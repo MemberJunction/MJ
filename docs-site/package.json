@@ -9,7 +9,7 @@
     "dev": "npm run ingest && astro dev",
     "build": "npm run ingest && astro build",
     "preview": "astro preview",
-    "test": "node --test scripts/lib/*.test.mjs"
+    "test": "node --test scripts/lib/*.test.mjs src/lib/*.test.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.36.0",

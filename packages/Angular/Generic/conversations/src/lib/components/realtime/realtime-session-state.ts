@@ -1,11 +1,11 @@
 import { Observable, Subject, Subscription } from 'rxjs';
 import {
-  RealtimeCaption, RealtimeDelegationProgress, RealtimeDelegationResult, RealtimeDelegationNarration
+  RealtimeCaption, RealtimeDelegationProgress, RealtimeDelegationResult, RealtimeDelegationNarration, RealtimeThoughtNarration
 } from '../../services/realtime-session.service';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact, FormatToolName } from '../../services/delegation-result-parser';
 
 /**
- * The four reactive session streams {@link RealtimeSessionState} merges — structurally
+ * The reactive session streams {@link RealtimeSessionState} merges — structurally
  * satisfied by `RealtimeSessionService`. Narrowed to an interface so the state (and its unit
  * tests) depend only on the streams, not on the full service / GraphQL import chain.
  */
@@ -18,6 +18,8 @@ export interface RealtimeSessionStreams {
   DelegationResult$: Observable<RealtimeDelegationResult>;
   /** Ephemeral spoken progress narrations. */
   DelegationNarration$: Observable<RealtimeDelegationNarration>;
+  /** Model-authored thought / reasoning narrations. */
+  ThoughtNarration$?: Observable<RealtimeThoughtNarration>;
 }
 
 /**
@@ -31,13 +33,17 @@ export interface RealtimeSessionStreams {
  * references and in-place updates reliably re-render.
  */
 export interface RealtimeDelegationCardVM {
-  /** The `invoke-target-agent` call this card represents. */
+  /** What this card represents: a delegated agent run, a direct action, or model-authored narration. */
+  Kind: 'agent' | 'action' | 'narration';
+  /** The `invoke-target-agent` or direct-action call this card represents. */
   CallID: string;
-  /** Display name of the delegated agent (e.g. "Sage"). */
+  /** Display name of the delegated agent (e.g. "Sage") or formatted direct action title (e.g. "Get Weather"). */
   AgentName: string;
+  /** The raw tool name when Kind === 'action' (e.g. "File_Storage_List_Objects"). */
+  ToolName?: string;
   /** Latest human-readable progress message from the stream. */
   LatestMessage: string;
-  /** The delegation phase (`prompt_execution` | `action_execution` | …). */
+  /** The delegation phase (`prompt_execution` | `action_execution` | `direct_action` | …). */
   LatestStep: string;
   /** Optional completion percentage (0–100) when the server supplies it. */
   Percentage?: number;
@@ -102,12 +108,15 @@ export interface RealtimeThreadDividerItem {
 /** One entry in the chronological thread: a caption bubble, a delegation card, or a leg divider. */
 export type RealtimeThreadItem = RealtimeThreadCaptionItem | RealtimeThreadDelegationItem | RealtimeThreadDividerItem;
 
+export { FormatToolName } from '../../services/delegation-result-parser';
+
 /**
  * Maps a raw delegation step id to a human-friendly phrase. Unknown steps fall back to
  * the raw progress message (per product direction) so the UI never shows snake_case ids.
  */
 export function FriendlyStepLabel(step: string, message: string): string {
   switch (step) {
+    case 'direct_action': return 'Looking that up';
     case 'prompt_execution': return 'Thinking it through';
     case 'action_execution': return 'Running actions';
     case 'subagent_execution': return 'Working with another agent';
@@ -186,6 +195,11 @@ export class RealtimeSessionState {
       voice.DelegationResult$.subscribe(r => this.onResult(r)),
       voice.DelegationNarration$.subscribe(n => this.onNarration(n))
     );
+    if (voice.ThoughtNarration$) {
+      this.subs.push(
+        voice.ThoughtNarration$.subscribe(t => this.onThought(t))
+      );
+    }
   }
 
   /** Unsubscribes from all session streams. Call from the owning shell's ngOnDestroy. */
@@ -205,12 +219,16 @@ export class RealtimeSessionState {
    */
   public LoadHistoricalItems(items: RealtimeThreadItem[]): void {
     this.reset();
-    this.Items = [...items];
-    for (const item of items) {
+    this.Items = items.map(item => {
       if (item.Kind === 'delegation') {
-        this.cardsByCallId.set(item.Card.CallID, item.Card);
+        const card: RealtimeDelegationCardVM = item.Card.Kind
+          ? item.Card
+          : { ...item.Card, Kind: 'agent' };
+        this.cardsByCallId.set(card.CallID, card);
+        return { Kind: 'delegation', Card: card };
       }
-    }
+      return item;
+    });
     this.rebuildCards();
     this.recomputeActive();
     this.Changed$.next();
@@ -247,23 +265,60 @@ export class RealtimeSessionState {
     this.Changed$.next();
   }
 
-  /** Appends any newly-arrived captions, keeping order relative to delegation cards. */
+  /** Appends any newly-arrived captions, keeping order relative to delegation cards, and updates streaming captions in place. */
   private onCaptions(captions: RealtimeCaption[]): void {
-    if (captions.length <= this.placedCaptionCount) {
+    if (captions.length < this.placedCaptionCount) {
       // Captions are cleared on a fresh session — reset all merge state.
-      if (captions.length < this.placedCaptionCount) {
-        this.reset();
-        this.Changed$.next();
-      }
+      this.reset();
+      this.Changed$.next();
       return;
     }
-    const appended: RealtimeThreadItem[] = [];
-    for (let i = this.placedCaptionCount; i < captions.length; i++) {
-      appended.push({ Kind: 'caption', Role: captions[i].Role, Text: captions[i].Text });
+
+    // Find the indices in this.Items of the captions already placed in the current session.
+    // They are the last `placedCaptionCount` caption items in this.Items.
+    const liveCaptionIndices: number[] = [];
+    for (let idx = this.Items.length - 1; idx >= 0 && liveCaptionIndices.length < this.placedCaptionCount; idx--) {
+      if (this.Items[idx].Kind === 'caption') {
+        liveCaptionIndices.unshift(idx);
+      }
     }
-    this.placedCaptionCount = captions.length;
-    this.Items = [...this.Items, ...appended];
-    this.Changed$.next();
+
+    let nextItems = this.Items;
+    let hasChanges = false;
+
+    // 1. Update any already-placed captions in place if their text or role changed (e.g. streaming deltas or corrections)
+    const updateCount = Math.min(this.placedCaptionCount, liveCaptionIndices.length);
+    for (let i = 0; i < updateCount; i++) {
+      const itemIdx = liveCaptionIndices[i];
+      const current = nextItems[itemIdx] as RealtimeThreadCaptionItem;
+      const incoming = captions[i];
+      if (current.Role !== incoming.Role || current.Text !== incoming.Text) {
+        if (nextItems === this.Items) {
+          nextItems = [...this.Items];
+        }
+        nextItems[itemIdx] = { Kind: 'caption', Role: incoming.Role, Text: incoming.Text };
+        hasChanges = true;
+      }
+    }
+
+    // 2. Append newly-arrived captions
+    if (captions.length > this.placedCaptionCount) {
+      const appended: RealtimeThreadItem[] = [];
+      for (let i = this.placedCaptionCount; i < captions.length; i++) {
+        appended.push({ Kind: 'caption', Role: captions[i].Role, Text: captions[i].Text });
+      }
+      if (nextItems === this.Items) {
+        nextItems = [...this.Items];
+      }
+      nextItems = [...nextItems, ...appended];
+      this.placedCaptionCount = captions.length;
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
+      this.Items = nextItems;
+      this.Changed$.next();
+    }
   }
 
   /** Inserts a new working card, or immutably replaces the existing one for this CallID. */
@@ -272,6 +327,7 @@ export class RealtimeSessionState {
     if (existing) {
       this.replaceCard({
         ...existing,
+        ToolName: progress.ToolName ?? existing.ToolName,
         LatestStep: progress.Step,
         LatestMessage: progress.Message,
         Percentage: progress.Percentage
@@ -284,9 +340,12 @@ export class RealtimeSessionState {
 
   /** Creates a working card for a first-seen CallID and appends it to the thread tail. */
   private insertCard(progress: RealtimeDelegationProgress): void {
+    const isAction = !!progress.ToolName && progress.ToolName !== 'invoke-target-agent';
     const card: RealtimeDelegationCardVM = {
       CallID: progress.CallID,
-      AgentName: this.AgentName,
+      Kind: isAction ? 'action' : 'agent',
+      ToolName: progress.ToolName,
+      AgentName: isAction ? FormatToolName(progress.ToolName!) : this.AgentName,
       LatestStep: progress.Step,
       LatestMessage: progress.Message,
       Percentage: progress.Percentage,
@@ -305,15 +364,48 @@ export class RealtimeSessionState {
   private onResult(result: RealtimeDelegationResult): void {
     const existing = this.cardsByCallId.get(result.CallID);
     if (!existing) {
-      return; // non-delegation tool result (no card was ever created) — ignore
+      if (!result.ToolName) {
+        return; // untracked result without tool name — ignore
+      }
+      // Create-or-update safety net: if a terminal result arrives without prior progress
+      // (e.g. fast direct action or missed stream packet), construct and insert the done card
+      // rather than dropping the result.
+      const isAction = result.ToolName !== 'invoke-target-agent';
+      const toolName = result.ToolName;
+      const card: RealtimeDelegationCardVM = {
+        CallID: result.CallID,
+        Kind: isAction ? 'action' : 'agent',
+        ToolName: toolName,
+        AgentName: isAction ? FormatToolName(toolName) : this.AgentName,
+        LatestStep: isAction ? 'direct_action' : 'decision_processing',
+        LatestMessage: isAction ? `Executed ${FormatToolName(toolName)}` : 'Completed',
+        Done: true,
+        Success: result.Success,
+        Result: result.Output,
+        RunRef: this.shortRunRef(result.CallID),
+        RunID: result.RunID,
+        Artifacts: isAction ? undefined : result.Artifacts,
+        StartedAt: Date.now(),
+        FinishedAt: Date.now()
+      };
+      this.cardsByCallId.set(result.CallID, card);
+      this.Items = [...this.Items, { Kind: 'delegation', Card: card }];
+      this.rebuildCards();
+      this.recomputeActive();
+      if (!this.HasRunningDelegation) {
+        this.Narration = null;
+      }
+      this.Changed$.next();
+      return;
     }
     this.replaceCard({
       ...existing,
+      ToolName: result.ToolName ?? existing.ToolName,
       Done: true,
       Success: result.Success,
       Result: result.Output,
       RunID: result.RunID ?? existing.RunID,
-      Artifacts: result.Artifacts ?? existing.Artifacts,
+      Artifacts: existing.Kind === 'action' ? undefined : (result.Artifacts ?? existing.Artifacts),
       FinishedAt: Date.now()
     });
     if (!this.HasRunningDelegation) {
@@ -326,6 +418,45 @@ export class RealtimeSessionState {
   /** Latest narration REPLACES the previous one (never accumulated). */
   private onNarration(narration: RealtimeDelegationNarration): void {
     this.Narration = narration.Text;
+    this.Changed$.next();
+  }
+
+  /**
+   * Creates or updates a narration delegation card representing model-authored thought / reasoning.
+   * Cards are immutable; narration cards are excluded from anchoring the live narration note (Reviewer Items 21 & 22).
+   */
+  private onThought(thought: RealtimeThoughtNarration): void {
+    const callId = thought.CallID ?? 'model-thought';
+    const isDone = thought.IsFinal ?? true;
+    const existing = this.cardsByCallId.get(callId);
+    if (existing) {
+      this.replaceCard({
+        ...existing,
+        LatestMessage: thought.Text,
+        Done: isDone,
+        Success: true,
+        Result: isDone ? thought.Text : existing.Result,
+        FinishedAt: isDone ? Date.now() : existing.FinishedAt,
+      });
+    } else {
+      const card: RealtimeDelegationCardVM = {
+        CallID: callId,
+        Kind: 'narration',
+        AgentName: this.AgentName,
+        LatestStep: 'reasoning',
+        LatestMessage: thought.Text,
+        Done: isDone,
+        Success: true,
+        Result: isDone ? thought.Text : null,
+        RunRef: this.shortRunRef(callId),
+        StartedAt: Date.now(),
+        FinishedAt: isDone ? Date.now() : undefined,
+      };
+      this.cardsByCallId.set(callId, card);
+      this.Items = [...this.Items, { Kind: 'delegation', Card: card }];
+      this.rebuildCards();
+      this.recomputeActive();
+    }
     this.Changed$.next();
   }
 
@@ -352,7 +483,7 @@ export class RealtimeSessionState {
 
   /** Recomputes which still-running delegation anchors the live narration note. */
   private recomputeActive(): void {
-    const running = this.Cards.find(c => !c.Done);
+    const running = this.Cards.find(c => !c.Done && c.Kind !== 'narration');
     this.ActiveCallId = running ? running.CallID : null;
   }
 

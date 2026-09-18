@@ -642,8 +642,12 @@ export class SearchResultsResource extends BaseResourceComponent {
 
         if (!result.EntityName || !result.RecordID) return;
 
-        // entity-record, content-item, or unset — navigate to entity record
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+        // entity-record, content-item, or unset — navigate to entity record.
+        // `RecordID` is a compact CompositeKey segment (bare value for a single-column key, "F1|v1||F2|v2"
+        // for a composite one) and the key column can have any name — resolve it against the entity's
+        // metadata instead of assuming `ID`. See ShellComponent.OnSearchResultSelected for the full note.
+        const entityInfo = this.ProviderToUse.EntityByName(result.EntityName);
+        const pkey = CompositeKey.FromURLSegment(entityInfo, result.RecordID);
         this.navigationService.OpenEntityRecord(result.EntityName, pkey);
     }
 

@@ -6,7 +6,7 @@
  * Also tracks column types in ConversionContext for downstream INSERT boolean casting.
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, removeNPrefix, QuoteConstraintNames } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, removeNPrefix, QuoteConstraintNames, convertJsonFunctions } from './ExpressionHelpers.js';
 
 export class CreateTableRule implements IConversionRule {
   Name = 'CreateTableRule';
@@ -59,6 +59,11 @@ export class CreateTableRule implements IConversionRule {
     // Phase 5a: Quote unquoted PascalCase column names (AFTER type conversion
     // and AFTER CLUSTERED removal so the PK regex matches correctly)
     result = this.quoteColumnDefinitions(result);
+
+    // After identifier quoting, ISJSON(col) = 1 in a CHECK body becomes
+    // "ISJSON"(col) = 1, which is not a PG function. convertJsonFunctions
+    // accepts both bare and quoted forms.
+    result = convertJsonFunctions(result);
 
     // Remove ON [PRIMARY] / ON "PRIMARY" filegroup clause
     result = result.replace(/\)\s*ON\s+\[?PRIMARY\]?\s*;?/gi, ');');

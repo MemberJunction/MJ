@@ -2,6 +2,8 @@ import { RegisterClass } from '@memberjunction/global';
 import { BusinessCentralBaseAction } from '../business-central-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ChartOfAccount } from '../../../types';
 
 /**
  * Interface for a GL Account (Chart of Accounts) entry from Business Central
@@ -26,6 +28,7 @@ export interface BCGLAccount {
 /**
  * Action to retrieve the Chart of Accounts from Microsoft Dynamics 365 Business Central
  */
+@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetChartOfAccounts, ERP_INTEGRATION.BusinessCentral))
 @RegisterClass(BaseAction, 'GetBusinessCentralGLAccountsAction')
 export class GetBusinessCentralGLAccountsAction extends BusinessCentralBaseAction {
     
@@ -126,6 +129,13 @@ export class GetBusinessCentralGLAccountsAction extends BusinessCentralBaseActio
 
             const bcAccounts = response.value || [];
             const glAccounts: BCGLAccount[] = bcAccounts.map(account => this.mapBCAccountToGLAccount(account));
+            const chart: ChartOfAccount[] = glAccounts.map(a => ({
+                id: a.id,
+                code: a.number,
+                name: a.displayName,
+                accountType: a.accountType,
+                isActive: !a.blocked
+            }));
 
             // Calculate summary
             const summary = this.calculateAccountSummary(glAccounts);
@@ -159,6 +169,16 @@ export class GetBusinessCentralGLAccountsAction extends BusinessCentralBaseActio
                 });
             } else {
                 params.Params.find(p => p.Name === 'Summary')!.Value = summary;
+            }
+
+            if (!params.Params.find(p => p.Name === 'Accounts')) {
+                params.Params.push({
+                    Name: 'Accounts',
+                    Type: 'Output',
+                    Value: chart
+                });
+            } else {
+                params.Params.find(p => p.Name === 'Accounts')!.Value = chart;
             }
 
             return {

@@ -23,6 +23,16 @@ vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (target: unknown) => target,
 }));
 
+vi.mock('@memberjunction/credentials', () => ({
+  CredentialEngine: {
+    Instance: {
+      Config: vi.fn(async () => undefined),
+      Credentials: [],
+      getCredential: vi.fn(async () => ({ values: {} })),
+    },
+  },
+}));
+
 vi.mock('@memberjunction/core', () => ({
   UserInfo: class UserInfo {},
   Metadata: vi.fn(),

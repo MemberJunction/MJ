@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT90 - Field-Level Security Enforcement",
+    "Description": "Proves Field-Level Security end to end against a live database — the tier where every real FLS bug has been found (the unit tests stayed green through all of them). The fls-enforcement bundle's lifecycle enables EnableFieldLevelSecurity on 'MJ: Employees' through the REAL server entity path, so snapshot initialization (the code that once made field security unenableable) gets live coverage on every run; teardown restores the flag and removes every row the snapshot wrote. Three seeded principals (metadata-optional: it-fls-reader in only the read-only 'Integration Test: FLS Reader' role, it-fls-writer in only the read+create+update+delete 'FLS Writer' role, it-fls-multi in Writer+Denier+Neutral) drive twenty-two ordered checks: FLS1 the enable succeeds and the snapshot covers exactly (restrictable fields x read-holding roles) with no PK/__mj_ targets; FLS2 snapshot defaults mirror entity permissions (Allow/Allow/Allow vs Allow/No Access/No Access) and enabling changes NOTHING until tightened; FLS3 every tightening aimed at a NON-system role is permitted through the real entity path and takes effect after refresh; FLS4 Deny beats Allow across roles; FLS5 No Access is neutral; FLS6 the cross-role read-required clamp (read-denied forces update/create denied despite another role's Update=Allow — the combination no per-row CHECK can see); FLS7 a missing row on an enabled entity fails CLOSED; FLS8 the system user is NOT exempt — its full access aggregates from ordinary Allow rows, with no identity branch; FLS9 RunView as the restricted user omits denied columns from every row; FLS10 the same query as an unrestricted user still returns them; FLS11 the server's shared full-width cache slot cannot cross-serve — the reader is served from the writer-warmed slot (zero new cache writes) WITHOUT the denied column; FLS12-FLS14 ExtraFilter/OrderBy/Aggregates referencing a denied field are REJECTED before execution with exactly the ambiguous 'does not exist or you do not have access' wording (output stripping alone is theater — predicates reconstruct values); FLS15 UserSearchString is NOT rejected (denied fields are excluded from the searched set instead); FLS16 a save modifying an update-denied field is rejected server-side and the stored value is untouched; FLS17 round-trip safety — a restricted user's save of an unrelated field leaves denied columns' stored values intact; FLS18 create suppression — a supplied create-denied value is silently dropped and the column takes its default, the insert succeeds; FLS19 a permission row targeting a primary key is rejected at save; FLS20 the typed-accessor gate throws the ambiguous message on a read-denied field; FLS22 the Record Changes audit trail is projected against the entity each row is ABOUT rather than against Record Changes itself (whose own field-security flag is off, which is exactly why the payload used to walk out) — denied keys dropped from ChangesJSON and FullRecordJSON, ChangesDescription withheld outright because prose cannot be safely redacted, allowed columns still present, and an unrestricted caller still receiving all three whole; FLS23 that projection holds on the SHARED cache slot — the writer's cold query warms a full-width slot carrying the denied value, the reader is served from it with zero new cache writes, and the payload still comes back narrowed. When the seed is absent or the entity is already FLS-enabled by an administrator the bundle skips-as-pass loudly; a present seed whose enable FAILS is a FAILURE (that exact bug has shipped).",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Field security enables via the real snapshot path, aggregates correctly across roles (Deny beats Allow, No Access neutral, read-required clamp, fail closed), strips/rejects/suppresses at every server enforcement point with the ambiguous wording, projects the Record Changes audit payload against each row's own target entity, and cannot leak through the shared cache slot."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "fls-enforcement"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "80F5E6E6-A62E-4633-9C52-C56BC8DD826F"
+  },
+  "sync": {
+    "lastModified": "2026-09-09T11:23:36.428Z",
+    "checksum": "fb26e9126fa86c1bbcac8e156d0a51eda160021139679c72d4054283b1954faa"
+  }
+}

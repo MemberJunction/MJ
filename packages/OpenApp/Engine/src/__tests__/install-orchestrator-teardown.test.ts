@@ -28,7 +28,10 @@ vi.mock('../github/github-client.js', () => ({
         return { Owner: m[1], Repo: m[2].replace(/\.git$/, ''), Subpath: sub.length ? sub : undefined };
     },
 }));
-vi.mock('../install/schema-manager.js', () => ({
+// Spread the real module so ValidateSchemaName is the genuine rule (these suites declare
+// ordinary schema names, so it always passes); only the DB-touching functions are stubbed.
+vi.mock('../install/schema-manager.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../install/schema-manager.js')>()),
     CreateAppSchema: vi.fn(),
     DropAppSchema: vi.fn(),
     SchemaExists: vi.fn(),
@@ -44,6 +47,7 @@ vi.mock('../install/package-manager.js', () => ({
 vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
     RemoveServerDynamicPackages: vi.fn(),
+    PruneDynamicPackagesNotInManifest: vi.fn(() => ({ Success: true })),
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
@@ -62,6 +66,7 @@ vi.mock('../install/history-recorder.js', () => ({
     FindDependentApps: vi.fn(),
     ListInstalledApps: vi.fn(),
     UpdateAppRecord: vi.fn(),
+    CheckSchemaSharedByOtherApps: vi.fn(),
 }));
 vi.mock('@memberjunction/core', () => ({
     Metadata: class { async CreateTransactionGroup() { return { Submit: async () => true }; } },
@@ -72,6 +77,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { RemoveApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
+import { DropAppSchema } from '../install/schema-manager.js';
 import { DownloadMigrations } from '../github/github-client.js';
 import { RunPackageInstall } from '../install/package-manager.js';
 import {
@@ -81,6 +87,7 @@ import {
     SetAppStatus,
     RecordInstallHistoryEntry,
     UpdateAppRecord,
+    CheckSchemaSharedByOtherApps,
 } from '../install/history-recorder.js';
 
 /** A full Open App manifest (schema + migrations) whose migrations declare a teardownDirectory. */
@@ -214,5 +221,156 @@ describe('RemoveApp — migrations-model teardown (HandleTeardown)', () => {
         expect(result.ErrorMessage).toMatch(/Teardown failed/i);
         // App is NOT marked Removed when teardown fails.
         expect(vi.mocked(UpdateAppRecord)).not.toHaveBeenCalledWith(expect.anything(), 'app-1', { Status: 'Removed' });
+    });
+});
+
+describe('RemoveApp — schema-drop refusal names the remedy that matches the classification', () => {
+    /**
+     * `ValidateSchemaName` classifies WHY a schema-drop was refused and whether an install option
+     * would have permitted it (`OverriddenBy` — see schema-manager.ts). `RemoveApp` must pick its
+     * remedy sentence from that classification instead of assuming every refusal is the same:
+     *   - `OverriddenBy` present: only the `__`-namespace rule blocks the name, and the SAME
+     *     override the install used (`--dangerously-ignore-dbl-underscore-schema-rule`) lifts it
+     *     again on remove — the schema is NOT actually un-droppable, so the message must not claim
+     *     it is and must not park the operator on `--keep-data` instead of the flag that works.
+     *   - `ReservedByPlatform` / `ReservedByMJ`: MJ or the platform owns the name outright (`dbo`,
+     *     `public`, `__mj`, …) and no flag unblocks it — this is the one reserved-name rejection an
+     *     operator can hit WITHOUT having done anything wrong, and refusing leaves the app in status
+     *     `Error`, still installed, with the reinstall path failing on the same name. Refusing is
+     *     right (these are schemas MJ must never drop), so `--keep-data` is named as the real exit.
+     *   - `Malformed`: the stored name is unusable, so MJ owns nothing here and must not say it
+     *     does — but `--keep-data` still gets the operator out.
+     * No branch may claim the runtime knows the app's install history — it doesn't check that.
+     */
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(FindDependentApps).mockResolvedValue([]);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(UpdateAppRecord).mockResolvedValue(undefined);
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(CheckSchemaSharedByOtherApps).mockResolvedValue({ Shared: false, CheckFailed: false });
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-legacy',
+            Name: 'legacy-app',
+            Version: '1.0.0',
+            RepositoryURL: 'https://github.com/acme/mj-apps',
+            SchemaName: 'public',
+            Status: 'Active',
+            ManifestJSON: JSON.stringify({
+                manifestVersion: 1, name: 'legacy-app', displayName: 'Legacy App',
+                description: 'Installed before the reserved set grew.', version: '1.0.0',
+                publisher: { name: 'Acme' }, repository: 'https://github.com/acme/mj-apps',
+                mjVersionRange: '>=5.0.0 <6.0.0', schema: { name: 'public' },
+            }),
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+    });
+
+    it('tells the operator about --keep-data when the drop is refused as reserved', async () => {
+        const result = await RemoveApp({ AppName: 'legacy-app' }, ctxFor('postgresql'));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/reserved/i);
+        expect(result.ErrorMessage, 'must name the way out').toMatch(/--keep-data/);
+        expect(result.ErrorMessage, 'no flag overrides a truly reserved name').not.toMatch(/dangerously-ignore/);
+        expect(result.ErrorMessage, 'the runtime cannot know install order').not.toMatch(/became reserved/);
+        // ValidateSchemaName's ReservedByPlatform/ReservedByMJ ErrorMessage has no trailing
+        // period, so the two sentences must not run together at the join.
+        expect(result.ErrorMessage, 'sentence break before the remedy clause').toMatch(/Open App\.\s+MemberJunction must never drop/);
+        expect(result.ErrorMessage, 'no run-on at the join').not.toMatch(/Open App MemberJunction/);
+    });
+
+    it('does not mention --keep-data for an ordinary drop failure', async () => {
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-ok', Name: 'ok-app', Version: '1.0.0',
+            RepositoryURL: 'https://github.com/acme/mj-apps', SchemaName: 'mj_connector_acme',
+            Status: 'Active', ManifestJSON: connectorManifest(false),
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+        vi.mocked(DropAppSchema).mockResolvedValue({
+            Success: false,
+            ErrorMessage: "Failed to drop schema 'mj_connector_acme': deadlock victim",
+        });
+
+        const result = await RemoveApp({ AppName: 'ok-app' }, ctxFor('postgresql'));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).not.toMatch(/--keep-data/);
+    });
+
+    /** A manifest/installed-app pair for a schema the `__`-namespace rule refuses by default. */
+    function bcsaasInstalledApp(): unknown {
+        return {
+            ID: 'app-bcsaas',
+            Name: 'bcsaas-app',
+            Version: '1.0.0',
+            RepositoryURL: 'https://github.com/acme/mj-apps',
+            SchemaName: '__bcsaas',
+            Status: 'Active',
+            ManifestJSON: JSON.stringify({
+                manifestVersion: 1, name: 'bcsaas-app', displayName: 'BCSaaS App',
+                description: 'Installed with the double-underscore override.', version: '1.0.0',
+                publisher: { name: 'Acme' }, repository: 'https://github.com/acme/mj-apps',
+                mjVersionRange: '>=5.0.0 <6.0.0', schema: { name: '__bcsaas' },
+            }),
+        };
+    }
+
+    it('names --dangerously-ignore-dbl-underscore-schema-rule (not --keep-data) for a schema only the double-underscore rule refused', async () => {
+        vi.mocked(FindInstalledApp).mockResolvedValue(
+            bcsaasInstalledApp() as unknown as Awaited<ReturnType<typeof FindInstalledApp>>,
+        );
+
+        const result = await RemoveApp({ AppName: 'bcsaas-app' }, ctxFor('postgresql'));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/--dangerously-ignore-dbl-underscore-schema-rule/);
+        expect(result.ErrorMessage, 'the override drops it fine — do not park the operator on --keep-data').not.toMatch(/--keep-data/);
+        expect(result.ErrorMessage, 'the runtime cannot know install order').not.toMatch(/became reserved/);
+        // This branch's message doesn't join the validator's ErrorMessage at all anymore (the
+        // OverriddenBy case returns its own text above), so there's no seam left to double up —
+        // this is now a regression pin: the composed message must never double its punctuation.
+        expect(result.ErrorMessage, 'no double period at the join').not.toMatch(/\.\./);
+        // The drop is refused before DropAppSchema is reached — its mock is irrelevant to this case.
+        expect(DropAppSchema).not.toHaveBeenCalled();
+    });
+
+    it('does not claim MJ owns an unusable stored schema name, and still names --keep-data', async () => {
+        // `Malformed` is the fourth class, and the only one MJ asserts NO ownership of: the stored
+        // name is simply unusable, so "MemberJunction must never drop schema ' padded '" would be
+        // false. No manifest can produce this (schemaNameRegex admits no whitespace) — only a
+        // hand-edited/imported OpenApp row — but the message must still be true if it appears.
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-padded', Name: 'padded-app', Version: '1.0.0',
+            RepositoryURL: 'https://github.com/acme/mj-apps', SchemaName: ' padded ',
+            Status: 'Active',
+            ManifestJSON: JSON.stringify({
+                manifestVersion: 1, name: 'padded-app', displayName: 'Padded App',
+                description: 'Stored schema name that no manifest could have produced.', version: '1.0.0',
+                publisher: { name: 'Acme' }, repository: 'https://github.com/acme/mj-apps',
+                mjVersionRange: '>=5.0.0 <6.0.0', schema: { name: ' padded ' },
+            }),
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+
+        const result = await RemoveApp({ AppName: 'padded-app' }, ctxFor('postgresql'));
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage, 'MJ asserts no ownership of a malformed name').not.toMatch(/must never drop/);
+        expect(result.ErrorMessage, 'must still name the way out').toMatch(/--keep-data/);
+        expect(result.ErrorMessage, 'no flag makes an unusable name usable').not.toMatch(/dangerously-ignore/);
+        expect(result.ErrorMessage, 'the runtime cannot know install order').not.toMatch(/became reserved/);
+        // The drop is refused before DropAppSchema is reached — nothing addressable to drop.
+        expect(DropAppSchema).not.toHaveBeenCalled();
+    });
+
+    it('reaches DropAppSchema when removed with the same override the install used', async () => {
+        vi.mocked(FindInstalledApp).mockResolvedValue(
+            bcsaasInstalledApp() as unknown as Awaited<ReturnType<typeof FindInstalledApp>>,
+        );
+        vi.mocked(DropAppSchema).mockResolvedValue({ Success: true });
+
+        await RemoveApp({ AppName: 'bcsaas-app', AllowDoubleUnderscoreSchema: true }, ctxFor('postgresql'));
+
+        expect(DropAppSchema).toHaveBeenCalledTimes(1);
     });
 });

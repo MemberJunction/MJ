@@ -13,6 +13,12 @@ import {
 } from '@memberjunction/installer';
 
 import { LegacyInstaller } from '../../lib/legacy-install.js';
+import {
+  NonInteractiveError,
+  failOnNonInteractive,
+  requireInteractive,
+  withNonInteractiveHandling,
+} from '../../lib/interactive-guard.js';
 
 export default class Install extends Command {
   static description = 'Install MemberJunction from a GitHub release';
@@ -78,12 +84,20 @@ export default class Install extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(Install);
 
-    if (flags.legacy) {
-      const legacy = new LegacyInstaller(this, flags.verbose ?? false);
-      return legacy.Run();
-    }
+    return withNonInteractiveHandling(this, async () => {
+      if (flags.legacy) {
+        // The legacy installer is a two-dozen-question wizard with no flag equivalents,
+        // so it is interactive by nature — refuse it up front rather than at question 1.
+        requireInteractive(
+          'The legacy interactive installer',
+          'Re-run at an interactive terminal, or drop --legacy to use the engine installer (which accepts --config).'
+        );
+        const legacy = new LegacyInstaller(this, flags.verbose ?? false);
+        return legacy.Run();
+      }
 
-    return this.runEngineInstall(flags);
+      return this.runEngineInstall(flags);
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -107,8 +121,9 @@ export default class Install extends Command {
   }): Promise<void> {
     const engine = new InstallerEngine();
     const fast = flags.fast ?? false;
+    const yes = flags.yes ?? false;
 
-    this.wireEventHandlers(engine, flags.verbose ?? false);
+    this.wireEventHandlers(engine, flags.verbose ?? false, yes);
 
     const plan = await engine.CreatePlan({
       Tag: flags.tag,
@@ -123,6 +138,19 @@ export default class Install extends Command {
       this.renderDryRun(plan);
       return;
     }
+
+    // Preflight, deliberately placed here: CreatePlan is pure and --dry-run has already
+    // returned, so nothing has touched disk yet, and a dry run stays usable headlessly.
+    //
+    // The engine asks its questions from inside the phases — the version picker and the
+    // not-empty-directory confirmation both live in Scaffold — so a guard that only
+    // fires when a prompt is emitted fires AFTER files have been written. Refusing here
+    // instead leaves the target directory untouched.
+    //
+    // --yes is the condition because it is what the engine itself keys on: every prompt
+    // in the installer is short-circuited by it. --config alone is not enough — it can
+    // supply configure-phase values but does not suppress the scaffold-phase questions.
+    this.requireAnswerableInstall(yes);
 
     this.renderHeader();
 
@@ -143,10 +171,24 @@ export default class Install extends Command {
   // Event wiring — bridges engine events to CLI output + inquirer prompts
   // ---------------------------------------------------------------------------
 
-  private wireEventHandlers(engine: InstallerEngine, verbose: boolean): void {
-    engine.On('prompt', (event: PromptEvent) => {
-      this.handlePromptEvent(event);
-    });
+  private wireEventHandlers(engine: InstallerEngine, verbose: boolean, yes: boolean): void {
+    // Under --yes the engine installs its own catch-all prompt listener that resolves
+    // anything unexpected with its default — the safety net that keeps Docker and CI
+    // runs from hanging. Registering an interactive bridge alongside it would make the
+    // two fight: ours runs first, refuses (no terminal), and exits(1) before the net
+    // can answer, turning a working headless install into a hard failure. So under
+    // --yes we simply don't bridge, and the engine's net owns every prompt.
+    if (!yes) {
+      engine.On('prompt', (event: PromptEvent) => {
+        // The emitter neither awaits nor catches this promise, so a rejection escaping
+        // here becomes an unhandled rejection — Node prints a stack trace and kills the
+        // process, which is exactly the opposite of the actionable error the guard inside
+        // handlePromptEvent is meant to produce. Catch it at the boundary. (Rejecting
+        // also means the event is never Resolve()d, so the engine would otherwise sit
+        // waiting on an answer that can never arrive.)
+        void this.handlePromptEvent(event).catch((e: unknown) => this.abortOnPromptFailure(e));
+      });
+    }
 
     engine.On('phase:start', (event: PhaseStartEvent) => {
       this.log(chalk.cyan(`\u25b8 ${event.Description}`));
@@ -185,7 +227,52 @@ export default class Install extends Command {
     });
   }
 
+  /**
+   * Fails before the first byte is written when this run will be asked questions it
+   * cannot answer.
+   *
+   * Deliberately conservative: it only refuses the combination that is *guaranteed* to
+   * dead-end — no terminal to prompt on and no `--yes` to skip the prompts. A terminal
+   * run is untouched, and `--yes` is untouched, so nothing that works today starts
+   * failing.
+   */
+  private requireAnswerableInstall(yes: boolean): void {
+    if (yes) return;
+
+    try {
+      requireInteractive(
+        'Answers to the installer\'s setup questions (version, target directory, configuration)',
+        'Pass --yes to accept defaults and install the latest version unattended, adding --tag and --config to pin the version and supply settings.'
+      );
+    } catch (error) {
+      failOnNonInteractive(this, error);
+    }
+  }
+
+  /**
+   * Terminates the install with a clean, actionable message when a prompt cannot be
+   * answered.
+   *
+   * `this.error()` throws, and there is no oclif frame above an emitter callback to
+   * catch it — so this writes the message itself and exits. An abrupt exit is the right
+   * trade here: the alternative is an engine blocked forever on an answer that will
+   * never come.
+   */
+  private abortOnPromptFailure(error: unknown): never {
+    const message = error instanceof Error ? error.message : String(error);
+    const suggestion = error instanceof NonInteractiveError ? `\nTry this: ${error.suggestion}` : '';
+    process.stderr.write(`${chalk.red('Error:')} ${message}${suggestion}\n`);
+    process.exit(1);
+  }
+
   private async handlePromptEvent(event: PromptEvent): Promise<void> {
+    // Every branch below blocks on stdin. Refuse up front when this run may not prompt,
+    // so the caller gets an actionable error instead of a process that never returns.
+    requireInteractive(
+      `An answer to "${event.Message}"`,
+      'Re-run at an interactive terminal, or supply the value through mj.config.cjs / the command\'s flags.'
+    );
+
     let answer: string;
 
     switch (event.PromptType) {

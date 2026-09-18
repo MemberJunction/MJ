@@ -813,6 +813,12 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
   'FOR', 'EACH', 'ROW', 'AFTER', 'BEFORE', 'INSTEAD', 'OF',
   'GENERATED', 'BY', 'IDENTITY', 'SERIAL', 'REPLACE', 'ACTION',
   'ASC', 'DESC', 'ORDER', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'TOP',
+  // MERGE (PostgreSQL 15+) and its MATCHED sub-keyword. Every other word in a MERGE statement was
+  // already here — USING, ON, WHEN, THEN, NOT, INSERT, UPDATE, SET, VALUES, AS — so a converted
+  // MERGE emerged as `"MERGE" __mj."X" AS tgt … WHEN "MATCHED" THEN UPDATE` and PostgreSQL rejected
+  // it with `syntax error at or near ""MERGE""`. The rest of the statement transpiles to valid PG
+  // MERGE already; these two were the only tokens being mistaken for identifiers.
+  'MERGE', 'MATCHED',
   'INNER', 'LEFT', 'RIGHT', 'OUTER', 'JOIN', 'CROSS', 'FULL',
   'UNION', 'ALL', 'DISTINCT', 'BETWEEN', 'CASE', 'WHEN', 'COALESCE',
   'CAST', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG', 'NOW', 'CURRENT_USER',
@@ -857,6 +863,14 @@ export function convertCommonFunctions(sql: string): string {
   sql = sql.replace(/\bSUSER_SNAME\s*\(\s*\)/gi, 'current_user');
   sql = sql.replace(/\bSUSER_NAME\s*\(\s*\)/gi, 'current_user');
   sql = sql.replace(/\bUSER_NAME\s*\(\s*\)/gi, 'current_user');
+  // `INTO` is OPTIONAL in T-SQL's MERGE and REQUIRED in PostgreSQL's, so `MERGE [dbo].[T] AS tgt`
+  // transpiles token-for-token into something PostgreSQL rejects at the target name rather than at
+  // MERGE — `syntax error at or near "__mj"`, which points one token past the actual problem.
+  // Only the bare form is rewritten; `MERGE INTO` is already correct and left alone. Anchored to
+  // statement position (start of line) so the word MERGE in prose — a migration's own header comment
+  // explaining "re-runnable: MERGE on fixed UUIDs" — is not rewritten into "MERGE INTO on fixed
+  // UUIDs". A `--`/`*` comment line cannot match either, since the anchor requires MERGE first.
+  sql = sql.replace(/^([ \t]*)MERGE[ \t]+(?!INTO\b)/gim, '$1MERGE INTO ');
   return sql;
 }
 
@@ -1117,7 +1131,23 @@ function rewriteTuple(tuple: string, boolPos: Set<number>): string {
   return '(' + vals.join(',') + ')';
 }
 
-/** Split a tuple body on top-level commas, respecting single-quoted strings and nested parens. */
+/**
+ * Split a tuple body on top-level commas, respecting single-quoted strings, nested parens AND SQL
+ * comments.
+ *
+ * Comments matter because positional rewriting is only correct if the split yields exactly one
+ * entry per column. CodeGen interleaves explanatory comments between values, and one of them
+ * contains a comma:
+ *
+ *   (SELECT COALESCE(MAX("Sequence"), 0) + 1 FROM …)
+ *   /* Apply-time sequence, not the literal CodeGen emitted (MJ#4202): … *\/, 'ExposeToModel', …
+ *
+ * Counting that comma as a separator inserts a phantom value and shifts every later column by one,
+ * so the rewriter lands on the wrong ordinals — observed as PostgreSQL rejecting
+ * `column "Scale" is of type integer but expression is of type boolean`, because the flag intended
+ * for `AllowsNull` was written one position early. Comment bodies are copied through untouched;
+ * they are simply not scanned for separators.
+ */
 function splitTopLevelValues(s: string): string[] {
   const out: string[] = [];
   let cur = '', depth = 0, inStr = false;
@@ -1126,7 +1156,23 @@ function splitTopLevelValues(s: string): string[] {
     if (inStr) {
       cur += c;
       if (c === "'") { if (s[i + 1] === "'") cur += s[++i]; else inStr = false; }
-    } else if (c === "'") { inStr = true; cur += c; }
+      continue;
+    }
+    if (c === '/' && s[i + 1] === '*') {              // block comment — copy verbatim, do not scan
+      const end = s.indexOf('*/', i + 2);
+      const stop = end === -1 ? s.length : end + 2;
+      cur += s.slice(i, stop);
+      i = stop - 1;
+      continue;
+    }
+    if (c === '-' && s[i + 1] === '-') {              // line comment — runs to end of line
+      const nl = s.indexOf('\n', i);
+      const stop = nl === -1 ? s.length : nl;
+      cur += s.slice(i, stop);
+      i = stop - 1;
+      continue;
+    }
+    if (c === "'") { inStr = true; cur += c; }
     else if (c === '(') { depth++; cur += c; }
     else if (c === ')') { depth--; cur += c; }
     else if (c === ',' && depth === 0) { out.push(cur); cur = ''; }

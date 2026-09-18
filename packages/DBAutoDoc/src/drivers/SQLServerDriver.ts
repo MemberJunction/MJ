@@ -65,6 +65,9 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     }
 
     this.pool = await sql.connect(this.sqlConfig);
+    this.pool.on('error', (err) => {
+      console.error('[SQLServerDriver] Pool-level connection error:', err.message);
+    });
   }
 
   public async test(): Promise<AutoDocConnectionTestResult> {

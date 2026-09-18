@@ -82,6 +82,12 @@ export const PostgreSQLQuotingKeywords: ReadonlySet<string> = new Set([
     // CONSTRAINTS / IMMEDIATE / DEFERRED in the keyword set, the tokenizer
     // double-quotes them as identifiers and PG rejects the resulting SQL.
     'CONSTRAINTS', 'IMMEDIATE', 'DEFERRED', 'SAVEPOINT', 'RELEASE',
+    // MERGE (PostgreSQL 15+) and its MATCHED sub-keyword. Every other word in a MERGE statement was
+    // already covered — USING, ON, WHEN, THEN, NOT, INSERT, UPDATE, SET, VALUES — so a converted
+    // MERGE came out as `"MERGE" __mj."X" AS tgt … WHEN "MATCHED" THEN UPDATE`, which PostgreSQL
+    // rejects with `syntax error at or near ""MERGE""`. Structurally the rest of the statement was
+    // already valid PG; only these two were being read as identifiers.
+    'MERGE', 'MATCHED',
     // SQL Server types (still appear in raw SQL fragments at runtime)
     'NVARCHAR', 'VARCHAR', 'UNIQUEIDENTIFIER', 'DATETIMEOFFSET', 'DATETIME', 'DATETIME2',
     'BIGINT', 'SMALLINT', 'TINYINT', 'FLOAT', 'REAL', 'DECIMAL', 'NUMERIC', 'MONEY',
@@ -122,6 +128,48 @@ export const PostgreSQLQuotingKeywords: ReadonlySet<string> = new Set([
     // `DEFERRABLE`/`INITIALLY` are constraint attributes; `CURRENT_USER`/`SESSION_USER` are
     // niladic functions written without parentheses, so rule 3 (word before `(`) never sees them.
     'BOTH', 'CURRENT_USER', 'SESSION_USER', 'DEFERRABLE', 'INITIALLY', 'EXTENSION', 'VALID', 'SYSTEM',
+    // The rest of PostgreSQL's niladic datetime/identity functions. These are spelled without
+    // parentheses, so rule 3 (word before `(`) never sees them, and they are reserved words that
+    // PostgreSQL will not resolve once quoted: `SELECT CURRENT_DATE` became `SELECT "CURRENT_DATE"`
+    // and failed with `column "CURRENT_DATE" does not exist`. `CURRENT_TIMESTAMP`, `CURRENT_USER`
+    // and `SESSION_USER` were already covered above; these are the siblings that were missed.
+    // None is an MJ column name — the baseline column guard enforces that, and only the ALL-CAPS
+    // spelling is affected, so a mixed-case `CurrentDate` column still quotes normally.
+    'CURRENT_DATE', 'CURRENT_TIME', 'LOCALTIME', 'LOCALTIMESTAMP',
+    'CURRENT_CATALOG', 'CURRENT_ROLE', 'CURRENT_SCHEMA',
+    // The remaining PostgreSQL RESERVED words. Being reserved is what makes these unconditionally
+    // safe to add: PostgreSQL itself refuses to resolve a same-named column unless it is quoted,
+    // so leaving the bare ALL-CAPS form alone cannot shadow anybody's column — the column form was
+    // never legal bare in the first place. `ISNULL` and `VARIADIC` are already above.
+    'LEADING', 'TRAILING', 'PLACING', 'SYMMETRIC', 'ASYMMETRIC', 'NOTNULL', 'NATURAL', 'SIMILAR',
+    'VERBOSE', 'ANALYZE', 'ANALYSE', 'FREEZE', 'OVERLAPS', 'AUTHORIZATION', 'BINARY', 'COLLATION',
+    // Clause vocabulary that rule 3 cannot reach, because none of these is followed by `(`.
+    // `WITHIN` is the one with teeth: `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY x)` is how
+    // every median/quantile is written, and it became `PERCENTILE_CONT(0.5) "WITHIN" GROUP (...)`.
+    // `ORDINALITY` is the second: `postgresqlDialect.ts` (ForeignKeyGraphSQL) and
+    // `crossDialect.test.ts` both carry comments saying they DELIBERATELY AVOID
+    // `unnest(...) WITH ORDINALITY` because this tokenizer quotes it — a workaround for this bug
+    // that predates the fix. Adding it here is what lets that workaround eventually go away.
+    'WITHIN', 'ORDINALITY', 'GROUPING', 'SETS', 'ROLLUP', 'CUBE', 'GROUPS', 'EXCLUDE', 'TIES',
+    'ESCAPE', 'UNKNOWN', 'NOWAIT', 'LOCKED', 'CASCADED', 'RESTART', 'STORED', 'OWNED',
+    'INCLUDING', 'EXCLUDING', 'INHERITS',
+    // Type names spelled in `CAST(x AS T)` / `::T` position. Like the type names already above,
+    // these are never followed by `(`, so only the keyword tier can save them. `CHARACTER VARYING`
+    // and `DOUBLE PRECISION` are two-word type names — `DOUBLE`/`PRECISION` were covered, their
+    // siblings were not.
+    'CHARACTER', 'VARYING', 'BOOL', 'INT2', 'INT4', 'INT8', 'FLOAT4', 'FLOAT8', 'BPCHAR',
+    'TIMETZ', 'TSVECTOR', 'TSQUERY', 'SMALLSERIAL', 'VARBIT', 'JSONPATH',
+    // Statement-level utility verbs. None is a believable column name, so these cost nothing and
+    // stop an entire statement from being mangled at its first word.
+    'REFRESH', 'TRUNCATE', 'EXPLAIN', 'VACUUM', 'REINDEX', 'UNLOGGED', 'PREPARE', 'DEALLOCATE',
+    'INCREMENT', 'MINVALUE', 'MAXVALUE', 'CYCLE',
+    // DELIBERATELY ABSENT, for the same reason `USER` is (see the baseline test's reverse guard):
+    // `LEVEL`, `MODE`, `OPTION`, `SHARE`, `START`, `CACHE`, `ROLE`, `PASSWORD`, `LOGIN`, `DOMAIN`,
+    // `CLUSTER`, `POLICY`, `SEQUENCE`, `LOCAL`, `SKIP`, `EXCLUSIVE`, `SOURCE`. Every one is a
+    // NON-reserved PostgreSQL word — legal as a bare column name — and a believable ALL-CAPS
+    // column in a customer schema this repo's baseline cannot see. MJ emits none of them through
+    // `ExecuteSQL` on PostgreSQL, so adding them would trade a real risk for no benefit. If a
+    // future statement needs one, add it WITH the statement, not speculatively.
 ]);
 
 /**

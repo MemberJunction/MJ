@@ -1,5 +1,11 @@
 # MJ Explorer UX Prototype - Visual Overview
 
+> **The prototype source has been removed.** `explorer-prototype/` was a standalone Angular 18
+> scratch app for this plan, which is complete. It was never part of the pnpm workspace, never
+> built by CI, and never shipped, but its pinned Angular 18 dependencies kept generating
+> Dependabot alerts for versions that have no patched release. The code remains in git history
+> if you need it. Source links below no longer resolve.
+
 ## Recent Work: Golden Layout Integration (Complete)
 
 ### What We Accomplished

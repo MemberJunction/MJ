@@ -196,6 +196,11 @@ function verifyMediaToken(token: string, fileId: string): { fileId: string; user
  * Returns null when the file row, its account, or its provider key can't be resolved
  * (→ 404). Mirrors `readRealtimeRecordingFile`'s account-resolution (engine config with
  * force-refresh fallback for newly-provisioned accounts).
+ *
+ * Each `null` return is LOGGED with which of those three distinct causes it was. The response
+ * stays a bare 404 (no body — the route must not describe server config to an unauthenticated
+ * caller), so the log is the only diagnostic there is; an unlogged 404 made a misconfigured
+ * provider indistinguishable from a deleted file.
  */
 async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource | null> {
   const systemUser: UserInfo = await getSystemUser();
@@ -204,7 +209,12 @@ async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource |
   // at token-mint time, so this load only locates the bytes.
   const md = new Metadata(); // global-provider-ok: pre-auth system-context route, no per-request provider
   const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', systemUser);
-  if (!await file.Load(fileId) || !file.ProviderKey) {
+  if (!await file.Load(fileId)) {
+    LogError(`[MediaStream] File ${fileId} could not be loaded (no such 'MJ: Files' row?) — responding 404.`);
+    return null;
+  }
+  if (!file.ProviderKey) {
+    LogError(`[MediaStream] File ${fileId} ('${file.Name}') has no ProviderKey, so its bytes cannot be located — responding 404.`);
     return null;
   }
 
@@ -218,6 +228,10 @@ async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource |
   }
   const account = accounts[0];
   if (!account) {
+    LogError(
+      `[MediaStream] File ${fileId} points at storage provider ${file.ProviderID}, which has no ` +
+        `'MJ: File Storage Accounts' row — nothing can read its bytes. Responding 404.`,
+    );
     return null;
   }
 

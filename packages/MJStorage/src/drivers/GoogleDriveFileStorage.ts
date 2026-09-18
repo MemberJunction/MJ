@@ -1,5 +1,6 @@
 import { google, drive_v3 } from 'googleapis';
 import { RegisterClass } from '@memberjunction/global';
+import { LogError } from '@memberjunction/core';
 import env from 'env-var';
 import mime from 'mime-types';
 import { Readable } from 'stream';
@@ -51,6 +52,81 @@ interface ServiceAccountCredentials {
   token_uri: string;
   auth_provider_x509_cert_url: string;
   client_x509_cert_url: string;
+}
+
+/**
+ * The nested shape of an error thrown by `googleapis` (a `GaxiosError`).
+ *
+ * The line an operator actually needs is rarely on the top-level `message` alone: the Drive API
+ * returns a machine `reason` plus a human sentence per failure in `errors[]`, and when the SDK
+ * surfaces the raw HTTP response the same payload also hangs off `response.data.error`. The
+ * "Service Accounts do not have storage quota. Leverage shared drives instead." text that made an
+ * upload fail lives there, under reason `storageQuotaExceeded`.
+ */
+interface GoogleApiErrorShape {
+  code?: number | string;
+  message?: string;
+  errors?: Array<{ reason?: string; message?: string; domain?: string }>;
+  response?: {
+    data?: {
+      error?: {
+        code?: number | string;
+        message?: string;
+        errors?: Array<{ reason?: string; message?: string; domain?: string }>;
+      };
+    };
+  };
+}
+
+/**
+ * Builds a log-safe, bounded, one-line description of a Google Drive API failure.
+ *
+ * Deliberately an **allowlist** of named fields rather than a serialisation of the error, for the
+ * reason `describeBoxError` documents in `BoxFileStorage.ts`: an error raised by an HTTP client
+ * carries the originating request, and a request carries whatever authenticated it. Naming the
+ * fields makes the logged set a property of this file, which an SDK upgrade cannot widen.
+ *
+ * Exported (rather than private to the driver) only so the extraction can be unit-tested against
+ * realistic error payloads — see `src/__tests__/googleDriveErrorDetail.test.ts`.
+ *
+ * @param error The caught value, of unknown shape.
+ * @returns A human-readable cause, e.g.
+ *   `code 403 — Service Accounts do not have storage quota... — storageQuotaExceeded: ...`.
+ */
+export function describeGoogleApiError(error: unknown): string {
+  if (error === null || typeof error !== 'object') {
+    return String(error);
+  }
+
+  const e = error as GoogleApiErrorShape;
+  const apiError = e.response?.data?.error;
+  const parts: string[] = [];
+  const add = (part: string | undefined): void => {
+    if (part && !parts.includes(part)) {
+      parts.push(part);
+    }
+  };
+
+  const code = e.code ?? apiError?.code;
+  if (code !== undefined && code !== null) {
+    add(`code ${code}`);
+  }
+  add(e.message);
+  add(apiError?.message);
+
+  // Per-failure details: the machine `reason` is the part worth grepping a log for. Its `message` is
+  // usually the same sentence already added above, so it is repeated only when it says something new.
+  for (const detail of e.errors ?? apiError?.errors ?? []) {
+    const sentence = detail.message;
+    const saysSomethingNew = !!sentence && !parts.some((part) => part.includes(sentence));
+    if (detail.reason) {
+      add(saysSomethingNew ? `${detail.reason}: ${sentence}` : detail.reason);
+    } else {
+      add(sentence);
+    }
+  }
+
+  return parts.length > 0 ? parts.join(' — ') : String(error);
 }
 
 /**
@@ -624,7 +700,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return true;
     } catch (error) {
-      console.error('Error moving object', { oldObjectName, newObjectName, error });
+      LogError(`GoogleDriveFileStorage.MoveObject failed ('${oldObjectName}' -> '${newObjectName}'): ${describeGoogleApiError(error)}`);
       return false;
     }
   }
@@ -673,7 +749,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         return true;
       }
 
-      console.error('Error deleting object', { objectName, error });
+      LogError(`GoogleDriveFileStorage.DeleteObject failed for '${objectName}': ${describeGoogleApiError(error)}`);
       return false;
     }
   }
@@ -755,7 +831,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
       console.log('[GoogleDriveFileStorage] Returning:', { objectCount: objects.length, prefixCount: prefixes.length });
       return { objects, prefixes };
     } catch (error) {
-      console.error('[GoogleDriveFileStorage] Error listing objects', { prefix, error });
+      LogError(`GoogleDriveFileStorage.ListObjects failed for prefix '${prefix}': ${describeGoogleApiError(error)}`);
       return { objects: [], prefixes: [] };
     }
   }
@@ -810,7 +886,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return true;
     } catch (error) {
-      console.error('Error creating directory', { directoryPath, error });
+      LogError(`GoogleDriveFileStorage.CreateDirectory failed for '${directoryPath}': ${describeGoogleApiError(error)}`);
       return false;
     }
   }
@@ -868,7 +944,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return true;
     } catch (error) {
-      console.error('Error deleting directory', { directoryPath, recursive, error });
+      LogError(`GoogleDriveFileStorage.DeleteDirectory failed for '${directoryPath}' (recursive: ${recursive}): ${describeGoogleApiError(error)}`);
       return false;
     }
   }
@@ -936,8 +1012,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return this._fileToMetadata(file, parentPath);
     } catch (error) {
-      console.error('Error getting object metadata', { params, error });
-      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
+      const cause = describeGoogleApiError(error);
+      LogError(`GoogleDriveFileStorage.GetObjectMetadata failed for '${params.objectId || params.fullPath}': ${cause}`);
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}. ${cause}`);
     }
   }
 
@@ -1038,8 +1115,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return Buffer.from(response.data as ArrayBuffer);
     } catch (error) {
-      console.error('Error getting object', { params, error });
-      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
+      const cause = describeGoogleApiError(error);
+      LogError(`GoogleDriveFileStorage.GetObject failed for '${params.objectId || params.fullPath}': ${cause}`);
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}. ${cause}`);
     }
   }
 
@@ -1129,8 +1207,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return result;
     } catch (error) {
-      console.error('Error streaming object', { params, error });
-      throw new Error(`Failed to stream object: ${params.objectId || params.fullPath}`);
+      const cause = describeGoogleApiError(error);
+      LogError(`GoogleDriveFileStorage.GetObjectStream failed for '${params.objectId || params.fullPath}': ${cause}`);
+      throw new Error(`Failed to stream object: ${params.objectId || params.fullPath}. ${cause}`);
     }
   }
 
@@ -1212,7 +1291,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return true;
     } catch (error) {
-      console.error('Error putting object', { objectName, error });
+      LogError(`GoogleDriveFileStorage.PutObject failed for '${objectName}': ${describeGoogleApiError(error)}`);
       return false;
     }
   }
@@ -1270,7 +1349,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
       return true;
     } catch (error) {
-      console.error('Error copying object', { sourceObjectName, destinationObjectName, error });
+      LogError(
+        `GoogleDriveFileStorage.CopyObject failed ('${sourceObjectName}' -> '${destinationObjectName}'): ${describeGoogleApiError(error)}`,
+      );
       return false;
     }
   }
@@ -1489,8 +1570,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         nextPageToken: response.data.nextPageToken || undefined,
       };
     } catch (error) {
-      console.error('Error searching files in Google Drive', { query, options, error });
-      throw new Error(`Google Drive search failed: ${error.message || 'Unknown error'}`);
+      const cause = describeGoogleApiError(error);
+      LogError(`GoogleDriveFileStorage.SearchFiles failed for query '${query}': ${cause}`);
+      throw new Error(`Google Drive search failed: ${cause}`);
     }
   }
 

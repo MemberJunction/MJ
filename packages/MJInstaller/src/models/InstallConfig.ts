@@ -20,6 +20,7 @@
  * @see mergeConfigs — merges multiple partial configs (later wins).
  */
 import fs from 'node:fs/promises';
+import type { PackageManagerType } from './PackageManager.js';
 export interface InstallConfig {
   // ── Database ──────────────────────────────────────────────────────────
 
@@ -78,6 +79,18 @@ export interface InstallConfig {
    */
   InstallMode: 'distribution' | 'monorepo';
 
+  // ── Package manager ───────────────────────────────────────────────────
+
+  /**
+   * Package manager used to install and build the workspace.
+   * - `'pnpm'` (default) — matches the era-6 platform manifest.
+   * - `'npm'` — explicit override for environments that cannot add pnpm.
+   *
+   * There is no silent fallback: preflight hard-fails when the configured
+   * package manager is not on PATH, so installs stay deterministic.
+   */
+  PackageManager: PackageManagerType;
+
   // ── Auth provider ─────────────────────────────────────────────────────
 
   /**
@@ -133,27 +146,33 @@ export interface InstallConfig {
 
 /**
  * Partial configuration that can be loaded from a `--config` JSON file
- * or passed programmatically. Fields not present will be prompted for
- * interactively during the {@link ConfigurePhase}, or filled with
- * {@link InstallConfigDefaults} in `--yes` mode.
+ * or passed programmatically. Fields not present are prompted for
+ * interactively during the {@link ConfigurePhase}; in `--yes` mode each
+ * of those prompts resolves to its own default instead of being asked.
  */
 export type PartialInstallConfig = Partial<InstallConfig>;
 
 /**
- * Sensible defaults for {@link InstallConfig} fields.
+ * Defaults applied before any prompting.
  *
- * Applied as the base layer when creating a plan via
- * {@link InstallerEngine.CreatePlan}. User-supplied and prompted values
- * override these defaults.
+ * Only fields that a phase **before** `configure` reads belong here. Anything
+ * whose only default is a prompt fallback must NOT be listed: `CreatePlan`
+ * spreads this object into the config, so a value here makes
+ * `ConfigurePhase`'s `config.X = config.X ?? await prompt(...)` guard
+ * permanently non-nullish and the prompt can never fire. `DatabaseTrustCert`
+ * defaulted to `false` here, which is why interactive installs silently wrote an
+ * empty `DB_TRUST_SERVER_CERTIFICATE` and failed `migrate` against every
+ * self-signed (Docker, local) SQL Server — see #4562.
+ *
+ * The removed fields are still defaulted, twice over: every pre-`configure`
+ * consumer carries its own `?? 'localhost'` / `?? 1433` / `?? 4000` / `?? 4200`
+ * fallback, and each prompt passes the same value as its own default, so
+ * `--yes` installs are unchanged.
  */
 export const InstallConfigDefaults: PartialInstallConfig = {
-  DatabaseHost: 'localhost',
-  DatabasePort: 1433,
-  DatabaseTrustCert: false,
-  APIPort: 4000,
-  ExplorerPort: 4200,
   AuthProvider: 'none',
   InstallMode: 'distribution',
+  PackageManager: 'pnpm',
 };
 
 // ── Environment variable mapping ──────────────────────────────────────────
@@ -184,6 +203,7 @@ const ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_MISTRAL_KEY',       Field: 'MistralKey',       Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_BASE_ENCRYPTION_KEY', Field: 'BaseEncryptionKey', Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_MODE',              Field: 'InstallMode',       Parse: (v) => v as InstallConfig['InstallMode'] },
+  { EnvVar: 'MJ_INSTALL_PACKAGE_MANAGER',   Field: 'PackageManager',    Parse: (v) => v as InstallConfig['PackageManager'] },
 ];
 
 /**
@@ -269,6 +289,7 @@ const KNOWN_KEYS: ReadonlySet<string> = new Set<string>([
   'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
   'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
   'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
+  'PackageManager',
 ]);
 
 /**

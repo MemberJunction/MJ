@@ -15,6 +15,13 @@ vi.mock('@google/genai', () => ({
   Content: class {},
   Part: class {},
   Blob: class {},
+  FunctionCallingConfigMode: {
+    MODE_UNSPECIFIED: 'MODE_UNSPECIFIED',
+    AUTO: 'AUTO',
+    ANY: 'ANY',
+    NONE: 'NONE',
+    VALIDATED: 'VALIDATED',
+  },
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -82,7 +89,9 @@ vi.mock('@memberjunction/ai', () => {
     ModelUsage: MockModelUsage,
     SummarizeParams: class {},
     SummarizeResult: class {},
-    ChatMessageRole: { user: 'user', assistant: 'assistant', system: 'system' },
+    ChatMessageRole: { user: 'user', assistant: 'assistant', system: 'system', tool: 'tool' },
+    ChatToolCall: class {},
+    CHAT_FINISH_REASON_TOOL_CALLS: 'tool_calls',
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
     BaseImageGenerator: MockBaseImageGenerator,
     ImageGenerationParams: class {},
@@ -604,6 +613,249 @@ describe('GeminiLLM', () => {
 
       expect(result.success).toBe(false);
       expect(result.statusText).toBe('Cancelled');
+    });
+  });
+});
+
+// =============================================================================
+// Native tool calling — request mapping + response normalization (plan §5)
+// =============================================================================
+
+describe('GeminiLLM — native tool calling', () => {
+  let llm: GeminiLLM;
+  let sendMessage: Mock;
+
+  const WEATHER_TOOL = {
+    name: 'get_weather',
+    description: 'Call this when the user asks about weather.',
+    inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+  };
+
+  /** Invokes the protected driver entry point the way the base class would. */
+  const run = async (params: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    const fn = (llm as unknown as Record<string, (p: unknown) => Promise<Record<string, unknown>>>)['nonStreamingChatCompletion'].bind(llm);
+    return fn({ model: 'gemini-2.5-flash', ...params });
+  };
+
+  /** The per-request config the driver handed the SDK. */
+  const sentConfig = (): Record<string, unknown> => sendMessage.mock.calls[0][0].config as Record<string, unknown>;
+
+  /** The history the driver handed chats.create(). */
+  let create: Mock;
+  const sentHistory = (): Array<Record<string, unknown>> => create.mock.calls[0][0].history;
+
+  /**
+   * The parts of the CURRENT turn. Gemini splits the conversation: everything but the last turn is
+   * `history`, and the last turn rides as `message` — so a trailing tool result lands here.
+   */
+  const sentMessageParts = (): Array<Record<string, unknown>> => sendMessage.mock.calls[0][0].message;
+
+  beforeEach(() => {
+    llm = new GeminiLLM('test-gemini-key');
+    sendMessage = vi.fn().mockResolvedValue({
+      candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
+    });
+    create = vi.fn().mockReturnValue({ sendMessage, sendMessageStream: vi.fn() });
+    (llm as unknown as Record<string, unknown>)['_gemini'] = { chats: { create } };
+  });
+
+  it('declares SupportsTools', () => {
+    expect(llm.SupportsTools).toBe(true);
+  });
+
+  describe('request mapping', () => {
+    it('maps tool declarations onto functionDeclarations using parametersJsonSchema', async () => {
+      await run({ messages: [{ role: 'user', content: 'weather?' }], tools: [WEATHER_TOOL] });
+
+      expect(sentConfig().tools).toEqual([{
+        functionDeclarations: [{
+          name: 'get_weather',
+          description: 'Call this when the user asks about weather.',
+          parametersJsonSchema: WEATHER_TOOL.inputSchema
+        }]
+      }]);
+    });
+
+    it('sends no tool fields when the caller declares none', async () => {
+      await run({ messages: [{ role: 'user', content: 'hi' }] });
+
+      expect(sentConfig().tools).toBeUndefined();
+      expect(sentConfig().toolConfig).toBeUndefined();
+    });
+
+    it.each([
+      ['auto', 'AUTO'],
+      ['none', 'NONE'],
+      ['required', 'ANY']
+    ])("maps toolChoice '%s' onto functionCallingConfig mode %s", async (choice, mode) => {
+      await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL], toolChoice: choice });
+
+      expect(sentConfig().toolConfig).toEqual({ functionCallingConfig: { mode } });
+    });
+
+    it('maps a named tool choice onto ANY restricted to that name', async () => {
+      await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL], toolChoice: { name: 'get_weather' } });
+
+      expect(sentConfig().toolConfig).toEqual({
+        functionCallingConfig: { mode: 'ANY', allowedFunctionNames: ['get_weather'] }
+      });
+    });
+  });
+
+  describe('conversation round-tripping (§5.3)', () => {
+    it('replays a prior assistant turn as functionCall parts on a model turn', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'NYC' } }] },
+          { role: 'tool', content: [{ type: 'tool_result', content: '72F', toolCallId: 'call_1', toolName: 'get_weather' }] }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+
+      const modelTurn = sentHistory()[1];
+      expect(modelTurn.role).toBe('model');
+      // A synthesized call carries no signature, so the documented placeholder goes out.
+      expect(modelTurn.parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: { city: 'NYC' } }, thoughtSignature: 'skip_thought_signature_validator' }]);
+    });
+
+    it('replays the thought signature the model attached to its own call', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'NYC' }, providerMetadata: { thoughtSignature: 'sig-abc' } }] },
+          { role: 'tool', content: [{ type: 'tool_result', content: '72F', toolCallId: 'call_1', toolName: 'get_weather' }] }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+      const modelTurn = sentHistory()[1];
+      expect(modelTurn.parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: { city: 'NYC' } }, thoughtSignature: 'sig-abc' }]);
+    });
+
+    it('sends a tool result as a functionResponse part with the output key', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {} }] },
+          { role: 'tool', content: [{ type: 'tool_result', content: '72F', toolCallId: 'call_1', toolName: 'get_weather' }] }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+
+      // The tool result is the latest turn, so it rides as the message rather than in history.
+      expect(sentMessageParts()).toEqual([
+        { functionResponse: { id: 'call_1', name: 'get_weather', response: { output: '72F' } } }
+      ]);
+    });
+
+    it('uses the error key for a failed tool result', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {} }] },
+          { role: 'tool', content: [{ type: 'tool_result', content: 'boom', toolCallId: 'call_1', toolName: 'get_weather', isError: true }] }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+
+      expect(sentMessageParts()).toEqual([
+        { functionResponse: { id: 'call_1', name: 'get_weather', response: { error: 'boom' } } }
+      ]);
+    });
+
+    it('drops the empty text part on a pure tool-call turn — Gemini rejects empty parts', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {} }] },
+          { role: 'user', content: 'thanks' }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+
+      expect(sentHistory()[1].parts).toEqual([{ functionCall: { id: 'call_1', name: 'get_weather', args: {} }, thoughtSignature: 'skip_thought_signature_validator' }]);
+    });
+
+    it('keeps prose alongside the functionCall when the model produced both', async () => {
+      await run({
+        messages: [
+          { role: 'user', content: 'weather?' },
+          { role: 'assistant', content: 'Let me check.', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {} }] },
+          { role: 'user', content: 'thanks' }
+        ],
+        tools: [WEATHER_TOOL]
+      });
+
+      expect(sentHistory()[1].parts).toEqual([
+        { text: 'Let me check.' },
+        { functionCall: { id: 'call_1', name: 'get_weather', args: {} }, thoughtSignature: 'skip_thought_signature_validator' }
+      ]);
+    });
+  });
+
+  describe('response normalization (§5.2)', () => {
+    it('normalizes functionCall parts into toolCalls', async () => {
+      sendMessage.mockResolvedValue({
+        candidates: [{ content: { parts: [{ functionCall: { id: 'call_1', name: 'get_weather', args: { city: 'NYC' } }, thoughtSignature: 'sig-from-model' }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
+      });
+
+      const result = await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL] });
+
+      // The model's thought signature rides on the call so a replay can send it back.
+      expect(result.data.choices[0].message.toolCalls).toEqual([
+        { id: 'call_1', name: 'get_weather', arguments: { city: 'NYC' }, providerMetadata: { thoughtSignature: 'sig-from-model' } }
+      ]);
+      expect(result.data.choices[0].finish_reason).toBe('tool_calls');
+    });
+
+    it('does NOT report "no output received" for a text-free tool-call turn', async () => {
+      // The regression this guards: a pure tool call has no text, and the empty-output guard used
+      // to treat that as a failed generation and throw.
+      sendMessage.mockResolvedValue({
+        candidates: [{ content: { parts: [{ functionCall: { name: 'get_weather', args: {} } }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
+      });
+
+      const result = await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL] });
+
+      expect(result.success).toBe(true);
+      expect(result.data.choices[0].message.toolCalls).toHaveLength(1);
+    });
+
+    it('synthesizes a stable id when Gemini omits one', async () => {
+      sendMessage.mockResolvedValue({
+        candidates: [{ content: { parts: [
+          { functionCall: { name: 'get_weather', args: {} } },
+          { functionCall: { name: 'get_time', args: {} } }
+        ] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2 }
+      });
+
+      const result = await run({ messages: [{ role: 'user', content: 'x' }], tools: [WEATHER_TOOL] });
+
+      expect(result.data.choices[0].message.toolCalls.map((c: { id: string }) => c.id))
+        .toEqual(['get_weather_0', 'get_time_1']);
+    });
+
+    it('still fails when the model returned neither text nor a tool call', async () => {
+      sendMessage.mockResolvedValue({
+        candidates: [{ content: { parts: [] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 0 }
+      });
+
+      const result = await run({ messages: [{ role: 'user', content: 'x' }] });
+
+      expect(result.success).toBe(false);
+      expect(String(result.errorMessage)).toContain('No output received from model');
+    });
+
+    it('leaves toolCalls undefined and finish_reason untouched on an ordinary turn', async () => {
+      const result = await run({ messages: [{ role: 'user', content: 'x' }] });
+
+      expect(result.data.choices[0].message.toolCalls).toBeUndefined();
+      expect(result.data.choices[0].finish_reason).toBe('STOP');
     });
   });
 });

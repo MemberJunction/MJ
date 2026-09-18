@@ -292,16 +292,12 @@ export class SchedulingActivityComponent implements OnInit, OnDestroy {
 
   public OpenExecutionRecord(exec: JobExecution, event: MouseEvent): void {
     event.stopPropagation();
-    const compositeKey = new CompositeKey();
-    compositeKey.LoadFromSingleKeyValuePair('ID', exec.id);
-    SharedService.Instance.OpenEntityRecord('MJ: Scheduled Job Runs', compositeKey);
+    SharedService.Instance.OpenEntityRecord('MJ: Scheduled Job Runs', CompositeKey.FromID(exec.id));
   }
 
   public OpenJobRecord(exec: JobExecution, event: MouseEvent): void {
     event.stopPropagation();
-    const compositeKey = new CompositeKey();
-    compositeKey.LoadFromSingleKeyValuePair('ID', exec.jobId);
-    SharedService.Instance.OpenEntityRecord('MJ: Scheduled Jobs', compositeKey);
+    SharedService.Instance.OpenEntityRecord('MJ: Scheduled Jobs', CompositeKey.FromID(exec.jobId));
   }
 
   public GetStatusIcon(status: string): string {

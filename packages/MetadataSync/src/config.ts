@@ -105,6 +105,18 @@ export interface SyncConfig {
      * Defaults to false.
      */
     alwaysPush?: boolean;
+    /**
+     * Default for every entity directory in this tree: whether each JSON-root graph gets its own
+     * connection and transaction. Defaults to false, and an entity directory's own
+     * `push.isolatedTransactions` overrides it.
+     * - `false` (default): all-or-nothing. Every create, update and delete runs in one database
+     *   transaction, one graph at a time. If anything fails, nothing is saved.
+     * - `true`: sibling graphs run in parallel (`--parallel-batch-size`) on their own connections,
+     *   and each create and update commits as soon as it is saved. A failure does NOT roll those
+     *   back. For entities that manage their own transaction scopes and want the parallelism.
+     * The CLI flags `--isolated-transactions` / `--no-isolated-transactions` override both.
+     */
+    isolatedTransactions?: boolean;
   };
   /** SQL logging configuration (only applies to root-level config, not inherited by subdirectories) */
   sqlLogging?: {
@@ -232,6 +244,19 @@ export interface EntityConfig {
    * Examples: ["output", "examples", "temp"]
    */
   ignoreDirectories?: string[];
+  /**
+   * Declarative collection configuration for composition axes.
+   * Key is collection property name (e.g. "Lines", "Payments").
+   */
+  collections?: Record<string, {
+    /** Membership mode: 'upsert' (default) or 'authoritative' (opt-in) */
+    mode?: 'upsert' | 'authoritative';
+    /**
+     * Maximum percentage of loaded collection rows that can be implied-deleted
+     * under authoritative mode before push refuses (default: 20%).
+     */
+    maxImpliedDeletePercent?: number;
+  }>;
   /** Pull command specific configuration */
   pull?: {
     /** Glob pattern for finding existing files to update (defaults to filePattern) */
@@ -290,6 +315,36 @@ export interface EntityConfig {
     ignoreNullFields?: boolean;
     /** Whether to ignore virtual fields during pull (defaults to false) */
     ignoreVirtualFields?: boolean;
+  };
+  /**
+   * Push-specific options for this entity directory. Applied only on `mj sync push`
+   * (not pull). Add new per-save / per-entity push knobs here rather than as global
+   * CLI flags so each entity can opt in independently.
+   */
+  push?: {
+    /**
+     * Maps to `EntitySaveOptions.SkipGeoCoding` so sample data with pre-filled
+     * lat/lng (or display-only geo entities) does not call the geocoding provider.
+     * Per-entity, not a global CLI kill switch.
+     */
+    skipGeoCoding?: boolean;
+    /**
+     * Whether this entity's JSON-root graphs each get their own connection and transaction, so
+     * siblings can be written in parallel. Overrides the root config; the CLI flags
+     * `--isolated-transactions` / `--no-isolated-transactions` override this.
+     *
+     * `true` buys parallelism and costs atomicity: each create and update commits as it is saved,
+     * so a later failure leaves them behind. Nested transaction scopes inside a save work either
+     * way — on the shared connection they become savepoints — so choose this for throughput on
+     * entities whose partial writes are acceptable, not to make nested scopes work.
+     */
+    isolatedTransactions?: boolean;
+    /**
+     * When false, skips creating or updating sync metadata blocks (`record.sync`)
+     * on records pushed from this directory. Used by decision metadata directories
+     * so decision files never carry sync blocks. Defaults to true.
+     */
+    writeSyncMetadata?: boolean;
   };
   /**
    * Whether to emit __mj_sync_notes in record files during push operations.

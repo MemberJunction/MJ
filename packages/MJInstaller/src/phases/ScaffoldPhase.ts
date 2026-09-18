@@ -25,6 +25,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { InstallerEventEmitter } from '../events/InstallerEvents.js';
 import { InstallerError } from '../errors/InstallerError.js';
+import { ArchiveEntryRefusedError } from '../errors/ArchiveEntryRefusedError.js';
 import { GitHubReleaseProvider } from '../adapters/GitHubReleaseProvider.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { RepoFetcher, type SparseFetchResult } from '../adapters/RepoFetcher.js';
@@ -111,6 +112,8 @@ export class ScaffoldPhase {
    * @throws {InstallerError} With code `NO_RELEASES` if no releases are found on GitHub.
    * @throws {InstallerError} With code `DOWNLOAD_FAILED` if the ZIP download fails.
    * @throws {InstallerError} With code `EXTRACT_FAILED` if ZIP extraction fails.
+   * @throws {InstallerError} With code `ARCHIVE_REFUSED` if the archive contains an entry that would
+   *   be written outside the target directory; nothing is extracted in that case.
    * @throws {InstallerError} With code `USER_CANCELLED` if the user declines the non-empty directory prompt.
    */
   async Run(context: ScaffoldContext): Promise<ScaffoldResult> {
@@ -251,6 +254,17 @@ export class ScaffoldPhase {
     try {
       await this.fileSystem.ExtractZip(zipPath, context.Dir);
     } catch (err) {
+      await this.removeTempZip(zipPath);
+      if (err instanceof ArchiveEntryRefusedError) {
+        // Nothing was written: ExtractZip validates every entry before the first write.
+        throw new InstallerError(
+          'scaffold',
+          'ARCHIVE_REFUSED',
+          `The release archive was refused: ${err.message}`,
+          'Do not extract this archive by hand. Delete the download, fetch the release again from ' +
+            'GitHub, and report it to the MemberJunction team if the same archive is refused twice.'
+        );
+      }
       throw new InstallerError(
         'scaffold',
         'EXTRACT_FAILED',
@@ -268,11 +282,15 @@ export class ScaffoldPhase {
       });
     }
 
-    // Clean up temp ZIP (non-critical).
+    await this.removeTempZip(zipPath);
+  }
+
+  /** Removes the downloaded release ZIP. Non-critical: the temp dir is reclaimed by the OS. */
+  private async removeTempZip(zipPath: string): Promise<void> {
     try {
       await this.fileSystem.RemoveFile(zipPath);
     } catch {
-      // ignore — temp dir is reclaimed by the OS
+      // ignore
     }
   }
 

@@ -329,6 +329,33 @@ function HeadersToRecord(headers: Headers): Record<string, string> {
     return result;
 }
 
+/**
+ * Discards a fetch `Response` body so its underlying connection can return to the keep-alive
+ * pool instead of being held open until GC finalizes an unconsumed stream. Node's `fetch`
+ * (undici) pins the connection to any `Response` whose body was never read or cancelled.
+ *
+ * Call this on a `Response` you're about to throw away without reading — most commonly an
+ * error-status branch that returns/throws before calling `.json()`/`.text()`/etc. `HttpRequest`
+ * and {@link HttpClient} already do this for you; reach for it directly only when a call site
+ * uses raw `fetch()` or {@link SafeFetch} instead of going through them.
+ *
+ * @example
+ * ```ts
+ * const response = await fetch(url);
+ * if (!response.ok) {
+ *     await DrainResponseBody(response);
+ *     throw new Error(`request failed: ${response.status}`);
+ * }
+ * ```
+ */
+export async function DrainResponseBody(response: Response): Promise<void> {
+    try {
+        await response.body?.cancel();
+    } catch {
+        // Body already consumed, already errored, or there was none to begin with — nothing to drain.
+    }
+}
+
 /** Reads and interprets a response body per the requested {@link HttpResponseType}. */
 async function ReadBody(response: Response, responseType: HttpResponseType): Promise<unknown> {
     switch (responseType) {
@@ -469,6 +496,11 @@ export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promi
         };
 
         if (!result.Ok && throwOnError) {
+            if (responseType === "stream" && data instanceof ReadableStream) {
+                // `data` is the raw, unconsumed stream we're about to discard in favor of throwing —
+                // cancel it so the connection isn't held open by an error nobody will read.
+                await DrainResponseBody(response);
+            }
             throw new HttpError(`Request failed with status code ${response.status}`, {
                 Status: response.status,
                 StatusText: response.statusText,

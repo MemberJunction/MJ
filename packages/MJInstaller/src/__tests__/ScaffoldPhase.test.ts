@@ -4,6 +4,7 @@ import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { sampleVersionInfo } from './mocks/fixtures.js';
 import type { ScaffoldContext } from '../phases/ScaffoldPhase.js';
 import { InstallerError } from '../errors/InstallerError.js';
+import { ArchiveEntryRefusedError } from '../errors/ArchiveEntryRefusedError.js';
 import type { VersionInfo } from '../models/VersionInfo.js';
 import type { SparseFetchResult } from '../adapters/RepoFetcher.js';
 import type { WriteOp } from '../distribution/DistributionAssembler.js';
@@ -364,6 +365,23 @@ describe('ScaffoldPhase', () => {
         expect((err as InstallerError).Code).toBe('EXTRACT_FAILED');
         expect((err as InstallerError).message).toContain('Corrupt ZIP');
       }
+    });
+
+    it('should throw ARCHIVE_REFUSED, not EXTRACT_FAILED, when the archive contains an escaping entry', async () => {
+      mockFs.ExtractZip.mockRejectedValue(new ArchiveEntryRefusedError('MJ-abc/../../.bashrc'));
+      try {
+        await phase.Run(monorepoCtx());
+        throw new Error('expected Run to throw');
+      } catch (err) {
+        const error = err as InstallerError;
+        expect(error.Code).toBe('ARCHIVE_REFUSED');
+        expect(error.message).toContain('MJ-abc/../../.bashrc');
+        // The remediation must not tell the user to extract by hand the archive that was just refused.
+        expect(error.SuggestedFix).not.toMatch(/extract it into the target directory/);
+        expect(error.SuggestedFix).toMatch(/Do not extract this archive by hand/);
+      }
+      // The hostile download must not be left behind in the temp dir.
+      expect(mockFs.RemoveFile).toHaveBeenCalledWith(expect.stringContaining('v5.2.0.zip'));
     });
 
     it('should call RemoveFile for the temp zip after successful extraction', async () => {

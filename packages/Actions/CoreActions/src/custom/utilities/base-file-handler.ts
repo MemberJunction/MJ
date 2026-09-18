@@ -3,6 +3,7 @@ import { RunActionParams } from "@memberjunction/actions-base";
 import { RunView } from "@memberjunction/core";
 import { MJFileEntity, MJFileStorageAccountEntity } from "@memberjunction/core-entities";
 import { FileStorageEngine } from "@memberjunction/storage";
+import { DrainResponseBody } from "@memberjunction/network-utils";
 
 /**
  * Base class for actions that handle file inputs from multiple sources
@@ -112,6 +113,7 @@ export abstract class BaseFileHandlerAction extends BaseAction {
 
             const response = await fetch(url);
             if (!response.ok) {
+                await DrainResponseBody(response);
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 

@@ -147,7 +147,7 @@ async function bootstrapProvider(): Promise<sql.ConnectionPool> {
         user: process.env.CODEGEN_DB_USERNAME || process.env.DB_USERNAME,
         password: process.env.CODEGEN_DB_PASSWORD || process.env.DB_PASSWORD,
         options: {
-            encrypt: (process.env.DB_HOST || '').includes('.database.windows.net'),
+            encrypt: (process.env.DB_HOST || '').endsWith('.database.windows.net'),
             trustServerCertificate: true,
             enableArithAbort: true,
         },

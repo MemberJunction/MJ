@@ -3,26 +3,10 @@ import { QuickBooksBaseAction } from '../quickbooks-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { UserInfo } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { AccountBalance } from '../../../types';
 
-/**
- * Account balance information
- */
-export interface AccountBalance {
-    accountId: string;
-    accountCode: string;
-    accountName: string;
-    accountType: string;
-    accountSubType: string;
-    normalBalance: 'Debit' | 'Credit';
-    currentBalance: number;
-    balanceWithSubAccounts: number;
-    currency: string;
-    asOfDate: Date;
-    isActive: boolean;
-    level: number;
-    parentAccountId?: string;
-    parentAccountName?: string;
-}
+export type { AccountBalance } from '../../../types';
 
 /**
  * Trial balance summary
@@ -38,6 +22,7 @@ export interface TrialBalanceSummary {
 /**
  * Action to retrieve account balances (trial balance) from QuickBooks Online
  */
+@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetAccountBalances, ERP_INTEGRATION.QuickBooksOnline))
 @RegisterClass(BaseAction, 'GetQuickBooksAccountBalancesAction')
 export class GetQuickBooksAccountBalancesAction extends QuickBooksBaseAction {
     

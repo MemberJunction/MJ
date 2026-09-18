@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, ShouldJoinRecordGeoCodes, HasNativeLatLngFields, NativeLatitudeField, NativeLongitudeField, ListEmbeddedGeoSpecs } from '@memberjunction/core';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
@@ -172,6 +172,14 @@ export class SQLCodeGenBase {
             startSpinner('Cleaning generated files...');
             this.deleteGeneratedEntityFiles(directory, baselineEntities);
             succeedSpinner('Cleaned generated files');
+
+            // STEP 2(a.5) - field-level security / permission-reconciliation run context.
+            // One async pass over the live catalog (permission state + service-login role
+            // memberships) so the synchronous permission emitters can (1) REVOKE-and-reassert
+            // within the managed scope — which is what makes GRANT/DENY *removal* reach the
+            // database at all — and (2) emit field-security column DENYs safely. SQL Server
+            // only: PostgreSQL has no DENY primitive, so per decision D2 it emits nothing.
+            await this.prepareFieldSecurityRunContext(pool);
 
             // STEP 2(b) - generate all the SQL files and execute them
             startSpinner(`Generating SQL for ${includedEntities.length} entities...`);
@@ -524,6 +532,106 @@ export class SQLCodeGenBase {
     }
 
 
+    /**
+     * Builds the once-per-run {@link FieldSecurityRunContext} and hands it to the dialect
+     * provider (whose permission emitters are synchronous string builders and cannot query).
+     * Three inputs, all read here:
+     *
+     *  1. **Managed roles** — `MJ: Roles` metadata rows with a non-blank `SQLName`, EXCLUDING
+     *     the standard UI/Developer/Integration roles: by decision D1a, field-security DENYs
+     *     target custom (DBA-created) roles only, so standard roles never enter
+     *     `RoleSQLNameByID` and Deny rows against them stay app-tier-enforced.
+     *  2. **Service-protected roles** — roles any protected principal is a member of
+     *     (`sys.database_role_members`). Protected principals default to the known service
+     *     logins (`MJ_Connect`, `MJ_Connect_Dev`) plus the configured CodeGen login; a DENY
+     *     to such a role would strip the column from the service login itself.
+     *  3. **Catalog permission state** — every `sys.database_permissions` entry (object- and
+     *     column-level) granted to a managed role, keyed by `<schema>.<object>`. This powers
+     *     the wipe-and-reassert reconciliation (decision D7) that finally makes permission
+     *     REMOVAL propagate: the historical model was assert-only, so a deleted
+     *     `EntityPermission` / Deny row left its GRANT/DENY in the database until the view
+     *     happened to be regenerated.
+     *
+     * SQL Server only (PostgreSQL emits no DB-tier field security, decision D2). Any failure
+     * degrades to a null context — emitters fall back to the historical grants-only output —
+     * with a prominent warning, never a failed run.
+     */
+    protected async prepareFieldSecurityRunContext(pool: CodeGenConnection): Promise<void> {
+        if (this._dbProvider.PlatformKey !== 'sqlserver') {
+            this._dbProvider.SetFieldSecurityRunContext(null);
+            return;
+        }
+        try {
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+            const standardRoleNames = new Set(['ui', 'developer', 'integration']);
+            const managedRoles = md.Roles.filter(r =>
+                (r.SQLName ?? '').trim().length > 0 && !standardRoleNames.has((r.Name ?? '').trim().toLowerCase())
+            );
+            const roleSQLNameByID = new Map<string, string>();
+            for (const role of managedRoles) {
+                roleSQLNameByID.set((role.ID ?? '').trim().toLowerCase(), role.SQLName.trim());
+            }
+            // The reconciliation scope includes the STANDARD roles' grants too (their view
+            // GRANTs / proc EXECUTEs are CodeGen-owned and must self-heal like any other),
+            // so the catalog query spans every non-blank-SQLName role — only the DENY
+            // emission path is restricted to the custom-role map above.
+            const allManagedSQLNames = md.Roles
+                .map(r => (r.SQLName ?? '').trim())
+                .filter(n => n.length > 0);
+
+            const escape = (name: string) => name.replace(/'/g, "''");
+            const protectedPrincipals = [...new Set(['MJ_Connect', 'MJ_Connect_Dev', (configInfo.codeGenLogin ?? '').trim()].filter(p => p.length > 0))];
+
+            const membershipResult = await pool.query(`
+                SELECT DISTINCT r.name AS role_name
+                FROM sys.database_role_members drm
+                JOIN sys.database_principals r ON r.principal_id = drm.role_principal_id
+                JOIN sys.database_principals m ON m.principal_id = drm.member_principal_id
+                WHERE m.name IN (${protectedPrincipals.map(p => `N'${escape(p)}'`).join(', ')})
+            `);
+            const serviceProtected = new Set<string>(
+                (membershipResult.recordset as Array<{ role_name: string }>).map(r => r.role_name.trim().toLowerCase())
+            );
+
+            const catalog = new Map<string, import('./codeGenDatabaseProvider').CatalogPermissionEntry[]>();
+            if (allManagedSQLNames.length > 0) {
+                const permissionResult = await pool.query(`
+                    SELECT pr.name AS role_name, s.name AS schema_name, o.name AS object_name,
+                           c.name AS column_name, p.state_desc, p.permission_name
+                    FROM sys.database_permissions p
+                    JOIN sys.database_principals pr ON pr.principal_id = p.grantee_principal_id
+                    JOIN sys.objects o ON o.object_id = p.major_id
+                    JOIN sys.schemas s ON s.schema_id = o.schema_id
+                    LEFT JOIN sys.columns c ON c.object_id = p.major_id AND c.column_id = p.minor_id
+                    WHERE p.class = 1
+                      AND pr.name IN (${allManagedSQLNames.map(n => `N'${escape(n)}'`).join(', ')})
+                `);
+                for (const row of permissionResult.recordset as Array<{ role_name: string; schema_name: string; object_name: string; column_name: string | null; state_desc: string; permission_name: string }>) {
+                    const key = `${row.schema_name}.${row.object_name}`.toLowerCase();
+                    const entries = catalog.get(key) ?? [];
+                    entries.push({
+                        RoleName: row.role_name.trim(),
+                        PermissionName: row.permission_name.trim(),
+                        StateDesc: row.state_desc.trim(),
+                        ColumnName: row.column_name ? row.column_name.trim() : null,
+                    });
+                    catalog.set(key, entries);
+                }
+            }
+
+            this._dbProvider.SetFieldSecurityRunContext({
+                ServiceProtectedRoleSQLNames: serviceProtected,
+                CatalogPermissions: catalog,
+                RoleSQLNameByID: roleSQLNameByID,
+            });
+            logStatus(`   Field-security run context ready: ${roleSQLNameByID.size} custom role(s), ${serviceProtected.size} service-protected role(s), ${catalog.size} object(s) with managed permissions`);
+        } catch (e) {
+            logWarning(`   ⚠️  Could not build the field-security run context (${e instanceof Error ? e.message : String(e)}). ` +
+                `Permission emission degrades to grants-only for this run: no field-security DENYs and no reconciliation REVOKEs.`);
+            this._dbProvider.SetFieldSecurityRunContext(null);
+        }
+    }
+
     public async applyPermissions(pool: CodeGenConnection, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
         try {
             let bSuccess = true;
@@ -803,6 +911,8 @@ export class SQLCodeGenBase {
         // BaseView while CodeGen keeps writing the inner view underneath it. Gating on
         // BaseViewGenerated alone would skip the inner view and leave the custom layer selecting
         // from an object that does not exist.
+        // One pass: overlay already applied → Pass 1 sees extra BaseView columns and logs
+        // EntityField INSERTs; Pass 2 DROPs/creates only GeneratedViewName, never the overlay.
         const generatesView = (entity.BaseViewGenerated || entity.HasLayeredBaseView) && !entity.VirtualEntity;
 
         const tvfSQL = generatesView ? this.generateRecursiveFKTVFs(entity) : '';
@@ -1847,16 +1957,21 @@ export class SQLCodeGenBase {
         let relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
 
-        // Geo support: add __mj_Latitude and __mj_Longitude virtual fields for geo-enabled entities
-        // Skip for Record Geo Codes itself to avoid circular self-reference in the view
+        // Geo WRITE source: native lat/lng aliases, or RecordGeoCode JOIN when the entity
+        // has writable Geo* fields and no native coords. Display-only entities (Person/Org
+        // virtual PrimaryAddress*) do not get a RecordGeoCode join on their own ID.
         if (entity.SupportsGeoCoding && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
             const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
-            const geoFieldsSelect = this.hasNativeGeoFields(entity.Fields)
+            const geoFieldsSelect = HasNativeLatLngFields(entity.Fields)
                 ? this.generateNativeGeoFields(entity.Fields, classNameFirstChar, qi)
-                : this.generateRecordGeoCodeFields(qi);
+                : (ShouldJoinRecordGeoCodes(entity) ? this.generateRecordGeoCodeFields(qi) : '');
             if (geoFieldsSelect) {
                 relatedFieldsString += (relatedFieldsString ? ',\n' : '') + geoFieldsSelect;
             }
+        }
+        const embeddedGeo = this.generateEmbeddedGeoSelect(entity, classNameFirstChar);
+        if (embeddedGeo.select) {
+            relatedFieldsString += (relatedFieldsString ? ',\n' : '') + embeddedGeo.select;
         }
         // GRANTs target the PUBLIC view (BaseView), not the one this method generates. For a
         // LAYERED entity those are different objects, and the outer one may not exist yet: the
@@ -1981,10 +2096,9 @@ export class SQLCodeGenBase {
             }
         }
 
-        // Geo support: add LEFT JOIN to vwRecordGeoCodes for entities with SupportsGeoCoding = 1
-        // that don't have native GeoLatitude/GeoLongitude fields (those get aliased directly).
-        // Skip for Record Geo Codes itself to avoid circular self-reference in the view.
-        if (entity.SupportsGeoCoding && !this.hasNativeGeoFields(entityFields) && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
+        // Geo WRITE source: RecordGeoCode JOIN only when there are writable Geo* fields
+        // and no native lat/lng. Display-only entities skip this join.
+        if (ShouldJoinRecordGeoCodes(entity)) {
             const dialect = this._dbProvider.Dialect;
             const qi = dialect.QuoteIdentifier.bind(dialect);
             const qs = dialect.QuoteSchema.bind(dialect);
@@ -2012,6 +2126,8 @@ export class SQLCodeGenBase {
             sOutput += `LEFT OUTER JOIN\n    ${qs(mjCoreSchema, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = ${recordIdExpr}\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
         }
 
+        sOutput += this.generateEmbeddedGeoJoins(entity, classNameFirstChar);
+
         return sOutput;
     }
 
@@ -2029,9 +2145,7 @@ export class SQLCodeGenBase {
      * on any geo-eligible entity whose RecordGeoCode-based view ran once.
      */
     protected hasNativeGeoFields(entityFields: EntityFieldInfo[]): boolean {
-        const hasLat = entityFields.some(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
-        const hasLng = entityFields.some(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
-        return hasLat && hasLng;
+        return HasNativeLatLngFields(entityFields);
     }
 
     /**
@@ -2043,10 +2157,43 @@ export class SQLCodeGenBase {
         classNameFirstChar: string,
         qi: (name: string) => string
     ): string {
-        const latField = entityFields.find(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
-        const lngField = entityFields.find(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
+        const latField = NativeLatitudeField(entityFields);
+        const lngField = NativeLongitudeField(entityFields);
         if (!latField || !lngField) return '';
         return `    ${qi(classNameFirstChar)}.${qi(latField.Name)} AS ${qi('__mj_Latitude')},\n    ${qi(classNameFirstChar)}.${qi(lngField.Name)} AS ${qi('__mj_Longitude')}`;
+    }
+
+    /**
+     * Bubble lat/lng from EmbeddedRecord peers as `__mj_Latitude_{FK}`.
+     * Geocode lives on the Address (or other source); the parent only displays it.
+     */
+    protected generateEmbeddedGeoSelect(entity: EntityInfo, classNameFirstChar: string): { select: string; joins: string } {
+        const specs = ListEmbeddedGeoSpecs(entity.Fields);
+        if (specs.length === 0) return { select: '', joins: '' };
+        const md = new Metadata(); // global-provider-ok: CodeGen is CLI tool
+        const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+        const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
+        const selects: string[] = [];
+        const joins: string[] = [];
+        for (const spec of specs) {
+            const related = md.Entities.find(e => e.ID.toLowerCase() === spec.relatedEntityID.toLowerCase());
+            if (!related) continue;
+            const latF = NativeLatitudeField(related.Fields) ?? related.Fields.find(f => f.Name === '__mj_Latitude' || f.Name === 'PrimaryAddressLatitude');
+            const lngF = NativeLongitudeField(related.Fields) ?? related.Fields.find(f => f.Name === '__mj_Longitude' || f.Name === 'PrimaryAddressLongitude');
+            if (!latF || !lngF) continue;
+            const alias = `__mj_emb_${spec.foreignKeyField}`;
+            const schema = spec.relatedSchemaName || related.SchemaName;
+            const table = spec.relatedBaseTable || related.BaseTable;
+            const joinKind = spec.allowsNull ? 'LEFT OUTER' : 'INNER';
+            joins.push(`${joinKind} JOIN\n    ${qs(schema, table)} AS ${alias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(spec.foreignKeyField)} = ${alias}.${qi(related.FirstPrimaryKey.Name)}`); // first-pk-ok: FK target — a single FK column joins to the related entity's single key
+            selects.push(`    ${alias}.${qi(latF.Name)} AS ${qi(spec.lat)},\n    ${alias}.${qi(lngF.Name)} AS ${qi(spec.lng)}`);
+        }
+        return { select: selects.join(',\n'), joins: joins.join('\n') };
+    }
+
+    protected generateEmbeddedGeoJoins(entity: EntityInfo, classNameFirstChar: string): string {
+        const { joins } = this.generateEmbeddedGeoSelect(entity, classNameFirstChar);
+        return joins ? ((entity.Fields.length ? '\n' : '') + joins) : '';
     }
 
     /**

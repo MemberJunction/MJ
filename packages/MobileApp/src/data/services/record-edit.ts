@@ -329,7 +329,8 @@ export async function loadRecordForEdit(
     if (!entity) return null;
 
     const record = await md.GetEntityObject<BaseEntity>(entityName, contextUser);
-    const loaded = await record.InnerLoad(CompositeKey.FromID(recordId));
+    // Arbitrary entity: resolve the key column from metadata instead of assuming `ID`.
+    const loaded = await record.InnerLoad(CompositeKey.FromURLSegment(entity, recordId));
     if (!loaded) return null;
 
     const descriptors = entity.Fields.map(describeField).filter(isEditableField).map(buildDescriptor);
@@ -389,8 +390,9 @@ function buildOfflineChanges(
         if (values[d.key] === load.values[d.key]) continue;
         changedFields[d.key] = toQueueScalar(entityValueFromForm(values[d.key], d.kind));
     }
-    const pkField = load.entity.FirstPrimaryKey;
-    const primaryKey = pkField ? String(load.record.Get(pkField.Name)) : null;
+    // The entity is arbitrary (any key column name, possibly composite), so serialize the record's full
+    // primary key in the compact form offline-sync reads back with CompositeKey.FromURLSegment.
+    const primaryKey = load.entity.PrimaryKeys.length > 0 ? load.record.PrimaryKey.ToCompactURLSegment() : null;
     return { changedFields, primaryKey };
 }
 

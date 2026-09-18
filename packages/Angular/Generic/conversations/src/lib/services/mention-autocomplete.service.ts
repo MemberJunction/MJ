@@ -2,7 +2,8 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAISkillEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, EntityInfo, QueryInfo, IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase, AIAgentPermissionHelper, AISkillPermissionHelper } from '@memberjunction/ai-engine-base';
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
+import { IntersectAcceptedSkills } from './skill-picker-narrowing';
 import { MentionSuggestion, MentionSuggestionPreset } from '@memberjunction/ng-composer';
 
 /**
@@ -33,6 +34,8 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
   private queriesCache: QueryInfo[] = [];
   /** Active skills the current user can Run — surfaced under the '/' trigger. */
   private skillsCache: MJAISkillEntity[] = [];
+  /** The provider this instance was initialised against (multi-provider hosts); undefined = global. */
+  private provider: IMetadataProvider | undefined;
   /** Default icon for a skill with no IconClass of its own. */
   private defaultSkillIcon = 'fa-solid fa-wand-magic-sparkles';
   /** Generic icon for all query mentions, sourced from the 'MJ: Queries' entity. */
@@ -100,10 +103,12 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
       this.queriesEntityIcon = this.resolveQueriesEntityIcon(provider);
 
       // Load Active skills the current user can Run (surfaced under the '/' trigger). Mirrors the
-      // agent filter: open-by-default unless a skill has explicit permission rows. The agent's
-      // AcceptsSkills gate is applied server-side at run time, so the picker shows the user's full
-      // run-permitted set regardless of which agent ends up handling the message.
+      // agent filter: open-by-default unless a skill has explicit permission rows. This is the user's
+      // full run-permitted set; when the host names the target agent (getSuggestions' targetAgentId)
+      // the picker narrows it to what that agent accepts, and the server's RequestedSkills guard is
+      // the backstop either way.
       this.skillsCache = await this.filterSkillsByRunPermission(currentUser);
+      this.provider = provider;
 
       this.isInitialized = true;
     } catch (error) {
@@ -206,17 +211,23 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
 
   /**
    * Get suggestions based on search query
-   * @param query The search text after @ symbol
+   * @param query The search text after the trigger character
    * @param includeUsers Whether to include users in suggestions
+   * @param trigger '@' (agents + users), '#' (entities + queries) or '/' (skills)
+   * @param targetAgentId When the host knows which agent the message will go to (the '/' trigger
+   * only), skill suggestions are narrowed to what THAT agent accepts — `AcceptsSkills` + its
+   * `MJ: AI Agent Skills` grants — via {@link AIEngineBase.GetSkillsForAgent}. Without it (or for an
+   * agent not in the user's runnable set) the user's full runnable catalog is shown, as before, and
+   * the server's `RequestedSkills` guard is the backstop.
    * @returns Filtered and ranked suggestions
    */
-  getSuggestions(query: string, includeUsers: boolean = true, trigger: string = '@'): MentionSuggestion[] {
+  getSuggestions(query: string, includeUsers: boolean = true, trigger: string = '@', targetAgentId: string | null = null): MentionSuggestion[] {
     // The '#' trigger searches entities + queries; '/' searches skills; '@' searches agents + users
     if (trigger === '#') {
       return this.getEntityAndQuerySuggestions(query);
     }
     if (trigger === '/') {
-      return this.getSkillSuggestions(query);
+      return this.getSkillSuggestions(query, targetAgentId);
     }
 
     const lowerQuery = query.toLowerCase().trim();
@@ -323,14 +334,34 @@ export class MentionAutocompleteService extends BaseSingleton<MentionAutocomplet
   }
 
   /**
+   * The skills to offer under '/': the user's runnable catalog, narrowed to the target agent's
+   * accepted set when the agent is known. Intersection only — the agent filter never adds a skill
+   * the user could not run. Unknown agent id (not in the user's runnable agents) → no narrowing.
+   */
+  private skillsForTarget(targetAgentId: string | null): MJAISkillEntity[] {
+    if (!targetAgentId) {
+      return this.skillsCache;
+    }
+    const agent = this.agentsCache.find(a => UUIDsEqual(a.ID, targetAgentId));
+    if (!agent) {
+      return this.skillsCache;
+    }
+    const engine = this.provider
+      ? (AIEngineBase.GetProviderInstance<AIEngineBase>(this.provider, AIEngineBase) as AIEngineBase)
+      : AIEngineBase.Instance;
+    return IntersectAcceptedSkills(this.skillsCache, engine.GetSkillsForAgent(agent));
+  }
+
+
+  /**
    * Get skill suggestions for '/'-mentions, ranked by query match. Each carries the skill's own
    * IconClass/Color (UX metadata) so the dropdown + inserted chip render distinctly per skill.
    */
-  private getSkillSuggestions(query: string): MentionSuggestion[] {
+  private getSkillSuggestions(query: string, targetAgentId: string | null = null): MentionSuggestion[] {
     const lowerQuery = query.toLowerCase().trim();
     const MAX_SUGGESTIONS = 12;
 
-    return this.skillsCache
+    return this.skillsForTarget(targetAgentId)
       .map(skill => ({
         score: this.calculateMatchScore(skill.Name || '', lowerQuery),
         suggestion: {

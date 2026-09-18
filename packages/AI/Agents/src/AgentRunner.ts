@@ -12,11 +12,12 @@
 
 import { createHash } from 'crypto';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective } from '@memberjunction/ai-core-plus';
+import { planArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, ArtifactMetadataEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -39,6 +40,30 @@ interface ArtifactVersionRow {
 }
 
 /**
+ * Identifies an artifact (and the version) that a run created.
+ */
+export interface CreatedArtifactInfo {
+    artifactId: string;
+    versionId: string;
+    versionNumber: number;
+}
+
+/**
+ * Choose the artifact a run should be represented by.
+ *
+ * A FILE artifact wins over the payload artifact: the file is the deliverable the user asked for
+ * (a .docx, a .pdf), while the payload artifact is a snapshot of the agent's internal state.
+ * Callers surface this as a single "open the artifact" affordance, so a document-generating run
+ * used to point at raw JSON. With several files, the first is the primary one.
+ */
+export function selectPrimaryArtifact(
+    fileArtifacts: readonly CreatedArtifactInfo[] | undefined,
+    payloadArtifact: CreatedArtifactInfo | undefined
+): CreatedArtifactInfo | undefined {
+    return fileArtifacts?.[0] ?? payloadArtifact;
+}
+
+/**
  * AgentRunner provides a thin wrapper for executing AI agents.
  * 
  * This class handles:
@@ -58,6 +83,19 @@ interface ArtifactVersionRow {
  * ```
  */
 export class AgentRunner {
+    /** Fallback artifact type for agent payloads when the agent declares no DefaultArtifactTypeID. */
+    private static readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+
+    /**
+     * Max length of `MJ: Artifacts.Name` (`nvarchar(255)`).
+     *
+     * A directive's `name` is model output and routinely arrives as a full sentence. `BaseEntity.Validate`
+     * enforces MaxLength, so an over-long title makes `Save()` return false — which used to abort the whole
+     * artifact write and leave the deliverable reachable only through `AIAgentRun.FinalPayload`. Clamped
+     * instead: a truncated title still names the artifact the user is looking at.
+     */
+    private static readonly ARTIFACT_NAME_MAX_LENGTH = 255;
+
     private readonly _provider: IMetadataProvider;
 
     constructor(provider?: IMetadataProvider) {
@@ -187,12 +225,16 @@ export class AgentRunner {
         userMessageDetailId: string;
         /** The conversation detail ID for the agent response (only present if server created it) */
         agentResponseDetailId?: string;
-        /** Artifact information if created */
-        artifactInfo?: {
-            artifactId: string;
-            versionId: string;
-            versionNumber: number;
-        };
+        /**
+         * The artifact to show for this response, if one was created.
+         *
+         * A FILE artifact wins over the payload artifact when both exist: the file is the
+         * deliverable the user asked for (a .docx, a .pdf), whereas the payload artifact is a
+         * snapshot of the agent's internal state. Callers that surface a single "open the
+         * artifact" affordance — MJ Explorer, the Slack/Teams bridge — were previously handed the
+         * payload artifact even when the run's whole point was the file.
+         */
+        artifactInfo?: CreatedArtifactInfo;
     }> {
         const md = params.provider || this._provider;
         const contextUser = params.contextUser;
@@ -201,11 +243,12 @@ export class AgentRunner {
             throw new Error('contextUser is required for RunAgentInConversation');
         }
 
+        let agentResponseDetail: MJConversationDetailEntity | undefined;
+
         try {
             let conversationId: string;
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
-            let agentResponseDetail: MJConversationDetailEntity | undefined;
 
             // If conversationDetailId is provided, use it (UI-created agent response detail)
             if (options.conversationDetailId) {
@@ -489,6 +532,15 @@ export class AgentRunner {
                 }
             };
 
+            // A 'suppress' directive is a per-STEP instruction about everything the step would
+            // persist as an artifact — the payload artifact, the artifacts wrapping generated files,
+            // and the ones wrapping generated media. Honoring it for the payload alone left a
+            // suppressed step still producing artifact cards in chat, contradicting the documented
+            // contract ("create or version nothing for this step"). Audit rows are NOT suppressed:
+            // AIAgentRunMedia still records every byte the run produced, since suppression is about
+            // what the user is shown, not about lineage.
+            const suppressArtifacts = agentResult.artifactDirective?.behavior === 'suppress';
+
             // Step 6: Process artifacts if requested and agent succeeded.
             const processArtifacts = async () => {
                 const shouldCreateArtifacts = options.createArtifacts !== false; // Default true
@@ -505,9 +557,20 @@ export class AgentRunner {
             };
 
             // Step 6b: Process file artifacts produced by file-generation actions.
-            const processFileArtifacts = async () => {
+            //
+            // The created artifacts are RETURNED, not discarded: a file artifact is the
+            // deliverable the user asked for, so it is what `artifactInfo` should point at.
+            // Previously only the payload artifact was reported, which meant a run whose whole
+            // purpose was to produce a .docx or .pdf handed callers a link to the agent's
+            // internal state instead — MJ Explorer and the Slack/Teams bridge both surface
+            // `artifactInfo` as "open the artifact".
+            const processFileArtifacts = async (): Promise<CreatedArtifactInfo[]> => {
+                if (suppressArtifacts && agentResult.fileOutputs?.length) {
+                    LogStatus(`Skipping ${agentResult.fileOutputs.length} file artifact(s) - the agent suppressed artifacts for this step`);
+                    return [];
+                }
                 if (agentResult.success && agentResponseDetailId && agentResult.fileOutputs?.length) {
-                    await this.ProcessFileArtifacts(
+                    return this.ProcessFileArtifacts(
                         agentResult.fileOutputs,
                         agentResponseDetailId,
                         contextUser,
@@ -516,6 +579,7 @@ export class AgentRunner {
                         params.agent.AcceptUnregisteredFiles
                     );
                 }
+                return [];
             };
 
             // Step 7: Save media outputs to AIAgentRunMedia (audit) and create artifacts (display)
@@ -552,12 +616,15 @@ export class AgentRunner {
                         ? mediaToSave.filter(m => !this.isMediaEmbeddedInPayload(m, payloadStr))
                         : mediaToSave;
 
-                    if (agentResponseDetailId && mediaForArtifacts.length > 0) {
+                    if (suppressArtifacts && mediaForArtifacts.length > 0) {
+                        LogStatus(`Skipping ${mediaForArtifacts.length} media artifact(s) - the agent suppressed artifacts for this step (the media itself is still recorded on the run)`);
+                    } else if (agentResponseDetailId && mediaForArtifacts.length > 0) {
                         await this.CreateMediaArtifacts(
                             agentResponseDetailId,
                             mediaForArtifacts,
                             contextUser,
-                            md
+                            md,
+                            agentResult.resolvedStorageAccountId
                         );
                     }
                     return ids;
@@ -576,9 +643,15 @@ export class AgentRunner {
             // before we return, so the resolver's 'complete' event still guarantees the client sees
             // every write.
             await updateDetail();
-            const artifactInfo = await processArtifacts();
-            await processFileArtifacts();
+            const payloadArtifact = await processArtifacts();
+            const fileArtifacts = await processFileArtifacts();
             await saveMedia();
+
+            // A file artifact wins: it is the thing the user asked for. The payload artifact is a
+            // snapshot of the agent's internal state, useful when the payload IS the deliverable
+            // (a report agent) and misleading when it is not — a document run reported the
+            // payload, so "open the artifact" opened raw JSON instead of the document.
+            const artifactInfo = selectPrimaryArtifact(fileArtifacts, payloadArtifact);
 
             return {
                 agentResult,
@@ -591,6 +664,17 @@ export class AgentRunner {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             LogError(`RunAgentInConversation failed: ${errorMessage}`, undefined, error);
+            if (agentResponseDetail && agentResponseDetail.Status === 'In-Progress') {
+                try {
+                    await agentResponseDetail.EnsureSaveComplete();
+                    agentResponseDetail.Status = 'Error';
+                    agentResponseDetail.Message = errorMessage;
+                    agentResponseDetail.Error = errorMessage;
+                    await agentResponseDetail.Save();
+                } catch (persistError) {
+                    LogError(`Failed to persist Error on conversation detail after agent crash: ${persistError}`, undefined, persistError);
+                }
+            }
             throw error;
         }
     }
@@ -615,7 +699,7 @@ export class AgentRunner {
             const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: `ArtifactID='${artifactId}'`,
+                ExtraFilter: `ArtifactID='${AgentRunner.FilterId(artifactId, 'GetMaxVersionForArtifact artifactId')}'`,
                 OrderBy: 'VersionNumber DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object'
@@ -656,10 +740,24 @@ export class AgentRunner {
     ): Promise<string | null> {
         const candidateHash = createHash('sha256').update(candidateContent, 'utf8').digest('hex');
 
+        // `Number()` alone yields NaN for a non-numeric input, which would reach SQL Server as
+        // `VersionNumber=NaN` and fail the query rather than match nothing. Every caller is
+        // internal so this cannot fire today; the guard matches the care taken on the id path
+        // above, and skipping the dedup check is the safe direction — it costs a duplicate
+        // version at worst, where a thrown query costs the whole artifact.
+        const latestVersion = Number(latestVersionNumber);
+        if (!Number.isFinite(latestVersion)) {
+            LogError(
+                `CheckForDuplicateVersion: latestVersionNumber is not a finite number ` +
+                `("${AgentRunner.DescribeUntrustedValue(latestVersionNumber)}") — skipping the duplicate check`
+            );
+            return null;
+        }
+
         const rv = RunView.FromMetadataProvider(provider || this._provider);
         const result = await rv.RunView<{ ID: string; ContentHash: string }>({
             EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ArtifactID='${artifactId}' AND VersionNumber=${latestVersionNumber}`,
+            ExtraFilter: `ArtifactID='${AgentRunner.FilterId(artifactId, 'CheckForDuplicateVersion artifactId')}' AND VersionNumber=${latestVersion}`,
             Fields: ['ID', 'ContentHash'],
             MaxRows: 1,
             ResultType: 'simple'
@@ -738,7 +836,7 @@ export class AgentRunner {
             const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJConversationDetailArtifactEntity>({
                 EntityName: 'MJ: Conversation Detail Artifacts',
-                ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Direction='Output'`,
+                ExtraFilter: `ConversationDetailID='${AgentRunner.FilterId(conversationDetailId, 'FindPreviousArtifactForMessage conversationDetailId')}' AND Direction='Output'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object'
@@ -774,7 +872,14 @@ export class AgentRunner {
      * Handles artifact creation, versioning, and linking to conversation details.
      *
      * This method implements intelligent artifact versioning:
-     * 1. If sourceArtifactId is provided (explicit continuity), creates new version of that artifact
+     * 0. If the agent supplied an artifactDirective, it decides: 'suppress' → nothing;
+     *    'create-new' → new artifact (sourceArtifactId ignored); 'version-source' → version
+     *    targetArtifactId, else sourceArtifactId. A directive-named target is model output and is
+     *    vetted first (UUID shape, existence, and the caller's right to write to it — see
+     *    {@link VetArtifactVersionTarget}); anything failing falls back down the ladder to the
+     *    caller's sourceArtifactId and then to the historical chain, so a directive can never widen
+     *    what the caller was already allowed to do.
+     * 1. Otherwise, if sourceArtifactId is provided (explicit continuity), creates new version of that artifact
      * 2. Otherwise, checks for previous artifacts on this conversation detail
      * 3. If previous artifact exists, creates new version of it
      * 4. If no previous artifact, creates entirely new artifact
@@ -834,29 +939,78 @@ export class AgentRunner {
 
         try {
             const md = provider || this._provider;
-            const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
-            // Determine if creating new artifact or new version
+            // Target selection: the agent's directive first (it knows what the payload IS —
+            // a deliverable, a draft, a plan), then the legacy chain
+            // (sourceArtifactId → previous artifact on this message → new artifact).
+            // An unrecognized behavior drops the WHOLE directive, not just its targeting. Every
+            // field of it is model output, and a `behavior` this consumer cannot parse means the
+            // producer and this consumer disagree about the wire format — which is no basis for
+            // trusting the object's other fields. Keeping the raw directive here would let one the
+            // log says is being ignored still name the artifact through `createArtifactHeader` AND
+            // suppress the extracted-name fallback below, so "ignored" would silently mean two
+            // behavior changes.
+            const rawDirective = agentResult.artifactDirective;
+            const behaviorRecognized = !rawDirective || IsKnownArtifactBehavior(rawDirective.behavior);
+            const directive = behaviorRecognized ? rawDirective : undefined;
+            if (!behaviorRecognized) {
+                LogError(
+                    `Ignoring artifact directive from agent "${agent?.Name}": unrecognized behavior ` +
+                    `("${AgentRunner.DescribeUntrustedValue(rawDirective!.behavior)}") — using the historical chain instead`
+                );
+            }
+            // planArtifactTarget discards a non-string targetArtifactId silently (it is pure and
+            // cannot log). Before this check lived in the pure function, VetArtifactVersionTarget
+            // logged such a value as "not a valid artifact ID"; keep that visibility here so a
+            // producer sending the wrong JSON type shows up in the run log rather than only as an
+            // artifact that versioned the run's source.
+            if (directive?.behavior === 'version-source') {
+                const rawTarget: unknown = directive.targetArtifactId;
+                if (rawTarget !== undefined && rawTarget !== null && typeof rawTarget !== 'string') {
+                    LogError(
+                        `Ignoring targetArtifactId from agent "${agent?.Name}": ` +
+                        `"${AgentRunner.DescribeUntrustedValue(rawTarget)}" is not a string — ` +
+                        `versioning the run's sourceArtifactId instead`
+                    );
+                }
+            }
+            let plan = planArtifactTarget(directive, sourceArtifactId);
+            if (plan.kind === 'suppress') {
+                LogStatus(`Skipping artifact creation - agent "${agent?.Name}" suppressed artifacts for this step`);
+                return undefined;
+            }
+
+            // Vet whatever artifact we are about to version, then walk DOWN the fallback ladder on
+            // failure: a directive-named target degrades to the caller's sourceArtifactId, and a bad
+            // sourceArtifactId degrades to the historical chain. Each rung is re-vetted, so a value
+            // rejected on one rung can never re-enter on the next (an agent echoing the run's own
+            // source id back as its target used to do exactly that: rejected as model output, then
+            // versioned anyway as a caller id, logged as both "not readable" and "creating version N").
+            const rejectedIds = new Set<string>();
+            while (plan.kind === 'version') {
+                const vetted = await this.VetArtifactVersionTarget(plan, contextUser, md, agent?.Name, rejectedIds);
+                if (vetted) {
+                    plan = vetted;
+                    break;
+                }
+                plan = plan.source === 'directive'
+                    ? planArtifactTarget(undefined, sourceArtifactId) // drop the directive, keep the caller's id
+                    : { kind: 'legacy' };                             // the caller's own id failed; nothing left to try
+            }
+
             let artifactId: string;
             let newVersionNumber: number;
             let isNewArtifact = false;
 
-            // Priority 1: Use explicit source artifact if provided
-            if (sourceArtifactId) {
-                const maxVersion = await this.GetMaxVersionForArtifact(sourceArtifactId, contextUser, provider);
-                artifactId = sourceArtifactId;
+            if (plan.kind === 'version') {
+                const maxVersion = await this.GetMaxVersionForArtifact(plan.artifactId, contextUser, provider);
+                artifactId = plan.artifactId;
                 newVersionNumber = maxVersion + 1;
-                LogStatus(`Creating version ${newVersionNumber} of source artifact ${artifactId}`);
-            }
-            // Priority 2: Try to find previous artifact for this message (only when running in
-            // a conversation context — outside one there is no message to look behind)
-            else {
-                const previousArtifact = conversationDetailId
-                    ? await this.FindPreviousArtifactForMessage(
-                        conversationDetailId,
-                        contextUser,
-                        md
-                    )
+                LogStatus(`Creating version ${newVersionNumber} of artifact ${artifactId} (${plan.source === 'directive' ? 'agent directive' : 'sourceArtifactId'})`);
+            } else {
+                // Legacy: look behind this message (only inside a conversation). 'create-new' skips the lookup.
+                const previousArtifact = (plan.kind === 'legacy' && conversationDetailId)
+                    ? await this.FindPreviousArtifactForMessage(conversationDetailId, contextUser, md)
                     : null;
 
                 if (previousArtifact) {
@@ -864,40 +1018,11 @@ export class AgentRunner {
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
                 } else {
-                    // Create new artifact header
-                    const artifact = await md.GetEntityObject<MJArtifactEntity>(
-                        'MJ: Artifacts',
-                        contextUser
-                    );
-
-                    const agentName = agent?.Name || 'Agent';
-                    artifact.Name = `${agentName} Payload - ${new Date().toLocaleString()}`;
-                    artifact.Description = `Payload returned by ${agentName}`;
-
-                    // Use agent's DefaultArtifactTypeID if available
-                    const defaultArtifactTypeId = (agent as any)?.DefaultArtifactTypeID;
-                    artifact.TypeID = defaultArtifactTypeId || JSON_ARTIFACT_TYPE_ID;
-
-                    artifact.UserID = contextUser.ID;
-                    artifact.EnvironmentID = (contextUser as any).EnvironmentID ||
-                                            'F51358F3-9447-4176-B313-BF8025FD8D09';
-
-                    // Set visibility based on agent's ArtifactCreationMode
-                    if (creationMode === 'System Only') {
-                        artifact.Visibility = 'System Only';
-                        LogStatus(`Artifact marked as "System Only" per agent configuration`);
-                    } else {
-                        artifact.Visibility = 'Always';
-                    }
-
-                    if (!(await artifact.Save())) {
-                        throw new Error('Failed to save artifact');
-                    }
-
+                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive);
                     artifactId = artifact.ID;
                     newVersionNumber = 1;
                     isNewArtifact = true;
-                    LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})`);
+                    LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})${plan.kind === 'create-new' ? ' per agent directive' : ''}`);
                 }
             }
 
@@ -931,8 +1056,8 @@ export class AgentRunner {
 
             LogStatus(`Created artifact version ${newVersionNumber} (${version.ID})`);
 
-            // If first version of new artifact, check for extracted Name attribute
-            if (isNewArtifact && newVersionNumber === 1) {
+            // First version of a new artifact: adopt the extracted Name attribute unless the agent named it
+            if (isNewArtifact && newVersionNumber === 1 && !AgentRunner.SafeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)) {
                 const nameAttr = (version as any).Attributes?.find((attr: any) =>
                     attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
                 );
@@ -967,6 +1092,255 @@ export class AgentRunner {
             LogError(`Failed to process agent artifacts: ${(error as Error).message}`);
             return undefined;
         }
+    }
+
+    /**
+     * Renders an untrusted value for a log line without trusting it to render itself.
+     *
+     * Directives arrive as parsed JSON, so a field declared `string` can hold any JSON value.
+     * `String(value)` is not safe on such a value — `{ toString: 'x' }` shadows `toString` with a
+     * non-callable, and `String()` throws — and a value that throws while being logged aborts the
+     * whole artifact write, which is the failure this helper exists to prevent.
+     *
+     * @param value - Any value, however malformed.
+     * @returns A short single-line description, never throwing.
+     */
+    private static DescribeUntrustedValue(value: unknown): string {
+        let text: string;
+        try {
+            text = typeof value === 'string' ? value : (JSON.stringify(value) ?? Object.prototype.toString.call(value));
+        } catch {
+            // Circular structure, a throwing getter, or a BigInt.
+            text = Object.prototype.toString.call(value);
+        }
+        return text.replace(/\s+/g, ' ').slice(0, 64);
+    }
+
+    /**
+     * Escapes an id for interpolation into a `RunView.ExtraFilter`, warning when the value cannot
+     * be an id at all.
+     *
+     * `RunViewParams.ExtraFilter` is a raw SQL fragment with no parameterized form, so every id
+     * this class puts into one is escaped HERE — at the query builder — rather than at whichever
+     * call site happened to be audited. `ValidateUserProvidedSQLClause` upstream blacklists
+     * statement keywords but permits `OR`, so an unescaped id remains a real predicate-injection
+     * surface; escaping at the builder covers every caller, present and future, including the
+     * caller-supplied `sourceArtifactId` that arrives straight from the GraphQL boundary.
+     *
+     * @param id - The id to interpolate.
+     * @param label - What the id is, for the warning.
+     * @returns The escaped id, ready to sit inside single quotes.
+     */
+    private static FilterId(id: string, label: string): string {
+        if (!IsValidUUID(id)) {
+            LogError(`${label} is not a UUID-shaped id ("${AgentRunner.DescribeUntrustedValue(id)}") — this query cannot match a row`);
+        }
+        return EscapeSQLString(id);
+    }
+
+    /**
+     * Coerces one of a directive's free-text fields into something safe to persist.
+     *
+     * The field is model output: it may be absent, may not be a string at all, may be whitespace,
+     * and may be far longer than its column. Anything unusable becomes `undefined` so the caller
+     * falls back to its own default, and anything over-long is clamped rather than allowed to fail
+     * `BaseEntity.Validate` — a rejected `Save()` would discard the entire artifact, so a truncated
+     * title is strictly better than no artifact.
+     *
+     * @param value - The directive field (`name` or `description`).
+     * @param maxLength - Column limit to clamp to; omit for `nvarchar(MAX)` columns.
+     * @returns The trimmed (and clamped) text, or `undefined` when there is nothing usable.
+     */
+    private static SafeDirectiveText(value: unknown, maxLength?: number): string | undefined {
+        if (typeof value !== 'string') {
+            return undefined;
+        }
+        const trimmed = value.trim();
+        if (trimmed.length === 0) {
+            return undefined;
+        }
+        return maxLength != null && trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
+    }
+
+    /**
+     * Vets one rung of the version-target ladder, returning the plan with a normalized id when the
+     * target is usable and `null` when the caller should fall back.
+     *
+     * Three things are checked, in cost order:
+     *
+     * 1. **Shape.** The id must be a UUID-shaped string. This matters because it is interpolated
+     *    into the `ExtraFilter` fragments built by {@link GetMaxVersionForArtifact} and
+     *    {@link CheckForDuplicateVersion}; those escape what they are handed, but an id that is not
+     *    a UUID cannot name an artifact, so rejecting it here turns a doomed query into a clean
+     *    fallback. The id is then TRIMMED for downstream use — `IsValidUUID` tolerates surrounding
+     *    whitespace, so a value with a trailing newline passes validation and would otherwise reach
+     *    `ArtifactID='<uuid>\n'` and fail as a SQL conversion error.
+     * 2. **Existence** — directive-named targets only.
+     * 3. **Authorization** — directive-named targets only. `vwArtifacts` carries no per-user
+     *    predicate and no row-level-security filter, so a row loading successfully proves only that
+     *    it EXISTS. Without this check an agent could name any artifact id in the instance and have
+     *    the run's payload appended to it as a new version. The caller must own the artifact or hold
+     *    an explicit `CanEdit` grant on it.
+     *
+     * Existence and authorization resolve in ONE `RunViews` round trip, and via `RunView` rather
+     * than `BaseEntity.Load` deliberately: `Load` THROWS on a permission denial, a SQL conversion
+     * error or any transient DB fault, and a throw here would propagate to the method-wide catch and
+     * lose the whole artifact — the opposite of the graceful fallback this is meant to provide.
+     *
+     * A caller-supplied `sourceArtifactId` is shape-checked but NOT loaded or authorized: it is a
+     * server-side argument rather than model output, and adding a round trip plus a new denial mode
+     * to that path would change behavior for every existing agent. (The pre-existing exposure on
+     * that path — any authenticated caller may name any artifact id — is unchanged by this PR and
+     * wants its own fix.) One exception, and it is deliberate rather than incidental: if the agent
+     * named the SAME id first and it failed authorization, `rejectedIds` refuses it on the caller
+     * rung too. The caller path still performs no authorization of its own; it just cannot be used
+     * to launder an id this run has already refused.
+     *
+     * **Why this does not call `PermissionEngine` / `ArtifactPermissionProvider`.** That provider
+     * (`MJCoreEntities/src/custom/PermissionProviders/ArtifactPermissionProvider.ts`) answers
+     * "may this user Update this artifact" from the permission ROWS, and is the right home for that
+     * question in general — see `guides/UNIFIED_PERMISSIONS_GUIDE.md` §1. It is not used here for
+     * two reasons specific to this path. First, it answers only half the question: it reads grant
+     * rows and does not treat the artifact's OWNER as an editor, so the `UserID` check below would
+     * remain regardless and the owner half would still live in two places. Second, and decisive:
+     * `PermissionEngine.CheckPermission` returns `Allowed: false` with "Unknown permission domain"
+     * when its domain is not loaded, and this path's response to a denial is a SILENT fallback to
+     * creating a new artifact. A deployment that has not synced `metadata/permission-domains` — or
+     * any caller that reaches the runner before `PermissionEngine.Config()` — would therefore stop
+     * versioning for every legitimate editor, with nothing in the logs to say why. A direct query
+     * has no such dependency on engine state. As of this writing nothing server-side calls
+     * `PermissionEngine` or runs its `Config()`: its callers are Explorer's Permissions dashboard,
+     * the Sharing Center, and the integration test suite. (`Lists/server`,
+     * `Communication/notifications` and the MJCoreEntities entity extensions call
+     * `ResourcePermissionEngine`, a different class over `MJ: Resource Permissions`.)
+     *
+     * The cost of that choice is drift: this is a third answer to "can this user edit this
+     * artifact", alongside the provider and `ng-conversations`' `artifact-permission.service.ts`.
+     * **If artifact sharing grows a new grant shape — role grantees, `SupportsDeny`, cascade from
+     * collections — this method must be updated with the provider.** Revisit the delegation once
+     * `PermissionEngine` is routinely configured server-side. The cleaner precondition is upstream:
+     * `CollectionPermissionProvider` already treats a collection's owner as a synthetic full-access
+     * grantee, and the same treatment in `ArtifactPermissionProvider` would make it a complete
+     * answer, at which point this method should delegate to `CheckPermission(..., 'Update')`
+     * outright rather than compose an owner check around it.
+     *
+     * @param plan - The `version` plan to vet.
+     * @param contextUser - User the run executes as.
+     * @param md - Provider for the lookups.
+     * @param agentName - Agent name, for log lines.
+     * @param rejectedIds - Ids already rejected on a higher rung; mutated with any new rejection so
+     *   the same id cannot be re-admitted further down the ladder.
+     * @returns The vetted plan with a trimmed id, or `null` to fall back.
+     */
+    protected async VetArtifactVersionTarget(
+        plan: Extract<ArtifactTargetPlan, { kind: 'version' }>,
+        contextUser: UserInfo,
+        md: IMetadataProvider,
+        agentName: string | undefined,
+        rejectedIds: Set<string>
+    ): Promise<Extract<ArtifactTargetPlan, { kind: 'version' }> | null> {
+        const origin = plan.source === 'directive' ? `artifact directive from agent "${agentName}"` : 'sourceArtifactId';
+
+        if (typeof plan.artifactId !== 'string' || !IsValidUUID(plan.artifactId)) {
+            LogError(`Ignoring ${origin}: "${AgentRunner.DescribeUntrustedValue(plan.artifactId)}" is not a valid artifact ID`);
+            return null;
+        }
+        const artifactId = plan.artifactId.trim();
+
+        if (rejectedIds.has(artifactId.toLowerCase())) {
+            LogError(`Ignoring ${origin}: artifact ${artifactId} was already rejected for this run`);
+            return null;
+        }
+        if (plan.source !== 'directive') {
+            return { ...plan, artifactId };
+        }
+
+        const reject = (reason: string): null => {
+            rejectedIds.add(artifactId.toLowerCase());
+            LogError(`Ignoring ${origin}: target artifact ${artifactId} ${reason}`);
+            return null;
+        };
+
+        try {
+            const rv = RunView.FromMetadataProvider(md);
+            // One round trip for both questions: does the artifact exist, and may this user add to it.
+            const [ownerResult, grantResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: Artifacts',
+                    ExtraFilter: `ID='${EscapeSQLString(artifactId)}'`,
+                    Fields: ['ID', 'UserID'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+                {
+                    EntityName: 'MJ: Artifact Permissions',
+                    ExtraFilter: `ArtifactID='${EscapeSQLString(artifactId)}' AND UserID='${EscapeSQLString(contextUser.ID)}' AND CanEdit=1`,
+                    Fields: ['ID'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                },
+            ], contextUser);
+
+            const owner = ownerResult?.Success ? (ownerResult.Results?.[0] as { UserID?: string } | undefined) : undefined;
+            if (!owner) {
+                return reject('was not found or is not readable');
+            }
+            if (UUIDsEqual(owner.UserID, contextUser.ID)) {
+                return { ...plan, artifactId };
+            }
+            if (grantResult?.Success && (grantResult.Results?.length ?? 0) > 0) {
+                return { ...plan, artifactId };
+            }
+            return reject(`is owned by another user and this user holds no CanEdit grant on it`);
+        } catch (error) {
+            // Fail closed: an unavailable lookup must not become an unchecked write.
+            return reject(`could not be verified (${(error as Error)?.message ?? 'unknown error'})`);
+        }
+    }
+
+    /**
+     * Creates the artifact header row. Name and description come from the agent's directive when
+     * it supplied them (e.g. Skip's artifactRequest); otherwise the historical placeholder.
+     */
+    private async createArtifactHeader(
+        md: IMetadataProvider,
+        contextUser: UserInfo,
+        agent: (typeof AIEngine.Instance.Agents)[number] | undefined,
+        creationMode: string | undefined,
+        directive: ArtifactDirective | undefined
+    ): Promise<MJArtifactEntity> {
+        const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+
+        const agentName = agent?.Name || 'Agent';
+        // Both fields are model output: coerced, trimmed, and (for Name) clamped to its column so a
+        // long or non-string title cannot fail validation and take the whole artifact down with it.
+        artifact.Name = AgentRunner.SafeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)
+            || `${agentName} Payload - ${new Date().toLocaleString()}`;
+        // Description is nvarchar(MAX), so there is no length to clamp to — only the type to check.
+        artifact.Description = AgentRunner.SafeDirectiveText(directive?.description)
+            || `Payload returned by ${agentName}`;
+
+        // Use agent's DefaultArtifactTypeID if available
+        artifact.TypeID = agent?.DefaultArtifactTypeID || AgentRunner.JSON_ARTIFACT_TYPE_ID;
+
+        artifact.UserID = contextUser.ID;
+        artifact.EnvironmentID = (contextUser as any).EnvironmentID || MJEnvironmentEntityExtended.DefaultEnvironmentID;
+
+        // Set visibility based on agent's ArtifactCreationMode
+        if (creationMode === 'System Only') {
+            artifact.Visibility = 'System Only';
+            LogStatus(`Artifact marked as "System Only" per agent configuration`);
+        } else {
+            artifact.Visibility = 'Always';
+        }
+
+        if (!(await artifact.Save())) {
+            // Surface WHY. A bare message here sent every cause — a validation failure on a
+            // model-supplied name, a permission denial, a transient DB fault — to the same
+            // indistinguishable log line.
+            throw new Error(`Failed to save artifact: ${artifact.LatestResult?.Message || 'no error message reported'}`);
+        }
+        return artifact;
     }
 
     /**
@@ -1214,6 +1588,10 @@ export class AgentRunner {
      * @param mediaOutputs - Media outputs to persist as artifacts
      * @param contextUser - User context for DB operations
      * @param provider - Optional metadata provider for multi-provider support
+     * @param resolvedStorageAccountId - Pre-resolved storage account from the agent's resolution
+     *   chain. Optional, and optional on purpose: this is a public method, and callers that
+     *   predate storage-backed media keep working — omitting it just falls back to the first
+     *   active account inside {@link uploadBase64ToStorage}.
      *
      * @since 5.38.0
      */
@@ -1221,13 +1599,21 @@ export class AgentRunner {
         conversationDetailId: string,
         mediaOutputs: MediaOutput[],
         contextUser: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        resolvedStorageAccountId?: string
     ): Promise<void> {
         if (!mediaOutputs || mediaOutputs.length === 0) {
             return;
         }
 
-        await ArtifactMetadataEngine.Instance.Config(false, contextUser);
+        // BOTH engines, as ProcessFileArtifacts does. FileStorageEngine reports zero accounts
+        // until it has loaded, so checking HasStorageAccounts without configuring it first reads
+        // an empty cache and silently routes every media artifact inline — indistinguishable from
+        // a deployment that genuinely has no storage.
+        await Promise.all([
+            ArtifactMetadataEngine.Instance.Config(false, contextUser),
+            FileStorageEngine.Instance.Config(false, contextUser),
+        ]);
         const md = provider || this._provider;
         let successCount = 0;
 
@@ -1241,28 +1627,39 @@ export class AgentRunner {
                     ? Math.ceil(media.data.length * 0.75)
                     : undefined;
 
-                await this.createArtifactWithVersion({
-                    mimeType: media.mimeType,
-                    fileName,
-                    sizeBytes: estimatedSizeBytes,
-                    conversationDetailId,
-                    contextUser,
-                    provider: md,
-                    acceptUnregisteredFiles: true,
-                    label: `media ${media.modality}`,
-                    setVersionFields: (version) => {
-                        // DecideInlineStorage applies consistent text-vs-binary storage
-                        // decisions across all artifact creation paths. For media (images,
-                        // audio, video), it wraps the base64 in a data URL; for text-y
-                        // MIMEs it decodes to UTF-8. Same helper the server hook and
-                        // ConversationAttachmentService use.
-                        if (media.data) {
-                            const stored = DecideInlineStorage(media.mimeType, media.data);
-                            version.ContentMode = stored.contentMode;
-                            version.Content = stored.content;
+                // Storage-backed when an account is configured, exactly as ProcessFileArtifacts
+                // does for file outputs.
+                const fileId = media.data
+                    ? await this.uploadToStorageIfConfigured(
+                          media.data, fileName, media.mimeType, contextUser, resolvedStorageAccountId, md, 'CreateMediaArtifacts')
+                    : undefined;
+
+                if (fileId) {
+                    await this.createFileArtifact(
+                        fileId, media.mimeType, fileName, estimatedSizeBytes, conversationDetailId, contextUser, md, true,
+                        `media ${media.modality}`);
+                } else {
+                    await this.createArtifactWithVersion({
+                        mimeType: media.mimeType,
+                        fileName,
+                        sizeBytes: estimatedSizeBytes,
+                        conversationDetailId,
+                        contextUser,
+                        provider: md,
+                        acceptUnregisteredFiles: true,
+                        label: `media ${media.modality}`,
+                        setVersionFields: (version) => {
+                            // DecideInlineStorage applies consistent text-vs-binary storage
+                            // decisions across all artifact creation paths: for media it wraps
+                            // the base64 in a data URL; for text-y MIMEs it decodes to UTF-8.
+                            if (media.data) {
+                                const stored = DecideInlineStorage(media.mimeType, media.data);
+                                version.ContentMode = stored.contentMode;
+                                version.Content = stored.content;
+                            }
                         }
-                    }
-                });
+                    });
+                }
 
                 successCount++;
             } catch (error) {
@@ -1271,6 +1668,39 @@ export class AgentRunner {
         }
 
         LogStatus(`Created ${successCount} of ${mediaOutputs.length} media artifact(s) for detail ${conversationDetailId}`);
+    }
+
+    /**
+     * Uploads bytes to MJStorage when a storage account is configured, returning the new
+     * `MJ: Files` ID — or `undefined` to tell the caller to store the bytes inline.
+     *
+     * The single home of the storage-or-inline contract for every artifact this runner creates,
+     * file outputs and media alike. Deliberately never throws: delivery must not fail because
+     * storage is unavailable, so an upload error degrades to inline with a log line.
+     *
+     * @param logPrefix - Names the calling path in the log so an operator can tell which kind of
+     *   artifact fell back, without the two paths carrying separate copies of this logic.
+     */
+    private async uploadToStorageIfConfigured(
+        base64Data: string,
+        fileName: string,
+        mimeType: string,
+        contextUser: UserInfo,
+        resolvedStorageAccountId: string | undefined,
+        provider: IMetadataProvider,
+        logPrefix: string
+    ): Promise<string | undefined> {
+        if (!FileStorageEngine.Instance.HasStorageAccounts) {
+            LogStatus(`${logPrefix}: no storage accounts configured for "${fileName}", storing inline`);
+            return undefined;
+        }
+        try {
+            return await this.uploadBase64ToStorage(
+                base64Data, fileName, mimeType, contextUser, resolvedStorageAccountId, provider);
+        } catch (storageError) {
+            LogStatus(`${logPrefix}: storage upload failed for "${fileName}", storing inline: ${(storageError as Error).message}`);
+            return undefined;
+        }
     }
 
     // ── File artifact processing ───────────────────────────────────────────────
@@ -1295,8 +1725,8 @@ export class AgentRunner {
         resolvedStorageAccountId?: string,
         provider?: IMetadataProvider,
         acceptUnregisteredFiles?: boolean
-    ): Promise<void> {
-        if (fileOutputs.length === 0) return;
+    ): Promise<CreatedArtifactInfo[]> {
+        if (fileOutputs.length === 0) return [];
 
         const md = provider || this._provider;
         const acceptUnregistered = acceptUnregisteredFiles ?? false;
@@ -1307,9 +1737,12 @@ export class AgentRunner {
             FileStorageEngine.Instance.Config(false, contextUser),
         ]);
 
-        await Promise.all(
+        const created = await Promise.all(
             fileOutputs.map(fo => this.processFileOutput(fo, conversationDetailId, contextUser, resolvedStorageAccountId, md, acceptUnregistered))
         );
+        // Entries are undefined only for outputs whose creation failed (logged above), so the
+        // caller sees exactly the artifacts that exist.
+        return created.filter((info): info is CreatedArtifactInfo => info != null);
     }
 
     /** Uploads or resolves a single file output and creates the artifact records.
@@ -1321,42 +1754,21 @@ export class AgentRunner {
         resolvedStorageAccountId: string | undefined,
         provider: IMetadataProvider,
         acceptUnregisteredFiles: boolean
-    ): Promise<void> {
+    ): Promise<CreatedArtifactInfo | undefined> {
         try {
             if (fo.fileId) {
                 // File already in storage — create file-backed artifact
-                await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-                return;
+                return await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, 'file', fo.visibility);
             }
 
-            // Check if any storage accounts are configured
-            const hasStorage = FileStorageEngine.Instance.HasStorageAccounts;
-
-            if (!hasStorage) {
-                // No storage configured — go straight to inline artifact
-                LogStatus(`ProcessFileArtifacts: no storage accounts configured for "${fo.fileName}", creating inline artifact`);
-                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-                return;
-            }
-
-            // Try to upload to storage
-            try {
-                const fileId = await this.uploadBase64ToStorage(
-                    fo.fileData!,
-                    fo.fileName,
-                    fo.mimeType,
-                    contextUser,
-                    resolvedStorageAccountId,
-                    provider
-                );
-                await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-            } catch (storageError) {
-                // Upload failed — fall back to inline artifact
-                LogStatus(`ProcessFileArtifacts: storage upload failed for "${fo.fileName}", creating inline artifact: ${(storageError as Error).message}`);
-                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-            }
+            const fileId = await this.uploadToStorageIfConfigured(
+                fo.fileData!, fo.fileName, fo.mimeType, contextUser, resolvedStorageAccountId, provider, 'ProcessFileArtifacts');
+            return fileId
+                ? await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, 'file', fo.visibility)
+                : await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, fo.visibility);
         } catch (error) {
             LogError(`ProcessFileArtifacts: failed for "${fo.fileName}": ${(error as Error).message}`);
+            return undefined;
         }
     }
 
@@ -1403,11 +1815,13 @@ export class AgentRunner {
             acceptUnregisteredFiles: boolean;
             /** Callback to set version-specific fields (ContentMode, FileID/Content, etc.) */
             setVersionFields: (version: MJArtifactVersionEntity) => void;
+            /** The artifact's Visibility; `Always` when the caller says nothing. */
+            visibility?: MJArtifactEntity['Visibility'];
             /** Label for log/error messages (e.g. 'file' or 'inline file') */
             label: string;
         }
-    ): Promise<void> {
-        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, setVersionFields, label } = params;
+    ): Promise<CreatedArtifactInfo> {
+        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, setVersionFields, label, visibility } = params;
 
         // Resolve the artifact type using the wildcard-aware resolver with an
         // extension hint for application/octet-stream uploads.
@@ -1453,7 +1867,7 @@ export class AgentRunner {
             artifact.Name = fileName;
             artifact.TypeID = artifactTypeId;
             artifact.UserID = contextUser.ID;
-            artifact.Visibility = 'Always';
+            artifact.Visibility = visibility ?? 'Always';
             if (!(await artifact.Save())) {
                 throw new Error(`Failed to save artifact for ${label}: ${fileName}`);
             }
@@ -1490,6 +1904,7 @@ export class AgentRunner {
             }
 
             LogStatus(`Created ${label} artifact: ${fileName} (${mimeType}) → artifact ${artifact.ID}, version ${version.ID}`);
+            return { artifactId: artifact.ID, versionId: version.ID, versionNumber: version.VersionNumber };
         } catch (error) {
             if (useTransaction) {
                 try {
@@ -1502,7 +1917,11 @@ export class AgentRunner {
         }
     }
 
-    /** Creates a file-backed artifact (version references a FileID in MJStorage). */
+    /**
+     * Creates a file-backed artifact (version references a FileID in MJStorage). `label` names the
+     * thing being stored in diagnostics ("file", "media Image") so a failure reads as specifically as
+     * the inline path's would.
+     */
     private async createFileArtifact(
         fileId: string,
         mimeType: string,
@@ -1511,11 +1930,13 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-        acceptUnregisteredFiles: boolean
-    ): Promise<void> {
-        await this.createArtifactWithVersion({
-            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
-            label: 'file',
+        acceptUnregisteredFiles: boolean,
+        label: string = 'file',
+        visibility?: MJArtifactEntity['Visibility']
+    ): Promise<CreatedArtifactInfo> {
+        return this.createArtifactWithVersion({
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, visibility,
+            label,
             setVersionFields: (version) => {
                 version.ContentMode = 'File';
                 version.FileID = fileId;
@@ -1532,10 +1953,11 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-        acceptUnregisteredFiles: boolean
-    ): Promise<void> {
-        await this.createArtifactWithVersion({
-            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
+        acceptUnregisteredFiles: boolean,
+        visibility?: MJArtifactEntity['Visibility']
+    ): Promise<CreatedArtifactInfo> {
+        return this.createArtifactWithVersion({
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, visibility,
             label: 'inline file',
             setVersionFields: (version) => {
                 version.ContentMode = 'Text';

@@ -12,6 +12,7 @@
  */
 
 import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
+import type { NativeToolBinding } from '../native-tools/control-tools';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
@@ -58,6 +59,24 @@ export abstract class BaseAgentType {
      * @protected
      */
     protected _jsonValidator: JSONValidator = new JSONValidator();
+
+    /**
+     * Whether this agent type can read a native tool call back as a step (plan §8.1).
+     *
+     * `BaseAgent` declares an agent's Actions as native tools ONLY when this is true. Declaring them
+     * to a type that cannot consume the call is not harmless: the model answers with a tool call and
+     * no text, the type's `DetermineNextStep` parses the empty text, and the turn becomes a Retry
+     * — a run that would have worked on the envelope path fails because tools were offered. That is
+     * exactly the failure a catalog-wide `DefaultToNativeToolCalling` would have produced on every
+     * Flow agent with Actions.
+     *
+     * Defaults to false. A type opts in by overriding this AND by honouring the `nativeToolBindings`
+     * argument of {@link DetermineNextStep}; the two go together, and `LoopAgentType` is the only
+     * type that does both today.
+     */
+    public get SupportsNativeToolCalls(): boolean {
+        return false;
+    }
 
     /**
      * Common placeholder for current payload injection
@@ -107,7 +126,16 @@ export abstract class BaseAgentType {
         promptResult: AIPromptRunResult | null, 
         params: ExecuteAgentParams<any, P>,
         payload: P,
-        agentTypeState: ATS
+        agentTypeState: ATS,
+        /**
+         * Reverse map from the sanitized tool name a model calls back to the Action it names,
+         * supplied by `BaseAgent` only when the turn ran with native tools declared (plan §8.1).
+         *
+         * A tool call arrives as `run_ad_hoc_query`, not "Run Ad-hoc Query", so without this an
+         * agent type cannot dispatch one. Optional and trailing: agent types that never declare
+         * tools are unaffected.
+         */
+        nativeToolBindings?: ReadonlyMap<string, NativeToolBinding>
     ): Promise<BaseAgentNextStep<P>>;
 
     /**

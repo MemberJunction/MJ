@@ -361,3 +361,28 @@ describe('ReportGenerator', () => {
     });
   });
 });
+
+describe('package-manager reporting', () => {
+  const generator = new ReportGenerator();
+
+  it('lists both lockfiles in the key-files check', async () => {
+    const checks = await generator.CheckKeyFiles('/test/install');
+    const paths = checks.map((c) => c.Path);
+    expect(paths).toContain('pnpm-lock.yaml');
+    expect(paths).toContain('package-lock.json');
+  });
+
+  it('renders a package-manager row in the environment table when present', () => {
+    const result = generator.Render({
+      Environment: {
+        OS: 'darwin 25 (arm64)',
+        NodeVersion: 'v24.0.0',
+        NpmVersion: '11.7.0',
+        Architecture: 'arm64',
+        PackageManager: 'pnpm',
+        PackageManagerVersion: '10.33.0',
+      },
+    });
+    expect(result).toContain('| Package manager | pnpm 10.33.0 |');
+  });
+});

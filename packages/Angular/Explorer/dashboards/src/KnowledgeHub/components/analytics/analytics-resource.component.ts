@@ -305,13 +305,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         }
 
         const md = this.ProviderToUse;
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
-        const pkey = new CompositeKey();
-        if (entityInfo) {
-            pkey.LoadFromURLSegment(entityInfo, recordID);
-        } else {
-            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: recordID }];
-        }
+        const pkey = CompositeKey.FromURLSegment(md.EntityByName(entityName), recordID);
         this.navigationService.OpenEntityRecord(entityName, pkey);
     }
 

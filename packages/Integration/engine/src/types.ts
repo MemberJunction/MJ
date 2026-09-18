@@ -35,6 +35,7 @@ export type SyncErrorCode =
     | 'WRITE_VERIFICATION_ERROR'
     | 'WATERMARK_INVALID'
     | 'CONFIGURATION_ERROR'
+    | 'OBJECT_UNAVAILABLE'
     | 'UNKNOWN_ERROR';
 
 /** Severity level of a sync error */
@@ -503,6 +504,30 @@ export interface SourceObjectInfo {
      * when the source does not expose a documented watermark.
      */
     IncrementalWatermarkField?: string;
+    /**
+     * Whether `Fields` is the object's COMPLETE column list for this account.
+     *
+     * Sources fall into three shapes and only the source knows which it is:
+     *   - it describes no columns at all (declared metadata is the whole truth),
+     *   - it returns only the account's CUSTOM columns (additive — the standard columns
+     *     still exist, the source simply did not restate them),
+     *   - it returns the full mapping (a column absent here is genuinely gone).
+     *
+     * Only the third shape may deactivate columns. This was previously INFERRED from
+     * "the field list came back non-empty", which cannot tell the second shape from the
+     * third — so a custom-only source looked authoritative and its standard columns were
+     * candidates for deactivation.
+     *
+     * Undefined means the object has not said, and the CONNECTOR's claim
+     * (`DiscoveryIsAuthoritative`, surfaced as `SourceSchemaInfo.IsAuthoritative`) is inherited:
+     * a connector affirming it returns the complete gamut is affirming it for the fields the same
+     * describe call returned. Since that claim defaults to false and a scoped introspection forces
+     * it false, an undeclared object under a non-affirming connector is still never deactivated.
+     *
+     * So set this `false` explicitly on an object whose describe is custom-only while the rest of
+     * the connector's discovery is complete — that is the one case the inherited claim gets wrong.
+     */
+    FieldsAreAuthoritative?: boolean;
 }
 
 /** One field/column in a source object discovered during introspection. */

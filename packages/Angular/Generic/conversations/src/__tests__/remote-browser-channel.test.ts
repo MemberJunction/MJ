@@ -1,9 +1,9 @@
 // The Remote Browser channel imports its standalone Angular surface component (partial-compiled
 // Angular libs require the JIT compiler in this node test environment), so load the compiler FIRST.
 import '@angular/compiler';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventEmitter } from '@angular/core';
-import { JSONValue } from '@memberjunction/ai';
+import { JSONValue, RealtimeTrack } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
 import {
@@ -38,7 +38,8 @@ interface CtxLog {
 function makeContext(
   log: CtxLog,
   response: Record<string, JSONValue> | null,
-  sessionId: string | null = 'session-1'
+  sessionId: string | null = 'session-1',
+  client: RealtimeChannelContext['Client'] = null
 ): RealtimeChannelContext {
   return {
     AgentName: 'Sage',
@@ -48,6 +49,7 @@ function makeContext(
     SetFocusMode: () => undefined,
     SaveAsArtifact: async () => null,
     AgentSessionID: sessionId,
+    Client: client,
     ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
       log.Calls.push({ Query: query, Variables: variables });
       return response as T | null;
@@ -759,5 +761,525 @@ describe('MapToViewportCoords (display → viewport coordinate mapping)', () => 
 
   it('returns null on an un-sized canvas', () => {
     expect(MapToViewportCoords(10, 10, { left: 0, top: 0, width: 640, height: 360 }, 0, 0)).toBeNull();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// #3496 — a page change the agent did NOT cause used to be invisible to it.
+//
+// The `[browser] current page:` note was pushed from exactly two call sites, both immediately after
+// a server action the model itself initiated. So a user taking over and navigating produced no
+// note, and the agent went on confidently describing the previous page — correcting only when told
+// to look again. Human takeover is on by default for Collaborative providers, which made the
+// default configuration the broken one.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('RemoteBrowserChannel — page changes the agent did not cause (#3496)', () => {
+  /** Reaches the private funnel the way the perception poll and pushed frames do. */
+  const observe = (channel: RemoteBrowserChannel, url: string | null) =>
+    (channel as unknown as { notePageChange(u: string | null, c: 'agent' | 'observed'): void })
+      .notePageChange(url, 'observed');
+
+  it('tells the agent when the page moved without it — and says who did NOT move it', () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+
+    observe(channel, 'https://geeksforgeeks.org');          // first sighting
+    observe(channel, 'https://geeksforgeeks.org/c-programs'); // the user navigated
+
+    expect(log.Notes[0]).toBe('[browser] current page: https://geeksforgeeks.org');
+    // The second note has to say more than "current page": the agent's failure was not knowing the
+    // page had moved out from under it, and an identically-worded note reads as its own navigation.
+    expect(log.Notes[1]).toContain('https://geeksforgeeks.org/c-programs');
+    expect(log.Notes[1]).toContain('you did not navigate here');
+  });
+
+  it('announces the FIRST page plainly — a session opening somewhere is nobody taking over', () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+
+    observe(channel, 'https://example.com');
+
+    expect(log.Notes).toEqual(['[browser] current page: https://example.com']);
+  });
+
+  it('says nothing while the page has not moved', () => {
+    // The perception poll runs every ~700ms. An unconditional note would bury the conversation in
+    // hundreds of identical lines, which is why this is a requirement and not an optimisation.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+
+    observe(channel, 'https://example.com');
+    observe(channel, 'https://example.com');
+    observe(channel, 'https://example.com');
+
+    expect(log.Notes).toHaveLength(1);
+  });
+
+  it('ignores a blank or missing URL rather than announcing an empty page', () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+
+    observe(channel, null);
+    observe(channel, '');
+    observe(channel, '   ');
+
+    expect(log.Notes).toHaveLength(0);
+  });
+
+  it('does not re-announce a page the AGENT just navigated to as someone else driving', () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://example.com/next', Detail: null } }));
+
+    return channel.ApplyAgentTool('browser_OpenUrl', JSON.stringify({ url: 'https://example.com/next' })).then(() => {
+      // The agent's own navigation must be the thing that produced the note — assert the mutation
+      // actually ran, or a misspelled tool name would make this whole case pass without driving it.
+      expect(log.Calls.some(c => c.Query.includes('ExecuteRemoteBrowserAction'))).toBe(true);
+      // The poll fires ~700ms later and sees the URL the agent itself produced. Without the shared
+      // funnel remembering it, every agent navigation would be followed by a bogus "someone else is
+      // driving" note one tick later.
+      observe(channel, 'https://example.com/next');
+
+      expect(log.Notes).toEqual(['[browser] current page: https://example.com/next']);
+    });
+  });
+
+  it('notices a page change through the PERCEPTION POLL — the polling-mode half of the fix', async () => {
+    // The poll already carried the URL every ~700ms; only the surface read it, so a user navigating
+    // moved the picture and told the agent nothing. This drives the real poll path rather than the
+    // funnel directly, because the wiring IS the fix in polling mode.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const reply = { RemoteBrowserSnapshot: { ScreenshotBase64: 'AAAA', CurrentUrl: 'https://example.com' } };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize({
+      AgentName: 'Sage',
+      Provider: null,
+      SendContextNote: (text: string) => log.Notes.push(text),
+      RequestSave: () => undefined,
+      SetFocusMode: () => undefined,
+      SaveAsArtifact: async () => null,
+      AgentSessionID: 'session-1',
+      ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+        log.Calls.push({ Query: query, Variables: variables });
+        return reply as unknown as T;
+      },
+    });
+    const poll = () => (channel as unknown as { fetchSnapshot(): Promise<unknown> }).fetchSnapshot();
+
+    await poll();                                                   // first sighting
+    await poll();                                                   // unchanged — silent
+    reply.RemoteBrowserSnapshot.CurrentUrl = 'https://example.com/c-programs';   // the user navigated
+    await poll();
+
+    expect(log.Notes[0]).toBe('[browser] current page: https://example.com');
+    expect(log.Notes).toHaveLength(2);
+    expect(log.Notes[1]).toContain('https://example.com/c-programs');
+    expect(log.Notes[1]).toContain('you did not navigate here');
+  });
+
+  it('notices a page change carried on a pushed screencast frame', () => {
+    // Under streaming the snapshot poll is stopped, so frames are the only thing that sees the page.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+    (channel as unknown as { streaming: boolean }).streaming = true;
+
+    channel.OnScreencastFrame('AAAA', 'https://example.com/one');
+    channel.OnScreencastFrame('BBBB', 'https://example.com/two');
+    channel.OnScreencastFrame('CCCC', 'https://example.com/two');
+
+    expect(log.Notes).toHaveLength(2);
+    expect(log.Notes[1]).toContain('https://example.com/two');
+  });
+
+  it('behaves exactly as before against a server that sends no URL on frames', () => {
+    // An older MJAPI omits `currentUrl`; reading that as "the page has no URL" would be worse than
+    // the bug being fixed.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+    (channel as unknown as { streaming: boolean }).streaming = true;
+
+    channel.OnScreencastFrame('AAAA');
+
+    expect(log.Notes).toHaveLength(0);
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Attribution cannot be read off the feed a change arrives on: an observation says the page
+  // moved, never who moved it. These pin the window that supplies the missing half.
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /** A context whose server call runs `duringCall` before replying — the ordering the race needs. */
+  function makeRacingContext(log: CtxLog, response: Record<string, JSONValue> | null, duringCall: () => void): RealtimeChannelContext {
+    return {
+      AgentName: 'Sage',
+      Provider: null,
+      SendContextNote: (text: string) => log.Notes.push(text),
+      RequestSave: () => undefined,
+      SetFocusMode: () => undefined,
+      SaveAsArtifact: async () => null,
+      AgentSessionID: 'session-1',
+      ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+        log.Calls.push({ Query: query, Variables: variables });
+        duringCall();
+        return response as T | null;
+      },
+    };
+  }
+
+  it('does not call the agent a bystander when its own frames outrun its reply', async () => {
+    // Under streaming, frames of the new page are pushed WHILE the action's mutation is still in
+    // flight, so the observation reliably lands before the URL is returned. Ordering alone would
+    // therefore report every agent navigation as a takeover — the exact lie being fixed, inverted.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeRacingContext(
+      log,
+      { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://example.com/next', Detail: null } },
+      () => observe(channel, 'https://example.com/next'),
+    ));
+    // Burn the first sighting deliberately: it is announced plainly whoever caused it, so leaving the
+    // race AS the first sighting would let this case pass even with attribution removed entirely.
+    observe(channel, 'https://example.com/start');
+
+    await channel.ApplyAgentTool('browser_OpenUrl', JSON.stringify({ url: 'https://example.com/next' }));
+
+    expect(log.Calls.some(c => c.Query.includes('ExecuteRemoteBrowserAction'))).toBe(true);
+    expect(log.Notes).toEqual([
+      '[browser] current page: https://example.com/start',
+      '[browser] current page: https://example.com/next',
+    ]);
+  });
+
+  it('does not narrate a GOAL run as someone else driving', async () => {
+    // A goal loop drives the page autonomously for minutes with nothing returned until it ends, so
+    // every page it opens is observed mid-run. This is the systematic case, not a race.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeRacingContext(
+      log,
+      { ExecuteRemoteBrowserGoal: { Success: true, Status: 'Completed', CurrentUrl: 'https://example.com/invoice', StepCount: 3, Detail: null } },
+      () => {
+        observe(channel, 'https://example.com/login');
+        observe(channel, 'https://example.com/invoice');
+      },
+    ));
+
+    await channel.ApplyAgentTool('browser_AchieveGoal', JSON.stringify({ goal: 'open the latest invoice' }));
+
+    expect(log.Notes.some(n => n.includes('you did not navigate here'))).toBe(false);
+    expect(log.Notes[0]).toBe('[browser] current page: https://example.com/login');
+  });
+
+  it('still reports a REAL takeover once the agent has finished driving', async () => {
+    // The window is what makes the takeover message trustworthy: if it never closed, the fix would
+    // have traded a missed takeover for one that can no longer be reported at all.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://example.com/next', Detail: null } }));
+
+    await channel.ApplyAgentTool('browser_OpenUrl', JSON.stringify({ url: 'https://example.com/next' }));
+    observe(channel, 'https://example.com/user-went-here');
+
+    expect(log.Notes[1]).toContain('you did not navigate here');
+  });
+
+  it('closes the window when the server call THROWS, not only when it returns', async () => {
+    // Without `finally`, one failed tool call would leave the channel permanently convinced the
+    // agent is still driving — and every later takeover silently mis-attributed to it.
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize({
+      AgentName: 'Sage',
+      Provider: null,
+      SendContextNote: (text: string) => log.Notes.push(text),
+      RequestSave: () => undefined,
+      SetFocusMode: () => undefined,
+      SaveAsArtifact: async () => null,
+      AgentSessionID: 'session-1',
+      ExecuteServerAction: async () => { throw new Error('transport died'); },
+    });
+
+    await channel.ApplyAgentTool('browser_OpenUrl', JSON.stringify({ url: 'https://example.com/next' })).catch(() => undefined);
+    observe(channel, 'https://example.com/first');
+    observe(channel, 'https://example.com/user-went-here');
+
+    expect(log.Notes[1]).toContain('you did not navigate here');
+  });
+
+  it('GetLatestFrame returns null when streaming is active to avoid double-sourcing', async () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+    const c = channel as unknown as { streaming: boolean };
+    c.streaming = true;
+
+    const frame = await channel.GetLatestFrame();
+    expect(frame).toBeNull();
+  });
+
+  it('GetLatestFrame fetches snapshot when streaming is not active', async () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, {
+      RemoteBrowserSnapshot: {
+        ScreenshotBase64: 'static-shot-base64',
+        CurrentUrl: 'https://example.com',
+      }
+    }));
+
+    const frame = await channel.GetLatestFrame();
+    expect(frame).toBe('static-shot-base64');
+  });
+
+  it('OnScreencastFrame paces pushes to videoBridge to <= 1 fps', () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+
+    const pushed: string[] = [];
+    const mockBridge = {
+      PushFrame: (frame: string) => {
+        pushed.push(frame);
+        return true;
+      }
+    };
+    const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+    c.streaming = true;
+    c.videoBridge = mockBridge;
+
+    // First frame arrives at t=0
+    channel.OnScreencastFrame('frame-1');
+    expect(pushed).toEqual(['frame-1']);
+
+    // Second frame arrives 200ms later (rapid screencast burst) -> dropped by 1000ms pacer
+    channel.OnScreencastFrame('frame-2');
+    expect(pushed).toEqual(['frame-1']);
+
+    // Advance time past 1000ms
+    const cTime = channel as unknown as { lastScreencastPushTime: number };
+    cTime.lastScreencastPushTime -= 1001;
+
+    channel.OnScreencastFrame('frame-3');
+    expect(pushed).toEqual(['frame-1', 'frame-3']);
+  });
+
+  it('OnScreencastFrame deduplicates identical frames and pushes on visual changes or URL changes', () => {
+    const log: CtxLog = { Notes: [], Calls: [] };
+    const channel = new RemoteBrowserChannel();
+    channel.Initialize(makeContext(log, null));
+
+    const pushed: string[] = [];
+    const mockBridge = {
+      PushFrame: (frame: string) => {
+        pushed.push(frame);
+        return true;
+      }
+    };
+    const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+    c.streaming = true;
+    c.videoBridge = mockBridge;
+
+    // First frame arrives
+    channel.OnScreencastFrame('frame-A', 'https://example.com/page1');
+    expect(pushed).toEqual(['frame-A']);
+
+    // Advance time past 1000ms but send identical frame on same URL -> deduplicated
+    const cTime = channel as unknown as { lastScreencastPushTime: number };
+    cTime.lastScreencastPushTime -= 1001;
+    channel.OnScreencastFrame('frame-A', 'https://example.com/page1');
+    expect(pushed).toEqual(['frame-A']);
+
+    // Advance time past 1000ms and send different frame -> pushed
+    cTime.lastScreencastPushTime -= 1001;
+    channel.OnScreencastFrame('frame-B', 'https://example.com/page1');
+    expect(pushed).toEqual(['frame-A', 'frame-B']);
+
+    // Advance time past 1000ms and change URL even with same frame -> pushed
+    cTime.lastScreencastPushTime -= 1001;
+    channel.OnScreencastFrame('frame-B', 'https://example.com/page2');
+    expect(pushed).toEqual(['frame-A', 'frame-B', 'frame-B']);
+  });
+
+  it('OnScreencastFrame delivers trailing-edge settled frame after burst of rapid activity', () => {
+    vi.useFakeTimers();
+    try {
+      const log: CtxLog = { Notes: [], Calls: [] };
+      const channel = new RemoteBrowserChannel();
+      channel.Initialize(makeContext(log, null));
+
+      const pushed: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushed.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+      c.streaming = true;
+      c.videoBridge = mockBridge;
+
+      // First frame at t=0 pushed immediately (leading edge)
+      channel.OnScreencastFrame('frame-0');
+      expect(pushed).toEqual(['frame-0']);
+
+      // Rapid burst during cooldown (< 1000ms):
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-1');
+      expect(pushed).toEqual(['frame-0']); // buffered, not pushed
+
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-2');
+      expect(pushed).toEqual(['frame-0']); // replaced in buffer
+
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-settled');
+      expect(pushed).toEqual(['frame-0']); // latest resting state
+
+      // Cooldown expires (total 1000ms reached)
+      vi.advanceTimersByTime(400);
+
+      // Trailing-edge timer fired and pushed the settled resting frame!
+      expect(pushed).toEqual(['frame-0', 'frame-settled']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('OnScreencastFrame trailing timer deduplicates if resting frame matches last pushed frame', () => {
+    vi.useFakeTimers();
+    try {
+      const log: CtxLog = { Notes: [], Calls: [] };
+      const channel = new RemoteBrowserChannel();
+      channel.Initialize(makeContext(log, null));
+
+      const pushed: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushed.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+      c.streaming = true;
+      c.videoBridge = mockBridge;
+
+      channel.OnScreencastFrame('frame-A');
+      expect(pushed).toEqual(['frame-A']);
+
+      // Intermediate transient frame (e.g. cursor blink or hover)
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-transient');
+
+      // Settled back to identical frame
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-A');
+
+      // Advance past cadence
+      vi.advanceTimersByTime(600);
+
+      // Identical resting frame is not pushed to save tokens
+      expect(pushed).toEqual(['frame-A']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancelling screencast clears pending trailing settle timer', () => {
+    vi.useFakeTimers();
+    try {
+      const log: CtxLog = { Notes: [], Calls: [] };
+      const channel = new RemoteBrowserChannel();
+      channel.Initialize(makeContext(log, null));
+
+      const pushed: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushed.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+      c.streaming = true;
+      c.videoBridge = mockBridge;
+
+      channel.OnScreencastFrame('frame-1');
+      expect(pushed).toEqual(['frame-1']);
+
+      vi.advanceTimersByTime(200);
+      channel.OnScreencastFrame('frame-2');
+
+      // Surface unbinds / stops screencast
+      channel.UnbindSurface();
+
+      // Time passes
+      vi.advanceTimersByTime(1000);
+
+      // Trailing timer was cancelled, frame-2 never pushed
+      expect(pushed).toEqual(['frame-1']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('paces pushes according to dynamically negotiated video track Rate', () => {
+    vi.useFakeTimers();
+    try {
+      const log: CtxLog = { Notes: [], Calls: [] };
+      const mockTrack: RealtimeTrack = {
+        TrackID: 'video-track-1',
+        State: 'live',
+        Descriptor: {
+          Modality: 'video',
+          Direction: 'inbound',
+          Rate: 4, // 4 fps -> 250ms cadence
+        }
+      };
+      const mockClient = {
+        EstablishedTracks: [mockTrack],
+        AllTracks: [mockTrack],
+        IsTrackEstablished: () => true
+      } as unknown as RealtimeChannelContext['Client'];
+
+      const channel = new RemoteBrowserChannel();
+      channel.Initialize(makeContext(log, null, 'session-1', mockClient));
+
+      const pushed: string[] = [];
+      const mockBridge = {
+        PushFrame: (frame: string) => {
+          pushed.push(frame);
+          return true;
+        }
+      };
+      const c = channel as unknown as { streaming: boolean; videoBridge: typeof mockBridge };
+      c.streaming = true;
+      c.videoBridge = mockBridge;
+
+      // t=0: frame-1 pushed immediately
+      channel.OnScreencastFrame('frame-1');
+      expect(pushed).toEqual(['frame-1']);
+
+      // t=100ms (< 250ms): frame-2 buffered
+      vi.advanceTimersByTime(100);
+      channel.OnScreencastFrame('frame-2');
+      expect(pushed).toEqual(['frame-1']);
+
+      // t=250ms: trailing timer delivers frame-2 (250ms cadence reached)
+      vi.advanceTimersByTime(150);
+      expect(pushed).toEqual(['frame-1', 'frame-2']);
+
+      // t=500ms (250ms since last push): leading edge delivers frame-3 immediately
+      vi.advanceTimersByTime(250);
+      channel.OnScreencastFrame('frame-3');
+      expect(pushed).toEqual(['frame-1', 'frame-2', 'frame-3']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

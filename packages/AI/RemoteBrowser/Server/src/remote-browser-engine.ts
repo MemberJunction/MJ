@@ -32,6 +32,7 @@ import {
   isControlModeSupported,
   resolveControlStrategy,
 } from '@memberjunction/remote-browser-base';
+import { IsDeadBrowserHandleError } from './dead-handle';
 
 /**
  * Who currently holds the input floor of a remote-browser session — the arbiter's view of control.
@@ -41,6 +42,48 @@ import {
  *   {@link RemoteBrowserEngine.RequestControl} → {@link RemoteBrowserEngine.GrantControl} handshake.
  */
 export type RemoteBrowserFloorHolder = 'Agent' | 'Human';
+
+/**
+ * Canonicalises an `instanceKey` — the name of ONE browser within an agent session (#3531) — or
+ * returns `null` for "the single unnamed instance", which is what every pre-#3531 caller means.
+ *
+ * Exported because the key is compared in more than one place: the engine's session map, the
+ * resolver's per-stream idempotency sets, and the screencast/audio envelopes a client routes on. If
+ * each normalised for itself, a surface could start a stream under `Left` and then fail to find it
+ * under `left` — the key would be case-insensitive in one layer and case-sensitive in the next, which
+ * is the kind of disagreement that only shows up in production with two surfaces open.
+ *
+ * Empty and whitespace collapse to `null` rather than to a distinct `''` instance, so a caller that
+ * threads an absent value through as `''` lands exactly where it did before the argument existed.
+ */
+export function NormalizeInstanceKey(instanceKey?: string | null): string | null {
+  const name = (instanceKey ?? '').trim().toLowerCase();
+  return name.length === 0 ? null : name;
+}
+
+/**
+ * How many times one surface may be healed from a dead handle before the engine stops trying (#3598).
+ *
+ * A browser that dies once is a recycled container; a browser that dies immediately after every
+ * relaunch is a configuration fault, and relaunching it forever converts a visible error into an
+ * invisible hang plus a stream of orphaned Chromes. Three is enough to ride out a backend restart and
+ * few enough that a genuinely broken provider surfaces quickly. The budget is per agent-session key
+ * and is cleared when that surface is explicitly ended.
+ */
+export const MAX_DEAD_HANDLE_RECOVERIES = 3;
+
+/**
+ * Parameters for {@link RemoteBrowserEngine.RecoverDeadAgentSession} — everything a relaunch needs
+ * that the fault itself cannot say.
+ */
+export interface RecoverDeadAgentSessionParams {
+  /** Which browser within the agent session faulted (#3531). Omitted is the single unnamed instance. */
+  InstanceKey?: string;
+  /** The MJ user the replacement runs as — the same one that owned the browser that died. */
+  ContextUser?: UserInfo;
+  /** Explicit backend provider name; when omitted the single Active provider is used. */
+  ProviderName?: string;
+}
 
 /**
  * Parameters for {@link RemoteBrowserEngine.StartSession}.
@@ -86,6 +129,11 @@ export interface StartRemoteBrowserSessionParams {
  * Parameters for {@link RemoteBrowserEngine.AchieveGoal} — a high-level, goal-driven browser run.
  */
 export interface AchieveGoalParams {
+  /**
+   * Names WHICH browser within the agent session, when the session holds more than one (#3531).
+   * Omitted resolves the single unnamed instance — the previous behaviour, and still the default.
+   */
+  InstanceKey?: string;
   /** The acting user (for lazy session start). */
   ContextUser?: UserInfo;
   /** Explicit backend provider name (when omitted, the single Active provider is used). */
@@ -261,6 +309,32 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    */
   private activeGoalAborts = new Map<string, AbortController>();
 
+  /**
+   * The frame sink each live session is streaming to, keyed by engine session id (lowercased) —
+   * remembered so a recovered session can be RE-ATTACHED to the same consumer (#3598).
+   *
+   * The client asks for a screencast exactly once, at bind time, and has no reason to ask again. So
+   * when a dead browser is replaced the new one streams to nobody unless the server re-pipes it, and
+   * the person watches a frozen last-good frame while the agent truthfully narrates a page they
+   * cannot see. Keeping the sink here is what makes re-attachment possible at all; without it,
+   * healing the backend would be strictly worse than the original fault.
+   */
+  private screencastSinks = new Map<string, RemoteBrowserScreencastSink>();
+
+  /**
+   * In-flight dead-handle recoveries, keyed the same way {@link agentSessionToEngineSession} is.
+   * A dead browser is discovered by several callers at once — the ~700ms snapshot poll and the next
+   * agent action both fault — and each would otherwise launch its own replacement, turning one dead
+   * browser into two live ones. Coalesced exactly like {@link startingSessions}.
+   */
+  private recoveringSessions = new Map<string, Promise<IRemoteBrowserSession | null>>();
+
+  /**
+   * How many times each agent-session key has been healed, so a browser that dies on arrival cannot
+   * spin the relaunch path forever. Cleared when the key is explicitly ended.
+   */
+  private recoveryAttempts = new Map<string, number>();
+
   /** Monotonic counter feeding the generated session-id suffix (unique within this process). */
   private sessionCounter = 0;
 
@@ -347,8 +421,12 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
   /**
    * Lazily starts (or returns the already-running) remote-browser session for an `AIAgentSession`.
    *
-   * Idempotent: a second call for an agent session that already has a live browser returns that same
-   * {@link IRemoteBrowserSession} rather than launching a second browser. The provider is resolved by
+   * Idempotent PER INSTANCE: a second call for the same agent session AND `instanceKey` returns that
+   * same {@link IRemoteBrowserSession} rather than launching a second browser. A DIFFERENT
+   * `instanceKey` is a different browser — that is the whole point of the argument (#3531): keyed by
+   * agent session alone, "open the pricing page beside the docs page" resolved both requests to one
+   * browser and the second silently navigated the first, so a side-by-side comparison could not be
+   * expressed at all. Omitting the key keeps the previous behaviour exactly: one unnamed instance. The provider is resolved by
    * the explicit `providerName` when supplied, else the engine's single {@link RemoteBrowserEngineBase.ActiveProviders}
    * entry — assuming EXACTLY ONE Active provider for now (a clear error is thrown for none or ambiguous,
    * rather than silently picking one).
@@ -359,19 +437,20 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    * @returns The live session the mutation drives.
    * @throws When no/ambiguous Active provider can be resolved, or the underlying {@link StartSession} fails.
    */
-  public async StartSessionForAgentSession(agentSessionID: string, contextUser?: UserInfo, providerName?: string): Promise<IRemoteBrowserSession> {
-    const existing = this.GetSessionForAgentSession(agentSessionID);
+  public async StartSessionForAgentSession(agentSessionID: string, contextUser?: UserInfo, providerName?: string, instanceKey?: string): Promise<IRemoteBrowserSession> {
+    const existing = this.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (existing) {
       return existing;
     }
     // Coalesce concurrent lazy-starts (screencast + first action + audio stream) onto one promise so we
-    // launch exactly ONE browser per agent session — see startingSessions.
-    const key = this.agentSessionKey(agentSessionID);
+    // launch exactly ONE browser per agent session AND INSTANCE — see startingSessions. The key must
+    // carry the instance or two named surfaces starting at once would collapse onto one promise.
+    const key = this.agentSessionKey(agentSessionID, instanceKey);
     const inflight = this.startingSessions.get(key);
     if (inflight) {
       return inflight;
     }
-    const startPromise = this.lazyStartBrowserForAgentSession(agentSessionID, key, contextUser, providerName);
+    const startPromise = this.lazyStartBrowserForAgentSession(agentSessionID, key, contextUser, providerName, instanceKey);
     this.startingSessions.set(key, startPromise);
     try {
       return await startPromise;
@@ -390,8 +469,9 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     key: string,
     contextUser?: UserInfo,
     providerName?: string,
+    instanceKey?: string,
   ): Promise<IRemoteBrowserSession> {
-    const existing = this.GetSessionForAgentSession(agentSessionID);
+    const existing = this.GetSessionForAgentSession(agentSessionID, instanceKey);
     if (existing) {
       return existing;
     }
@@ -413,8 +493,8 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    * @param agentSessionID The `AIAgentSession` id.
    * @returns The live session, or `undefined`.
    */
-  public GetSessionForAgentSession(agentSessionID: string): IRemoteBrowserSession | undefined {
-    const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID));
+  public GetSessionForAgentSession(agentSessionID: string, instanceKey?: string): IRemoteBrowserSession | undefined {
+    const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID, instanceKey));
     if (!engineSessionID) {
       return undefined;
     }
@@ -438,8 +518,8 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    * @returns The goal outcome.
    */
   public async AchieveGoal(agentSessionID: string, goal: string, opts: AchieveGoalParams = {}): Promise<RemoteBrowserGoalResult> {
-    await this.StartSessionForAgentSession(agentSessionID, opts.ContextUser, opts.ProviderName);
-    const handle = this.getHandleForAgentSession(agentSessionID);
+    await this.StartSessionForAgentSession(agentSessionID, opts.ContextUser, opts.ProviderName, opts.InstanceKey);
+    const handle = this.getHandleForAgentSession(agentSessionID, opts.InstanceKey);
     if (!handle) {
       return { Success: false, Status: 'Error', Detail: 'No active remote-browser session for this agent session.' };
     }
@@ -466,8 +546,8 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
   }
 
   /** Returns the full session handle (with capability features) for an agent session, or `undefined`. */
-  private getHandleForAgentSession(agentSessionID: string): RemoteBrowserSessionHandle | undefined {
-    const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID));
+  private getHandleForAgentSession(agentSessionID: string, instanceKey?: string): RemoteBrowserSessionHandle | undefined {
+    const engineSessionID = this.agentSessionToEngineSession.get(this.agentSessionKey(agentSessionID, instanceKey));
     return engineSessionID ? this.activeSessions.get(engineSessionID.toLowerCase()) : undefined;
   }
 
@@ -480,14 +560,152 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
    * @param agentSessionID The `AIAgentSession` id whose browser to end.
    * @returns `true` when a live browser was found and torn down, `false` when none was held.
    */
-  public async EndSessionForAgentSession(agentSessionID: string): Promise<boolean> {
-    const key = this.agentSessionKey(agentSessionID);
+  public async EndSessionForAgentSession(agentSessionID: string, instanceKey?: string): Promise<boolean> {
+    const key = this.agentSessionKey(agentSessionID, instanceKey);
+    // An explicit end is the surface going away for good, so its recovery budget goes with it — a
+    // later surface reusing the key starts from a clean slate rather than inheriting a spent one.
+    this.recoveryAttempts.delete(key);
     const engineSessionID = this.agentSessionToEngineSession.get(key);
     if (!engineSessionID) {
       return false;
     }
     this.agentSessionToEngineSession.delete(key);
     return this.EndSession(engineSessionID);
+  }
+
+  /**
+   * Heals a surface whose browser has DIED, given the error that revealed it (#3598).
+   *
+   * The engine's live map keeps a handle after the browser behind it is gone — an external Chrome
+   * closed, a container recycled, a CDP target lost — so `StartSessionForAgentSession` keeps handing
+   * back a corpse and every call throws for the rest of the session. A dead handle is not a failure
+   * to report; it is a mapping to delete. This discards it, launches one replacement, and re-attaches
+   * the screencast so the person watching sees the browser the agent is now describing.
+   *
+   * **The caller does not decide what "dead" means.** It hands over the error it already caught and
+   * this decides — so the closed grammar in {@link IsDeadBrowserHandleError} has exactly one home and
+   * a bad selector can never cost a healthy browser its state. Anything unrecognised returns `null`
+   * and the caller reports the error precisely as it does today.
+   *
+   * Bounded on purpose: concurrent faults on one surface coalesce onto a single relaunch, and a
+   * surface gets at most {@link MAX_DEAD_HANDLE_RECOVERIES} of them before the engine stops trying
+   * and says so. A browser that dies on arrival should surface as a visible fault, not a hang.
+   *
+   * @param agentSessionID The `AIAgentSession` id whose surface faulted.
+   * @param error The error the caller caught from the dead handle.
+   * @param opts Which instance faulted, plus the user/provider a relaunch needs.
+   * @returns The replacement session, or `null` when the error was not a dead handle, nothing was
+   *  mapped, the budget is spent, or the relaunch itself failed.
+   */
+  public async RecoverDeadAgentSession(
+    agentSessionID: string,
+    error: unknown,
+    opts: RecoverDeadAgentSessionParams = {},
+  ): Promise<IRemoteBrowserSession | null> {
+    if (!IsDeadBrowserHandleError(error)) {
+      return null;
+    }
+    const key = this.agentSessionKey(agentSessionID, opts.InstanceKey);
+    // Join an in-flight recovery BEFORE looking at the mapping, and the order is not cosmetic: a
+    // recovery deletes the dead mapping as its first act, so a caller that checked the map first
+    // would see "nothing mapped", conclude there was nothing to heal, and return null — leaving the
+    // agent's action failing while a perfectly good replacement was seconds away.
+    const inflight = this.recoveringSessions.get(key);
+    if (inflight) {
+      return inflight;
+    }
+    if (!this.agentSessionToEngineSession.has(key)) {
+      // Nothing mapped and nothing in flight: either it was never started or a recovery already
+      // finished. Either way the ordinary lazy-start path is the right next step, not a relaunch.
+      return null;
+    }
+    const attempts = this.recoveryAttempts.get(key) ?? 0;
+    if (attempts >= MAX_DEAD_HANDLE_RECOVERIES) {
+      LogError(
+        `[RemoteBrowserEngine] Giving up on agent session ${agentSessionID}${opts.InstanceKey ? ` (instance '${opts.InstanceKey}')` : ''}: ` +
+          `its browser died ${attempts} times after relaunch. Surfacing the fault rather than relaunching again.`,
+      );
+      return null;
+    }
+    this.recoveryAttempts.set(key, attempts + 1);
+    const recovery = this.relaunchDeadAgentSession(agentSessionID, key, opts);
+    this.recoveringSessions.set(key, recovery);
+    try {
+      return await recovery;
+    } finally {
+      this.recoveringSessions.delete(key);
+    }
+  }
+
+  /**
+   * Discards the dead mapping and launches ONE replacement, re-piping the screencast to whatever sink
+   * the discarded session was streaming to (serialized by {@link recoveringSessions}).
+   *
+   * Never throws: a relaunch that fails is logged and reported as `null`, because this runs inside
+   * some other operation's failure path and replacing one error with a different one would only hide
+   * the fault the caller was already handling.
+   */
+  private async relaunchDeadAgentSession(
+    agentSessionID: string,
+    key: string,
+    opts: RecoverDeadAgentSessionParams,
+  ): Promise<IRemoteBrowserSession | null> {
+    const deadEngineSessionID = this.agentSessionToEngineSession.get(key);
+    const sink = deadEngineSessionID ? this.screencastSinks.get(deadEngineSessionID.toLowerCase()) : undefined;
+    LogStatus(
+      `[RemoteBrowserEngine] Dead browser handle for agent session ${agentSessionID}` +
+        `${opts.InstanceKey ? ` (instance '${opts.InstanceKey}')` : ''}; discarding engine session ${deadEngineSessionID} and relaunching.`,
+    );
+    // Closing a browser that is ALREADY gone is expected to fail, and that failure is not news —
+    // the mapping is dropped either way, which is the part that matters for healing.
+    this.agentSessionToEngineSession.delete(key);
+    if (deadEngineSessionID) {
+      try {
+        await this.EndSession(deadEngineSessionID);
+      } catch (endError) {
+        LogStatus(
+          `[RemoteBrowserEngine] Tearing down the dead session ${deadEngineSessionID} failed (expected for an already-gone browser): ` +
+            `${endError instanceof Error ? endError.message : String(endError)}`,
+        );
+      }
+    }
+    let replacement: IRemoteBrowserSession;
+    try {
+      replacement = await this.StartSessionForAgentSession(agentSessionID, opts.ContextUser, opts.ProviderName, opts.InstanceKey);
+    } catch (startError) {
+      LogError(
+        `[RemoteBrowserEngine] Relaunch after a dead handle failed for agent session ${agentSessionID}: ` +
+          `${startError instanceof Error ? startError.message : String(startError)}`,
+      );
+      return null;
+    }
+    if (sink) {
+      await this.reattachScreencast(agentSessionID, key, sink);
+    }
+    return replacement;
+  }
+
+  /**
+   * Re-pipes a recovered surface to the sink its predecessor was streaming to.
+   *
+   * A failure here leaves a WORKING browser that nobody can see, which is bad but strictly better
+   * than discarding the recovery — so it is logged and the replacement is still returned. The agent
+   * keeps working; the view is what degrades, and the log says so.
+   */
+  private async reattachScreencast(agentSessionID: string, key: string, sink: RemoteBrowserScreencastSink): Promise<void> {
+    const newEngineSessionID = this.agentSessionToEngineSession.get(key);
+    if (!newEngineSessionID) {
+      return;
+    }
+    try {
+      await this.PipeScreencastToTrack(newEngineSessionID, sink);
+      LogStatus(`[RemoteBrowserEngine] Re-attached the screencast for agent session ${agentSessionID} to engine session ${newEngineSessionID}.`);
+    } catch (pipeError) {
+      LogError(
+        `[RemoteBrowserEngine] Recovered the browser for agent session ${agentSessionID} but could not re-attach its screencast; ` +
+          `the surface will stay frozen until it is re-bound: ${pipeError instanceof Error ? pipeError.message : String(pipeError)}`,
+      );
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────────
@@ -562,6 +780,9 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     // Stop any in-flight goal loop before tearing down the browser it drives.
     this.abortActiveGoal(handle.SessionID);
     this.activeSessions.delete(key);
+    // The sink outlives nothing: this session's frames are over, and holding the closure would keep
+    // whatever it captured alive for the life of the process.
+    this.screencastSinks.delete(key);
     await this.teardown(handle);
     LogStatus(`[RemoteBrowserEngine] Session ${handle.SessionID} ended.`);
     return true;
@@ -742,6 +963,8 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
       throw this.notSupported('ScreenStreaming', handle.Provider.Name);
     }
     await handle.Session.StartScreencast((frame) => sink(frame));
+    // Remembered so a dead handle can be replaced and re-piped to this same consumer (#3598).
+    this.screencastSinks.set(handle.SessionID.toLowerCase(), sink);
     LogStatus(`[RemoteBrowserEngine] Screencast piped for session ${handle.SessionID}.`);
   }
 
@@ -758,6 +981,9 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     if (!handle || handle.Features.ScreenStreaming !== true) {
       return;
     }
+    // Forget the sink BEFORE stopping: a caller that deliberately stopped streaming must not have a
+    // recovery quietly re-attach it, which would resurrect a surface the host chose to release.
+    this.screencastSinks.delete(handle.SessionID.toLowerCase());
     await handle.Session.StopScreencast();
   }
 
@@ -950,9 +1176,18 @@ export class RemoteBrowserEngine extends BaseSingleton<RemoteBrowserEngine> impl
     return active[0].Name;
   }
 
-  /** Canonical map key for an agent-session id (UUID case differs across DB platforms). */
-  private agentSessionKey(agentSessionID: string): string {
-    return agentSessionID.trim().toLowerCase();
+  /**
+   * Canonical map key for an agent-session id (UUID case differs across DB platforms).
+   *
+   * `instanceKey` NAMES A SECOND BROWSER within one agent session. Keyed by agent session alone,
+   * "open the pricing page beside the docs page" resolves both requests to the SAME browser and the
+   * second silently navigates the first — so a side-by-side comparison cannot be expressed at all.
+   * A caller that supplies no key keeps the previous behaviour exactly: the one unnamed instance.
+   */
+  private agentSessionKey(agentSessionID: string, instanceKey?: string): string {
+    const base = agentSessionID.trim().toLowerCase();
+    const name = NormalizeInstanceKey(instanceKey);
+    return name === null ? base : `${base}::${name}`;
   }
 
   /** Builds the standard capability-not-supported error stamped with the backend name. */

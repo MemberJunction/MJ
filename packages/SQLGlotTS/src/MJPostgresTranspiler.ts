@@ -44,9 +44,25 @@ export interface MJPostgresTranspilerOptions {
    * registry, e.g. collected from the baselines), so seed INSERTs targeting those
    * tables get their 1/0 values coerced to TRUE/FALSE.
    */
-  extraBitColumns?: string[];
+  extraBitColumns?: readonly BitColumnRef[];
   /** Per-invocation timeout in ms (default 120000 — baselines are large). */
   timeoutMs?: number;
+}
+
+/**
+ * One entry in the cross-file BIT/BOOLEAN registry: a `[table, column]` pair, both LOWERCASED —
+ * the wire shape the dialect emits from `--collect-bitcols` and reads back from
+ * `MJ_EXTRA_BIT_COLS_FILE` (`[["entityfield","allowsnull"], …]`).
+ *
+ * Previously typed as `string[]`, which type-checked only because the value is passed straight
+ * back out as JSON and never indexed — a `"Table.Column"` string would have serialized fine and
+ * silently matched nothing.
+ */
+export type BitColumnRef = readonly [table: string, column: string];
+
+/** Runtime narrow for a registry entry parsed from the dialect's JSON output. */
+function isBitColumnRef(v: unknown): v is BitColumnRef {
+  return Array.isArray(v) && v.length === 2 && typeof v[0] === 'string' && typeof v[1] === 'string';
 }
 
 /**
@@ -85,7 +101,7 @@ function resolveDialectPath(): string {
 export class MJPostgresTranspiler {
   private readonly pythonPath: string;
   private readonly dialectPath: string;
-  private readonly extraBitColumns: string[];
+  private extraBitColumns: BitColumnRef[];
   private readonly timeoutMs: number;
   /** Lazily-written temp file holding the bit-col registry JSON. `undefined` = not yet computed, `null` = none. */
   private bitColsFile: string | null | undefined;
@@ -93,7 +109,7 @@ export class MJPostgresTranspiler {
   constructor(options?: MJPostgresTranspilerOptions) {
     this.pythonPath = options?.pythonPath ?? process.env.MJ_SQLGLOT_PYTHON ?? 'python3';
     this.dialectPath = resolveDialectPath();
-    this.extraBitColumns = options?.extraBitColumns ?? [];
+    this.extraBitColumns = [...(options?.extraBitColumns ?? [])];
     this.timeoutMs = options?.timeoutMs ?? 120_000;
   }
 
@@ -125,6 +141,31 @@ export class MJPostgresTranspiler {
     return file;
   }
 
+  /**
+   * Extend the cross-file BIT/BOOLEAN registry after construction.
+   *
+   * The constructor registry is collected from the migration set's own baseline, which declares
+   * the tables that set DECLARES — never MJ core's. An Open App migration that seeds
+   * `__mj.EntityField` therefore had no type information for `AllowsNull` / `IsVirtual` /
+   * `IsPrimaryKey`, so BIT `0`/`1` passed through to a PostgreSQL BOOLEAN column and the statement
+   * failed with `column "X" is of type boolean but expression is of type integer` (issue #3839).
+   *
+   * Callers that hold a live PostgreSQL connection — `--bake-codegen` requires one — can supply
+   * the authoritative set from `information_schema`, which is both complete and correct for the
+   * core version actually installed, unlike a checked-in map that goes stale as columns are added.
+   *
+   * Must be called before the first `transpile()`: the registry file is materialised lazily and
+   * cached, so this invalidates that cache to keep late additions honest rather than silently
+   * ignored.
+   */
+  addExtraBitColumns(columns: readonly BitColumnRef[]): void {
+    if (columns.length === 0) return;
+    const seen = new Map<string, BitColumnRef>();
+    for (const c of [...this.extraBitColumns, ...columns]) seen.set(`${c[0]}\u0000${c[1]}`, c);
+    this.extraBitColumns = [...seen.values()];
+    this.bitColsFile = undefined;
+  }
+
   /** Transpile T-SQL to PostgreSQL. Statements the dialect can't emit land in `unhandled`. */
   async transpile(tsql: string): Promise<MJPostgresTranspileResult> {
     const stdout = await this.runDialect([], tsql);
@@ -140,10 +181,10 @@ export class MJPostgresTranspiler {
    * given SQL — used to build the cross-file registry from baselines before
    * transpiling individual migrations.
    */
-  async collectBitColumns(sql: string): Promise<string[]> {
+  async collectBitColumns(sql: string): Promise<BitColumnRef[]> {
     const stdout = await this.runDialect(['--collect-bitcols'], sql);
-    const parsed = JSON.parse(stdout) as string[];
-    if (!Array.isArray(parsed)) {
+    const parsed: unknown = JSON.parse(stdout);
+    if (!Array.isArray(parsed) || !parsed.every(isBitColumnRef)) {
       throw new Error(`MJPostgresTranspiler: unexpected --collect-bitcols output: ${stdout.slice(0, 200)}`);
     }
     return parsed;

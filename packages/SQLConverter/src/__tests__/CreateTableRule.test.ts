@@ -322,4 +322,20 @@ describe('CreateTableRule', () => {
       expect(result).not.toContain('"pk_payment"');
     });
   });
+
+  describe('JSON CHECK constraints', () => {
+    it('should convert ISJSON(col) = 1 to (col) IS JSON after identifier quoting', () => {
+      const sql = `CREATE TABLE [__mj_BizAppsAccounting].[AccountingEngineExtension] (
+  [ID] UNIQUEIDENTIFIER NOT NULL,
+  [Configuration] NVARCHAR(MAX) NULL,
+  CONSTRAINT CK_AccountingEngineExtension_Configuration CHECK (
+    Configuration IS NULL OR ISJSON(Configuration) = 1
+  )
+)`;
+      const result = convert(sql);
+      expect(result).toMatch(/IS JSON/);
+      expect(result).not.toMatch(/"ISJSON"/);
+      expect(result).not.toMatch(/\bISJSON\s*\(/i);
+    });
+  });
 });

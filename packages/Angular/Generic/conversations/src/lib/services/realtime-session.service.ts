@@ -5,7 +5,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import {
   BaseRealtimeClient,
@@ -23,7 +23,7 @@ import {
   RealtimeClientUsage
 } from '@memberjunction/ai-realtime-client';
 import { BuildNarrationInstructions } from './narration-template';
-import { ParseDelegationResultJson, ParsedDelegationArtifact } from './delegation-result-parser';
+import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../components/realtime/channels/base-realtime-channel-client';
 import { RealtimeAudioRecorder } from './realtime-audio-recorder';
 
@@ -78,9 +78,11 @@ export interface RealtimeCaption {
  * future overlay render a "working" card while the realtime model narrates the same progress aloud.
  */
 export interface RealtimeDelegationProgress {
-  /** The `invoke-target-agent` call this progress belongs to. */
+  /** The tool/agent call this progress belongs to. */
   CallID: string;
-  /** The delegation phase: `prompt_execution` | `action_execution` | `subagent_execution` | `decision_processing`. */
+  /** The raw tool name when this progress represents a direct action (e.g. `File_Storage_List_Objects`). */
+  ToolName?: string;
+  /** The delegation phase: `prompt_execution` | `action_execution` | `subagent_execution` | `decision_processing` | `direct_action`. */
   Step: string;
   /** Human-readable progress message. */
   Message: string;
@@ -94,8 +96,10 @@ export interface RealtimeDelegationProgress {
  * content + provenance.
  */
 export interface RealtimeDelegationResult {
-  /** The `invoke-target-agent` call this result belongs to. */
+  /** The tool/agent call this result belongs to. */
   CallID: string;
+  /** The raw tool name when this result represents a direct action. */
+  ToolName?: string;
   /** Whether the delegated work succeeded. */
   Success: boolean;
   /** The result text — the agent's output, or an error message on failure. */
@@ -159,6 +163,20 @@ export interface RealtimeDelegationNarration {
 }
 
 /**
+ * One thought/reasoning narration emitted on {@link RealtimeSessionService.ThoughtNarration$}.
+ * Distinct from spoken progress narrations: thought summaries are authored by reasoning models
+ * (e.g. Gemini 3.8 Live Extended Thinking) and are NOT spoken aloud.
+ */
+export interface RealtimeThoughtNarration {
+  /** Correlating call ID if associated with a delegation/turn; otherwise generated or empty. */
+  CallID?: string;
+  /** The model's thought / reasoning text. */
+  Text: string;
+  /** Whether this emission represents the complete finalized thought turn. */
+  IsFinal?: boolean;
+}
+
+/**
  * Raw shape of the JSON `message` the server publishes on the push-status topic during a delegated run.
  * We filter on `resolver` + `type` before correlating by `agentSessionID`; normal agent runs publish
  * other shapes on the same topic and are ignored.
@@ -185,6 +203,12 @@ interface RemoteBrowserScreencastPayload {
   width: number;
   height: number;
   seq: number;
+  /**
+   * The browser's URL when the frame was captured (#3496). Optional: a server older than that change
+   * omits it, and the channel then behaves exactly as it did before rather than reading `undefined`
+   * as "the page has no URL".
+   */
+  currentUrl?: string | null;
 }
 
 /**
@@ -205,8 +229,13 @@ interface RemoteBrowserAudioChunkPayload {
 /**
  * Result shape returned by the `StartRealtimeClientSession` server mutation.
  * The browser uses these values to open a client-direct realtime session.
+ *
+ * Exported because a host may mint the session ITSELF (its own mutation, carrying
+ * server-side context the stock mutation cannot express) and then hand the result to
+ * {@link RealtimeSessionService.StartRealtimeSessionFromResult} to run it — this is the
+ * contract that path is written against.
  */
-interface StartRealtimeClientSessionResult {
+export interface StartRealtimeClientSessionResult {
   AgentSessionId: string;
   ConversationId: string | null;
   Provider: string;
@@ -234,6 +263,86 @@ interface StartRealtimeClientSessionResult {
 }
 
 /**
+ * Host-supplied inputs that accompany an already-minted session on
+ * {@link RealtimeSessionService.StartRealtimeSessionFromResult} — the values the RUN half needs
+ * that a {@link StartRealtimeClientSessionResult} cannot carry. Every field is optional and
+ * mirrors the same-named {@link RealtimeSessionService.StartRealtimeSession} parameter, defaults
+ * included: omit one and the session behaves exactly as the all-in-one entry point does when that
+ * parameter is omitted.
+ */
+export interface RealtimeSessionRunOptions {
+  /**
+   * The conversation the host asked its OWN mint for, or null/omitted when it asked the server to
+   * create one. Only the ORIGINAL request tells the two apart: a null here plus a
+   * `ConversationId` on the result means the server created that conversation for this session,
+   * which the host is told about via {@link RealtimeSessionService.SessionCreatedConversationId}.
+   */
+  readonly conversationId?: string | null;
+  /**
+   * Display name of the target agent, surfaced on {@link RealtimeSessionService.AgentName$} so any
+   * host can render it without re-resolving. Omitted ⇒ the previous name stands.
+   */
+  readonly agentName?: string | null;
+  /**
+   * EXPLICIT "record this call" consent for THIS session. Omitted/`null` ⇒ the per-user persisted
+   * preference (`mj.realtimeVoice.recordingConsent.v1`) is read as the default; `false` never
+   * records. The host is responsible for reporting its own choice to its own mint.
+   */
+  readonly recordingConsent?: boolean | null;
+  /**
+   * The application the session runs in. Stored so the live ClientContextChannel can stream
+   * subsequent context deltas under it. Omitted ⇒ no app layer (the pre-app behavior).
+   */
+  readonly applicationId?: string | null;
+  /**
+   * Live app-context snapshot. Omitted/`null` ⇒ the snapshot the host has already pushed via
+   * {@link RealtimeSessionService.UpdateAppContext} stands (never clobber a good value with null).
+   */
+  readonly appContext?: AppContextSnapshot | null;
+}
+
+/**
+ * Converts a {@link RealtimeTrackDescriptor} to its JSON form for the session-config bag.
+ *
+ * Every field's VALUE is already JSON-safe; the interface simply is not assignable to `JSONValue`
+ * because it declares no index signature and `UsageBasis` is `readonly`. Written out field by field
+ * rather than asserted, so adding a descriptor field is a compile error here instead of a field that
+ * silently stops reaching the driver.
+ */
+function trackDescriptorToJSON(track: RealtimeTrackDescriptor): JSONObject {
+  const json: JSONObject = { Modality: track.Modality, Direction: track.Direction };
+  if (track.Encoding !== undefined) {
+    json['Encoding'] = track.Encoding;
+  }
+  if (track.Rate !== undefined) {
+    json['Rate'] = track.Rate;
+  }
+  if (track.UsageBasis !== undefined) {
+    json['UsageBasis'] = [...track.UsageBasis];
+  }
+  if (track.RequiresConsent !== undefined) {
+    json['RequiresConsent'] = track.RequiresConsent;
+  }
+  return json;
+}
+
+/**
+ * Reads the `Direction:Modality` dedupe key off an already-JSON track entry, or `null` when the
+ * entry is not a track-shaped object. Used for tracks the mint supplied, which arrive as raw JSON.
+ */
+function trackKeyFromJSON(raw: JSONValue): string | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const direction = raw['Direction'];
+  const modality = raw['Modality'];
+  if (typeof direction !== 'string' || typeof modality !== 'string') {
+    return null;
+  }
+  return `${direction}:${modality}`;
+}
+
+/**
  * Drives a **client-direct** real-time voice session: the browser mints an ephemeral
  * token from the MJ server, then connects DIRECTLY to the realtime provider. Audio
  * frames never transit the MJ server (low latency); only tool calls and final
@@ -250,7 +359,10 @@ interface StartRealtimeClientSessionResult {
  * bakes the companion instructions + tool set into `SessionConfigJson`, which the client
  * driver applies verbatim.
  *
- * Lifecycle: {@link StartRealtimeSession} → live duplex → {@link EndRealtimeSession}.
+ * Lifecycle: {@link StartRealtimeSession} → live duplex → {@link EndRealtimeSession}. A start is
+ * two halves — MINT (the `StartRealtimeClientSession` mutation) and RUN (everything above) — and a
+ * host that must mint through its own server surface enters at the second half via
+ * {@link StartRealtimeSessionFromResult}; there is one implementation of the run half either way.
  */
 @Injectable({ providedIn: 'root' })
 export class RealtimeSessionService {
@@ -261,6 +373,7 @@ export class RealtimeSessionService {
   private _delegationProgress$ = new Subject<RealtimeDelegationProgress>();
   private _delegationResult$ = new Subject<RealtimeDelegationResult>();
   private _delegationNarration$ = new Subject<RealtimeDelegationNarration>();
+  private _thoughtNarration$ = new Subject<RealtimeThoughtNarration>();
   private _agentName$ = new BehaviorSubject<string>('Sage');
   private _modelName$ = new BehaviorSubject<string | null>(null);
   private _minimized$ = new BehaviorSubject<boolean>(false);
@@ -295,6 +408,11 @@ export class RealtimeSessionService {
    * renders them as a transient "live note" near the active working card.
    */
   public readonly DelegationNarration$: Observable<RealtimeDelegationNarration> = this._delegationNarration$.asObservable();
+  /**
+   * Model-authored thought / reasoning narrations (see {@link RealtimeThoughtNarration}). These are
+   * reasoning summaries author-emitted during extended thinking, separate from spoken progress updates.
+   */
+  public readonly ThoughtNarration$: Observable<RealtimeThoughtNarration> = this._thoughtNarration$.asObservable();
   /** Display name of the agent the active session fronts (set at session start). */
   public readonly AgentName$: Observable<string> = this._agentName$.asObservable();
   /**
@@ -396,6 +514,10 @@ export class RealtimeSessionService {
   private sessionConversationId: string | null = null;
   /** First final user utterance of the live session (the naming seed). */
   private firstUserTranscript: string | null = null;
+  /** Buffer accumulating streaming user interim deltas into a single in-progress bubble. */
+  private pendingUserCaption = '';
+  /** Whether an in-place interim user caption is currently placed in `_captions$`. */
+  private hasActiveInterimUserCaption = false;
 
   /**
    * When the active/last session CREATED its conversation (started without one), the new
@@ -486,6 +608,20 @@ export class RealtimeSessionService {
   private segmentIndex = 0;
   /** How often crash-recovery shards are flushed during a recording. */
   private static readonly SegmentFlushMs = 15000;
+
+  // ── Server-side liveness ───────────────────────────────────────────────────
+  /**
+   * Interval that tells the server this session is still in use, or `null` when no session is
+   * running. See {@link startLivenessPulse} for why the server cannot work this out itself.
+   */
+  private livenessTimer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * How often the client asserts liveness. Comfortably under `SessionJanitor`'s
+   * `closeThresholdMinutes` (15 by default) so several pulses must be missed in a row before a
+   * live session is reaped, and well above `SessionManager`'s heartbeat write-coalescing window
+   * so the DB sees at most a trickle of writes per session.
+   */
+  private static readonly LivenessPulseMs = 60000;
   /**
    * Recording-relative ms offset at which the IN-FLIGHT (not-yet-finalized) turn's audio
    * actually BEGAN — captured the moment that turn's audio/text starts flowing (its first
@@ -496,6 +632,12 @@ export class RealtimeSessionService {
    * the post-gap turn at the pre-gap offset). See {@link markTurnAudioStart}.
    */
   private currentTurnStartMs: number | null = null;
+  /**
+   * Wall-anchor of the SESSION clock (#3832): `performance.now()` at the moment the call went
+   * live, or `null` before any call has. Read only through {@link nowTurnOffsetMs}.
+   */
+  private sessionClockStartMs: number | null = null;
+
   /**
    * Per-turn guard for {@link markTurnAudioStart}: `true` once the in-flight turn's audio-start
    * offset has been captured, so mid-turn interim deltas don't overwrite it. Reset to `false`
@@ -666,22 +808,81 @@ export class RealtimeSessionService {
       return; // a session is already running — ignore duplicate starts
     }
 
+    const consent = this.beginSessionStart({ agentName, recordingConsent, applicationId, appContext });
+    // Captured BEFORE startChannels so the mint carries exactly the snapshot the prologue
+    // resolved, whatever a channel plugin may push in the meantime.
+    const effectiveAppContext = this._appContext$.value;
+
+    let session: StartRealtimeClientSessionResult;
+    try {
+      // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
+      // tool sets must be declared to the realtime model at session mint.
+      const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
+      session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
+    } catch (error) {
+      await this.failSessionStart(error);
+      return;
+    }
+
+    await this.runMintedSession(session, conversationId ?? null, consent);
+  }
+
+  /**
+   * Run a session the HOST has already minted itself — the second half of
+   * {@link StartRealtimeSession}, without the `StartRealtimeClientSession` mutation.
+   *
+   * For hosts that must mint through their own server surface because they attach per-session
+   * context the stock mutation cannot carry (e.g. an interview persona baked into the companion
+   * prompt). They call their own mutation, shape the reply into a
+   * {@link StartRealtimeClientSessionResult}, and hand it here: driver resolution, the ephemeral-token
+   * connect, tool/transcript relays, recording, connection state and teardown are all identical to
+   * the all-in-one path — there is exactly one implementation of the run half.
+   *
+   * NOTE: the interactive-channel plugins are NOT started on this path. Their tool sets must be
+   * declared to the model AT MINT, which happened on the host's side — so a host that wants channels
+   * owns that half too.
+   *
+   * @param result The minted session — the same ten fields the `StartRealtimeClientSession`
+   *   mutation returns. `EphemeralToken` and `Provider` are what actually open the call.
+   * @param options Host-side inputs the result cannot carry; see {@link RealtimeSessionRunOptions}.
+   *   Every field defaults exactly as its {@link StartRealtimeSession} counterpart does.
+   */
+  public async StartRealtimeSessionFromResult(
+    result: StartRealtimeClientSessionResult,
+    options?: RealtimeSessionRunOptions
+  ): Promise<void> {
+    if (this.IsActive) {
+      return; // a session is already running — ignore duplicate starts
+    }
+
+    const effectiveOptions = options ?? {};
+    const consent = this.beginSessionStart(effectiveOptions);
+    await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent);
+  }
+
+  /**
+   * Start prologue shared by both entry points: bind the app layer, publish the agent name, reset
+   * per-session state, and flip the session live (which is ALSO what makes the `IsActive` guard
+   * suppress duplicate starts while the mint is still in flight — hence it runs before minting, not
+   * after). Returns the resolved recording consent, which the mint half reports to the server and
+   * the run half uses to decide whether to record.
+   */
+  private beginSessionStart(options: RealtimeSessionRunOptions): boolean {
     // App awareness (Move 1/3/4): the application the session runs in (sources the app config
     // cascade + RelevantAgents → allowed-agent union) and the live app-context snapshot injected
     // into the companion prompt at mint. Stored so the ClientContextChannel can stream subsequent
     // deltas. Absent ⇒ no app layer / no mint-time context (the pre-app behavior).
-    this.applicationId = applicationId ?? null;
+    this.applicationId = options.applicationId ?? null;
     // Prefer the explicit param, but fall back to the snapshot the host has ALREADY pushed via
     // UpdateAppContext (explorer-app streams the live snapshot continuously). The overlay's
     // [appContext] binding can still read null at the instant the mic is clicked — without this
     // fallback, StartRealtimeSession(null) would clobber a perfectly good snapshot and mint the
     // companion prompt with no app context (no NavigableApps / no tool schemas → the co-agent guesses
     // parameter names and navigation fails). Never overwrite a good value with null.
-    const effectiveAppContext = appContext ?? this._appContext$.value;
-    this._appContext$.next(effectiveAppContext);
+    this._appContext$.next(options.appContext ?? this._appContext$.value);
 
-    if (agentName) {
-      this._agentName$.next(agentName);
+    if (options.agentName) {
+      this._agentName$.next(options.agentName);
     }
     this.resetState();
     this._active$.next(true);
@@ -689,20 +890,28 @@ export class RealtimeSessionService {
 
     // Resolve recording consent for this session: explicit value wins, else the per-user
     // persisted preference. Computed before mint so it can be reported to the server.
-    const consent = recordingConsent ?? this.readPersistedRecordingConsent();
+    const consent = options.recordingConsent ?? this.readPersistedRecordingConsent();
     this.recordingStartedAtIso = consent ? new Date().toISOString() : null;
+    return consent;
+  }
 
+  /**
+   * The RUN half of a session start, shared by both entry points: consume the minted result, open
+   * the provider connection, and go live. `inputConversationId` is the conversation the START asked
+   * for (null ⇒ "server, make me one") — the result alone can't distinguish the two.
+   */
+  private async runMintedSession(
+    session: StartRealtimeClientSessionResult,
+    inputConversationId: string | null,
+    consent: boolean
+  ): Promise<void> {
     try {
-      // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
-      // tool sets must be declared to the realtime model at session mint.
-      const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
       // it on close, and auto-name it (via the shared naming helper).
-      this.createdConversationId = !conversationId && session.ConversationId ? session.ConversationId : null;
-      this.sessionConversationId = session.ConversationId ?? conversationId ?? null;
+      this.createdConversationId = !inputConversationId && session.ConversationId ? session.ConversationId : null;
+      this.sessionConversationId = session.ConversationId ?? inputConversationId ?? null;
       this.firstUserTranscript = null;
       this.narrationTemplate = session.NarrationInstructionsTemplate ?? null;
       this._modelName$.next(session.ModelName ?? null);
@@ -717,11 +926,29 @@ export class RealtimeSessionService {
       this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       await client.Connect(this.buildClientConfig(session), this.localStream);
 
+      // Notify active channels that the session client is connected and tracks are established
+      for (const channel of this._activeChannels$.value) {
+        try {
+          channel.OnSessionStarted?.();
+        } catch (err) {
+          console.error(`[RealtimeSession] Error in channel '${channel.ChannelName}' OnSessionStarted:`, err);
+        }
+      }
+
       // Start browser-side recording (mic + agent mix) when consented. Best-effort: an
       // unsupported browser / missing remote stream degrades gracefully (mic-only or off)
       // and never blocks the call. The remote stream may still be null here (the WebRTC
       // ontrack can land slightly after Connect resolves) — the recorder mixes the mic now
       // and the agent audio rides through whenever its track is already attached.
+      // The SESSION clock (#3832): anchored the moment the call goes live, whether or not a
+      // recording exists. When the recorder runs, per-turn timings use ITS clock (offsets into a
+      // seekable file); when it does not — every unconsented and every relay-captured session,
+      // which is 100% of turns measured across two databases — this is the fallback that stops
+      // `UtteranceStartMs`/`UtteranceEndMs` being categorically null. An offset into a session
+      // with no audio is not seekable, but it is orderable and displayable ("3:42 into the
+      // interview"), and it is stamped when the SPEECH happened rather than when the relay
+      // mutation landed — which no server-side backfill can ever recover.
+      this.sessionClockStartMs = performance.now();
       if (consent) {
         this.startRecording(client);
       }
@@ -738,11 +965,23 @@ export class RealtimeSessionService {
         sessionId: this.agentSessionId,
         channelNames: this._activeChannels$.value.map(c => c.ChannelName),
       });
+
+      // Same place, same reason: the session is connected and its id is known, which is exactly
+      // the window in which the server needs to be told it is alive.
+      this.startLivenessPulse();
     } catch (error) {
-      console.error('[RealtimeSession] Failed to start session:', error);
-      this._connectionState$.next('error');
-      await this.teardown(false);
+      await this.failSessionStart(error);
     }
+  }
+
+  /**
+   * The single failure path for a session start (mint half or run half): report it, latch the
+   * overlay into 'error', and unwind whatever the half-built session already opened.
+   */
+  private async failSessionStart(error: unknown): Promise<void> {
+    console.error('[RealtimeSession] Failed to start session:', error);
+    this._connectionState$.next('error');
+    await this.teardown(false);
   }
 
   /**
@@ -826,6 +1065,31 @@ export class RealtimeSessionService {
   }
 
   /**
+   * Asks the live model to SPEAK FIRST — before the human has said anything.
+   *
+   * Every other path into the model's voice reacts to something: the human spoke, or a channel
+   * reported input. A host that needs the agent to open the conversation (an interviewer greeting
+   * a candidate, a guide introducing a task) had no way to ask for that, so the session connected
+   * and both sides waited for the other. The instructions are what to say, in the host's words —
+   * the model still speaks in its own voice and persona.
+   *
+   * Returns whether the request was DELIVERED, which is the one way this deliberately differs from
+   * {@link SendContextNote} beside it. A context note that is dropped costs the model a little
+   * perception; an opening line that is dropped is a session that sits in silence, and the host
+   * needs to be able to tell the two apart. `false` means no session was live (or the instructions
+   * were empty) — usually a host that asked before the connection reached a speaking state, which
+   * it can then retry.
+   */
+  public RequestSpokenOpening(instructions: string): boolean {
+    const trimmed = instructions?.trim() ?? '';
+    if (trimmed.length === 0 || !this.client || !this.isSessionLive()) {
+      return false;
+    }
+    this.requestChannelSpokenResponse(trimmed);
+    return true;
+  }
+
+  /**
    * The active client's current audio activity (per-direction RMS levels + spectrum
    * bins), or `null` when no session is live or the driver attached no audio meters.
    * Sampled by the overlay's animation-frame loop to drive the audio-reactive orb/EQ —
@@ -833,6 +1097,30 @@ export class RealtimeSessionService {
    */
   public GetAudioActivity(): RealtimeAudioActivity | null {
     return this.client?.GetAudioActivity() ?? null;
+  }
+
+  /**
+   * The active {@link BaseRealtimeClient} driving the media plane, or null when not connected.
+   */
+  public get Client(): BaseRealtimeClient | null {
+    return this.client;
+  }
+
+  /**
+   * Relays a video frame to the underlying realtime client if active.
+   */
+  public SendVideoFrame(base64Image: string, mimeType?: string): void {
+    if (!this.client || !this.isSessionLive()) {
+      return;
+    }
+    this.client.SendVideoFrame?.(base64Image, mimeType);
+  }
+
+  /**
+   * Checks whether a media track is established on the active realtime client.
+   */
+  public IsTrackEstablished(modality: string, direction: RealtimeTrackDirection): boolean {
+    return this.client?.IsTrackEstablished(modality, direction) ?? false;
   }
 
   // ── Browser-side call recording ────────────────────────────────────────────
@@ -867,6 +1155,9 @@ export class RealtimeSessionService {
       // First turn's audio starts at ~0 (recording begins right as the call goes live). Seed it
       // here so the very first turn has a sane start even if its first interim is missed; later
       // turns re-stamp from where THEIR audio begins via markTurnAudioStart (handles tool gaps).
+      // Seeded even though the session clock may already have stamped a start: the clocks have
+      // different zeros, and a session-clock start carried into recorder-clock offsets would put
+      // turn one's cue wherever the clocks happen to differ.
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
       this.turnAudioStartCaptured = false;
       if (this.recorder) {
@@ -893,6 +1184,63 @@ export class RealtimeSessionService {
     if (this.segmentTimer) {
       clearInterval(this.segmentTimer);
       this.segmentTimer = null;
+    }
+  }
+
+  /**
+   * Starts telling the server this session is still in use (#3533).
+   *
+   * **Why the server cannot work this out on its own.** In the client-direct topology the audio
+   * goes browser → provider over WebRTC. The server sees the mint, a few channel actions in the
+   * first seconds, and then nothing at all — so `SessionManager.RecordActivity` stops being
+   * reached while the conversation is still going. `LastActiveAt` freezes ~45 seconds in, and
+   * `SessionJanitor` — which cannot distinguish an active call from an abandoned one — force-closes
+   * it at `closeThresholdMinutes`, mid-sentence, taking the user's surfaces with it. A session
+   * whose channels are all client-side (whiteboard, media) goes quiet from the server's point of
+   * view almost immediately.
+   *
+   * The browser is the only participant that knows the call is alive, so it is the one that has to
+   * say so. Raising `closeThresholdMinutes` is not the fix — it just makes the janitor slower at
+   * its real job (reaping rows orphaned by a crash) without making liveness observable.
+   *
+   * The pulse is best-effort by design: a failed beat is logged and skipped, never surfaced to the
+   * user and never allowed to end the session. Losing one beat costs nothing because the threshold
+   * is many beats wide; turning a transient network blip into a visible error would be a worse
+   * failure than the one this fixes. Write amplification is bounded on the server side too, where
+   * `SessionManager.Heartbeat` coalesces persisted writes.
+   */
+  private startLivenessPulse(): void {
+    this.stopLivenessPulse();
+    this.livenessTimer = setInterval(() => { void this.pulseLiveness(); }, RealtimeSessionService.LivenessPulseMs);
+  }
+
+  /** Stops the liveness pulse. Idempotent — safe on a session that never started one. */
+  private stopLivenessPulse(): void {
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer);
+      this.livenessTimer = null;
+    }
+  }
+
+  /**
+   * One liveness beat. Reads the session id at fire time rather than closing over it, so a beat
+   * that fires during teardown finds `null` and does nothing instead of resurrecting a closed row.
+   */
+  private async pulseLiveness(): Promise<void> {
+    const agentSessionId = this.agentSessionId;
+    if (!agentSessionId) {
+      return;
+    }
+    const mutation = `
+      mutation AgentSessionHeartbeat($agentSessionId: String!) {
+        AgentSessionHeartbeat(agentSessionId: $agentSessionId)
+      }
+    `;
+    try {
+      await this.gql().ExecuteGQL(mutation, { agentSessionId });
+    } catch (error) {
+      // Best-effort: the next beat is 60s away and the janitor threshold is many beats wide.
+      console.warn('[RealtimeSession] Liveness pulse failed (session continues):', error);
     }
   }
 
@@ -1140,7 +1488,12 @@ export class RealtimeSessionService {
       // (Explorer) feeds both; absent on hosts that supply no app context / register no client tools.
       AppContext$: this.AppContext$,
       ExecuteClientTool: (name: string, params: Record<string, unknown>) =>
-        this.executeAppClientTool(name, params)
+        this.executeAppClientTool(name, params),
+      get Client(): BaseRealtimeClient | null {
+        return service.client;
+      },
+      SendVideoFrame: (base64Image: string, mimeType?: string) => this.SendVideoFrame(base64Image, mimeType),
+      IsTrackEstablished: (modality: string, direction: RealtimeTrackDirection) => this.IsTrackEstablished(modality, direction),
     };
   }
 
@@ -1385,14 +1738,44 @@ export class RealtimeSessionService {
     return client;
   }
 
-  /** Builds the client-direct session config the realtime client connects with. */
-  private buildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
+  /**
+   * Builds the client-direct session config the realtime client connects with.
+   * Aggregates tracks sourced by active channels into `requestedTracks` so the driver
+   * can negotiate them (e.g., establishing inbound video streaming for Whiteboard / RemoteBrowser).
+   */
+  public buildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
+    const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
+    const channelTracks = this._activeChannels$.value.flatMap((c) => c.GetSourcedTracks());
+    if (channelTracks.length > 0) {
+      // `requestedTracks` crosses a JSON boundary — the driver reads it back out of the session
+      // config bag (`GeminiRealtimeClient.parseSessionConfig`). A `RealtimeTrackDescriptor` is NOT
+      // structurally a `JSONValue`: it has no index signature and `UsageBasis` is readonly, so the
+      // conversion is written out rather than asserted. Dedupe key and precedence are unchanged —
+      // audio floor first, then anything the mint supplied, then the channels' own tracks.
+      const existing: readonly JSONValue[] = Array.isArray(sessionConfig['requestedTracks'])
+        ? sessionConfig['requestedTracks']
+        : [];
+      const trackMap = new Map<string, JSONValue>();
+      for (const t of DEFAULT_REALTIME_AUDIO_TRACKS) {
+        trackMap.set(`${t.Direction}:${t.Modality}`, trackDescriptorToJSON(t));
+      }
+      for (const raw of existing) {
+        const key = trackKeyFromJSON(raw);
+        if (key) {
+          trackMap.set(key, raw);
+        }
+      }
+      for (const t of channelTracks) {
+        trackMap.set(`${t.Direction}:${t.Modality}`, trackDescriptorToJSON(t));
+      }
+      sessionConfig['requestedTracks'] = Array.from(trackMap.values());
+    }
     return {
       Provider: session.Provider,
       Model: session.Model,
       EphemeralToken: session.EphemeralToken,
       ExpiresAt: session.ExpiresAt,
-      SessionConfig: this.parseSessionConfig(session.SessionConfigJson)
+      SessionConfig: sessionConfig
     };
   }
 
@@ -1423,7 +1806,7 @@ export class RealtimeSessionService {
       void this.handleToolCall(call);
     });
     client.OnError((error: RealtimeClientError) => {
-      console.error('[RealtimeSession] Provider error event:', error);
+      console.error('[RealtimeSession] Provider error event:', JSON.stringify(error), error);
     });
     // Usage telemetry: accumulate the driver's per-response token DELTAS and relay them to
     // the server (onto the co-agent AIPromptRun) debounced + once at teardown. Providers
@@ -1496,15 +1879,38 @@ export class RealtimeSessionService {
       // silence gap is timed where its audio really is — not inherited from the prior
       // turn's end. Narration interims are ephemeral and excluded (Kind guard inside).
       this.markTurnAudioStart(transcript.Kind);
+      if (transcript.Role === 'User') {
+        if (!this.hasActiveInterimUserCaption) {
+          if (transcript.Text.trim().length === 0) {
+            return;
+          }
+          this.hasActiveInterimUserCaption = true;
+          this.pendingUserCaption = transcript.Text;
+          this.appendCaption({ Role: 'User', Text: this.pendingUserCaption });
+        } else {
+          this.pendingUserCaption += transcript.Text;
+          this.replaceLastCaption('User', this.pendingUserCaption);
+        }
+      }
       return;
     }
     if (transcript.Role === 'Assistant') {
+      this.hasActiveInterimUserCaption = false;
+      this.pendingUserCaption = '';
       if (transcript.Kind === 'narration') {
-        this._delegationNarration$.next({ Text: transcript.Text });
-        // Remember what was actually SAID so later updates build on it instead of repeating.
-        this.spokenNarrations.push(transcript.Text);
-        if (this.spokenNarrations.length > RealtimeSessionService.MaxPriorNarrations) {
-          this.spokenNarrations.shift();
+        if (transcript.IsThought) {
+          this._thoughtNarration$.next({
+            CallID: 'thought-session',
+            Text: transcript.Text,
+            IsFinal: transcript.IsFinal ?? true,
+          });
+        } else {
+          this._delegationNarration$.next({ Text: transcript.Text });
+          // Remember what was actually SAID so later updates build on it instead of repeating.
+          this.spokenNarrations.push(transcript.Text);
+          if (this.spokenNarrations.length > RealtimeSessionService.MaxPriorNarrations) {
+            this.spokenNarrations.shift();
+          }
         }
       } else if (transcript.ReplacesPrevious) {
         // CORRECTION (e.g. ElevenLabs post-barge-in re-finalization): this final
@@ -1516,11 +1922,25 @@ export class RealtimeSessionService {
         this.appendCaption({ Role: 'Assistant', Text: transcript.Text });
         await this.relayTranscript('assistant', transcript.Text);
       }
+    } else if (this.hasActiveInterimUserCaption) {
+      this.hasActiveInterimUserCaption = false;
+      this.pendingUserCaption = '';
+      if (transcript.Text.trim().length === 0) {
+        return;
+      }
+      this.replaceLastCaption('User', transcript.Text);
+      if (this.firstUserTranscript === null) {
+        this.firstUserTranscript = transcript.Text;
+      }
+      await this.relayTranscript('user', transcript.Text);
     } else if (transcript.ReplacesPrevious) {
-      // STREAMING user transcription: providers like Grok emit the growing utterance as repeated
+      // STREAMING user transcription: providers like Grok and OpenAI Live emit the growing utterance as repeated
       // events (each the full text so far), flagging all but the first ReplacesPrevious. Update the
       // in-place User caption + persisted turn instead of stacking a new bubble per increment — the
-      // same correction semantics the assistant branch uses. (OpenAI sends one final → the else path.)
+      // same correction semantics the assistant branch uses. (Classic OpenAI Realtime sends one final → the else path.)
+      if (transcript.Text.trim().length === 0) {
+        return;
+      }
       this.replaceLastCaption('User', transcript.Text);
       await this.relayTranscript('user', transcript.Text, true);
     } else {
@@ -1550,11 +1970,31 @@ export class RealtimeSessionService {
    * assistant answer, which always has interims.
    */
   private markTurnAudioStart(kind: 'normal' | 'narration'): void {
-    if (!this.recorder || this.turnAudioStartCaptured || kind === 'narration') {
+    if (this.turnAudioStartCaptured || kind === 'narration') {
       return;
     }
-    this.currentTurnStartMs = this.recorder.NowOffsetMs();
+    const offset = this.nowTurnOffsetMs();
+    if (offset === null) {
+      return;
+    }
+    this.currentTurnStartMs = offset;
     this.turnAudioStartCaptured = true;
+  }
+
+  /**
+   * The current per-turn offset in ms — the RECORDER's clock when one runs (an offset into a
+   * seekable file), else the SESSION clock (#3832: orderable and displayable, not seekable),
+   * else `null` before any call is live. One function so the two stamp sites cannot disagree
+   * about which clock a session is on.
+   */
+  private nowTurnOffsetMs(): number | null {
+    if (this.recorder) {
+      return this.recorder.NowOffsetMs();
+    }
+    if (this.sessionClockStartMs !== null) {
+      return Math.max(0, Math.round(performance.now() - this.sessionClockStartMs));
+    }
+    return null;
   }
 
   /**
@@ -1599,8 +2039,9 @@ export class RealtimeSessionService {
   private async handleToolCall(call: RealtimeClientToolCall): Promise<void> {
     const clientHandler = this.findClientToolHandler(call.ToolName);
     if (clientHandler) {
-      // Local UI tool: no server relay, no 'thinking' turn-state / narration burst — these
-      // are fast, in-browser surface mutations (e.g. drawing on the whiteboard).
+      // Local UI tool: no server relay, no 'thinking' turn-state / narration burst, and intentionally
+      // NO thread card — these are fast, in-browser surface mutations (e.g. drawing on the whiteboard)
+      // whose visual effects are immediately visible on the dedicated canvas/surface.
       const resultJson = await this.executeClientTool(clientHandler, call);
       this.client?.SendToolResult(call.CallID, resultJson);
       // Observability: record the channel tool call on the co-agent's run (run-only — NOT a chat
@@ -1622,9 +2063,21 @@ export class RealtimeSessionService {
       this.lastNarratedTail = '';
     }
     this.inFlightCallIds.add(call.CallID);
+
+    if (call.ToolName !== 'invoke-target-agent') {
+      // Direct action: emit synthetic progress immediately so the conversation thread
+      // and activity rail render an active "working" action card while the tool executes.
+      this._delegationProgress$.next({
+        CallID: call.CallID,
+        ToolName: call.ToolName,
+        Step: 'direct_action',
+        Message: `Executing ${FormatToolName(call.ToolName)}`
+      });
+    }
+
     try {
       const resultJson = await this.executeSessionTool(call.CallID, call.ToolName, call.ArgumentsJson);
-      this.emitDelegationResult(call.CallID, resultJson);
+      this.emitDelegationResult(call.CallID, resultJson, call.ToolName);
       this.client?.SendToolResult(call.CallID, resultJson);
     } catch (error) {
       console.error('[RealtimeSession] Tool execution failed:', error);
@@ -1636,7 +2089,7 @@ export class RealtimeSessionService {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       });
-      this.emitDelegationResult(call.CallID, errorJson);
+      this.emitDelegationResult(call.CallID, errorJson, call.ToolName);
       this.client?.SendToolResult(call.CallID, errorJson);
     }
   }
@@ -1671,13 +2124,12 @@ export class RealtimeSessionService {
   /**
    * Emits a delegation result so the overlay's "working" card flips to a result card with real
    * content. Parses the broker's `{success, output, runId}` | `{success:false, error}` shape via
-   * {@link ParseDelegationResultJson}; if it isn't JSON, surfaces the raw string. Only delegation
-   * cards (created from progress events) react — non-delegation tool results have no card and are
-   * harmlessly ignored downstream. The `runId` (the delegated `MJ: AI Agent Runs` record) rides
-   * along as {@link RealtimeDelegationResult.RunID} for the overlay's dev links, and any `artifacts`
-   * ride along as {@link RealtimeDelegationResult.Artifacts} for the surface panel's artifact tabs.
+   * {@link ParseDelegationResultJson}; if it isn't JSON, surfaces the raw string. The `runId`
+   * (the delegated `MJ: AI Agent Runs` record) rides along as {@link RealtimeDelegationResult.RunID}
+   * for the overlay's dev links, and any `artifacts` ride along as {@link RealtimeDelegationResult.Artifacts}
+   * for the surface panel's artifact tabs.
    */
-  private emitDelegationResult(callId: string, resultJson: string): void {
+  private emitDelegationResult(callId: string, resultJson: string, toolName?: string): void {
     // The result will be spoken next — a deferred interim update is now pointless
     // (this is what keeps fast agents like Sage from narrating over their own answer),
     // and any progress still in the PubSub pipe for this call is stale.
@@ -1692,6 +2144,7 @@ export class RealtimeSessionService {
     const parsed = ParseDelegationResultJson(resultJson);
     this._delegationResult$.next({
       CallID: callId,
+      ToolName: toolName,
       Success: parsed.Success,
       Output: parsed.Output,
       RunID: parsed.RunID,
@@ -1924,12 +2377,13 @@ export class RealtimeSessionService {
     if (!this.agentSessionId) {
       return;
     }
-    // Per-turn timing against the recording (when recording). `utteranceStartMs` is where this
-    // turn's audio actually began (captured by markTurnAudioStart on the first interim); the
-    // `?? 0` fallback covers a turn whose interim was missed / a final-only first turn.
-    const utteranceEndMs = this.recorder ? this.recorder.NowOffsetMs() : null;
-    const utteranceStartMs = this.recorder && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
-    if (this.recorder && !replacesPrevious) {
+    // Per-turn timing against whichever clock the session is on (#3832): the recorder's when one
+    // runs, else the session clock. `utteranceStartMs` is where this turn's audio actually began
+    // (captured by markTurnAudioStart on the first interim); the `?? 0` fallback covers a turn
+    // whose interim was missed / a final-only first turn.
+    const utteranceEndMs = this.nowTurnOffsetMs();
+    const utteranceStartMs = utteranceEndMs !== null && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
+    if (utteranceEndMs !== null && !replacesPrevious) {
       // This turn is finalized — arm the NEXT turn to re-stamp its start from its own first
       // interim (handles a tool-call gap before the next turn). Stop inheriting this end as the
       // next start. `null` means "not yet captured"; relay falls back to `?? 0` if no interim fires.
@@ -2125,7 +2579,9 @@ export class RealtimeSessionService {
   private routeScreencastFrame(frame: RemoteBrowserScreencastPayload): void {
     for (const channel of this._activeChannels$.value) {
       if (channel.ChannelName === 'Remote Browser' && this.hasOnScreencastFrame(channel)) {
-        channel.OnScreencastFrame(frame.dataBase64);
+        // The URL rides along so the channel can notice a page change nobody on this side caused —
+        // under streaming the snapshot poll is stopped, and frames were pure pixels (#3496).
+        channel.OnScreencastFrame(frame.dataBase64, frame.currentUrl ?? null);
         return;
       }
     }
@@ -2134,7 +2590,7 @@ export class RealtimeSessionService {
   /** Structural guard: true when the channel exposes an `OnScreencastFrame(dataBase64)` method. */
   private hasOnScreencastFrame(
     channel: BaseRealtimeChannelClient,
-  ): channel is BaseRealtimeChannelClient & { OnScreencastFrame(dataBase64: string): void } {
+  ): channel is BaseRealtimeChannelClient & { OnScreencastFrame(dataBase64: string, currentUrl?: string | null): void } {
     return typeof (channel as { OnScreencastFrame?: unknown }).OnScreencastFrame === 'function';
   }
 
@@ -2342,6 +2798,9 @@ export class RealtimeSessionService {
    * @param closeServerSession when true, calls `CloseAgentSession` on the server.
    */
   private async teardown(closeServerSession: boolean): Promise<void> {
+    // First: stop asserting liveness. A pulse racing the close would re-stamp LastActiveAt on a
+    // session we are deliberately ending, leaving an Idle row the janitor then has to age out.
+    this.stopLivenessPulse();
     this.teardownDelegationProgress();
 
     // Channels first: flush any unsaved channel state WHILE the live session id is still
@@ -2427,6 +2886,8 @@ export class RealtimeSessionService {
   /** Resets reactive + internal state at the start of a session. */
   private resetState(): void {
     this._captions$.next([]);
+    this.pendingUserCaption = '';
+    this.hasActiveInterimUserCaption = false;
     this.SetMinimized(false);
     this.stopSegmentFlushing();
     this.segmentIndex = 0;

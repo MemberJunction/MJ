@@ -781,7 +781,8 @@ export class GraphQLSystemUserClient {
                     SkipEntityAIActions: options.SkipEntityAIActions ?? false,
                     SkipEntityActions: options.SkipEntityActions ?? false,
                     ReplayOnly: options.ReplayOnly ?? false,
-                    IsParentEntityDelete: options.IsParentEntityDelete ?? false
+                    IsParentEntityDelete: options.IsParentEntityDelete ?? false,
+                    SkipRecordChanges: options.SkipRecordChanges ?? false
                 };
             }
 
@@ -2502,6 +2503,8 @@ export interface DeleteQueryOptionsInput {
      * @default false
      */
     IsParentEntityDelete?: boolean;
+    /** Skip the Record Change (audit) row for this delete — machine writers only; see EntityDeleteOptions. */
+    SkipRecordChanges?: boolean;
 }
 
 /**

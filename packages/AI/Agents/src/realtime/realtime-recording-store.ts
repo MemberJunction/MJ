@@ -202,16 +202,25 @@ export async function deleteRealtimeRecordingSegments(sessionID: string, storage
     }
 }
 
+/** Outcome of {@link storeRealtimeRecording}. */
+export interface StoreRealtimeRecordingResult {
+    /** The `MJ: Files` id when the recording was stored; null on every failure. */
+    readonly FileID: string | null;
+    /** Why it failed, verbatim from the layer that knew. Null on success. */
+    readonly ErrorMessage: string | null;
+}
+
 /**
  * Uploads a session recording to MJStorage, links it to the `AIAgentSession` (via
  * `MJ: File Entity Record Links`), and stamps `RecordingFileID` / `RecordingMedia` / `RecordingStartedAt`
  * on the session. Never throws — a recording-storage failure must not fail the session; failures are
- * logged and surfaced as a `null` return.
+ * logged AND carried out in the result so the caller can report the real cause (a bare `null` used to
+ * strand reasons like Drive's "Service Accounts do not have storage quota" three layers down).
  *
  * @param input The recording bytes + storage account + session context.
- * @returns The created `MJ: Files` id, or `null` on failure.
+ * @returns The created `MJ: Files` id, or the failure reason.
  */
-export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput): Promise<string | null> {
+export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput): Promise<StoreRealtimeRecordingResult> {
     const { Audio, MimeType, Media, StartedAt, StorageAccountID, SessionID, ContextUser, Provider, Peaks } = input;
     try {
         // Canonical consolidated file in the session's own folder, alongside (then replacing) its shards.
@@ -252,9 +261,10 @@ export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput)
                 LogError(`storeRealtimeRecording: failed to stamp recording fields on session ${SessionID}: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
         }
-        return uploaded.FileID;
+        return { FileID: uploaded.FileID, ErrorMessage: null };
     } catch (error) {
-        LogError(`storeRealtimeRecording failed for session ${SessionID}: ${error instanceof Error ? error.message : String(error)}`);
-        return null;
+        const message = error instanceof Error ? error.message : String(error);
+        LogError(`storeRealtimeRecording failed for session ${SessionID}: ${message}`);
+        return { FileID: null, ErrorMessage: message };
     }
 }

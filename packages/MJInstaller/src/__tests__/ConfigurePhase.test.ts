@@ -3,6 +3,7 @@ import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { sampleConfig } from './mocks/fixtures.js';
 import type { ConfigureContext } from '../phases/ConfigurePhase.js';
 import type { InstallConfig, PartialInstallConfig } from '../models/InstallConfig.js';
+import { InstallConfigDefaults } from '../models/InstallConfig.js';
 
 // ---------------------------------------------------------------------------
 // Adapter mocks — ConfigurePhase creates FileSystemAdapter via `new`
@@ -1028,5 +1029,64 @@ describe('ConfigurePhase', () => {
         expect(written).toContain(`CLIENT_ID: '${clientId}'`);
       });
     }
+  });
+
+  // ─── prompts that have defaults (#4562) ────────────────────────────
+
+  describe('prompts that have defaults (#4562)', () => {
+    it('does not pre-answer fields that exist only as prompt fallbacks', () => {
+      // CreatePlan spreads InstallConfigDefaults into the config before
+      // ConfigurePhase applies its `??` guards, so any field with a default was
+      // already non-nullish and could never prompt — and `false ?? x` is `false`,
+      // which wrote an empty DB_TRUST_SERVER_CERTIFICATE and broke migrate
+      // against every Docker SQL Server.
+      expect(InstallConfigDefaults).not.toHaveProperty('DatabaseHost');
+      expect(InstallConfigDefaults).not.toHaveProperty('DatabasePort');
+      expect(InstallConfigDefaults).not.toHaveProperty('DatabaseTrustCert');
+      expect(InstallConfigDefaults).not.toHaveProperty('APIPort');
+      expect(InstallConfigDefaults).not.toHaveProperty('ExplorerPort');
+    });
+
+    it('keeps the defaults that phases before configure depend on', () => {
+      // resolvePackageManager() runs in preflight; InstallMode drives plan construction.
+      expect(InstallConfigDefaults.PackageManager).toBe('pnpm');
+      expect(InstallConfigDefaults.InstallMode).toBe('distribution');
+      expect(InstallConfigDefaults.AuthProvider).toBe('none');
+    });
+
+    it('prompts for trust-cert in interactive mode', async () => {
+      const config = { ...sampleConfig() };
+      delete (config as Partial<InstallConfig>).DatabaseTrustCert;
+
+      const { emitter, emitSpy } = createMockEmitter();
+      const answered: string[] = [];
+      emitter.On('prompt', (prompt) => {
+        answered.push(prompt.PromptId);
+        prompt.Resolve(prompt.Default ?? '');
+      });
+
+      await phase.Run(makeContext({ Config: config, Yes: false, Emitter: emitter }));
+
+      expect(answered).toContain('db-trust-cert');
+      expect(emittedEvents(emitSpy, 'prompt').length).toBeGreaterThan(0);
+    });
+
+    it('falls back to the default port when the prompt answer is not a number', async () => {
+      const config = { ...sampleConfig() };
+      delete (config as Partial<InstallConfig>).DatabasePort;
+
+      const { emitter } = createMockEmitter();
+      emitter.On('prompt', (prompt) => {
+        if (prompt.PromptId === 'db-port') {
+          prompt.Resolve('not-a-number');
+        } else {
+          prompt.Resolve(prompt.Default ?? '');
+        }
+      });
+
+      const result = await phase.Run(makeContext({ Config: config, Yes: false, Emitter: emitter }));
+
+      expect(result.Config.DatabasePort).toBe(1433);
+    });
   });
 });

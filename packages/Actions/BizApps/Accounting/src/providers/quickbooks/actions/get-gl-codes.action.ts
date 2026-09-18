@@ -3,6 +3,8 @@ import { QuickBooksBaseAction } from '../quickbooks-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { UserInfo } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ChartOfAccount } from '../../../types';
 
 /**
  * Interface for a GL Code (Chart of Accounts) entry
@@ -45,6 +47,7 @@ interface QBOAccount {
 /**
  * Action to retrieve the Chart of Accounts (GL Codes) from QuickBooks Online
  */
+@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetChartOfAccounts, ERP_INTEGRATION.QuickBooksOnline))
 @RegisterClass(BaseAction, 'GetQuickBooksGLCodesAction')
 export class GetQuickBooksGLCodesAction extends QuickBooksBaseAction {
     
@@ -110,12 +113,24 @@ export class GetQuickBooksGLCodesAction extends QuickBooksBaseAction {
             // Process the results
             const accounts = response.QueryResponse?.Account || [];
             const glCodes: GLCode[] = accounts.map(account => this.mapQBOAccountToGLCode(account));
+            const chart: ChartOfAccount[] = glCodes.map(g => ({
+                id: g.id,
+                code: g.code,
+                name: g.name,
+                accountType: g.type,
+                isActive: g.active
+            }));
 
             // Set output parameters
             const outputParams: ActionParam[] = [
                 {
                     Name: 'GLCodes',
                     Value: glCodes,
+                    Type: 'Output'
+                },
+                {
+                    Name: 'Accounts',
+                    Value: chart,
                     Type: 'Output'
                 },
                 {

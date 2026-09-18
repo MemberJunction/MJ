@@ -1,7 +1,8 @@
 import { Command, Flags } from '@oclif/core';
-import { CLIPluginRegistry } from '@memberjunction/cli-core';
+import { CLIPluginRegistry, ResolveOutputFormat } from '@memberjunction/cli-core';
 import { loadAllCliPlugins } from '../lib/cli-plugins.js';
 import { emitUsage, renderDomainMap } from '../lib/usage-render.js';
+import type { OclifCommandShape } from '../lib/derived-usage.js';
 
 /**
  * Tier-1 progressive disclosure (plan §5, the linearis model). Returns a compact
@@ -19,14 +20,19 @@ export default class Usage extends Command {
   ];
 
   static flags = {
-    format: Flags.string({ options: ['text', 'json', 'md'], default: 'text', description: 'Output format' }),
+    // No default: the absence of a value is what lets a piped stdout select json.
+    format: Flags.string({
+      options: ['text', 'json', 'md'],
+      description: 'Output format. Defaults to text on a terminal and json when stdout is piped.',
+    }),
   };
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Usage);
-    await loadAllCliPlugins(process.cwd());
+    await loadAllCliPlugins(process.cwd(), this.config.commands as unknown as OclifCommandShape[]);
     const map = CLIPluginRegistry.BuildDomainMap();
     const result = CLIPluginRegistry.AsResult('usage', { guidance: map.guidance, domains: map.domains });
-    emitUsage((m) => this.log(m), flags.format as string, result, renderDomainMap(map));
+    const { format } = ResolveOutputFormat({ formatFlag: flags.format });
+    emitUsage((m) => this.log(m), format, result, renderDomainMap(map));
   }
 }

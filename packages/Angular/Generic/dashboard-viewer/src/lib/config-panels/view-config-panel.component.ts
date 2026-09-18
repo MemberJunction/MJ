@@ -76,7 +76,7 @@ export class ViewConfigPanelComponent extends BaseConfigPanel {
      * Get the viewId as a CompositeKey for the tree dropdown
      */
     public get ViewIdAsKey(): CompositeKey | null {
-        return this.viewId ? CompositeKey.FromID(this.viewId) : null;
+        return this.viewId ? CompositeKey.FromID(this.viewId) : null; // first-pk-ok: viewId is an MJ: User Views record (ViewLeafConfig) — core entity keyed by ID
     }
 
     public initFromConfig(config: PanelConfig | null): void {

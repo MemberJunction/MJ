@@ -22,9 +22,27 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
  *
  * Replaces `<kendo-dropdownlist>`.
  *
- * @example
+ * Every dropdown needs an ACCESSIBLE NAME, or it announces as "combobox, collapsed" with no hint of
+ * what it selects (WCAG 2.1 4.1.2). Use {@link AriaLabelledBy} when a visible label already exists —
+ * `<label for>` cannot name a `div[role=combobox]` — and {@link AriaLabel} when none does.
+ *
+ * @example With a visible label (preferred)
+ * ```html
+ * <span id="persona-label">Interview persona</span>
+ * <mj-dropdown
+ *   AriaLabelledBy="persona-label"
+ *   [Data]="items"
+ *   TextField="name"
+ *   ValueField="id"
+ *   [(ngModel)]="selectedId"
+ *   [ValuePrimitive]="true">
+ * </mj-dropdown>
+ * ```
+ *
+ * @example With no visible label
  * ```html
  * <mj-dropdown
+ *   AriaLabel="Interview persona"
  *   [Data]="items"
  *   TextField="name"
  *   ValueField="id"
@@ -48,9 +66,15 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       [class.mj-dropdown--open]="IsOpen"
       [class.mj-dropdown--disabled]="IsDisabled"
       role="combobox"
+      [attr.id]="InputId || null"
+      [attr.aria-label]="AriaLabel || null"
+      [attr.aria-labelledby]="AriaLabelledBy || null"
+      [attr.aria-describedby]="AriaDescribedBy || null"
       [attr.aria-expanded]="IsOpen"
       aria-haspopup="listbox"
-      tabindex="0"
+      [attr.aria-controls]="IsOpen ? ListboxId : null"
+      [attr.aria-disabled]="IsDisabled ? 'true' : null"
+      [attr.tabindex]="IsDisabled ? -1 : 0"
       (click)="Toggle()"
       (keydown)="OnKeyDown($event)"
       (blur)="OnBlur()">
@@ -70,14 +94,28 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       cdkConnectedOverlayBackdropClass="mj-dropdown-backdrop"
       (backdropClick)="Close()"
       (detach)="Close()">
-      <div class="mj-dropdown-panel" role="listbox">
+      <div class="mj-dropdown-panel" role="listbox"
+        [attr.id]="ListboxId"
+        [attr.aria-label]="AriaLabel || null"
+        [attr.aria-labelledby]="AriaLabelledBy || null">
         @if (Filterable) {
           <div class="mj-dropdown-filter-wrap">
+            <!--
+              The word "Filter" lives in a hidden span rather than in a concatenated string so the
+              AriaLabelledBy path can NAME this box from the same visible label that names the
+              dropdown: aria-labelledby takes an ID LIST, so "Filter" plus the label's own text is
+              composed by the accessibility tree without this component ever seeing that text.
+              Without it, every filterable dropdown on a form named this way announces as an
+              identical "Filter options".
+            -->
+            <span class="mj-dropdown-sr-only" [attr.id]="FilterWordId">Filter</span>
             <input
               #filterInput
               class="mj-input mj-dropdown-filter"
               type="text"
-              placeholder="Search..."
+              placeholder="Filter..."
+              [attr.aria-labelledby]="FilterLabelledBy"
+              [attr.aria-label]="FilterLabelledBy ? null : FilterLabel"
               [value]="filterText"
               (input)="OnFilterInput($event)"
               (keydown)="OnKeyDown($event)" />
@@ -122,12 +160,53 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
   }]
 })
 export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
+  /**
+   * Accessible name for the combobox (#3860). Without one — and with no visible label wired via
+   * {@link AriaLabelledBy} — the control announces as an UNNAMED combobox, which fails WCAG 2.1
+   * 4.1.2 (Name, Role, Value): "combobox, collapsed" with no hint of what it selects. Applied as
+   * `aria-label` on the trigger AND on the popup listbox, so both halves announce the same name.
+   */
+  @Input() AriaLabel = '';
+
+  /**
+   * The id of a VISIBLE label element that names this control — the preferred wiring when a label
+   * already exists on screen (an `aria-label` would duplicate its text and drift on rename). This,
+   * not `<label for>`, is the visible-label path: the trigger is a `div[role=combobox]`, and the
+   * label-for association only names labelable form elements. `aria-labelledby` beats `AriaLabel`
+   * in the accessible-name computation where both are present. Applied to trigger AND listbox.
+   */
+  @Input() AriaLabelledBy = '';
+
+  /**
+   * `id` for the combobox trigger, so other markup can REFERENCE it — `aria-controls`, hint text,
+   * test hooks. It is deliberately not documented as a `<label for>` target: the trigger is a div,
+   * which `label[for]` neither names nor focuses. To name the control from a visible label, put an
+   * id on the LABEL and pass it as {@link AriaLabelledBy}.
+   */
+  @Input() InputId = '';
+
+  /** `aria-describedby` passthrough for hint/error text — same shape of gap as the name. */
+  @Input() AriaDescribedBy = '';
+
   @Input() Data: Record<string, unknown>[] | string[] | readonly unknown[] | null = [];
   @Input() TextField = '';
   @Input() ValueField = '';
   @Input() Filterable = false;
   @Input() ValuePrimitive = false;
-  @Input() Disabled = false;
+  /**
+   * Host-driven disable. Composed with Angular Forms' `setDisabledState()` into `IsDisabled`
+   * (the actual gate) — see `syncDisabled`. A setter, not a bare field, because this input is
+   * routinely bound to an expression that changes over the control's lifetime
+   * (`[Disabled]="!draft.CompanyID"`), and the gate has to follow it every time.
+   */
+  @Input()
+  set Disabled(value: boolean) {
+    this.disabledInput = value;
+    this.syncDisabled();
+  }
+  get Disabled(): boolean {
+    return this.disabledInput;
+  }
   @Input() Placeholder = 'Select...';
   @Input() DefaultItem: Record<string, unknown> | string | null = null;
 
@@ -145,7 +224,43 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
   private static nextId = 0;
 
   DropdownId = MJDropdownComponent.nextId++;
+
+  /**
+   * Id of the popup listbox, so the trigger can point `aria-controls` at it while open — the half of
+   * the combobox pattern that makes "collapsed/expanded" refer to something a screen reader can
+   * find. Generated per instance from the same `static nextId` counter `dialog`, `window` and
+   * `accordion` use in this package.
+   */
+  get ListboxId(): string { return `mj-dropdown-listbox-${this.DropdownId}`; }
+
+  /** Id of the hidden "Filter" word, composed into the filter box's name via an id list. */
+  get FilterWordId(): string { return `mj-dropdown-filter-word-${this.DropdownId}`; }
+
+  /**
+   * `aria-labelledby` for the filter box when the dropdown is named by a VISIBLE label: "Filter"
+   * plus that label's own text, composed by the accessibility tree. Empty when there is no such
+   * label, in which case {@link FilterLabel} supplies a string instead.
+   */
+  get FilterLabelledBy(): string { return this.AriaLabelledBy ? `${this.FilterWordId} ${this.AriaLabelledBy}` : ''; }
+
+  /**
+   * `aria-label` for the filter box in the no-visible-label case.
+   *
+   * The "filter" guard is not cosmetic: this repo's house habit is `AriaLabel="Filter roles"`, and
+   * an unconditional prefix announces that box as "Filter Filter roles". A name that already begins
+   * with the word is used as-is.
+   */
+  get FilterLabel(): string {
+    const name = this.AriaLabel.trim();
+    if (!name) return 'Filter options';
+    return /^filter\b/i.test(name) ? name : `Filter ${name}`;
+  }
   IsOpen = false;
+  /**
+   * The single gate on `Toggle()` / `Open()` — true when EITHER the `Disabled` input or Angular
+   * Forms says so. Never assign it directly; go through `syncDisabled()` so both sources are
+   * always composed and a lock closes an open panel.
+   */
   IsDisabled = false;
   HighlightedIndex = -1;
   SelectedValue: unknown = null;
@@ -160,6 +275,33 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
 
   private onChange: (value: unknown) => void = () => {};
   private onTouched: () => void = () => {};
+
+  /** Backing field for the `Disabled` input. */
+  private disabledInput = false;
+  /** The forms-driven disabled state, kept SEPARATE so neither source can stomp the other. */
+  private formDisabled = false;
+
+  /**
+   * Recompute the gate from both of its sources. Called whenever either changes.
+   *
+   * `IsDisabled` is derived state, and the only thing that assigned it was `setDisabledState()`.
+   * The forms-driven half was in fact fine — `setUpControl` also wires `registerOnDisabledChange`,
+   * so that hook fires on every `control.disable()`/`enable()`, not just at registration. What had
+   * no recompute path at all was the `Disabled` @Input: a plain field, so the gate froze at
+   * whatever the first compose produced and every later change to the input was dropped.
+   *
+   * That is how a `[Disabled]="!draft.CompanyID"` picker stayed dead for the life of the
+   * component after the company was finally chosen.
+   */
+  private syncDisabled(): void {
+    const disabled = this.disabledInput || this.formDisabled;
+    if (disabled === this.IsDisabled) return;
+    this.IsDisabled = disabled;
+    // Becoming disabled while the panel is open would otherwise leave an interactive list
+    // hanging off a control the user can no longer operate.
+    if (disabled) this.resetPanelState();
+    this.cdr.markForCheck();
+  }
 
   get FilteredItems(): unknown[] {
     const data = (this.Data ?? []) as unknown[];
@@ -198,10 +340,19 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
 
   Close(): void {
     if (!this.IsOpen) return;
+    this.resetPanelState();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Panel state only — no change detection. Split out of `Close()` because `syncDisabled()` can
+   * run from an @Input setter, i.e. DURING the parent's change-detection pass, where a nested
+   * `detectChanges()` re-enters CD and trips NG0100 on the parent's own bindings.
+   */
+  private resetPanelState(): void {
     this.IsOpen = false;
     this.filterText = '';
     this.HighlightedIndex = -1;
-    this.cdr.detectChanges();
   }
 
   SelectItem(item: unknown | null, event?: Event): void {
@@ -281,7 +432,7 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
   writeValue(value: unknown): void { this.SelectedValue = value; }
   registerOnChange(fn: (value: unknown) => void): void { this.onChange = fn; }
   registerOnTouched(fn: () => void): void { this.onTouched = fn; }
-  setDisabledState(isDisabled: boolean): void { this.IsDisabled = isDisabled || this.Disabled; }
+  setDisabledState(isDisabled: boolean): void { this.formDisabled = isDisabled; this.syncDisabled(); }
   ngOnDestroy(): void { this.Close(); }
 
   private getSelectedIndex(): number {

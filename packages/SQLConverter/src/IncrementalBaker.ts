@@ -74,6 +74,15 @@ export interface IncrementalBakerOptions {
   db: BakerWorkingDB;
   /** Target schema for the baked output and `search_path`. Defaults to `__mj`. */
   schema?: string;
+  /**
+   * MJ core schema substituted for `${mjSchema}`. Defaults to `__mj`.
+   *
+   * Separate from `schema`, which is the APP's schema: an Open App migration references core as
+   * `${mjSchema}` and itself as `${flyway:defaultSchema}`, and for every app those differ. The
+   * baked body is EXECUTED against the working database, so an unresolved macro is not cosmetic —
+   * it fails the apply and halts the bake chain (issue #3838).
+   */
+  coreSchema?: string;
 }
 
 export interface BakedMigrationResult {
@@ -99,6 +108,8 @@ export interface BakedMigrationResult {
 }
 
 const DEFAULT_SCHEMA = '__mj';
+/** MJ core's schema — the value `${mjSchema}` resolves to unless the caller overrides it. */
+const DEFAULT_CORE_SCHEMA = '__mj';
 const CODEGEN_SECTION_HEADER = '-- ===================== CodeGen (native PG, baked) =====================';
 
 /** A baseline migration (`B<timestamp>__…`) — a full from-scratch schema snapshot. Mirrors the
@@ -109,9 +120,11 @@ function isBaselineFile(fileName: string): boolean {
 
 export class IncrementalBaker {
   private readonly schema: string;
+  private readonly coreSchema: string;
 
   constructor(private readonly opts: IncrementalBakerOptions) {
     this.schema = opts.schema ?? DEFAULT_SCHEMA;
+    this.coreSchema = opts.coreSchema ?? DEFAULT_CORE_SCHEMA;
   }
 
   /**
@@ -143,6 +156,7 @@ export class IncrementalBaker {
     const conv = await convertMigration(ssSql, fileName, {
       transpiler: this.opts.transpiler,
       schema: this.schema,
+      coreSchema: this.coreSchema,
       includeHeader: false,
     });
     const handBody = conv.pgSQL.trim();
@@ -238,9 +252,13 @@ export class IncrementalBaker {
       parts.push(CODEGEN_SECTION_HEADER);
       parts.push(captured.join('\n\n'));
     }
-    // Belt-and-suspenders: convertMigration already substitutes the schema; native capture
+    // Belt-and-suspenders: convertMigration already substitutes both schemas; native capture
     // emits literal `__mj`. Replace any stray macro so the baked file is fully literal.
-    return parts.join('\n\n').replaceAll('${flyway:defaultSchema}', this.schema) + '\n';
+    return parts
+      .join('\n\n')
+      // Replacement functions, not strings — see MigrationConverter.assemblePgSQL (issue #3171).
+      .replaceAll('${flyway:defaultSchema}', () => this.schema)
+      .replaceAll('${mjSchema}', () => this.coreSchema) + '\n';
   }
 
   private bakedHeader(fileName: string): string {

@@ -245,6 +245,14 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="ToolCallingMode"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="RootParentID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -296,7 +304,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Messages"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -345,7 +353,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ModelSpecificResponseDetails"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -459,7 +467,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="FailoverErrors"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -467,7 +475,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="FailoverDurations"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -551,6 +559,31 @@
             Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="InputUnitsUsed"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="OutputUnitsUsed"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="UsageTypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -638,7 +671,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ModelSelection"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -776,7 +809,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ValidationAttempts"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -784,7 +817,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ValidationSummary"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -873,10 +906,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Runs (Rerun From Run) Section -->
+    <!-- AI Prompt Runs (Rerun From) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunsRerunFromPromptRunID"
-        SectionName="AI Prompt Runs (Rerun From Run)"
+        SectionName="AI Prompt Runs (Rerun From)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"

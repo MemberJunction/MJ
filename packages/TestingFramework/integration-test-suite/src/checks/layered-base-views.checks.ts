@@ -47,6 +47,7 @@ import { RunView } from '@memberjunction/core';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { hasFullCatalogVisibility } from './catalog-visibility';
 
 /** Every entity in live metadata that declares a layered base view. */
 function layeredEntities(ctx: IntegrationCheckContext): EntityInfo[] {
@@ -112,10 +113,14 @@ function catalogAccess(ctx: IntegrationCheckContext): CatalogAccess | null {
  *
  * The skip is logged with the provider name so a green result is never mistaken for a real one.
  */
-function catalogOrSkip(ctx: IntegrationCheckContext, checkId: string): EntityInfo[] | null {
+async function catalogOrSkip(ctx: IntegrationCheckContext, checkId: string): Promise<EntityInfo[] | null> {
     if (!catalogAccess(ctx)) {
         const providerName = ctx.Provider?.constructor?.name ?? 'unknown';
         console.log(`      → ${checkId} SKIPPED (no assertions ran): no catalog access on this run path (provider '${providerName}')`);
+        return null;
+    }
+    if (ctx.Pool && !(await hasFullCatalogVisibility(ctx.Pool))) {
+        console.log(`      → ${checkId} SKIPPED (no assertions ran): the login lacks VIEW DEFINITION — sys.sql_modules definitions are hidden from least-privilege logins`);
         return null;
     }
     return requireLayered(ctx);
@@ -202,7 +207,7 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
         Id: 'layered-base-views.LBV2',
         Name: 'LBV2: both the inner and outer views physically exist as distinct objects',
         Fn: async (ctx): Promise<void> => {
-            const entities = catalogOrSkip(ctx, 'LBV2');
+            const entities = await catalogOrSkip(ctx, 'LBV2');
             if (!entities) return;
 
             for (const e of entities) {
@@ -220,7 +225,7 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
         Id: 'layered-base-views.LBV3',
         Name: 'LBV3: the outer view selects FROM the inner view — it is genuinely a wrapper',
         Fn: async (ctx): Promise<void> => {
-            const entities = catalogOrSkip(ctx, 'LBV3');
+            const entities = await catalogOrSkip(ctx, 'LBV3');
             if (!entities) return;
 
             for (const e of entities) {
@@ -236,7 +241,7 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
         Id: 'layered-base-views.LBV4',
         Name: 'LBV4: CodeGen has not overwritten the application-owned outer view',
         Fn: async (ctx): Promise<void> => {
-            const entities = catalogOrSkip(ctx, 'LBV4');
+            const entities = await catalogOrSkip(ctx, 'LBV4');
             if (!entities) return;
 
             for (const e of entities) {
@@ -259,7 +264,7 @@ export const LayeredBaseViewChecks: NamedCheck[] = [
         Id: 'layered-base-views.LBV5',
         Name: 'LBV5: every inner-view column is inherited by the outer view',
         Fn: async (ctx): Promise<void> => {
-            const entities = catalogOrSkip(ctx, 'LBV5');
+            const entities = await catalogOrSkip(ctx, 'LBV5');
             if (!entities) return;
 
             for (const e of entities) {

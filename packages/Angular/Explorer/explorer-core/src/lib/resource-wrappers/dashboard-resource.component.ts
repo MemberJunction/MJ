@@ -409,6 +409,16 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
 })
 export class DashboardResource extends BaseResourceComponent {
     private componentRef: ComponentRef<unknown> | null = null;
+
+    /**
+     * A cache reattach moves this wrapper to another tab without recreating the dashboard inside it,
+     * so the child's tab stamp — taken when we created it — has to move too. Without this the
+     * dashboard keeps reading and writing the params of the tab it was born in, from inside a tab it
+     * no longer belongs to.
+     */
+    protected override onTabIdRebound(tabId: string): void {
+        this.rehomeChildToTab(this.componentRef?.instance as BaseResourceComponent | undefined, tabId);
+    }
     private dataLoaded = false;
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
 
@@ -697,6 +707,14 @@ export class DashboardResource extends BaseResourceComponent {
             this.componentRef = componentRef;
             const instance = componentRef.instance;
 
+            // Scope the child's query-param reads/writes to THIS tab. A dashboard we instantiate
+            // ourselves has no ResourceData and therefore no tab id of its own; without this it
+            // cannot update the URL at all (BaseResourceComponent refuses tab-less writes rather
+            // than corrupting whichever tab the user is viewing). Set before any await below —
+            // Angular can run the child's ngOnInit, which binds its param subscription, while we
+            // are suspended.
+            instance.ParentTabId = this.getTabId();
+
             // Set the entity filter - ngOnInit will use this when it runs
             if (entityFilter) {
                 instance.entityFilter = entityFilter;
@@ -780,6 +798,14 @@ export class DashboardResource extends BaseResourceComponent {
             this.containerElement.nativeElement.innerHTML = '';
             this.componentRef = this.viewContainer.createComponent<BaseDashboard>(classReg.SubClass);
             const instance = this.componentRef.instance as BaseDashboard;
+
+            // Scope the child's query-param reads/writes to THIS tab. Code dashboards resolved via
+            // ClassFactory (every Open App dashboard, MCPDashboard, DataExplorer) get no
+            // ResourceData and so have no tab id of their own; without this their UpdateQueryParams
+            // calls are refused (and previously — worse — landed in whatever tab the user happened
+            // to be looking at). Set before the awaits below: Angular can run the child's ngOnInit,
+            // which binds its param subscription, while we are suspended.
+            instance.ParentTabId = this.getTabId();
 
             // Setup LoadCompleteEvent() to know when the dashboard is ready
             instance.LoadCompleteEvent = () => {
@@ -959,18 +985,11 @@ export class DashboardResource extends BaseResourceComponent {
                 // ToURLSegment serialize it a second time as `ID|<segment>` and produces a
                 // malformed `Field|Field|Value` URL the host parser silently mis-reads (manifesting
                 // downstream as `BaseEntity.Load(... Key: ID=ID)` and `Primary Key value is not a
-                // valid number`). Parse the segment with `LoadFromURLSegment` against the entity's
-                // PK metadata instead, so single-PK and composite-PK both round-trip correctly.
+                // valid number`). Parse the segment with `FromURLSegment` against the entity's PK
+                // metadata instead, so single-PK and composite-PK both round-trip correctly (it also
+                // owns the last-resort `ID` fallback for an entity name metadata can't resolve).
                 const md = this.ProviderToUse;
-                const entityInfo = md.EntityByName(entityRequest.entityName);
-                const pkey = new CompositeKey();
-                if (entityInfo) {
-                    pkey.LoadFromURLSegment(entityInfo, entityRequest.recordId);
-                } else {
-                    // Last-resort fallback when entity metadata isn't resolvable — preserves
-                    // pre-fix behavior so we don't NRE on an unknown entity name.
-                    pkey.KeyValuePairs = [{ FieldName: 'ID', Value: entityRequest.recordId }];
-                }
+                const pkey = CompositeKey.FromURLSegment(md.EntityByName(entityRequest.entityName), entityRequest.recordId);
                 this.navigationService.OpenEntityRecord(entityRequest.entityName, pkey);
                 break;
             }
@@ -1001,7 +1020,7 @@ export class DashboardResource extends BaseResourceComponent {
             // Try to load dashboard metadata if we have the record ID
             if (data.ResourceRecordID && data.ResourceRecordID.length > 0) {
                 const md = this.ProviderToUse;
-                const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
+                const compositeKey = CompositeKey.FromID(data.ResourceRecordID); // first-pk-ok: ResourceRecordID of a Dashboards resource — core entity keyed by ID
                 const name = await md.GetEntityRecordName('Dashboards', compositeKey);
                 if (name) {
                     return name;

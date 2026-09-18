@@ -15,11 +15,12 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
+import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, canonicalizeColumnFields, computeFieldsList } from '../utils/record.util';
+import { AggregateField } from '../utils/aggregate-field.util';
 import {
   MJUserViewEntityExtended,
   ViewInfo,
@@ -1225,10 +1226,32 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         minimumFractionDigits: 0
       });
     }
+    // A date aggregate reaches the browser as an ISO string: the server JSON-stringifies the value
+    // and the client parses it back, which turns a Date into text. Resolve the column's type first
+    // so a `date` column renders as its stored day whether the value is a Date or that string.
+    if (typeof value !== 'boolean' && this.aggregateIsDateOnly(agg)) {
+      return FormatDateOnly(value);
+    }
     if (value instanceof Date) {
       return value.toLocaleDateString();
     }
+    // A timestamp aggregate arrives as the same ISO string. It names an instant, so it is rendered
+    // in local time, as a Date instance would be — not printed as the wire text.
+    if (typeof value === 'string' && AggregateField(agg, this._entityInfo)?.TSType === EntityFieldTSType.Date) {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) return date.toLocaleDateString();
+    }
     return String(value);
+  }
+
+  /**
+   * Whether an aggregate summarises a date-only column. An aggregate carries no field metadata of
+   * its own, so the column is read from a single-field expression such as `MIN(IntakeDate)` or
+   * from the column the aggregate is pinned under. A `date` column is a calendar day and must not
+   * be shifted into the reader's zone (MJ#4210).
+   */
+  private aggregateIsDateOnly(agg: ViewGridAggregate): boolean {
+    return IsDateOnlySQLType(AggregateField(agg, this._entityInfo)?.Type);
   }
 
   // ========================================
@@ -1558,7 +1581,30 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   // Loading state
   loading: boolean = false;
-  errorMessage: string = '';
+  private _errorMessage: string = '';
+  /**
+   * Raw technical error from the last failed load. Kept for callers and the
+   * console; the error STATE shown to users leads with FriendlyErrorMessage.
+   * Setting a non-empty value logs the technical detail.
+   */
+  get errorMessage(): string {
+    return this._errorMessage;
+  }
+  set errorMessage(value: string) {
+    this._errorMessage = value;
+    if (value) {
+      LogError(`EntityDataGrid data load failed: ${value}`);
+    }
+  }
+  /**
+   * Human-first message for the error empty-state. Users see what happened and
+   * what to do; the raw error rides along as a de-emphasized parenthetical so a
+   * screenshot still carries the detail support needs.
+   */
+  get FriendlyErrorMessage(): string {
+    const friendly = 'The server may be busy or briefly unreachable — retrying usually fixes this.';
+    return this._errorMessage ? `${friendly} (Detail: ${this._errorMessage})` : friendly;
+  }
   totalRowCount: number = 0;
   private _loadDataPromise: Promise<void> | null = null;
 
@@ -1919,11 +1965,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
           // stale columns from a previously viewed entity leaking into the query.
           // This can happen when user defaults were saved for a different view of
           // the same entity with different columns, or when settings are mismatched.
-          const validColumns = this._entityInfo
-            ? gridState.columnSettings.filter(col =>
-                this._entityInfo!.Fields.some(f => f.Name === col.Name)
-              )
-            : gridState.columnSettings;
+          const validColumns = this.filterToExistingFields(gridState.columnSettings, col => col.Name);
 
           if (validColumns.length > 0) {
             this._gridState = {
@@ -1937,11 +1979,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
         // Apply sort state if not already set — validate sort fields exist on current entity
         if (this._sortState.length === 0 && gridState.sortSettings?.length) {
-          const validSorts = this._entityInfo
-            ? gridState.sortSettings.filter(s =>
-                this._entityInfo!.Fields.some(f => f.Name === s.field)
-              )
-            : gridState.sortSettings;
+          const validSorts = this.filterToSortableFields(gridState.sortSettings, s => s.field);
           this._sortState = validSorts.map((s, index) => ({
             field: s.field,
             direction: s.dir,
@@ -2029,9 +2067,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       if (sortInfo?.length) {
         // Validate sort fields exist on the current entity to prevent stale
         // sort fields from a previously viewed entity leaking into ORDER BY
-        const validSorts = this._entityInfo
-          ? sortInfo.filter(s => this._entityInfo!.Fields.some(f => f.Name === s.field))
-          : sortInfo;
+        const validSorts = this.filterToSortableFields(sortInfo, s => s.field);
         this._sortState = validSorts.map((s, index) => ({
           field: s.field,
           direction: (typeof s.direction === 'string' ? s.direction.toLowerCase() : s.direction === 2 ? 'desc' : 'asc') === 'desc' ? 'desc' : 'asc',
@@ -2044,9 +2080,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       // empty and buildOrderByClause() returns '' — causing the SQL to omit
       // ORDER BY on the first page load.
       // Validate sort fields exist on the current entity
-      const validSorts = this._entityInfo
-        ? this._gridState!.sortSettings!.filter(s => this._entityInfo!.Fields.some(f => f.Name === s.field))
-        : this._gridState!.sortSettings!;
+      const validSorts = this.filterToSortableFields(this._gridState!.sortSettings!, s => s.field);
       this._sortState = validSorts.map((sortSetting, index) => ({
         field: sortSetting.field,
         direction: sortSetting.dir,
@@ -2076,9 +2110,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       // Apply sort if present - support multi-column sort
       // Validate sort fields against current entity to prevent stale sort from a previous entity
       if (this._gridState.sortSettings?.length && this.gridApi && !this.gridApi.isDestroyed()) {
-        const validSorts = this._entityInfo
-          ? this._gridState.sortSettings.filter(s => this._entityInfo!.Fields.some(f => f.Name === s.field))
-          : this._gridState.sortSettings;
+        const validSorts = this.filterToSortableFields(this._gridState.sortSettings, s => s.field);
         this._sortState = validSorts.map((sortSetting, index) => ({
           field: sortSetting.field,
           direction: sortSetting.dir,
@@ -2229,6 +2261,14 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * This logic is aligned with MJUserViewEntity.SetDefaultsFromEntity() to ensure
    * consistent column visibility between initial load and saved views.
    */
+  /**
+   * NOTE: field security is deliberately NOT applied here. This decides the column MODEL, and
+   * the user's saved column preference is captured from what ends up rendered — so filtering a
+   * denied field out at this level writes a temporary restriction into a durable preference,
+   * and the column never returns when access is restored. The denial is applied where columns
+   * are RENDERED ({@link buildAgColumnDefs}), and {@link buildCurrentGridState} carries the
+   * hidden entries forward so the saved preference stays complete.
+   */
   private shouldShowField(field: EntityFieldInfo): boolean {
     // Always exclude system fields
     if (field.Name.startsWith('__mj_')) return false;
@@ -2242,6 +2282,53 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     // This aligns with MJUserViewEntity.SetDefaultsFromEntity() behavior
     // ensuring users see the same columns before and after saving a view
     return field.DefaultInView === true;
+  }
+
+  /**
+   * Field names field-level security denies the current user READ on, lowercased — empty when
+   * there is no entity or no resolved user, when the entity has field security switched off,
+   * or when nothing is denied, so callers can treat it as "nothing to filter".
+   *
+   * Deliberately the BULK primitive: `EntityInfo.GetDeniedReadFields` documents that the
+   * per-field form costs `fields x rows` aggregations when called inside a loop, and every
+   * caller here is a loop over fields or saved settings.
+   */
+  private deniedReadFieldsFor(entity: EntityInfo | null | undefined): Set<string> {
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!entity || !user) {
+      return new Set<string>();
+    }
+    return entity.GetDeniedReadFields(user);
+  }
+
+  /**
+   * Drops saved settings naming a field that no longer EXISTS on the current entity — stale
+   * state from another view, or a column the schema lost.
+   *
+   * Deliberately does NOT drop denied fields. A denial is temporary and reversible, so removing
+   * the column here would launder a restriction into the user's saved column PREFERENCE and the
+   * column would not return when access was restored. Field security is applied where the
+   * columns are RENDERED ({@link buildAgColumnDefs}), which hides the column while leaving the
+   * preference that mentions it intact.
+   */
+  private filterToExistingFields<T>(items: T[], nameOf: (item: T) => string): T[] {
+    const entity = this._entityInfo;
+    if (!entity) {
+      return items;
+    }
+    return items.filter(item => entity.Fields.some(f => f.Name === nameOf(item)));
+  }
+
+  /**
+   * The same existence check, plus dropping fields the user cannot read — for SORT settings
+   * only. A denied field in ORDER BY is rejected outright by the server, so unlike a column it
+   * cannot be carried along harmlessly; the query would fail rather than degrade. A user also
+   * cannot meaningfully sort by a column they cannot see.
+   */
+  private filterToSortableFields<T>(items: T[], nameOf: (item: T) => string): T[] {
+    const denied = this.deniedReadFieldsFor(this._entityInfo);
+    return this.filterToExistingFields(items, nameOf)
+      .filter(item => !denied.has(nameOf(item)?.trim().toLowerCase()));
   }
 
   /**
@@ -2396,6 +2483,20 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       this.agColumnDefs = this.generateAgColumnDefs(this._entityInfo);
     } else {
       this.agColumnDefs = [];
+    }
+
+    // Field security, applied to EVERY branch above rather than inside each one. This is the
+    // only point all three column sources meet: a saved view's `columnSettings` (the usual path
+    // in the entity browser) and a host-supplied `[Columns]` array both bypass the metadata
+    // filter in shouldShowField(), so gating only there leaves the denied column rendered in
+    // exactly the case that matters most. Runs BEFORE the row-number and filler columns are
+    // appended — those are synthetic and have no entity field to check.
+
+    const deniedReadFields = this.deniedReadFieldsFor(this._entityInfo);
+    if (deniedReadFields.size > 0) {
+      this.agColumnDefs = this.agColumnDefs.filter(
+        c => !c.field || !deniedReadFields.has(c.field.trim().toLowerCase())
+      );
     }
 
     // Add row number column if enabled
@@ -2756,6 +2857,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
                   (!extendedType && (fieldNameLower.includes('url') ||
                                      fieldNameLower.includes('website') ||
                                      fieldNameLower.includes('link')));
+    // Image cells key off ExtendedType (or a User View format override). Field-name
+    // heuristics (PhotoURL/LogoURL) are not used — those columns are classified as
+    // ExtendedType='Image' in metadata.
+    const isImage = (customFormat?.type as string | undefined) === 'image' ||
+                    extendedType === 'image';
+    const isColor = extendedType === 'color';
     // Use ExtendedType='Tel' from metadata, fallback to field name pattern
     const isPhone = extendedType === 'tel' ||
                     (!extendedType && (fieldNameLower.includes('phone') ||
@@ -2792,6 +2899,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       colDef.headerClass = 'header-align-right';
     }
 
+    if (isImage) {
+      colDef.cellClass = `${colDef.cellClass || ''} mj-grid-image-cell`.trim();
+      colDef.headerClass = `${colDef.headerClass || ''} mj-grid-image-header`.trim();
+      colDef.width = 48;
+      colDef.minWidth = 44;
+      colDef.maxWidth = 56;
+      colDef.resizable = false;
+    }
+
     // Apply custom header style if provided
     if (customFormat?.headerStyle) {
       const headerStyle = this.buildCssStyle(customFormat.headerStyle);
@@ -2806,6 +2922,35 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     colDef.cellRenderer = (params: ICellRendererParams) => {
       if (params.value === null || params.value === undefined) {
         return '<span class="cell-empty">—</span>';
+      }
+
+      if (isImage) {
+        const raw = String(params.value).trim();
+        const src = CoerceImageSrc(raw);
+        if (src) {
+          const escaped = HighlightUtil.escapeHtml(src);
+          const img = `<img src="${escaped}" alt="" class="cell-image" width="28" height="28" style="width:28px;height:28px;max-width:28px;max-height:28px;object-fit:cover;object-position:center;border-radius:50%;display:block" />`;
+          const inner = src.startsWith('data:')
+            ? img
+            : `<a href="${escaped}" target="_blank" rel="noopener noreferrer" class="cell-image-link" onclick="event.stopPropagation()">${img}</a>`;
+          return this.wrapWithStyle(
+            inner,
+            customFormat?.cellStyle ? this.buildCssStyle(customFormat.cellStyle) : '',
+          );
+        }
+      }
+
+      if (isColor) {
+        const raw = String(params.value).trim();
+        const hex = ParseCssHexColor(raw);
+        const escaped = HighlightUtil.escapeHtml(raw);
+        const swatch = hex
+          ? `<span style="width:14px;height:14px;border-radius:3px;background:${HighlightUtil.escapeHtml(hex)};border:1px solid rgba(0,0,0,.2);display:inline-block;flex-shrink:0"></span>`
+          : '';
+        return this.wrapWithStyle(
+          `<span style="display:inline-flex;align-items:center;gap:6px">${swatch}${escaped}</span>`,
+          customFormat?.cellStyle ? this.buildCssStyle(customFormat.cellStyle) : '',
+        );
       }
 
       // Handle foreign key fields - render as clickable links
@@ -2864,7 +3009,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
       if (useCustomFormat) {
         // Use custom formatting
-        displayValue = this.formatValueWithCustomFormat(params.value, customFormat);
+        displayValue = this.formatValueWithCustomFormat(params.value, customFormat, field);
         // Check if formatCustomBoolean returned HTML (icon or checkbox)
         if (customFormat.type === 'boolean' &&
             (customFormat.booleanDisplay === 'icon' || customFormat.booleanDisplay === 'checkbox')) {
@@ -2886,18 +3031,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         }
         // Date formatting
         else if (fieldType === 'Date') {
-          const date = params.value instanceof Date ? params.value : new Date(params.value as string);
-          if (isNaN(date.getTime())) {
-            displayValue = String(params.value);
-          } else if (vc.friendlyDates) {
-            displayValue = date.toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric'
-            });
-          } else {
-            displayValue = date.toISOString().split('T')[0];
-          }
+          displayValue = this.formatDefaultDate(params.value, field, !!vc.friendlyDates);
         }
         // Currency formatting
         else if (fieldType === 'number' && isCurrency) {
@@ -2981,6 +3115,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return `<span style="${style}">${content}</span>`;
   }
 
+
+
   /**
    * Build a CSS style string from a ColumnTextStyle object
    */
@@ -3010,7 +3146,20 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   /**
    * Format a value using custom ColumnFormat settings
    */
-  private formatValueWithCustomFormat(value: unknown, format: ColumnFormat): string {
+  /**
+   * Default rendering of a date-family cell. A `date` column is a calendar day that arrives as UTC
+   * midnight; a local-zone formatter would land on the previous day for every reader west of
+   * Greenwich (MJ#4210). A timestamp names an instant and stays in local time.
+   */
+  private formatDefaultDate(value: unknown, field: EntityFieldInfo, friendlyDates: boolean): string {
+    const date = value instanceof Date ? value : new Date(value as string);
+    if (isNaN(date.getTime())) return String(value);
+    if (!friendlyDates) return date.toISOString().split('T')[0];
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    return IsDateOnlySQLType(field.Type) ? FormatDateOnly(date, options) : date.toLocaleDateString(undefined, options);
+  }
+
+  private formatValueWithCustomFormat(value: unknown, format: ColumnFormat, field: EntityFieldInfo): string {
     if (value == null) return '—';
 
     switch (format.type) {
@@ -3022,7 +3171,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         return this.formatCustomPercent(value as number, format);
       case 'date':
       case 'datetime':
-        return this.formatCustomDate(value, format);
+        return this.formatCustomDate(value, format, IsDateOnlySQLType(field.Type));
       case 'boolean':
         return this.formatCustomBoolean(value as boolean, format);
       default:
@@ -3068,7 +3217,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return new Intl.NumberFormat('en-US', options).format(num / 100);
   }
 
-  private formatCustomDate(value: unknown, format: ColumnFormat): string {
+  /**
+   * @param dateOnly The column is a SQL `date`: a calendar day at UTC midnight with no time to show.
+   * It is rendered in UTC so the day does not shift west of Greenwich, and a `datetime` column
+   * format cannot add a time of day to it (MJ#4210). A timestamp column keeps local rendering.
+   */
+  private formatCustomDate(value: unknown, format: ColumnFormat, dateOnly: boolean): string {
     const date = value instanceof Date ? value : new Date(value as string);
     if (isNaN(date.getTime())) return String(value);
 
@@ -3076,6 +3230,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     const formatStr = format.dateFormat || 'medium';
     const includeWeekday = formatStr.includes('-weekday');
     const baseFormat = formatStr.replace('-weekday', '') as 'short' | 'medium' | 'long';
+    const withTime = format.type === 'datetime' && !dateOnly;
 
     let options: Intl.DateTimeFormatOptions;
 
@@ -3090,7 +3245,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         // medium
         options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
       }
-      if (format.type === 'datetime') {
+      if (withTime) {
         options.hour = 'numeric';
         options.minute = '2-digit';
       }
@@ -3099,12 +3254,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       options = {
         dateStyle: baseFormat === 'short' ? 'short' : baseFormat === 'long' ? 'long' : 'medium'
       };
-      if (format.type === 'datetime') {
+      if (withTime) {
         options.timeStyle = 'short';
       }
     }
 
-    return new Intl.DateTimeFormat('en-US', options).format(date);
+    return dateOnly ? FormatDateOnly(date, options, 'en-US') : new Intl.DateTimeFormat('en-US', options).format(date);
   }
 
   private formatCustomBoolean(value: boolean, format: ColumnFormat): string {
@@ -4144,6 +4299,72 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       }
     }
 
+    // Carry forward the settings for columns FIELD SECURITY hid from this user.
+    //
+    // This state is captured from the rendered AG Grid, and a denied column is not rendered —
+    // so without this it would be missing from the captured state, that state is persisted as
+    // the user's column PREFERENCE, and the column is gone permanently. It would not come back
+    // when the denial was lifted, because by then the saved preference genuinely no longer
+    // lists it. A temporary restriction must never be recorded as a durable preference.
+    //
+    // Ordering is intentionally not recomputed: the retained entries keep their previous
+    // orderIndex, so restoring access puts the column back roughly where it was rather than
+    // appending it to the end.
+    const deniedReadFields = this.deniedReadFieldsFor(this._entityInfo);
+    if (deniedReadFields.size > 0) {
+      const captured = new Set(columnSettings.map(c => c.Name.toLowerCase()));
+      // Prefer the settings the user already had; fall back to the column MODEL, which still
+      // lists denied fields, for the case where they are saving grid state for the first time
+      // while the restriction is in force and there is no prior entry to preserve.
+      const priorByName = new Map<string, ViewGridColumnSetting>();
+      for (const prior of this._gridState?.columnSettings ?? []) {
+        priorByName.set(prior.Name.trim().toLowerCase(), prior);
+      }
+      // Position is resolved against the column that preceded it in the PRIOR state, not by its
+      // own old orderIndex: the captured entries were renumbered by render position, so the two
+      // index spaces no longer line up once a hidden column has been removed from the middle.
+      // A fractional index slots the retained column back between its old neighbours; the whole
+      // list is renumbered to integers afterwards.
+      const capturedIndexByName = new Map(columnSettings.map((c, i) => [c.Name.toLowerCase(), i]));
+      const priorOrdered = [...(this._gridState?.columnSettings ?? [])]
+        .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+
+      const positionFor = (name: string): number => {
+        const priorIndex = priorOrdered.findIndex(c => c.Name.trim().toLowerCase() === name);
+        for (let back = priorIndex - 1; back >= 0; back--) {
+          const anchor = capturedIndexByName.get(priorOrdered[back].Name.toLowerCase());
+          if (anchor !== undefined) {
+            return anchor + 0.5;
+          }
+        }
+        return priorIndex >= 0 ? -0.5 : columnSettings.length;
+      };
+
+      for (const denied of deniedReadFields) {
+        if (captured.has(denied)) {
+          continue;
+        }
+        const prior = priorByName.get(denied);
+        if (prior) {
+          columnSettings.push({ ...prior, orderIndex: positionFor(denied) });
+          continue;
+        }
+        const modelled = this._columns.find(c => c.field.trim().toLowerCase() === denied);
+        const field = this._entityInfo.Fields.find(f => f.Name.trim().toLowerCase() === denied);
+        if (modelled && field) {
+          columnSettings.push({
+            ID: field.ID,
+            Name: field.Name,
+            DisplayName: field.DisplayNameOrName,
+            hidden: false,
+            orderIndex: columnSettings.length
+          });
+        }
+      }
+      columnSettings.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+      columnSettings.forEach((c, i) => { c.orderIndex = i; });
+    }
+
     // Sort by sortIndex to maintain correct multi-sort priority order
     sortedColumns.sort((a, b) => a.sortIndex - b.sortIndex);
     const sortSettings: ViewGridSortSetting[] = sortedColumns.map(s => ({
@@ -4733,10 +4954,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   /** Builds the driver context from the current entity + selection and mounts the named driver. */
   private mountRuntimeDriver(action: EntityActionConfig): void {
     const entity = this._entityInfo!;
-    const pkName = entity.FirstPrimaryKey?.Name;
-    const selectedRecordIDs = pkName
-      ? this.GetSelectedRows().map(r => String(r[pkName])).filter(id => id.length > 0)
-      : [];
+    // The grid's entity is arbitrary (any key column name, possibly composite), so each selected row's
+    // identity is its full primary key in the compact record-id form the record-process engine reads
+    // back with CompositeKey.FromURLSegment — a bare value for single-column keys, `F1|v1||F2|v2` otherwise.
+    const selectedRecordIDs = this.GetSelectedRows()
+      .map(r => CompositeKey.FromEntityRecord(entity, r).ToCompactURLSegment())
+      .filter(id => id.length > 0);
     this.ActiveRuntimeDriver = {
       DriverClass: action.runtimeUXDriverClass!,
       Context: {

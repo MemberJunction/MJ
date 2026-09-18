@@ -378,6 +378,18 @@ export class PostgreSQLDialect extends SQLDialect {
         return ''; // PostgreSQL does not need batch separators
     }
 
+    CreateSavepointSQL(name: string): string {
+        return `SAVEPOINT ${name}`;
+    }
+
+    ReleaseSavepointSQL(name: string): string {
+        return `RELEASE SAVEPOINT ${name}`;
+    }
+
+    RollbackToSavepointSQL(name: string): string {
+        return `ROLLBACK TO SAVEPOINT ${name}`;
+    }
+
     /**
      * Splits an oversized SQL batch into individual statements on `;`+EOL
      * boundaries — but NEVER inside a PostgreSQL dollar-quoted block

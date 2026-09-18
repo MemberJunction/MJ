@@ -9,6 +9,7 @@ import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatParams, ChatMessage, ChatMessageRole, GetAIAPIKey, BaseLLM } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
+import { MJAIModelVendorEntity } from '@memberjunction/core-entities';
 import { GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
@@ -78,6 +79,28 @@ export class EmbedTextResult {
 
     @Field({ nullable: true })
     error?: string;
+}
+
+/**
+ * A runnable model for `ExecuteSimplePrompt`: the model row PLUS the vendor implementation that will
+ * serve it (#3532).
+ *
+ * Both halves are required, and that is the correction the issue is about. `DriverClass` and
+ * `APIName` moved to `AIModelVendor`, so a model on its own no longer says which driver to
+ * instantiate or what name to put on the wire — selecting a model without also selecting its vendor
+ * yields something that cannot be run, and fails as a 404 with an empty message.
+ *
+ * Carried as a pair rather than stamped back onto the model entity, deliberately: those entities are
+ * the ENGINE'S CACHE, so writing the winning vendor onto one would leak into every other caller in
+ * the process and make the next request's answer depend on this one's.
+ */
+interface SimplePromptModelChoice {
+    /** The selected model row. */
+    Model: MJAIModelEntityExtended;
+    /** The vendor's driver class — what resolves the API key and instantiates the LLM. */
+    DriverClass: string;
+    /** The vendor's wire name for this model, falling back to the model's own APIName/Name. */
+    APIName: string;
 }
 
 @Resolver()
@@ -394,72 +417,157 @@ export class RunAIPromptResolver extends ResolverBase {
         );
     }
 
+    /** The `AI Model Types.Name` that means "a chat LLM", compared lowercased. */
+    private static readonly SimplePromptLLMTypeName = 'llm';
+
     /**
-     * Helper method to select a model for simple prompt execution based on preferences or power level
-     * @private
+     * Selects a runnable model + vendor for simple prompt execution.
+     *
+     * ## What was wrong (#3532)
+     *
+     * Four defects stacked here, and each reported as something unrelated to its actual cause:
+     *
+     * 1. `GetAIAPIKey(model.DriverClass)` threw on a row with a null `DriverClass`, so ONE malformed
+     *    row took out prompt execution with `Cannot read properties of null (reading 'toUpperCase')`.
+     *    Fixed at the source in `AIAPIKeys.GetAPIKey` — a row with no driver has no key, which is an
+     *    answer, not a crash.
+     * 2. The filter read `m.AIModelType`, a VIRTUAL column that is not populated on the engine's
+     *    model objects, so the candidate list came out empty and the caller was told "No AI models
+     *    with valid API keys found" — a message about keys for a problem with nothing to do with
+     *    keys. This now resolves the type through `ModelTypesByID` (an ID lookup that cannot be
+     *    absent), falling back to the virtual column rather than depending on it.
+     * 3. `DriverClass` lives on the model's VENDOR now, so `GetAIAPIKey(model.DriverClass)` could
+     *    never match and the list stayed empty — the same misleading key message again.
+     * 4. `APIName` also moved to the vendor, so `chatParams.model` went out empty and the provider
+     *    answered 404 with an empty error message, which reads as "that model doesn't exist" and
+     *    sends you to check a model list where the model is plainly present.
+     *
+     * ## How it selects now
+     *
+     * Vendor-first, through MJ's own rules rather than a local guess: for each Active LLM model, its
+     * Active **inference-provider** vendors (`AIEngine.IsInferenceProvider` — the same predicate
+     * `AIPromptRunner` uses) in `Priority` order, and the first whose `DriverClass` resolves an API
+     * key wins. Deliberately NOT "any vendor whose driver class ends in LLM": that heuristic admits
+     * model-developer vendor rows that are not serving endpoints at all.
+     *
+     * @throws When nothing is runnable — with a message that says WHICH of the three reasons it was.
      */
     private async selectModelForSimplePrompt(
         preferredModels: string[] | undefined,
         modelPower: string,
         contextUser: any
-    ): Promise<MJAIModelEntityExtended> {
+    ): Promise<SimplePromptModelChoice> {
         // Ensure AI Engine is configured
         await AIEngine.Instance.Config(false, contextUser);
-        
-        // Get all LLM models that have API keys
-        const allModels = AIEngine.Instance.Models.filter(m => 
-            m.AIModelType?.trim().toLowerCase() === 'llm' &&
-            m.IsActive === true
-        );
-        
-        // Filter to only models with valid API keys
-        const modelsWithKeys: MJAIModelEntityExtended[] = [];
-        for (const model of allModels) {
-            const apiKey = GetAIAPIKey(model.DriverClass);
-            if (apiKey && apiKey.trim().length > 0) {
-                modelsWithKeys.push(model);
+
+        const llmModels = AIEngine.Instance.Models.filter(m => m.IsActive === true && this.isLLMModel(m));
+        if (llmModels.length === 0) {
+            throw new Error('No Active LLM models are configured. Check the AI Models list and their AI Model Type.');
+        }
+
+        const candidates: SimplePromptModelChoice[] = [];
+        let modelsWithAnInferenceVendor = 0;
+        for (const model of llmModels) {
+            const vendors = this.inferenceVendorsFor(model);
+            if (vendors.length === 0) {
+                continue;
+            }
+            modelsWithAnInferenceVendor++;
+            const runnable = vendors.find(v => {
+                const apiKey = GetAIAPIKey(v.DriverClass);
+                return !!apiKey && apiKey.trim().length > 0;
+            });
+            if (runnable) {
+                candidates.push({
+                    Model: model,
+                    DriverClass: runnable.DriverClass,
+                    APIName: runnable.APIName?.trim() || model.APINameOrName
+                });
             }
         }
-        
-        if (modelsWithKeys.length === 0) {
-            throw new Error('No AI models with valid API keys found');
+
+        if (candidates.length === 0) {
+            // Say which wall was hit. The old single message blamed API keys for every cause, which
+            // is what made this expensive: it sends you to your environment for a metadata problem.
+            throw new Error(
+                modelsWithAnInferenceVendor === 0
+                    ? `${llmModels.length} Active LLM model(s) found, but none has an Active inference-provider vendor. `
+                      + 'Check the AI Model Vendors rows (Status and Vendor Type).'
+                    : `${modelsWithAnInferenceVendor} LLM model(s) have an Active inference-provider vendor, but no API `
+                      + 'key resolved for any of their driver classes. Check AI_VENDOR_API_KEY__<DriverClass> in the environment.'
+            );
         }
-        
+
         // Try preferred models first if provided
         if (preferredModels && preferredModels.length > 0) {
             for (const preferred of preferredModels) {
-                const model = modelsWithKeys.find(m => 
-                    m.Name === preferred || 
-                    m.APIName === preferred
+                // All three names a caller could plausibly hold. `c.APIName` is the VENDOR's wire
+                // name, which is an implementation detail the caller has no reason to know — before
+                // the vendor split, `preferredModels` was matched against the MODEL's own APIName,
+                // and dropping it would silently downgrade those callers to power selection.
+                const choice = candidates.find(c =>
+                    c.Model.Name === preferred ||
+                    c.Model.APIName === preferred ||
+                    c.APIName === preferred
                 );
-                if (model) {
-                    LogStatus(`Selected preferred model: ${model.Name}`);
-                    return model;
+                if (choice) {
+                    LogStatus(`Selected preferred model: ${choice.Model.Name} (${choice.DriverClass}/${choice.APIName})`);
+                    return choice;
                 }
             }
             LogStatus('No preferred models available, falling back to power selection');
         }
-        
+
         // Sort by PowerRank for power-based selection
-        modelsWithKeys.sort((a, b) => (b.PowerRank || 0) - (a.PowerRank || 0));
-        
-        let selectedModel: MJAIModelEntityExtended;
+        candidates.sort((a, b) => (b.Model.PowerRank || 0) - (a.Model.PowerRank || 0));
+
+        let selected: SimplePromptModelChoice;
         switch (modelPower) {
             case 'lowest':
-                selectedModel = modelsWithKeys[modelsWithKeys.length - 1];
+                selected = candidates[candidates.length - 1];
                 break;
             case 'highest':
-                selectedModel = modelsWithKeys[0];
+                selected = candidates[0];
                 break;
             case 'medium':
             default:
-                const midIndex = Math.floor(modelsWithKeys.length / 2);
-                selectedModel = modelsWithKeys[midIndex];
+                const midIndex = Math.floor(candidates.length / 2);
+                selected = candidates[midIndex];
                 break;
         }
-        
-        LogStatus(`Selected model by power (${modelPower || 'medium'}): ${selectedModel.Name}`);
-        return selectedModel;
+
+        LogStatus(`Selected model by power (${modelPower || 'medium'}): ${selected.Model.Name} (${selected.DriverClass}/${selected.APIName})`);
+        return selected;
+    }
+
+    /**
+     * Whether a model is an LLM, resolved through the model TYPE rather than the `AIModelType`
+     * virtual column (#3532 defect 2).
+     *
+     * `AIModelTypeID` is a real FK the engine always carries; `AIModelType` is a view column that may
+     * not survive onto the cached objects. Reading the column directly is what silently emptied the
+     * candidate list. The column is still consulted as a fallback so this is strictly more tolerant
+     * than before, never less.
+     */
+    private isLLMModel(model: MJAIModelEntityExtended): boolean {
+        const typeName = AIEngine.Instance.ModelTypesByID.get(model.AIModelTypeID)?.Name ?? model.AIModelType;
+        return typeName?.trim().toLowerCase() === RunAIPromptResolver.SimplePromptLLMTypeName;
+    }
+
+    /**
+     * This model's Active INFERENCE-PROVIDER vendors, highest `Priority` first — the rows that can
+     * actually serve it.
+     *
+     * Uses `AIEngine.IsInferenceProvider`, the same memoized predicate `AIPromptRunner` selects with,
+     * rather than pattern-matching the driver class name. A vendor can be attached to a model as its
+     * DEVELOPER without serving an endpoint, and treating those as runnable is how you get a driver
+     * that instantiates and then cannot answer.
+     */
+    private inferenceVendorsFor(model: MJAIModelEntityExtended): MJAIModelVendorEntity[] {
+        const vendors = AIEngine.Instance.ModelVendorsByModelID.get(model.ID) ?? model.ModelVendors ?? [];
+        return vendors
+            .filter(v => v.Status === 'Active' && AIEngine.Instance.IsInferenceProvider(v) && !!v.DriverClass)
+            .sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
     }
     
     /**
@@ -611,12 +719,13 @@ export class RunAIPromptResolver extends ResolverBase {
                 };
             }
             
-            // Select model based on preferences or power level
-            const model = await this.selectModelForSimplePrompt(
+            // Select a runnable model + vendor (#3532 — the driver and wire name live on the vendor)
+            const choice = await this.selectModelForSimplePrompt(
                 preferredModels,
                 modelPower || 'medium',
                 currentUser
             );
+            const model = choice.Model;
             
             // Build chat messages
             const chatMessages = this.buildChatMessages(systemPrompt, messages);
@@ -630,11 +739,11 @@ export class RunAIPromptResolver extends ResolverBase {
                 };
             }
             
-            // Create LLM instance
-            const apiKey = GetAIAPIKey(model.DriverClass);
+            // Create LLM instance from the VENDOR's driver — the one the key was matched on.
+            const apiKey = GetAIAPIKey(choice.DriverClass);
             const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
                 BaseLLM,
-                model.DriverClass,
+                choice.DriverClass,
                 apiKey
             );
             
@@ -650,7 +759,20 @@ export class RunAIPromptResolver extends ResolverBase {
             // Build chat parameters
             const chatParams = new ChatParams();
             chatParams.messages = chatMessages;
-            chatParams.model = model.APIName;
+            chatParams.model = choice.APIName;
+
+            // Refuse an empty wire name here rather than sending it (#3532 defect 4). An empty
+            // `model` comes back as a 404 with an empty error message, which reads as "that model
+            // doesn't exist" and sends you to the provider's model list, where it plainly does.
+            if (!chatParams.model?.trim()) {
+                return {
+                    success: false,
+                    error: `Model '${model.Name}' has no API name on its '${choice.DriverClass}' vendor row, so there is `
+                        + 'nothing to send as the model name. Set AIModelVendor.APIName (or the model\'s APIName).',
+                    modelName: model.Name,
+                    executionTimeMs: Date.now() - startTime
+                };
+            }
             
             if (responseFormat) {
                 // Cast to valid response format type

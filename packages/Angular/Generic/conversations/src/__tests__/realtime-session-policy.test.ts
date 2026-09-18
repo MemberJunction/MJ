@@ -414,6 +414,49 @@ describe('RealtimeSessionService — transcript correction (ReplacesPrevious)', 
       expect.objectContaining({ replacesPrevious: false })
     );
   });
+
+  it('renders interim user transcripts as an in-place caption, appending deltas and replacing on final without relaying interims', async () => {
+    const t = transcriptInternals(service);
+
+    // Three deltas
+    await t.onClientTranscript({ Role: 'User', Text: 'Hello', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello' }]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    await t.onClientTranscript({ Role: 'User', Text: ' world', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello world' }]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    await t.onClientTranscript({ Role: 'User', Text: '!', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello world!' }]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    // Final
+    await t.onClientTranscript({ Role: 'User', Text: 'Hello world!', IsFinal: true, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello world!' }]);
+    expect(executeGQL).toHaveBeenCalledTimes(1);
+    expect(executeGQL).toHaveBeenLastCalledWith(
+      expect.stringContaining('RelayRealtimeTranscript'),
+      expect.objectContaining({ role: 'user', text: 'Hello world!', agentSessionId: 'sess-1' })
+    );
+  });
+
+  it('ignores whitespace-only interim deltas and whitespace-only final transcripts', async () => {
+    const t = transcriptInternals(service);
+
+    // Whitespace-only interim delta does not start an interim bubble
+    await t.onClientTranscript({ Role: 'User', Text: '   ', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    // Real interim delta creates the bubble
+    await t.onClientTranscript({ Role: 'User', Text: 'Hello', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello' }]);
+
+    // Whitespace-only final does not relay or overwrite
+    await t.onClientTranscript({ Role: 'User', Text: '   ', IsFinal: true, Kind: 'normal' });
+    expect(executeGQL).not.toHaveBeenCalled();
+  });
 });
 
 describe('RealtimeSessionService — per-turn recording timing across a tool-call gap', () => {
@@ -428,6 +471,7 @@ describe('RealtimeSessionService — per-turn recording timing across a tool-cal
       Kind: 'normal' | 'narration'; ReplacesPrevious?: boolean;
     }): Promise<void>;
     recorder: { NowOffsetMs(): number } | null;
+    sessionClockStartMs: number | null;
     currentTurnStartMs: number | null;
     turnAudioStartCaptured: boolean;
   }
@@ -509,10 +553,40 @@ describe('RealtimeSessionService — per-turn recording timing across a tool-cal
     expect(lastTiming()).toEqual({ utteranceStartMs: null, utteranceEndMs: 9000 });
   });
 
-  it('omits timing entirely when the session is not being recorded', async () => {
+  // ── #3832: the session clock — timings without a recording ────────────────────────────────────
+
+  it('falls back to the SESSION clock when there is no recorder (#3832)', async () => {
+    // Before this, every unconsented and every relay-captured session stored categorically null
+    // timings — 0 of 1,669 turns across two databases. The session clock stamps offsets at the
+    // moment the SPEECH happened, which no server-side backfill could ever recover.
     const t = timing(service);
     t.recorder = null;
-    await t.onClientTranscript({ Role: 'Assistant', Text: 'no recording', IsFinal: true, Kind: 'normal' });
+    t.currentTurnStartMs = null;
+    t.turnAudioStartCaptured = false;
+    const nowSpy = vi.spyOn(performance, 'now');
+    nowSpy.mockReturnValue(100_000);
+    t.sessionClockStartMs = 100_000;              // the call went live at clock time 100s
+    nowSpy.mockReturnValue(125_000);              // first interim at +25s
+    await t.onClientTranscript({ Role: 'Assistant', Text: 'checking', IsFinal: false, Kind: 'normal' });
+    nowSpy.mockReturnValue(128_000);              // finalized at +28s
+    await t.onClientTranscript({ Role: 'Assistant', Text: 'checking the latest price', IsFinal: true, Kind: 'normal' });
+    expect(lastTiming()).toEqual({ utteranceStartMs: 25_000, utteranceEndMs: 28_000 });
+    nowSpy.mockRestore();
+  });
+
+  it('prefers the RECORDER clock whenever one runs — those offsets seek in a real file', async () => {
+    const t = timing(service);
+    t.sessionClockStartMs = 500;                  // both clocks live; the recorder must win
+    now = 7000;
+    await t.onClientTranscript({ Role: 'Assistant', Text: 'recorded turn', IsFinal: true, Kind: 'normal' });
+    expect(lastTiming()).toEqual({ utteranceStartMs: 0, utteranceEndMs: 7000 });
+  });
+
+  it('omits timing only before any call is live — no recorder AND no session clock', async () => {
+    const t = timing(service);
+    t.recorder = null;
+    t.sessionClockStartMs = null;
+    await t.onClientTranscript({ Role: 'Assistant', Text: 'no clock at all', IsFinal: true, Kind: 'normal' });
     expect(lastTiming()).toEqual({ utteranceStartMs: null, utteranceEndMs: null });
   });
 });

@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { Metadata, IMetadataProvider, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
   MJConversationDetailEntity,
@@ -425,19 +425,21 @@ export class ConversationAgentService {
 
       if (runResult.Success && runResult.Result) {
         return runResult.Result as ExecuteAgentResult;
-      } else if (!runResult.Success) {
-        const errorMsg = `Sub-agent "${agentName}" failed: ${runResult.ErrorMessage || 'unknown error'}`;
-        console.error(errorMsg);
-        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
-        return null;
       }
 
-      return null;
+      const failed = coerceFailedExecuteAgentResult(
+        runResult.Result as ExecuteAgentResult | null | undefined,
+        runResult.ErrorMessage || `Sub-agent "${agentName}" failed`,
+      );
+      const errorMsg = `Sub-agent "${agentName}" failed: ${failed.errorMessage}`;
+      console.error(errorMsg);
+      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
+      return failed;
     } catch (error) {
       const errorMsg = `Error invoking sub-agent "${agentName}": ` + (error instanceof Error ? error.message : String(error));
       console.error(`Error invoking sub-agent "${agentName}":`, error);
       MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
-      return null;
+      return coerceFailedExecuteAgentResult<ExecuteAgentResult>(undefined, errorMsg);
     }
   }
 

@@ -1,6 +1,7 @@
 # MemberJunction LTS Release Process
 
-> **Status: CANON** — v1.3.6, adopted 2026-08-03 (PR #3241 merged with exec acceptance: "until we determine at some point what would improve it, yes, I'm 100% on board" — Amith). Owner: Craig Adam (certification owner).
+> **Status: CANON** — v1.3.7, adopted 2026-08-03 (PR #3241 merged with exec acceptance: "until we determine at some point what would improve it, yes, I'm 100% on board" — Amith). Owner: Craig Adam (certification owner).
+> v1.3.7 adds §5.3, the backport eligibility bar. v1.3.6 established that backporting is opt-in and defaults to no (§10 edge case 9), but never said what clears the bar, so the phrase "fixes that *should* have been labeled" carried the whole decision undefined and every case relitigated from first principles (#3425's cache freeze being the first). §5.3 names what qualifies, what queues, and why the line is not simply "the last release with every bug fixed." It also puts the `backport-declined` decision on the record, which was named in v1.3 but never created as a label.
 > v1.3.6 amends §5.2 rule 2 after the first real backport (#3525, 2026-08-06): the label mechanism silently failed on a branch containing merge-of-`next` commits — the action refused the backport yet exited 0, leaving a green run. The invariant is now **assert-the-backport** — `merge_commits: skip` (payload must live in non-merge commits) plus a workflow step that fails red when any labeled target does not land.
 > v1.3.5 amends §4.2 after the first Edge publish (6.1.0-edge.0, 2026-08-05): changesets pre mode *forbids* an explicit `--tag`, so "no publish omits its explicit `--tag`" was unimplementable as written on the routine path. The invariant is now **assert-the-tag** — `pre.json` cross-checked before publishing, registry-truth verification after — matching what `publish.yml` actually enforces.
 > v1.3.4 promotes §14 mitigation 2 from contingency to plan: the bootstrap certification completes on the 5.x line branch (§5.1, §14). It adds the respin policy + evidence carry-over rules (§14.1), corrects the bootstrap line name to `lts/5` (Appendix B — a spec correction, no branch existed yet), records the line-publish choreography with the completed dry-check's findings (§14.1), and adds a third migration tier — `codegen-repair`, `dbImpact: repair` — for generated-object repair on a line (§12, §10, §5.2, Appendix B, plus schema/validator/tests).
@@ -174,12 +175,41 @@ The bootstrap cert **completes on the line branch**, not on `next`. Sequence: (1
 
 ### 5.2 Regular cycles (cycle #2 onward — `next` never stops)
 
-1. **Candidate cut = the pre-exit dance** (scripted): `changeset pre exit` → version → publish **`6.2.0`** (normal, `make_latest: false` until certified) → branch **`lts/6.2`** from the tag → `changeset pre enter edge` (Edge resumes at `6.3.0-edge.0`). `next` flows at full speed throughout.
+1. **Candidate cut = the pre-exit dance** (scripted: `publish.yml` invocation 4, the `cut-candidate` job over `ci/candidate-cut.mjs`, dispatched from `next` with `cut_line`/`confirm_branch`): `changeset pre exit` → version → build → publish **`6.2.0`** under `lts-6.2` (normal, `make_latest: false` until certified) → tag → branch **`lts/6.2`** from the tag → `changeset pre enter edge` plus a seed `minor` changeset (Edge resumes at `6.3.0-edge.0`; without the seed a patch-only merge would give `6.2.1-edge.0`) → ledger append. Preconditions the job refuses without: the line's `release-lines.json` entry already merged as a `candidate` by reviewed PR (§8), and no branch, tag or npm version of that name yet. `next` flows at full speed throughout; nothing is pushed until the packages are on npm. Runbook operation 2 has the button and the failure posture.
 2. **Fixes land on `next` first**, then reach the line by label: `backport lts/6.2` on the merged PR → [korthout/backport-action](https://github.com/korthout/backport-action) opens the cherry-pick PR automatically (conflicts become a draft PR a human finishes). The only exceptions to next-first: fixes for code that no longer exists on the dev line, and genuinely line-specific metadata corrections (certification-owner triage). **No backport completes without being asserted**: the action only cherry-picks *non-merge* commits (`merge_commits: skip` — merging `next` into a feature branch is routine and must not poison the label; the cost is that payload living solely in a merge commit's conflict resolution never reaches the line, so keep real changes in ordinary commits), and the workflow fails red when any labeled target does not land — the action's own exit code stays 0 on failure, which left #3525's failed backport behind a green run (2026-08-06) until a human noticed the PR comment.
 3. **Line releases** ship from `publish.yml`'s parameterized LTS path, dispatched **from `next`** with `line_branch`/`confirm_branch`: `changeset publish --tag lts-6.2`, git tag `v6.2.N`, GitHub Release (`make_latest` only if newest certified). Line publishes never merge back to `next`. The path lives inside `publish.yml` rather than its own file because npm trusted publishing (OIDC) is scoped per package to the workflow **filename** — a second publishing file means a second trusted publisher entered by hand on ~300 packages. Dispatching from `next` (rather than from the line ref) means the release always runs the maintained copy of the workflow, never stale workflow code that was never backported to the line.
 4. **Line guard** (CI on `lts/*` branches): **patch-only, always.** A `migrations/` diff is scanned for DDL (CREATE/ALTER/DROP/…): **data-only** → requires the `metadata-migration` label; **contains DDL** → requires the `codegen-repair` label (generated-object repair only, §12) or the `security-exception` label (§12). Either way the release remains a patch; `dbImpact` records the DB touch. The scanner is a **tripwire, not the gate** — dynamic SQL (`EXEC`, `sp_rename`, string-built DDL) can evade a regex; the human review behind each DDL label is the real control.
 
 The existing `next → main → publish → merge-back` pipeline is untouched for Edge in every cycle — it just runs in prerelease mode.
+
+### 5.3 Backport eligibility: what qualifies for a line
+
+**One sentence: a fix earns a line patch when staying on the current line release costs a customer more than moving to the next one.**
+
+Everything we fix on `next` is a real bug, so "is this a real bug" cannot be the bar. The bar is a comparison, and it is asymmetric. Declining a backport costs the deployments that actually hit the bug a workaround. Shipping one costs *every* deployment on the line a re-qualification, whether they hit the bug or not, and that second population is almost always the larger one. This is why the default in §10 edge case 9 is **no**, and why backporting is opt-in by label rather than automatic.
+
+Classify by what the change *is*, never by how many affected users we can name. We publish ~300 packages to public npm and cannot survey who is running what, so an unknowable population is not evidence either way: it argues *for* shipping a correctness fix (the affected cannot ask us) and *against* shipping a behavior change (the unaffected cannot opt out).
+
+**Clears the bar:**
+
+1. **Security**, any severity. Ships under the §12 tiers, with `security-exception` if it needs DDL.
+2. **Data loss or corruption**, including silently wrong answers from a query, cache, or transform path. A customer cannot work around a result they have no reason to distrust.
+3. **The deployment cannot function**, or functions only through a workaround the customer has to keep performing.
+4. **Cert-blockers** during a certification window (§14.1).
+
+**Queues instead:** everything else, which is most of what we fix. Rendering and layout, ergonomics, performance that is slow rather than unusable, wrong behavior in a path that has a working alternative, and any fix that also changes behavior for people who do not have the bug. These ride the next *line*, where customers expect to re-qualify anyway.
+
+**A fix that also changes behavior is not one decision.** Where only part of a change belongs on a line, the split happens on `next` before the merge: the label cherry-picks whole commits, so the isolation has to exist upstream of the backport (§5.2 rule 2). A line patch that changes visible behavior removes the choice from deployments that were never broken.
+
+**Why the line is not simply "the last release with every bug fixed":**
+
+1. **Certification evidence decays with every patch.** The eight gates ran against one SHA. Every patch after that is delta the full run never covered, re-covered only by a mini-cert (gates 1–3), which is deliberately lighter. Patch the line freely and the build customers install drifts steadily away from the build we actually certified while still carrying its label. A quiet patch stream is what keeps the label meaning something.
+2. **Constant patching removes the thing the line sells.** A customer pins to a certified line to stop tracking our cadence. If the line moves every week, their options are to re-qualify continuously (the cost they pinned to avoid) or to skip patches and run a combination nobody tested. Both are worse than what they signed up for.
+3. **The backport tax is a named risk, not a hypothetical** (§16 risk 5). Cherry-pick and mini-cert volume lands on the same small crew that runs the gates. Volume there does not slow releases down, it degrades gates, which is the failure mode this entire process exists to prevent.
+
+None of this makes the line frozen. It takes fixes it has a reason to take, and the channel for everything else already exists: Edge for continuous fixes, and the next certified line for customers who want them with the label attached.
+
+**Recording the decision.** A considered-and-declined fix gets `backport-declined` on the `next` PR plus a one-line reason. The weekly triage sweep (§7) reads the two labels together: `backport lts/<line>` is the queue, `backport-declined` is the evidence that a fix was ruled on rather than missed. The certification owner decides; disagreement escalates under §8.
 
 ## 6. Certification Gates — the Checklist
 
@@ -255,7 +285,7 @@ The argument for monthly: more practice cycles to harden the gates fast. If chos
 | Cycle | Candidate cut | Shape | Effective support (current + grace) |
 |---|---|---|---|
 | #1 — 5.50 LTS (bootstrap) | ~Jul 27, 2026 | Freeze-based (the only one); 5.x-era classic grammar | **Fixed 6 months** |
-| #2 — line 6.1 (first of the era) | Late Sep 2026 | Regular (pre-exit dance debuts) | ~4 months |
+| #2 — line 6.1 (first of the era) | Fri Sep 11, 2026 (pulled forward from late Sep for AIDP Next's Oct 1 go-live; cert target ~Sep 25) | Regular (pre-exit dance debuts) | ~4 months |
 | #3 — line 6.2 | Late Nov 2026 | Regular | ~4–6 months (transition) |
 | **Review** | Dec 2026 | Retro on cycles 1–3: cert cost, backport volume, gate reliability, pre-mode behavior → confirm quarterly for 2027 | — |
 | 2027 steady state | Quarterly (Mar / Jun / Sep / Dec) | Regular | ~6 months each; longer as maturity proves out (extend-only) |
@@ -286,7 +316,7 @@ The core walkthrough (this is the scenario from the PR discussion, and the gramm
 
 Edge cases:
 
-9. **A contributor asks "do I need to do anything for LTS?"** Default: no. Backporting is opt-in by label; the certification owner runs a weekly sweep to catch fixes that *should* have been labeled (`backport-declined` records the considered-and-rejected ones).
+9. **A contributor asks "do I need to do anything for LTS?"** Default: no. Backporting is opt-in by label; the certification owner runs a weekly sweep to catch fixes that should have been labeled. **§5.3 is the bar** for what "should" means, and `backport-declined` records the considered-and-rejected ones.
 10. **Cherry-pick conflict.** The action opens a **draft PR** with the first conflict committed plus resolution instructions; a human finishes it. The original PR gets a comment either way — no silent failures.
 11. **Certification slips past the next cut date.** The cut waits; the previous line's windows extend automatically (defined by supersession). Slipping is a schedule event; certifying weak is a credibility event.
 12. **A candidate fails outright.** Status → `withdrawn`; no label; branch retired; its minor is consumed (version numbers are free); next cycle targets the next tuple. Its published builds are `npm deprecate`d **immediately** (not at EOL) — deprecation is an install-time warning, not a resolution change, which is exactly why version selection in MJ tooling resolves through `release-lines.json` (§15 item 7) rather than trusting registry range resolution.
@@ -298,7 +328,7 @@ Edge cases:
 ## 11. Contributor Impact (what actually changes for the Core team)
 
 - Day-to-day: **nothing changes.** PRs → `next`, changesets as usual, Edge ships as fast as ever (after the bootstrap freeze ends, permanently). Version strings on Edge grow an `-edge.N` suffix at the 6.x era open — that's the visible difference.
-- New labels exist: `backport lts/<line>` (opt-in backporting), `cert-blocker` (jumps every queue during a cycle), `metadata-migration` (data-only line fix), `codegen-repair` (generated-object repair on a line), `security-exception` (DDL on a line — rarest), `backport-declined`.
+- New labels exist: `backport lts/<line>` (opt-in backporting), `cert-blocker` (jumps every queue during a cycle), `metadata-migration` (data-only line fix), `codegen-repair` (generated-object repair on a line), `security-exception` (DDL on a line — rarest), `backport-declined` (considered against §5.3 and ruled out, with a reason).
 - During a regular cycle, the only team-wide effect is that `cert-blocker` fixes take priority. No freezes.
 - Educating the team on this process is part of the process: the bootstrap cycle is announced with Appendix A.1, the era-open grammar change with A.3, and Craig trains delegates on the human gates during cycles 2–3.
 
@@ -472,7 +502,7 @@ Ordered so that **items 1–3 are enough to label and enforce** the first LTS; t
 | Data-only line migration | Label `metadata-migration` (CI-verified DDL-free; ships as a patch, `dbImpact: metadata`) |
 | Generated-object repair on a line | Label `codegen-repair` (DROP/CREATE of CodeGen-owned procs/views/indexes only, no table DDL; ships as a patch, `dbImpact: repair`) |
 | DDL on a line — rarest, security-driven | Label `security-exception` (additive-only, next-first, byte-identical; ships as a patch, `dbImpact: schema`) |
-| Considered, not backported | Label `backport-declined` |
+| Considered, not backported | Label `backport-declined` on the `next` PR, plus a one-line reason (bar: §5.3) |
 | npm | `latest` = newest certified · `edge` = fast channel · `lts-6.1` = per-line (bootstrap: `lts-5`) · continuous Edge tracking = the `edge` tag as version specifier or `mj bump --channel edge` exact pins, never a semver range |
 | Docker | `:latest` = certified · `:edge` · `:6.1` |
 | Scorecards | `certifications/<version>.md`, linked from the GitHub Release |
