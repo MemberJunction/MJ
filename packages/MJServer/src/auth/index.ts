@@ -2,7 +2,7 @@ import { JwtHeader, SigningKeyCallback, JwtPayload } from 'jsonwebtoken';
 import { configInfo } from '../config.js';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import sql from 'mssql';
-import { DatabaseProviderBase, Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
@@ -241,7 +241,14 @@ export const verifyUserRecord = async (
 ): Promise<UserInfo | undefined> => {
   if (!email) return undefined;
 
-  let user = UserCache.Instance.Users.find((u) => {
+  // Collect ALL matches rather than taking .find()'s first hit. Two User rows can share an email
+  // case-insensitively (see the duplicate-provisioning path below), and .find() then resolved to
+  // whichever row happened to sit earlier in UserCache.Instance.Users — i.e. database row order.
+  // That order changes when the cache is rebuilt, so an MJAPI restart silently moved a user onto a
+  // different record: their conversations, artifacts, items shared with them and their profile
+  // picture (UserImageURL lives on the User row) all vanished at once, and came back if the order
+  // flipped again. Observed in production 2026-09-15. Resolution must not depend on row order.
+  const emailMatches = UserCache.Instance.Users.filter((u) => {
     if (!u.Email || u.Email.trim() === '') {
       // this condition should never occur. If it doesn throw a console error including the user id
       // DB requires non-null but this is just an extra check and we could in theory have a blank string in the DB
@@ -250,7 +257,45 @@ export const verifyUserRecord = async (
     } else return u.Email.toLowerCase().trim() === email.toLowerCase().trim();
   });
 
+  if (emailMatches.length > 1) {
+    // Deterministic tie-break by ID so every process and every restart agrees, and a LOUD error
+    // because this is a data problem an operator has to resolve — silently picking a row is what
+    // made it look like data loss to the customer. Sorting by ID is arbitrary but stable; the point
+    // is that it never changes, not that it picks the "right" one.
+    emailMatches.sort((a, b) => a.ID.localeCompare(b.ID));
+    LogError(
+      `AMBIGUOUS LOGIN: ${emailMatches.length} User records share the email '${email}' ` +
+        `(case-insensitively): ${emailMatches.map((u) => `${u.ID} (${u.Email})`).join(', ')}. ` +
+        `Resolving to ${emailMatches[0].ID} by stable ID order. Until the duplicates are merged, ` +
+        `content owned by the other records is invisible to this login. Find every affected user ` +
+        `with: SELECT LOWER(Email), COUNT(*) FROM __mj.[User] GROUP BY LOWER(Email) HAVING COUNT(*) > 1`
+    );
+  }
+
+  let user = emailMatches[0];
+
   if (!user) {
+    // REFRESH THE CACHE BEFORE PROVISIONING. This block used to sit AFTER the auto-create below,
+    // gated on `!user`, so it could only ever run when creation had already failed or was not
+    // attempted. That made it dead code in the exact case it exists to handle: a user who IS in the
+    // database but is NOT yet in this process's UserCache. Users provisioned out of band (an admin,
+    // an invite, a direct insert) are absent from the cache until it is rebuilt, so the lookup above
+    // missed and auto-create minted a SECOND record for someone who already had one — which is how
+    // the duplicate emails that Fix 1 above has to tolerate get created in the first place.
+    // Observed in production: three users created 2026-09-14 18:18, a duplicate for one of them
+    // created 2026-09-15 01:38 on that user's next sign-in.
+    //
+    // The recursive call passes attemptCacheUpdateIfNeeded=false, so the second pass skips straight
+    // to auto-create if the refreshed cache still has no match. Auto-provisioning of genuinely new
+    // users is therefore unchanged — it just no longer runs before we have looked properly.
+    if (configInfo.userHandling.updateCacheWhenNotFound && dataSource && attemptCacheUpdateIfNeeded) {
+      console.warn(`User ${email} not found in cache. Updating cache in attempt to find the user...`);
+
+      await refreshUserCache();
+
+      return verifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false);
+    }
+
     // NOTE: `requestDomain` (parsed from the spoofable `Origin` header) is deliberately NOT part of
     // this condition. It was previously required here, which meant a non-browser client sending no
     // Origin could never auto-provision while an attacker simply forged one — it gated entry without
@@ -305,14 +350,6 @@ export const verifyUserRecord = async (
       }
     }
 
-    if (!user && configInfo.userHandling.updateCacheWhenNotFound && dataSource && attemptCacheUpdateIfNeeded) {
-      // if we get here that means in the above, if we were attempting to create a new user, it did not work, or it wasn't attempted and we have a config that asks us to auto update the cache
-      console.warn(`User ${email} not found in cache. Updating cache in attempt to find the user...`);
-
-      await refreshUserCache();
-
-      return verifyUserRecord(email, firstName, lastName, requestDomain, dataSource, false); // try one more time but do not update cache next time if not found
-    }
   }
 
   return user;
