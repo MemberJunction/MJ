@@ -109,9 +109,14 @@ import {
     ExtractPromptResultText,
     GetTaskGraphSubmitter,
     SkillAvailabilityPurpose,
-    ArtifactDirective
+    ArtifactDirective,
+    SystemPlaceholderManager
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
+import { TemplateEngineServer } from '@memberjunction/templates';
+import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage } from './runtime-state-fragment';
+import { ResolveVolatileStatePlacement } from './agent-types/loop-agent-prompt-params';
+import { ResolveSpecializationPlacement } from './volatile-child-prompt';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
@@ -4173,7 +4178,169 @@ export class BaseAgent {
             );
         }
 
+        // Prompt-cache layout. Under `volatileStatePlacement: 'trailingMessage'` the per-iteration state
+        // (and, when the child prompt is volatile, the specialization) leaves the system prompt and rides as
+        // the FINAL message of THIS request. Appended to a COPY: the fragment is per-call and must never
+        // enter the persisted history — the history has to stay a byte-stable, cacheable prefix.
+        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType);
+        if (volatileStateMessage) {
+            promptParams.conversationMessages = this.assembleOutgoingMessages(params.conversationMessages, volatileStateMessage);
+        }
+
         return promptParams;
+    }
+
+    /**
+     * The message array sent for ONE request under `'trailingMessage'` placement: a copy of the history
+     * with every non-system message's fragment tag literals escaped, then the real fragment last.
+     *
+     * Escaping at send time (rather than where text enters the history) covers every source at once —
+     * user turns, action results, sub-agent results, skill activations — without rewriting stored data,
+     * and it is deterministic, so the cached prefix stays byte-stable across iterations. System messages
+     * are left alone: the template's own pointer legitimately names the tag, and the memory-context
+     * message is framework-authored. The fragment is appended un-escaped — it is the real one.
+     */
+    protected assembleOutgoingMessages(history: ChatMessage[], fragment: AgentChatMessage): ChatMessage[] {
+        const sanitized = history.map(m => (m.role === 'system' ? m : EscapeRuntimeStateTagsInMessage(m)));
+        return [...sanitized, fragment];
+    }
+
+    /**
+     * Builds the framework-authored `user` message that carries the loop agent's volatile state when
+     * `volatileStatePlacement` is `'trailingMessage'`; returns null under the default placement or when
+     * every block is turned off. The blocks mirror the system-prompt template's own sections (see
+     * {@link RuntimeStateFragmentBuilder}), and each honors the same include flag the template does.
+     *
+     * Why this exists: provider prompt caching is a prefix match over tools → system → messages, so
+     * state that changes every iteration INSIDE the system prompt invalidates the entire history each
+     * call. Measured on Sage: 36% → 83% cached on Gemini 2.5 Flash, 12% → 96% on Claude Opus 5 (with the
+     * Anthropic adapter placing its breakpoint before this message), output quality unchanged.
+     *
+     * The message carries STATE only — never rules. It is marked `metadata.volatileState` so adapters
+     * can recognize it without depending on this package's tag names.
+     */
+    protected async buildVolatileStateMessage<P>(
+        params: ExecuteAgentParams,
+        promptParams: AIPromptParams,
+        payload: P,
+        childPrompt: MJAIPromptEntityExtended | undefined,
+        agentType: MJAIAgentTypeEntity
+    ): Promise<AgentChatMessage | null> {
+        const data = promptParams.data ?? {};
+        const agentTypePromptParams = data.__agentTypePromptParams as Record<string, unknown> | undefined;
+        if (ResolveVolatileStatePlacement(agentTypePromptParams) !== 'trailingMessage') {
+            return null;
+        }
+        const includeDateTime = agentTypePromptParams?.includeDateTimeInPrompt !== false;
+        const includeScratchpad = agentTypePromptParams?.includeScratchpadDocs !== false;
+        const includePayload = agentTypePromptParams?.includePayloadInPrompt !== false;
+
+        const specialization = await this.resolveRelocatedSpecialization(promptParams, childPrompt, agentType, params.contextUser);
+        const fragment = new RuntimeStateFragmentBuilder().Build({
+            DateTime: includeDateTime ? await this.resolveFragmentDateTime(promptParams) : null,
+            Scratchpad: includeScratchpad ? this.readScratchpadFromTemplateData(data) : null,
+            // Same value the agent type injects for the template (`payload || {}`), so both placements agree.
+            Payload: includePayload ? { Value: payload || {} } : null,
+            Specialization: specialization,
+        });
+        if (!fragment) {
+            return null;
+        }
+        this.logStatus(`📦 Volatile state → trailing message (${fragment.length} chars${specialization ? ', specialization relocated' : ''})`, true, params);
+        return { role: 'user', content: fragment, metadata: { volatileState: true } };
+    }
+
+    /**
+     * Decides whether this run's specialization (child prompt) rides in the trailing message, and if so
+     * pre-renders it and flags the template to render a stub in its place. Decided from the child
+     * template's UNRENDERED text via {@link ResolveSpecializationPlacement}, so the answer is the same on
+     * every iteration and the layout never flips mid-run. Returns the rendered specialization, or null
+     * when it stays in the system prompt.
+     */
+    protected async resolveRelocatedSpecialization(
+        promptParams: AIPromptParams,
+        childPrompt: MJAIPromptEntityExtended | undefined,
+        agentType: MJAIAgentTypeEntity,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        const placeholder = agentType.AgentPromptPlaceholder;
+        if (!childPrompt || !placeholder || !promptParams.childPrompts || promptParams.childPrompts.length === 0) {
+            return null;
+        }
+        const templateText = await this.loadChildPromptTemplateText(childPrompt, contextUser);
+        const agentTypePromptParams = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        if (ResolveSpecializationPlacement(agentTypePromptParams, templateText) !== 'trailingMessage') {
+            return null;
+        }
+        const rendered = await this._promptRunner.RenderChildPromptTemplates(promptParams.childPrompts, promptParams);
+        const text = rendered.renderedTemplates[placeholder];
+        if (!text || text.trim().length === 0) {
+            return null;
+        }
+        // The same data object the parent template renders against — this switches the `## Specialization`
+        // block to its stub and extends the Runtime State pointer.
+        if (promptParams.data) {
+            promptParams.data._SPECIALIZATION_RELOCATED = true;
+        }
+        return text;
+    }
+
+    /**
+     * The child prompt's raw template text (placeholders intact), from the cached template engine.
+     * Null when the prompt has no template or the lookup fails — which fails CLOSED: with no text to
+     * inspect, {@link ResolveSpecializationPlacement} keeps the specialization in the system prompt.
+     */
+    protected async loadChildPromptTemplateText(childPrompt: MJAIPromptEntityExtended, contextUser: UserInfo): Promise<string | null> {
+        if (!childPrompt.TemplateID) {
+            return null;
+        }
+        try {
+            await TemplateEngineServer.Instance.Config(false, contextUser);
+            const template = TemplateEngineServer.Instance.FindTemplate(childPrompt.TemplateID);
+            return template?.GetHighestPriorityContent()?.TemplateText ?? null;
+        } catch (e) {
+            this.logError(e instanceof Error ? e : String(e), { category: 'VolatileStatePlacement', severity: 'warning' });
+            return null;
+        }
+    }
+
+    /**
+     * The date/time strings exactly as the system placeholders would render them into the template.
+     * Resolves only the three temporal placeholders (by name, through the same registry the template
+     * uses, so a registered override applies here too) rather than every system placeholder — this runs
+     * on every loop iteration.
+     */
+    protected async resolveFragmentDateTime(promptParams: AIPromptParams): Promise<RuntimeStateDateTime | null> {
+        const resolve = async (name: string): Promise<string | null> => {
+            const placeholder = SystemPlaceholderManager.getPlaceholders().find(p => p.name === name);
+            if (!placeholder) {
+                return null;
+            }
+            try {
+                const value = await placeholder.getValue(promptParams);
+                return value == null ? null : String(value);
+            } catch (e) {
+                this.logError(e instanceof Error ? e : String(e), { category: 'VolatileStatePlacement', severity: 'warning', metadata: { placeholder: name } });
+                return null;
+            }
+        };
+        const [date, dayOfWeek, time] = await Promise.all([resolve('_CURRENT_DATE'), resolve('_CURRENT_DAY_OF_WEEK'), resolve('_CURRENT_TIME')]);
+        if (!date || !dayOfWeek || !time) {
+            return null;
+        }
+        return { Date: date, DayOfWeek: dayOfWeek, Time: time };
+    }
+
+    /**
+     * The scratchpad strings already placed in the template data by the prep step (so the fragment shows
+     * exactly what the template would have). Null when the scratchpad is disabled or absent.
+     */
+    protected readScratchpadFromTemplateData(data: Record<string, unknown>): RuntimeStateScratchpad | null {
+        const notes = data._SCRATCHPAD_NOTES, tasks = data._SCRATCHPAD_TASKS, summary = data._SCRATCHPAD_TASK_SUMMARY;
+        if (typeof notes !== 'string' || typeof tasks !== 'string' || typeof summary !== 'string') {
+            return null;
+        }
+        return { Notes: notes, Tasks: tasks, TaskSummary: summary };
     }
 
     /**

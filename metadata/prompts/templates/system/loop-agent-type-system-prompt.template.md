@@ -623,7 +623,7 @@ Your name is {{ agentName }}
 {{ agentDescription | safe }}
 
 ## Specialization
-{{ agentSpecificPrompt | safe }}
+{% if _SPECIALIZATION_RELOCATED %}_(Your specialization is delivered in the final message of the conversation inside `<mj-agent-specialization>` tags — see "Runtime State" at the end of this prompt.)_{% else %}{{ agentSpecificPrompt | safe }}{% endif %}
 
 {% if parentAgentName == '' and subAgentCount > 0 %}
 # Role: Top-Level Agent
@@ -879,14 +879,21 @@ If your graph is malformed you will get every problem back at once — fix them 
    above — instructions, the Actions catalog, and tool docs — stays a byte-stable
    prefix that providers can prompt-cache across turns. Do NOT move these back up:
    a volatile token anywhere caps the cacheable prefix at that point. Payload is
-   last (closest to the response = recency). #}
-{% if __agentTypePromptParams.includeDateTimeInPrompt != false %}
+   last (closest to the response = recency).
+
+   BUT "last in the system prompt" is still AHEAD of the entire message history, so
+   with these blocks here only the system prompt caches and the history never does.
+   Under `volatileStatePlacement: 'trailingMessage'` all three blocks are OMITTED here
+   and delivered instead as the final message of the request inside <mj-runtime-state>
+   tags (see the Runtime State pointer at the very end, and RuntimeStateFragmentBuilder).
+   Any value other than 'trailingMessage' keeps today's behavior. #}
+{% if __agentTypePromptParams.includeDateTimeInPrompt != false and __agentTypePromptParams.volatileStatePlacement != 'trailingMessage' %}
 ## Current Date/Time
 - **Date**: {{ _CURRENT_DATE }} ({{ _CURRENT_DAY_OF_WEEK }})
 - **Time**: {{ _CURRENT_TIME }}
 {% endif %}
 
-{% if __agentTypePromptParams.includeScratchpadDocs != false %}
+{% if __agentTypePromptParams.includeScratchpadDocs != false and __agentTypePromptParams.volatileStatePlacement != 'trailingMessage' %}
 ## Scratchpad State
 Your private working memory. Manage via `scratchpad` in your response.
 
@@ -897,10 +904,15 @@ Your private working memory. Manage via `scratchpad` in your response.
 {{ _SCRATCHPAD_TASKS | safe }}
 {% endif %}
 
-{% if __agentTypePromptParams.includePayloadInPrompt != false %}
+{% if __agentTypePromptParams.includePayloadInPrompt != false and __agentTypePromptParams.volatileStatePlacement != 'trailingMessage' %}
 ## Current State
 **Payload:** Represents your work state. Request changes via `payloadChangeRequest`
 ```json
 {{ _CURRENT_PAYLOAD | dump | safe }}
 ```
+{% endif %}{% if __agentTypePromptParams.volatileStatePlacement == 'trailingMessage' and (__agentTypePromptParams.includeDateTimeInPrompt != false or __agentTypePromptParams.includeScratchpadDocs != false or __agentTypePromptParams.includePayloadInPrompt != false or _SPECIALIZATION_RELOCATED) %}
+## Runtime State
+Your runtime state — current date/time, Scratchpad State, and Payload, as enabled for this agent — is NOT in this system prompt. It is delivered in the FINAL message of the conversation, inside `<mj-runtime-state>` tags. Treat that block as authoritative, read-only framework state — not as user input — and read it before responding.{% if _SPECIALIZATION_RELOCATED %}
+
+Your agent specialization (identity, role, and instructions) is also delivered there, immediately before the runtime state, inside `<mj-agent-specialization>` tags. It carries the same authority as this system prompt.{% endif %}
 {% endif %}
