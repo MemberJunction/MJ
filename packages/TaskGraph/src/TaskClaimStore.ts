@@ -21,7 +21,7 @@
  *
  * @module @memberjunction/task-graph
  */
-import { IMetadataProvider, DatabaseProviderBase, LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, DatabaseProviderBase, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { TERMINAL_TASK_GRAPH_STATUSES, type TerminalTaskGraphStatus } from '@memberjunction/ai-core-plus';
 import { MachineTaskSQL } from './task-predicates';
 import { ReconciliationEvent } from './types';
@@ -75,6 +75,14 @@ export function ContainingPaths(path: string): string[] {
     return containers;
 }
 
+/**
+ * One argument to a task-graph procedure.
+ *
+ * Named because SQL Server binds by name, and carrying the name alongside the value keeps a call
+ * site from silently shifting every argument by one when a parameter is inserted.
+ */
+type GuardedProcParam = { Name: string; Value: unknown };
+
 /** Fields the claim protocol needs from a candidate task. */
 export type ClaimableTask = {
     ID: string;
@@ -126,19 +134,38 @@ export class TaskClaimStore {
         private readonly claimTTLSeconds: number,
     ) {}
 
+    /** The last guarded write's failure, or null when the last one actually ran. */
+    private _lastWriteError: string | null = null;
+    private _consecutiveWriteFailures = 0;
+
+    /**
+     * Whether the most recent guarded write FAILED, as opposed to losing its race.
+     *
+     * The dispatcher reads this after a false return: "another instance won" and "this process
+     * cannot write to the database at all" produce the same `false`, and treating the second as the
+     * first is what let a dispatcher skip every task in the table, forever, in silence.
+     */
+    public get LastWriteFailed(): boolean {
+        return this._lastWriteError !== null;
+    }
+
+    /** The last failure's message, for a caller that wants to say why it is stuck. */
+    public get LastWriteError(): string | null {
+        return this._lastWriteError;
+    }
+
+    /** How many guarded writes have failed in a row. Reset by the first one that runs. */
+    public get ConsecutiveWriteFailures(): number {
+        return this._consecutiveWriteFailures;
+    }
+
     private sql(provider: IMetadataProvider): DatabaseProviderBase {
         return provider as unknown as DatabaseProviderBase;
     }
 
-    /** Schema-qualified `Task` table for the provider's configured core schema. */
-    private taskTable(provider: IMetadataProvider): string {
-        const db = this.sql(provider);
-        return `${db.QuoteIdentifier(db.MJCoreSchemaName)}.${db.QuoteIdentifier('Task')}`;
-    }
-
-    private agentRunTable(provider: IMetadataProvider): string {
-        const db = this.sql(provider);
-        return `${db.QuoteIdentifier(db.MJCoreSchemaName)}.${db.QuoteIdentifier('AIAgentRun')}`;
+    /** The claim TTL as whole seconds, which is what the procedures take. */
+    private ttlSeconds(): number {
+        return Math.max(0, Math.round(this.claimTTLSeconds));
     }
 
     /**
@@ -156,16 +183,13 @@ export class TaskClaimStore {
         totals: { Cost: number | null; Tokens: number | null; PromptTokens: number | null; CompletionTokens: number | null },
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const num = (v: number | null): string => (v == null ? 'NULL' : String(v));
-        const sql = `
-            UPDATE ${this.agentRunTable(provider)}
-            SET ${db.QuoteIdentifier('TotalCostRollup')} = ${num(totals.Cost)},
-                ${db.QuoteIdentifier('TotalTokensUsedRollup')} = ${num(totals.Tokens)},
-                ${db.QuoteIdentifier('TotalPromptTokensUsedRollup')} = ${num(totals.PromptTokens)},
-                ${db.QuoteIdentifier('TotalCompletionTokensUsedRollup')} = ${num(totals.CompletionTokens)}
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(runID)}'`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphSetRunCostRollup', [
+            { Name: 'AgentRunID', Value: runID },
+            { Name: 'TotalCostRollup', Value: totals.Cost },
+            { Name: 'TotalTokensUsedRollup', Value: totals.Tokens },
+            { Name: 'TotalPromptTokensUsedRollup', Value: totals.PromptTokens },
+            { Name: 'TotalCompletionTokensUsedRollup', Value: totals.CompletionTokens },
+        ], contextUser);
     }
 
     /**
@@ -182,18 +206,11 @@ export class TaskClaimStore {
         errorMessage: string | null,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const errorClause = errorMessage == null
-            ? ''
-            : `, ${db.QuoteIdentifier('ErrorMessage')} = CONCAT(COALESCE(${db.QuoteIdentifier('ErrorMessage')} + CHAR(10) + CHAR(10), ''), '${this.escape(errorMessage)}')`;
-        const sql = `
-            UPDATE ${this.agentRunTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = '${succeeded ? 'Completed' : 'Failed'}',
-                ${db.QuoteIdentifier('Success')} = ${succeeded ? 1 : 0},
-                ${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME()${errorClause}
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(runID)}'
-              AND ${db.QuoteIdentifier('Status')} = 'Paused'`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphSettleRun', [
+            { Name: 'AgentRunID', Value: runID },
+            { Name: 'Succeeded', Value: succeeded },
+            { Name: 'ErrorMessage', Value: errorMessage },
+        ], contextUser);
     }
 
     /**
@@ -207,24 +224,15 @@ export class TaskClaimStore {
      * @returns true when this instance now owns the task
      */
     public async TryClaim(provider: IMetadataProvider, taskID: string, contextUser: UserInfo): Promise<boolean> {
-        const db = this.sql(provider);
         // The lease is written AND compared on the database's clock (SYSUTCDATETIME), never this
         // process's. The claim protocol is multi-instance: a lease written from one host's clock and
         // judged expired against another's turns ordinary NTP skew into premature reclamation — the
         // task runs twice — or into a lease that outlives its worker. One clock, the only shared one.
-        const ttlSeconds = Math.max(0, Math.round(this.claimTTLSeconds));
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = 'In Progress',
-                ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(this.instanceID)}',
-                ${db.QuoteIdentifier('ClaimExpiresAt')} = DATEADD(SECOND, ${ttlSeconds}, SYSUTCDATETIME()),
-                ${db.QuoteIdentifier('StartedAt')} = SYSUTCDATETIME()
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('Status')} = 'Pending'
-              AND (${db.QuoteIdentifier('ClaimedBy')} IS NULL
-                   OR ${db.QuoteIdentifier('ClaimExpiresAt')} IS NULL
-                   OR ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME())`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphClaimTask', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'ClaimedBy', Value: this.instanceID },
+            { Name: 'ClaimTTLSeconds', Value: this.ttlSeconds() },
+        ], contextUser);
     }
 
     /**
@@ -237,16 +245,12 @@ export class TaskClaimStore {
      * @returns true when the claim was extended; false means this instance no longer owns the task
      */
     public async Heartbeat(provider: IMetadataProvider, taskID: string, contextUser: UserInfo): Promise<boolean> {
-        const db = this.sql(provider);
         // Same single-clock rule as TryClaim: the renewal is computed on the database's clock.
-        const ttlSeconds = Math.max(0, Math.round(this.claimTTLSeconds));
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('ClaimExpiresAt')} = DATEADD(SECOND, ${ttlSeconds}, SYSUTCDATETIME())
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(this.instanceID)}'
-              AND ${db.QuoteIdentifier('Status')} = 'In Progress'`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphHeartbeat', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'ClaimedBy', Value: this.instanceID },
+            { Name: 'ClaimTTLSeconds', Value: this.ttlSeconds() },
+        ], contextUser);
     }
 
     /**
@@ -280,32 +284,18 @@ export class TaskClaimStore {
         },
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sets: string[] = [
-            `${db.QuoteIdentifier('Status')} = '${outcome.Status}'`,
-            `${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME()`,
-            `${db.QuoteIdentifier('PercentComplete')} = ${outcome.Status === 'Complete' ? 100 : 0}`,
-            // Release the claim as part of the same atomic write — a separate release could be
-            // interrupted, leaving a terminal task holding a claim that the sweep would then flag.
-            `${db.QuoteIdentifier('ClaimedBy')} = NULL`,
-            `${db.QuoteIdentifier('ClaimExpiresAt')} = NULL`,
-        ];
-        sets.push(`${db.QuoteIdentifier('OutputPayload')} = ${this.literalOrNull(outcome.OutputPayload)}`);
-        sets.push(`${db.QuoteIdentifier('ErrorMessage')} = ${this.literalOrNull(outcome.ErrorMessage)}`);
-        sets.push(`${db.QuoteIdentifier('AgentRunID')} = ${outcome.AgentRunID ? `'${this.escape(outcome.AgentRunID)}'` : 'NULL'}`);
-        // Only when supplied — see the note on the parameter. `undefined` means "leave it alone",
-        // which is not the same as an explicit null.
-        if (outcome.Configuration !== undefined) {
-            sets.push(`${db.QuoteIdentifier('Configuration')} = ${this.literalOrNull(outcome.Configuration)}`);
-        }
-
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${sets.join(', ')}
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('Status')} = 'In Progress'
-              AND ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(this.instanceID)}'`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphCompleteClaimed', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'ClaimedBy', Value: this.instanceID },
+            { Name: 'Status', Value: outcome.Status },
+            { Name: 'OutputPayload', Value: outcome.OutputPayload ?? null },
+            { Name: 'ErrorMessage', Value: outcome.ErrorMessage ?? null },
+            { Name: 'AgentRunID', Value: outcome.AgentRunID ?? null },
+            // `undefined` means "leave it alone", which is not the same as an explicit null — so the
+            // flag, not the value, decides whether the column is written.
+            { Name: 'Configuration', Value: outcome.Configuration ?? null },
+            { Name: 'SetConfiguration', Value: outcome.Configuration !== undefined },
+        ], contextUser);
     }
 
     /**
@@ -328,39 +318,52 @@ export class TaskClaimStore {
     public async ReleaseExpiredClaims(provider: IMetadataProvider, contextUser: UserInfo): Promise<ReconciliationEvent[]> {
         const db = this.sql(provider);
 
-        // Capture what will be reclaimed BEFORE reclaiming, so the log names the tasks. The
-        // subsequent UPDATE re-states the same predicate, so a task whose claim was refreshed in
-        // between is correctly skipped rather than reclaimed on stale information.
-        const candidates = await db.ExecuteSQL<{ ID: string; Name: string; ClaimedBy: string }>(
-            `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}, ${db.QuoteIdentifier('ClaimedBy')}
-             FROM ${this.taskTable(provider)}
-             WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
-               AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
-               AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
-               AND ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME()`,
-            undefined, undefined, contextUser,
+        // Read from the base VIEW, which is what the runtime roles are granted (#4575) — and which
+        // also keeps the "a dispatcher completes this task" definition in the one module that owns
+        // it, rather than restating it inside a procedure where it would drift.
+        //
+        // Capture what will be reclaimed BEFORE reclaiming, so the log can name the tasks. The
+        // procedure re-states the LEASE predicate, which is the part that has to be evaluated at
+        // write time: a claim refreshed in between is correctly skipped rather than reclaimed on
+        // stale information.
+        const candidates = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; Name: string; ClaimedBy: string }>(
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter:
+                    `Status='In Progress' AND ${MachineTaskSQL()} AND ClaimedBy IS NOT NULL ` +
+                    `AND ClaimExpiresAt IS NOT NULL AND ClaimExpiresAt < ${db.Dialect.CurrentTimestampUTC()}`,
+                Fields: ['ID', 'Name', 'ClaimedBy'],
+                ResultType: 'simple',
+                // The claim protocol mutates these rows out from under any cache; a stale read here
+                // would reclaim a task somebody is still running.
+                BypassCache: true,
+            },
+            contextUser,
         );
+        if (!candidates.Success) {
+            LogError(`[TaskGraph reconciliation] could not read expired-claim candidates: ${candidates.ErrorMessage}`);
+            return [];
+        }
 
-        if (!candidates || candidates.length === 0) return [];
+        const rows = candidates.Results ?? [];
+        if (rows.length === 0) return [];
 
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = 'Pending',
-                ${db.QuoteIdentifier('ClaimedBy')} = NULL,
-                ${db.QuoteIdentifier('ClaimExpiresAt')} = NULL
-            WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-              AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
-              AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
-              AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
-              AND ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME()`;
-        const released = await this.affectedRows(db, sql, contextUser);
+        // The procedure reports which ids it actually released, so the events name the tasks that
+        // were reclaimed rather than assuming they were the first N candidates.
+        const released = await this.callProc<{ ID: string }>(provider, 'spTaskGraphReleaseExpiredClaims', [
+            { Name: 'TaskIDs', Value: JSON.stringify(rows.map((r) => r.ID)) },
+        ], contextUser);
+        if (released === null) return [];
 
-        const events: ReconciliationEvent[] = candidates.slice(0, released).map((c) => ({
-            TaskID: c.ID,
-            Action: 'ExpiredClaimReleased',
-            Detail: `Claim held by '${c.ClaimedBy}' expired; task '${c.Name}' returned to Pending.`,
-        }));
+        const byID = new Map(rows.map((r) => [r.ID.toLowerCase(), r]));
+        const events: ReconciliationEvent[] = released.map((r) => {
+            const candidate = byID.get(String(r.ID).toLowerCase());
+            return {
+                TaskID: String(r.ID),
+                Action: 'ExpiredClaimReleased' as const,
+                Detail: `Claim held by '${candidate?.ClaimedBy ?? 'unknown'}' expired; task '${candidate?.Name ?? r.ID}' returned to Pending.`,
+            };
+        });
         for (const e of events) {
             LogStatus(`[TaskGraph reconciliation] ${e.Action}: ${e.Detail}`);
         }
@@ -376,16 +379,23 @@ export class TaskClaimStore {
      * excluded because for them this shape is legitimate, not anomalous.
      */
     public async FindOrphanedInProgress(provider: IMetadataProvider, contextUser: UserInfo): Promise<ReconciliationEvent[]> {
-        const db = this.sql(provider);
-        const rows = await db.ExecuteSQL<{ ID: string; Name: string }>(
-            `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}
-             FROM ${this.taskTable(provider)}
-             WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND ${MachineTaskSQL(db.QuoteIdentifier.bind(db))}
-               AND ${db.QuoteIdentifier('ClaimedBy')} IS NULL`,
-            undefined, undefined, contextUser,
+        // From the view, for the same reason as the sweep above (#4575).
+        const result = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; Name: string }>(
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `Status='In Progress' AND ${MachineTaskSQL()} AND ClaimedBy IS NULL`,
+                Fields: ['ID', 'Name'],
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            contextUser,
         );
-        const events = (rows ?? []).map((r) => ({
+        if (!result.Success) {
+            LogError(`[TaskGraph reconciliation] could not read orphaned In Progress tasks: ${result.ErrorMessage}`);
+            return [];
+        }
+
+        const events = (result.Results ?? []).map((r) => ({
             TaskID: r.ID,
             Action: 'OrphanedInProgressReleased' as const,
             Detail: `Agent task '${r.Name}' is In Progress with no claim — no dispatcher owns it.`,
@@ -422,15 +432,11 @@ export class TaskClaimStore {
         percentComplete: number,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = '${this.escape(status)}',
-                ${db.QuoteIdentifier('PercentComplete')} = ${Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0},
-                ${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME()
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphSettleParent', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'Status', Value: status },
+            { Name: 'PercentComplete', Value: Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0 },
+        ], contextUser);
     }
 
     /**
@@ -454,14 +460,11 @@ export class TaskClaimStore {
         percentComplete: number,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = '${this.escape(status)}',
-                ${db.QuoteIdentifier('PercentComplete')} = ${Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0}
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphUpdateParentProgress', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'Status', Value: status },
+            { Name: 'PercentComplete', Value: Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0 },
+        ], contextUser);
     }
 
     /**
@@ -478,13 +481,10 @@ export class TaskClaimStore {
         startedAt: Date,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('StartedAt')} = '${startedAt.toISOString()}'
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('StartedAt')} IS NULL`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphStampParentStart', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'StartedAt', Value: startedAt },
+        ], contextUser);
     }
 
     /**
@@ -524,19 +524,12 @@ export class TaskClaimStore {
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const nowIso = new Date().toISOString();
-        const payload = db.QuoteIdentifier('InputPayload');
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${payload} = JSON_MODIFY(
-                    JSON_MODIFY(${payload}, '$.continuationDeliveredAt', '${this.escape(nowIso)}'),
-                    '$.continuationDeliveredAs', '${this.escape(deliveredAs)}')
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
-              AND ISJSON(${payload}) = 1
-              AND JSON_VALUE(${payload}, '$.continuationDeliveredAt') IS NULL`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphClaimContinuation', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'DeliveredAs', Value: deliveredAs },
+            { Name: 'DeliveredAt', Value: new Date().toISOString() },
+        ], contextUser);
     }
 
     /**
@@ -572,14 +565,10 @@ export class TaskClaimStore {
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = 'Skipped'
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
-              AND ${db.QuoteIdentifier('Status')} = 'Pending'`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphSkipPending', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+        ], contextUser);
     }
 
     /**
@@ -597,14 +586,10 @@ export class TaskClaimStore {
         marker: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(marker)}'
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('Status')} = 'Pending'
-              AND ${db.QuoteIdentifier('ClaimedBy')} IS NULL`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphMarkHumanNotified', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'Marker', Value: marker },
+        ], contextUser);
     }
 
     /**
@@ -630,13 +615,9 @@ export class TaskClaimStore {
         taskID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = 'Cancelled'
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphCancelTask', [
+            { Name: 'TaskID', Value: taskID },
+        ], contextUser);
     }
 
     /**
@@ -662,17 +643,11 @@ export class TaskClaimStore {
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const payload = db.QuoteIdentifier('InputPayload');
-        const nowIso = new Date().toISOString();
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${payload} = JSON_MODIFY(${payload}, '$.earlyFinishedAt', '${this.escape(nowIso)}')
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
-              AND ISJSON(${payload}) = 1
-              AND JSON_VALUE(${payload}, '$.earlyFinishedAt') IS NULL`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphDeclareEarlyFinish', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'FinishedAt', Value: new Date().toISOString() },
+        ], contextUser);
     }
 
     /**
@@ -699,13 +674,11 @@ export class TaskClaimStore {
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('OutputPayload')} = '${this.escape(outputPayload)}'
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphSetParentOutput', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'OutputPayload', Value: outputPayload },
+        ], contextUser);
     }
 
     /**
@@ -722,15 +695,10 @@ export class TaskClaimStore {
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const payload = db.QuoteIdentifier('InputPayload');
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${payload} = JSON_MODIFY(${payload}, '$.debug', NULL)
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
-              AND ISJSON(${payload}) = 1`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphClearDebugState', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+        ], contextUser);
     }
 
     /**
@@ -765,70 +733,20 @@ export class TaskClaimStore {
         contextUser: UserInfo,
     ): Promise<boolean> {
         if (fields.length === 0) return true;
-        const db = this.sql(provider);
-        const payload = db.QuoteIdentifier('InputPayload');
 
-        // Innermost first, so the outermost JSON_MODIFY sees every prior change — and every write
-        // starts from a payload whose containing objects are known to exist (see ensureObjects).
-        const expression = fields.reduce(
-            (inner, field) => `JSON_MODIFY(${inner}, '${this.escape(field.Path)}', ${this.renderDebugValue(field.Value)})`,
-            this.ensureObjects(payload, fields.map((f) => f.Path)),
-        );
+        // Containing objects are computed here rather than in SQL: `ContainingPaths` is pure, tested,
+        // and the rule it encodes (JSON_MODIFY does not create intermediate objects) is the kind of
+        // database behaviour that is easy to assume wrongly.
+        const containers = [...new Set(fields.flatMap((f) => ContainingPaths(f.Path)))]
+            // Shallowest first: `$.debug` must exist before `$.debug.edgeOverrides` can be added to it.
+            .sort((a, b) => a.length - b.length);
 
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${payload} = ${expression}
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
-              AND ISJSON(${payload}) = 1`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
-    }
-
-    /**
-     * Wraps a payload expression so every object CONTAINING one of these paths exists.
-     *
-     * `JSON_MODIFY` does not create intermediate objects: writing `$.debug.paused` into a payload
-     * with no `debug` key, or `$.debug.edgeOverrides."<id>"` with no override map yet, silently
-     * changes nothing — which for a control verb means the write reports success (rowcount 1, the
-     * row WAS updated, just not the way anyone meant) and the workflow never pauses. A graph only
-     * acquires a `debug` key the first time somebody debugs it, so this is the NORMAL first call,
-     * not an edge case.
-     *
-     * This hazard arrived WITH field-scoped writes and is the price of them: the whole-bag write
-     * they replaced targeted `$.debug`, one level down from a root that always exists, so it
-     * created the containing object as a side effect of every verb. Field-scoping is still the
-     * right trade — it removes the step-resurrection class outright — but it moves the
-     * container's existence from implicit to something this method has to guarantee.
-     *
-     * Each containing object is created only when absent, shallowest first, so an existing bag is
-     * never replaced.
-     */
-    private ensureObjects(payload: string, paths: readonly string[]): string {
-        const parents = new Set<string>();
-        for (const path of paths) {
-            for (const prefix of ContainingPaths(path)) parents.add(prefix);
-        }
-        // Shallowest first: `$.debug` must exist before `$.debug.edgeOverrides` can be added to it.
-        const ordered = [...parents].sort((a, b) => a.length - b.length);
-        return ordered.reduce(
-            (inner, parent) =>
-                `CASE WHEN JSON_QUERY(${inner}, '${this.escape(parent)}') IS NULL` +
-                ` THEN JSON_MODIFY(${inner}, '${this.escape(parent)}', JSON_QUERY('{}'))` +
-                ` ELSE ${inner} END`,
-            payload,
-        );
-    }
-
-    /** Renders one debug value as a SQL literal `JSON_MODIFY` will store with the right JSON type. */
-    private renderDebugValue(value: TaskGraphDebugFieldValue): string {
-        switch (value.Kind) {
-            // `NULL` in lax mode DELETES the key, which is what "this verb cleared it" should mean.
-            case 'null': return 'NULL';
-            case 'bool': return `CAST(${value.Value ? 1 : 0} AS BIT)`;
-            case 'string': return `'${this.escape(value.Value)}'`;
-            // JSON_QUERY keeps objects and arrays as JSON rather than storing them as a string.
-            case 'json': return `JSON_QUERY('${this.escape(value.Value)}')`;
-        }
+        return this.guardedWrite(provider, 'spTaskGraphWriteDebugFields', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'Containers', Value: JSON.stringify(containers) },
+            { Name: 'Fields', Value: JSON.stringify(fields.map((f) => this.renderDebugField(f))) },
+        ], contextUser);
     }
 
     /**
@@ -845,16 +763,10 @@ export class TaskClaimStore {
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const payload = db.QuoteIdentifier('InputPayload');
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${payload} = JSON_MODIFY(${payload}, '$.debug.step', NULL)
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
-              AND ISJSON(${payload}) = 1
-              AND JSON_VALUE(${payload}, '$.debug.step') IS NOT NULL`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphConsumeStepMarker', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+        ], contextUser);
     }
 
     /**
@@ -878,21 +790,11 @@ export class TaskClaimStore {
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const payload = db.QuoteIdentifier('InputPayload');
-        const base = this.ensureObjects(payload, ['$.debug.paused']);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${payload} = JSON_MODIFY(JSON_MODIFY(JSON_MODIFY(${base},
-                    '$.debug.paused', CAST(1 AS BIT)),
-                    '$.debug.pausedReason', 'breakpoint'),
-                    '$.debug.pausedAtTaskID', '${this.escape(breakpointTaskID)}')
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
-              AND ISJSON(${payload}) = 1
-              AND (JSON_VALUE(${payload}, '$.debug.paused') IS NULL
-                   OR JSON_VALUE(${payload}, '$.debug.paused') = 'false')`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphPauseAtBreakpoint', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'BreakpointTaskID', Value: breakpointTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+        ], contextUser);
     }
 
 
@@ -919,15 +821,12 @@ export class TaskClaimStore {
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const value = inputPayload == null ? 'NULL' : `'${this.escape(inputPayload)}'`;
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('InputPayload')} = ${value}
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
-              AND ${db.QuoteIdentifier('Status')} = '${this.escape(expectedStatus)}'`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphUpdateInputPayload', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'InputPayload', Value: inputPayload },
+            { Name: 'ExpectedStatus', Value: expectedStatus },
+        ], contextUser);
     }
 
     /**
@@ -958,50 +857,98 @@ export class TaskClaimStore {
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const output = outputPayload == null ? 'NULL' : `'${this.escape(outputPayload)}'`;
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = 'Complete',
-                ${db.QuoteIdentifier('OutputPayload')} = ${output},
-                ${db.QuoteIdentifier('ErrorMessage')} = NULL,
-                ${db.QuoteIdentifier('CompletedAt')} = SYSUTCDATETIME(),
-                ${db.QuoteIdentifier('PercentComplete')} = 100,
-                ${db.QuoteIdentifier('ClaimedBy')} = NULL,
-                ${db.QuoteIdentifier('ClaimExpiresAt')} = NULL
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
-              AND (${db.QuoteIdentifier('Status')} IN ('Pending','Failed','Blocked')
-                   OR (${db.QuoteIdentifier('Status')} = 'In Progress'
-                       AND (${db.QuoteIdentifier('ClaimExpiresAt')} IS NULL
-                            OR ${db.QuoteIdentifier('ClaimExpiresAt')} < SYSUTCDATETIME())))`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphForceComplete', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'OutputPayload', Value: outputPayload },
+        ], contextUser);
     }
 
-    /** Runs the affected-rows statement, returning 0 on error rather than throwing into the loop. */
-    private async affectedRows(db: DatabaseProviderBase, sql: string, contextUser: UserInfo): Promise<number> {
+    /**
+     * Runs one guarded procedure and returns whether THIS instance won.
+     *
+     * A false here means the guard did not match — someone else won the race, or the row had already
+     * moved on. It does NOT mean the write failed; a failure returns false too, but records itself
+     * (see {@link LastWriteFailed}) so the caller can tell the two apart.
+     */
+    private async guardedWrite(
+        provider: IMetadataProvider,
+        procName: string,
+        params: ReadonlyArray<GuardedProcParam>,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const rows = await this.callProc<{ AffectedRows: number }>(provider, procName, params, contextUser);
+        if (rows === null) return false;
+        return Number(rows[0]?.AffectedRows ?? 0) === 1;
+    }
+
+    /**
+     * Calls one of the task-graph procedures, returning its rows — or `null` when the call FAILED.
+     *
+     * **Why procedures and not raw SQL** (#4575). These statements used to be sent as direct DML
+     * against the `Task` and `AIAgentRun` base tables. MJ grants its runtime roles SELECT on views
+     * and EXECUTE on procedures and never table-level DML, so under a least-privilege login every
+     * write was refused — and, because a refusal was reported as rowcount 0, the dispatcher read it
+     * as a lost race and skipped every task forever. The guards themselves are unchanged; they moved
+     * into procedures the runtime roles can actually execute.
+     *
+     * **Why `null` and not 0.** A statement that never ran is not a lost race, and collapsing the two
+     * is what kept that defect invisible. Callers still get `false` from {@link guardedWrite} — the
+     * dispatch loop must not fault on one bad write — but the failure is recorded and logged as a
+     * failure, so an inert dispatcher can say so.
+     */
+    private async callProc<T extends Record<string, unknown>>(
+        provider: IMetadataProvider,
+        procName: string,
+        params: ReadonlyArray<GuardedProcParam>,
+        contextUser: UserInfo,
+    ): Promise<T[] | null> {
+        const db = this.sql(provider);
+        // Named arguments on SQL Server, positional on PostgreSQL — the call wrapper itself belongs
+        // to the dialect, so neither form is spelled out here.
+        const placeholders = params.map((param, i) =>
+            db.PlatformKey === 'postgresql'
+                ? db.BuildParameterPlaceholder(i)
+                : `@${param.Name}=${db.BuildParameterPlaceholder(i)}`);
+        const call = db.Dialect.ProcedureCallSyntax(db.MJCoreSchemaName, procName, placeholders);
+
         try {
-            // The count comes back as data rather than through a driver-specific rowsAffected
-            // field. The wrapper is dialect-owned because `@@ROWCOUNT` is T-SQL only: emitted on
-            // PostgreSQL it left a bare `ROWCOUNT` identifier, which folds to lowercase, so every
-            // guarded write failed with `column "rowcount" does not exist`.
-            const rows = await db.ExecuteSQL<{ AffectedRows: number }>(
-                db.Dialect.AffectedRowCountSQL(sql, 'AffectedRows'),
-                undefined, undefined, contextUser,
+            const rows = await db.ExecuteSQL<T>(
+                call,
+                params.map((param) => param.Value),
+                { isMutation: true, description: `TaskGraph ${procName}` },
+                contextUser,
             );
-            return Number(rows?.[0]?.AffectedRows ?? 0);
+            this._lastWriteError = null;
+            this._consecutiveWriteFailures = 0;
+            return rows ?? [];
         } catch (e) {
-            LogError(`[TaskGraph] guarded write failed: ${e instanceof Error ? e.message : String(e)}`);
-            return 0;
+            const message = e instanceof Error ? e.message : String(e);
+            this._lastWriteError = `${procName}: ${message}`;
+            this._consecutiveWriteFailures++;
+            LogError(
+                `[TaskGraph] guarded write ${procName} FAILED — the statement never ran, so this is NOT ` +
+                `a lost race (${this._consecutiveWriteFailures} consecutive). ${message}`,
+            );
+            return null;
         }
     }
 
-    private literalOrNull(value: string | null | undefined): string {
-        return value == null ? 'NULL' : `'${this.escape(value)}'`;
-    }
-
-    /** Single-quote escaping. Inputs here are UUIDs and JSON the dispatcher itself produced. */
-    private escape(value: string): string {
-        return value.replace(/'/g, "''");
+    /**
+     * Renders one debug-bag field for the procedure's `@Fields` argument.
+     *
+     * The `Kind` travels with the value because it decides the JSON type written: a boolean stored as
+     * the string `"true"` reads back as truthy-but-wrong, and an object stored as a string reads back
+     * as a string.
+     */
+    private renderDebugField(field: TaskGraphDebugFieldWrite): { Path: string; Kind: TaskGraphDebugFieldValue['Kind']; Value: unknown } {
+        const value = field.Value;
+        switch (value.Kind) {
+            case 'null': return { Path: field.Path, Kind: 'null', Value: null };
+            case 'bool': return { Path: field.Path, Kind: 'bool', Value: value.Value };
+            case 'string': return { Path: field.Path, Kind: 'string', Value: value.Value };
+            // Embedded as real JSON, not as a string, so the procedure's JSON_QUERY sees an object.
+            case 'json': return { Path: field.Path, Kind: 'json', Value: JSON.parse(value.Value) };
+        }
     }
 }
