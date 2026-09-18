@@ -334,6 +334,11 @@ export class TaskClaimStore {
                     `AND ClaimExpiresAt IS NOT NULL AND ClaimExpiresAt < ${db.Dialect.CurrentTimestampUTC()}`,
                 Fields: ['ID', 'Name', 'ClaimedBy'],
                 ResultType: 'simple',
+                // The statement this replaced was an unbounded SELECT. Without this, `MJ: Tasks`
+                // contributes its UserViewMaxRows (1000) as a TOP clause, and the sweep would
+                // silently reclaim only the first 1000 expired claims per pass — a backlog that
+                // never drains, reported as a completed sweep.
+                IgnoreMaxRows: true,
                 // The claim protocol mutates these rows out from under any cache; a stale read here
                 // would reclaim a task somebody is still running.
                 BypassCache: true,
@@ -386,6 +391,9 @@ export class TaskClaimStore {
                 ExtraFilter: `Status='In Progress' AND ${MachineTaskSQL()} AND ClaimedBy IS NULL`,
                 Fields: ['ID', 'Name'],
                 ResultType: 'simple',
+                // Unbounded for the same reason as the sweep above: this is a reconciliation
+                // report, where a quietly truncated answer is worse than a slow one.
+                IgnoreMaxRows: true,
                 BypassCache: true,
             },
             contextUser,

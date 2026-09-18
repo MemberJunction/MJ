@@ -217,6 +217,22 @@ describe('reclamation covers every task a dispatcher can execute (R2-1)', () => 
         expect(views[0].BypassCache).toBe(true);
     });
 
+    // Both reads replaced an unbounded raw SELECT. `MJ: Tasks` carries UserViewMaxRows = 1000,
+    // which the provider applies as a TOP clause whenever neither IgnoreMaxRows nor MaxRows is
+    // given — so without these the sweep silently reclaims only the first 1000 expired claims and
+    // the orphan report silently under-reports, both while looking like they succeeded.
+    it('sweeps EVERY expired claim, not the first page of them', async () => {
+        const { provider, views } = recordingProvider();
+        await store.ReleaseExpiredClaims(provider, USER);
+        expect(views[0].IgnoreMaxRows).toBe(true);
+    });
+
+    it('reports EVERY orphaned task — a truncated reconciliation answer is worse than a slow one', async () => {
+        const { provider, views } = recordingProvider();
+        await store.FindOrphanedInProgress(provider, USER);
+        expect(views[0].IgnoreMaxRows).toBe(true);
+    });
+
     it('releases exactly the tasks the procedure reports, not the first N candidates', async () => {
         // The old code sliced the candidate list by a rowcount, which named the wrong tasks whenever
         // a claim was refreshed between the read and the write.
