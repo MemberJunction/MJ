@@ -24,6 +24,8 @@ import {
    defaultPredicateFor,
    entityLevelEnableBlockedReason,
    isNarrativeFieldName,
+   MAX_SEARCHABLE_FIELDS_PER_ENTITY,
+   NAME_LIKE_FIELD_NAMES,
    normalizePredicate,
    normalizeSmartFieldResultShape,
    SearchPredicate,
@@ -4463,6 +4465,16 @@ export class ManageMetadataBase {
          succeedSpinner(`Advanced generation completed (${step7Elapsed}s)`);
       }
 
+      // Deterministic search-flag hygiene. Deliberately OUTSIDE the `skipAdvancedGeneration`
+      // guard above: advanced generation is off by default, and an entity created under that
+      // default is precisely the one that ends up flagged searchable with nothing searchable on
+      // it. Ordered after it so the model's choices, where it did run, are already applied and
+      // the seed only fills a genuine gap. See buildSearchFlagHygieneSQL.
+      if (!await this.applySearchFlagHygiene(pool, excludeSchemas)) {
+         logError('Error applying search flag hygiene');
+         // Non-fatal, like advanced generation — a stale search flag is not worth failing a run over.
+      }
+
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
 
       return bSuccess;
@@ -7848,6 +7860,176 @@ export class ManageMetadataBase {
                AND AutoUpdateIncludeInUserSearchAPI = ${this.boolLit(true)}
             `);
          }
+      }
+   }
+
+   /**
+    * Build the two deterministic search-flag hygiene statements.
+    *
+    * These exist because the LLM-driven smart-field pipeline cannot be relied on to run at all:
+    * `AdvancedGeneration.enabled` reads `enableAdvancedGeneration ?? false`, so on a default
+    * configuration none of `applySearchableFieldUpdates` / `applyEntitySearchConfig` ever
+    * executes — while every new entity is still INSERTed with `AllowUserSearchAPI = 1`
+    * (see `createNewEntityInsertSQL`). The result is an entity flagged searchable with nothing
+    * searchable on it, which is not a harmless default: `UserSearchString` against such an entity
+    * is a documented no-op (MJ#4581/#4582), so the data provider ignores the term and returns the
+    * UNFILTERED table. Global search then fans out to it on every keystroke and discards every row.
+    *
+    * Both statements are deterministic, need no model, and are safe to run on every pass:
+    *
+    *  1. **Seed** — an entity with NO searchable field gets its name-like columns flagged
+    *     (`NAME_LIKE_FIELD_NAMES`: Name, Title, FirstName, LastName, …). Those are what a person
+    *     types into a search box, so they are the one defensible default. Only fires when the
+    *     entity has nothing flagged at all, so it fills a gap rather than overriding anyone —
+    *     including the LLM, which has already run by this point when it is enabled.
+    *
+    *     Note this keys on the field's NAME, not on `IsNameField`. That flag looks like the
+    *     obvious source and is the wrong one: measured against a real database, seeding from it
+    *     would flag 54 fields of which 41 are VIRTUAL — the denormalized FK display columns
+    *     CodeGen puts on views (`Action`, `Agent`, `Artifact`). Those are computed by JOIN, so a
+    *     LIKE against them cannot seek any index, and flagging them would push 49 junction
+    *     entities into the global-search fan-out with unindexable predicates — the exact cost
+    *     `search-guardrails.ts` exists to prevent. It also picked up identifiers (`RecordID`,
+    *     `Token`, `ExternalSystemRecordID`) and a `Description`, which `isNarrativeFieldName`
+    *     rejects on the LLM path. And it would still not have fixed `MJ: Employees`, whose only
+    *     `IsNameField` is the virtual `FirstLast`; keying on the name reaches its real
+    *     `FirstName` / `LastName` columns, which is what the reported bug needed.
+    *  2. **Clear** — an entity STILL left with no searchable field has `AllowUserSearchAPI` turned
+    *     off, so it drops out of the search fan-out instead of contributing noise.
+    *
+    * Both honor the `AutoUpdate*` opt-outs, which is how an operator pins a hand-made decision —
+    * and is exactly how the curated entries in `metadata/entities/.entity-search-exclusions.json`
+    * protect themselves (they set `AutoUpdateAllowUserSearchAPI` to false alongside the flag).
+    *
+    * Full-text-search entities are exempt from both. An FTS entity is searchable through its
+    * INDEX: `createViewUserSearchSQL` takes the full-text branch before it ever reads
+    * `IncludeInUserSearchAPI`, so those flags are dead metadata there and the entity is a
+    * perfectly valid search target without them.
+    *
+    * Written as `UPDATE ... WHERE <key> IN (subquery)` rather than `UPDATE ... FROM ... JOIN`,
+    * which is T-SQL-only. The subquery form is ANSI and runs unchanged on both platforms.
+    */
+   protected buildSearchFlagHygieneSQL(excludeSchemas: string[]): { seedSQL: string; clearSQL: string } {
+      const coreSchema = mj_core_schema();
+      const entity = this.qs(coreSchema, 'Entity');
+      const entityField = this.qs(coreSchema, 'EntityField');
+      const yes = this.boolLit(true);
+      const no = this.boolLit(false);
+      // Same set the LLM path's isNameLikeFieldName() tests, lowered for a case-insensitive
+      // comparison that does not depend on the database collation.
+      const nameLikeList = NAME_LIKE_FIELD_NAMES.map(n => `'${n.toLowerCase()}'`).join(',');
+
+      // Every name in NAME_LIKE_FIELD_NAMES resolves to the same predicate, so one literal covers
+      // the whole seed. This MUST be set explicitly: `EntityField.UserSearchPredicateAPI` defaults
+      // to 'Contains' in the database, which is `LIKE '%term%'` — the unindexable scan the
+      // guardrails exist to prevent. Seeding the flag without the predicate would have made every
+      // seeded entity a full scan on every keystroke.
+      const seedPredicate = defaultPredicateFor(NAME_LIKE_FIELD_NAMES[0]);
+
+      // The entity-shape guardrails the LLM path applies (`entityLevelEnableBlockedReason`).
+      // A log / audit / run-history table grows without bound and a detail / line-item child is
+      // reached through its parent; neither is a global-search target, whichever columns it has.
+      // Expressed as SQL rather than reusing the regex helpers because this runs in the database.
+      const shapeSuffixes = [
+         'Logs', 'Log', 'Runs', 'Run', 'Run History', 'Run Steps', 'Run Messages', 'Execution Logs',
+         'Details', 'Detail', 'Lines', 'Line', 'Items', 'Item', 'Steps', 'Step',
+         'Params', 'Param', 'Mappings', 'Mapping',
+      ];
+      const shapeClauses = shapeSuffixes
+         .map(sfx => `e.${this.qi('Name')} LIKE '%${sfx}'`)
+         .concat([`e.${this.qi('Name')} LIKE '%Audit%'`, `e.${this.qi('Name')} LIKE '%Record Change%'`])
+         .join(' OR ');
+      const entityShapeFilter = `AND NOT (${shapeClauses})`;
+      const schemaFilter = excludeSchemas.length > 0
+         ? `AND e.${this.qi('SchemaName')} NOT IN (${excludeSchemas.map(sc => `'${sc}'`).join(',')})`
+         : '';
+
+      // "This entity has nothing a user search can match." Mirrors
+      // `EntityInfo.HasSearchFields` and the runtime screen in EntitySearchProvider.
+      const noSearchableField = `NOT EXISTS (
+               SELECT 1 FROM ${entityField} f2
+               WHERE f2.${this.qi('EntityID')} = e.${this.qi('ID')}
+                 AND f2.${this.qi('IncludeInUserSearchAPI')} = ${yes}
+            )`;
+
+      // An FTS entity is searchable through its index, with no per-field flags involved.
+      const notFullText = `AND ${this.coalesce(`e.${this.qi('FullTextSearchEnabled')}`, no)} = ${no}`;
+
+      // The eligibility predicate here mirrors `isFieldEligibleForUserSearch` (and the runtime
+      // `isTextSearchableType` it was written against): not the primary key, a bounded text
+      // column. A name field that is neither is left alone rather than flagged uselessly.
+      const seedSQL = `
+         UPDATE ${entityField}
+         SET ${this.qi('IncludeInUserSearchAPI')} = ${yes},
+             ${this.qi('UserSearchPredicateAPI')} = '${seedPredicate}'
+         WHERE ${this.qi('ID')} IN (
+            SELECT ranked.${this.qi('ID')} FROM (
+               SELECT f.${this.qi('ID')},
+                      ROW_NUMBER() OVER (
+                         PARTITION BY f.${this.qi('EntityID')}
+                         ORDER BY f.${this.qi('Sequence')}, f.${this.qi('Name')}
+                      ) AS rn
+               FROM ${entityField} f
+               INNER JOIN ${entity} e ON e.${this.qi('ID')} = f.${this.qi('EntityID')}
+               WHERE LOWER(f.${this.qi('Name')}) IN (${nameLikeList})
+                 AND f.${this.qi('AutoUpdateIncludeInUserSearchAPI')} = ${yes}
+                 AND f.${this.qi('IncludeInUserSearchAPI')} = ${no}
+                 AND ${this.coalesce(`f.${this.qi('IsPrimaryKey')}`, no)} = ${no}
+                 AND ${this.coalesce(`f.${this.qi('IsVirtual')}`, no)} = ${no}
+                 AND LOWER(f.${this.qi('Type')}) IN ('nvarchar','varchar','char','nchar')
+                 AND ${this.coalesce(`f.${this.qi('Length')}`, '0')} <> -1
+                 AND e.${this.qi('VirtualEntity')} = ${no}
+                 AND e.${this.qi('AllowUserSearchAPI')} = ${yes}
+                 ${notFullText}
+                 ${entityShapeFilter}
+                 ${schemaFilter}
+                 AND ${noSearchableField}
+            ) ranked
+            WHERE ranked.rn <= ${MAX_SEARCHABLE_FIELDS_PER_ENTITY}
+         )`;
+
+      const clearSQL = `
+         UPDATE ${entity}
+         SET ${this.qi('AllowUserSearchAPI')} = ${no}
+         WHERE ${this.qi('ID')} IN (
+            SELECT e.${this.qi('ID')}
+            FROM ${entity} e
+            WHERE e.${this.qi('AllowUserSearchAPI')} = ${yes}
+              AND e.${this.qi('AutoUpdateAllowUserSearchAPI')} = ${yes}
+              AND e.${this.qi('VirtualEntity')} = ${no}
+              ${notFullText}
+              ${schemaFilter}
+              AND ${noSearchableField}
+         )`;
+
+      return { seedSQL, clearSQL };
+   }
+
+   /**
+    * Run the deterministic search-flag hygiene pass (see {@link buildSearchFlagHygieneSQL}).
+    *
+    * Runs OUTSIDE `applyAdvancedGeneration` and therefore regardless of whether advanced
+    * generation is enabled — which is the whole point, since it is off by default and an entity
+    * created under that default is exactly the one that needs this. Ordered after it so the
+    * model's choices, when it did run, are already in place and the seed only fills a real gap.
+    *
+    * Idempotent: a second pass matches nothing, because the first pass made
+    * `noSearchableField` false for every row it touched.
+    */
+   protected async applySearchFlagHygiene(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const { seedSQL, clearSQL } = this.buildSearchFlagHygieneSQL(excludeSchemas);
+         // Order matters: seeding first means an entity whose name field was just flagged is no
+         // longer a candidate for having its AllowUserSearchAPI cleared. Reversed, the pass would
+         // disable search on an entity it was about to make searchable.
+         // 4th arg is `isRecurringScript`, NOT a throw flag — passing `false` here is the default
+         // and is spelled out only to make the intent explicit. Errors are caught below.
+         await this.LogSQLBatchAndExecute(pool, [seedSQL, clearSQL], 'Deterministic search-flag hygiene', false);
+         return true;
+      }
+      catch (ex) {
+         logError('Error applying search flag hygiene', ex);
+         return false;
       }
    }
 
