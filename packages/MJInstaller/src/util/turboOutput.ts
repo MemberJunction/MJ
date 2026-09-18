@@ -22,7 +22,7 @@
  * colourised summary turned the expected pre-CodeGen state of every distribution
  * install into `BUILD_FAILED`.
  */
-const ANSI_ESCAPE_PATTERN = /\[[0-?]*[ -/]*[@-~]/g;
+const ANSI_ESCAPE_PATTERN = /\u001b\[[0-?]*[ -/]*[@-~]/g;
 
 /**
  * Matches turbo's summary line and captures the task list that follows it.
