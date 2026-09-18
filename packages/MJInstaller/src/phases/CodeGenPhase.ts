@@ -333,6 +333,12 @@ export class CodeGenPhase {
     const { cmd, args } = await this.resolveCli(dir, pm, versionTag, ['codegen']);
     const result = await this.processRunner.Run(cmd, args, {
       Cwd: dir,
+      // afterFailed below regex-matches result.Stderr for "COMMAND:...FAILED".
+      // A colourised run (FORCE_COLOR forwarded from the operator's env, same
+      // trigger as #4562) can put escape codes between those words and make
+      // the match silently miss a real AFTER-command failure. NO_COLOR does
+      // not override FORCE_COLOR; pinning it to '0' does.
+      Env: { FORCE_COLOR: '0' },
       TimeoutMs: 900_000, // 15 minutes
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
