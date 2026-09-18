@@ -858,7 +858,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
      * caller gates recording correctly. `replayInfo` is returned either way, so the
      * drift signal survives a green fallback.
      */
-    private async dispatchRun(
+    protected async dispatchRun(
         engine: MJComputerUseEngine,
         params: MJRunComputerUseParams,
         config: ComputerUseTestConfig,
@@ -915,7 +915,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
      * gating oracle green, and the engine's own `isRecordableRun`. A save failure
      * is logged and swallowed — it costs the next run a re-record.
      */
-    private async maybeRecordScript(args: {
+    protected async maybeRecordScript(args: {
         result: ComputerUseResult;
         status: string;
         gating: OracleResult[];
