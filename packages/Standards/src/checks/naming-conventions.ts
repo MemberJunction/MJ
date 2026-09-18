@@ -839,7 +839,8 @@ function resolveRelativeImport(fromFile: string, specifier: string): string | nu
  * package publishes cannot, because an interface has no runtime carrier to hold both names. Only
  * the second kind is a compatibility problem.
  *
- * Follows `export * from './x'` into the target file and takes named re-exports at face value.
+ * Follows `export * from './x'` into the target file. A named re-export contributes both its
+ * exported name and, when it is aliased, the source name the declaration actually carries.
  * A re-export from another *package* is not followed: that name belongs to the package it came
  * from and is judged there.
  */
@@ -864,7 +865,16 @@ function collectPublicSymbols(
                         ? statement.moduleSpecifier.text
                         : null;
                 if (statement.exportClause && ts.isNamedExports(statement.exportClause)) {
-                    for (const element of statement.exportClause.elements) names.add(element.name.text);
+                    for (const element of statement.exportClause.elements) {
+                        // Both halves of `export { Source as Alias }`. Consumers import the ALIAS,
+                        // so it is published — but a finding on a member carries the name of the
+                        // DECLARATION that owns it (`DataShapeOwner`), which is the source half.
+                        // Recording only the alias makes `severityFor` miss the match and return
+                        // `error`, and an `error` type member is what the rename pass selects —
+                        // so a published member would be renamed with no stub possible.
+                        names.add(element.name.text);
+                        if (element.propertyName) names.add(element.propertyName.text);
+                    }
                 } else if (!statement.exportClause && specifier) {
                     const target = resolveRelativeImport(file, specifier);
                     if (target) queue.push(target);

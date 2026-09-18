@@ -344,6 +344,30 @@ describe('severity comes from whether a compatible fix exists', () => {
         expect(await severities()).toEqual({ doWork: 'error' });
     });
 
+    it('warns on a data-shape member published under an ALIAS, which consumers can still name', async () => {
+        // `export { ChatParams as PublicChatParams }` publishes the alias, but the finding on
+        // `maxTokens` carries the DECLARATION name `ChatParams`. Matching only the alias makes
+        // the member look unpublished and returns `error` — and `error` type members are what
+        // the rename pass selects, so a member an external consumer can spell would be renamed
+        // with no runtime stub possible.
+        writePackage('a', {
+            'index.ts': "export { ChatParams as PublicChatParams } from './shape.js';",
+            'shape.ts': 'export interface ChatParams {\n    maxTokens: number;\n}',
+        });
+        expect(await severities()).toEqual({ maxTokens: 'warn' });
+    });
+
+    it('still errors on a sibling type the aliased entry does not re-export', async () => {
+        // The alias fix must not publish the whole file — only the named declaration.
+        writePackage('a', {
+            'index.ts': "export { ChatParams as PublicChatParams } from './shape.js';",
+            'shape.ts':
+                'export interface ChatParams {\n    maxTokens: number;\n}\n' +
+                'export interface HiddenParams {\n    topP: number;\n}',
+        });
+        expect(await severities()).toEqual({ maxTokens: 'warn', topP: 'error' });
+    });
+
     it('promotes data shapes to error when enforceTypeMembers takes the type-only break', async () => {
         writePackage('a', {
             'index.ts': "export * from './shape.js';",
