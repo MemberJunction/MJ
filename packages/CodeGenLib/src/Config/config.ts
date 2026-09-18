@@ -604,7 +604,7 @@ const configInfoSchema = z.object({
     { workingDirectory: '../GeneratedEntities', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../GeneratedActions', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../MJServer', command: 'npm', args: ['run', 'build'], when: 'after' },
-    { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, when: 'after' },
+    { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, isDaemon: true, when: 'after' },
   ]),
   /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
   additionalSchemaInfo: z.string().optional(),
