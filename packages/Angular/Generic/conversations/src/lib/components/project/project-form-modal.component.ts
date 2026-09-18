@@ -9,6 +9,8 @@ export interface ProjectFormData {
   description: string;
   color: string;
   icon: string;
+  /** true = only the owner sees it; false = everyone in the environment does. */
+  isPersonal: boolean;
 }
 
 const DEFAULT_PROJECT_COLORS = [
@@ -106,6 +108,22 @@ const DEFAULT_PROJECT_ICONS = [
             placeholder="What goes in this folder? (optional)"
             class="mj-textarea full-width"
             rows="2"></textarea>
+        </div>
+
+        <!-- Visibility -->
+        <div class="form-field">
+          <label>Visibility</label>
+          <label class="visibility-option">
+            <input type="checkbox" [(ngModel)]="formData.isPersonal" />
+            <span class="visibility-text">
+              <strong>Only me</strong>
+              <small>
+                {{ formData.isPersonal
+                    ? 'This folder is visible only to you.'
+                    : 'Everyone in this environment can see this folder and its name.' }}
+              </small>
+            </span>
+          </label>
         </div>
 
         <!-- Color Picker -->
@@ -228,6 +246,29 @@ const DEFAULT_PROJECT_ICONS = [
     }
 
     /* Color Picker */
+    .visibility-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      cursor: pointer;
+      font-weight: 400;
+    }
+
+    .visibility-option input {
+      margin-top: 0.15rem;
+      flex: 0 0 auto;
+    }
+
+    .visibility-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .visibility-text small {
+      color: var(--mj-text-muted);
+    }
+
     .color-picker-section {
       border: 1px solid var(--mj-border-default);
       border-radius: 12px;
@@ -361,7 +402,14 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     name: '',
     description: '',
     color: '#0076B6',
-    icon: 'fa-folder'
+    icon: 'fa-folder',
+    // A NEW folder is personal by default. The conversation sidebar is a personal
+    // surface — the conversations in it are already bound to their owner — so a
+    // folder everyone can see is the surprising option, not the private one. Folder
+    // NAMES are user-authored free text, and before OwnerUserID existed every one of
+    // them was readable by every user of the environment, which is what prompted
+    // this. Existing folders are untouched: they carry NULL, which still means shared.
+    isPersonal: true
   };
 
   public showNameError = false;
@@ -394,7 +442,10 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
       name: this.project.Name || '',
       description: this.project.Description || '',
       color: this.project.Color || '#0076B6',
-      icon: this.project.Icon || 'fa-folder'
+      icon: this.project.Icon || 'fa-folder',
+      // Reflect what the folder IS, not the create-time default — otherwise opening
+      // a shared folder's settings and pressing Save would silently make it private.
+      isPersonal: !!this.project.OwnerUserID
     };
   }
 
@@ -426,6 +477,11 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
       project.Description = this.formData.description.trim() || null;
       project.Color = this.formData.color;
       project.Icon = this.formData.icon;
+
+      // Settable on edit too: "share this with the team" and "take it back" are both
+      // things people expect to do to their own folder. Null means shared, which is
+      // what every folder created before this column existed carries.
+      project.OwnerUserID = this.formData.isPersonal ? this.currentUser.ID : null;
 
       if (!this.isEditMode) {
         project.EnvironmentID = this.environmentId;
