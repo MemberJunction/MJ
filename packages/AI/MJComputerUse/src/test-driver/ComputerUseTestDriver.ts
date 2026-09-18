@@ -649,8 +649,8 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         if (config.screenshotHistoryDepth != null) {
             params.ScreenshotHistoryDepth = config.screenshotHistoryDepth;
         }
-        // Element-grounded perception: opt-in per test/suite; default off
-        // (coordinate mode) until baked in across the suite.
+        // Element-grounded perception: on unless a test opts out. A coordinate click
+        // records no durable target, so grounding is the precondition for replay.
         params.ElementGrounding = usesElementGrounding(config);
         params.ReplayHeal = resolveReplayHeal(config);
         // Per-test controller generation overrides: determinism knobs.

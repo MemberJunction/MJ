@@ -122188,10 +122188,15 @@ export interface MJTestEntity_ITestConfiguration {
     PendingReplayScript?: MJTestEntity_IReplayScript;
 
     /**
-     * Whether a failed replay may fall back to the agent, re-derive the goal, and
-     * overwrite {@link ReplayScript}. Defaults to **true**. Set `false` to pin a
-     * test to deterministic execution, wherever a silent re-derivation could paper
-     * over the regression the test exists to catch.
+     * Whether a failed replay may fall back to the agent and re-derive the goal.
+     * Defaults to **true**. Set `false` to pin a test to deterministic execution,
+     * wherever a silent re-derivation could paper over the regression the test
+     * exists to catch.
+     *
+     * A green fallback records to {@link PendingReplayScript}, not
+     * {@link ReplayScript} — replacing a promoted script is always a reviewed act.
+     * This governs the whole goal; to stop a single STEP being repaired during
+     * replay, use the driver's `replayHeal`.
      */
     AllowLLMFallback?: boolean;
 
