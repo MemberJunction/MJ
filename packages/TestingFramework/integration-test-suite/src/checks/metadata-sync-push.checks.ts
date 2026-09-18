@@ -10,6 +10,11 @@
  *    and child ran on different connections — pushes cleanly in atomic mode.
  *  - MSP4: a push with isolated transactions that fails reports exactly which records stayed
  *    committed, and they really are in the database.
+ *  - MSP5-MSP8: entities that derive child rows inside their own `Save()` — a Query's extraction
+ *    pipeline, a Template Content's parameter extraction. Those writes go through the entity's own
+ *    provider, which is the push transaction under the shared default, so a failure has to take the
+ *    derived rows with it. Before 6.1.0 it did; from 6.1.0 the graph's own connection committed them
+ *    as it went, and they survived a failed push (the third symptom reported in #4545).
  *
  * Every row the bundle writes is named with the `zzz-it94` prefix. Teardown deletes all of them
  * (Action Params before Actions, then vendors) and removes the scratch directories, even after a
@@ -55,6 +60,8 @@ interface ScratchFolder {
     Name: string;
     Entity: string;
     Files: Record<string, JsonValue>;
+    /** Writes `push.isolatedTransactions` into this directory's own `.mj-sync.json`. */
+    Isolated?: boolean;
 }
 
 /** Write one push tree: a root `.mj-sync.json`, then one entity folder per entry, in order. */
@@ -66,7 +73,11 @@ function writeTree(dir: string, folders: ScratchFolder[], autoCreate: boolean): 
     for (const folder of folders) {
         const folderDir = path.join(dir, folder.Name);
         fs.mkdirSync(folderDir);
-        fs.writeFileSync(path.join(folderDir, '.mj-sync.json'), JSON.stringify({ entity: folder.Entity, filePattern: '**/.*.json' }, null, 2));
+        const entityConfig: Record<string, JsonValue> = { entity: folder.Entity, filePattern: '**/.*.json' };
+        if (folder.Isolated) {
+            entityConfig.push = { isolatedTransactions: true };
+        }
+        fs.writeFileSync(path.join(folderDir, '.mj-sync.json'), JSON.stringify(entityConfig, null, 2));
         for (const [file, data] of Object.entries(folder.Files)) {
             fs.writeFileSync(path.join(folderDir, file), JSON.stringify(data, null, 2));
         }
@@ -135,6 +146,42 @@ async function loadVendor(ctx: IntegrationCheckContext, id: string): Promise<MJA
     );
     Assert(result.Success, `loading AI Vendor ${id} failed: ${result.ErrorMessage}`);
     return result.Results[0];
+}
+
+/** A query whose SQL declares template parameters, so saving it derives parameter and field rows. */
+function queryRecord(id: string, name: string, dialectID: string, marker: string): JsonValue {
+    return {
+        primaryKey: { ID: id },
+        fields: {
+            Name: name,
+            Description: marker,
+            SQL: "SELECT ID, Name FROM __mj.AIVendor WHERE Name = '{{ VendorName }}'",
+            Status: 'Approved',
+            SQLDialectID: dialectID,
+            AuditQueryRuns: false,
+            CacheEnabled: false,
+            Reusable: true,
+            IsMaterialized: false,
+        },
+    };
+}
+
+/** The rows a Query's own Save derives, which no metadata file declares. */
+async function derivedQueryRowCounts(ctx: IntegrationCheckContext, queryID: string): Promise<Record<string, number>> {
+    return {
+        query: await countRows(ctx, 'MJ: Queries', `ID='${queryID}'`),
+        parameters: await countRows(ctx, 'MJ: Query Parameters', `QueryID='${queryID}'`),
+        fields: await countRows(ctx, 'MJ: Query Fields', `QueryID='${queryID}'`),
+        entities: await countRows(ctx, 'MJ: Query Entities', `QueryID='${queryID}'`),
+    };
+}
+
+/** One row's id from an entity, by filter. Fails the check when it is missing. */
+async function lookupID(ctx: IntegrationCheckContext, entityName: string, filter: string): Promise<string> {
+    const rv = RunView.FromMetadataProvider(ctx.Provider);
+    const result = await rv.RunView<BaseEntity>({ EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object' }, ctx.User);
+    Assert(result.Success && result.Results.length > 0, `could not find ${entityName} where ${filter}: ${result.ErrorMessage ?? 'no rows'}`);
+    return String(result.Results[0].Get('ID'));
 }
 
 async function countRows(ctx: IntegrationCheckContext, entityName: string, filter: string): Promise<number> {
@@ -210,6 +257,11 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('metadata-sync-push', {
         };
     },
     Teardown: async (ctx: IntegrationCheckContext): Promise<void> => {
+        // Template Params block their template's delete (#4588), so they go first; a Query cascades.
+        await deleteAll<BaseEntity>(ctx, 'MJ: Template Params', `Template LIKE '${PREFIX}%'`);
+        await deleteAll<BaseEntity>(ctx, 'MJ: Template Contents', `Template LIKE '${PREFIX}%'`);
+        await deleteAll<BaseEntity>(ctx, 'MJ: Templates', `Name LIKE '${PREFIX}%'`);
+        await deleteAll<BaseEntity>(ctx, 'MJ: Queries', `Name LIKE '${PREFIX}%'`);
         await deleteAll<MJActionParamEntity>(ctx, 'MJ: Action Params', `Action LIKE '${PREFIX}%'`);
         await deleteAll<MJActionEntity>(ctx, 'MJ: Actions', `Name LIKE '${PREFIX}%'`);
         await deleteAll<MJAIVendorEntity>(ctx, 'MJ: AI Vendors', `Name LIKE '${PREFIX}%'`);
@@ -325,6 +377,101 @@ async function withTimeout<T>(work: Promise<T>, ms: number, message: string): Pr
     }
 }
 
+
+// ─── Entities that derive child rows inside their own Save() ────────────────
+
+async function checkMsp5QueryDerivesRowsAndReStaysStable(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const dialectID = await lookupID(ctx, 'MJ: SQL Dialects', `Name='T-SQL'`);
+    const queryID = randomUUID().toUpperCase();
+    const dir = writeTree(path.join(f.Root, 'msp5'), [
+        { Name: 'a-queries', Entity: 'MJ: Queries', Files: { '.query.json': queryRecord(queryID, `${PREFIX} MSP5 query`, dialectID, 'MSP5') } },
+    ], true);
+
+    const first = await runPush(ctx.User, dir);
+    Assert(first.Error === undefined, `MSP5: push failed: ${first.Error instanceof Error ? first.Error.message : String(first.Error)}`);
+    const after = await derivedQueryRowCounts(ctx, queryID);
+    AssertEqual(after.query, 1, 'MSP5: the query exists');
+    Assert(after.parameters > 0, `MSP5: saving the query derived parameter rows (got ${after.parameters})`);
+    Assert(after.fields > 0, `MSP5: saving the query derived field rows (got ${after.fields})`);
+
+    // Pushing the same file again must not derive a second set: that is the collision in #4545.
+    const second = await runPush(ctx.User, dir);
+    Assert(second.Error === undefined, `MSP5: re-push failed: ${second.Error instanceof Error ? second.Error.message : String(second.Error)}`);
+    AssertEqual(JSON.stringify(await derivedQueryRowCounts(ctx, queryID)), JSON.stringify(after), 'MSP5: counts after an unchanged re-push');
+}
+
+async function checkMsp6SharedFailureRollsBackDerivedRows(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const dialectID = await lookupID(ctx, 'MJ: SQL Dialects', `Name='T-SQL'`);
+    const queryID = randomUUID().toUpperCase();
+    const dir = writeTree(path.join(f.Root, 'msp6'), [
+        { Name: 'a-queries', Entity: 'MJ: Queries', Files: { '.query.json': queryRecord(queryID, `${PREFIX} MSP6 query`, dialectID, 'MSP6') } },
+        { Name: 'b-vendors', Entity: 'MJ: AI Vendors', Files: { '.bad.json': vendorRecord(f.BaseVendorID, { Name: null }) } },
+    ], true);
+    const aborted = asAborted(await runPush(ctx.User, dir), 'MSP6');
+
+    Assert(aborted.NothingCommitted, 'MSP6: a shared push must report nothing committed');
+    AssertEqual(
+        JSON.stringify(await derivedQueryRowCounts(ctx, queryID)),
+        JSON.stringify({ query: 0, parameters: 0, fields: 0, entities: 0 }),
+        'MSP6: the query AND every row its save derived must be rolled back'
+    );
+}
+
+async function checkMsp7IsolatedFailureKeepsDerivedRows(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const dialectID = await lookupID(ctx, 'MJ: SQL Dialects', `Name='T-SQL'`);
+    const queryID = randomUUID().toUpperCase();
+    const dir = writeTree(path.join(f.Root, 'msp7'), [
+        {
+            Name: 'a-queries',
+            Entity: 'MJ: Queries',
+            Isolated: true,
+            Files: { '.query.json': queryRecord(queryID, `${PREFIX} MSP7 query`, dialectID, 'MSP7') },
+        },
+        { Name: 'b-vendors', Entity: 'MJ: AI Vendors', Files: { '.bad.json': vendorRecord(f.BaseVendorID, { Name: null }) } },
+    ], true);
+    const aborted = asAborted(await runPush(ctx.User, dir), 'MSP7');
+
+    Assert(!aborted.NothingCommitted, 'MSP7: an isolated directory that committed must be reported');
+    const after = await derivedQueryRowCounts(ctx, queryID);
+    AssertEqual(after.query, 1, 'MSP7: the query stays committed');
+    Assert(after.parameters > 0, 'MSP7: its derived parameter rows stay with it');
+}
+
+async function checkMsp8TemplateParamsFollowTheirPush(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const typeID = await lookupID(ctx, 'MJ: Template Content Types', `Name='Text'`);
+    const templateID = randomUUID().toUpperCase();
+    const contentID = randomUUID().toUpperCase();
+    const template = (text: string): JsonValue => ({
+        primaryKey: { ID: templateID },
+        fields: { Name: `${PREFIX} MSP8 template`, IsActive: true, UserID: ctx.User.ID },
+        relatedEntities: {
+            'MJ: Template Contents': [
+                { primaryKey: { ID: contentID }, fields: { TemplateID: '@parent:ID', TypeID: typeID, Priority: 1, IsActive: true, TemplateText: text } },
+            ],
+        },
+    });
+
+    const okDir = writeTree(path.join(f.Root, 'msp8-ok'), [
+        { Name: 'a-templates', Entity: 'MJ: Templates', Files: { '.template.json': template('Hello {{ FirstName }}, code {{ Code }}.') } },
+    ], true);
+    const ok = await runPush(ctx.User, okDir);
+    Assert(ok.Error === undefined, `MSP8: push failed: ${ok.Error instanceof Error ? ok.Error.message : String(ok.Error)}`);
+    const derived = await countRows(ctx, 'MJ: Template Params', `TemplateID='${templateID}'`);
+    Assert(derived > 0, `MSP8: saving the content derived template params (got ${derived})`);
+
+    // A failing push that would re-derive them must leave what is there untouched.
+    const failDir = writeTree(path.join(f.Root, 'msp8-fail'), [
+        { Name: 'a-templates', Entity: 'MJ: Templates', Files: { '.template.json': template('Hi {{ FirstName }}, {{ Code }} and {{ Extra }}.') } },
+        { Name: 'b-vendors', Entity: 'MJ: AI Vendors', Files: { '.bad.json': vendorRecord(f.BaseVendorID, { Name: null }) } },
+    ], true);
+    asAborted(await runPush(ctx.User, failDir), 'MSP8');
+    AssertEqual(await countRows(ctx, 'MJ: Template Params', `TemplateID='${templateID}'`), derived, 'MSP8: the failed push re-derived nothing that stuck');
+}
+
 export const MetadataSyncPushChecks: NamedCheck[] = [
     {
         Id: 'metadata-sync-push.MSP1',
@@ -348,6 +495,30 @@ export const MetadataSyncPushChecks: NamedCheck[] = [
         Id: 'metadata-sync-push.MSP4',
         Name: 'MSP4: a failed push with isolated transactions lists exactly the records that stayed committed',
         Fn: checkMsp4NonAtomicReportsWhatStayedCommitted,
+        RequiresMutation: true,
+    },
+    {
+        Id: 'metadata-sync-push.MSP5',
+        Name: 'MSP5: a Query derives its parameter and field rows on save, and an unchanged re-push derives no more',
+        Fn: checkMsp5QueryDerivesRowsAndReStaysStable,
+        RequiresMutation: true,
+    },
+    {
+        Id: 'metadata-sync-push.MSP6',
+        Name: 'MSP6: a failed shared push rolls back the rows a Query derived inside its own save',
+        Fn: checkMsp6SharedFailureRollsBackDerivedRows,
+        RequiresMutation: true,
+    },
+    {
+        Id: 'metadata-sync-push.MSP7',
+        Name: 'MSP7: the same failure in an isolated directory keeps the Query and its derived rows, and reports them',
+        Fn: checkMsp7IsolatedFailureKeepsDerivedRows,
+        RequiresMutation: true,
+    },
+    {
+        Id: 'metadata-sync-push.MSP8',
+        Name: 'MSP8: Template Params derived inside a save follow the push that derived them',
+        Fn: checkMsp8TemplateParamsFollowTheirPush,
         RequiresMutation: true,
     },
 ];
