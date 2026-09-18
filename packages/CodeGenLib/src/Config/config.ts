@@ -66,6 +66,16 @@ const commandInfoSchema = z.object({
   args: z.string().array(),
   /** Optional timeout in milliseconds */
   timeout: z.number().nullish(),
+  /**
+   * Marks a long-running service that never exits on its own (e.g. `npm start`).
+   *
+   * For these, reaching `timeout` without having crashed IS the pass — the command
+   * is a boot check and the timeout is the observation window. Exiting before the
+   * timeout is still a failure, because a service that comes down on its own
+   * crashed. Requires a positive `timeout`; without one the process would never be
+   * killed and CodeGen would wait forever.
+   */
+  isDaemon: z.boolean().nullish(),
   /** When to run the command (e.g., 'before', 'after') */
   when: z.string(),
 });

@@ -68,6 +68,14 @@ export class RunCommandsBase {
   public async runCommand(command: CommandInfo ): Promise<CommandExecutionResult> {
     let cp: ChildProcess = null!;
     try {
+      if (command.isDaemon === true && !(command.timeout && command.timeout > 0)) {
+        const message =
+          `Command "${command.command}" is marked isDaemon but has no timeout. A daemon never exits on its own, ` +
+          `so CodeGen would wait forever. Set timeout (ms) to how long the service needs to boot.`;
+        logError(message);
+        return { output: '', error: message, success: false, elapsedTime: 0 };
+      }
+
       let output = '';
       let startTime = new Date();
       const commandName = command.command;
@@ -140,17 +148,24 @@ export class RunCommandsBase {
         const timeoutPromise = new Promise<CommandExecutionResult>((resolve) => {
           setTimeout(() => {
             const elapsedTime = new Date().getTime() - startTime.getTime();
+            // A daemon has no exit of its own — staying up for the whole budget is
+            // the pass. Anything else that reaches the timeout has hung.
+            const isDaemon = command.isDaemon === true;
             if (!cp.killed) {
               treeKill(cp.pid!);
-              console.error(`COMMAND: "${command.command}" TIMED OUT after ${elapsedTime / 1000} seconds`);
+              if (isDaemon) {
+                logStatus(`COMMAND: "${command.command}" STAYED UP for ${elapsedTime / 1000} seconds — daemon boot check passed.`);
+              } else {
+                console.error(`COMMAND: "${command.command}" TIMED OUT after ${elapsedTime / 1000} seconds`);
+              }
               output += `Process killed after ${timeout} ms`;
             }
 
             resolve({
-              output: output,
-              error: null!,
-              success: false,
-              elapsedTime: elapsedTime,
+              output,
+              error: isDaemon ? null! : `Timed out after ${timeout} ms`,
+              success: isDaemon,
+              elapsedTime,
             });
           }, timeout);
         });
