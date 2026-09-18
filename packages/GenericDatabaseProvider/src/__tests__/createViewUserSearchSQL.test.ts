@@ -150,6 +150,15 @@ function makeField(opts: FieldOpts): EntityFieldInfo {
     return f;
 }
 
+/**
+ * Builds a real EntityInfo via the prototype — NOT a `{ ... } as unknown as EntityInfo` literal.
+ *
+ * That distinction is load-bearing now that the SUT reads `entityInfo.HasSearchFields` (a getter
+ * on EntityInfo.prototype) rather than scanning `.Fields` inline. A plain object literal has no
+ * prototype, so the getter would be `undefined` — falsy — and every entity would silently take the
+ * "no search surface" branch, making an assertion about the `(1=0)` fallback pass for the wrong
+ * reason. Seeding `_Fields` on a prototype-backed object keeps the getter live. See MJ#4581.
+ */
 function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string; fields: EntityFieldInfo[] }): EntityInfo {
     // EntityInfo has a heavy constructor / initialization path; we build a
     // minimal shape via Object.create + property assignment. The SUT only

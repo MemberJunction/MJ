@@ -71,6 +71,7 @@ type EntityInternals = {
     _datetimeFieldsCache: EntityFieldInfo[] | null;
     _nameFieldCache: EntityFieldInfo | null | undefined;
     _hasSearchFields: boolean | undefined;
+    _hasInactiveFields: boolean | undefined;
 };
 
 const internals = (e: EntityInfo): EntityInternals => e as unknown as EntityInternals;
@@ -86,6 +87,7 @@ function primeAllDerivedCaches(e: EntityInfo): void {
     void e.DatetimeFields;
     void e.NameField;
     void e.HasSearchFields;
+    void e.HasInactiveFields;
 }
 
 /** Swap the backing `_Fields` array to a brand-new field set (no cache reset). */
@@ -108,6 +110,7 @@ function runProductionCacheReset(e: EntityInfo): void {
     i._datetimeFieldsCache = null;
     i._nameFieldCache = undefined;
     i._hasSearchFields = undefined;
+    i._hasInactiveFields = undefined;
 }
 
 function makeEntityA(): EntityInfo {
@@ -290,5 +293,49 @@ describe('EntityInfo.HasSearchFields (MJ#4581)', () => {
         swapSearchFields(e, NO_SEARCH_FIELDS);
         runProductionCacheReset(e);
         expect(e.HasSearchFields).toBe(false);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────
+// HasInactiveFields — the same staleness, fixed alongside HasSearchFields
+// ─────────────────────────────────────────────────────────────────────────────────────────
+//
+// HasInactiveFields (added 2026-06-18) post-dates the constructor reset block (2026-06-15) and
+// was never added to it, so it carried the exact bug that block exists to prevent. Fixed in the
+// same change as HasSearchFields because it is one line in a block already being edited.
+
+const ALL_ACTIVE: FieldInit[] = [
+    { ID: 'c1', EntityID: 'eC', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1, Status: 'Active' },
+    { ID: 'c2', EntityID: 'eC', Name: 'Name', Type: 'nvarchar', Sequence: 2, Status: 'Active' },
+];
+
+const HAS_DEPRECATED: FieldInit[] = [
+    { ID: 'd1', EntityID: 'eC', Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1, Status: 'Active' },
+    { ID: 'd2', EntityID: 'eC', Name: 'Legacy', Type: 'nvarchar', Sequence: 2, Status: 'Deprecated' },
+];
+
+function makeStatusEntity(fields: FieldInit[]): EntityInfo {
+    return new EntityInfo({ ID: 'eC', Name: 'Statusy', SchemaName: 'app', BaseTable: 'Statusy', EntityFields: fields });
+}
+
+describe('EntityInfo.HasInactiveFields cache reset', () => {
+    it('reflects the field set it was built from', () => {
+        expect(makeStatusEntity(ALL_ACTIVE).HasInactiveFields).toBe(false);
+        expect(makeStatusEntity(HAS_DEPRECATED).HasInactiveFields).toBe(true);
+    });
+
+    it('CONTROL: without the reset it serves STALE data after a _Fields swap', () => {
+        const e = makeStatusEntity(ALL_ACTIVE);
+        expect(e.HasInactiveFields).toBe(false);          // prime
+        internals(e)._Fields = HAS_DEPRECATED.map(f => new EntityFieldInfo(f)); // no reset
+        expect(e.HasInactiveFields).toBe(false);          // stale: the Deprecated field is invisible
+    });
+
+    it('the production cache reset makes it reflect the NEW field set', () => {
+        const e = makeStatusEntity(ALL_ACTIVE);
+        expect(e.HasInactiveFields).toBe(false);
+        internals(e)._Fields = HAS_DEPRECATED.map(f => new EntityFieldInfo(f));
+        runProductionCacheReset(e);
+        expect(e.HasInactiveFields).toBe(true);
     });
 });

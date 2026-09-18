@@ -4206,6 +4206,8 @@ export class EntityInfo extends BaseInfo {
             this._Fields = [];
 
             // Reset every lazy field-derived memo cache whenever _Fields is (re)assigned.
+            // `entityInfo.cacheReset.test.ts` mirrors this list in `runProductionCacheReset`;
+            // a cache added here needs adding there too, or its reset goes unexercised.
             // These caches (FieldByName map, PrimaryKeys, UniqueKeys, ForeignKeys, EncryptedFields,
             // DatetimeFields, NameField, FirstPrimaryKey) are populated lazily off this.Fields and
             // were previously relying on an implicit "_Fields is write-once after construction"
@@ -4223,6 +4225,9 @@ export class EntityInfo extends BaseInfo {
             this._datetimeFieldsCache = null;
             this._nameFieldCache = undefined;
             this._hasSearchFields = undefined;
+            // Added late: HasInactiveFields (Jun 18) post-dates this block (Jun 15) and was never
+            // listed here, so it carried exactly the staleness the block exists to prevent.
+            this._hasInactiveFields = undefined;
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
