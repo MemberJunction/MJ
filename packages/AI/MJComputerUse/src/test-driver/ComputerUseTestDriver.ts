@@ -89,7 +89,7 @@ import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import { MJRunComputerUseParams, PromptEntityRef, ActionRef } from '../types/mj-params.js';
 import { parseJudgeFrequency } from '../utils/judge-frequency-parser.js';
-import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext, findUnresolvedPlaceholders } from '../utils/variable-substitution.js';
+import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext, findUnresolvedPlaceholders, findUnresolvedAuthPlaceholders } from '../utils/variable-substitution.js';
 
 import type {
     ComputerUseTestConfig,
@@ -270,6 +270,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             const missingVars = [
                 ...findUnresolvedPlaceholders(input.startUrl).map(k => `startUrl:{{${k}}}`),
                 ...findUnresolvedPlaceholders(input.goal).map(k => `goal:{{${k}}}`),
+                ...findUnresolvedAuthPlaceholders(input.auth),
             ];
             if (missingVars.length > 0) {
                 throw new Error(

@@ -16,6 +16,25 @@ set -e
 
 SCRIPTS=/app/docker/regression/scripts
 
+# Map the documented credentials onto the variables the tests actually read.
+#
+# The 155 regression tests bind {{authUsername}}/{{authPassword}}, which resolve
+# from MJ_TEST_VAR_*. The documented Mode A setup asks for TEST_UID/TEST_PWD in
+# .env.test, and nothing connected the two — while compose declares each
+# MJ_TEST_VAR_* as "${MJ_TEST_VAR_x:-}", so inside the container they were always
+# present but empty. Every test therefore submitted blank credentials to Auth0.
+# An explicitly-set MJ_TEST_VAR_* still wins; this only fills the gap.
+if [ -z "${MJ_TEST_VAR_authUsername:-}" ] && [ -n "${TEST_UID:-}" ]; then
+    export MJ_TEST_VAR_authUsername="$TEST_UID"
+fi
+if [ -z "${MJ_TEST_VAR_authPassword:-}" ] && [ -n "${TEST_PWD:-}" ]; then
+    export MJ_TEST_VAR_authPassword="$TEST_PWD"
+fi
+if [ -z "${MJ_TEST_VAR_authUsername:-}" ] || [ -z "${MJ_TEST_VAR_authPassword:-}" ]; then
+    echo "WARNING: no test credentials. Set TEST_UID/TEST_PWD (or MJ_TEST_VAR_authUsername/"
+    echo "         MJ_TEST_VAR_authPassword) in .env.test, or every test will fail at login."
+fi
+
 # Register ComputerUseTestDriver with ClassFactory before the CLI runs.
 export NODE_OPTIONS="--import /app/bootstrap.mjs"
 

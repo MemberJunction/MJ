@@ -449,10 +449,17 @@ All variables go in `docker/.env.test` (gitignored). See `.env.test.example` for
 | `AUTH0_DOMAIN` | Yes | Auth0 tenant domain (e.g., `dev-xxxxx.us.auth0.com`) |
 | `AUTH0_CLIENTID` | Yes | Auth0 SPA application client ID |
 | `AUTH0_CLIENT_SECRET` | Yes | Auth0 application client secret |
-| `TEST_UID` | Yes | Test user email (must exist in Auth0, email verified, no MFA) |
-| `TEST_PWD` | Yes | Test user password in Auth0 |
+| `TEST_UID` | Yes | Test user email (must exist in Auth0, email verified, no MFA). The entrypoint maps this onto `MJ_TEST_VAR_authUsername`, which is what the tests bind as `{{authUsername}}` |
+| `TEST_PWD` | Yes | Test user password in Auth0. Mapped onto `MJ_TEST_VAR_authPassword` the same way |
 | `AI_VENDOR_API_KEY__GeminiLLM` | Yes* | Google Gemini API key — the **primary** Computer Use model |
 | `AI_VENDOR_API_KEY__AnthropicLLM` | Yes* | Anthropic API key — failover / alternate model |
+
+> **Credentials reach the tests as variables.** Every test binds `{{authUsername}}` /
+> `{{authPassword}}` rather than literal credentials, and those resolve from
+> `MJ_TEST_VAR_authUsername` / `MJ_TEST_VAR_authPassword`. `test-runner-entrypoint.sh`
+> derives them from `TEST_UID` / `TEST_PWD` when you have not set them directly, so
+> setting either pair works. Set neither and the run stops at the first test naming the
+> unresolved variable — it no longer submits a blank login.
 
 \* At least one AI vendor key is required. Variable names match the root `.env` convention (`AI_VENDOR_API_KEY__<Vendor>LLM`).
 
