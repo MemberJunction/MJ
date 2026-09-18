@@ -40,3 +40,60 @@ describe('normalizeTraceUrl idempotency', () => {
         expect(traceUrlMatches(pattern, other)).toBe(false);
     });
 });
+
+describe('normalizeTraceUrl idempotency with encoded query values (review #2)', () => {
+    const cases: Array<[string, string]> = [
+        ['encoded delimiters in a redirect_uri',
+            'http://localhost:4200/app?redirect_uri=https%3A%2F%2Fapp%2Fcb%3Fa%3D1%26b%3D2&state=s'],
+        ['encoded ampersand', 'http://localhost:4200/x?a=1%262&b=3'],
+        ['encoded equals', 'http://localhost:4200/x?a=k%3Dv'],
+        ['encoded hash', 'http://localhost:4200/x?a=frag%23top'],
+        ['plus as space', 'http://localhost:4200/x?q=hello+world'],
+        ['already-plain value', 'http://localhost:4200/x?a=1&b=2'],
+        ['no query', 'http://localhost:4200/app/data'],
+    ];
+
+    it.each(cases)('is idempotent: %s', (_label, url) => {
+        const once = normalizeTraceUrl(url);
+        expect(normalizeTraceUrl(once)).toBe(once);
+    });
+
+    it.each(cases)('a normalized URL still matches its own pattern: %s', (_label, url) => {
+        // traceUrlMatches normalizes the pattern a second time, so a pattern
+        // recorded from this URL must still match the live URL it came from.
+        const recorded = normalizeTraceUrl(url);
+        expect(traceUrlMatches(recorded, url)).toBe(true);
+    });
+});
+
+describe('traceUrlMatches precision (review #3)', () => {
+    it('an absolute-URL pattern does NOT match a different path on the same origin', () => {
+        // A goal postcondition distilled from a run that ends at the app root used
+        // to pass on any URL of that origin, including an error page.
+        expect(traceUrlMatches('http://localhost:4200/', 'http://localhost:4200/login-error?x=1')).toBe(false);
+        expect(traceUrlMatches('http://localhost:4200/app/data', 'http://localhost:4200/app/data-archive')).toBe(false);
+    });
+
+    it('an absolute-URL pattern matches the same URL', () => {
+        expect(traceUrlMatches('http://localhost:4200/', 'http://localhost:4200/')).toBe(true);
+        expect(traceUrlMatches('http://localhost:4200/app/data', 'http://localhost:4200/app/data')).toBe(true);
+    });
+
+    it('an absolute-URL pattern matches a deeper path at a segment boundary', () => {
+        expect(traceUrlMatches('http://localhost:4200/app/data', 'http://localhost:4200/app/data/records')).toBe(true);
+    });
+
+    it('a path-fragment pattern still matches by containment', () => {
+        expect(traceUrlMatches('/app/data', 'http://localhost:4200/app/data?view=grid')).toBe(true);
+        expect(traceUrlMatches('/app/data', 'http://localhost:4200/app/home')).toBe(false);
+    });
+
+    it('an empty pattern still matches anything', () => {
+        expect(traceUrlMatches('', 'http://localhost:4200/anything')).toBe(true);
+    });
+
+    it('ignores the query when the pattern records none, but not the path', () => {
+        expect(traceUrlMatches('http://localhost:4200/app', 'http://localhost:4200/app?x=1')).toBe(true);
+        expect(traceUrlMatches('http://localhost:4200/app', 'http://localhost:4200/other?x=1')).toBe(false);
+    });
+});

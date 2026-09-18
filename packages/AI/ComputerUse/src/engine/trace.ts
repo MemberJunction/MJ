@@ -62,6 +62,13 @@ export function normalizeTraceUrl(url: string, volatileParams: string[] = []): s
     }
 
     const volatile = new Set(volatileParams.map(p => p.toLowerCase()));
+    // Re-encode through URLSearchParams rather than joining the decoded values by
+    // hand. `searchParams` DECODES, so emitting raw turned `redirect_uri=a%3Fb%26c`
+    // into `redirect_uri=a?b&c`, which a second pass then re-parsed as extra
+    // parameters and re-sorted. Normalization has to be idempotent: the pattern is
+    // normalized at record time and AGAIN inside traceUrlMatches, while the live URL
+    // is normalized once, so a non-idempotent pass made a URL stop matching itself
+    // and every step carrying a redirect_uri diverged on every replay.
     const params: [string, string][] = [];
     parsed.searchParams.forEach((value, name) => {
         if (!volatile.has(name.toLowerCase())) {
@@ -72,18 +79,47 @@ export function normalizeTraceUrl(url: string, volatileParams: string[] = []): s
 
     const path = parsed.pathname.replace(UUID_RE, () => UUID_TOKEN).replace(ENCODED_UUID_TOKEN_RE, () => UUID_TOKEN);
     const query = params.length > 0
-        ? '?' + params.map(([n, v]) => `${n}=${v}`).join('&')
+        ? '?' + params.map(([n, v]) => `${encodeQueryPart(n)}=${encodeQueryPart(v)}`).join('&')
         : '';
     // Hash fragment is intentionally dropped.
     return `${parsed.origin}${path}${query}`;
 }
 
+
 /**
- * Whether an actual URL satisfies a recorded URL pattern. Both are normalized,
- * then the pattern is matched as a substring of the actual — so a full-URL
- * pattern matches exactly and a path-fragment pattern (e.g. `/app/data`)
- * matches any URL containing it. An empty pattern matches anything (no
- * constraint recorded).
+ * Re-escape the characters that would change how a query string PARSES, and only
+ * those: `%`, `&`, `=`, `#`, `?`, `+`.
+ *
+ * `searchParams` hands back decoded values, so emitting them raw let a value
+ * containing `&` or `=` re-parse as extra parameters on the next pass — and
+ * normalization runs more than once (record time, then again inside
+ * traceUrlMatches), so a URL stopped matching itself. Full `encodeURIComponent`
+ * would fix that too, but it also escapes spaces and braces, which breaks the
+ * `{uuid}` token and stops variable tokenization finding a value like `Acme Corp`.
+ * Escaping only the structural characters keeps both properties.
+ */
+function encodeQueryPart(part: string): string {
+    return part
+        .replace(/%/g, '%25')    // first, so the escapes below are not re-escaped
+        .replace(/&/g, '%26')
+        .replace(/=/g, '%3D')
+        .replace(/#/g, '%23')
+        .replace(/\?/g, '%3F')
+        .replace(/\+/g, '%2B');
+}
+
+/**
+ * Whether an actual URL satisfies a recorded URL pattern. Both are normalized first.
+ *
+ * An ABSOLUTE pattern (one carrying an origin) is matched structurally: same origin,
+ * and the same path or a deeper one at a `/` boundary, with the pattern's query
+ * parameters all present. It used to be plain containment, which made every
+ * full-URL assertion vacuous — the pattern `http://localhost:4200/` matched
+ * `http://localhost:4200/login-error`, so a goal postcondition distilled from a run
+ * ending at the app root passed on any URL of that origin, error pages included.
+ *
+ * A path-FRAGMENT pattern (e.g. `/app/data`) keeps containment semantics, which is
+ * what makes it a fragment. An empty pattern matches anything.
  */
 export function traceUrlMatches(pattern: string, actualUrl: string, volatileParams: string[] = []): boolean {
     const p = normalizeTraceUrl(pattern, volatileParams);
@@ -91,7 +127,43 @@ export function traceUrlMatches(pattern: string, actualUrl: string, volatilePara
         return true;
     }
     const a = normalizeTraceUrl(actualUrl, volatileParams);
-    return a.includes(p);
+
+    let patternUrl: URL;
+    let actualParsed: URL;
+    try {
+        patternUrl = new URL(p);
+        actualParsed = new URL(a);
+    } catch {
+        return a.includes(p);   // fragment pattern (or an unparseable actual): containment
+    }
+
+    if (patternUrl.origin !== actualParsed.origin) {
+        return false;
+    }
+    if (!pathContains(patternUrl.pathname, actualParsed.pathname)) {
+        return false;
+    }
+    for (const [name, value] of patternUrl.searchParams) {
+        if (!actualParsed.searchParams.getAll(name).includes(value)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/** Same path, or a descendant of it — `/app/data` contains `/app/data/records`
+ *  but not `/app/data-archive`. */
+function pathContains(patternPath: string, actualPath: string): boolean {
+    // A trailing slash is cosmetic, except on the root itself: a pattern of "/" means
+    // the root page, NOT "anywhere on this origin" — treating it as the latter is how
+    // the login smoke test's URL assertion passed on /login-error.
+    const base = patternPath.length > 1 && patternPath.endsWith('/')
+        ? patternPath.slice(0, -1)
+        : patternPath;
+    if (base === '/' || base === '') {
+        return actualPath === '/' || actualPath === '';
+    }
+    return actualPath === base || actualPath.startsWith(`${base}/`);
 }
 
 // ─── Recording ─────────────────────────────────────────
