@@ -45,7 +45,7 @@ import {
     WalkAgentRunTree,
     type AgentRunTreeNode,
 } from '@memberjunction/ai-core-plus';
-import { IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
@@ -670,6 +670,56 @@ export class TaskGraphDispatcher implements IShutdownable {
      * looking at tasks its own previous incarnation claimed and never released — reclaiming those
      * up front is what turns a crash from "work stranded forever" into "work resumes".
      */
+    /**
+     * Says, once per episode, that this dispatcher cannot claim anything.
+     *
+     * Once per episode rather than once per task: the failure repeats on every task of every poll,
+     * and a line per attempt buries the one fact an operator needs. `TaskClaimStore` resets its
+     * counter on the first write that actually runs, so a later episode announces itself again.
+     */
+    private reportClaimsUnavailable(): void {
+        if (this.claims.ConsecutiveWriteFailures !== 1) return;
+        LogError(
+            `[TaskGraphDispatcher] Cannot claim tasks — the guarded write was refused, not lost to ` +
+            `another instance. Nothing in any graph will execute on this instance until it succeeds. ` +
+            `If this is a permission error, the database principal needs EXECUTE on the task-graph ` +
+            `procedures (the cdp_Developer or cdp_Integration role grants them). ` +
+            `${this.claims.LastWriteError ?? ''}`,
+        );
+    }
+
+    /**
+     * Warns at boot when this process cannot execute the claim procedure.
+     *
+     * The same check the scheduling engine runs for its lock sproc, and for the same reason: the
+     * alternative is discovering it one refused claim at a time, in a log line that reads like a lost
+     * race. Never throws — a dispatcher that cannot probe should still start and try.
+     */
+    private async probeClaimPermission(): Promise<void> {
+        try {
+            const db = (await this.providerFactory.CreateProvider()) as unknown as DatabaseProviderBase;
+            // sys.fn_my_permissions is SQL Server-only; on other platforms a real problem still
+            // surfaces at the first claim rather than as an error-shaped line at boot.
+            if (db.PlatformKey !== 'sqlserver') return;
+            const rows = await db.ExecuteSQL<{ permission_name: string }>(
+                `SELECT permission_name FROM sys.fn_my_permissions(` +
+                `'${db.MJCoreSchemaName}.spTaskGraphClaimTask', 'OBJECT') WHERE permission_name = 'EXECUTE'`,
+                [],
+                { isMutation: false, description: 'TaskGraph claim permission probe' },
+                this.contextUser,
+            );
+            if (!rows || rows.length === 0) {
+                LogError(
+                    `[TaskGraphDispatcher] The database principal lacks EXECUTE on ` +
+                    `${db.MJCoreSchemaName}.spTaskGraphClaimTask, so NO task will ever be claimed. ` +
+                    `Grant the cdp_Developer or cdp_Integration role to the principal and restart.`,
+                );
+            }
+        } catch {
+            // A probe that cannot run is not itself a fault; the claim path reports the real thing.
+        }
+    }
+
     public async Start(): Promise<void> {
         if (this.running) return;
         this.running = true;
@@ -680,6 +730,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         ShutdownRegistry.Instance.Register(this);
 
         LogStatus(`[TaskGraphDispatcher] Starting as instance '${this.config.InstanceID}'.`);
+        await this.probeClaimPermission();
         await this.Reconcile();
         // One wide pass over graphs that reached terminal without settling, mirroring what claim
         // reconciliation above already does for tasks. The realistic producer of a >24h-stale
@@ -941,6 +992,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                 if (!this.running) break;
                 if (this.inFlight.size >= this.config.MaxConcurrentTasks) break;
                 if (!(await this.claims.TryClaim(provider, task.ID, this.contextUser))) {
+                    // A write that was REFUSED is not a lost race (#4575). Both return false, and
+                    // reading the first as the second is what let a dispatcher skip every task in
+                    // the table, forever, while logging nothing but "normal". Stop the wave: if this
+                    // process cannot write claims, the next task will not go better either.
+                    if (this.claims.LastWriteFailed) {
+                        this.reportClaimsUnavailable();
+                        break;
+                    }
                     // Another instance won the race, or the task is no longer Pending. Normal.
                     continue;
                 }
