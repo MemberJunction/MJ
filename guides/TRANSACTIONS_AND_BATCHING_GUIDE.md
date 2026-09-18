@@ -82,7 +82,8 @@ disagree. If you called any of them, switch to `BeginEntityTransaction()` — or
 > MJServer builds per-request providers, so an ambient transaction is effectively request-scoped.
 > Long-lived CLI tools must not run parallel Saves on one provider instance. `mj sync push` is
 > atomic by default: every save runs on the host provider inside the push transaction, **one
-> JSON-root graph at a time**, so nothing interleaves. A non-atomic push (`--no-atomic`) runs graphs
+> JSON-root graph at a time**, so nothing interleaves. An entity directory that opts into isolated
+> transactions (`push.isolatedTransactions`, or `--isolated-transactions`) runs its graphs
 > in parallel on `DatabaseProviderBase.CreateIndependentInstance()`, which forks a provider that
 > **shares the connection pool and metadata cache** but has its own transaction stack (SQL Server and
 > PostgreSQL). Those saves commit as they go and are not rolled back with the push.
