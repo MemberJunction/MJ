@@ -150,7 +150,7 @@ export function evaluatePrecondition(
         return { pass: false, reason: `entry URL does not match ${describeUrlMismatch(pre.UrlPattern, observed.url)}` };
     }
     if (pre.WaitForTarget && observed.targetChecked && !observed.targetVisible) {
-        return { pass: false, reason: 'target never became attached+visible within the bound' };
+        return { pass: false, reason: PRECONDITION_TARGET_MISSING };
     }
     return { pass: true, reason: 'precondition satisfied' };
 }
@@ -272,8 +272,33 @@ export function shouldAcceptHeal(confidence: number, threshold: number = DEFAULT
     return confidence >= threshold;
 }
 
-/** A divergence caused by flow drift (not selector drift) is out of scope for
- *  selector re-resolution and must escalate to full re-derivation (LLM tier). */
+/**
+ * Whether a divergence is selector drift, and so in scope for re-resolution.
+ *
+ * This is an ALLOWLIST, and deliberately so. Exactly two divergences mean "the
+ * element I recorded is not where I recorded it": the target never appeared, and
+ * the action against it failed. Everything else is flow drift — the run is not
+ * where it should be — and re-resolving a selector there finds a same-named
+ * control on the wrong page, clicks it, and reports the run Completed from
+ * somewhere it was never meant to be.
+ *
+ * It used to exclude reasons starting with `postcondition`, which let a URL
+ * PREcondition failure through: a step recorded at /app/data, replayed at
+ * /app/home with a `button "Save"` present, healed and passed.
+ *
+ * An exclusion list also fails open — every divergence reason added later is
+ * healable until someone remembers to exclude it. This fails closed.
+ */
 export function isSelectorHealable(divergenceReason: string): boolean {
-    return !divergenceReason.startsWith('postcondition');
+    return divergenceReason.includes(PRECONDITION_TARGET_MISSING) || ACTION_FAILED.test(divergenceReason);
 }
+
+/**
+ * The precondition failure that means selector drift: the recorded target never
+ * became attached and visible. Shared with {@link isSelectorHealable} so the
+ * producer and the predicate cannot drift apart — the wording is load-bearing.
+ */
+export const PRECONDITION_TARGET_MISSING = 'target never became attached+visible within the bound';
+
+/** `action Click failed — …`, as built by the replay loop. */
+const ACTION_FAILED = /(^|\s)action \S+ failed —/;

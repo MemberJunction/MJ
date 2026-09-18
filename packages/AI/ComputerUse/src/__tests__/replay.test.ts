@@ -8,6 +8,7 @@ import {
     reresolveTarget,
     shouldAcceptHeal,
     isSelectorHealable,
+    PRECONDITION_TARGET_MISSING,
     DEFAULT_HEAL_CONFIDENCE_THRESHOLD,
 } from '../engine/replay.js';
 import { TraceStep, TraceAction, TraceTarget, StepPrecondition, StepPostcondition } from '../types/trace.js';
@@ -209,12 +210,37 @@ describe('shouldAcceptHeal (mabl gate)', () => {
 });
 
 describe('isSelectorHealable (flow-vs-selector drift)', () => {
-    it('treats precondition/action divergence as selector-healable', () => {
-        expect(isSelectorHealable('precondition — target never became visible')).toBe(true);
-        expect(isSelectorHealable('action Click failed — not found')).toBe(true);
+    // These are the reason strings the engine actually builds, not paraphrases:
+    // `precondition — ${evaluatePrecondition().reason}` and `action ${Type} failed — …`.
+    const targetMissing = `precondition — ${PRECONDITION_TARGET_MISSING}`;
+    const wrongPage = 'precondition — entry URL does not match (recorded /app/data, live /app/home)';
+
+    it('treats a missing target as selector-healable — the element moved', () => {
+        expect(isSelectorHealable(targetMissing)).toBe(true);
     });
+
+    it('treats a failed action as selector-healable', () => {
+        expect(isSelectorHealable('action Click failed — not found')).toBe(true);
+        expect(isSelectorHealable('action Type failed — element detached')).toBe(true);
+    });
+
     it('treats postcondition (flow) divergence as NOT selector-healable', () => {
         expect(isSelectorHealable('postcondition — URL mismatch')).toBe(false);
+    });
+
+    it('treats a URL-precondition failure as flow drift, NOT selector drift', () => {
+        // Being on the wrong page is not a moved selector. Healing it clicks a
+        // same-named button on whatever page the run actually landed on, and the
+        // run reports Completed from somewhere it was never meant to be.
+        expect(isSelectorHealable(wrongPage)).toBe(false);
+    });
+
+    it('fails closed on a reason it does not recognise', () => {
+        // The predicate is an allowlist precisely so a divergence reason added later
+        // is not healable by default. An exclusion list leaks every new string.
+        expect(isSelectorHealable('no replayable action (missing recorded selector)')).toBe(false);
+        expect(isSelectorHealable('some future divergence nobody has written yet')).toBe(false);
+        expect(isSelectorHealable('')).toBe(false);
     });
 });
 

@@ -1525,7 +1525,18 @@ export class ComputerUseEngine {
         // recorded selector still points at the recorded element (below), and
         // latching checkpoints whose assertions name elements rather than URLs.
         step.InteractiveElements = await this.safeExtractElements();
-        const repointed = this.repointDriftedSelector(traceStep, step.InteractiveElements, step.StepNumber, context.Params.ReplayHeal ?? 'llm');
+
+        // Re-point only while we are on the page the step was recorded on. The live
+        // element list on the WRONG page still contains same-named controls, so an
+        // ungated re-point rewrites the target to a control that merely shares a
+        // role and name — flow drift repaired as if it were selector drift. The
+        // precondition below would still catch it, but only when the step happened
+        // to record a UrlPattern; without this the rewritten selector is what the
+        // rest of the step acts on.
+        const onRecordedPage = !traceStep.Precondition?.UrlPattern
+            || traceUrlMatches(traceStep.Precondition.UrlPattern, this.browserAdapter.CurrentUrl, volatile);
+        const repointed = onRecordedPage
+            && this.repointDriftedSelector(traceStep, step.InteractiveElements, step.StepNumber, context.Params.ReplayHeal ?? 'llm');
 
         const pre = await this.replayPrecondition(traceStep, volatile);
         if (!pre.pass) {

@@ -11,7 +11,7 @@ import {
 } from '../types/browser.js';
 import { RunComputerUseParams } from '../types/params.js';
 import { AppProfile, SettleConfig } from '../types/app-profile.js';
-import { ComputerUseTrace, TraceStep, TraceTarget, StepPostcondition } from '../types/trace.js';
+import { ComputerUseTrace, TraceStep, TraceTarget, StepPostcondition, StepPrecondition } from '../types/trace.js';
 import type { ReplayHealPolicy } from '../types/params.js';
 
 /** Fake adapter that can drift a selector and expose a fresh element list for healing. */
@@ -222,5 +222,53 @@ describe('ComputerUseEngine.Replay heal policy', () => {
 
         await engine.Replay(trace([clickStep('button', 'Save', '#old')]), paramsWithHeal('off'));
         expect(engine.asked).toBe(0);
+    });
+});
+
+describe('ComputerUseEngine.Replay flow drift is not selector drift', () => {
+    /** A step recorded on one page, whose precondition pins the entry URL. */
+    function stepOnPage(entryUrl: string, role: string, name: string, selector: string): TraceStep {
+        const st = new TraceStep();
+        st.Instruction = `click ${name}`;
+        st.Action.Method = 'click';
+        st.Action.Target = Object.assign(new TraceTarget(), { Role: role, Name: name, Selector: selector });
+        st.Precondition = Object.assign(new StepPrecondition(), { WaitForTarget: true, UrlPattern: entryUrl });
+        return st;
+    }
+
+    it('diverges when replayed on the wrong page, even though a same-named target is right there', async () => {
+        const engine = new ComputerUseEngine();
+        const adapter = new HealFakeAdapter();
+        adapter.Url = 'http://localhost:4200/app/home';     // recorded at /app/data
+        adapter.visible.set('#save-home', true);
+        adapter.elements = [el(0, 'button', 'Save', '#save-home')];
+        engine.SetBrowserAdapter(adapter);
+
+        const t = trace([stepOnPage('http://localhost:4200/app/data', 'button', 'Save', '#save-data')]);
+        const result = await engine.Replay(t, params());
+
+        expect(result.Status).toBe('Failed');
+        expect(result.Replay?.Steps[0].Outcome).toBe('diverged');
+        expect(result.Replay?.Steps[0].Detail).toContain('entry URL does not match');
+        expect(result.Replay?.Healed).toBe(0);
+        // The critical assertion: nothing was clicked on the page we should not be on.
+        expect(adapter.clicked).toHaveLength(0);
+        expect(t.Steps[0].Action.Target?.Selector).toBe('#save-data');
+    });
+
+    it('still heals a missing target when the page IS the recorded one', async () => {
+        const engine = new ComputerUseEngine();
+        const adapter = new HealFakeAdapter();
+        adapter.Url = 'http://localhost:4200/app/data';
+        adapter.visible.set('#save-new', true);
+        adapter.elements = [el(0, 'button', 'Save', '#save-new')];
+        engine.SetBrowserAdapter(adapter);
+
+        const t = trace([stepOnPage('http://localhost:4200/app/data', 'button', 'Save', '#save-old')]);
+        const result = await engine.Replay(t, params());
+
+        expect(result.Status).toBe('Completed');
+        expect(result.Replay?.Healed).toBe(1);
+        expect(adapter.clicked).toContain('#save-new');
     });
 });
