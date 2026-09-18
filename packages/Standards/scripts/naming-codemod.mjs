@@ -413,7 +413,9 @@ function rewriteProperty(ctx, node, names, classNode) {
     if (!readonly) {
         stub +=
             `\n${indent}${docFor(names.New)}\n` +
-            `${indent}${aliasIsInput ? '@Input() ' : ''}${mods}set ${names.Old}(value${paramType}) {\n${indent}${unit}this.${names.New} = value;\n${indent}}`;
+            // No `@Input()` here: a decorated property is refused above, so this stub is always
+            // a plain accessor. (`rewriteAccessorPair` is the one that can emit a decorated alias.)
+            `${indent}${mods}set ${names.Old}(value${paramType}) {\n${indent}${unit}this.${names.New} = value;\n${indent}}`;
     }
     buffer.Insert(node.end, stub);
     return null;
