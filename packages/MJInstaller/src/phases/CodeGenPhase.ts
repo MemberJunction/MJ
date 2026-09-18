@@ -38,6 +38,7 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
+import { classifyTurboFailures } from '../util/turboOutput.js';
 
 /**
  * Input context for the codegen phase.
@@ -546,15 +547,12 @@ export class CodeGenPhase {
     // Build failed — tolerate failures in codegen-managed packages only.
     // These contain stale generated code that codegen will regenerate.
     // Codegen itself only needs server-side packages (not Angular forms).
+    // turbo writes its summary to stdout, so both streams go to the classifier.
     const combinedOutput = result.Stdout + '\n' + result.Stderr;
-    const failedPackages = this.extractFailedTurboPackages(combinedOutput);
-    const onlyCodegenFailures = failedPackages.length > 0
-      && failedPackages.every(pkg =>
-        CodeGenPhase.CODEGEN_MANAGED_PACKAGES.some(pattern => pkg.includes(pattern))
-      );
+    const verdict = classifyTurboFailures(combinedOutput, CodeGenPhase.CODEGEN_MANAGED_PACKAGES);
 
-    if (onlyCodegenFailures) {
-      const failList = failedPackages.join(', ');
+    if (verdict.ToleratedOnly) {
+      const failList = verdict.FailedPackages.join(', ');
       emitter.Emit('warn', {
         Type: 'warn',
         Phase: 'codegen',
@@ -563,11 +561,15 @@ export class CodeGenPhase {
       return;
     }
 
-    const lastLines = this.lastNLines(result.Stderr || result.Stdout, 50);
+    const lastLines = this.lastNLines(combinedOutput, 50);
+    const attribution = verdict.Attributable
+      ? ` Failed packages: ${verdict.FailedPackages.join(', ')}.`
+      : ' The failure could not be attributed to any package — no "Failed:" summary was found in turbo\'s output.';
+
     throw new InstallerError(
       'codegen',
       'CODEGEN_FAILED',
-      `Package rebuild failed (exit code ${result.ExitCode}):\n${lastLines}`,
+      `Package rebuild failed (exit code ${result.ExitCode}).${attribution}\n${lastLines}`,
       `Run "${pm.Name} run build" manually at the repo root to see full error output, then re-run "mj codegen".`
     );
   }
@@ -1477,21 +1479,6 @@ export class CodeGenPhase {
   // ---------------------------------------------------------------------------
   // Utilities
   // ---------------------------------------------------------------------------
-
-  /**
-   * Extract failed package names from turbo's output.
-   * Turbo outputs lines like: "Failed:    @memberjunction/ng-core-entity-forms#build"
-   * Note: the "Failed:" summary goes to stdout, not stderr.
-   */
-  private extractFailedTurboPackages(output: string): string[] {
-    const packages: string[] = [];
-    const failedPattern = /Failed:\s+(@[^#\s]+)#build/g;
-    let match: RegExpExecArray | null;
-    while ((match = failedPattern.exec(output)) !== null) {
-      packages.push(match[1]);
-    }
-    return [...new Set(packages)];
-  }
 
   /**
    * Extract the last N lines from a string (for truncated error output).
