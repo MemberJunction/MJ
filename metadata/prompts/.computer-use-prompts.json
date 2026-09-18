@@ -178,7 +178,7 @@
       "RetryDelayMS": 1000,
       "RetryStrategy": "Fixed",
       "OutputType": "object",
-      "OutputExample": "{\"done\":false,\"confidence\":0.3,\"reason\":\"The agent has navigated to the page but has not yet completed the goal.\",\"feedback\":\"Try clicking on the search input field next.\"}",
+      "OutputExample": "{\"done\":false,\"confidence\":0.3,\"criteria\":[{\"criterion\":\"The search results are visible\",\"met\":false,\"evidence\":\"The page loaded but no search has been run\"}],\"reason\":\"The agent has navigated to the page but has not yet completed the goal.\",\"feedback\":\"Try clicking on the search input field next.\"}",
       "Temperature": 0,
       "Seed": 42,
       "EffortLevel": 1

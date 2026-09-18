@@ -40,21 +40,36 @@ export async function dismissOverlay(page: OverlayDismissablePage): Promise<void
 }
 
 /**
+ * The retry's own budget, once the overlay is gone.
+ *
+ * The first attempt has already consumed the caller's action timeout waiting for
+ * an actionability check that a backdrop can never satisfy, so there is nothing
+ * left to divide. A cleared overlay makes the click land immediately, so a short
+ * fixed window is enough — and it caps the worst case at roughly one budget plus
+ * this, rather than the two full budgets the retry used to cost.
+ */
+export const OVERLAY_RETRY_TIMEOUT_MS = 1500;
+
+/**
  * Run `attempt`; if it failed only because a dismissable overlay was in the way,
- * clear the overlay and run it once more. Any other error — and a second failure —
- * propagates, so a genuinely unreachable target still fails fast.
+ * clear the overlay and run it once more on a short budget. Any other error — and
+ * a second failure — propagates, so a genuinely unreachable target still fails fast.
+ *
+ * `attempt` receives the timeout to use, so the retry is bounded rather than
+ * repeating the caller's full action timeout.
  */
 export async function retryPastDismissableOverlay<T>(
     page: OverlayDismissablePage,
-    attempt: () => Promise<T>
+    attempt: (timeoutMs: number) => Promise<T>,
+    actionTimeoutMs: number
 ): Promise<T> {
     try {
-        return await attempt();
+        return await attempt(actionTimeoutMs);
     } catch (error) {
         if (!isBlockedByDismissableOverlay(error)) {
             throw error;
         }
         await dismissOverlay(page);
-        return await attempt();
+        return await attempt(OVERLAY_RETRY_TIMEOUT_MS);
     }
 }

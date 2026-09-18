@@ -738,12 +738,12 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                     const target = await resolveActionLocator(page, action.Selector);
                     // An open popover's backdrop makes this unwinnable by waiting —
                     // the replay tier's every click comes through here.
-                    await retryPastDismissableOverlay(page, () => target.click({
+                    await retryPastDismissableOverlay(page, timeout => target.click({
                         button: action.Button,
                         clickCount: action.ClickCount,
-                        timeout: this.config.ActionTimeoutMs,
+                        timeout,
                         ...(action.Modifiers?.length ? { modifiers: action.Modifiers } : {}),
-                    }));
+                    }), this.config.ActionTimeoutMs);
                 } else {
                     await this.executeClick(page, action);
                 }

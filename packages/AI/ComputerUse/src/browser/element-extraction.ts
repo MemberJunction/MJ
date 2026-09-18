@@ -119,7 +119,11 @@ function locatorFor(page: Page, element: InteractiveElement) {
  * Budget for the exact-selector attempt. The stored selector is an absolute
  * XPath, so when the SPA has re-rendered since perception it matches nothing and
  * the wait is pure waste — it must fail fast enough to leave room for the heal.
- * The two attempts together never exceed the caller's `actionTimeoutMs`.
+ *
+ * The two attempts do NOT sum to the caller's `actionTimeoutMs`: this bounds the
+ * precise attempt, and the heal attempt that follows gets the caller's full
+ * budget, so the worst case is this plus that. Stated plainly because the comment
+ * here used to claim the opposite.
  */
 const PRECISE_ATTEMPT_TIMEOUT_MS = 2000;
 

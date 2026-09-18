@@ -79,3 +79,31 @@ describe('SharedContextBrowserAdapter selector click — blocking overlay', () =
         expect(result.Success).toBe(false);
     });
 });
+
+describe('overlay retry budget (review: non-blocking)', () => {
+    it('retries on a short budget, not a second full action timeout', async () => {
+        // The first attempt has already burned the action budget waiting for an
+        // actionability check a backdrop can never satisfy. Repeating it doubled
+        // the worst case for every blocked click on the replay tier.
+        locator.click.mockRejectedValueOnce(OVERLAY_INTERCEPTION).mockResolvedValueOnce(undefined);
+
+        const adapter = new SharedContextBrowserAdapter(context as unknown as BrowserContext);
+        const config = new BrowserConfig();
+        config.ActionTimeoutMs = 10_000;
+        await adapter.Launch(config);
+
+        const action = new ClickAction();
+        action.Selector = '#submit';
+        const result = await adapter.ExecuteAction(action);
+
+        expect(result.Success).toBe(true);
+        expect(page.keyboard.press).toHaveBeenCalledWith('Escape');
+        expect(locator.click).toHaveBeenCalledTimes(2);
+
+        const firstTimeout = locator.click.mock.calls[0][0].timeout;
+        const retryTimeout = locator.click.mock.calls[1][0].timeout;
+        expect(firstTimeout).toBe(10_000);
+        expect(retryTimeout).toBeLessThan(firstTimeout);
+        expect(firstTimeout + retryTimeout).toBeLessThan(firstTimeout * 2);
+    });
+});

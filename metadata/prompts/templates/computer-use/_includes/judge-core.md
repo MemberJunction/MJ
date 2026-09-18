@@ -12,23 +12,31 @@
 ## Response Format
 Respond with ONLY a JSON object (no other text):
 
-**Goal accomplished:**
+**Goal accomplished** (with validation criteria — include `criteria`, one entry per criterion):
 ```json
 {
   "done": true,
   "impossible": false,
   "confidence": 0.95,
+  "criteria": [
+    { "criterion": "[criterion text, echoed back]", "met": true, "evidence": "[what you observed]" },
+    { "criterion": "[criterion text, echoed back]", "met": true, "evidence": "[what you observed]" }
+  ],
   "reason": "The goal has been accomplished — [specific evidence]",
   "feedback": ""
 }
 ```
 
-**Goal not yet accomplished but still achievable:**
+**Goal not yet accomplished but still achievable** — `done` is false because a criterion is unmet:
 ```json
 {
   "done": false,
   "impossible": false,
   "confidence": 0.7,
+  "criteria": [
+    { "criterion": "[criterion text, echoed back]", "met": true, "evidence": "[what you observed]" },
+    { "criterion": "[criterion text, echoed back]", "met": false, "evidence": "[what is missing]" }
+  ],
   "reason": "The agent is making progress but has not yet completed [specific remaining work]",
   "feedback": "Specific guidance on what the agent should do next"
 }
@@ -40,10 +48,16 @@ Respond with ONLY a JSON object (no other text):
   "done": false,
   "impossible": true,
   "confidence": 0.9,
+  "criteria": [
+    { "criterion": "[criterion text, echoed back]", "met": false, "evidence": "[the blocker you observed]" }
+  ],
   "reason": "The goal cannot be accomplished because [specific blocker]",
   "feedback": ""
 }
 ```
+
+> Omit `criteria` only when no validation criteria were supplied with this prompt. When they were,
+> every criterion must appear exactly once, and `done` must equal "every criterion met".
 
 ## Field Definitions
 - **"done"**: `true` ONLY if the goal is fully accomplished and visible on screen

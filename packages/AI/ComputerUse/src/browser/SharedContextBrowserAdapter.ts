@@ -303,12 +303,12 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 if (action.Selector) {
                     const target = await resolveActionLocator(page, action.Selector);
                     // Waiting out a backdrop is unwinnable — dismiss it and retry.
-                    await retryPastDismissableOverlay(page, () => target.click({
+                    await retryPastDismissableOverlay(page, timeout => target.click({
                         button: action.Button,
                         clickCount: action.ClickCount,
-                        timeout: this.config.ActionTimeoutMs,
+                        timeout,
                         ...(action.Modifiers?.length ? { modifiers: action.Modifiers } : {}),
-                    }));
+                    }), this.config.ActionTimeoutMs);
                     break;
                 }
                 let x = action.X;
