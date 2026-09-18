@@ -432,6 +432,8 @@ export interface SearchResultItem {
     ID: string;
     /** The entity this result came from */
     EntityName: string;
+    /** Human-readable display name for the entity (e.g., "People" instead of "MJ_BizApps_Common: People") */
+    EntityDisplayName?: string;
     /** The source record ID */
     RecordID: string;
     /** How the content was sourced: 'vector', 'fulltext', 'entity', or 'fused' */

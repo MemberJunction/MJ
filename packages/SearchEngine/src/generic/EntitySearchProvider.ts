@@ -328,9 +328,11 @@ export class EntitySearchProvider extends BaseSearchProvider {
             const nameBoost = nameFieldMatch ? 0.35 : 0;  // +0.35 for name field match
             const score = Math.min(baseScore + nameBoost, 0.95);
 
+            const entityDisplayName = entityInfo?.DisplayName || entityName;
             const resultItem: SearchResultItem = {
                 ID: recordID,
                 EntityName: entityName,
+                EntityDisplayName: entityDisplayName,
                 RecordID: recordID,
                 SourceType: 'entity',
                 ResultType: 'entity-record',
@@ -340,6 +342,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 ScoreBreakdown: { Entity: Math.round(score * 100) / 100 },
                 Tags: [],
                 EntityIcon: entityInfo?.Icon ?? undefined,
+                RecordName: title !== 'Record' ? title : undefined,
                 MatchedAt: new Date()
             };
             return resultItem;
