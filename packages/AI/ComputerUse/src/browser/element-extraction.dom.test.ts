@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
-import { INTERACTIVITY_PROBE } from '../browser/element-extraction.js';
+import { INTERACTIVITY_PROBE } from './element-extraction.js';
 
 /**
  * A roving-tabindex composite marks every INACTIVE item `tabindex="-1"` and only
