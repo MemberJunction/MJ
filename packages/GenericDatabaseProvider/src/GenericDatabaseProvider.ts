@@ -2419,9 +2419,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
             if (sUserSearchSQL.length > 0) {
                 sUserSearchSQL = '(' + sUserSearchSQL + ')';
-            } else if (userSearchString && userSearchString.trim().length > 0) {
-                // When a search term was provided but no fields participate in the search (e.g. non-text fields only or denied by FLS),
-                // return an unsatisfiable predicate so the query returns zero rows rather than the entire table unfiltered.
+            } else if (userSearchString && userSearchString.trim().length > 0 && entityInfo.HasSearchFields) {
+                // A term was supplied and this entity DOES declare searchable fields, but every one of
+                // them dropped out of the loop above — denied by field-level security, or not a sensible
+                // text-search target. Returning the whole table would imply the search ran when it did
+                // not, and in the FLS case would hand back rows the caller tried to narrow by a field
+                // they cannot see. So return an unsatisfiable predicate.
+                //
+                // An entity that declares NO searchable field at all is a DIFFERENT case and stays a
+                // no-op. The caller asked to filter by a surface the entity does not have; nothing was
+                // withheld from them, and blanking a generic grid is the wrong answer. That no-op is
+                // pinned by integration check runview-matrix.RVM9. See MJ#4581.
                 sUserSearchSQL = '(1=0)';
             }
         }
