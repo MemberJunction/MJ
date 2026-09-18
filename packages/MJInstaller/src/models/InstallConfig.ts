@@ -146,9 +146,9 @@ export interface InstallConfig {
 
 /**
  * Partial configuration that can be loaded from a `--config` JSON file
- * or passed programmatically. Fields not present will be prompted for
- * interactively during the {@link ConfigurePhase}, or filled with
- * {@link InstallConfigDefaults} in `--yes` mode.
+ * or passed programmatically. Fields not present are prompted for
+ * interactively during the {@link ConfigurePhase}; in `--yes` mode each
+ * of those prompts resolves to its own default instead of being asked.
  */
 export type PartialInstallConfig = Partial<InstallConfig>;
 
