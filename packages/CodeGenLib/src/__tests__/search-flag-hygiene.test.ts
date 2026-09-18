@@ -94,13 +94,51 @@ describe('search-flag hygiene — seeding the name field', () => {
       const sql = flat(mm.testBuild([]).seedSQL);
       expect(sql).toContain('[IsPrimaryKey]');
       expect(sql).toContain("LOWER(f.[Type]) IN ('nvarchar','varchar','char','nchar')");
-      expect(sql).toContain('[Length] <> -1');
+      // A NULL Length must stay eligible — isFieldEligibleForUserSearch only rejects an explicit
+      // -1, and a bare `[Length] <> -1` is UNKNOWN for NULL, which would silently drop the row.
+      expect(sql).toContain("ISNULL(f.[Length], 0) <> -1");
    });
 
    it('caps the number of seeded fields at the guardrail maximum', () => {
       const sql = flat(mm.testBuild([]).seedSQL);
       expect(sql).toContain('ROW_NUMBER() OVER');
       expect(sql).toContain(`ranked.rn <= ${MAX_SEARCHABLE_FIELDS_PER_ENTITY}`);
+   });
+});
+
+describe('search-flag hygiene — predicate and entity-shape guardrails', () => {
+   let mm: TestableManageMetadata;
+   beforeEach(() => { mm = new TestableManageMetadata(); });
+
+   it('sets the index-seekable predicate rather than inheriting the Contains default', () => {
+      // EntityField.UserSearchPredicateAPI defaults to 'Contains' in the database, which is
+      // LIKE '%term%' — an unindexable scan. Flagging a field without also setting the predicate
+      // would make every seeded entity a full scan per keystroke, which is the exact cost this
+      // whole change exists to avoid.
+      const sql = flat(mm.testBuild([]).seedSQL);
+      expect(sql).toContain("[UserSearchPredicateAPI] = 'BeginsWith'");
+      expect(sql).not.toContain("'Contains'");
+   });
+
+   it('refuses log / audit / run-history entity shapes', () => {
+      const sql = flat(mm.testBuild([]).seedSQL);
+      expect(sql).toContain("LIKE '%Logs'");
+      expect(sql).toContain("LIKE '%Audit%'");
+      expect(sql).toContain("LIKE '%Runs'");
+   });
+
+   it('refuses detail / line-item / step / param child shapes', () => {
+      const sql = flat(mm.testBuild([]).seedSQL);
+      for (const sfx of ['%Details', '%Lines', '%Items', '%Steps', '%Params', '%Mappings']) {
+         expect(sql).toContain(`LIKE '${sfx}'`);
+      }
+   });
+
+   it('only seeds entities where search is actually enabled', () => {
+      // Writing field flags to an entity whose AllowUserSearchAPI is off — a curated exclusion,
+      // say — would permanently disarm both the clear below and the LLM path's
+      // "no searchable fields survived guardrails" block, since those test for flagged fields.
+      expect(flat(mm.testBuild([]).seedSQL)).toContain('e.[AllowUserSearchAPI] = 1');
    });
 });
 

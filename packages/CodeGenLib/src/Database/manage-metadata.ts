@@ -7918,6 +7918,28 @@ export class ManageMetadataBase {
       // Same set the LLM path's isNameLikeFieldName() tests, lowered for a case-insensitive
       // comparison that does not depend on the database collation.
       const nameLikeList = NAME_LIKE_FIELD_NAMES.map(n => `'${n.toLowerCase()}'`).join(',');
+
+      // Every name in NAME_LIKE_FIELD_NAMES resolves to the same predicate, so one literal covers
+      // the whole seed. This MUST be set explicitly: `EntityField.UserSearchPredicateAPI` defaults
+      // to 'Contains' in the database, which is `LIKE '%term%'` — the unindexable scan the
+      // guardrails exist to prevent. Seeding the flag without the predicate would have made every
+      // seeded entity a full scan on every keystroke.
+      const seedPredicate = defaultPredicateFor(NAME_LIKE_FIELD_NAMES[0]);
+
+      // The entity-shape guardrails the LLM path applies (`entityLevelEnableBlockedReason`).
+      // A log / audit / run-history table grows without bound and a detail / line-item child is
+      // reached through its parent; neither is a global-search target, whichever columns it has.
+      // Expressed as SQL rather than reusing the regex helpers because this runs in the database.
+      const shapeSuffixes = [
+         'Logs', 'Log', 'Runs', 'Run', 'Run History', 'Run Steps', 'Run Messages', 'Execution Logs',
+         'Details', 'Detail', 'Lines', 'Line', 'Items', 'Item', 'Steps', 'Step',
+         'Params', 'Param', 'Mappings', 'Mapping',
+      ];
+      const shapeClauses = shapeSuffixes
+         .map(sfx => `e.${this.qi('Name')} LIKE '%${sfx}'`)
+         .concat([`e.${this.qi('Name')} LIKE '%Audit%'`, `e.${this.qi('Name')} LIKE '%Record Change%'`])
+         .join(' OR ');
+      const entityShapeFilter = `AND NOT (${shapeClauses})`;
       const schemaFilter = excludeSchemas.length > 0
          ? `AND e.${this.qi('SchemaName')} NOT IN (${excludeSchemas.map(sc => `'${sc}'`).join(',')})`
          : '';
@@ -7931,14 +7953,15 @@ export class ManageMetadataBase {
             )`;
 
       // An FTS entity is searchable through its index, with no per-field flags involved.
-      const notFullText = `AND ISNULL(e.${this.qi('FullTextSearchEnabled')}, ${no}) = ${no}`;
+      const notFullText = `AND ${this.coalesce(`e.${this.qi('FullTextSearchEnabled')}`, no)} = ${no}`;
 
       // The eligibility predicate here mirrors `isFieldEligibleForUserSearch` (and the runtime
       // `isTextSearchableType` it was written against): not the primary key, a bounded text
       // column. A name field that is neither is left alone rather than flagged uselessly.
       const seedSQL = `
          UPDATE ${entityField}
-         SET ${this.qi('IncludeInUserSearchAPI')} = ${yes}
+         SET ${this.qi('IncludeInUserSearchAPI')} = ${yes},
+             ${this.qi('UserSearchPredicateAPI')} = '${seedPredicate}'
          WHERE ${this.qi('ID')} IN (
             SELECT ranked.${this.qi('ID')} FROM (
                SELECT f.${this.qi('ID')},
@@ -7951,12 +7974,14 @@ export class ManageMetadataBase {
                WHERE LOWER(f.${this.qi('Name')}) IN (${nameLikeList})
                  AND f.${this.qi('AutoUpdateIncludeInUserSearchAPI')} = ${yes}
                  AND f.${this.qi('IncludeInUserSearchAPI')} = ${no}
-                 AND ISNULL(f.${this.qi('IsPrimaryKey')}, ${no}) = ${no}
-                 AND ISNULL(f.${this.qi('IsVirtual')}, ${no}) = ${no}
+                 AND ${this.coalesce(`f.${this.qi('IsPrimaryKey')}`, no)} = ${no}
+                 AND ${this.coalesce(`f.${this.qi('IsVirtual')}`, no)} = ${no}
                  AND LOWER(f.${this.qi('Type')}) IN ('nvarchar','varchar','char','nchar')
-                 AND f.${this.qi('Length')} <> -1
+                 AND ${this.coalesce(`f.${this.qi('Length')}`, '0')} <> -1
                  AND e.${this.qi('VirtualEntity')} = ${no}
+                 AND e.${this.qi('AllowUserSearchAPI')} = ${yes}
                  ${notFullText}
+                 ${entityShapeFilter}
                  ${schemaFilter}
                  AND ${noSearchableField}
             ) ranked
@@ -7997,6 +8022,8 @@ export class ManageMetadataBase {
          // Order matters: seeding first means an entity whose name field was just flagged is no
          // longer a candidate for having its AllowUserSearchAPI cleared. Reversed, the pass would
          // disable search on an entity it was about to make searchable.
+         // 4th arg is `isRecurringScript`, NOT a throw flag — passing `false` here is the default
+         // and is spelled out only to make the intent explicit. Errors are caught below.
          await this.LogSQLBatchAndExecute(pool, [seedSQL, clearSQL], 'Deterministic search-flag hygiene', false);
          return true;
       }

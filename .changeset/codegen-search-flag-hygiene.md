@@ -17,8 +17,14 @@ Order matters: seeding first means an entity whose name column was just flagged 
 
 **The seed keys on the field's NAME, not on `IsNameField`.** That flag is the obvious source and the wrong one. Measured against a real database, seeding from it selects 54 fields of which **41 are virtual** — the denormalized FK display columns CodeGen puts on views (`Action`, `Agent`, `Artifact`). Those are computed by JOIN, so a `LIKE` against them cannot seek any index, and flagging them would push 49 junction entities into the fan-out with unindexable predicates: exactly the cost `search-guardrails.ts` exists to prevent. It also selected identifiers (`RecordID`, `Token`, `ExternalSystemRecordID`) and a `Description`, which `isNarrativeFieldName` rejects on the LLM path. And it would not have fixed `MJ: Employees` — the entity behind the original report — whose only `IsNameField` is the virtual `FirstLast`. Keying on the name reaches its real `FirstName` / `LastName` columns.
 
+Seeded fields also get `UserSearchPredicateAPI = 'BeginsWith'`. `EntityField.UserSearchPredicateAPI` defaults to `'Contains'` in the database — `LIKE '%term%'`, the unindexable scan the guardrails exist to prevent — so flagging a field without setting the predicate would have made every seeded entity a full scan per keystroke.
+
+The seed also applies the entity-shape guardrails the LLM path uses (`entityLevelEnableBlockedReason`): log / audit / run-history tables and detail / line-item / step / param children are never seeded, whichever columns they carry. And it only touches entities where `AllowUserSearchAPI` is already on, so it cannot write flags into a curated exclusion and thereby disarm the clear.
+
 Full-text-search entities are exempt from both statements: an FTS entity is searchable through its index, and `createViewUserSearchSQL` takes the full-text branch before it ever reads `IncludeInUserSearchAPI`.
 
 `isNameLikeFieldName` now derives its pattern from the exported `NAME_LIKE_FIELD_NAMES`, so the generated SQL and the LLM-path predicate cannot drift apart.
 
-Both statements use `UPDATE ... WHERE <key> IN (subquery)` rather than the T-SQL-only `UPDATE ... FROM ... JOIN`, so they run unchanged on PostgreSQL.
+Both statements use `UPDATE ... WHERE <key> IN (subquery)` rather than the T-SQL-only `UPDATE ... FROM ... JOIN`, and go through the dialect helpers (`this.coalesce()`, not a literal `ISNULL`), so they run unchanged on PostgreSQL.
+
+**Known gap:** the clear is unconditional while the seed only repairs name-like columns. An entity whose only plausible search target is identifier-shaped (`Email`, `SKU`, `*Code`, `*Number` — shapes `isIdentifierFieldName` accepts) is disabled with no deterministic path back; an admin can still flag a field by hand and pin it with `AutoUpdateAllowUserSearchAPI = 0`. Measured against a live database this affects zero entities today — the only match, `MJ: Employees`, is already repaired by the name-shape seed.
