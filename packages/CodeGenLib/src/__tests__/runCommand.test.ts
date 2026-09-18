@@ -218,6 +218,64 @@ describe('RunCommandsBase', () => {
             expect(result.output).toMatch(/EADDRINUSE/);
         });
 
+        it('fails a daemon that exits ZERO before its timeout', async () => {
+            // The sibling test above covers a non-zero exit. This is the case that
+            // actually bites: MJAPI's entry point is
+            // `createMJServer({ resolverPaths }).catch(console.error)`, so a boot
+            // failure is caught and logged and never re-thrown, and Node then exits
+            // 0 once the event loop drains. Staying up IS the assertion, so any
+            // close before the timeout is a failure whatever the code — otherwise a
+            // server that never came up is reported as a passing boot check, which
+            // is the inverse of the bug isDaemon was added to fix.
+            const result = await runner.runCommand({
+                command: 'printf "%s\\n" "boot failed: invalid DB credentials" >&2; exit 0',
+                args: [],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 5000,
+                isDaemon: true,
+            });
+            expect(result.success).toBe(false);
+            expect(result.error).toMatch(/exited/i);
+            expect(result.output).toMatch(/boot failed/);
+        });
+
+        it('does not report a daemon failure for the kill it performed itself', async () => {
+            // Reaching the timeout is the PASS, and we kill the child to end the
+            // observation window — so its `close` event fires moments later with
+            // whatever code the kill produced. That close must stay silent: logging
+            // "Daemon exited ... instead of staying up" right after a successful boot
+            // check tells the operator the opposite of what happened.
+            // tree-kill is mocked file-wide, so by default nothing is actually killed
+            // and the child's close event never arrives — which would make this test
+            // pass without exercising anything. Give the mock a real kill for this case.
+            const treeKill = (await import('tree-kill')).default;
+            vi.mocked(treeKill).mockImplementation(((pid: number) => {
+                try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ }
+            }) as unknown as typeof treeKill);
+
+            const errors: string[] = [];
+            const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+                errors.push(args.map(String).join(' '));
+            });
+            try {
+                const result = await runner.runCommand({
+                    command: 'sleep 5',
+                    args: [],
+                    workingDirectory: '/tmp',
+                    when: 'test',
+                    timeout: 300,
+                    isDaemon: true,
+                });
+                expect(result.success).toBe(true);
+                // Give the child's close event time to arrive after treeKill.
+                await new Promise((r) => setTimeout(r, 500));
+                expect(errors.join('\n')).not.toMatch(/Daemon exited/i);
+            } finally {
+                spy.mockRestore();
+            }
+        });
+
         it('rejects a daemon with no timeout instead of waiting forever', async () => {
             const result = await runner.runCommand({
                 command: 'sleep 30',

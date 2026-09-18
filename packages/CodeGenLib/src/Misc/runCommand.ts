@@ -78,6 +78,10 @@ export class RunCommandsBase {
 
       let output = '';
       let startTime = new Date();
+      // Set when the timeout ends the observation window and kills the child itself.
+      // The child's `close` then fires moments later for a kill we performed, which is
+      // not the daemon coming down on its own — see the daemon branch in `close`.
+      let endedByObservationWindow = false;
       const commandName = command.command;
       const absPath = path.resolve(currentWorkingDirectory, command.workingDirectory);
 
@@ -118,6 +122,30 @@ export class RunCommandsBase {
 
         cp.on('close', (code) => {
           const elapsedTime = new Date().getTime() - startTime.getTime();
+
+          // A daemon's entire assertion is that it STAYS UP, so any close before the
+          // timeout is a failure — exit 0 included. Exit 0 is not the harmless case
+          // here, it is the dangerous one: MJAPI's entry point is
+          // `createMJServer({ resolverPaths }).catch(console.error)`, so a boot failure
+          // is caught, logged and never re-thrown, and Node then exits 0 once the event
+          // loop drains. Treating that as success would report a server that never came
+          // up as a passing boot check — the inverse of the bug isDaemon was added for.
+          // ...unless WE ended the window. The timeout kills the child on the way out,
+          // so its close arrives for a kill we performed, after the race has already
+          // settled as a pass. Reporting that as a daemon failure would print the
+          // opposite of what happened right after a successful boot check.
+          if (command.isDaemon === true && !endedByObservationWindow) {
+            const message = `Daemon exited with code ${code} after ${elapsedTime} ms instead of staying up for its ${command.timeout} ms boot window`;
+            console.error(`COMMAND: "${command.command}" FAILED: ${elapsedTime / 1000} seconds (${message})`);
+            resolve({
+              output,
+              error: message,
+              success: false,
+              elapsedTime,
+            });
+            return;
+          }
+
           if (code === 0) {
             logStatus(`COMMAND: "${command.command}" COMPLETED SUCCESSFULLY: ${elapsedTime/1000} seconds`);
             resolve({
@@ -151,6 +179,7 @@ export class RunCommandsBase {
             // A daemon has no exit of its own — staying up for the whole budget is
             // the pass. Anything else that reaches the timeout has hung.
             const isDaemon = command.isDaemon === true;
+            endedByObservationWindow = true;
             if (!cp.killed) {
               treeKill(cp.pid!);
               if (isDaemon) {
