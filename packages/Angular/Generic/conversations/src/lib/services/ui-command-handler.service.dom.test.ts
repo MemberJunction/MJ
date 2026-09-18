@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ComposeEmailCommand } from '@memberjunction/ai-core-plus';
 import { UICommandHandlerService } from './ui-command-handler.service';
+import { DataCacheService } from './data-cache.service';
 
 /**
  * DOM spec (jsdom — the mail client is opened by a synthesized anchor click) for the
@@ -11,8 +12,9 @@ import { UICommandHandlerService } from './ui-command-handler.service';
  * draft with the body silently truncated and the user sends half a message. It must instead emit
  * so the host can open the full draft artifact.
  *
- * The service's only constructor dependency is DataCacheService, which the compose path never
- * touches, so it is passed as a stub rather than through TestBed.
+ * The service's only constructor dependency is DataCacheService, which has a no-arg constructor
+ * and which the compose path never touches — so a real instance is passed directly rather than a
+ * double, and no TestBed is needed.
  */
 describe('UICommandHandlerService — compose:email', () => {
   let service: UICommandHandlerService;
@@ -28,8 +30,7 @@ describe('UICommandHandlerService — compose:email', () => {
   });
 
   beforeEach(() => {
-    const dataCache = { refreshEntity: vi.fn(), refreshCache: vi.fn() };
-    service = new UICommandHandlerService(dataCache as never);
+    service = new UICommandHandlerService(new DataCacheService());
     clicked = [];
     // Capture the synthesized anchor click without navigating jsdom.
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
