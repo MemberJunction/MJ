@@ -81,3 +81,69 @@ describe('IntegrationConnectorCreationPipeline — the run deadline', () => {
         expect(settled).toBe('pending');
     });
 });
+
+describe('IntegrationConnectorCreationPipeline — where the deadline comes from', () => {
+    /**
+     * The ceiling is the OUTERMOST discovery bound and the only one that can fail a whole run, yet it
+     * was the only one with no configuration path: `discoveryTimeBudgetMs`, `discoveryBatchSize` and
+     * `discoveryMaxRecords` all read from the connection, while this read a constant. Changing it meant
+     * editing source and redeploying — so a NetForum catalog of 888 objects was failed at object 336 and
+     * its introspection discarded, with no way to raise the limit for that one connection.
+     *
+     * These pin the precedence, not the numbers.
+     */
+    const resolve = (opts: unknown): number =>
+        (IntegrationConnectorCreationPipeline as unknown as {
+            ResolveRunDeadlineMs: (o: unknown) => number;
+        }).ResolveRunDeadlineMs(opts);
+
+    const withConfig = (cfg: unknown, rest: Record<string, unknown> = {}) => ({
+        CompanyIntegration: { Configuration: typeof cfg === 'string' ? cfg : JSON.stringify(cfg) },
+        ...rest,
+    });
+
+    const ENV = 'MJ_INTEGRATION_RUN_DEADLINE_MS';
+    afterEach(() => { delete process.env[ENV]; });
+
+    it('falls back to the default when nothing is set', () => {
+        expect(resolve({})).toBe(45 * 60_000);
+    });
+
+    it('reads the connection Configuration — the case that had no path before', () => {
+        expect(resolve(withConfig({ runDeadlineMs: 3 * 60 * 60_000 }))).toBe(3 * 60 * 60_000);
+    });
+
+    it('lets an explicit argument win over the connection', () => {
+        expect(resolve(withConfig({ runDeadlineMs: 999 }, { RunDeadlineMs: 123 }))).toBe(123);
+    });
+
+    it('lets the connection win over the environment', () => {
+        process.env[ENV] = '5000';
+        expect(resolve(withConfig({ runDeadlineMs: 7000 }))).toBe(7000);
+    });
+
+    it('reads the environment when the connection says nothing', () => {
+        process.env[ENV] = '5000';
+        expect(resolve({})).toBe(5000);
+    });
+
+    it('honours 0 as "no ceiling" from the connection — the positive-only readers cannot express this', () => {
+        expect(resolve(withConfig({ runDeadlineMs: 0 }))).toBe(0);
+    });
+
+    it('ignores a negative and falls through rather than disabling the ceiling by accident', () => {
+        expect(resolve(withConfig({ runDeadlineMs: -1 }))).toBe(45 * 60_000);
+    });
+
+    it('ignores a non-numeric and falls through', () => {
+        expect(resolve(withConfig({ runDeadlineMs: '3h' }))).toBe(45 * 60_000);
+    });
+
+    it('survives a malformed Configuration instead of throwing mid-run', () => {
+        expect(resolve(withConfig('{not json'))).toBe(45 * 60_000);
+    });
+
+    it('survives a connection with no Configuration at all', () => {
+        expect(resolve({ CompanyIntegration: {} })).toBe(45 * 60_000);
+    });
+});
