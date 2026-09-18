@@ -10,7 +10,7 @@ export default class TestScripts extends Command {
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> --test "T042 - Filter Grid"',
     '<%= config.bin %> <%= command.id %> --promote --test "T042 - Filter Grid"',
-    '<%= config.bin %> <%= command.id %> --promote',
+    '<%= config.bin %> <%= command.id %> --promote --yes',
     '<%= config.bin %> <%= command.id %> --discard --test "T042 - Filter Grid"',
   ];
 
@@ -28,6 +28,11 @@ export default class TestScripts extends Command {
       default: false,
       exclusive: ['promote'],
     }),
+    yes: Flags.boolean({
+      char: 'y',
+      description: 'Confirm a bulk --promote/--discard that was not narrowed with --test',
+      default: false,
+    }),
   };
 
   async run(): Promise<void> {
@@ -40,6 +45,7 @@ export default class TestScripts extends Command {
         test: flags.test,
         promote: flags.promote,
         discard: flags.discard,
+        yes: flags.yes,
       });
     } catch (error) {
       this.error(error as Error);

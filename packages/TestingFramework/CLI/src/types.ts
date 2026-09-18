@@ -106,6 +106,8 @@ export interface ScriptsFlags extends CommonFlags {
     promote?: boolean;
     /** Drop the pending script(s), leaving the promoted one in place. */
     discard?: boolean;
+    /** Confirm a bulk --promote/--discard that was not narrowed to one test. */
+    yes?: boolean;
 }
 
 export interface ListFlags extends CommonFlags {

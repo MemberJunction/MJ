@@ -12,7 +12,13 @@ import { MJTestEntity_IReplayScript, MJTestEntity_IReplayScriptStep } from '@mem
  * that changed while role and name held is routine churn the healer absorbs,
  * whereas a changed target, verb, or URL means the UI itself moved.
  */
-export type ScriptStepDriftKind = 'selector-drift' | 'target-changed' | 'method-changed' | 'url-changed';
+export type ScriptStepDriftKind =
+    | 'selector-drift'
+    | 'target-changed'
+    | 'method-changed'
+    | 'url-changed'
+    | 'input-changed'
+    | 'guard-changed';
 
 export interface ScriptStepDrift {
     /** 0-based index into the promoted script's steps. */
@@ -85,6 +91,12 @@ function compareStep(
     if (normalizeUrl(before.Action?.Url) !== normalizeUrl(after.Action?.Url)) {
         return { index, kind: 'url-changed', detail: `${before.Action?.Url ?? '(none)'} → ${after.Action?.Url ?? '(none)'}` };
     }
+    // The engine's diffTraces labels a changed entry URL `url-changed` too. Using
+    // the same word for only Action.Url meant a step that starts somewhere else
+    // entirely was reported as identical.
+    if (normalizeUrl(before.UrlBefore) !== normalizeUrl(after.UrlBefore)) {
+        return { index, kind: 'url-changed', detail: `entry ${before.UrlBefore ?? '(none)'} → ${after.UrlBefore ?? '(none)'}` };
+    }
 
     const b = before.Action?.Target;
     const a = after.Action?.Target;
@@ -95,10 +107,80 @@ function compareStep(
             detail: `${describeTarget(b?.Role, b?.Name)} → ${describeTarget(a?.Role, a?.Name)}`,
         };
     }
+    // Scope is part of the target's identity — it is what tells same-named twins
+    // apart — so a changed region is the UI moving, not selector churn.
+    if ((b?.Scope ?? '') !== (a?.Scope ?? '')) {
+        return { index, kind: 'target-changed', detail: `scope ${b?.Scope ?? '(none)'} → ${a?.Scope ?? '(none)'}` };
+    }
+
+    // What the step actually enters. A recording that types a different value, or
+    // stops pressing Enter, is a behavioural change however stable its selector.
+    const inputDrift = compareInput(before, after);
+    if (inputDrift) {
+        return { index, ...inputDrift };
+    }
+
+    // What the step asserts. A dropped or rewritten guard is how a script quietly
+    // stops checking the thing it was recorded to check.
+    const guardDrift = compareGuards(before, after);
+    if (guardDrift) {
+        return { index, ...guardDrift };
+    }
+
     if ((b?.Selector ?? '') !== (a?.Selector ?? '')) {
         return { index, kind: 'selector-drift', detail: `${b?.Selector ?? '(none)'} → ${a?.Selector ?? '(none)'}` };
     }
     return null;
+}
+
+/** Text / Key / PressEnter — the payload the step delivers. */
+function compareInput(
+    before: MJTestEntity_IReplayScriptStep,
+    after: MJTestEntity_IReplayScriptStep
+): { kind: ScriptStepDriftKind; detail: string } | null {
+    const fields: Array<'Text' | 'Key'> = ['Text', 'Key'];
+    for (const field of fields) {
+        const b = before.Action?.[field] ?? '';
+        const a = after.Action?.[field] ?? '';
+        if (b !== a) {
+            return { kind: 'input-changed', detail: `${field} "${b}" → "${a}"` };
+        }
+    }
+    if ((before.Action?.PressEnter ?? false) !== (after.Action?.PressEnter ?? false)) {
+        return { kind: 'input-changed', detail: `PressEnter ${before.Action?.PressEnter ?? false} → ${after.Action?.PressEnter ?? false}` };
+    }
+    return null;
+}
+
+/** Precondition / Postcondition — what the step waits for and what it proves. */
+function compareGuards(
+    before: MJTestEntity_IReplayScriptStep,
+    after: MJTestEntity_IReplayScriptStep
+): { kind: ScriptStepDriftKind; detail: string } | null {
+    const pre = describeGuard(before.Precondition);
+    const preAfter = describeGuard(after.Precondition);
+    if (pre !== preAfter) {
+        return { kind: 'guard-changed', detail: `precondition ${pre} → ${preAfter}` };
+    }
+    const post = describeGuard(before.Postcondition);
+    const postAfter = describeGuard(after.Postcondition);
+    if (post !== postAfter) {
+        return { kind: 'guard-changed', detail: `postcondition ${post} → ${postAfter}` };
+    }
+    return null;
+}
+
+/** Stable text for a guard, with URL patterns normalized so token churn is not drift. */
+function describeGuard(guard: unknown): string {
+    if (!guard) {
+        return '(none)';
+    }
+    const g = guard as Record<string, unknown>;
+    const parts = Object.keys(g)
+        .sort()
+        .filter(k => g[k] !== undefined)
+        .map(k => `${k}=${k.endsWith('UrlPattern') ? normalizeUrl(String(g[k])) : String(g[k])}`);
+    return parts.length > 0 ? parts.join(',') : '(none)';
 }
 
 function describeTarget(role: string | undefined, name: string | undefined): string {

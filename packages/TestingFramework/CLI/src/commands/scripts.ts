@@ -40,12 +40,35 @@ export class ScriptsCommand {
             const engine = TestEngine.Instance;
             await engine.Config(false, contextUser);
 
+            const matchedTests = flags.test ? this.findTests(engine, flags.test) : undefined;
+            if (matchedTests && matchedTests.length === 0) {
+                // A name nobody has is not the same as a test with nothing pending.
+                // Reporting both as "no pending script" made a typo look like success.
+                console.log(chalk.yellow(`\nNo test matches "${flags.test}".\n`));
+                process.exitCode = 1;
+                await closeMJProvider();
+                return;
+            }
+
             const entries = this.collectPending(engine, flags.test);
 
             if (entries.length === 0) {
                 console.log(chalk.gray(flags.test
                     ? `\nNo pending replay script for "${flags.test}".\n`
                     : '\nNo pending replay scripts — every recorded script matches what replay is using.\n'));
+                await closeMJProvider();
+                return;
+            }
+
+            if ((flags.promote || flags.discard) && !flags.test && !flags.yes && entries.length > 1) {
+                // Resolving every pending script at once is the operation you least
+                // want to perform by accident: promoting ratifies UI changes nobody
+                // looked at, discarding throws away recordings that cost model time.
+                this.report(entries);
+                console.log(chalk.yellow(
+                    `This would ${flags.promote ? 'promote' : 'discard'} all ${entries.length} pending script(s) at once.\n` +
+                    `Re-run with --yes to confirm, or narrow it with --test "<name>".\n`));
+                process.exitCode = 1;
                 await closeMJProvider();
                 return;
             }
@@ -66,6 +89,11 @@ export class ScriptsCommand {
             }
             process.exit(1);
         }
+    }
+
+    /** Every test matching a name-or-ID filter, regardless of pending state. */
+    private findTests(engine: TestEngine, testFilter: string): MJTestEntity[] {
+        return engine.Tests.filter(t => t.Name === testFilter || UUIDsEqual(t.ID, testFilter));
     }
 
     /** Tests carrying a pending script, optionally narrowed to one by name or ID. */

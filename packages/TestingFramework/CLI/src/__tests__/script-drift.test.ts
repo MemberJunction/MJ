@@ -123,3 +123,65 @@ describe('summarizeScriptDrift', () => {
         expect(summarizeScriptDrift(script([]), script([])).summary).toBe('identical to the promoted script');
     });
 });
+
+describe('fields the comparison used to ignore (review: non-blocking)', () => {
+    /** A full step, so each test can change exactly one field. */
+    function full(): MJTestEntity_IReplayScriptStep {
+        return {
+            Instruction: 'type the name',
+            UrlBefore: 'http://app/data',
+            Action: {
+                Method: 'type' as MJTestEntity_IReplayScriptStep['Action']['Method'],
+                Text: 'Widget',
+                Key: 'Enter',
+                PressEnter: true,
+                Target: { Role: 'textbox', Name: 'Name', Selector: '#n', Scope: 'group:Details' },
+            },
+            Precondition: { WaitForTarget: true },
+            Postcondition: { UrlPattern: 'http://app/data/saved' },
+        } as MJTestEntity_IReplayScriptStep;
+    }
+
+    const scriptOf = (s: MJTestEntity_IReplayScriptStep): MJTestEntity_IReplayScript =>
+        ({ TestId: 'T1', Steps: [s] } as MJTestEntity_IReplayScript);
+
+    function driftFor(mutate: (s: MJTestEntity_IReplayScriptStep) => void) {
+        const after = full();
+        mutate(after);
+        return summarizeScriptDrift(scriptOf(full()), scriptOf(after));
+    }
+
+    it('reports changed typed text — the recording no longer enters the same value', () => {
+        expect(driftFor(s => { s.Action.Text = 'Gadget'; }).meaningfulDrift).toBeGreaterThan(0);
+    });
+
+    it('reports a changed key', () => {
+        expect(driftFor(s => { s.Action.Key = 'Tab'; }).meaningfulDrift).toBeGreaterThan(0);
+    });
+
+    it('reports a changed PressEnter', () => {
+        expect(driftFor(s => { s.Action.PressEnter = false; }).meaningfulDrift).toBeGreaterThan(0);
+    });
+
+    it('reports a changed Scope — the twin-disambiguating region moved', () => {
+        expect(driftFor(s => { s.Action.Target!.Scope = 'group:Other'; }).meaningfulDrift).toBeGreaterThan(0);
+    });
+
+    it('reports a changed UrlBefore', () => {
+        expect(driftFor(s => { s.UrlBefore = 'http://app/home'; }).meaningfulDrift).toBeGreaterThan(0);
+    });
+
+    it('reports a changed postcondition — the step now asserts something else', () => {
+        expect(driftFor(s => { s.Postcondition = { UrlPattern: 'http://app/elsewhere' } as never; }).meaningfulDrift).toBeGreaterThan(0);
+    });
+
+    it('reports a dropped postcondition', () => {
+        expect(driftFor(s => { s.Postcondition = undefined; }).meaningfulDrift).toBeGreaterThan(0);
+    });
+
+    it('still reports two identical steps as no drift', () => {
+        const drift = summarizeScriptDrift(scriptOf(full()), scriptOf(full()));
+        expect(drift.changes).toHaveLength(0);
+        expect(drift.meaningfulDrift).toBe(0);
+    });
+});
