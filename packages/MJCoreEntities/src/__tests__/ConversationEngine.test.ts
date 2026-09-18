@@ -12,6 +12,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 let runViewResultQueue: Array<{ Success: boolean; Results: unknown[]; ErrorMessage?: string }> = [];
 
 /**
+ * How many times the dispatcher asked for the row.
+ *
+ * On a remote event whose entity is not on the server's broadcast allowlist, that ask is a READ
+ * through the provider — and this dispatcher runs in every connected browser for every save of
+ * these entities anywhere in the system. "Did it skip the read" is therefore a behaviour worth
+ * asserting directly; a test that only checks the handler's outcome passes either way, because
+ * skipping and reading-then-discarding look identical from outside.
+ *
+ * `vi.hoisted` because `vi.mock` factories are lifted above ordinary declarations.
+ */
+const rowResolverCalls = vi.hoisted(() => ({ count: 0 }));
+
+/**
  * Queue of results that the RunQuery mock will return in order.
  */
 let runQueryResultQueue: Array<{ Success: boolean; Results: unknown[] | null; ErrorMessage?: string }> = [];
@@ -91,6 +104,7 @@ vi.mock('@memberjunction/core', () => {
             }
         },
         ResolveEntityEventRow: async (event: { baseEntity?: { GetAll(): unknown }; payload?: { recordData?: string } }) => {
+            rowResolverCalls.count++;
             if (event?.baseEntity) return event.baseEntity.GetAll();
             const raw = event?.payload?.recordData;
             if (!raw) return null;
@@ -1184,6 +1198,62 @@ describe('ConversationEngine', () => {
             });
 
             expect(engine.GetCachedDetails('conv-1')).toBeUndefined();
+        });
+    });
+
+    // ========================================================================
+    // THE ROW IS ONLY FETCHED WHEN SOMETHING WILL USE IT
+    // ========================================================================
+    // On a remote event for an entity off the broadcast allowlist, asking for the row means a READ
+    // through the provider — in every connected browser, for every save of these entities anywhere
+    // in the system. These assert the ASK, not just the outcome: skipping the read and
+    // reading-then-discarding produce the same handler result, so only a call count tells them
+    // apart.
+    describe('row hydration is gated', () => {
+        const remote = (entityName: string, action: string, id: string) => ({
+            type: 'remote-invalidate',
+            baseEntity: null,
+            entityName,
+            payload: { action, primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: id }]) },
+        });
+        const dispatch = (evt: Record<string, unknown>) =>
+            (engine as unknown as {
+                HandleIndividualBaseEntityEvent(e: Record<string, unknown>): Promise<boolean>;
+            }).HandleIndividualBaseEntityEvent(evt);
+
+        beforeEach(() => { rowResolverCalls.count = 0; });
+
+        it('does not read for a project event — ID is the primary key', async () => {
+            await dispatch(remote('MJ: Projects', 'save', 'proj-1'));
+            expect(rowResolverCalls.count).toBe(0);
+        });
+
+        it('does not read for a conversation delete — the id is all it needs', async () => {
+            await dispatch(remote('MJ: Conversations', 'delete', 'conv-nope'));
+            expect(rowResolverCalls.count).toBe(0);
+        });
+
+        it('does not read for a conversation save we do not hold', async () => {
+            await dispatch(remote('MJ: Conversations', 'save', 'conv-not-ours'));
+            expect(rowResolverCalls.count).toBe(0);
+        });
+
+        it('does not read for a detail event when nothing is cached', async () => {
+            // The common case for most sessions: someone else's conversation, in some other
+            // tenant, on the hottest write path in the product.
+            await dispatch(remote('MJ: Conversation Details', 'save', 'd-someone-elses'));
+            expect(rowResolverCalls.count).toBe(0);
+        });
+
+        it('DOES read for a detail event once a conversation is cached', async () => {
+            // ConversationID is a foreign key, so the primary key cannot tell us whether this
+            // detail belongs to a conversation we hold — the read is the only way to find out.
+            enqueueDetailsResults([createMockDetail({ ID: 'd1', ConversationID: 'conv-1' })]);
+            await engine.LoadConversationDetails('conv-1', contextUser);
+            rowResolverCalls.count = 0;
+
+            await dispatch(remote('MJ: Conversation Details', 'save', 'd-new'));
+            expect(rowResolverCalls.count).toBe(1);
         });
     });
 
