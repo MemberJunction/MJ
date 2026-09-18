@@ -4,6 +4,7 @@ import 'reflect-metadata';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   ConfigureRecordDataBroadcast,
+  MayBroadcastPrimaryKey,
   MayBroadcastRecordData,
 } from '../generic/CacheInvalidationResolver.js';
 
@@ -71,5 +72,36 @@ describe('MayBroadcastRecordData', () => {
 describe('CacheInvalidationResolver module surface', () => {
   it('imports without any server configuration present', async () => {
     await expect(import('../generic/CacheInvalidationResolver.js')).resolves.toBeDefined();
+  });
+});
+
+/**
+ * The record id is withheld on a save that withholds the row — and only there.
+ *
+ * Verified against both consumers before writing this: LocalCacheManager and BaseEngine read
+ * `primaryKeyValues` ONLY under `action === 'delete'`. On a save they build the key from
+ * `recordData` (`buildCompositeKeyFromRow`), so once the row is withheld the key is read by nobody
+ * and its only effect is to disclose the id of a record the subscriber may not be entitled to.
+ */
+describe('MayBroadcastPrimaryKey', () => {
+  afterEach(() => ConfigureRecordDataBroadcast([]));
+
+  it('withholds the key on a save whose row is withheld', () => {
+    ConfigureRecordDataBroadcast([]);
+    expect(MayBroadcastPrimaryKey('save', 'MJ: Conversation Details')).toBe(false);
+  });
+
+  it('sends the key on a save whose row is going anyway', () => {
+    // Nothing is gained by hiding the id of a row being shipped in full beside it.
+    ConfigureRecordDataBroadcast(['AI Models']);
+    expect(MayBroadcastPrimaryKey('save', 'AI Models')).toBe(true);
+    expect(MayBroadcastPrimaryKey('save', 'MJ: Conversation Details')).toBe(false);
+  });
+
+  it('always sends the key on a delete, which is the one path that reads it', () => {
+    // A delete carries no row content to withhold, and both consumers need the key to drop that one
+    // row; without it they fall back to invalidating the whole entity for no privacy gain.
+    ConfigureRecordDataBroadcast([]);
+    expect(MayBroadcastPrimaryKey('delete', 'MJ: Conversation Details')).toBe(true);
   });
 });

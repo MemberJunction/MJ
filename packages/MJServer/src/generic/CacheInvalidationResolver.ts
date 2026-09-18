@@ -43,6 +43,24 @@ export function MayBroadcastRecordData(entityName: string): boolean {
   return allowedRecordDataEntities.some((e) => e.trim().toLowerCase() === name);
 }
 
+/**
+ * May the record's primary key ride along?
+ *
+ * On a DELETE, yes: both consumers use it to drop that one row from their caches
+ * (`LocalCacheManager.parseCompositeKeyFromJSON` -> `RemoveSingleEntity`, `BaseEngine.applyRemoteDelete`),
+ * and a delete carries no row content to withhold in the first place. Omitting it would force a
+ * whole-entity invalidation on every delete for no privacy gain.
+ *
+ * On a SAVE, only when the row itself is going too. Both consumers build their key from
+ * `recordData` on that path (`buildCompositeKeyFromRow`) and NEVER read `primaryKeyValues`; with the
+ * row withheld they fall through to invalidating the entity's cached results either way. So a key
+ * sent alongside a withheld row is read by nobody and discloses the id of a record the subscriber
+ * may not be entitled to — cost without benefit. Saves are also the bulk of the traffic.
+ */
+export function MayBroadcastPrimaryKey(action: string, entityName: string): boolean {
+  return action === 'delete' || MayBroadcastRecordData(entityName);
+}
+
 @ObjectType()
 export class CacheInvalidationNotification {
     @Field(() => String)

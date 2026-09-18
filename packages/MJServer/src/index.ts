@@ -67,7 +67,7 @@ import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
-import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, MayBroadcastPrimaryKey, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
 import {
@@ -913,7 +913,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
         const entityName = beEvent.baseEntity.EntityInfo.Name;
         PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
           entityName,
-          primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
+          primaryKeyValues: MayBroadcastPrimaryKey(beEvent.type, entityName)
+            ? JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs)
+            : null,
           action: beEvent.type,
           sourceServerId: MJGlobal.Instance.ProcessUUID,
           timestamp: new Date(),
