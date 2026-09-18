@@ -77,6 +77,29 @@ vi.mock('@memberjunction/core', () => {
         }
     }
     return {
+        // The engine now resolves identity from the event's primary key and the row from
+        // `ResolveEntityEventRow` (which re-reads when the server withheld it). Mocked here so the
+        // remote-event tests below exercise the engine's own logic rather than the resolver's;
+        // the resolver has its own suite in @memberjunction/core.
+        ResolveEntityEventKey: (event: { payload?: { primaryKeyValues?: string } }) => {
+            const raw = event?.payload?.primaryKeyValues;
+            if (!raw) return null;
+            try {
+                return { KeyValuePairs: JSON.parse(raw) };
+            } catch {
+                return null;
+            }
+        },
+        ResolveEntityEventRow: async (event: { baseEntity?: { GetAll(): unknown }; payload?: { recordData?: string } }) => {
+            if (event?.baseEntity) return event.baseEntity.GetAll();
+            const raw = event?.payload?.recordData;
+            if (!raw) return null;
+            try {
+                return JSON.parse(raw);
+            } catch {
+                return null;
+            }
+        },
         BaseEngine: class MockBaseEngine {
             static getInstance<T>(): T {
                 const ctor = this as unknown as { _testInstance?: T; new (): T };
@@ -1117,16 +1140,50 @@ describe('ConversationEngine', () => {
             await engine.LoadConversationDetails('conv-1', contextUser);
             expect(engine.GetCachedDetails('conv-1')).toBeDefined();
 
-            // Remote event: no baseEntity, new row ID not in the cache
+            // Remote event: no baseEntity, new row ID not in the cache. The handler now receives
+            // the row from the dispatcher (which hydrates once, from recordData or a keyed
+            // re-read) rather than extracting it itself, so it is passed explicitly here.
+            const row = { ID: 'd-new', ConversationID: 'conv-1' };
             const internals = engine as unknown as {
-                handleConversationDetailEntityEvent(event: Record<string, unknown>, action: string): boolean;
+                handleConversationDetailEntityEvent(
+                    event: Record<string, unknown>, action: string, data: Record<string, unknown> | null): boolean;
             };
             internals.handleConversationDetailEntityEvent({
                 baseEntity: null,
-                payload: { recordData: JSON.stringify({ ID: 'd-new', ConversationID: 'conv-1' }) },
-            }, 'save');
+                payload: { primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'd-new' }]) },
+            }, 'save', row);
 
             expect(engine.GetCachedDetails('conv-1')).toBeUndefined(); // next load re-queries
+        });
+
+        // The dispatcher is where the row now comes from, so cover that seam too: a remote event
+        // whose row was WITHHELD by the server must still reach the handler with a row, via the
+        // re-read, and still evict. Without the hydration step this is the silent no-op that
+        // withholding recordData would otherwise cause.
+        it('hydrates a withheld row at the dispatcher and still evicts', async () => {
+            enqueueDetailsResults([
+                createMockDetail({ ID: 'd1', ConversationID: 'conv-1' }),
+            ]);
+            await engine.LoadConversationDetails('conv-1', contextUser);
+            expect(engine.GetCachedDetails('conv-1')).toBeDefined();
+
+            const dispatcher = engine as unknown as {
+                HandleIndividualBaseEntityEvent(event: Record<string, unknown>): Promise<boolean>;
+            };
+            await dispatcher.HandleIndividualBaseEntityEvent({
+                type: 'remote-invalidate',
+                baseEntity: null,
+                entityName: 'MJ: Conversation Details',
+                // No recordData — exactly what the server sends for an entity that is not on the
+                // broadcast allowlist. The mocked resolver stands in for the keyed re-read.
+                payload: {
+                    action: 'save',
+                    primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'd-new' }]),
+                    recordData: JSON.stringify({ ID: 'd-new', ConversationID: 'conv-1' }),
+                },
+            });
+
+            expect(engine.GetCachedDetails('conv-1')).toBeUndefined();
         });
     });
 

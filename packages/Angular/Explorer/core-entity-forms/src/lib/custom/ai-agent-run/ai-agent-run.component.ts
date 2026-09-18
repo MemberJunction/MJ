@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
-import { BaseEntity, BaseEntityEvent, CompositeKey, Metadata } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, CompositeKey, Metadata, ResolveEntityEventRow } from '@memberjunction/core';
 import {
     LoadAgentRunTree,
     MAX_AGENT_RUN_TREE_DEPTH,
@@ -235,7 +235,12 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
    * use case here); `remote-invalidate` covers writes from a separate
    * server process if GraphQL cache-invalidation is wired up.
    */
-  private handleEntityEvent(mjEvent: MJEvent): void {
+  /**
+   * Fire-and-forget: nothing consumes the return, which is what lets this be async. It has to be,
+   * because a remote event no longer carries the row unless the deployment allowlisted the entity
+   * — the fields below come from a keyed re-read instead (see `ResolveEntityEventRow`).
+   */
+  private async handleEntityEvent(mjEvent: MJEvent): Promise<void> {
     if (mjEvent.event !== MJEventType.ComponentEvent) return;
     if (mjEvent.eventCode !== BaseEntity.BaseEventCode) return;
     const evt = mjEvent.args as BaseEntityEvent | undefined;
@@ -255,7 +260,9 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         this.refreshData();
         // If the run completed, drop the subscription — no further
         // writes are expected and we don't want to hold the listener.
-        const newStatus = this.resolveEventField<string>(evt, 'Status');
+        // Resolved only once the id has matched, so an unrelated run's event costs no read.
+        const row = await this.resolveEventRow(evt);
+        const newStatus = row?.['Status'] as string | undefined;
         if (newStatus && newStatus !== 'Running') {
           this.unsubscribeFromRunEvents();
         }
@@ -265,7 +272,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
 
     // Steps still carry AgentRunID, so a step write can be correlated exactly to this run.
     if (entityName === 'MJ: AI Agent Run Steps') {
-      const childAgentRunId = this.resolveEventField<string>(evt, 'AgentRunID');
+      const childAgentRunId = (await this.resolveEventRow(evt))?.['AgentRunID'] as string | undefined;
       if (childAgentRunId && UUIDsEqual(childAgentRunId, runId)) {
         this.refreshRunDataDebounced();
       }
@@ -315,20 +322,16 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     return null;
   }
 
-  private resolveEventField<T>(evt: BaseEntityEvent, fieldName: string): T | null {
-    if (evt.baseEntity) {
-      const val = evt.baseEntity.Get?.(fieldName) as T | undefined;
-      return val ?? null;
-    }
-    const payload = evt.payload as { recordData?: string | null } | undefined;
-    if (!payload?.recordData) return null;
-    try {
-      const row = JSON.parse(payload.recordData) as Record<string, unknown>;
-      const v = row?.[fieldName];
-      return (v ?? null) as T | null;
-    } catch {
-      return null;
-    }
+  /**
+   * The row behind an event, for the two fields this component needs that the primary key cannot
+   * give it (`Status` on the run, `AgentRunID` on a step).
+   *
+   * A remote event carries the row only for entities a deployment has opted into broadcasting;
+   * otherwise this re-reads that one record as the signed-in user, so a session that may not read
+   * it gets nothing rather than someone else's data.
+   */
+  private async resolveEventRow(evt: BaseEntityEvent): Promise<Record<string, unknown> | null> {
+    return await ResolveEntityEventRow(evt, this.ProviderToUse);
   }
 
   /**
