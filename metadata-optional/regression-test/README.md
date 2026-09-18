@@ -10,7 +10,7 @@ These are **test-only** records. Like `metadata-optional/integration-test/`, the
 mj sync push --dir=metadata-optional/regression-test
 ```
 
-The `Computer Use` TestType row itself stays in the normal `metadata/test-types/` tree (it is just a type definition, no test data). The pre-consolidation regression tests (the original `T01`–`T25` that shipped in `metadata/tests/regression/`) are removed from every instance by delete records at [`metadata/tests/regression/.deleted-computer-use-tests.json`](../../metadata/tests/regression/.deleted-computer-use-tests.json) — those DO live in the default tree so a normal `mj sync push` prunes them.
+The `Computer Use` TestType row itself stays in the normal `metadata/test-types/` tree (it is just a type definition, no test data). The pre-consolidation regression tests (the original `T01`–`T25` that shipped in `metadata/tests/regression/`) are removed from every instance by [`migrations/v6/V202609171030__v6.2.x__Prune_Pre_Consolidation_ComputerUse_Tests.sql`](../../migrations/v6/V202609171030__v6.2.x__Prune_Pre_Consolidation_ComputerUse_Tests.sql), which drops their suite memberships and then the test rows themselves. It is a migration rather than metadata delete records because a `deleteRecord` directive re-stamps `deletedAt` into its own file on every database where the row is still present, which leaves the committed tree dirty on every CI run.
 
 ## Quick Reference
 

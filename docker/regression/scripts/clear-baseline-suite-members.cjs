@@ -2,22 +2,23 @@
  * Clear baseline-seeded members of the MJ Explorer Regression Suite BEFORE any
  * test/suite metadata push, so the metadata becomes authoritative.
  *
- * Why this exists — two independent failures, both caused by the same stale rows:
+ * Why this exists — and what has since stopped being true.
  *
- *   1. UQ collision. A Flyway baseline migration (B*__Baseline.sql) seeds this
- *      suite with the 25 members captured when the baseline was cut. Six of
- *      those TestIDs are reused by tests in metadata-optional/regression-test,
- *      which carry their own member primaryKeys — different PKs for the same
- *      (SuiteID, TestID) pair. Pushing them violates UQ_TestSuiteTest_Suite_Test
- *      and rolls back the ENTIRE member transaction, leaving the DB stuck at the
- *      stale 25-member baseline while the metadata defines 155.
+ *   Originally this guarded two failures caused by the baseline-seeded members:
+ *   a UQ collision, because six of the consolidated tests reused a baseline
+ *   TestID with a different member primaryKey; and an FK block, because the
+ *   delete records that pruned the old T01-T25 could not apply while those
+ *   members existed.
  *
- *   2. FK block. All 25 baseline members hold an FK to a Computer Use test that
- *      metadata/tests/regression/.deleted-computer-use-tests.json prunes, so the
- *      delete records cannot apply while those members exist.
+ *   Both are gone. The six tests were given fresh keys, so no metadata member
+ *   reuses a baseline (SuiteID, TestID) pair; and the prune moved out of metadata
+ *   into migrations/v6/V202609171030__v6.2.x__Prune_Pre_Consolidation_ComputerUse_Tests.sql,
+ *   which drops all 25 memberships during db-setup. On a database built fresh
+ *   from migrations this script now finds nothing to clear.
  *
- *   Clearing the suite's members first fixes both: the deletes are unblocked and
- *   every metadata member inserts cleanly into an empty membership.
+ *   It is kept for the reruns that do NOT start fresh: on a persistent volume the
+ *   previous run's members are still there, and clearing them keeps the metadata
+ *   push authoritative rather than layering onto whatever the last run left.
  *
  * Non-fatal: if the suite doesn't exist yet, or the DB is unreachable, we warn
  * and continue (the push itself will surface any real problem).

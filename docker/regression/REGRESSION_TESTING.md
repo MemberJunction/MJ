@@ -535,7 +535,7 @@ metadata-optional/regression-test/
     └── .regression-suite.json    # Suite + ordered TestSuiteTest mappings
 
 metadata/tests/regression/
-└── .deleted-computer-use-tests.json  # Delete records pruning the old T01–T25
+(the old T01–T25 are pruned by a migration, not by metadata — see migrations/v6/)
 ```
 
 ### How the entrypoints + scripts fit together

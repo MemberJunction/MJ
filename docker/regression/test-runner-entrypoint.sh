@@ -112,17 +112,17 @@ echo ""
 # (a) makes the metadata suite-member push authoritative — the baseline seeds
 # different PKs for six of the same (SuiteID,TestID) pairs, which would UQ-collide
 # and roll back the whole member transaction; and (b) drops suite members holding
-# an FK to a Computer Use test that the delete records below prune.
+# an FK to a Computer Use test that the prune migration already removed
+# during db-setup (migrations/v6/V202609171030__v6.2.x__Prune_Pre_Consolidation_ComputerUse_Tests.sql).
 echo "Clearing baseline-seeded regression suite members..."
 node "$SCRIPTS/clear-baseline-suite-members.cjs" 2>&1 || echo "  WARNING: suite-member clear failed (non-fatal)"
 echo ""
 
 # Sync test definitions + suite mapping. Tests must process before suites
 # because suites reference tests by name.
-# Default metadata/ tree: research-agent tests/suites + the Computer Use delete
-# records (metadata/tests/regression/.deleted-computer-use-tests.json) that prune
-# the pre-consolidation regression tests from the instance.
-echo "Syncing test metadata (incl. Computer Use delete records)..."
+# Default metadata/ tree: research-agent tests/suites only. The pre-consolidation
+# T01-T25 are pruned by a migration during db-setup, not from here.
+echo "Syncing test metadata..."
 node /app/packages/MJCLI/bin/run.js sync push --dir=metadata --include="tests" 2>&1 || {
     echo "  WARNING: Test metadata sync failed"
 }
