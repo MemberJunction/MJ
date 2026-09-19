@@ -26,7 +26,6 @@ import { MJRealtimeSessionCard } from '@/chat/realtime/RealtimeSessionCard';
 import { FindActiveTrigger, ApplyMention, MentionedAgentId, SerializeDraft, type InsertedMention } from '@/chat/mentions/trigger';
 import { MentionSuggestions } from '@/chat/mentions/MentionSuggestions';
 import { MJComposer } from '@/chat/composer/MJComposer';
-import { GlobalNav } from '@/components/GlobalNav';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { ChatColors, Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -77,7 +76,6 @@ export default function ChatThreadScreen() {
 
     const [sending, setSending] = useState(false);
     const [stalled, setStalled] = useState(false);
-    const [navOpen, setNavOpen] = useState(false);
     const [progress, setProgress] = useState<SendProgress | null>(null);
     const [pendingUserText, setPendingUserText] = useState<string | null>(null);
     const [sendError, setSendError] = useState<string | null>(null);
@@ -245,7 +243,7 @@ export default function ChatThreadScreen() {
                 behavior="padding"
                 keyboardVerticalOffset={0}
             >
-                <ChatHeader title={view.title} participants={view.participants} messageCount={view.messageCount} live={view.live || sending} onOpenNav={() => setNavOpen(true)} />
+                <ChatHeader title={view.title} participants={view.participants} messageCount={view.messageCount} live={view.live || sending} />
                 {recentChips.length > 0 ? <RecentsStrip activeId={view.id} chips={recentChips} /> : null}
 
                 <ScrollView
@@ -329,7 +327,6 @@ export default function ChatThreadScreen() {
                 <ArtifactDockHandle conversationId={view.id} count={view.artifacts.length} />
                 <MJComposer OnSend={handleSend} Disabled={sending} ConversationID={view.id} />
             </KeyboardAvoidingView>
-            <GlobalNav Visible={navOpen} OnClose={() => setNavOpen(false)} />
         </SafeAreaView>
     );
 }
@@ -339,24 +336,27 @@ export default function ChatThreadScreen() {
  * avatar stack + participant/message counts + live dot, and `+`
  * (-> `/new-conversation`).
  */
-function ChatHeader({ title, participants, messageCount, live, onOpenNav }: {
+function ChatHeader({ title, participants, messageCount, live }: {
     title: string;
     participants: AdaptedAgentRef[];
     messageCount: number;
     live: boolean;
-    /** Opens the global navigation sheet — the only route to Apps, Explorer and Profile from here. */
-    onOpenNav: () => void;
 }) {
     return (
         <View style={styles.header}>
+            {/*
+              * A back chevron, not the hamburger this used to be. A thread is a drill-down pushed
+              * over the tab shell, so the only thing this control has to do is leave — going
+              * ANYWHERE else is now the tab bar's job, from every screen rather than just this one.
+              */}
             <Pressable
                 hitSlop={8}
                 style={styles.iconBtn}
                 accessibilityRole="button"
-                accessibilityLabel="Navigate"
-                onPress={onOpenNav}
+                accessibilityLabel="Back"
+                onPress={() => (router.canGoBack() ? router.back() : router.replace('/conversations'))}
             >
-                <Icons.Menu size={22} color={Colors.ink} />
+                <Icons.ChevronLeft size={23} color={Colors.ink} strokeWidth={2.2} />
             </Pressable>
             <View style={styles.headerCenter}>
                 <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>

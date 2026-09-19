@@ -1,10 +1,12 @@
 import '@/polyfills';
+import { LogBox } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { MJProviderRoot } from '@/providers/mj-provider';
 import { AppLockGate } from '@/auth/AppLockGate';
+import { BootGate } from '@/boot/BootGate';
 import { PushNotificationsBoot } from '@/hooks/usePushRegistration';
 import { LoadHostedMobileResources } from '@/host/registry';
 
@@ -12,6 +14,15 @@ import { LoadHostedMobileResources } from '@/host/registry';
 // will eliminate unless something references them. This call is that reference — see
 // `src/host/registry.ts` for why a native host needs a build-time manifest at all.
 LoadHostedMobileResources();
+
+// Two warnings fire on every launch, neither actionable from this package: require cycles inside
+// the published `@memberjunction/core` and `BaseAIEngine` bundles, and a debugger-connect notice.
+// They are suppressed as NOTIFICATIONS only — they still print to the Metro console, where a
+// developer actually reads them — because the LogBox toast renders at the bottom of the screen,
+// directly over the tab bar, and swallows taps on it. A permanent overlay across the app's primary
+// navigation is a worse cost than a warning a developer has already seen a hundred times.
+// Deliberately NOT `ignoreAllLogs`: every other warning still surfaces.
+LogBox.ignoreLogs([/^Require cycle:/, /^Failed to open debugger/]);
 import { Colors } from '@/theme/tokens';
 
 /**
@@ -39,13 +50,23 @@ export default function RootLayout() {
                     <StatusBar style="dark" />
                     <PushNotificationsBoot />
                     <AppLockGate>
-                        <Stack
-                            screenOptions={{
-                                headerShown: false,
-                                contentStyle: { backgroundColor: Colors.bg },
-                                animation: 'slide_from_right',
-                            }}
-                        />
+                        {/*
+                          * BootGate wraps the shell rather than sitting in it as a route. As a
+                          * route it redirected to the tab shell once the provider was ready, and
+                          * that redirect raced the user: on a cold launch the FIRST tab press was
+                          * swallowed while navigation settled, and only a second press worked.
+                          * Wrapping means the ready path navigates nowhere — Home is simply the
+                          * initial route.
+                          */}
+                        <BootGate>
+                            <Stack
+                                screenOptions={{
+                                    headerShown: false,
+                                    contentStyle: { backgroundColor: Colors.bg },
+                                    animation: 'slide_from_right',
+                                }}
+                            />
+                        </BootGate>
                     </AppLockGate>
                 </MJProviderRoot>
             </SafeAreaProvider>

@@ -9,8 +9,12 @@ appId: org.memberjunction.mobile
 ---
 - launchApp
 - extendedWaitUntil:
-    visible: "Conversations"
+    visible: "Ask an agent anything, or pick up where you left off."
     timeout: 30000
+# The launch animation has to finish before a synthetic touch reaches a handler — without this the
+# tap reports success and nothing happens. Supported wait rather than a guessed sleep.
+- waitForAnimationToEnd:
+    timeout: 10000
 - tapOn: "New conversation"
 
 # The shared empty state — same greeting the web uses.

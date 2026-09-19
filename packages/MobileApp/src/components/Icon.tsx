@@ -47,6 +47,14 @@ export const Icons = {
     /** `@` — the mention trigger. Distinct from {@link Send}, which the mention button wrongly shared. */
     AtSign: (p: IconProps) => (<D {...p}><Circle cx="12" cy="12" r="4" /><Path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" /></D>),
     ChevronDown: (p: IconProps) => (<D {...p}><Polyline points="6 9 12 15 18 9" /></D>),
+    /** Home — the Home tab. */
+    Home: (p: IconProps) => (<D {...p}><Path d="M3 10.5L12 3l9 7.5" /><Path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5" /></D>),
+    /** Speech bubble — the Chats tab. */
+    MessageSquare: (p: IconProps) => (<D {...p}><Path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 21l1.9-4.1A8.4 8.4 0 0 1 4 12.5a8.4 8.4 0 0 1 8.5-8.4h.5a8.4 8.4 0 0 1 8 8.4z" /></D>),
+    /** Four-square grid — the Apps tab. */
+    Grid: (p: IconProps) => (<D {...p}><Rect x={3} y={3} width={7} height={7} rx={1.5} /><Rect x={14} y={3} width={7} height={7} rx={1.5} /><Rect x={3} y={14} width={7} height={7} rx={1.5} /><Rect x={14} y={14} width={7} height={7} rx={1.5} /></D>),
+    /** Person — the You tab. */
+    User: (p: IconProps) => (<D {...p}><Circle cx={12} cy={8} r={4} /><Path d="M4 21a8 8 0 0 1 16 0" /></D>),
     /** Broadcast tower — the realtime-session card, matching the web's `fa-tower-broadcast`. */
     Broadcast: (p: IconProps) => (<D {...p}><Circle cx={12} cy={9} r={2} /><Path d="M12 11v10" /><Path d="M8.5 5.5a5 5 0 0 0 0 7M15.5 5.5a5 5 0 0 1 0 7" /><Path d="M5.5 2.5a9 9 0 0 0 0 13M18.5 2.5a9 9 0 0 1 0 13" /></D>),
     Mic: (p: IconProps) => (<D {...p}><Path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><Path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" /></D>),

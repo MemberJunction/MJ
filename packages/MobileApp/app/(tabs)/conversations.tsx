@@ -39,14 +39,15 @@ export default function ConversationsScreen() {
 
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
+            {/*
+              * The filter button that used to sit here had no `onPress` at all — it rendered,
+              * it depressed, and nothing happened. A control that looks live and is not costs more
+              * than the blank space, so it is gone until there is a filter behind it.
+              */}
             <View style={styles.navTop}>
-                <View style={styles.iconBtn} />
                 <View style={styles.titleStack}>
                     <Text style={styles.title}>Conversations</Text>
                 </View>
-                <Pressable hitSlop={8} style={styles.iconBtn}>
-                    <Icons.Sliders size={22} color={Colors.ink} />
-                </Pressable>
             </View>
 
             <ScrollView
@@ -66,9 +67,6 @@ export default function ConversationsScreen() {
                     >
                         <Icons.Plus size={14} color={Colors.inverse} strokeWidth={2.5} />
                         <Text style={styles.newButtonText}>New conversation</Text>
-                    </Pressable>
-                    <Pressable style={styles.searchButton}>
-                        <Icons.Search size={18} color={Colors.ink} />
                     </Pressable>
                 </View>
 
@@ -242,7 +240,6 @@ const styles = StyleSheet.create({
         height: 56, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14,
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2,
     },
-    iconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md },
     titleStack: { flex: 1, paddingLeft: 4 },
     title: { fontSize: 20, fontWeight: Type.bold, letterSpacing: -0.4, color: Colors.ink },
     scroll: { paddingBottom: Spacing.xxxl },
@@ -250,7 +247,6 @@ const styles = StyleSheet.create({
     actions: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
     newButton: { flex: 1, height: 44, backgroundColor: Colors.ink, borderRadius: Radius.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
     newButtonText: { color: Colors.inverse, fontSize: 14, fontWeight: Type.semibold },
-    searchButton: { width: 44, height: 44, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, borderRadius: Radius.lg, alignItems: 'center', justifyContent: 'center' },
 
     errorBox: { marginTop: 12, marginHorizontal: 16, padding: 12, backgroundColor: Colors.dangerSoft, borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2 },
     errorText: { fontSize: 13, color: Colors.danger, lineHeight: 19 },

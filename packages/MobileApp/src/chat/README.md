@@ -227,6 +227,14 @@ screen.
 ## 6. Layout of this directory
 
 ```
+src/navigation/
+  tabs.ts                ← the four tab destinations, as data (assertable without a navigator)
+  greeting.ts            ← Home's time-of-day greeting (pure, tested)
+src/boot/
+  BootGate.tsx           ← what renders until the MJ connection is usable
+app/(tabs)/
+  _layout.tsx            ← the tab bar — the app's navigation backbone
+  index.tsx              ← Home
 src/chat/
   README.md              ← this file
   slots.ts               ← slot contracts (mirrors ng-conversations/slot-interfaces.ts)
