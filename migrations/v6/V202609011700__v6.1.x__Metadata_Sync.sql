@@ -14,9 +14,20 @@ SET
 SET
   @Name_9cd8cd11 = N'Tokens'
 SET
-  @Description_9cd8cd11 = N'Discrete model tokens. The default measure for text models, and the measure every pre-existing cost row is recorded in.' EXEC [${flyway:defaultSchema}].spCreateAIUsageType @ID = @ID_9cd8cd11,
+  @Description_9cd8cd11 = N'Discrete model tokens. The default measure for text models, and the measure every pre-existing cost row is recorded in.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIUsageType] WHERE [ID] = @ID_9cd8cd11)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIUsageType @ID = @ID_9cd8cd11,
   @Name = @Name_9cd8cd11,
   @Description = @Description_9cd8cd11;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIUsageType @ID = @ID_9cd8cd11,
+  @Name = @Name_9cd8cd11,
+  @Description = @Description_9cd8cd11;
+END
+
 
 GO
 
@@ -29,9 +40,20 @@ SET
 SET
   @Name_1c7da79f = N'Seconds'
 SET
-  @Description_1c7da79f = N'Seconds of continuous media — audio submitted for transcription, or audio synthesized. Always recorded in seconds regardless of the billing granularity; the price unit type converts to minutes or hours.' EXEC [${flyway:defaultSchema}].spCreateAIUsageType @ID = @ID_1c7da79f,
+  @Description_1c7da79f = N'Seconds of continuous media — audio submitted for transcription, or audio synthesized. Always recorded in seconds regardless of the billing granularity; the price unit type converts to minutes or hours.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIUsageType] WHERE [ID] = @ID_1c7da79f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIUsageType @ID = @ID_1c7da79f,
   @Name = @Name_1c7da79f,
   @Description = @Description_1c7da79f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIUsageType @ID = @ID_1c7da79f,
+  @Name = @Name_1c7da79f,
+  @Description = @Description_1c7da79f;
+END
+
 
 GO
 
@@ -44,9 +66,20 @@ SET
 SET
   @Name_f50801c3 = N'Characters'
 SET
-  @Description_f50801c3 = N'Characters of text submitted, used by text-to-speech models that bill per character rather than per token.' EXEC [${flyway:defaultSchema}].spCreateAIUsageType @ID = @ID_f50801c3,
+  @Description_f50801c3 = N'Characters of text submitted, used by text-to-speech models that bill per character rather than per token.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIUsageType] WHERE [ID] = @ID_f50801c3)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIUsageType @ID = @ID_f50801c3,
   @Name = @Name_f50801c3,
   @Description = @Description_f50801c3;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIUsageType @ID = @ID_f50801c3,
+  @Name = @Name_f50801c3,
+  @Description = @Description_f50801c3;
+END
+
 
 GO
 
@@ -59,9 +92,20 @@ SET
 SET
   @Name_6f42e38c = N'Images'
 SET
-  @Description_6f42e38c = N'Whole images generated or analyzed, for models that bill per image rather than by any continuous measure.' EXEC [${flyway:defaultSchema}].spCreateAIUsageType @ID = @ID_6f42e38c,
+  @Description_6f42e38c = N'Whole images generated or analyzed, for models that bill per image rather than by any continuous measure.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIUsageType] WHERE [ID] = @ID_6f42e38c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIUsageType @ID = @ID_6f42e38c,
   @Name = @Name_6f42e38c,
   @Description = @Description_6f42e38c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIUsageType @ID = @ID_6f42e38c,
+  @Name = @Name_6f42e38c,
+  @Description = @Description_6f42e38c;
+END
+
 
 GO
 
@@ -154,7 +198,9 @@ SET
   @ModelSelectionInsights_2904ae0e = N'Choose when the workload already runs on OpenAI credentials, or when Groq is unavailable — accuracy is close to Whisper Large v3 but throughput and price are both markedly worse ($0.006/min = $0.36/hour, roughly 3x Groq''s Large v3 and 9x its Turbo). Kept as a separate model record because the endpoint serves large-v2 weights: attaching it as a vendor of Whisper Large v3 would misreport which checkpoint transcribed a given run. No speaker diarization; OpenAI caps uploads at 25MB per request, so longer audio must be split.'
 SET
   @InheritTypeModalities_2904ae0e = 1
-EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_2904ae0e,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_2904ae0e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_2904ae0e,
   @Name = @Name_2904ae0e,
   @Description = @Description_2904ae0e,
   @AIModelTypeID = @AIModelTypeID_2904ae0e,
@@ -172,6 +218,29 @@ EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_2904ae0e,
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_2904ae0e,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_2904ae0e,
+  @Name = @Name_2904ae0e,
+  @Description = @Description_2904ae0e,
+  @AIModelTypeID = @AIModelTypeID_2904ae0e,
+  @PowerRank = @PowerRank_2904ae0e,
+  @IsActive = @IsActive_2904ae0e,
+  @SpeedRank = @SpeedRank_2904ae0e,
+  @CostRank = @CostRank_2904ae0e,
+  @ModelSelectionInsights = @ModelSelectionInsights_2904ae0e,
+  @InheritTypeModalities = @InheritTypeModalities_2904ae0e,
+  @PriorVersionID = @PriorVersionID_2904ae0e,
+  @PriorVersionID_Clear = 1,
+  @SupportsPrefill = @SupportsPrefill_2904ae0e,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_2904ae0e,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_2904ae0e,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -341,7 +410,10 @@ SET
 SET
   @ProcessingType_8f0109a0 = N'Realtime'
 SET
-  @Comments_8f0109a0 = N'Groq list pricing for whisper-large-v3 as of August 2026: $0.111 per hour of audio transcribed. Transcription has no output side, so the whole rate sits in InputPricePerUnit with OutputPricePerUnit 0 — the same single-blended-rate convention the Grok Voice per-minute row uses, so consumers never double-count. Priced on the Per Hour unit type while the Minutes price type describes what is metered; the TimePerHour driver converts recorded seconds. Groq bills a 10-second minimum per request, which this row does not model. Cache pricing does not apply to audio (both cache columns null).' EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_8f0109a0,
+  @Comments_8f0109a0 = N'Groq list pricing for whisper-large-v3 as of August 2026: $0.111 per hour of audio transcribed. Transcription has no output side, so the whole rate sits in InputPricePerUnit with OutputPricePerUnit 0 — the same single-blended-rate convention the Grok Voice per-minute row uses, so consumers never double-count. Priced on the Per Hour unit type while the Minutes price type describes what is metered; the TimePerHour driver converts recorded seconds. Groq bills a 10-second minimum per request, which this row does not model. Cache pricing does not apply to audio (both cache columns null).'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_8f0109a0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_8f0109a0,
   @ModelID = @ModelID_8f0109a0,
   @VendorID = @VendorID_8f0109a0,
   @StartedAt = @StartedAt_8f0109a0,
@@ -359,6 +431,29 @@ SET
   @CacheReadPricePerUnit_Clear = 1,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_8f0109a0,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_8f0109a0,
+  @ModelID = @ModelID_8f0109a0,
+  @VendorID = @VendorID_8f0109a0,
+  @StartedAt = @StartedAt_8f0109a0,
+  @EndedAt = @EndedAt_8f0109a0,
+  @EndedAt_Clear = 1,
+  @Status = @Status_8f0109a0,
+  @Currency = @Currency_8f0109a0,
+  @PriceTypeID = @PriceTypeID_8f0109a0,
+  @InputPricePerUnit = @InputPricePerUnit_8f0109a0,
+  @OutputPricePerUnit = @OutputPricePerUnit_8f0109a0,
+  @UnitTypeID = @UnitTypeID_8f0109a0,
+  @ProcessingType = @ProcessingType_8f0109a0,
+  @Comments = @Comments_8f0109a0,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_8f0109a0,
+  @CacheReadPricePerUnit_Clear = 1,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_8f0109a0,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -401,7 +496,10 @@ SET
 SET
   @ProcessingType_94a3831a = N'Realtime'
 SET
-  @Comments_94a3831a = N'Groq list pricing for whisper-large-v3-turbo as of August 2026: $0.04 per hour of audio transcribed. Same single-blended-rate convention as the Large v3 row — whole rate in InputPricePerUnit, OutputPricePerUnit 0, cache columns null — and the same unmodelled 10-second per-request minimum.' EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_94a3831a,
+  @Comments_94a3831a = N'Groq list pricing for whisper-large-v3-turbo as of August 2026: $0.04 per hour of audio transcribed. Same single-blended-rate convention as the Large v3 row — whole rate in InputPricePerUnit, OutputPricePerUnit 0, cache columns null — and the same unmodelled 10-second per-request minimum.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_94a3831a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_94a3831a,
   @ModelID = @ModelID_94a3831a,
   @VendorID = @VendorID_94a3831a,
   @StartedAt = @StartedAt_94a3831a,
@@ -419,6 +517,29 @@ SET
   @CacheReadPricePerUnit_Clear = 1,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_94a3831a,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_94a3831a,
+  @ModelID = @ModelID_94a3831a,
+  @VendorID = @VendorID_94a3831a,
+  @StartedAt = @StartedAt_94a3831a,
+  @EndedAt = @EndedAt_94a3831a,
+  @EndedAt_Clear = 1,
+  @Status = @Status_94a3831a,
+  @Currency = @Currency_94a3831a,
+  @PriceTypeID = @PriceTypeID_94a3831a,
+  @InputPricePerUnit = @InputPricePerUnit_94a3831a,
+  @OutputPricePerUnit = @OutputPricePerUnit_94a3831a,
+  @UnitTypeID = @UnitTypeID_94a3831a,
+  @ProcessingType = @ProcessingType_94a3831a,
+  @Comments = @Comments_94a3831a,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_94a3831a,
+  @CacheReadPricePerUnit_Clear = 1,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_94a3831a,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -461,7 +582,10 @@ SET
 SET
   @SupportsStreaming_907f11fe = 0
 SET
-  @TypeID_907f11fe = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_907f11fe,
+  @TypeID_907f11fe = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_907f11fe)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_907f11fe,
   @ModelID = @ModelID_907f11fe,
   @VendorID = @VendorID_907f11fe,
   @Priority = @Priority_907f11fe,
@@ -484,6 +608,34 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_907f11fe,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_907f11fe,
+  @ModelID = @ModelID_907f11fe,
+  @VendorID = @VendorID_907f11fe,
+  @Priority = @Priority_907f11fe,
+  @Status = @Status_907f11fe,
+  @DriverClass = @DriverClass_907f11fe,
+  @DriverImportPath = @DriverImportPath_907f11fe,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_907f11fe,
+  @MaxInputTokens = @MaxInputTokens_907f11fe,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_907f11fe,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_907f11fe,
+  @SupportsEffortLevel = @SupportsEffortLevel_907f11fe,
+  @SupportsStreaming = @SupportsStreaming_907f11fe,
+  @TypeID = @TypeID_907f11fe,
+  @SupportsPrefill = @SupportsPrefill_907f11fe,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_907f11fe,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_907f11fe,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -522,7 +674,10 @@ SET
 SET
   @SupportsStreaming_072d0d0c = 0
 SET
-  @TypeID_072d0d0c = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_072d0d0c,
+  @TypeID_072d0d0c = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_072d0d0c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_072d0d0c,
   @ModelID = @ModelID_072d0d0c,
   @VendorID = @VendorID_072d0d0c,
   @Priority = @Priority_072d0d0c,
@@ -547,6 +702,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_072d0d0c,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_072d0d0c,
+  @ModelID = @ModelID_072d0d0c,
+  @VendorID = @VendorID_072d0d0c,
+  @Priority = @Priority_072d0d0c,
+  @Status = @Status_072d0d0c,
+  @DriverClass = @DriverClass_072d0d0c,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_072d0d0c,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_072d0d0c,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_072d0d0c,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_072d0d0c,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_072d0d0c,
+  @SupportsEffortLevel = @SupportsEffortLevel_072d0d0c,
+  @SupportsStreaming = @SupportsStreaming_072d0d0c,
+  @TypeID = @TypeID_072d0d0c,
+  @SupportsPrefill = @SupportsPrefill_072d0d0c,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_072d0d0c,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_072d0d0c,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -589,7 +774,10 @@ SET
 SET
   @ProcessingType_4d8b9e01 = N'Realtime'
 SET
-  @Comments_4d8b9e01 = N'OpenAI list pricing for the Whisper transcription endpoint as of August 2026: $0.006 per minute of audio. Whole rate in InputPricePerUnit with OutputPricePerUnit 0 (transcription has no billed output side), cache columns null. The TimePerMinute driver converts recorded seconds to minutes.' EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_4d8b9e01,
+  @Comments_4d8b9e01 = N'OpenAI list pricing for the Whisper transcription endpoint as of August 2026: $0.006 per minute of audio. Whole rate in InputPricePerUnit with OutputPricePerUnit 0 (transcription has no billed output side), cache columns null. The TimePerMinute driver converts recorded seconds to minutes.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_4d8b9e01)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_4d8b9e01,
   @ModelID = @ModelID_4d8b9e01,
   @VendorID = @VendorID_4d8b9e01,
   @StartedAt = @StartedAt_4d8b9e01,
@@ -607,6 +795,29 @@ SET
   @CacheReadPricePerUnit_Clear = 1,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_4d8b9e01,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_4d8b9e01,
+  @ModelID = @ModelID_4d8b9e01,
+  @VendorID = @VendorID_4d8b9e01,
+  @StartedAt = @StartedAt_4d8b9e01,
+  @EndedAt = @EndedAt_4d8b9e01,
+  @EndedAt_Clear = 1,
+  @Status = @Status_4d8b9e01,
+  @Currency = @Currency_4d8b9e01,
+  @PriceTypeID = @PriceTypeID_4d8b9e01,
+  @InputPricePerUnit = @InputPricePerUnit_4d8b9e01,
+  @OutputPricePerUnit = @OutputPricePerUnit_4d8b9e01,
+  @UnitTypeID = @UnitTypeID_4d8b9e01,
+  @ProcessingType = @ProcessingType_4d8b9e01,
+  @Comments = @Comments_4d8b9e01,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_4d8b9e01,
+  @CacheReadPricePerUnit_Clear = 1,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_4d8b9e01,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -644,7 +855,10 @@ SET
 SET
   @InheritTypeModalities_70a58594 = 1
 SET
-  @PriorVersionID_70a58594 = 'CD31949A-2E85-4410-A216-777571F47E72' EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_70a58594,
+  @PriorVersionID_70a58594 = 'CD31949A-2E85-4410-A216-777571F47E72'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_70a58594)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_70a58594,
   @Name = @Name_70a58594,
   @Description = @Description_70a58594,
   @AIModelTypeID = @AIModelTypeID_70a58594,
@@ -662,6 +876,29 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_70a58594,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_70a58594,
+  @Name = @Name_70a58594,
+  @Description = @Description_70a58594,
+  @AIModelTypeID = @AIModelTypeID_70a58594,
+  @PowerRank = @PowerRank_70a58594,
+  @IsActive = @IsActive_70a58594,
+  @SpeedRank = @SpeedRank_70a58594,
+  @CostRank = @CostRank_70a58594,
+  @ModelSelectionInsights = @ModelSelectionInsights_70a58594,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_70a58594,
+  @PriorVersionID = @PriorVersionID_70a58594,
+  @SupportsPrefill = @SupportsPrefill_70a58594,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_70a58594,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_70a58594,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -700,7 +937,10 @@ SET
 SET
   @SupportsStreaming_4b2eebb3 = 0
 SET
-  @TypeID_4b2eebb3 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_4b2eebb3,
+  @TypeID_4b2eebb3 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_4b2eebb3)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_4b2eebb3,
   @ModelID = @ModelID_4b2eebb3,
   @VendorID = @VendorID_4b2eebb3,
   @Priority = @Priority_4b2eebb3,
@@ -725,6 +965,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_4b2eebb3,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_4b2eebb3,
+  @ModelID = @ModelID_4b2eebb3,
+  @VendorID = @VendorID_4b2eebb3,
+  @Priority = @Priority_4b2eebb3,
+  @Status = @Status_4b2eebb3,
+  @DriverClass = @DriverClass_4b2eebb3,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_4b2eebb3,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_4b2eebb3,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_4b2eebb3,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_4b2eebb3,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_4b2eebb3,
+  @SupportsEffortLevel = @SupportsEffortLevel_4b2eebb3,
+  @SupportsStreaming = @SupportsStreaming_4b2eebb3,
+  @TypeID = @TypeID_4b2eebb3,
+  @SupportsPrefill = @SupportsPrefill_4b2eebb3,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_4b2eebb3,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_4b2eebb3,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -771,7 +1041,10 @@ SET
 SET
   @SupportsStreaming_e70d452c = 1
 SET
-  @TypeID_e70d452c = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_e70d452c,
+  @TypeID_e70d452c = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_e70d452c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_e70d452c,
   @ModelID = @ModelID_e70d452c,
   @VendorID = @VendorID_e70d452c,
   @Priority = @Priority_e70d452c,
@@ -792,6 +1065,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_e70d452c,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_e70d452c,
+  @ModelID = @ModelID_e70d452c,
+  @VendorID = @VendorID_e70d452c,
+  @Priority = @Priority_e70d452c,
+  @Status = @Status_e70d452c,
+  @DriverClass = @DriverClass_e70d452c,
+  @DriverImportPath = @DriverImportPath_e70d452c,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_e70d452c,
+  @MaxInputTokens = @MaxInputTokens_e70d452c,
+  @MaxOutputTokens = @MaxOutputTokens_e70d452c,
+  @SupportedResponseFormats = @SupportedResponseFormats_e70d452c,
+  @SupportsEffortLevel = @SupportsEffortLevel_e70d452c,
+  @SupportsStreaming = @SupportsStreaming_e70d452c,
+  @TypeID = @TypeID_e70d452c,
+  @SupportsPrefill = @SupportsPrefill_e70d452c,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_e70d452c,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_e70d452c,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -838,7 +1137,10 @@ SET
 SET
   @SupportsStreaming_de0d4d59 = 1
 SET
-  @TypeID_de0d4d59 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_de0d4d59,
+  @TypeID_de0d4d59 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_de0d4d59)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_de0d4d59,
   @ModelID = @ModelID_de0d4d59,
   @VendorID = @VendorID_de0d4d59,
   @Priority = @Priority_de0d4d59,
@@ -859,6 +1161,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_de0d4d59,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_de0d4d59,
+  @ModelID = @ModelID_de0d4d59,
+  @VendorID = @VendorID_de0d4d59,
+  @Priority = @Priority_de0d4d59,
+  @Status = @Status_de0d4d59,
+  @DriverClass = @DriverClass_de0d4d59,
+  @DriverImportPath = @DriverImportPath_de0d4d59,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_de0d4d59,
+  @MaxInputTokens = @MaxInputTokens_de0d4d59,
+  @MaxOutputTokens = @MaxOutputTokens_de0d4d59,
+  @SupportedResponseFormats = @SupportedResponseFormats_de0d4d59,
+  @SupportsEffortLevel = @SupportsEffortLevel_de0d4d59,
+  @SupportsStreaming = @SupportsStreaming_de0d4d59,
+  @TypeID = @TypeID_de0d4d59,
+  @SupportsPrefill = @SupportsPrefill_de0d4d59,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_de0d4d59,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_de0d4d59,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -905,7 +1233,10 @@ SET
 SET
   @SupportsStreaming_47efe81c = 1
 SET
-  @TypeID_47efe81c = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_47efe81c,
+  @TypeID_47efe81c = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_47efe81c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_47efe81c,
   @ModelID = @ModelID_47efe81c,
   @VendorID = @VendorID_47efe81c,
   @Priority = @Priority_47efe81c,
@@ -926,6 +1257,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_47efe81c,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_47efe81c,
+  @ModelID = @ModelID_47efe81c,
+  @VendorID = @VendorID_47efe81c,
+  @Priority = @Priority_47efe81c,
+  @Status = @Status_47efe81c,
+  @DriverClass = @DriverClass_47efe81c,
+  @DriverImportPath = @DriverImportPath_47efe81c,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_47efe81c,
+  @MaxInputTokens = @MaxInputTokens_47efe81c,
+  @MaxOutputTokens = @MaxOutputTokens_47efe81c,
+  @SupportedResponseFormats = @SupportedResponseFormats_47efe81c,
+  @SupportsEffortLevel = @SupportsEffortLevel_47efe81c,
+  @SupportsStreaming = @SupportsStreaming_47efe81c,
+  @TypeID = @TypeID_47efe81c,
+  @SupportsPrefill = @SupportsPrefill_47efe81c,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_47efe81c,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_47efe81c,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -971,7 +1328,9 @@ SET
   @Comments_770b22e2 = N'Qwen3.8-Flash launch pricing on Alibaba Cloud Model Studio as of 2026-08-26: $0.15/$0.47 per 1M input/output. Cache-hit reads reported at approximately $0.016/1M. Sources: https://mpost.io/alibaba-prices-qwen3-8-flash-api-at-0-16-per-million-tokens-cutting-inference-costs-for-125b-parameter-model/ ; https://www.bloomberg.com/news/articles/2026-08-26/alibaba-releases-smaller-cost-effective-qwen-ai-model'
 SET
   @CacheReadPricePerUnit_770b22e2 = 0.016
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_770b22e2,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_770b22e2)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_770b22e2,
   @ModelID = @ModelID_770b22e2,
   @VendorID = @VendorID_770b22e2,
   @StartedAt = @StartedAt_770b22e2,
@@ -988,6 +1347,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_770b22e2,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_770b22e2,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_770b22e2,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_770b22e2,
+  @ModelID = @ModelID_770b22e2,
+  @VendorID = @VendorID_770b22e2,
+  @StartedAt = @StartedAt_770b22e2,
+  @EndedAt = @EndedAt_770b22e2,
+  @EndedAt_Clear = 1,
+  @Status = @Status_770b22e2,
+  @Currency = @Currency_770b22e2,
+  @PriceTypeID = @PriceTypeID_770b22e2,
+  @InputPricePerUnit = @InputPricePerUnit_770b22e2,
+  @OutputPricePerUnit = @OutputPricePerUnit_770b22e2,
+  @UnitTypeID = @UnitTypeID_770b22e2,
+  @ProcessingType = @ProcessingType_770b22e2,
+  @Comments = @Comments_770b22e2,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_770b22e2,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_770b22e2,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1030,7 +1411,10 @@ SET
 SET
   @ProcessingType_e7eab101 = N'Realtime'
 SET
-  @Comments_e7eab101 = N'Qwen3.8-Flash on OpenRouter as passthrough of Alibaba Cloud direct pricing ($0.15/$0.47 per 1M). Source: https://openrouter.ai/qwen/qwen3.8-flash' EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_e7eab101,
+  @Comments_e7eab101 = N'Qwen3.8-Flash on OpenRouter as passthrough of Alibaba Cloud direct pricing ($0.15/$0.47 per 1M). Source: https://openrouter.ai/qwen/qwen3.8-flash'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_e7eab101)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_e7eab101,
   @ModelID = @ModelID_e7eab101,
   @VendorID = @VendorID_e7eab101,
   @StartedAt = @StartedAt_e7eab101,
@@ -1048,6 +1432,29 @@ SET
   @CacheReadPricePerUnit_Clear = 1,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_e7eab101,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_e7eab101,
+  @ModelID = @ModelID_e7eab101,
+  @VendorID = @VendorID_e7eab101,
+  @StartedAt = @StartedAt_e7eab101,
+  @EndedAt = @EndedAt_e7eab101,
+  @EndedAt_Clear = 1,
+  @Status = @Status_e7eab101,
+  @Currency = @Currency_e7eab101,
+  @PriceTypeID = @PriceTypeID_e7eab101,
+  @InputPricePerUnit = @InputPricePerUnit_e7eab101,
+  @OutputPricePerUnit = @OutputPricePerUnit_e7eab101,
+  @UnitTypeID = @UnitTypeID_e7eab101,
+  @ProcessingType = @ProcessingType_e7eab101,
+  @Comments = @Comments_e7eab101,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_e7eab101,
+  @CacheReadPricePerUnit_Clear = 1,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_e7eab101,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1094,7 +1501,10 @@ SET
 SET
   @SupportsStreaming_71f9d8c2 = 1
 SET
-  @TypeID_71f9d8c2 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_71f9d8c2,
+  @TypeID_71f9d8c2 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_71f9d8c2)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_71f9d8c2,
   @ModelID = @ModelID_71f9d8c2,
   @VendorID = @VendorID_71f9d8c2,
   @Priority = @Priority_71f9d8c2,
@@ -1115,6 +1525,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_71f9d8c2,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_71f9d8c2,
+  @ModelID = @ModelID_71f9d8c2,
+  @VendorID = @VendorID_71f9d8c2,
+  @Priority = @Priority_71f9d8c2,
+  @Status = @Status_71f9d8c2,
+  @DriverClass = @DriverClass_71f9d8c2,
+  @DriverImportPath = @DriverImportPath_71f9d8c2,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_71f9d8c2,
+  @MaxInputTokens = @MaxInputTokens_71f9d8c2,
+  @MaxOutputTokens = @MaxOutputTokens_71f9d8c2,
+  @SupportedResponseFormats = @SupportedResponseFormats_71f9d8c2,
+  @SupportsEffortLevel = @SupportsEffortLevel_71f9d8c2,
+  @SupportsStreaming = @SupportsStreaming_71f9d8c2,
+  @TypeID = @TypeID_71f9d8c2,
+  @SupportsPrefill = @SupportsPrefill_71f9d8c2,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_71f9d8c2,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_71f9d8c2,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1160,7 +1596,9 @@ SET
   @Comments_b8ac3803 = N'Grok 4.6 on Amazon Bedrock — availability announced week of 2026-08-25 via US Geo and Global cross-region inference. Vendor parity with x.ai direct sub-200K tier ($2/$6 per 1M). Same tiered long-context structure applies for prompts >= 200K tokens (see the x.ai direct cost record Comments). Reasoning-effort levels (low/medium/high/xhigh) exposed. Sources: https://x.ai/news/grok-4-6-amazon-bedrock ; https://aws.amazon.com/about-aws/whats-new/2026/08/amazon-bedrock-grok-4-6/'
 SET
   @CacheReadPricePerUnit_b8ac3803 = 0.5
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_b8ac3803,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_b8ac3803)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_b8ac3803,
   @ModelID = @ModelID_b8ac3803,
   @VendorID = @VendorID_b8ac3803,
   @StartedAt = @StartedAt_b8ac3803,
@@ -1177,6 +1615,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_b8ac3803,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_b8ac3803,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_b8ac3803,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_b8ac3803,
+  @ModelID = @ModelID_b8ac3803,
+  @VendorID = @VendorID_b8ac3803,
+  @StartedAt = @StartedAt_b8ac3803,
+  @EndedAt = @EndedAt_b8ac3803,
+  @EndedAt_Clear = 1,
+  @Status = @Status_b8ac3803,
+  @Currency = @Currency_b8ac3803,
+  @PriceTypeID = @PriceTypeID_b8ac3803,
+  @InputPricePerUnit = @InputPricePerUnit_b8ac3803,
+  @OutputPricePerUnit = @OutputPricePerUnit_b8ac3803,
+  @UnitTypeID = @UnitTypeID_b8ac3803,
+  @ProcessingType = @ProcessingType_b8ac3803,
+  @Comments = @Comments_b8ac3803,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_b8ac3803,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_b8ac3803,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1214,7 +1674,10 @@ SET
 SET
   @InheritTypeModalities_64b86f35 = 1
 SET
-  @PriorVersionID_64b86f35 = 'D5DC6B04-AA19-459A-9ED3-D44B2C42D6A5' EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_64b86f35,
+  @PriorVersionID_64b86f35 = 'D5DC6B04-AA19-459A-9ED3-D44B2C42D6A5'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModel] WHERE [ID] = @ID_64b86f35)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModel @ID = @ID_64b86f35,
   @Name = @Name_64b86f35,
   @Description = @Description_64b86f35,
   @AIModelTypeID = @AIModelTypeID_64b86f35,
@@ -1232,6 +1695,29 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_64b86f35,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModel @ID = @ID_64b86f35,
+  @Name = @Name_64b86f35,
+  @Description = @Description_64b86f35,
+  @AIModelTypeID = @AIModelTypeID_64b86f35,
+  @PowerRank = @PowerRank_64b86f35,
+  @IsActive = @IsActive_64b86f35,
+  @SpeedRank = @SpeedRank_64b86f35,
+  @CostRank = @CostRank_64b86f35,
+  @ModelSelectionInsights = @ModelSelectionInsights_64b86f35,
+  @ModelSelectionInsights_Clear = 1,
+  @InheritTypeModalities = @InheritTypeModalities_64b86f35,
+  @PriorVersionID = @PriorVersionID_64b86f35,
+  @SupportsPrefill = @SupportsPrefill_64b86f35,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_64b86f35,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_64b86f35,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1270,7 +1756,10 @@ SET
 SET
   @SupportsStreaming_296a2a35 = 0
 SET
-  @TypeID_296a2a35 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_296a2a35,
+  @TypeID_296a2a35 = '10DB468E-F2CE-475D-9F39-2DF2DE75D257'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_296a2a35)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_296a2a35,
   @ModelID = @ModelID_296a2a35,
   @VendorID = @VendorID_296a2a35,
   @Priority = @Priority_296a2a35,
@@ -1295,6 +1784,36 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_296a2a35,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_296a2a35,
+  @ModelID = @ModelID_296a2a35,
+  @VendorID = @VendorID_296a2a35,
+  @Priority = @Priority_296a2a35,
+  @Status = @Status_296a2a35,
+  @DriverClass = @DriverClass_296a2a35,
+  @DriverClass_Clear = 1,
+  @DriverImportPath = @DriverImportPath_296a2a35,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_296a2a35,
+  @APIName_Clear = 1,
+  @MaxInputTokens = @MaxInputTokens_296a2a35,
+  @MaxInputTokens_Clear = 1,
+  @MaxOutputTokens = @MaxOutputTokens_296a2a35,
+  @MaxOutputTokens_Clear = 1,
+  @SupportedResponseFormats = @SupportedResponseFormats_296a2a35,
+  @SupportsEffortLevel = @SupportsEffortLevel_296a2a35,
+  @SupportsStreaming = @SupportsStreaming_296a2a35,
+  @TypeID = @TypeID_296a2a35,
+  @SupportsPrefill = @SupportsPrefill_296a2a35,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_296a2a35,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_296a2a35,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1341,7 +1860,10 @@ SET
 SET
   @SupportsStreaming_29fbb7ed = 1
 SET
-  @TypeID_29fbb7ed = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_29fbb7ed,
+  @TypeID_29fbb7ed = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_29fbb7ed)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_29fbb7ed,
   @ModelID = @ModelID_29fbb7ed,
   @VendorID = @VendorID_29fbb7ed,
   @Priority = @Priority_29fbb7ed,
@@ -1362,6 +1884,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_29fbb7ed,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_29fbb7ed,
+  @ModelID = @ModelID_29fbb7ed,
+  @VendorID = @VendorID_29fbb7ed,
+  @Priority = @Priority_29fbb7ed,
+  @Status = @Status_29fbb7ed,
+  @DriverClass = @DriverClass_29fbb7ed,
+  @DriverImportPath = @DriverImportPath_29fbb7ed,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_29fbb7ed,
+  @MaxInputTokens = @MaxInputTokens_29fbb7ed,
+  @MaxOutputTokens = @MaxOutputTokens_29fbb7ed,
+  @SupportedResponseFormats = @SupportedResponseFormats_29fbb7ed,
+  @SupportsEffortLevel = @SupportsEffortLevel_29fbb7ed,
+  @SupportsStreaming = @SupportsStreaming_29fbb7ed,
+  @TypeID = @TypeID_29fbb7ed,
+  @SupportsPrefill = @SupportsPrefill_29fbb7ed,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_29fbb7ed,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_29fbb7ed,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1408,7 +1956,10 @@ SET
 SET
   @SupportsStreaming_2fd7e54d = 1
 SET
-  @TypeID_2fd7e54d = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_2fd7e54d,
+  @TypeID_2fd7e54d = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_2fd7e54d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_2fd7e54d,
   @ModelID = @ModelID_2fd7e54d,
   @VendorID = @VendorID_2fd7e54d,
   @Priority = @Priority_2fd7e54d,
@@ -1429,6 +1980,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_2fd7e54d,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_2fd7e54d,
+  @ModelID = @ModelID_2fd7e54d,
+  @VendorID = @VendorID_2fd7e54d,
+  @Priority = @Priority_2fd7e54d,
+  @Status = @Status_2fd7e54d,
+  @DriverClass = @DriverClass_2fd7e54d,
+  @DriverImportPath = @DriverImportPath_2fd7e54d,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_2fd7e54d,
+  @MaxInputTokens = @MaxInputTokens_2fd7e54d,
+  @MaxOutputTokens = @MaxOutputTokens_2fd7e54d,
+  @SupportedResponseFormats = @SupportedResponseFormats_2fd7e54d,
+  @SupportsEffortLevel = @SupportsEffortLevel_2fd7e54d,
+  @SupportsStreaming = @SupportsStreaming_2fd7e54d,
+  @TypeID = @TypeID_2fd7e54d,
+  @SupportsPrefill = @SupportsPrefill_2fd7e54d,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_2fd7e54d,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_2fd7e54d,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1475,7 +2052,10 @@ SET
 SET
   @SupportsStreaming_f4456494 = 1
 SET
-  @TypeID_f4456494 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3' EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_f4456494,
+  @TypeID_f4456494 = '5B043EC3-1FF2-4730-B5D2-7CFDA50979B3'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelVendor] WHERE [ID] = @ID_f4456494)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelVendor @ID = @ID_f4456494,
   @ModelID = @ModelID_f4456494,
   @VendorID = @VendorID_f4456494,
   @Priority = @Priority_f4456494,
@@ -1496,6 +2076,32 @@ SET
   @PrefillFallbackText_Clear = 1,
   @ModelConfiguration = @ModelConfiguration_f4456494,
   @ModelConfiguration_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelVendor @ID = @ID_f4456494,
+  @ModelID = @ModelID_f4456494,
+  @VendorID = @VendorID_f4456494,
+  @Priority = @Priority_f4456494,
+  @Status = @Status_f4456494,
+  @DriverClass = @DriverClass_f4456494,
+  @DriverImportPath = @DriverImportPath_f4456494,
+  @DriverImportPath_Clear = 1,
+  @APIName = @APIName_f4456494,
+  @MaxInputTokens = @MaxInputTokens_f4456494,
+  @MaxOutputTokens = @MaxOutputTokens_f4456494,
+  @SupportedResponseFormats = @SupportedResponseFormats_f4456494,
+  @SupportsEffortLevel = @SupportsEffortLevel_f4456494,
+  @SupportsStreaming = @SupportsStreaming_f4456494,
+  @TypeID = @TypeID_f4456494,
+  @SupportsPrefill = @SupportsPrefill_f4456494,
+  @SupportsPrefill_Clear = 1,
+  @PrefillFallbackText = @PrefillFallbackText_f4456494,
+  @PrefillFallbackText_Clear = 1,
+  @ModelConfiguration = @ModelConfiguration_f4456494,
+  @ModelConfiguration_Clear = 1;
+END
+
 
 GO
 
@@ -1541,7 +2147,9 @@ SET
   @Comments_488c003b = N'GLM-5.3-Flash direct-API pricing on Z.AI as of 2026-08-26 launch: $0.15/$0.50 per 1M input/output. Cache reads reported at approximately $0.016/1M. Sources: https://www.orcarouter.ai/blog/glm-5-3-flash-release ; https://kie.ai/blog/what-is-glm-5-5'
 SET
   @CacheReadPricePerUnit_488c003b = 0.016
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_488c003b,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_488c003b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_488c003b,
   @ModelID = @ModelID_488c003b,
   @VendorID = @VendorID_488c003b,
   @StartedAt = @StartedAt_488c003b,
@@ -1558,6 +2166,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_488c003b,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_488c003b,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_488c003b,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_488c003b,
+  @ModelID = @ModelID_488c003b,
+  @VendorID = @VendorID_488c003b,
+  @StartedAt = @StartedAt_488c003b,
+  @EndedAt = @EndedAt_488c003b,
+  @EndedAt_Clear = 1,
+  @Status = @Status_488c003b,
+  @Currency = @Currency_488c003b,
+  @PriceTypeID = @PriceTypeID_488c003b,
+  @InputPricePerUnit = @InputPricePerUnit_488c003b,
+  @OutputPricePerUnit = @OutputPricePerUnit_488c003b,
+  @UnitTypeID = @UnitTypeID_488c003b,
+  @ProcessingType = @ProcessingType_488c003b,
+  @Comments = @Comments_488c003b,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_488c003b,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_488c003b,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1600,7 +2230,10 @@ SET
 SET
   @ProcessingType_82f008af = N'Realtime'
 SET
-  @Comments_82f008af = N'GLM-5.3-Flash on OpenRouter listed at $0.05/$0.1667 per 1M input/output as of 2026-08-26. Values reflect a limited-time 50% Z.AI promo (through 2026-09-09 16:00 UTC); a follow-up cost row should be added once the promo expires so the historical rate is preserved and post-promo pricing is captured accurately. Source: https://openrouter.ai/z-ai/glm-5.3-flash' EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_82f008af,
+  @Comments_82f008af = N'GLM-5.3-Flash on OpenRouter listed at $0.05/$0.1667 per 1M input/output as of 2026-08-26. Values reflect a limited-time 50% Z.AI promo (through 2026-09-09 16:00 UTC); a follow-up cost row should be added once the promo expires so the historical rate is preserved and post-promo pricing is captured accurately. Source: https://openrouter.ai/z-ai/glm-5.3-flash'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_82f008af)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_82f008af,
   @ModelID = @ModelID_82f008af,
   @VendorID = @VendorID_82f008af,
   @StartedAt = @StartedAt_82f008af,
@@ -1618,6 +2251,29 @@ SET
   @CacheReadPricePerUnit_Clear = 1,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_82f008af,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_82f008af,
+  @ModelID = @ModelID_82f008af,
+  @VendorID = @VendorID_82f008af,
+  @StartedAt = @StartedAt_82f008af,
+  @EndedAt = @EndedAt_82f008af,
+  @EndedAt_Clear = 1,
+  @Status = @Status_82f008af,
+  @Currency = @Currency_82f008af,
+  @PriceTypeID = @PriceTypeID_82f008af,
+  @InputPricePerUnit = @InputPricePerUnit_82f008af,
+  @OutputPricePerUnit = @OutputPricePerUnit_82f008af,
+  @UnitTypeID = @UnitTypeID_82f008af,
+  @ProcessingType = @ProcessingType_82f008af,
+  @Comments = @Comments_82f008af,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_82f008af,
+  @CacheReadPricePerUnit_Clear = 1,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_82f008af,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1668,7 +2324,10 @@ SET
 SET
   @DriverClass_f3a90f38 = N'ApolloGetListsAction'
 SET
-  @IconClass_f3a90f38 = N'fa-solid fa-rocket' EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_f3a90f38,
+  @IconClass_f3a90f38 = N'fa-solid fa-rocket'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Action] WHERE [ID] = @ID_f3a90f38)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_f3a90f38,
   @CategoryID = @CategoryID_f3a90f38,
   @Name = @Name_f3a90f38,
   @Description = @Description_f3a90f38,
@@ -1707,6 +2366,50 @@ SET
   @MaxExecutionTimeMS_Clear = 1,
   @CreatedByAgentID = @CreatedByAgentID_f3a90f38,
   @CreatedByAgentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAction @ID = @ID_f3a90f38,
+  @CategoryID = @CategoryID_f3a90f38,
+  @Name = @Name_f3a90f38,
+  @Description = @Description_f3a90f38,
+  @Type = @Type_f3a90f38,
+  @UserPrompt = @UserPrompt_f3a90f38,
+  @UserPrompt_Clear = 1,
+  @UserComments = @UserComments_f3a90f38,
+  @UserComments_Clear = 1,
+  @Code = @Code_f3a90f38,
+  @Code_Clear = 1,
+  @CodeComments = @CodeComments_f3a90f38,
+  @CodeComments_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_f3a90f38,
+  @CodeApprovalComments = @CodeApprovalComments_f3a90f38,
+  @CodeApprovalComments_Clear = 1,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_f3a90f38,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_f3a90f38,
+  @CodeApprovedAt_Clear = 1,
+  @CodeLocked = @CodeLocked_f3a90f38,
+  @ForceCodeGeneration = @ForceCodeGeneration_f3a90f38,
+  @RetentionPeriod = @RetentionPeriod_f3a90f38,
+  @RetentionPeriod_Clear = 1,
+  @Status = @Status_f3a90f38,
+  @DriverClass = @DriverClass_f3a90f38,
+  @ParentID = @ParentID_f3a90f38,
+  @ParentID_Clear = 1,
+  @IconClass = @IconClass_f3a90f38,
+  @DefaultCompactPromptID = @DefaultCompactPromptID_f3a90f38,
+  @DefaultCompactPromptID_Clear = 1,
+  @Config = @Config_f3a90f38,
+  @Config_Clear = 1,
+  @RuntimeActionConfiguration = @RuntimeActionConfiguration_f3a90f38,
+  @RuntimeActionConfiguration_Clear = 1,
+  @MaxExecutionTimeMS = @MaxExecutionTimeMS_f3a90f38,
+  @MaxExecutionTimeMS_Clear = 1,
+  @CreatedByAgentID = @CreatedByAgentID_f3a90f38,
+  @CreatedByAgentID_Clear = 1;
+END
+
 
 GO
 
@@ -1757,7 +2460,10 @@ SET
 SET
   @DriverClass_808c40db = N'ApolloCreateListAction'
 SET
-  @IconClass_808c40db = N'fa-solid fa-rocket' EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_808c40db,
+  @IconClass_808c40db = N'fa-solid fa-rocket'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Action] WHERE [ID] = @ID_808c40db)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_808c40db,
   @CategoryID = @CategoryID_808c40db,
   @Name = @Name_808c40db,
   @Description = @Description_808c40db,
@@ -1796,6 +2502,50 @@ SET
   @MaxExecutionTimeMS_Clear = 1,
   @CreatedByAgentID = @CreatedByAgentID_808c40db,
   @CreatedByAgentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAction @ID = @ID_808c40db,
+  @CategoryID = @CategoryID_808c40db,
+  @Name = @Name_808c40db,
+  @Description = @Description_808c40db,
+  @Type = @Type_808c40db,
+  @UserPrompt = @UserPrompt_808c40db,
+  @UserPrompt_Clear = 1,
+  @UserComments = @UserComments_808c40db,
+  @UserComments_Clear = 1,
+  @Code = @Code_808c40db,
+  @Code_Clear = 1,
+  @CodeComments = @CodeComments_808c40db,
+  @CodeComments_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_808c40db,
+  @CodeApprovalComments = @CodeApprovalComments_808c40db,
+  @CodeApprovalComments_Clear = 1,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_808c40db,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_808c40db,
+  @CodeApprovedAt_Clear = 1,
+  @CodeLocked = @CodeLocked_808c40db,
+  @ForceCodeGeneration = @ForceCodeGeneration_808c40db,
+  @RetentionPeriod = @RetentionPeriod_808c40db,
+  @RetentionPeriod_Clear = 1,
+  @Status = @Status_808c40db,
+  @DriverClass = @DriverClass_808c40db,
+  @ParentID = @ParentID_808c40db,
+  @ParentID_Clear = 1,
+  @IconClass = @IconClass_808c40db,
+  @DefaultCompactPromptID = @DefaultCompactPromptID_808c40db,
+  @DefaultCompactPromptID_Clear = 1,
+  @Config = @Config_808c40db,
+  @Config_Clear = 1,
+  @RuntimeActionConfiguration = @RuntimeActionConfiguration_808c40db,
+  @RuntimeActionConfiguration_Clear = 1,
+  @MaxExecutionTimeMS = @MaxExecutionTimeMS_808c40db,
+  @MaxExecutionTimeMS_Clear = 1,
+  @CreatedByAgentID = @CreatedByAgentID_808c40db,
+  @CreatedByAgentID_Clear = 1;
+END
+
 
 GO
 
@@ -1846,7 +2596,10 @@ SET
 SET
   @DriverClass_2a393aa9 = N'ApolloGetListAccountsAction'
 SET
-  @IconClass_2a393aa9 = N'fa-solid fa-rocket' EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_2a393aa9,
+  @IconClass_2a393aa9 = N'fa-solid fa-rocket'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Action] WHERE [ID] = @ID_2a393aa9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_2a393aa9,
   @CategoryID = @CategoryID_2a393aa9,
   @Name = @Name_2a393aa9,
   @Description = @Description_2a393aa9,
@@ -1885,6 +2638,50 @@ SET
   @MaxExecutionTimeMS_Clear = 1,
   @CreatedByAgentID = @CreatedByAgentID_2a393aa9,
   @CreatedByAgentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAction @ID = @ID_2a393aa9,
+  @CategoryID = @CategoryID_2a393aa9,
+  @Name = @Name_2a393aa9,
+  @Description = @Description_2a393aa9,
+  @Type = @Type_2a393aa9,
+  @UserPrompt = @UserPrompt_2a393aa9,
+  @UserPrompt_Clear = 1,
+  @UserComments = @UserComments_2a393aa9,
+  @UserComments_Clear = 1,
+  @Code = @Code_2a393aa9,
+  @Code_Clear = 1,
+  @CodeComments = @CodeComments_2a393aa9,
+  @CodeComments_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_2a393aa9,
+  @CodeApprovalComments = @CodeApprovalComments_2a393aa9,
+  @CodeApprovalComments_Clear = 1,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_2a393aa9,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_2a393aa9,
+  @CodeApprovedAt_Clear = 1,
+  @CodeLocked = @CodeLocked_2a393aa9,
+  @ForceCodeGeneration = @ForceCodeGeneration_2a393aa9,
+  @RetentionPeriod = @RetentionPeriod_2a393aa9,
+  @RetentionPeriod_Clear = 1,
+  @Status = @Status_2a393aa9,
+  @DriverClass = @DriverClass_2a393aa9,
+  @ParentID = @ParentID_2a393aa9,
+  @ParentID_Clear = 1,
+  @IconClass = @IconClass_2a393aa9,
+  @DefaultCompactPromptID = @DefaultCompactPromptID_2a393aa9,
+  @DefaultCompactPromptID_Clear = 1,
+  @Config = @Config_2a393aa9,
+  @Config_Clear = 1,
+  @RuntimeActionConfiguration = @RuntimeActionConfiguration_2a393aa9,
+  @RuntimeActionConfiguration_Clear = 1,
+  @MaxExecutionTimeMS = @MaxExecutionTimeMS_2a393aa9,
+  @MaxExecutionTimeMS_Clear = 1,
+  @CreatedByAgentID = @CreatedByAgentID_2a393aa9,
+  @CreatedByAgentID_Clear = 1;
+END
+
 
 GO
 
@@ -1935,7 +2732,10 @@ SET
 SET
   @DriverClass_db998531 = N'ApolloGetListContactsAction'
 SET
-  @IconClass_db998531 = N'fa-solid fa-rocket' EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_db998531,
+  @IconClass_db998531 = N'fa-solid fa-rocket'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Action] WHERE [ID] = @ID_db998531)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_db998531,
   @CategoryID = @CategoryID_db998531,
   @Name = @Name_db998531,
   @Description = @Description_db998531,
@@ -1974,6 +2774,50 @@ SET
   @MaxExecutionTimeMS_Clear = 1,
   @CreatedByAgentID = @CreatedByAgentID_db998531,
   @CreatedByAgentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAction @ID = @ID_db998531,
+  @CategoryID = @CategoryID_db998531,
+  @Name = @Name_db998531,
+  @Description = @Description_db998531,
+  @Type = @Type_db998531,
+  @UserPrompt = @UserPrompt_db998531,
+  @UserPrompt_Clear = 1,
+  @UserComments = @UserComments_db998531,
+  @UserComments_Clear = 1,
+  @Code = @Code_db998531,
+  @Code_Clear = 1,
+  @CodeComments = @CodeComments_db998531,
+  @CodeComments_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_db998531,
+  @CodeApprovalComments = @CodeApprovalComments_db998531,
+  @CodeApprovalComments_Clear = 1,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_db998531,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_db998531,
+  @CodeApprovedAt_Clear = 1,
+  @CodeLocked = @CodeLocked_db998531,
+  @ForceCodeGeneration = @ForceCodeGeneration_db998531,
+  @RetentionPeriod = @RetentionPeriod_db998531,
+  @RetentionPeriod_Clear = 1,
+  @Status = @Status_db998531,
+  @DriverClass = @DriverClass_db998531,
+  @ParentID = @ParentID_db998531,
+  @ParentID_Clear = 1,
+  @IconClass = @IconClass_db998531,
+  @DefaultCompactPromptID = @DefaultCompactPromptID_db998531,
+  @DefaultCompactPromptID_Clear = 1,
+  @Config = @Config_db998531,
+  @Config_Clear = 1,
+  @RuntimeActionConfiguration = @RuntimeActionConfiguration_db998531,
+  @RuntimeActionConfiguration_Clear = 1,
+  @MaxExecutionTimeMS = @MaxExecutionTimeMS_db998531,
+  @MaxExecutionTimeMS_Clear = 1,
+  @CreatedByAgentID = @CreatedByAgentID_db998531,
+  @CreatedByAgentID_Clear = 1;
+END
+
 
 GO
 
@@ -2024,7 +2868,10 @@ SET
 SET
   @DriverClass_3bd18dae = N'ApolloSearchPeopleAction'
 SET
-  @IconClass_3bd18dae = N'fa-solid fa-rocket' EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_3bd18dae,
+  @IconClass_3bd18dae = N'fa-solid fa-rocket'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Action] WHERE [ID] = @ID_3bd18dae)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_3bd18dae,
   @CategoryID = @CategoryID_3bd18dae,
   @Name = @Name_3bd18dae,
   @Description = @Description_3bd18dae,
@@ -2063,6 +2910,50 @@ SET
   @MaxExecutionTimeMS_Clear = 1,
   @CreatedByAgentID = @CreatedByAgentID_3bd18dae,
   @CreatedByAgentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAction @ID = @ID_3bd18dae,
+  @CategoryID = @CategoryID_3bd18dae,
+  @Name = @Name_3bd18dae,
+  @Description = @Description_3bd18dae,
+  @Type = @Type_3bd18dae,
+  @UserPrompt = @UserPrompt_3bd18dae,
+  @UserPrompt_Clear = 1,
+  @UserComments = @UserComments_3bd18dae,
+  @UserComments_Clear = 1,
+  @Code = @Code_3bd18dae,
+  @Code_Clear = 1,
+  @CodeComments = @CodeComments_3bd18dae,
+  @CodeComments_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_3bd18dae,
+  @CodeApprovalComments = @CodeApprovalComments_3bd18dae,
+  @CodeApprovalComments_Clear = 1,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_3bd18dae,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_3bd18dae,
+  @CodeApprovedAt_Clear = 1,
+  @CodeLocked = @CodeLocked_3bd18dae,
+  @ForceCodeGeneration = @ForceCodeGeneration_3bd18dae,
+  @RetentionPeriod = @RetentionPeriod_3bd18dae,
+  @RetentionPeriod_Clear = 1,
+  @Status = @Status_3bd18dae,
+  @DriverClass = @DriverClass_3bd18dae,
+  @ParentID = @ParentID_3bd18dae,
+  @ParentID_Clear = 1,
+  @IconClass = @IconClass_3bd18dae,
+  @DefaultCompactPromptID = @DefaultCompactPromptID_3bd18dae,
+  @DefaultCompactPromptID_Clear = 1,
+  @Config = @Config_3bd18dae,
+  @Config_Clear = 1,
+  @RuntimeActionConfiguration = @RuntimeActionConfiguration_3bd18dae,
+  @RuntimeActionConfiguration_Clear = 1,
+  @MaxExecutionTimeMS = @MaxExecutionTimeMS_3bd18dae,
+  @MaxExecutionTimeMS_Clear = 1,
+  @CreatedByAgentID = @CreatedByAgentID_3bd18dae,
+  @CreatedByAgentID_Clear = 1;
+END
+
 
 GO
 
@@ -2113,7 +3004,10 @@ SET
 SET
   @DriverClass_fa90a5f8 = N'ApolloMoveListAccountsAction'
 SET
-  @IconClass_fa90a5f8 = N'fa-solid fa-rocket' EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_fa90a5f8,
+  @IconClass_fa90a5f8 = N'fa-solid fa-rocket'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Action] WHERE [ID] = @ID_fa90a5f8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_fa90a5f8,
   @CategoryID = @CategoryID_fa90a5f8,
   @Name = @Name_fa90a5f8,
   @Description = @Description_fa90a5f8,
@@ -2152,6 +3046,50 @@ SET
   @MaxExecutionTimeMS_Clear = 1,
   @CreatedByAgentID = @CreatedByAgentID_fa90a5f8,
   @CreatedByAgentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAction @ID = @ID_fa90a5f8,
+  @CategoryID = @CategoryID_fa90a5f8,
+  @Name = @Name_fa90a5f8,
+  @Description = @Description_fa90a5f8,
+  @Type = @Type_fa90a5f8,
+  @UserPrompt = @UserPrompt_fa90a5f8,
+  @UserPrompt_Clear = 1,
+  @UserComments = @UserComments_fa90a5f8,
+  @UserComments_Clear = 1,
+  @Code = @Code_fa90a5f8,
+  @Code_Clear = 1,
+  @CodeComments = @CodeComments_fa90a5f8,
+  @CodeComments_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_fa90a5f8,
+  @CodeApprovalComments = @CodeApprovalComments_fa90a5f8,
+  @CodeApprovalComments_Clear = 1,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_fa90a5f8,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_fa90a5f8,
+  @CodeApprovedAt_Clear = 1,
+  @CodeLocked = @CodeLocked_fa90a5f8,
+  @ForceCodeGeneration = @ForceCodeGeneration_fa90a5f8,
+  @RetentionPeriod = @RetentionPeriod_fa90a5f8,
+  @RetentionPeriod_Clear = 1,
+  @Status = @Status_fa90a5f8,
+  @DriverClass = @DriverClass_fa90a5f8,
+  @ParentID = @ParentID_fa90a5f8,
+  @ParentID_Clear = 1,
+  @IconClass = @IconClass_fa90a5f8,
+  @DefaultCompactPromptID = @DefaultCompactPromptID_fa90a5f8,
+  @DefaultCompactPromptID_Clear = 1,
+  @Config = @Config_fa90a5f8,
+  @Config_Clear = 1,
+  @RuntimeActionConfiguration = @RuntimeActionConfiguration_fa90a5f8,
+  @RuntimeActionConfiguration_Clear = 1,
+  @MaxExecutionTimeMS = @MaxExecutionTimeMS_fa90a5f8,
+  @MaxExecutionTimeMS_Clear = 1,
+  @CreatedByAgentID = @CreatedByAgentID_fa90a5f8,
+  @CreatedByAgentID_Clear = 1;
+END
+
 
 GO
 
@@ -2202,7 +3140,10 @@ SET
 SET
   @DriverClass_351cbaec = N'ApolloMoveListContactsAction'
 SET
-  @IconClass_351cbaec = N'fa-solid fa-rocket' EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_351cbaec,
+  @IconClass_351cbaec = N'fa-solid fa-rocket'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Action] WHERE [ID] = @ID_351cbaec)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_351cbaec,
   @CategoryID = @CategoryID_351cbaec,
   @Name = @Name_351cbaec,
   @Description = @Description_351cbaec,
@@ -2241,6 +3182,50 @@ SET
   @MaxExecutionTimeMS_Clear = 1,
   @CreatedByAgentID = @CreatedByAgentID_351cbaec,
   @CreatedByAgentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAction @ID = @ID_351cbaec,
+  @CategoryID = @CategoryID_351cbaec,
+  @Name = @Name_351cbaec,
+  @Description = @Description_351cbaec,
+  @Type = @Type_351cbaec,
+  @UserPrompt = @UserPrompt_351cbaec,
+  @UserPrompt_Clear = 1,
+  @UserComments = @UserComments_351cbaec,
+  @UserComments_Clear = 1,
+  @Code = @Code_351cbaec,
+  @Code_Clear = 1,
+  @CodeComments = @CodeComments_351cbaec,
+  @CodeComments_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_351cbaec,
+  @CodeApprovalComments = @CodeApprovalComments_351cbaec,
+  @CodeApprovalComments_Clear = 1,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_351cbaec,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_351cbaec,
+  @CodeApprovedAt_Clear = 1,
+  @CodeLocked = @CodeLocked_351cbaec,
+  @ForceCodeGeneration = @ForceCodeGeneration_351cbaec,
+  @RetentionPeriod = @RetentionPeriod_351cbaec,
+  @RetentionPeriod_Clear = 1,
+  @Status = @Status_351cbaec,
+  @DriverClass = @DriverClass_351cbaec,
+  @ParentID = @ParentID_351cbaec,
+  @ParentID_Clear = 1,
+  @IconClass = @IconClass_351cbaec,
+  @DefaultCompactPromptID = @DefaultCompactPromptID_351cbaec,
+  @DefaultCompactPromptID_Clear = 1,
+  @Config = @Config_351cbaec,
+  @Config_Clear = 1,
+  @RuntimeActionConfiguration = @RuntimeActionConfiguration_351cbaec,
+  @RuntimeActionConfiguration_Clear = 1,
+  @MaxExecutionTimeMS = @MaxExecutionTimeMS_351cbaec,
+  @MaxExecutionTimeMS_Clear = 1,
+  @CreatedByAgentID = @CreatedByAgentID_351cbaec,
+  @CreatedByAgentID_Clear = 1;
+END
+
 
 GO
 
@@ -2274,7 +3259,9 @@ SET
   @IsRequired_bd47c23d = 0
 SET
   @LogValue_bd47c23d = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_bd47c23d,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_bd47c23d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_bd47c23d,
   @ActionID = @ActionID_bd47c23d,
   @Name = @Name_bd47c23d,
   @DefaultValue = @DefaultValue_bd47c23d,
@@ -2287,6 +3274,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_bd47c23d,
   @MediaModality = @MediaModality_bd47c23d,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_bd47c23d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_bd47c23d,
+  @ActionID = @ActionID_bd47c23d,
+  @Name = @Name_bd47c23d,
+  @DefaultValue = @DefaultValue_bd47c23d,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_bd47c23d,
+  @ValueType = @ValueType_bd47c23d,
+  @IsArray = @IsArray_bd47c23d,
+  @Description = @Description_bd47c23d,
+  @IsRequired = @IsRequired_bd47c23d,
+  @MediaModality = @MediaModality_bd47c23d,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_bd47c23d;
+END
+
 
 GO
 
@@ -2320,7 +3325,9 @@ SET
   @IsRequired_fe3c8de4 = 0
 SET
   @LogValue_fe3c8de4 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_fe3c8de4,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_fe3c8de4)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_fe3c8de4,
   @ActionID = @ActionID_fe3c8de4,
   @Name = @Name_fe3c8de4,
   @DefaultValue = @DefaultValue_fe3c8de4,
@@ -2333,6 +3340,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_fe3c8de4,
   @MediaModality = @MediaModality_fe3c8de4,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_fe3c8de4;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_fe3c8de4,
+  @ActionID = @ActionID_fe3c8de4,
+  @Name = @Name_fe3c8de4,
+  @DefaultValue = @DefaultValue_fe3c8de4,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_fe3c8de4,
+  @ValueType = @ValueType_fe3c8de4,
+  @IsArray = @IsArray_fe3c8de4,
+  @Description = @Description_fe3c8de4,
+  @IsRequired = @IsRequired_fe3c8de4,
+  @MediaModality = @MediaModality_fe3c8de4,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_fe3c8de4;
+END
+
 
 GO
 
@@ -2366,7 +3391,9 @@ SET
   @IsRequired_a15f0c28 = 0
 SET
   @LogValue_a15f0c28 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_a15f0c28,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_a15f0c28)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_a15f0c28,
   @ActionID = @ActionID_a15f0c28,
   @Name = @Name_a15f0c28,
   @DefaultValue = @DefaultValue_a15f0c28,
@@ -2379,6 +3406,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_a15f0c28,
   @MediaModality = @MediaModality_a15f0c28,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_a15f0c28;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_a15f0c28,
+  @ActionID = @ActionID_a15f0c28,
+  @Name = @Name_a15f0c28,
+  @DefaultValue = @DefaultValue_a15f0c28,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_a15f0c28,
+  @ValueType = @ValueType_a15f0c28,
+  @IsArray = @IsArray_a15f0c28,
+  @Description = @Description_a15f0c28,
+  @IsRequired = @IsRequired_a15f0c28,
+  @MediaModality = @MediaModality_a15f0c28,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_a15f0c28;
+END
+
 
 GO
 
@@ -2412,7 +3457,9 @@ SET
   @IsRequired_3335e10a = 0
 SET
   @LogValue_3335e10a = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_3335e10a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_3335e10a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_3335e10a,
   @ActionID = @ActionID_3335e10a,
   @Name = @Name_3335e10a,
   @DefaultValue = @DefaultValue_3335e10a,
@@ -2425,6 +3472,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_3335e10a,
   @MediaModality = @MediaModality_3335e10a,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_3335e10a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_3335e10a,
+  @ActionID = @ActionID_3335e10a,
+  @Name = @Name_3335e10a,
+  @DefaultValue = @DefaultValue_3335e10a,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_3335e10a,
+  @ValueType = @ValueType_3335e10a,
+  @IsArray = @IsArray_3335e10a,
+  @Description = @Description_3335e10a,
+  @IsRequired = @IsRequired_3335e10a,
+  @MediaModality = @MediaModality_3335e10a,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_3335e10a;
+END
+
 
 GO
 
@@ -2443,11 +3508,24 @@ SET
 SET
   @IsSuccess_74d3a6e3 = 1
 SET
-  @Description_74d3a6e3 = N'Labels retrieved.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_74d3a6e3,
+  @Description_74d3a6e3 = N'Labels retrieved.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_74d3a6e3)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_74d3a6e3,
   @ActionID = @ActionID_74d3a6e3,
   @ResultCode = @ResultCode_74d3a6e3,
   @IsSuccess = @IsSuccess_74d3a6e3,
   @Description = @Description_74d3a6e3;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_74d3a6e3,
+  @ActionID = @ActionID_74d3a6e3,
+  @ResultCode = @ResultCode_74d3a6e3,
+  @IsSuccess = @IsSuccess_74d3a6e3,
+  @Description = @Description_74d3a6e3;
+END
+
 
 GO
 
@@ -2466,11 +3544,24 @@ SET
 SET
   @IsSuccess_4ebc7d61 = 0
 SET
-  @Description_4ebc7d61 = N'Listing Apollo labels failed. The message carries the Apollo error.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_4ebc7d61,
+  @Description_4ebc7d61 = N'Listing Apollo labels failed. The message carries the Apollo error.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_4ebc7d61)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_4ebc7d61,
   @ActionID = @ActionID_4ebc7d61,
   @ResultCode = @ResultCode_4ebc7d61,
   @IsSuccess = @IsSuccess_4ebc7d61,
   @Description = @Description_4ebc7d61;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_4ebc7d61,
+  @ActionID = @ActionID_4ebc7d61,
+  @ResultCode = @ResultCode_4ebc7d61,
+  @IsSuccess = @IsSuccess_4ebc7d61,
+  @Description = @Description_4ebc7d61;
+END
+
 
 GO
 
@@ -2489,11 +3580,24 @@ SET
 SET
   @IsSuccess_a55f5856 = 0
 SET
-  @Description_a55f5856 = N'The Apollo credential resolved but its Values carry no usable apiKey.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_a55f5856,
+  @Description_a55f5856 = N'The Apollo credential resolved but its Values carry no usable apiKey.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_a55f5856)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_a55f5856,
   @ActionID = @ActionID_a55f5856,
   @ResultCode = @ResultCode_a55f5856,
   @IsSuccess = @IsSuccess_a55f5856,
   @Description = @Description_a55f5856;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_a55f5856,
+  @ActionID = @ActionID_a55f5856,
+  @ResultCode = @ResultCode_a55f5856,
+  @IsSuccess = @IsSuccess_a55f5856,
+  @Description = @Description_a55f5856;
+END
+
 
 GO
 
@@ -2512,11 +3616,24 @@ SET
 SET
   @IsSuccess_67132b7b = 0
 SET
-  @Description_67132b7b = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_67132b7b,
+  @Description_67132b7b = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_67132b7b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_67132b7b,
   @ActionID = @ActionID_67132b7b,
   @ResultCode = @ResultCode_67132b7b,
   @IsSuccess = @IsSuccess_67132b7b,
   @Description = @Description_67132b7b;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_67132b7b,
+  @ActionID = @ActionID_67132b7b,
+  @ResultCode = @ResultCode_67132b7b,
+  @IsSuccess = @IsSuccess_67132b7b,
+  @Description = @Description_67132b7b;
+END
+
 
 GO
 
@@ -2535,11 +3652,24 @@ SET
 SET
   @IsSuccess_11f51fcd = 0
 SET
-  @Description_11f51fcd = N'A required input was absent. The message names the field.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_11f51fcd,
+  @Description_11f51fcd = N'A required input was absent. The message names the field.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_11f51fcd)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_11f51fcd,
   @ActionID = @ActionID_11f51fcd,
   @ResultCode = @ResultCode_11f51fcd,
   @IsSuccess = @IsSuccess_11f51fcd,
   @Description = @Description_11f51fcd;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_11f51fcd,
+  @ActionID = @ActionID_11f51fcd,
+  @ResultCode = @ResultCode_11f51fcd,
+  @IsSuccess = @IsSuccess_11f51fcd,
+  @Description = @Description_11f51fcd;
+END
+
 
 GO
 
@@ -2558,11 +3688,24 @@ SET
 SET
   @IsSuccess_392303df = 0
 SET
-  @Description_392303df = N'An input was present but not usable. The message explains why.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_392303df,
+  @Description_392303df = N'An input was present but not usable. The message explains why.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_392303df)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_392303df,
   @ActionID = @ActionID_392303df,
   @ResultCode = @ResultCode_392303df,
   @IsSuccess = @IsSuccess_392303df,
   @Description = @Description_392303df;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_392303df,
+  @ActionID = @ActionID_392303df,
+  @ResultCode = @ResultCode_392303df,
+  @IsSuccess = @IsSuccess_392303df,
+  @Description = @Description_392303df;
+END
+
 
 GO
 
@@ -2596,7 +3739,9 @@ SET
   @IsRequired_f201cfe5 = 1
 SET
   @LogValue_f201cfe5 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f201cfe5,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_f201cfe5)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f201cfe5,
   @ActionID = @ActionID_f201cfe5,
   @Name = @Name_f201cfe5,
   @DefaultValue = @DefaultValue_f201cfe5,
@@ -2609,6 +3754,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f201cfe5,
   @MediaModality = @MediaModality_f201cfe5,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_f201cfe5;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_f201cfe5,
+  @ActionID = @ActionID_f201cfe5,
+  @Name = @Name_f201cfe5,
+  @DefaultValue = @DefaultValue_f201cfe5,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_f201cfe5,
+  @ValueType = @ValueType_f201cfe5,
+  @IsArray = @IsArray_f201cfe5,
+  @Description = @Description_f201cfe5,
+  @IsRequired = @IsRequired_f201cfe5,
+  @MediaModality = @MediaModality_f201cfe5,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_f201cfe5;
+END
+
 
 GO
 
@@ -2644,7 +3807,9 @@ SET
   @IsRequired_6762a680 = 0
 SET
   @LogValue_6762a680 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_6762a680,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_6762a680)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_6762a680,
   @ActionID = @ActionID_6762a680,
   @Name = @Name_6762a680,
   @DefaultValue = @DefaultValue_6762a680,
@@ -2656,6 +3821,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_6762a680,
   @MediaModality = @MediaModality_6762a680,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_6762a680;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_6762a680,
+  @ActionID = @ActionID_6762a680,
+  @Name = @Name_6762a680,
+  @DefaultValue = @DefaultValue_6762a680,
+  @Type = @Type_6762a680,
+  @ValueType = @ValueType_6762a680,
+  @IsArray = @IsArray_6762a680,
+  @Description = @Description_6762a680,
+  @IsRequired = @IsRequired_6762a680,
+  @MediaModality = @MediaModality_6762a680,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_6762a680;
+END
+
 
 GO
 
@@ -2689,7 +3871,9 @@ SET
   @IsRequired_93069007 = 0
 SET
   @LogValue_93069007 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_93069007,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_93069007)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_93069007,
   @ActionID = @ActionID_93069007,
   @Name = @Name_93069007,
   @DefaultValue = @DefaultValue_93069007,
@@ -2702,6 +3886,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_93069007,
   @MediaModality = @MediaModality_93069007,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_93069007;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_93069007,
+  @ActionID = @ActionID_93069007,
+  @Name = @Name_93069007,
+  @DefaultValue = @DefaultValue_93069007,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_93069007,
+  @ValueType = @ValueType_93069007,
+  @IsArray = @IsArray_93069007,
+  @Description = @Description_93069007,
+  @IsRequired = @IsRequired_93069007,
+  @MediaModality = @MediaModality_93069007,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_93069007;
+END
+
 
 GO
 
@@ -2735,7 +3937,9 @@ SET
   @IsRequired_78dc9e14 = 0
 SET
   @LogValue_78dc9e14 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_78dc9e14,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_78dc9e14)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_78dc9e14,
   @ActionID = @ActionID_78dc9e14,
   @Name = @Name_78dc9e14,
   @DefaultValue = @DefaultValue_78dc9e14,
@@ -2748,6 +3952,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_78dc9e14,
   @MediaModality = @MediaModality_78dc9e14,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_78dc9e14;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_78dc9e14,
+  @ActionID = @ActionID_78dc9e14,
+  @Name = @Name_78dc9e14,
+  @DefaultValue = @DefaultValue_78dc9e14,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_78dc9e14,
+  @ValueType = @ValueType_78dc9e14,
+  @IsArray = @IsArray_78dc9e14,
+  @Description = @Description_78dc9e14,
+  @IsRequired = @IsRequired_78dc9e14,
+  @MediaModality = @MediaModality_78dc9e14,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_78dc9e14;
+END
+
 
 GO
 
@@ -2781,7 +4003,9 @@ SET
   @IsRequired_7dc341f1 = 0
 SET
   @LogValue_7dc341f1 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_7dc341f1,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_7dc341f1)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_7dc341f1,
   @ActionID = @ActionID_7dc341f1,
   @Name = @Name_7dc341f1,
   @DefaultValue = @DefaultValue_7dc341f1,
@@ -2794,6 +4018,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_7dc341f1,
   @MediaModality = @MediaModality_7dc341f1,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_7dc341f1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_7dc341f1,
+  @ActionID = @ActionID_7dc341f1,
+  @Name = @Name_7dc341f1,
+  @DefaultValue = @DefaultValue_7dc341f1,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_7dc341f1,
+  @ValueType = @ValueType_7dc341f1,
+  @IsArray = @IsArray_7dc341f1,
+  @Description = @Description_7dc341f1,
+  @IsRequired = @IsRequired_7dc341f1,
+  @MediaModality = @MediaModality_7dc341f1,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_7dc341f1;
+END
+
 
 GO
 
@@ -2827,7 +4069,9 @@ SET
   @IsRequired_ddf21117 = 0
 SET
   @LogValue_ddf21117 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_ddf21117,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_ddf21117)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_ddf21117,
   @ActionID = @ActionID_ddf21117,
   @Name = @Name_ddf21117,
   @DefaultValue = @DefaultValue_ddf21117,
@@ -2840,6 +4084,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_ddf21117,
   @MediaModality = @MediaModality_ddf21117,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_ddf21117;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_ddf21117,
+  @ActionID = @ActionID_ddf21117,
+  @Name = @Name_ddf21117,
+  @DefaultValue = @DefaultValue_ddf21117,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_ddf21117,
+  @ValueType = @ValueType_ddf21117,
+  @IsArray = @IsArray_ddf21117,
+  @Description = @Description_ddf21117,
+  @IsRequired = @IsRequired_ddf21117,
+  @MediaModality = @MediaModality_ddf21117,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_ddf21117;
+END
+
 
 GO
 
@@ -2873,7 +4135,9 @@ SET
   @IsRequired_cbd1ace6 = 0
 SET
   @LogValue_cbd1ace6 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_cbd1ace6,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_cbd1ace6)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_cbd1ace6,
   @ActionID = @ActionID_cbd1ace6,
   @Name = @Name_cbd1ace6,
   @DefaultValue = @DefaultValue_cbd1ace6,
@@ -2886,6 +4150,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_cbd1ace6,
   @MediaModality = @MediaModality_cbd1ace6,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_cbd1ace6;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_cbd1ace6,
+  @ActionID = @ActionID_cbd1ace6,
+  @Name = @Name_cbd1ace6,
+  @DefaultValue = @DefaultValue_cbd1ace6,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_cbd1ace6,
+  @ValueType = @ValueType_cbd1ace6,
+  @IsArray = @IsArray_cbd1ace6,
+  @Description = @Description_cbd1ace6,
+  @IsRequired = @IsRequired_cbd1ace6,
+  @MediaModality = @MediaModality_cbd1ace6,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_cbd1ace6;
+END
+
 
 GO
 
@@ -2904,11 +4186,24 @@ SET
 SET
   @IsSuccess_9e77082b = 1
 SET
-  @Description_9e77082b = N'Label created, or an existing one reused.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_9e77082b,
+  @Description_9e77082b = N'Label created, or an existing one reused.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_9e77082b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_9e77082b,
   @ActionID = @ActionID_9e77082b,
   @ResultCode = @ResultCode_9e77082b,
   @IsSuccess = @IsSuccess_9e77082b,
   @Description = @Description_9e77082b;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_9e77082b,
+  @ActionID = @ActionID_9e77082b,
+  @ResultCode = @ResultCode_9e77082b,
+  @IsSuccess = @IsSuccess_9e77082b,
+  @Description = @Description_9e77082b;
+END
+
 
 GO
 
@@ -2927,11 +4222,24 @@ SET
 SET
   @IsSuccess_86f02fde = 0
 SET
-  @Description_86f02fde = N'Creating the Apollo label failed. The message carries the Apollo error.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_86f02fde,
+  @Description_86f02fde = N'Creating the Apollo label failed. The message carries the Apollo error.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_86f02fde)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_86f02fde,
   @ActionID = @ActionID_86f02fde,
   @ResultCode = @ResultCode_86f02fde,
   @IsSuccess = @IsSuccess_86f02fde,
   @Description = @Description_86f02fde;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_86f02fde,
+  @ActionID = @ActionID_86f02fde,
+  @ResultCode = @ResultCode_86f02fde,
+  @IsSuccess = @IsSuccess_86f02fde,
+  @Description = @Description_86f02fde;
+END
+
 
 GO
 
@@ -2950,11 +4258,24 @@ SET
 SET
   @IsSuccess_bb7ee883 = 0
 SET
-  @Description_bb7ee883 = N'The Apollo credential resolved but its Values carry no usable apiKey.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_bb7ee883,
+  @Description_bb7ee883 = N'The Apollo credential resolved but its Values carry no usable apiKey.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_bb7ee883)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_bb7ee883,
   @ActionID = @ActionID_bb7ee883,
   @ResultCode = @ResultCode_bb7ee883,
   @IsSuccess = @IsSuccess_bb7ee883,
   @Description = @Description_bb7ee883;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_bb7ee883,
+  @ActionID = @ActionID_bb7ee883,
+  @ResultCode = @ResultCode_bb7ee883,
+  @IsSuccess = @IsSuccess_bb7ee883,
+  @Description = @Description_bb7ee883;
+END
+
 
 GO
 
@@ -2973,11 +4294,24 @@ SET
 SET
   @IsSuccess_d70caf52 = 0
 SET
-  @Description_d70caf52 = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_d70caf52,
+  @Description_d70caf52 = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_d70caf52)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_d70caf52,
   @ActionID = @ActionID_d70caf52,
   @ResultCode = @ResultCode_d70caf52,
   @IsSuccess = @IsSuccess_d70caf52,
   @Description = @Description_d70caf52;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_d70caf52,
+  @ActionID = @ActionID_d70caf52,
+  @ResultCode = @ResultCode_d70caf52,
+  @IsSuccess = @IsSuccess_d70caf52,
+  @Description = @Description_d70caf52;
+END
+
 
 GO
 
@@ -2996,11 +4330,24 @@ SET
 SET
   @IsSuccess_98dae223 = 0
 SET
-  @Description_98dae223 = N'A required input was absent. The message names the field.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_98dae223,
+  @Description_98dae223 = N'A required input was absent. The message names the field.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_98dae223)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_98dae223,
   @ActionID = @ActionID_98dae223,
   @ResultCode = @ResultCode_98dae223,
   @IsSuccess = @IsSuccess_98dae223,
   @Description = @Description_98dae223;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_98dae223,
+  @ActionID = @ActionID_98dae223,
+  @ResultCode = @ResultCode_98dae223,
+  @IsSuccess = @IsSuccess_98dae223,
+  @Description = @Description_98dae223;
+END
+
 
 GO
 
@@ -3019,11 +4366,24 @@ SET
 SET
   @IsSuccess_c2a8540f = 0
 SET
-  @Description_c2a8540f = N'An input was present but not usable. The message explains why.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_c2a8540f,
+  @Description_c2a8540f = N'An input was present but not usable. The message explains why.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_c2a8540f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_c2a8540f,
   @ActionID = @ActionID_c2a8540f,
   @ResultCode = @ResultCode_c2a8540f,
   @IsSuccess = @IsSuccess_c2a8540f,
   @Description = @Description_c2a8540f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_c2a8540f,
+  @ActionID = @ActionID_c2a8540f,
+  @ResultCode = @ResultCode_c2a8540f,
+  @IsSuccess = @IsSuccess_c2a8540f,
+  @Description = @Description_c2a8540f;
+END
+
 
 GO
 
@@ -3057,7 +4417,9 @@ SET
   @IsRequired_a827fcb3 = 1
 SET
   @LogValue_a827fcb3 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_a827fcb3,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_a827fcb3)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_a827fcb3,
   @ActionID = @ActionID_a827fcb3,
   @Name = @Name_a827fcb3,
   @DefaultValue = @DefaultValue_a827fcb3,
@@ -3070,6 +4432,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_a827fcb3,
   @MediaModality = @MediaModality_a827fcb3,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_a827fcb3;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_a827fcb3,
+  @ActionID = @ActionID_a827fcb3,
+  @Name = @Name_a827fcb3,
+  @DefaultValue = @DefaultValue_a827fcb3,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_a827fcb3,
+  @ValueType = @ValueType_a827fcb3,
+  @IsArray = @IsArray_a827fcb3,
+  @Description = @Description_a827fcb3,
+  @IsRequired = @IsRequired_a827fcb3,
+  @MediaModality = @MediaModality_a827fcb3,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_a827fcb3;
+END
+
 
 GO
 
@@ -3103,7 +4483,9 @@ SET
   @IsRequired_e860fb8e = 0
 SET
   @LogValue_e860fb8e = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e860fb8e,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_e860fb8e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e860fb8e,
   @ActionID = @ActionID_e860fb8e,
   @Name = @Name_e860fb8e,
   @DefaultValue = @DefaultValue_e860fb8e,
@@ -3116,6 +4498,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e860fb8e,
   @MediaModality = @MediaModality_e860fb8e,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_e860fb8e;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_e860fb8e,
+  @ActionID = @ActionID_e860fb8e,
+  @Name = @Name_e860fb8e,
+  @DefaultValue = @DefaultValue_e860fb8e,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_e860fb8e,
+  @ValueType = @ValueType_e860fb8e,
+  @IsArray = @IsArray_e860fb8e,
+  @Description = @Description_e860fb8e,
+  @IsRequired = @IsRequired_e860fb8e,
+  @MediaModality = @MediaModality_e860fb8e,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_e860fb8e;
+END
+
 
 GO
 
@@ -3151,7 +4551,9 @@ SET
   @IsRequired_96afa9e3 = 0
 SET
   @LogValue_96afa9e3 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_96afa9e3,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_96afa9e3)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_96afa9e3,
   @ActionID = @ActionID_96afa9e3,
   @Name = @Name_96afa9e3,
   @DefaultValue = @DefaultValue_96afa9e3,
@@ -3163,6 +4565,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_96afa9e3,
   @MediaModality = @MediaModality_96afa9e3,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_96afa9e3;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_96afa9e3,
+  @ActionID = @ActionID_96afa9e3,
+  @Name = @Name_96afa9e3,
+  @DefaultValue = @DefaultValue_96afa9e3,
+  @Type = @Type_96afa9e3,
+  @ValueType = @ValueType_96afa9e3,
+  @IsArray = @IsArray_96afa9e3,
+  @Description = @Description_96afa9e3,
+  @IsRequired = @IsRequired_96afa9e3,
+  @MediaModality = @MediaModality_96afa9e3,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_96afa9e3;
+END
+
 
 GO
 
@@ -3198,7 +4617,9 @@ SET
   @IsRequired_1f922c28 = 0
 SET
   @LogValue_1f922c28 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1f922c28,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_1f922c28)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1f922c28,
   @ActionID = @ActionID_1f922c28,
   @Name = @Name_1f922c28,
   @DefaultValue = @DefaultValue_1f922c28,
@@ -3210,6 +4631,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1f922c28,
   @MediaModality = @MediaModality_1f922c28,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_1f922c28;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_1f922c28,
+  @ActionID = @ActionID_1f922c28,
+  @Name = @Name_1f922c28,
+  @DefaultValue = @DefaultValue_1f922c28,
+  @Type = @Type_1f922c28,
+  @ValueType = @ValueType_1f922c28,
+  @IsArray = @IsArray_1f922c28,
+  @Description = @Description_1f922c28,
+  @IsRequired = @IsRequired_1f922c28,
+  @MediaModality = @MediaModality_1f922c28,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_1f922c28;
+END
+
 
 GO
 
@@ -3243,7 +4681,9 @@ SET
   @IsRequired_4b940b94 = 0
 SET
   @LogValue_4b940b94 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_4b940b94,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_4b940b94)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_4b940b94,
   @ActionID = @ActionID_4b940b94,
   @Name = @Name_4b940b94,
   @DefaultValue = @DefaultValue_4b940b94,
@@ -3256,6 +4696,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_4b940b94,
   @MediaModality = @MediaModality_4b940b94,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_4b940b94;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_4b940b94,
+  @ActionID = @ActionID_4b940b94,
+  @Name = @Name_4b940b94,
+  @DefaultValue = @DefaultValue_4b940b94,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_4b940b94,
+  @ValueType = @ValueType_4b940b94,
+  @IsArray = @IsArray_4b940b94,
+  @Description = @Description_4b940b94,
+  @IsRequired = @IsRequired_4b940b94,
+  @MediaModality = @MediaModality_4b940b94,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_4b940b94;
+END
+
 
 GO
 
@@ -3289,7 +4747,9 @@ SET
   @IsRequired_80622241 = 0
 SET
   @LogValue_80622241 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_80622241,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_80622241)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_80622241,
   @ActionID = @ActionID_80622241,
   @Name = @Name_80622241,
   @DefaultValue = @DefaultValue_80622241,
@@ -3302,6 +4762,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_80622241,
   @MediaModality = @MediaModality_80622241,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_80622241;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_80622241,
+  @ActionID = @ActionID_80622241,
+  @Name = @Name_80622241,
+  @DefaultValue = @DefaultValue_80622241,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_80622241,
+  @ValueType = @ValueType_80622241,
+  @IsArray = @IsArray_80622241,
+  @Description = @Description_80622241,
+  @IsRequired = @IsRequired_80622241,
+  @MediaModality = @MediaModality_80622241,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_80622241;
+END
+
 
 GO
 
@@ -3335,7 +4813,9 @@ SET
   @IsRequired_4332d7b6 = 0
 SET
   @LogValue_4332d7b6 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_4332d7b6,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_4332d7b6)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_4332d7b6,
   @ActionID = @ActionID_4332d7b6,
   @Name = @Name_4332d7b6,
   @DefaultValue = @DefaultValue_4332d7b6,
@@ -3348,6 +4828,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_4332d7b6,
   @MediaModality = @MediaModality_4332d7b6,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_4332d7b6;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_4332d7b6,
+  @ActionID = @ActionID_4332d7b6,
+  @Name = @Name_4332d7b6,
+  @DefaultValue = @DefaultValue_4332d7b6,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_4332d7b6,
+  @ValueType = @ValueType_4332d7b6,
+  @IsArray = @IsArray_4332d7b6,
+  @Description = @Description_4332d7b6,
+  @IsRequired = @IsRequired_4332d7b6,
+  @MediaModality = @MediaModality_4332d7b6,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_4332d7b6;
+END
+
 
 GO
 
@@ -3381,7 +4879,9 @@ SET
   @IsRequired_b3717029 = 0
 SET
   @LogValue_b3717029 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b3717029,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_b3717029)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b3717029,
   @ActionID = @ActionID_b3717029,
   @Name = @Name_b3717029,
   @DefaultValue = @DefaultValue_b3717029,
@@ -3394,6 +4894,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b3717029,
   @MediaModality = @MediaModality_b3717029,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_b3717029;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_b3717029,
+  @ActionID = @ActionID_b3717029,
+  @Name = @Name_b3717029,
+  @DefaultValue = @DefaultValue_b3717029,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_b3717029,
+  @ValueType = @ValueType_b3717029,
+  @IsArray = @IsArray_b3717029,
+  @Description = @Description_b3717029,
+  @IsRequired = @IsRequired_b3717029,
+  @MediaModality = @MediaModality_b3717029,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_b3717029;
+END
+
 
 GO
 
@@ -3427,7 +4945,9 @@ SET
   @IsRequired_50fa5ef8 = 0
 SET
   @LogValue_50fa5ef8 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_50fa5ef8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_50fa5ef8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_50fa5ef8,
   @ActionID = @ActionID_50fa5ef8,
   @Name = @Name_50fa5ef8,
   @DefaultValue = @DefaultValue_50fa5ef8,
@@ -3440,6 +4960,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_50fa5ef8,
   @MediaModality = @MediaModality_50fa5ef8,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_50fa5ef8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_50fa5ef8,
+  @ActionID = @ActionID_50fa5ef8,
+  @Name = @Name_50fa5ef8,
+  @DefaultValue = @DefaultValue_50fa5ef8,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_50fa5ef8,
+  @ValueType = @ValueType_50fa5ef8,
+  @IsArray = @IsArray_50fa5ef8,
+  @Description = @Description_50fa5ef8,
+  @IsRequired = @IsRequired_50fa5ef8,
+  @MediaModality = @MediaModality_50fa5ef8,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_50fa5ef8;
+END
+
 
 GO
 
@@ -3473,7 +5011,9 @@ SET
   @IsRequired_765627b8 = 0
 SET
   @LogValue_765627b8 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_765627b8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_765627b8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_765627b8,
   @ActionID = @ActionID_765627b8,
   @Name = @Name_765627b8,
   @DefaultValue = @DefaultValue_765627b8,
@@ -3486,6 +5026,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_765627b8,
   @MediaModality = @MediaModality_765627b8,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_765627b8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_765627b8,
+  @ActionID = @ActionID_765627b8,
+  @Name = @Name_765627b8,
+  @DefaultValue = @DefaultValue_765627b8,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_765627b8,
+  @ValueType = @ValueType_765627b8,
+  @IsArray = @IsArray_765627b8,
+  @Description = @Description_765627b8,
+  @IsRequired = @IsRequired_765627b8,
+  @MediaModality = @MediaModality_765627b8,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_765627b8;
+END
+
 
 GO
 
@@ -3519,7 +5077,9 @@ SET
   @IsRequired_436163a1 = 0
 SET
   @LogValue_436163a1 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_436163a1,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_436163a1)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_436163a1,
   @ActionID = @ActionID_436163a1,
   @Name = @Name_436163a1,
   @DefaultValue = @DefaultValue_436163a1,
@@ -3532,6 +5092,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_436163a1,
   @MediaModality = @MediaModality_436163a1,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_436163a1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_436163a1,
+  @ActionID = @ActionID_436163a1,
+  @Name = @Name_436163a1,
+  @DefaultValue = @DefaultValue_436163a1,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_436163a1,
+  @ValueType = @ValueType_436163a1,
+  @IsArray = @IsArray_436163a1,
+  @Description = @Description_436163a1,
+  @IsRequired = @IsRequired_436163a1,
+  @MediaModality = @MediaModality_436163a1,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_436163a1;
+END
+
 
 GO
 
@@ -3550,11 +5128,24 @@ SET
 SET
   @IsSuccess_2370dd6c = 1
 SET
-  @Description_2370dd6c = N'Accounts retrieved.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_2370dd6c,
+  @Description_2370dd6c = N'Accounts retrieved.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_2370dd6c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_2370dd6c,
   @ActionID = @ActionID_2370dd6c,
   @ResultCode = @ResultCode_2370dd6c,
   @IsSuccess = @IsSuccess_2370dd6c,
   @Description = @Description_2370dd6c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_2370dd6c,
+  @ActionID = @ActionID_2370dd6c,
+  @ResultCode = @ResultCode_2370dd6c,
+  @IsSuccess = @IsSuccess_2370dd6c,
+  @Description = @Description_2370dd6c;
+END
+
 
 GO
 
@@ -3573,11 +5164,24 @@ SET
 SET
   @IsSuccess_886b8e75 = 0
 SET
-  @Description_886b8e75 = N'No Apollo label matches the supplied ListName.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_886b8e75,
+  @Description_886b8e75 = N'No Apollo label matches the supplied ListName.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_886b8e75)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_886b8e75,
   @ActionID = @ActionID_886b8e75,
   @ResultCode = @ResultCode_886b8e75,
   @IsSuccess = @IsSuccess_886b8e75,
   @Description = @Description_886b8e75;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_886b8e75,
+  @ActionID = @ActionID_886b8e75,
+  @ResultCode = @ResultCode_886b8e75,
+  @IsSuccess = @IsSuccess_886b8e75,
+  @Description = @Description_886b8e75;
+END
+
 
 GO
 
@@ -3596,11 +5200,24 @@ SET
 SET
   @IsSuccess_ad222d1d = 0
 SET
-  @Description_ad222d1d = N'Reading the Apollo list failed. The message carries the Apollo error.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_ad222d1d,
+  @Description_ad222d1d = N'Reading the Apollo list failed. The message carries the Apollo error.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_ad222d1d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_ad222d1d,
   @ActionID = @ActionID_ad222d1d,
   @ResultCode = @ResultCode_ad222d1d,
   @IsSuccess = @IsSuccess_ad222d1d,
   @Description = @Description_ad222d1d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_ad222d1d,
+  @ActionID = @ActionID_ad222d1d,
+  @ResultCode = @ResultCode_ad222d1d,
+  @IsSuccess = @IsSuccess_ad222d1d,
+  @Description = @Description_ad222d1d;
+END
+
 
 GO
 
@@ -3619,11 +5236,24 @@ SET
 SET
   @IsSuccess_85162499 = 0
 SET
-  @Description_85162499 = N'The Apollo credential resolved but its Values carry no usable apiKey.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_85162499,
+  @Description_85162499 = N'The Apollo credential resolved but its Values carry no usable apiKey.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_85162499)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_85162499,
   @ActionID = @ActionID_85162499,
   @ResultCode = @ResultCode_85162499,
   @IsSuccess = @IsSuccess_85162499,
   @Description = @Description_85162499;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_85162499,
+  @ActionID = @ActionID_85162499,
+  @ResultCode = @ResultCode_85162499,
+  @IsSuccess = @IsSuccess_85162499,
+  @Description = @Description_85162499;
+END
+
 
 GO
 
@@ -3642,11 +5272,24 @@ SET
 SET
   @IsSuccess_43ecabda = 0
 SET
-  @Description_43ecabda = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_43ecabda,
+  @Description_43ecabda = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_43ecabda)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_43ecabda,
   @ActionID = @ActionID_43ecabda,
   @ResultCode = @ResultCode_43ecabda,
   @IsSuccess = @IsSuccess_43ecabda,
   @Description = @Description_43ecabda;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_43ecabda,
+  @ActionID = @ActionID_43ecabda,
+  @ResultCode = @ResultCode_43ecabda,
+  @IsSuccess = @IsSuccess_43ecabda,
+  @Description = @Description_43ecabda;
+END
+
 
 GO
 
@@ -3665,11 +5308,24 @@ SET
 SET
   @IsSuccess_1c8a590a = 0
 SET
-  @Description_1c8a590a = N'A required input was absent. The message names the field.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_1c8a590a,
+  @Description_1c8a590a = N'A required input was absent. The message names the field.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_1c8a590a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_1c8a590a,
   @ActionID = @ActionID_1c8a590a,
   @ResultCode = @ResultCode_1c8a590a,
   @IsSuccess = @IsSuccess_1c8a590a,
   @Description = @Description_1c8a590a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_1c8a590a,
+  @ActionID = @ActionID_1c8a590a,
+  @ResultCode = @ResultCode_1c8a590a,
+  @IsSuccess = @IsSuccess_1c8a590a,
+  @Description = @Description_1c8a590a;
+END
+
 
 GO
 
@@ -3688,11 +5344,24 @@ SET
 SET
   @IsSuccess_a23fb9f9 = 0
 SET
-  @Description_a23fb9f9 = N'An input was present but not usable. The message explains why.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_a23fb9f9,
+  @Description_a23fb9f9 = N'An input was present but not usable. The message explains why.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_a23fb9f9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_a23fb9f9,
   @ActionID = @ActionID_a23fb9f9,
   @ResultCode = @ResultCode_a23fb9f9,
   @IsSuccess = @IsSuccess_a23fb9f9,
   @Description = @Description_a23fb9f9;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_a23fb9f9,
+  @ActionID = @ActionID_a23fb9f9,
+  @ResultCode = @ResultCode_a23fb9f9,
+  @IsSuccess = @IsSuccess_a23fb9f9,
+  @Description = @Description_a23fb9f9;
+END
+
 
 GO
 
@@ -3726,7 +5395,9 @@ SET
   @IsRequired_f6721e9f = 1
 SET
   @LogValue_f6721e9f = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f6721e9f,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_f6721e9f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f6721e9f,
   @ActionID = @ActionID_f6721e9f,
   @Name = @Name_f6721e9f,
   @DefaultValue = @DefaultValue_f6721e9f,
@@ -3739,6 +5410,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f6721e9f,
   @MediaModality = @MediaModality_f6721e9f,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_f6721e9f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_f6721e9f,
+  @ActionID = @ActionID_f6721e9f,
+  @Name = @Name_f6721e9f,
+  @DefaultValue = @DefaultValue_f6721e9f,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_f6721e9f,
+  @ValueType = @ValueType_f6721e9f,
+  @IsArray = @IsArray_f6721e9f,
+  @Description = @Description_f6721e9f,
+  @IsRequired = @IsRequired_f6721e9f,
+  @MediaModality = @MediaModality_f6721e9f,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_f6721e9f;
+END
+
 
 GO
 
@@ -3772,7 +5461,9 @@ SET
   @IsRequired_d54ac578 = 0
 SET
   @LogValue_d54ac578 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d54ac578,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_d54ac578)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d54ac578,
   @ActionID = @ActionID_d54ac578,
   @Name = @Name_d54ac578,
   @DefaultValue = @DefaultValue_d54ac578,
@@ -3785,6 +5476,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d54ac578,
   @MediaModality = @MediaModality_d54ac578,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_d54ac578;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_d54ac578,
+  @ActionID = @ActionID_d54ac578,
+  @Name = @Name_d54ac578,
+  @DefaultValue = @DefaultValue_d54ac578,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_d54ac578,
+  @ValueType = @ValueType_d54ac578,
+  @IsArray = @IsArray_d54ac578,
+  @Description = @Description_d54ac578,
+  @IsRequired = @IsRequired_d54ac578,
+  @MediaModality = @MediaModality_d54ac578,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_d54ac578;
+END
+
 
 GO
 
@@ -3820,7 +5529,9 @@ SET
   @IsRequired_cd1a3154 = 0
 SET
   @LogValue_cd1a3154 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_cd1a3154,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_cd1a3154)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_cd1a3154,
   @ActionID = @ActionID_cd1a3154,
   @Name = @Name_cd1a3154,
   @DefaultValue = @DefaultValue_cd1a3154,
@@ -3832,6 +5543,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_cd1a3154,
   @MediaModality = @MediaModality_cd1a3154,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_cd1a3154;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_cd1a3154,
+  @ActionID = @ActionID_cd1a3154,
+  @Name = @Name_cd1a3154,
+  @DefaultValue = @DefaultValue_cd1a3154,
+  @Type = @Type_cd1a3154,
+  @ValueType = @ValueType_cd1a3154,
+  @IsArray = @IsArray_cd1a3154,
+  @Description = @Description_cd1a3154,
+  @IsRequired = @IsRequired_cd1a3154,
+  @MediaModality = @MediaModality_cd1a3154,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_cd1a3154;
+END
+
 
 GO
 
@@ -3867,7 +5595,9 @@ SET
   @IsRequired_dfac9936 = 0
 SET
   @LogValue_dfac9936 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_dfac9936,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_dfac9936)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_dfac9936,
   @ActionID = @ActionID_dfac9936,
   @Name = @Name_dfac9936,
   @DefaultValue = @DefaultValue_dfac9936,
@@ -3879,6 +5609,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_dfac9936,
   @MediaModality = @MediaModality_dfac9936,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_dfac9936;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_dfac9936,
+  @ActionID = @ActionID_dfac9936,
+  @Name = @Name_dfac9936,
+  @DefaultValue = @DefaultValue_dfac9936,
+  @Type = @Type_dfac9936,
+  @ValueType = @ValueType_dfac9936,
+  @IsArray = @IsArray_dfac9936,
+  @Description = @Description_dfac9936,
+  @IsRequired = @IsRequired_dfac9936,
+  @MediaModality = @MediaModality_dfac9936,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_dfac9936;
+END
+
 
 GO
 
@@ -3912,7 +5659,9 @@ SET
   @IsRequired_764f1deb = 0
 SET
   @LogValue_764f1deb = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_764f1deb,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_764f1deb)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_764f1deb,
   @ActionID = @ActionID_764f1deb,
   @Name = @Name_764f1deb,
   @DefaultValue = @DefaultValue_764f1deb,
@@ -3925,6 +5674,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_764f1deb,
   @MediaModality = @MediaModality_764f1deb,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_764f1deb;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_764f1deb,
+  @ActionID = @ActionID_764f1deb,
+  @Name = @Name_764f1deb,
+  @DefaultValue = @DefaultValue_764f1deb,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_764f1deb,
+  @ValueType = @ValueType_764f1deb,
+  @IsArray = @IsArray_764f1deb,
+  @Description = @Description_764f1deb,
+  @IsRequired = @IsRequired_764f1deb,
+  @MediaModality = @MediaModality_764f1deb,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_764f1deb;
+END
+
 
 GO
 
@@ -3958,7 +5725,9 @@ SET
   @IsRequired_dcb57470 = 0
 SET
   @LogValue_dcb57470 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_dcb57470,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_dcb57470)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_dcb57470,
   @ActionID = @ActionID_dcb57470,
   @Name = @Name_dcb57470,
   @DefaultValue = @DefaultValue_dcb57470,
@@ -3971,6 +5740,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_dcb57470,
   @MediaModality = @MediaModality_dcb57470,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_dcb57470;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_dcb57470,
+  @ActionID = @ActionID_dcb57470,
+  @Name = @Name_dcb57470,
+  @DefaultValue = @DefaultValue_dcb57470,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_dcb57470,
+  @ValueType = @ValueType_dcb57470,
+  @IsArray = @IsArray_dcb57470,
+  @Description = @Description_dcb57470,
+  @IsRequired = @IsRequired_dcb57470,
+  @MediaModality = @MediaModality_dcb57470,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_dcb57470;
+END
+
 
 GO
 
@@ -4004,7 +5791,9 @@ SET
   @IsRequired_53a2eccf = 0
 SET
   @LogValue_53a2eccf = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_53a2eccf,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_53a2eccf)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_53a2eccf,
   @ActionID = @ActionID_53a2eccf,
   @Name = @Name_53a2eccf,
   @DefaultValue = @DefaultValue_53a2eccf,
@@ -4017,6 +5806,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_53a2eccf,
   @MediaModality = @MediaModality_53a2eccf,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_53a2eccf;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_53a2eccf,
+  @ActionID = @ActionID_53a2eccf,
+  @Name = @Name_53a2eccf,
+  @DefaultValue = @DefaultValue_53a2eccf,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_53a2eccf,
+  @ValueType = @ValueType_53a2eccf,
+  @IsArray = @IsArray_53a2eccf,
+  @Description = @Description_53a2eccf,
+  @IsRequired = @IsRequired_53a2eccf,
+  @MediaModality = @MediaModality_53a2eccf,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_53a2eccf;
+END
+
 
 GO
 
@@ -4050,7 +5857,9 @@ SET
   @IsRequired_2a1dc9a6 = 0
 SET
   @LogValue_2a1dc9a6 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_2a1dc9a6,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_2a1dc9a6)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_2a1dc9a6,
   @ActionID = @ActionID_2a1dc9a6,
   @Name = @Name_2a1dc9a6,
   @DefaultValue = @DefaultValue_2a1dc9a6,
@@ -4063,6 +5872,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_2a1dc9a6,
   @MediaModality = @MediaModality_2a1dc9a6,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_2a1dc9a6;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_2a1dc9a6,
+  @ActionID = @ActionID_2a1dc9a6,
+  @Name = @Name_2a1dc9a6,
+  @DefaultValue = @DefaultValue_2a1dc9a6,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_2a1dc9a6,
+  @ValueType = @ValueType_2a1dc9a6,
+  @IsArray = @IsArray_2a1dc9a6,
+  @Description = @Description_2a1dc9a6,
+  @IsRequired = @IsRequired_2a1dc9a6,
+  @MediaModality = @MediaModality_2a1dc9a6,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_2a1dc9a6;
+END
+
 
 GO
 
@@ -4096,7 +5923,9 @@ SET
   @IsRequired_fca1db83 = 0
 SET
   @LogValue_fca1db83 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_fca1db83,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_fca1db83)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_fca1db83,
   @ActionID = @ActionID_fca1db83,
   @Name = @Name_fca1db83,
   @DefaultValue = @DefaultValue_fca1db83,
@@ -4109,6 +5938,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_fca1db83,
   @MediaModality = @MediaModality_fca1db83,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_fca1db83;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_fca1db83,
+  @ActionID = @ActionID_fca1db83,
+  @Name = @Name_fca1db83,
+  @DefaultValue = @DefaultValue_fca1db83,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_fca1db83,
+  @ValueType = @ValueType_fca1db83,
+  @IsArray = @IsArray_fca1db83,
+  @Description = @Description_fca1db83,
+  @IsRequired = @IsRequired_fca1db83,
+  @MediaModality = @MediaModality_fca1db83,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_fca1db83;
+END
+
 
 GO
 
@@ -4142,7 +5989,9 @@ SET
   @IsRequired_13677095 = 0
 SET
   @LogValue_13677095 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_13677095,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_13677095)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_13677095,
   @ActionID = @ActionID_13677095,
   @Name = @Name_13677095,
   @DefaultValue = @DefaultValue_13677095,
@@ -4155,6 +6004,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_13677095,
   @MediaModality = @MediaModality_13677095,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_13677095;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_13677095,
+  @ActionID = @ActionID_13677095,
+  @Name = @Name_13677095,
+  @DefaultValue = @DefaultValue_13677095,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_13677095,
+  @ValueType = @ValueType_13677095,
+  @IsArray = @IsArray_13677095,
+  @Description = @Description_13677095,
+  @IsRequired = @IsRequired_13677095,
+  @MediaModality = @MediaModality_13677095,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_13677095;
+END
+
 
 GO
 
@@ -4188,7 +6055,9 @@ SET
   @IsRequired_1f6d5fbd = 0
 SET
   @LogValue_1f6d5fbd = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1f6d5fbd,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_1f6d5fbd)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1f6d5fbd,
   @ActionID = @ActionID_1f6d5fbd,
   @Name = @Name_1f6d5fbd,
   @DefaultValue = @DefaultValue_1f6d5fbd,
@@ -4201,6 +6070,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1f6d5fbd,
   @MediaModality = @MediaModality_1f6d5fbd,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_1f6d5fbd;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_1f6d5fbd,
+  @ActionID = @ActionID_1f6d5fbd,
+  @Name = @Name_1f6d5fbd,
+  @DefaultValue = @DefaultValue_1f6d5fbd,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_1f6d5fbd,
+  @ValueType = @ValueType_1f6d5fbd,
+  @IsArray = @IsArray_1f6d5fbd,
+  @Description = @Description_1f6d5fbd,
+  @IsRequired = @IsRequired_1f6d5fbd,
+  @MediaModality = @MediaModality_1f6d5fbd,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_1f6d5fbd;
+END
+
 
 GO
 
@@ -4219,11 +6106,24 @@ SET
 SET
   @IsSuccess_3b8c481b = 1
 SET
-  @Description_3b8c481b = N'Contacts retrieved.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_3b8c481b,
+  @Description_3b8c481b = N'Contacts retrieved.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_3b8c481b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_3b8c481b,
   @ActionID = @ActionID_3b8c481b,
   @ResultCode = @ResultCode_3b8c481b,
   @IsSuccess = @IsSuccess_3b8c481b,
   @Description = @Description_3b8c481b;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_3b8c481b,
+  @ActionID = @ActionID_3b8c481b,
+  @ResultCode = @ResultCode_3b8c481b,
+  @IsSuccess = @IsSuccess_3b8c481b,
+  @Description = @Description_3b8c481b;
+END
+
 
 GO
 
@@ -4242,11 +6142,24 @@ SET
 SET
   @IsSuccess_ca71779b = 0
 SET
-  @Description_ca71779b = N'No Apollo label matches the supplied ListName.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_ca71779b,
+  @Description_ca71779b = N'No Apollo label matches the supplied ListName.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_ca71779b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_ca71779b,
   @ActionID = @ActionID_ca71779b,
   @ResultCode = @ResultCode_ca71779b,
   @IsSuccess = @IsSuccess_ca71779b,
   @Description = @Description_ca71779b;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_ca71779b,
+  @ActionID = @ActionID_ca71779b,
+  @ResultCode = @ResultCode_ca71779b,
+  @IsSuccess = @IsSuccess_ca71779b,
+  @Description = @Description_ca71779b;
+END
+
 
 GO
 
@@ -4265,11 +6178,24 @@ SET
 SET
   @IsSuccess_00f638b8 = 0
 SET
-  @Description_00f638b8 = N'Reading the Apollo list failed. The message carries the Apollo error.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_00f638b8,
+  @Description_00f638b8 = N'Reading the Apollo list failed. The message carries the Apollo error.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_00f638b8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_00f638b8,
   @ActionID = @ActionID_00f638b8,
   @ResultCode = @ResultCode_00f638b8,
   @IsSuccess = @IsSuccess_00f638b8,
   @Description = @Description_00f638b8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_00f638b8,
+  @ActionID = @ActionID_00f638b8,
+  @ResultCode = @ResultCode_00f638b8,
+  @IsSuccess = @IsSuccess_00f638b8,
+  @Description = @Description_00f638b8;
+END
+
 
 GO
 
@@ -4288,11 +6214,24 @@ SET
 SET
   @IsSuccess_48cc57da = 0
 SET
-  @Description_48cc57da = N'The Apollo credential resolved but its Values carry no usable apiKey.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_48cc57da,
+  @Description_48cc57da = N'The Apollo credential resolved but its Values carry no usable apiKey.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_48cc57da)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_48cc57da,
   @ActionID = @ActionID_48cc57da,
   @ResultCode = @ResultCode_48cc57da,
   @IsSuccess = @IsSuccess_48cc57da,
   @Description = @Description_48cc57da;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_48cc57da,
+  @ActionID = @ActionID_48cc57da,
+  @ResultCode = @ResultCode_48cc57da,
+  @IsSuccess = @IsSuccess_48cc57da,
+  @Description = @Description_48cc57da;
+END
+
 
 GO
 
@@ -4311,11 +6250,24 @@ SET
 SET
   @IsSuccess_de7c04df = 0
 SET
-  @Description_de7c04df = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_de7c04df,
+  @Description_de7c04df = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_de7c04df)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_de7c04df,
   @ActionID = @ActionID_de7c04df,
   @ResultCode = @ResultCode_de7c04df,
   @IsSuccess = @IsSuccess_de7c04df,
   @Description = @Description_de7c04df;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_de7c04df,
+  @ActionID = @ActionID_de7c04df,
+  @ResultCode = @ResultCode_de7c04df,
+  @IsSuccess = @IsSuccess_de7c04df,
+  @Description = @Description_de7c04df;
+END
+
 
 GO
 
@@ -4334,11 +6286,24 @@ SET
 SET
   @IsSuccess_7a0b293c = 0
 SET
-  @Description_7a0b293c = N'A required input was absent. The message names the field.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_7a0b293c,
+  @Description_7a0b293c = N'A required input was absent. The message names the field.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_7a0b293c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_7a0b293c,
   @ActionID = @ActionID_7a0b293c,
   @ResultCode = @ResultCode_7a0b293c,
   @IsSuccess = @IsSuccess_7a0b293c,
   @Description = @Description_7a0b293c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_7a0b293c,
+  @ActionID = @ActionID_7a0b293c,
+  @ResultCode = @ResultCode_7a0b293c,
+  @IsSuccess = @IsSuccess_7a0b293c,
+  @Description = @Description_7a0b293c;
+END
+
 
 GO
 
@@ -4357,11 +6322,24 @@ SET
 SET
   @IsSuccess_0a33c1b0 = 0
 SET
-  @Description_0a33c1b0 = N'An input was present but not usable. The message explains why.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_0a33c1b0,
+  @Description_0a33c1b0 = N'An input was present but not usable. The message explains why.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_0a33c1b0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_0a33c1b0,
   @ActionID = @ActionID_0a33c1b0,
   @ResultCode = @ResultCode_0a33c1b0,
   @IsSuccess = @IsSuccess_0a33c1b0,
   @Description = @Description_0a33c1b0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_0a33c1b0,
+  @ActionID = @ActionID_0a33c1b0,
+  @ResultCode = @ResultCode_0a33c1b0,
+  @IsSuccess = @IsSuccess_0a33c1b0,
+  @Description = @Description_0a33c1b0;
+END
+
 
 GO
 
@@ -4395,7 +6373,9 @@ SET
   @IsRequired_6d0fe7e8 = 0
 SET
   @LogValue_6d0fe7e8 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_6d0fe7e8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_6d0fe7e8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_6d0fe7e8,
   @ActionID = @ActionID_6d0fe7e8,
   @Name = @Name_6d0fe7e8,
   @DefaultValue = @DefaultValue_6d0fe7e8,
@@ -4408,6 +6388,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_6d0fe7e8,
   @MediaModality = @MediaModality_6d0fe7e8,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_6d0fe7e8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_6d0fe7e8,
+  @ActionID = @ActionID_6d0fe7e8,
+  @Name = @Name_6d0fe7e8,
+  @DefaultValue = @DefaultValue_6d0fe7e8,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_6d0fe7e8,
+  @ValueType = @ValueType_6d0fe7e8,
+  @IsArray = @IsArray_6d0fe7e8,
+  @Description = @Description_6d0fe7e8,
+  @IsRequired = @IsRequired_6d0fe7e8,
+  @MediaModality = @MediaModality_6d0fe7e8,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_6d0fe7e8;
+END
+
 
 GO
 
@@ -4441,7 +6439,9 @@ SET
   @IsRequired_f2c17d00 = 0
 SET
   @LogValue_f2c17d00 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f2c17d00,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_f2c17d00)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f2c17d00,
   @ActionID = @ActionID_f2c17d00,
   @Name = @Name_f2c17d00,
   @DefaultValue = @DefaultValue_f2c17d00,
@@ -4454,6 +6454,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f2c17d00,
   @MediaModality = @MediaModality_f2c17d00,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_f2c17d00;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_f2c17d00,
+  @ActionID = @ActionID_f2c17d00,
+  @Name = @Name_f2c17d00,
+  @DefaultValue = @DefaultValue_f2c17d00,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_f2c17d00,
+  @ValueType = @ValueType_f2c17d00,
+  @IsArray = @IsArray_f2c17d00,
+  @Description = @Description_f2c17d00,
+  @IsRequired = @IsRequired_f2c17d00,
+  @MediaModality = @MediaModality_f2c17d00,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_f2c17d00;
+END
+
 
 GO
 
@@ -4487,7 +6505,9 @@ SET
   @IsRequired_9770264a = 0
 SET
   @LogValue_9770264a = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_9770264a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_9770264a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_9770264a,
   @ActionID = @ActionID_9770264a,
   @Name = @Name_9770264a,
   @DefaultValue = @DefaultValue_9770264a,
@@ -4500,6 +6520,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_9770264a,
   @MediaModality = @MediaModality_9770264a,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_9770264a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_9770264a,
+  @ActionID = @ActionID_9770264a,
+  @Name = @Name_9770264a,
+  @DefaultValue = @DefaultValue_9770264a,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_9770264a,
+  @ValueType = @ValueType_9770264a,
+  @IsArray = @IsArray_9770264a,
+  @Description = @Description_9770264a,
+  @IsRequired = @IsRequired_9770264a,
+  @MediaModality = @MediaModality_9770264a,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_9770264a;
+END
+
 
 GO
 
@@ -4533,7 +6571,9 @@ SET
   @IsRequired_3c6c359f = 0
 SET
   @LogValue_3c6c359f = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_3c6c359f,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_3c6c359f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_3c6c359f,
   @ActionID = @ActionID_3c6c359f,
   @Name = @Name_3c6c359f,
   @DefaultValue = @DefaultValue_3c6c359f,
@@ -4546,6 +6586,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_3c6c359f,
   @MediaModality = @MediaModality_3c6c359f,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_3c6c359f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_3c6c359f,
+  @ActionID = @ActionID_3c6c359f,
+  @Name = @Name_3c6c359f,
+  @DefaultValue = @DefaultValue_3c6c359f,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_3c6c359f,
+  @ValueType = @ValueType_3c6c359f,
+  @IsArray = @IsArray_3c6c359f,
+  @Description = @Description_3c6c359f,
+  @IsRequired = @IsRequired_3c6c359f,
+  @MediaModality = @MediaModality_3c6c359f,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_3c6c359f;
+END
+
 
 GO
 
@@ -4581,7 +6639,9 @@ SET
   @IsRequired_36709086 = 0
 SET
   @LogValue_36709086 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_36709086,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_36709086)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_36709086,
   @ActionID = @ActionID_36709086,
   @Name = @Name_36709086,
   @DefaultValue = @DefaultValue_36709086,
@@ -4593,6 +6653,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_36709086,
   @MediaModality = @MediaModality_36709086,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_36709086;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_36709086,
+  @ActionID = @ActionID_36709086,
+  @Name = @Name_36709086,
+  @DefaultValue = @DefaultValue_36709086,
+  @Type = @Type_36709086,
+  @ValueType = @ValueType_36709086,
+  @IsArray = @IsArray_36709086,
+  @Description = @Description_36709086,
+  @IsRequired = @IsRequired_36709086,
+  @MediaModality = @MediaModality_36709086,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_36709086;
+END
+
 
 GO
 
@@ -4628,7 +6705,9 @@ SET
   @IsRequired_942e34da = 0
 SET
   @LogValue_942e34da = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_942e34da,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_942e34da)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_942e34da,
   @ActionID = @ActionID_942e34da,
   @Name = @Name_942e34da,
   @DefaultValue = @DefaultValue_942e34da,
@@ -4640,6 +6719,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_942e34da,
   @MediaModality = @MediaModality_942e34da,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_942e34da;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_942e34da,
+  @ActionID = @ActionID_942e34da,
+  @Name = @Name_942e34da,
+  @DefaultValue = @DefaultValue_942e34da,
+  @Type = @Type_942e34da,
+  @ValueType = @ValueType_942e34da,
+  @IsArray = @IsArray_942e34da,
+  @Description = @Description_942e34da,
+  @IsRequired = @IsRequired_942e34da,
+  @MediaModality = @MediaModality_942e34da,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_942e34da;
+END
+
 
 GO
 
@@ -4673,7 +6769,9 @@ SET
   @IsRequired_18e5145b = 0
 SET
   @LogValue_18e5145b = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_18e5145b,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_18e5145b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_18e5145b,
   @ActionID = @ActionID_18e5145b,
   @Name = @Name_18e5145b,
   @DefaultValue = @DefaultValue_18e5145b,
@@ -4686,6 +6784,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_18e5145b,
   @MediaModality = @MediaModality_18e5145b,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_18e5145b;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_18e5145b,
+  @ActionID = @ActionID_18e5145b,
+  @Name = @Name_18e5145b,
+  @DefaultValue = @DefaultValue_18e5145b,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_18e5145b,
+  @ValueType = @ValueType_18e5145b,
+  @IsArray = @IsArray_18e5145b,
+  @Description = @Description_18e5145b,
+  @IsRequired = @IsRequired_18e5145b,
+  @MediaModality = @MediaModality_18e5145b,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_18e5145b;
+END
+
 
 GO
 
@@ -4719,7 +6835,9 @@ SET
   @IsRequired_ac088672 = 0
 SET
   @LogValue_ac088672 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_ac088672,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_ac088672)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_ac088672,
   @ActionID = @ActionID_ac088672,
   @Name = @Name_ac088672,
   @DefaultValue = @DefaultValue_ac088672,
@@ -4732,6 +6850,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_ac088672,
   @MediaModality = @MediaModality_ac088672,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_ac088672;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_ac088672,
+  @ActionID = @ActionID_ac088672,
+  @Name = @Name_ac088672,
+  @DefaultValue = @DefaultValue_ac088672,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_ac088672,
+  @ValueType = @ValueType_ac088672,
+  @IsArray = @IsArray_ac088672,
+  @Description = @Description_ac088672,
+  @IsRequired = @IsRequired_ac088672,
+  @MediaModality = @MediaModality_ac088672,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_ac088672;
+END
+
 
 GO
 
@@ -4765,7 +6901,9 @@ SET
   @IsRequired_d150e272 = 0
 SET
   @LogValue_d150e272 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d150e272,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_d150e272)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d150e272,
   @ActionID = @ActionID_d150e272,
   @Name = @Name_d150e272,
   @DefaultValue = @DefaultValue_d150e272,
@@ -4778,6 +6916,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d150e272,
   @MediaModality = @MediaModality_d150e272,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_d150e272;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_d150e272,
+  @ActionID = @ActionID_d150e272,
+  @Name = @Name_d150e272,
+  @DefaultValue = @DefaultValue_d150e272,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_d150e272,
+  @ValueType = @ValueType_d150e272,
+  @IsArray = @IsArray_d150e272,
+  @Description = @Description_d150e272,
+  @IsRequired = @IsRequired_d150e272,
+  @MediaModality = @MediaModality_d150e272,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_d150e272;
+END
+
 
 GO
 
@@ -4811,7 +6967,9 @@ SET
   @IsRequired_5aaf1932 = 0
 SET
   @LogValue_5aaf1932 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_5aaf1932,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_5aaf1932)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_5aaf1932,
   @ActionID = @ActionID_5aaf1932,
   @Name = @Name_5aaf1932,
   @DefaultValue = @DefaultValue_5aaf1932,
@@ -4824,6 +6982,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_5aaf1932,
   @MediaModality = @MediaModality_5aaf1932,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_5aaf1932;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_5aaf1932,
+  @ActionID = @ActionID_5aaf1932,
+  @Name = @Name_5aaf1932,
+  @DefaultValue = @DefaultValue_5aaf1932,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_5aaf1932,
+  @ValueType = @ValueType_5aaf1932,
+  @IsArray = @IsArray_5aaf1932,
+  @Description = @Description_5aaf1932,
+  @IsRequired = @IsRequired_5aaf1932,
+  @MediaModality = @MediaModality_5aaf1932,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_5aaf1932;
+END
+
 
 GO
 
@@ -4857,7 +7033,9 @@ SET
   @IsRequired_5dcd7eae = 0
 SET
   @LogValue_5dcd7eae = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_5dcd7eae,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_5dcd7eae)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_5dcd7eae,
   @ActionID = @ActionID_5dcd7eae,
   @Name = @Name_5dcd7eae,
   @DefaultValue = @DefaultValue_5dcd7eae,
@@ -4870,6 +7048,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_5dcd7eae,
   @MediaModality = @MediaModality_5dcd7eae,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_5dcd7eae;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_5dcd7eae,
+  @ActionID = @ActionID_5dcd7eae,
+  @Name = @Name_5dcd7eae,
+  @DefaultValue = @DefaultValue_5dcd7eae,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_5dcd7eae,
+  @ValueType = @ValueType_5dcd7eae,
+  @IsArray = @IsArray_5dcd7eae,
+  @Description = @Description_5dcd7eae,
+  @IsRequired = @IsRequired_5dcd7eae,
+  @MediaModality = @MediaModality_5dcd7eae,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_5dcd7eae;
+END
+
 
 GO
 
@@ -4888,11 +7084,24 @@ SET
 SET
   @IsSuccess_203580e4 = 1
 SET
-  @Description_203580e4 = N'Search completed.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_203580e4,
+  @Description_203580e4 = N'Search completed.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_203580e4)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_203580e4,
   @ActionID = @ActionID_203580e4,
   @ResultCode = @ResultCode_203580e4,
   @IsSuccess = @IsSuccess_203580e4,
   @Description = @Description_203580e4;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_203580e4,
+  @ActionID = @ActionID_203580e4,
+  @ResultCode = @ResultCode_203580e4,
+  @IsSuccess = @IsSuccess_203580e4,
+  @Description = @Description_203580e4;
+END
+
 
 GO
 
@@ -4911,11 +7120,24 @@ SET
 SET
   @IsSuccess_20168bfb = 0
 SET
-  @Description_20168bfb = N'The search matched no people.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_20168bfb,
+  @Description_20168bfb = N'The search matched no people.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_20168bfb)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_20168bfb,
   @ActionID = @ActionID_20168bfb,
   @ResultCode = @ResultCode_20168bfb,
   @IsSuccess = @IsSuccess_20168bfb,
   @Description = @Description_20168bfb;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_20168bfb,
+  @ActionID = @ActionID_20168bfb,
+  @ResultCode = @ResultCode_20168bfb,
+  @IsSuccess = @IsSuccess_20168bfb,
+  @Description = @Description_20168bfb;
+END
+
 
 GO
 
@@ -4934,11 +7156,24 @@ SET
 SET
   @IsSuccess_463ca4fa = 0
 SET
-  @Description_463ca4fa = N'The Apollo people search failed. The message carries the Apollo error.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_463ca4fa,
+  @Description_463ca4fa = N'The Apollo people search failed. The message carries the Apollo error.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_463ca4fa)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_463ca4fa,
   @ActionID = @ActionID_463ca4fa,
   @ResultCode = @ResultCode_463ca4fa,
   @IsSuccess = @IsSuccess_463ca4fa,
   @Description = @Description_463ca4fa;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_463ca4fa,
+  @ActionID = @ActionID_463ca4fa,
+  @ResultCode = @ResultCode_463ca4fa,
+  @IsSuccess = @IsSuccess_463ca4fa,
+  @Description = @Description_463ca4fa;
+END
+
 
 GO
 
@@ -4957,11 +7192,24 @@ SET
 SET
   @IsSuccess_53198568 = 0
 SET
-  @Description_53198568 = N'The Apollo credential resolved but its Values carry no usable apiKey.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_53198568,
+  @Description_53198568 = N'The Apollo credential resolved but its Values carry no usable apiKey.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_53198568)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_53198568,
   @ActionID = @ActionID_53198568,
   @ResultCode = @ResultCode_53198568,
   @IsSuccess = @IsSuccess_53198568,
   @Description = @Description_53198568;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_53198568,
+  @ActionID = @ActionID_53198568,
+  @ResultCode = @ResultCode_53198568,
+  @IsSuccess = @IsSuccess_53198568,
+  @Description = @Description_53198568;
+END
+
 
 GO
 
@@ -4980,11 +7228,24 @@ SET
 SET
   @IsSuccess_40fbdc9a = 0
 SET
-  @Description_40fbdc9a = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_40fbdc9a,
+  @Description_40fbdc9a = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_40fbdc9a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_40fbdc9a,
   @ActionID = @ActionID_40fbdc9a,
   @ResultCode = @ResultCode_40fbdc9a,
   @IsSuccess = @IsSuccess_40fbdc9a,
   @Description = @Description_40fbdc9a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_40fbdc9a,
+  @ActionID = @ActionID_40fbdc9a,
+  @ResultCode = @ResultCode_40fbdc9a,
+  @IsSuccess = @IsSuccess_40fbdc9a,
+  @Description = @Description_40fbdc9a;
+END
+
 
 GO
 
@@ -5003,11 +7264,24 @@ SET
 SET
   @IsSuccess_ccd2add2 = 0
 SET
-  @Description_ccd2add2 = N'A required input was absent. The message names the field.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_ccd2add2,
+  @Description_ccd2add2 = N'A required input was absent. The message names the field.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_ccd2add2)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_ccd2add2,
   @ActionID = @ActionID_ccd2add2,
   @ResultCode = @ResultCode_ccd2add2,
   @IsSuccess = @IsSuccess_ccd2add2,
   @Description = @Description_ccd2add2;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_ccd2add2,
+  @ActionID = @ActionID_ccd2add2,
+  @ResultCode = @ResultCode_ccd2add2,
+  @IsSuccess = @IsSuccess_ccd2add2,
+  @Description = @Description_ccd2add2;
+END
+
 
 GO
 
@@ -5026,11 +7300,24 @@ SET
 SET
   @IsSuccess_236c4bca = 0
 SET
-  @Description_236c4bca = N'An input was present but not usable. The message explains why.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_236c4bca,
+  @Description_236c4bca = N'An input was present but not usable. The message explains why.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_236c4bca)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_236c4bca,
   @ActionID = @ActionID_236c4bca,
   @ResultCode = @ResultCode_236c4bca,
   @IsSuccess = @IsSuccess_236c4bca,
   @Description = @Description_236c4bca;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_236c4bca,
+  @ActionID = @ActionID_236c4bca,
+  @ResultCode = @ResultCode_236c4bca,
+  @IsSuccess = @IsSuccess_236c4bca,
+  @Description = @Description_236c4bca;
+END
+
 
 GO
 
@@ -5064,7 +7351,9 @@ SET
   @IsRequired_6e51c5f9 = 1
 SET
   @LogValue_6e51c5f9 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_6e51c5f9,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_6e51c5f9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_6e51c5f9,
   @ActionID = @ActionID_6e51c5f9,
   @Name = @Name_6e51c5f9,
   @DefaultValue = @DefaultValue_6e51c5f9,
@@ -5077,6 +7366,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_6e51c5f9,
   @MediaModality = @MediaModality_6e51c5f9,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_6e51c5f9;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_6e51c5f9,
+  @ActionID = @ActionID_6e51c5f9,
+  @Name = @Name_6e51c5f9,
+  @DefaultValue = @DefaultValue_6e51c5f9,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_6e51c5f9,
+  @ValueType = @ValueType_6e51c5f9,
+  @IsArray = @IsArray_6e51c5f9,
+  @Description = @Description_6e51c5f9,
+  @IsRequired = @IsRequired_6e51c5f9,
+  @MediaModality = @MediaModality_6e51c5f9,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_6e51c5f9;
+END
+
 
 GO
 
@@ -5110,7 +7417,9 @@ SET
   @IsRequired_b5acaa94 = 1
 SET
   @LogValue_b5acaa94 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b5acaa94,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_b5acaa94)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b5acaa94,
   @ActionID = @ActionID_b5acaa94,
   @Name = @Name_b5acaa94,
   @DefaultValue = @DefaultValue_b5acaa94,
@@ -5123,6 +7432,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b5acaa94,
   @MediaModality = @MediaModality_b5acaa94,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_b5acaa94;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_b5acaa94,
+  @ActionID = @ActionID_b5acaa94,
+  @Name = @Name_b5acaa94,
+  @DefaultValue = @DefaultValue_b5acaa94,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_b5acaa94,
+  @ValueType = @ValueType_b5acaa94,
+  @IsArray = @IsArray_b5acaa94,
+  @Description = @Description_b5acaa94,
+  @IsRequired = @IsRequired_b5acaa94,
+  @MediaModality = @MediaModality_b5acaa94,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_b5acaa94;
+END
+
 
 GO
 
@@ -5156,7 +7483,9 @@ SET
   @IsRequired_b58875e0 = 1
 SET
   @LogValue_b58875e0 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b58875e0,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_b58875e0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b58875e0,
   @ActionID = @ActionID_b58875e0,
   @Name = @Name_b58875e0,
   @DefaultValue = @DefaultValue_b58875e0,
@@ -5169,6 +7498,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b58875e0,
   @MediaModality = @MediaModality_b58875e0,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_b58875e0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_b58875e0,
+  @ActionID = @ActionID_b58875e0,
+  @Name = @Name_b58875e0,
+  @DefaultValue = @DefaultValue_b58875e0,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_b58875e0,
+  @ValueType = @ValueType_b58875e0,
+  @IsArray = @IsArray_b58875e0,
+  @Description = @Description_b58875e0,
+  @IsRequired = @IsRequired_b58875e0,
+  @MediaModality = @MediaModality_b58875e0,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_b58875e0;
+END
+
 
 GO
 
@@ -5202,7 +7549,9 @@ SET
   @IsRequired_d1640c9c = 0
 SET
   @LogValue_d1640c9c = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d1640c9c,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_d1640c9c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d1640c9c,
   @ActionID = @ActionID_d1640c9c,
   @Name = @Name_d1640c9c,
   @DefaultValue = @DefaultValue_d1640c9c,
@@ -5215,6 +7564,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d1640c9c,
   @MediaModality = @MediaModality_d1640c9c,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_d1640c9c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_d1640c9c,
+  @ActionID = @ActionID_d1640c9c,
+  @Name = @Name_d1640c9c,
+  @DefaultValue = @DefaultValue_d1640c9c,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_d1640c9c,
+  @ValueType = @ValueType_d1640c9c,
+  @IsArray = @IsArray_d1640c9c,
+  @Description = @Description_d1640c9c,
+  @IsRequired = @IsRequired_d1640c9c,
+  @MediaModality = @MediaModality_d1640c9c,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_d1640c9c;
+END
+
 
 GO
 
@@ -5248,7 +7615,9 @@ SET
   @IsRequired_e3a685c4 = 0
 SET
   @LogValue_e3a685c4 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e3a685c4,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_e3a685c4)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e3a685c4,
   @ActionID = @ActionID_e3a685c4,
   @Name = @Name_e3a685c4,
   @DefaultValue = @DefaultValue_e3a685c4,
@@ -5261,6 +7630,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e3a685c4,
   @MediaModality = @MediaModality_e3a685c4,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_e3a685c4;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_e3a685c4,
+  @ActionID = @ActionID_e3a685c4,
+  @Name = @Name_e3a685c4,
+  @DefaultValue = @DefaultValue_e3a685c4,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_e3a685c4,
+  @ValueType = @ValueType_e3a685c4,
+  @IsArray = @IsArray_e3a685c4,
+  @Description = @Description_e3a685c4,
+  @IsRequired = @IsRequired_e3a685c4,
+  @MediaModality = @MediaModality_e3a685c4,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_e3a685c4;
+END
+
 
 GO
 
@@ -5294,7 +7681,9 @@ SET
   @IsRequired_8a0d7a18 = 0
 SET
   @LogValue_8a0d7a18 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8a0d7a18,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_8a0d7a18)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8a0d7a18,
   @ActionID = @ActionID_8a0d7a18,
   @Name = @Name_8a0d7a18,
   @DefaultValue = @DefaultValue_8a0d7a18,
@@ -5307,6 +7696,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8a0d7a18,
   @MediaModality = @MediaModality_8a0d7a18,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_8a0d7a18;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_8a0d7a18,
+  @ActionID = @ActionID_8a0d7a18,
+  @Name = @Name_8a0d7a18,
+  @DefaultValue = @DefaultValue_8a0d7a18,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_8a0d7a18,
+  @ValueType = @ValueType_8a0d7a18,
+  @IsArray = @IsArray_8a0d7a18,
+  @Description = @Description_8a0d7a18,
+  @IsRequired = @IsRequired_8a0d7a18,
+  @MediaModality = @MediaModality_8a0d7a18,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_8a0d7a18;
+END
+
 
 GO
 
@@ -5340,7 +7747,9 @@ SET
   @IsRequired_bc2d8978 = 0
 SET
   @LogValue_bc2d8978 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_bc2d8978,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_bc2d8978)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_bc2d8978,
   @ActionID = @ActionID_bc2d8978,
   @Name = @Name_bc2d8978,
   @DefaultValue = @DefaultValue_bc2d8978,
@@ -5353,6 +7762,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_bc2d8978,
   @MediaModality = @MediaModality_bc2d8978,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_bc2d8978;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_bc2d8978,
+  @ActionID = @ActionID_bc2d8978,
+  @Name = @Name_bc2d8978,
+  @DefaultValue = @DefaultValue_bc2d8978,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_bc2d8978,
+  @ValueType = @ValueType_bc2d8978,
+  @IsArray = @IsArray_bc2d8978,
+  @Description = @Description_bc2d8978,
+  @IsRequired = @IsRequired_bc2d8978,
+  @MediaModality = @MediaModality_bc2d8978,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_bc2d8978;
+END
+
 
 GO
 
@@ -5386,7 +7813,9 @@ SET
   @IsRequired_8b582347 = 0
 SET
   @LogValue_8b582347 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8b582347,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_8b582347)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8b582347,
   @ActionID = @ActionID_8b582347,
   @Name = @Name_8b582347,
   @DefaultValue = @DefaultValue_8b582347,
@@ -5399,6 +7828,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8b582347,
   @MediaModality = @MediaModality_8b582347,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_8b582347;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_8b582347,
+  @ActionID = @ActionID_8b582347,
+  @Name = @Name_8b582347,
+  @DefaultValue = @DefaultValue_8b582347,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_8b582347,
+  @ValueType = @ValueType_8b582347,
+  @IsArray = @IsArray_8b582347,
+  @Description = @Description_8b582347,
+  @IsRequired = @IsRequired_8b582347,
+  @MediaModality = @MediaModality_8b582347,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_8b582347;
+END
+
 
 GO
 
@@ -5432,7 +7879,9 @@ SET
   @IsRequired_e791a869 = 0
 SET
   @LogValue_e791a869 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e791a869,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_e791a869)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e791a869,
   @ActionID = @ActionID_e791a869,
   @Name = @Name_e791a869,
   @DefaultValue = @DefaultValue_e791a869,
@@ -5445,6 +7894,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e791a869,
   @MediaModality = @MediaModality_e791a869,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_e791a869;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_e791a869,
+  @ActionID = @ActionID_e791a869,
+  @Name = @Name_e791a869,
+  @DefaultValue = @DefaultValue_e791a869,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_e791a869,
+  @ValueType = @ValueType_e791a869,
+  @IsArray = @IsArray_e791a869,
+  @Description = @Description_e791a869,
+  @IsRequired = @IsRequired_e791a869,
+  @MediaModality = @MediaModality_e791a869,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_e791a869;
+END
+
 
 GO
 
@@ -5478,7 +7945,9 @@ SET
   @IsRequired_2154efd0 = 0
 SET
   @LogValue_2154efd0 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_2154efd0,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_2154efd0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_2154efd0,
   @ActionID = @ActionID_2154efd0,
   @Name = @Name_2154efd0,
   @DefaultValue = @DefaultValue_2154efd0,
@@ -5491,6 +7960,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_2154efd0,
   @MediaModality = @MediaModality_2154efd0,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_2154efd0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_2154efd0,
+  @ActionID = @ActionID_2154efd0,
+  @Name = @Name_2154efd0,
+  @DefaultValue = @DefaultValue_2154efd0,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_2154efd0,
+  @ValueType = @ValueType_2154efd0,
+  @IsArray = @IsArray_2154efd0,
+  @Description = @Description_2154efd0,
+  @IsRequired = @IsRequired_2154efd0,
+  @MediaModality = @MediaModality_2154efd0,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_2154efd0;
+END
+
 
 GO
 
@@ -5509,11 +7996,24 @@ SET
 SET
   @IsSuccess_095ed6a0 = 1
 SET
-  @Description_095ed6a0 = N'Every supplied id was moved.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_095ed6a0,
+  @Description_095ed6a0 = N'Every supplied id was moved.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_095ed6a0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_095ed6a0,
   @ActionID = @ActionID_095ed6a0,
   @ResultCode = @ResultCode_095ed6a0,
   @IsSuccess = @IsSuccess_095ed6a0,
   @Description = @Description_095ed6a0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_095ed6a0,
+  @ActionID = @ActionID_095ed6a0,
+  @ResultCode = @ResultCode_095ed6a0,
+  @IsSuccess = @IsSuccess_095ed6a0,
+  @Description = @Description_095ed6a0;
+END
+
 
 GO
 
@@ -5532,11 +8032,24 @@ SET
 SET
   @IsSuccess_0e77a44b = 0
 SET
-  @Description_0e77a44b = N'Some ids moved and some did not. Read Results, FailedCount and NotOnSourcePage — a partial move is NOT rolled back.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_0e77a44b,
+  @Description_0e77a44b = N'Some ids moved and some did not. Read Results, FailedCount and NotOnSourcePage — a partial move is NOT rolled back.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_0e77a44b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_0e77a44b,
   @ActionID = @ActionID_0e77a44b,
   @ResultCode = @ResultCode_0e77a44b,
   @IsSuccess = @IsSuccess_0e77a44b,
   @Description = @Description_0e77a44b;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_0e77a44b,
+  @ActionID = @ActionID_0e77a44b,
+  @ResultCode = @ResultCode_0e77a44b,
+  @IsSuccess = @IsSuccess_0e77a44b,
+  @Description = @Description_0e77a44b;
+END
+
 
 GO
 
@@ -5555,11 +8068,24 @@ SET
 SET
   @IsSuccess_8e7fb4bb = 0
 SET
-  @Description_8e7fb4bb = N'None of the supplied ids were found on the source list.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_8e7fb4bb,
+  @Description_8e7fb4bb = N'None of the supplied ids were found on the source list.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_8e7fb4bb)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_8e7fb4bb,
   @ActionID = @ActionID_8e7fb4bb,
   @ResultCode = @ResultCode_8e7fb4bb,
   @IsSuccess = @IsSuccess_8e7fb4bb,
   @Description = @Description_8e7fb4bb;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_8e7fb4bb,
+  @ActionID = @ActionID_8e7fb4bb,
+  @ResultCode = @ResultCode_8e7fb4bb,
+  @IsSuccess = @IsSuccess_8e7fb4bb,
+  @Description = @Description_8e7fb4bb;
+END
+
 
 GO
 
@@ -5578,11 +8104,24 @@ SET
 SET
   @IsSuccess_45c51686 = 0
 SET
-  @Description_45c51686 = N'FromList or ToList was not supplied.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_45c51686,
+  @Description_45c51686 = N'FromList or ToList was not supplied.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_45c51686)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_45c51686,
   @ActionID = @ActionID_45c51686,
   @ResultCode = @ResultCode_45c51686,
   @IsSuccess = @IsSuccess_45c51686,
   @Description = @Description_45c51686;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_45c51686,
+  @ActionID = @ActionID_45c51686,
+  @ResultCode = @ResultCode_45c51686,
+  @IsSuccess = @IsSuccess_45c51686,
+  @Description = @Description_45c51686;
+END
+
 
 GO
 
@@ -5601,11 +8140,24 @@ SET
 SET
   @IsSuccess_cfb20c89 = 0
 SET
-  @Description_cfb20c89 = N'The id list could not be parsed, or FromList and ToList are the same label.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_cfb20c89,
+  @Description_cfb20c89 = N'The id list could not be parsed, or FromList and ToList are the same label.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_cfb20c89)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_cfb20c89,
   @ActionID = @ActionID_cfb20c89,
   @ResultCode = @ResultCode_cfb20c89,
   @IsSuccess = @IsSuccess_cfb20c89,
   @Description = @Description_cfb20c89;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_cfb20c89,
+  @ActionID = @ActionID_cfb20c89,
+  @ResultCode = @ResultCode_cfb20c89,
+  @IsSuccess = @IsSuccess_cfb20c89,
+  @Description = @Description_cfb20c89;
+END
+
 
 GO
 
@@ -5624,11 +8176,24 @@ SET
 SET
   @IsSuccess_445230b7 = 0
 SET
-  @Description_445230b7 = N'The move failed. The message carries the Apollo error.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_445230b7,
+  @Description_445230b7 = N'The move failed. The message carries the Apollo error.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_445230b7)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_445230b7,
   @ActionID = @ActionID_445230b7,
   @ResultCode = @ResultCode_445230b7,
   @IsSuccess = @IsSuccess_445230b7,
   @Description = @Description_445230b7;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_445230b7,
+  @ActionID = @ActionID_445230b7,
+  @ResultCode = @ResultCode_445230b7,
+  @IsSuccess = @IsSuccess_445230b7,
+  @Description = @Description_445230b7;
+END
+
 
 GO
 
@@ -5647,11 +8212,24 @@ SET
 SET
   @IsSuccess_493a1ce0 = 0
 SET
-  @Description_493a1ce0 = N'The Apollo credential resolved but its Values carry no usable apiKey.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_493a1ce0,
+  @Description_493a1ce0 = N'The Apollo credential resolved but its Values carry no usable apiKey.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_493a1ce0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_493a1ce0,
   @ActionID = @ActionID_493a1ce0,
   @ResultCode = @ResultCode_493a1ce0,
   @IsSuccess = @IsSuccess_493a1ce0,
   @Description = @Description_493a1ce0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_493a1ce0,
+  @ActionID = @ActionID_493a1ce0,
+  @ResultCode = @ResultCode_493a1ce0,
+  @IsSuccess = @IsSuccess_493a1ce0,
+  @Description = @Description_493a1ce0;
+END
+
 
 GO
 
@@ -5670,11 +8248,24 @@ SET
 SET
   @IsSuccess_fb1b28c9 = 0
 SET
-  @Description_fb1b28c9 = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_fb1b28c9,
+  @Description_fb1b28c9 = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_fb1b28c9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_fb1b28c9,
   @ActionID = @ActionID_fb1b28c9,
   @ResultCode = @ResultCode_fb1b28c9,
   @IsSuccess = @IsSuccess_fb1b28c9,
   @Description = @Description_fb1b28c9;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_fb1b28c9,
+  @ActionID = @ActionID_fb1b28c9,
+  @ResultCode = @ResultCode_fb1b28c9,
+  @IsSuccess = @IsSuccess_fb1b28c9,
+  @Description = @Description_fb1b28c9;
+END
+
 
 GO
 
@@ -5708,7 +8299,9 @@ SET
   @IsRequired_b6faeed8 = 1
 SET
   @LogValue_b6faeed8 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b6faeed8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_b6faeed8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b6faeed8,
   @ActionID = @ActionID_b6faeed8,
   @Name = @Name_b6faeed8,
   @DefaultValue = @DefaultValue_b6faeed8,
@@ -5721,6 +8314,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b6faeed8,
   @MediaModality = @MediaModality_b6faeed8,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_b6faeed8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_b6faeed8,
+  @ActionID = @ActionID_b6faeed8,
+  @Name = @Name_b6faeed8,
+  @DefaultValue = @DefaultValue_b6faeed8,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_b6faeed8,
+  @ValueType = @ValueType_b6faeed8,
+  @IsArray = @IsArray_b6faeed8,
+  @Description = @Description_b6faeed8,
+  @IsRequired = @IsRequired_b6faeed8,
+  @MediaModality = @MediaModality_b6faeed8,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_b6faeed8;
+END
+
 
 GO
 
@@ -5754,7 +8365,9 @@ SET
   @IsRequired_e78de505 = 1
 SET
   @LogValue_e78de505 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e78de505,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_e78de505)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e78de505,
   @ActionID = @ActionID_e78de505,
   @Name = @Name_e78de505,
   @DefaultValue = @DefaultValue_e78de505,
@@ -5767,6 +8380,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_e78de505,
   @MediaModality = @MediaModality_e78de505,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_e78de505;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_e78de505,
+  @ActionID = @ActionID_e78de505,
+  @Name = @Name_e78de505,
+  @DefaultValue = @DefaultValue_e78de505,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_e78de505,
+  @ValueType = @ValueType_e78de505,
+  @IsArray = @IsArray_e78de505,
+  @Description = @Description_e78de505,
+  @IsRequired = @IsRequired_e78de505,
+  @MediaModality = @MediaModality_e78de505,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_e78de505;
+END
+
 
 GO
 
@@ -5800,7 +8431,9 @@ SET
   @IsRequired_c49bc654 = 1
 SET
   @LogValue_c49bc654 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c49bc654,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_c49bc654)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c49bc654,
   @ActionID = @ActionID_c49bc654,
   @Name = @Name_c49bc654,
   @DefaultValue = @DefaultValue_c49bc654,
@@ -5813,6 +8446,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c49bc654,
   @MediaModality = @MediaModality_c49bc654,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_c49bc654;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_c49bc654,
+  @ActionID = @ActionID_c49bc654,
+  @Name = @Name_c49bc654,
+  @DefaultValue = @DefaultValue_c49bc654,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_c49bc654,
+  @ValueType = @ValueType_c49bc654,
+  @IsArray = @IsArray_c49bc654,
+  @Description = @Description_c49bc654,
+  @IsRequired = @IsRequired_c49bc654,
+  @MediaModality = @MediaModality_c49bc654,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_c49bc654;
+END
+
 
 GO
 
@@ -5846,7 +8497,9 @@ SET
   @IsRequired_56cb0d8b = 0
 SET
   @LogValue_56cb0d8b = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_56cb0d8b,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_56cb0d8b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_56cb0d8b,
   @ActionID = @ActionID_56cb0d8b,
   @Name = @Name_56cb0d8b,
   @DefaultValue = @DefaultValue_56cb0d8b,
@@ -5859,6 +8512,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_56cb0d8b,
   @MediaModality = @MediaModality_56cb0d8b,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_56cb0d8b;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_56cb0d8b,
+  @ActionID = @ActionID_56cb0d8b,
+  @Name = @Name_56cb0d8b,
+  @DefaultValue = @DefaultValue_56cb0d8b,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_56cb0d8b,
+  @ValueType = @ValueType_56cb0d8b,
+  @IsArray = @IsArray_56cb0d8b,
+  @Description = @Description_56cb0d8b,
+  @IsRequired = @IsRequired_56cb0d8b,
+  @MediaModality = @MediaModality_56cb0d8b,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_56cb0d8b;
+END
+
 
 GO
 
@@ -5892,7 +8563,9 @@ SET
   @IsRequired_a4229347 = 0
 SET
   @LogValue_a4229347 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_a4229347,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_a4229347)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_a4229347,
   @ActionID = @ActionID_a4229347,
   @Name = @Name_a4229347,
   @DefaultValue = @DefaultValue_a4229347,
@@ -5905,6 +8578,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_a4229347,
   @MediaModality = @MediaModality_a4229347,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_a4229347;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_a4229347,
+  @ActionID = @ActionID_a4229347,
+  @Name = @Name_a4229347,
+  @DefaultValue = @DefaultValue_a4229347,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_a4229347,
+  @ValueType = @ValueType_a4229347,
+  @IsArray = @IsArray_a4229347,
+  @Description = @Description_a4229347,
+  @IsRequired = @IsRequired_a4229347,
+  @MediaModality = @MediaModality_a4229347,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_a4229347;
+END
+
 
 GO
 
@@ -5938,7 +8629,9 @@ SET
   @IsRequired_c277a07c = 0
 SET
   @LogValue_c277a07c = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c277a07c,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_c277a07c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c277a07c,
   @ActionID = @ActionID_c277a07c,
   @Name = @Name_c277a07c,
   @DefaultValue = @DefaultValue_c277a07c,
@@ -5951,6 +8644,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c277a07c,
   @MediaModality = @MediaModality_c277a07c,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_c277a07c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_c277a07c,
+  @ActionID = @ActionID_c277a07c,
+  @Name = @Name_c277a07c,
+  @DefaultValue = @DefaultValue_c277a07c,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_c277a07c,
+  @ValueType = @ValueType_c277a07c,
+  @IsArray = @IsArray_c277a07c,
+  @Description = @Description_c277a07c,
+  @IsRequired = @IsRequired_c277a07c,
+  @MediaModality = @MediaModality_c277a07c,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_c277a07c;
+END
+
 
 GO
 
@@ -5984,7 +8695,9 @@ SET
   @IsRequired_485b75bf = 0
 SET
   @LogValue_485b75bf = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_485b75bf,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_485b75bf)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_485b75bf,
   @ActionID = @ActionID_485b75bf,
   @Name = @Name_485b75bf,
   @DefaultValue = @DefaultValue_485b75bf,
@@ -5997,6 +8710,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_485b75bf,
   @MediaModality = @MediaModality_485b75bf,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_485b75bf;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_485b75bf,
+  @ActionID = @ActionID_485b75bf,
+  @Name = @Name_485b75bf,
+  @DefaultValue = @DefaultValue_485b75bf,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_485b75bf,
+  @ValueType = @ValueType_485b75bf,
+  @IsArray = @IsArray_485b75bf,
+  @Description = @Description_485b75bf,
+  @IsRequired = @IsRequired_485b75bf,
+  @MediaModality = @MediaModality_485b75bf,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_485b75bf;
+END
+
 
 GO
 
@@ -6030,7 +8761,9 @@ SET
   @IsRequired_f732eae1 = 0
 SET
   @LogValue_f732eae1 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f732eae1,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_f732eae1)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f732eae1,
   @ActionID = @ActionID_f732eae1,
   @Name = @Name_f732eae1,
   @DefaultValue = @DefaultValue_f732eae1,
@@ -6043,6 +8776,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_f732eae1,
   @MediaModality = @MediaModality_f732eae1,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_f732eae1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_f732eae1,
+  @ActionID = @ActionID_f732eae1,
+  @Name = @Name_f732eae1,
+  @DefaultValue = @DefaultValue_f732eae1,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_f732eae1,
+  @ValueType = @ValueType_f732eae1,
+  @IsArray = @IsArray_f732eae1,
+  @Description = @Description_f732eae1,
+  @IsRequired = @IsRequired_f732eae1,
+  @MediaModality = @MediaModality_f732eae1,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_f732eae1;
+END
+
 
 GO
 
@@ -6076,7 +8827,9 @@ SET
   @IsRequired_9c21d9cd = 0
 SET
   @LogValue_9c21d9cd = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_9c21d9cd,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_9c21d9cd)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_9c21d9cd,
   @ActionID = @ActionID_9c21d9cd,
   @Name = @Name_9c21d9cd,
   @DefaultValue = @DefaultValue_9c21d9cd,
@@ -6089,6 +8842,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_9c21d9cd,
   @MediaModality = @MediaModality_9c21d9cd,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_9c21d9cd;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_9c21d9cd,
+  @ActionID = @ActionID_9c21d9cd,
+  @Name = @Name_9c21d9cd,
+  @DefaultValue = @DefaultValue_9c21d9cd,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_9c21d9cd,
+  @ValueType = @ValueType_9c21d9cd,
+  @IsArray = @IsArray_9c21d9cd,
+  @Description = @Description_9c21d9cd,
+  @IsRequired = @IsRequired_9c21d9cd,
+  @MediaModality = @MediaModality_9c21d9cd,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_9c21d9cd;
+END
+
 
 GO
 
@@ -6122,7 +8893,9 @@ SET
   @IsRequired_c28385b9 = 0
 SET
   @LogValue_c28385b9 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c28385b9,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_c28385b9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c28385b9,
   @ActionID = @ActionID_c28385b9,
   @Name = @Name_c28385b9,
   @DefaultValue = @DefaultValue_c28385b9,
@@ -6135,6 +8908,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c28385b9,
   @MediaModality = @MediaModality_c28385b9,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_c28385b9;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_c28385b9,
+  @ActionID = @ActionID_c28385b9,
+  @Name = @Name_c28385b9,
+  @DefaultValue = @DefaultValue_c28385b9,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_c28385b9,
+  @ValueType = @ValueType_c28385b9,
+  @IsArray = @IsArray_c28385b9,
+  @Description = @Description_c28385b9,
+  @IsRequired = @IsRequired_c28385b9,
+  @MediaModality = @MediaModality_c28385b9,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_c28385b9;
+END
+
 
 GO
 
@@ -6153,11 +8944,24 @@ SET
 SET
   @IsSuccess_dd4fdef2 = 1
 SET
-  @Description_dd4fdef2 = N'Every supplied id was moved.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_dd4fdef2,
+  @Description_dd4fdef2 = N'Every supplied id was moved.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_dd4fdef2)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_dd4fdef2,
   @ActionID = @ActionID_dd4fdef2,
   @ResultCode = @ResultCode_dd4fdef2,
   @IsSuccess = @IsSuccess_dd4fdef2,
   @Description = @Description_dd4fdef2;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_dd4fdef2,
+  @ActionID = @ActionID_dd4fdef2,
+  @ResultCode = @ResultCode_dd4fdef2,
+  @IsSuccess = @IsSuccess_dd4fdef2,
+  @Description = @Description_dd4fdef2;
+END
+
 
 GO
 
@@ -6176,11 +8980,24 @@ SET
 SET
   @IsSuccess_5a4d69f9 = 0
 SET
-  @Description_5a4d69f9 = N'Some ids moved and some did not. Read Results, FailedCount and NotOnSourcePage — a partial move is NOT rolled back.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_5a4d69f9,
+  @Description_5a4d69f9 = N'Some ids moved and some did not. Read Results, FailedCount and NotOnSourcePage — a partial move is NOT rolled back.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_5a4d69f9)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_5a4d69f9,
   @ActionID = @ActionID_5a4d69f9,
   @ResultCode = @ResultCode_5a4d69f9,
   @IsSuccess = @IsSuccess_5a4d69f9,
   @Description = @Description_5a4d69f9;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_5a4d69f9,
+  @ActionID = @ActionID_5a4d69f9,
+  @ResultCode = @ResultCode_5a4d69f9,
+  @IsSuccess = @IsSuccess_5a4d69f9,
+  @Description = @Description_5a4d69f9;
+END
+
 
 GO
 
@@ -6199,11 +9016,24 @@ SET
 SET
   @IsSuccess_5c333c14 = 0
 SET
-  @Description_5c333c14 = N'None of the supplied ids were found on the source list.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_5c333c14,
+  @Description_5c333c14 = N'None of the supplied ids were found on the source list.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_5c333c14)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_5c333c14,
   @ActionID = @ActionID_5c333c14,
   @ResultCode = @ResultCode_5c333c14,
   @IsSuccess = @IsSuccess_5c333c14,
   @Description = @Description_5c333c14;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_5c333c14,
+  @ActionID = @ActionID_5c333c14,
+  @ResultCode = @ResultCode_5c333c14,
+  @IsSuccess = @IsSuccess_5c333c14,
+  @Description = @Description_5c333c14;
+END
+
 
 GO
 
@@ -6222,11 +9052,24 @@ SET
 SET
   @IsSuccess_704ef8c6 = 0
 SET
-  @Description_704ef8c6 = N'FromList or ToList was not supplied.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_704ef8c6,
+  @Description_704ef8c6 = N'FromList or ToList was not supplied.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_704ef8c6)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_704ef8c6,
   @ActionID = @ActionID_704ef8c6,
   @ResultCode = @ResultCode_704ef8c6,
   @IsSuccess = @IsSuccess_704ef8c6,
   @Description = @Description_704ef8c6;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_704ef8c6,
+  @ActionID = @ActionID_704ef8c6,
+  @ResultCode = @ResultCode_704ef8c6,
+  @IsSuccess = @IsSuccess_704ef8c6,
+  @Description = @Description_704ef8c6;
+END
+
 
 GO
 
@@ -6245,11 +9088,24 @@ SET
 SET
   @IsSuccess_2ea493e0 = 0
 SET
-  @Description_2ea493e0 = N'The id list could not be parsed, or FromList and ToList are the same label.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_2ea493e0,
+  @Description_2ea493e0 = N'The id list could not be parsed, or FromList and ToList are the same label.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_2ea493e0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_2ea493e0,
   @ActionID = @ActionID_2ea493e0,
   @ResultCode = @ResultCode_2ea493e0,
   @IsSuccess = @IsSuccess_2ea493e0,
   @Description = @Description_2ea493e0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_2ea493e0,
+  @ActionID = @ActionID_2ea493e0,
+  @ResultCode = @ResultCode_2ea493e0,
+  @IsSuccess = @IsSuccess_2ea493e0,
+  @Description = @Description_2ea493e0;
+END
+
 
 GO
 
@@ -6268,11 +9124,24 @@ SET
 SET
   @IsSuccess_2557ca9f = 0
 SET
-  @Description_2557ca9f = N'The move failed. The message carries the Apollo error.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_2557ca9f,
+  @Description_2557ca9f = N'The move failed. The message carries the Apollo error.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_2557ca9f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_2557ca9f,
   @ActionID = @ActionID_2557ca9f,
   @ResultCode = @ResultCode_2557ca9f,
   @IsSuccess = @IsSuccess_2557ca9f,
   @Description = @Description_2557ca9f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_2557ca9f,
+  @ActionID = @ActionID_2557ca9f,
+  @ResultCode = @ResultCode_2557ca9f,
+  @IsSuccess = @IsSuccess_2557ca9f,
+  @Description = @Description_2557ca9f;
+END
+
 
 GO
 
@@ -6291,11 +9160,24 @@ SET
 SET
   @IsSuccess_1de4bd6f = 0
 SET
-  @Description_1de4bd6f = N'The Apollo credential resolved but its Values carry no usable apiKey.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_1de4bd6f,
+  @Description_1de4bd6f = N'The Apollo credential resolved but its Values carry no usable apiKey.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_1de4bd6f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_1de4bd6f,
   @ActionID = @ActionID_1de4bd6f,
   @ResultCode = @ResultCode_1de4bd6f,
   @IsSuccess = @IsSuccess_1de4bd6f,
   @Description = @Description_1de4bd6f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_1de4bd6f,
+  @ActionID = @ActionID_1de4bd6f,
+  @ResultCode = @ResultCode_1de4bd6f,
+  @IsSuccess = @IsSuccess_1de4bd6f,
+  @Description = @Description_1de4bd6f;
+END
+
 
 GO
 
@@ -6314,11 +9196,24 @@ SET
 SET
   @IsSuccess_2f83780f = 0
 SET
-  @Description_2f83780f = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_2f83780f,
+  @Description_2f83780f = N'No Apollo API key could be resolved for the supplied CompanyID or the environment.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_2f83780f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_2f83780f,
   @ActionID = @ActionID_2f83780f,
   @ResultCode = @ResultCode_2f83780f,
   @IsSuccess = @IsSuccess_2f83780f,
   @Description = @Description_2f83780f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_2f83780f,
+  @ActionID = @ActionID_2f83780f,
+  @ResultCode = @ResultCode_2f83780f,
+  @IsSuccess = @IsSuccess_2f83780f,
+  @Description = @Description_2f83780f;
+END
+
 
 GO
 
@@ -6352,7 +9247,9 @@ SET
   @IsRequired_b4816778 = 0
 SET
   @LogValue_b4816778 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b4816778,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_b4816778)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b4816778,
   @ActionID = @ActionID_b4816778,
   @Name = @Name_b4816778,
   @DefaultValue = @DefaultValue_b4816778,
@@ -6365,6 +9262,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b4816778,
   @MediaModality = @MediaModality_b4816778,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_b4816778;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_b4816778,
+  @ActionID = @ActionID_b4816778,
+  @Name = @Name_b4816778,
+  @DefaultValue = @DefaultValue_b4816778,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_b4816778,
+  @ValueType = @ValueType_b4816778,
+  @IsArray = @IsArray_b4816778,
+  @Description = @Description_b4816778,
+  @IsRequired = @IsRequired_b4816778,
+  @MediaModality = @MediaModality_b4816778,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_b4816778;
+END
+
 
 GO
 
@@ -6398,7 +9313,9 @@ SET
   @IsRequired_2affb8c0 = 0
 SET
   @LogValue_2affb8c0 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_2affb8c0,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_2affb8c0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_2affb8c0,
   @ActionID = @ActionID_2affb8c0,
   @Name = @Name_2affb8c0,
   @DefaultValue = @DefaultValue_2affb8c0,
@@ -6411,6 +9328,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_2affb8c0,
   @MediaModality = @MediaModality_2affb8c0,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_2affb8c0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_2affb8c0,
+  @ActionID = @ActionID_2affb8c0,
+  @Name = @Name_2affb8c0,
+  @DefaultValue = @DefaultValue_2affb8c0,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_2affb8c0,
+  @ValueType = @ValueType_2affb8c0,
+  @IsArray = @IsArray_2affb8c0,
+  @Description = @Description_2affb8c0,
+  @IsRequired = @IsRequired_2affb8c0,
+  @MediaModality = @MediaModality_2affb8c0,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_2affb8c0;
+END
+
 
 GO
 
@@ -6461,7 +9396,10 @@ SET
 SET
   @DriverClass_a1b8ba5d = N'Read RSS Feed'
 SET
-  @IconClass_a1b8ba5d = N'fa-solid fa-rss' EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_a1b8ba5d,
+  @IconClass_a1b8ba5d = N'fa-solid fa-rss'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Action] WHERE [ID] = @ID_a1b8ba5d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_a1b8ba5d,
   @CategoryID = @CategoryID_a1b8ba5d,
   @Name = @Name_a1b8ba5d,
   @Description = @Description_a1b8ba5d,
@@ -6500,6 +9438,50 @@ SET
   @MaxExecutionTimeMS_Clear = 1,
   @CreatedByAgentID = @CreatedByAgentID_a1b8ba5d,
   @CreatedByAgentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAction @ID = @ID_a1b8ba5d,
+  @CategoryID = @CategoryID_a1b8ba5d,
+  @Name = @Name_a1b8ba5d,
+  @Description = @Description_a1b8ba5d,
+  @Type = @Type_a1b8ba5d,
+  @UserPrompt = @UserPrompt_a1b8ba5d,
+  @UserPrompt_Clear = 1,
+  @UserComments = @UserComments_a1b8ba5d,
+  @UserComments_Clear = 1,
+  @Code = @Code_a1b8ba5d,
+  @Code_Clear = 1,
+  @CodeComments = @CodeComments_a1b8ba5d,
+  @CodeComments_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_a1b8ba5d,
+  @CodeApprovalComments = @CodeApprovalComments_a1b8ba5d,
+  @CodeApprovalComments_Clear = 1,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_a1b8ba5d,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_a1b8ba5d,
+  @CodeApprovedAt_Clear = 1,
+  @CodeLocked = @CodeLocked_a1b8ba5d,
+  @ForceCodeGeneration = @ForceCodeGeneration_a1b8ba5d,
+  @RetentionPeriod = @RetentionPeriod_a1b8ba5d,
+  @RetentionPeriod_Clear = 1,
+  @Status = @Status_a1b8ba5d,
+  @DriverClass = @DriverClass_a1b8ba5d,
+  @ParentID = @ParentID_a1b8ba5d,
+  @ParentID_Clear = 1,
+  @IconClass = @IconClass_a1b8ba5d,
+  @DefaultCompactPromptID = @DefaultCompactPromptID_a1b8ba5d,
+  @DefaultCompactPromptID_Clear = 1,
+  @Config = @Config_a1b8ba5d,
+  @Config_Clear = 1,
+  @RuntimeActionConfiguration = @RuntimeActionConfiguration_a1b8ba5d,
+  @RuntimeActionConfiguration_Clear = 1,
+  @MaxExecutionTimeMS = @MaxExecutionTimeMS_a1b8ba5d,
+  @MaxExecutionTimeMS_Clear = 1,
+  @CreatedByAgentID = @CreatedByAgentID_a1b8ba5d,
+  @CreatedByAgentID_Clear = 1;
+END
+
 
 GO
 
@@ -6533,7 +9515,9 @@ SET
   @IsRequired_1d186c70 = 1
 SET
   @LogValue_1d186c70 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1d186c70,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_1d186c70)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1d186c70,
   @ActionID = @ActionID_1d186c70,
   @Name = @Name_1d186c70,
   @DefaultValue = @DefaultValue_1d186c70,
@@ -6546,6 +9530,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1d186c70,
   @MediaModality = @MediaModality_1d186c70,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_1d186c70;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_1d186c70,
+  @ActionID = @ActionID_1d186c70,
+  @Name = @Name_1d186c70,
+  @DefaultValue = @DefaultValue_1d186c70,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_1d186c70,
+  @ValueType = @ValueType_1d186c70,
+  @IsArray = @IsArray_1d186c70,
+  @Description = @Description_1d186c70,
+  @IsRequired = @IsRequired_1d186c70,
+  @MediaModality = @MediaModality_1d186c70,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_1d186c70;
+END
+
 
 GO
 
@@ -6581,7 +9583,9 @@ SET
   @IsRequired_372d6cc0 = 0
 SET
   @LogValue_372d6cc0 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_372d6cc0,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_372d6cc0)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_372d6cc0,
   @ActionID = @ActionID_372d6cc0,
   @Name = @Name_372d6cc0,
   @DefaultValue = @DefaultValue_372d6cc0,
@@ -6593,6 +9597,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_372d6cc0,
   @MediaModality = @MediaModality_372d6cc0,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_372d6cc0;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_372d6cc0,
+  @ActionID = @ActionID_372d6cc0,
+  @Name = @Name_372d6cc0,
+  @DefaultValue = @DefaultValue_372d6cc0,
+  @Type = @Type_372d6cc0,
+  @ValueType = @ValueType_372d6cc0,
+  @IsArray = @IsArray_372d6cc0,
+  @Description = @Description_372d6cc0,
+  @IsRequired = @IsRequired_372d6cc0,
+  @MediaModality = @MediaModality_372d6cc0,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_372d6cc0;
+END
+
 
 GO
 
@@ -6626,7 +9647,9 @@ SET
   @IsRequired_1e4978ae = 0
 SET
   @LogValue_1e4978ae = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1e4978ae,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_1e4978ae)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1e4978ae,
   @ActionID = @ActionID_1e4978ae,
   @Name = @Name_1e4978ae,
   @DefaultValue = @DefaultValue_1e4978ae,
@@ -6639,6 +9662,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_1e4978ae,
   @MediaModality = @MediaModality_1e4978ae,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_1e4978ae;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_1e4978ae,
+  @ActionID = @ActionID_1e4978ae,
+  @Name = @Name_1e4978ae,
+  @DefaultValue = @DefaultValue_1e4978ae,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_1e4978ae,
+  @ValueType = @ValueType_1e4978ae,
+  @IsArray = @IsArray_1e4978ae,
+  @Description = @Description_1e4978ae,
+  @IsRequired = @IsRequired_1e4978ae,
+  @MediaModality = @MediaModality_1e4978ae,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_1e4978ae;
+END
+
 
 GO
 
@@ -6672,7 +9713,9 @@ SET
   @IsRequired_36841b96 = 0
 SET
   @LogValue_36841b96 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_36841b96,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_36841b96)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_36841b96,
   @ActionID = @ActionID_36841b96,
   @Name = @Name_36841b96,
   @DefaultValue = @DefaultValue_36841b96,
@@ -6685,6 +9728,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_36841b96,
   @MediaModality = @MediaModality_36841b96,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_36841b96;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_36841b96,
+  @ActionID = @ActionID_36841b96,
+  @Name = @Name_36841b96,
+  @DefaultValue = @DefaultValue_36841b96,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_36841b96,
+  @ValueType = @ValueType_36841b96,
+  @IsArray = @IsArray_36841b96,
+  @Description = @Description_36841b96,
+  @IsRequired = @IsRequired_36841b96,
+  @MediaModality = @MediaModality_36841b96,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_36841b96;
+END
+
 
 GO
 
@@ -6720,7 +9781,9 @@ SET
   @IsRequired_8a744493 = 0
 SET
   @LogValue_8a744493 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8a744493,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_8a744493)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8a744493,
   @ActionID = @ActionID_8a744493,
   @Name = @Name_8a744493,
   @DefaultValue = @DefaultValue_8a744493,
@@ -6732,6 +9795,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8a744493,
   @MediaModality = @MediaModality_8a744493,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_8a744493;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_8a744493,
+  @ActionID = @ActionID_8a744493,
+  @Name = @Name_8a744493,
+  @DefaultValue = @DefaultValue_8a744493,
+  @Type = @Type_8a744493,
+  @ValueType = @ValueType_8a744493,
+  @IsArray = @IsArray_8a744493,
+  @Description = @Description_8a744493,
+  @IsRequired = @IsRequired_8a744493,
+  @MediaModality = @MediaModality_8a744493,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_8a744493;
+END
+
 
 GO
 
@@ -6767,7 +9847,9 @@ SET
   @IsRequired_5c96efac = 0
 SET
   @LogValue_5c96efac = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_5c96efac,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_5c96efac)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_5c96efac,
   @ActionID = @ActionID_5c96efac,
   @Name = @Name_5c96efac,
   @DefaultValue = @DefaultValue_5c96efac,
@@ -6779,6 +9861,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_5c96efac,
   @MediaModality = @MediaModality_5c96efac,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_5c96efac;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_5c96efac,
+  @ActionID = @ActionID_5c96efac,
+  @Name = @Name_5c96efac,
+  @DefaultValue = @DefaultValue_5c96efac,
+  @Type = @Type_5c96efac,
+  @ValueType = @ValueType_5c96efac,
+  @IsArray = @IsArray_5c96efac,
+  @Description = @Description_5c96efac,
+  @IsRequired = @IsRequired_5c96efac,
+  @MediaModality = @MediaModality_5c96efac,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_5c96efac;
+END
+
 
 GO
 
@@ -6812,7 +9911,9 @@ SET
   @IsRequired_71ddd0b1 = 0
 SET
   @LogValue_71ddd0b1 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_71ddd0b1,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_71ddd0b1)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_71ddd0b1,
   @ActionID = @ActionID_71ddd0b1,
   @Name = @Name_71ddd0b1,
   @DefaultValue = @DefaultValue_71ddd0b1,
@@ -6825,6 +9926,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_71ddd0b1,
   @MediaModality = @MediaModality_71ddd0b1,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_71ddd0b1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_71ddd0b1,
+  @ActionID = @ActionID_71ddd0b1,
+  @Name = @Name_71ddd0b1,
+  @DefaultValue = @DefaultValue_71ddd0b1,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_71ddd0b1,
+  @ValueType = @ValueType_71ddd0b1,
+  @IsArray = @IsArray_71ddd0b1,
+  @Description = @Description_71ddd0b1,
+  @IsRequired = @IsRequired_71ddd0b1,
+  @MediaModality = @MediaModality_71ddd0b1,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_71ddd0b1;
+END
+
 
 GO
 
@@ -6858,7 +9977,9 @@ SET
   @IsRequired_b17cee9a = 0
 SET
   @LogValue_b17cee9a = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b17cee9a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_b17cee9a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b17cee9a,
   @ActionID = @ActionID_b17cee9a,
   @Name = @Name_b17cee9a,
   @DefaultValue = @DefaultValue_b17cee9a,
@@ -6871,6 +9992,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b17cee9a,
   @MediaModality = @MediaModality_b17cee9a,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_b17cee9a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_b17cee9a,
+  @ActionID = @ActionID_b17cee9a,
+  @Name = @Name_b17cee9a,
+  @DefaultValue = @DefaultValue_b17cee9a,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_b17cee9a,
+  @ValueType = @ValueType_b17cee9a,
+  @IsArray = @IsArray_b17cee9a,
+  @Description = @Description_b17cee9a,
+  @IsRequired = @IsRequired_b17cee9a,
+  @MediaModality = @MediaModality_b17cee9a,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_b17cee9a;
+END
+
 
 GO
 
@@ -6904,7 +10043,9 @@ SET
   @IsRequired_feb03771 = 0
 SET
   @LogValue_feb03771 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_feb03771,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_feb03771)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_feb03771,
   @ActionID = @ActionID_feb03771,
   @Name = @Name_feb03771,
   @DefaultValue = @DefaultValue_feb03771,
@@ -6917,6 +10058,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_feb03771,
   @MediaModality = @MediaModality_feb03771,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_feb03771;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_feb03771,
+  @ActionID = @ActionID_feb03771,
+  @Name = @Name_feb03771,
+  @DefaultValue = @DefaultValue_feb03771,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_feb03771,
+  @ValueType = @ValueType_feb03771,
+  @IsArray = @IsArray_feb03771,
+  @Description = @Description_feb03771,
+  @IsRequired = @IsRequired_feb03771,
+  @MediaModality = @MediaModality_feb03771,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_feb03771;
+END
+
 
 GO
 
@@ -6950,7 +10109,9 @@ SET
   @IsRequired_8a6e0883 = 0
 SET
   @LogValue_8a6e0883 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8a6e0883,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_8a6e0883)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8a6e0883,
   @ActionID = @ActionID_8a6e0883,
   @Name = @Name_8a6e0883,
   @DefaultValue = @DefaultValue_8a6e0883,
@@ -6963,6 +10124,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8a6e0883,
   @MediaModality = @MediaModality_8a6e0883,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_8a6e0883;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_8a6e0883,
+  @ActionID = @ActionID_8a6e0883,
+  @Name = @Name_8a6e0883,
+  @DefaultValue = @DefaultValue_8a6e0883,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_8a6e0883,
+  @ValueType = @ValueType_8a6e0883,
+  @IsArray = @IsArray_8a6e0883,
+  @Description = @Description_8a6e0883,
+  @IsRequired = @IsRequired_8a6e0883,
+  @MediaModality = @MediaModality_8a6e0883,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_8a6e0883;
+END
+
 
 GO
 
@@ -6996,7 +10175,9 @@ SET
   @IsRequired_c03c80ac = 0
 SET
   @LogValue_c03c80ac = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c03c80ac,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_c03c80ac)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c03c80ac,
   @ActionID = @ActionID_c03c80ac,
   @Name = @Name_c03c80ac,
   @DefaultValue = @DefaultValue_c03c80ac,
@@ -7009,6 +10190,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c03c80ac,
   @MediaModality = @MediaModality_c03c80ac,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_c03c80ac;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_c03c80ac,
+  @ActionID = @ActionID_c03c80ac,
+  @Name = @Name_c03c80ac,
+  @DefaultValue = @DefaultValue_c03c80ac,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_c03c80ac,
+  @ValueType = @ValueType_c03c80ac,
+  @IsArray = @IsArray_c03c80ac,
+  @Description = @Description_c03c80ac,
+  @IsRequired = @IsRequired_c03c80ac,
+  @MediaModality = @MediaModality_c03c80ac,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_c03c80ac;
+END
+
 
 GO
 
@@ -7042,7 +10241,9 @@ SET
   @IsRequired_c761b73d = 0
 SET
   @LogValue_c761b73d = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c761b73d,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_c761b73d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c761b73d,
   @ActionID = @ActionID_c761b73d,
   @Name = @Name_c761b73d,
   @DefaultValue = @DefaultValue_c761b73d,
@@ -7055,6 +10256,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c761b73d,
   @MediaModality = @MediaModality_c761b73d,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_c761b73d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_c761b73d,
+  @ActionID = @ActionID_c761b73d,
+  @Name = @Name_c761b73d,
+  @DefaultValue = @DefaultValue_c761b73d,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_c761b73d,
+  @ValueType = @ValueType_c761b73d,
+  @IsArray = @IsArray_c761b73d,
+  @Description = @Description_c761b73d,
+  @IsRequired = @IsRequired_c761b73d,
+  @MediaModality = @MediaModality_c761b73d,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_c761b73d;
+END
+
 
 GO
 
@@ -7088,7 +10307,9 @@ SET
   @IsRequired_b1bee93f = 0
 SET
   @LogValue_b1bee93f = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b1bee93f,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_b1bee93f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b1bee93f,
   @ActionID = @ActionID_b1bee93f,
   @Name = @Name_b1bee93f,
   @DefaultValue = @DefaultValue_b1bee93f,
@@ -7101,6 +10322,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b1bee93f,
   @MediaModality = @MediaModality_b1bee93f,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_b1bee93f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_b1bee93f,
+  @ActionID = @ActionID_b1bee93f,
+  @Name = @Name_b1bee93f,
+  @DefaultValue = @DefaultValue_b1bee93f,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_b1bee93f,
+  @ValueType = @ValueType_b1bee93f,
+  @IsArray = @IsArray_b1bee93f,
+  @Description = @Description_b1bee93f,
+  @IsRequired = @IsRequired_b1bee93f,
+  @MediaModality = @MediaModality_b1bee93f,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_b1bee93f;
+END
+
 
 GO
 
@@ -7119,11 +10358,24 @@ SET
 SET
   @IsSuccess_0bbe54f7 = 1
 SET
-  @Description_0bbe54f7 = N'Feeds read and articles returned.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_0bbe54f7,
+  @Description_0bbe54f7 = N'Feeds read and articles returned.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_0bbe54f7)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_0bbe54f7,
   @ActionID = @ActionID_0bbe54f7,
   @ResultCode = @ResultCode_0bbe54f7,
   @IsSuccess = @IsSuccess_0bbe54f7,
   @Description = @Description_0bbe54f7;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_0bbe54f7,
+  @ActionID = @ActionID_0bbe54f7,
+  @ResultCode = @ResultCode_0bbe54f7,
+  @IsSuccess = @IsSuccess_0bbe54f7,
+  @Description = @Description_0bbe54f7;
+END
+
 
 GO
 
@@ -7142,11 +10394,24 @@ SET
 SET
   @IsSuccess_69456228 = 0
 SET
-  @Description_69456228 = N'FeedURLs is required but was not provided.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_69456228,
+  @Description_69456228 = N'FeedURLs is required but was not provided.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_69456228)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_69456228,
   @ActionID = @ActionID_69456228,
   @ResultCode = @ResultCode_69456228,
   @IsSuccess = @IsSuccess_69456228,
   @Description = @Description_69456228;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_69456228,
+  @ActionID = @ActionID_69456228,
+  @ResultCode = @ResultCode_69456228,
+  @IsSuccess = @IsSuccess_69456228,
+  @Description = @Description_69456228;
+END
+
 
 GO
 
@@ -7165,11 +10430,24 @@ SET
 SET
   @IsSuccess_ccce2a4a = 0
 SET
-  @Description_ccce2a4a = N'FeedURLs could not be parsed into a list of URLs.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_ccce2a4a,
+  @Description_ccce2a4a = N'FeedURLs could not be parsed into a list of URLs.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_ccce2a4a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_ccce2a4a,
   @ActionID = @ActionID_ccce2a4a,
   @ResultCode = @ResultCode_ccce2a4a,
   @IsSuccess = @IsSuccess_ccce2a4a,
   @Description = @Description_ccce2a4a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_ccce2a4a,
+  @ActionID = @ActionID_ccce2a4a,
+  @ResultCode = @ResultCode_ccce2a4a,
+  @IsSuccess = @IsSuccess_ccce2a4a,
+  @Description = @Description_ccce2a4a;
+END
+
 
 GO
 
@@ -7188,11 +10466,24 @@ SET
 SET
   @IsSuccess_a9360453 = 0
 SET
-  @Description_a9360453 = N'A supplied URL is not an http(s) URL.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_a9360453,
+  @Description_a9360453 = N'A supplied URL is not an http(s) URL.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_a9360453)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_a9360453,
   @ActionID = @ActionID_a9360453,
   @ResultCode = @ResultCode_a9360453,
   @IsSuccess = @IsSuccess_a9360453,
   @Description = @Description_a9360453;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_a9360453,
+  @ActionID = @ActionID_a9360453,
+  @ResultCode = @ResultCode_a9360453,
+  @IsSuccess = @IsSuccess_a9360453,
+  @Description = @Description_a9360453;
+END
+
 
 GO
 
@@ -7211,11 +10502,24 @@ SET
 SET
   @IsSuccess_b14436ee = 0
 SET
-  @Description_b14436ee = N'A feed could not be read, and RequireAllFeeds was set.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_b14436ee,
+  @Description_b14436ee = N'A feed could not be read, and RequireAllFeeds was set.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_b14436ee)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_b14436ee,
   @ActionID = @ActionID_b14436ee,
   @ResultCode = @ResultCode_b14436ee,
   @IsSuccess = @IsSuccess_b14436ee,
   @Description = @Description_b14436ee;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_b14436ee,
+  @ActionID = @ActionID_b14436ee,
+  @ResultCode = @ResultCode_b14436ee,
+  @IsSuccess = @IsSuccess_b14436ee,
+  @Description = @Description_b14436ee;
+END
+
 
 GO
 
@@ -7249,7 +10553,9 @@ SET
   @IsRequired_199551b8 = 0
 SET
   @LogValue_199551b8 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_199551b8,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_199551b8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_199551b8,
   @ActionID = @ActionID_199551b8,
   @Name = @Name_199551b8,
   @DefaultValue = @DefaultValue_199551b8,
@@ -7262,6 +10568,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_199551b8,
   @MediaModality = @MediaModality_199551b8,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_199551b8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_199551b8,
+  @ActionID = @ActionID_199551b8,
+  @Name = @Name_199551b8,
+  @DefaultValue = @DefaultValue_199551b8,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_199551b8,
+  @ValueType = @ValueType_199551b8,
+  @IsArray = @IsArray_199551b8,
+  @Description = @Description_199551b8,
+  @IsRequired = @IsRequired_199551b8,
+  @MediaModality = @MediaModality_199551b8,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_199551b8;
+END
+
 
 GO
 
@@ -7312,7 +10636,10 @@ SET
 SET
   @DriverClass_024ae168 = N'Tavily Search'
 SET
-  @IconClass_024ae168 = N'fa-solid fa-magnifying-glass-chart' EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_024ae168,
+  @IconClass_024ae168 = N'fa-solid fa-magnifying-glass-chart'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Action] WHERE [ID] = @ID_024ae168)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAction @ID = @ID_024ae168,
   @CategoryID = @CategoryID_024ae168,
   @Name = @Name_024ae168,
   @Description = @Description_024ae168,
@@ -7351,6 +10678,50 @@ SET
   @MaxExecutionTimeMS_Clear = 1,
   @CreatedByAgentID = @CreatedByAgentID_024ae168,
   @CreatedByAgentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAction @ID = @ID_024ae168,
+  @CategoryID = @CategoryID_024ae168,
+  @Name = @Name_024ae168,
+  @Description = @Description_024ae168,
+  @Type = @Type_024ae168,
+  @UserPrompt = @UserPrompt_024ae168,
+  @UserPrompt_Clear = 1,
+  @UserComments = @UserComments_024ae168,
+  @UserComments_Clear = 1,
+  @Code = @Code_024ae168,
+  @Code_Clear = 1,
+  @CodeComments = @CodeComments_024ae168,
+  @CodeComments_Clear = 1,
+  @CodeApprovalStatus = @CodeApprovalStatus_024ae168,
+  @CodeApprovalComments = @CodeApprovalComments_024ae168,
+  @CodeApprovalComments_Clear = 1,
+  @CodeApprovedByUserID = @CodeApprovedByUserID_024ae168,
+  @CodeApprovedByUserID_Clear = 1,
+  @CodeApprovedAt = @CodeApprovedAt_024ae168,
+  @CodeApprovedAt_Clear = 1,
+  @CodeLocked = @CodeLocked_024ae168,
+  @ForceCodeGeneration = @ForceCodeGeneration_024ae168,
+  @RetentionPeriod = @RetentionPeriod_024ae168,
+  @RetentionPeriod_Clear = 1,
+  @Status = @Status_024ae168,
+  @DriverClass = @DriverClass_024ae168,
+  @ParentID = @ParentID_024ae168,
+  @ParentID_Clear = 1,
+  @IconClass = @IconClass_024ae168,
+  @DefaultCompactPromptID = @DefaultCompactPromptID_024ae168,
+  @DefaultCompactPromptID_Clear = 1,
+  @Config = @Config_024ae168,
+  @Config_Clear = 1,
+  @RuntimeActionConfiguration = @RuntimeActionConfiguration_024ae168,
+  @RuntimeActionConfiguration_Clear = 1,
+  @MaxExecutionTimeMS = @MaxExecutionTimeMS_024ae168,
+  @MaxExecutionTimeMS_Clear = 1,
+  @CreatedByAgentID = @CreatedByAgentID_024ae168,
+  @CreatedByAgentID_Clear = 1;
+END
+
 
 GO
 
@@ -7384,7 +10755,9 @@ SET
   @IsRequired_965f57ab = 1
 SET
   @LogValue_965f57ab = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_965f57ab,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_965f57ab)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_965f57ab,
   @ActionID = @ActionID_965f57ab,
   @Name = @Name_965f57ab,
   @DefaultValue = @DefaultValue_965f57ab,
@@ -7397,6 +10770,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_965f57ab,
   @MediaModality = @MediaModality_965f57ab,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_965f57ab;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_965f57ab,
+  @ActionID = @ActionID_965f57ab,
+  @Name = @Name_965f57ab,
+  @DefaultValue = @DefaultValue_965f57ab,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_965f57ab,
+  @ValueType = @ValueType_965f57ab,
+  @IsArray = @IsArray_965f57ab,
+  @Description = @Description_965f57ab,
+  @IsRequired = @IsRequired_965f57ab,
+  @MediaModality = @MediaModality_965f57ab,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_965f57ab;
+END
+
 
 GO
 
@@ -7432,7 +10823,9 @@ SET
   @IsRequired_d31fd6ce = 0
 SET
   @LogValue_d31fd6ce = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d31fd6ce,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_d31fd6ce)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d31fd6ce,
   @ActionID = @ActionID_d31fd6ce,
   @Name = @Name_d31fd6ce,
   @DefaultValue = @DefaultValue_d31fd6ce,
@@ -7444,6 +10837,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_d31fd6ce,
   @MediaModality = @MediaModality_d31fd6ce,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_d31fd6ce;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_d31fd6ce,
+  @ActionID = @ActionID_d31fd6ce,
+  @Name = @Name_d31fd6ce,
+  @DefaultValue = @DefaultValue_d31fd6ce,
+  @Type = @Type_d31fd6ce,
+  @ValueType = @ValueType_d31fd6ce,
+  @IsArray = @IsArray_d31fd6ce,
+  @Description = @Description_d31fd6ce,
+  @IsRequired = @IsRequired_d31fd6ce,
+  @MediaModality = @MediaModality_d31fd6ce,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_d31fd6ce;
+END
+
 
 GO
 
@@ -7479,7 +10889,9 @@ SET
   @IsRequired_fb18c63c = 0
 SET
   @LogValue_fb18c63c = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_fb18c63c,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_fb18c63c)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_fb18c63c,
   @ActionID = @ActionID_fb18c63c,
   @Name = @Name_fb18c63c,
   @DefaultValue = @DefaultValue_fb18c63c,
@@ -7491,6 +10903,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_fb18c63c,
   @MediaModality = @MediaModality_fb18c63c,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_fb18c63c;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_fb18c63c,
+  @ActionID = @ActionID_fb18c63c,
+  @Name = @Name_fb18c63c,
+  @DefaultValue = @DefaultValue_fb18c63c,
+  @Type = @Type_fb18c63c,
+  @ValueType = @ValueType_fb18c63c,
+  @IsArray = @IsArray_fb18c63c,
+  @Description = @Description_fb18c63c,
+  @IsRequired = @IsRequired_fb18c63c,
+  @MediaModality = @MediaModality_fb18c63c,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_fb18c63c;
+END
+
 
 GO
 
@@ -7526,7 +10955,9 @@ SET
   @IsRequired_8244ff86 = 0
 SET
   @LogValue_8244ff86 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8244ff86,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_8244ff86)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8244ff86,
   @ActionID = @ActionID_8244ff86,
   @Name = @Name_8244ff86,
   @DefaultValue = @DefaultValue_8244ff86,
@@ -7538,6 +10969,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_8244ff86,
   @MediaModality = @MediaModality_8244ff86,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_8244ff86;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_8244ff86,
+  @ActionID = @ActionID_8244ff86,
+  @Name = @Name_8244ff86,
+  @DefaultValue = @DefaultValue_8244ff86,
+  @Type = @Type_8244ff86,
+  @ValueType = @ValueType_8244ff86,
+  @IsArray = @IsArray_8244ff86,
+  @Description = @Description_8244ff86,
+  @IsRequired = @IsRequired_8244ff86,
+  @MediaModality = @MediaModality_8244ff86,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_8244ff86;
+END
+
 
 GO
 
@@ -7573,7 +11021,9 @@ SET
   @IsRequired_93302e82 = 0
 SET
   @LogValue_93302e82 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_93302e82,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_93302e82)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_93302e82,
   @ActionID = @ActionID_93302e82,
   @Name = @Name_93302e82,
   @DefaultValue = @DefaultValue_93302e82,
@@ -7585,6 +11035,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_93302e82,
   @MediaModality = @MediaModality_93302e82,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_93302e82;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_93302e82,
+  @ActionID = @ActionID_93302e82,
+  @Name = @Name_93302e82,
+  @DefaultValue = @DefaultValue_93302e82,
+  @Type = @Type_93302e82,
+  @ValueType = @ValueType_93302e82,
+  @IsArray = @IsArray_93302e82,
+  @Description = @Description_93302e82,
+  @IsRequired = @IsRequired_93302e82,
+  @MediaModality = @MediaModality_93302e82,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_93302e82;
+END
+
 
 GO
 
@@ -7620,7 +11087,9 @@ SET
   @IsRequired_c6bf879a = 0
 SET
   @LogValue_c6bf879a = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c6bf879a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_c6bf879a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c6bf879a,
   @ActionID = @ActionID_c6bf879a,
   @Name = @Name_c6bf879a,
   @DefaultValue = @DefaultValue_c6bf879a,
@@ -7632,6 +11101,23 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_c6bf879a,
   @MediaModality = @MediaModality_c6bf879a,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_c6bf879a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_c6bf879a,
+  @ActionID = @ActionID_c6bf879a,
+  @Name = @Name_c6bf879a,
+  @DefaultValue = @DefaultValue_c6bf879a,
+  @Type = @Type_c6bf879a,
+  @ValueType = @ValueType_c6bf879a,
+  @IsArray = @IsArray_c6bf879a,
+  @Description = @Description_c6bf879a,
+  @IsRequired = @IsRequired_c6bf879a,
+  @MediaModality = @MediaModality_c6bf879a,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_c6bf879a;
+END
+
 
 GO
 
@@ -7665,7 +11151,9 @@ SET
   @IsRequired_ab36ed68 = 0
 SET
   @LogValue_ab36ed68 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_ab36ed68,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_ab36ed68)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_ab36ed68,
   @ActionID = @ActionID_ab36ed68,
   @Name = @Name_ab36ed68,
   @DefaultValue = @DefaultValue_ab36ed68,
@@ -7678,6 +11166,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_ab36ed68,
   @MediaModality = @MediaModality_ab36ed68,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_ab36ed68;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_ab36ed68,
+  @ActionID = @ActionID_ab36ed68,
+  @Name = @Name_ab36ed68,
+  @DefaultValue = @DefaultValue_ab36ed68,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_ab36ed68,
+  @ValueType = @ValueType_ab36ed68,
+  @IsArray = @IsArray_ab36ed68,
+  @Description = @Description_ab36ed68,
+  @IsRequired = @IsRequired_ab36ed68,
+  @MediaModality = @MediaModality_ab36ed68,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_ab36ed68;
+END
+
 
 GO
 
@@ -7711,7 +11217,9 @@ SET
   @IsRequired_64946073 = 0
 SET
   @LogValue_64946073 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_64946073,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_64946073)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_64946073,
   @ActionID = @ActionID_64946073,
   @Name = @Name_64946073,
   @DefaultValue = @DefaultValue_64946073,
@@ -7724,6 +11232,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_64946073,
   @MediaModality = @MediaModality_64946073,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_64946073;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_64946073,
+  @ActionID = @ActionID_64946073,
+  @Name = @Name_64946073,
+  @DefaultValue = @DefaultValue_64946073,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_64946073,
+  @ValueType = @ValueType_64946073,
+  @IsArray = @IsArray_64946073,
+  @Description = @Description_64946073,
+  @IsRequired = @IsRequired_64946073,
+  @MediaModality = @MediaModality_64946073,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_64946073;
+END
+
 
 GO
 
@@ -7757,7 +11283,9 @@ SET
   @IsRequired_b321175f = 0
 SET
   @LogValue_b321175f = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b321175f,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_b321175f)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b321175f,
   @ActionID = @ActionID_b321175f,
   @Name = @Name_b321175f,
   @DefaultValue = @DefaultValue_b321175f,
@@ -7770,6 +11298,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_b321175f,
   @MediaModality = @MediaModality_b321175f,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_b321175f;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_b321175f,
+  @ActionID = @ActionID_b321175f,
+  @Name = @Name_b321175f,
+  @DefaultValue = @DefaultValue_b321175f,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_b321175f,
+  @ValueType = @ValueType_b321175f,
+  @IsArray = @IsArray_b321175f,
+  @Description = @Description_b321175f,
+  @IsRequired = @IsRequired_b321175f,
+  @MediaModality = @MediaModality_b321175f,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_b321175f;
+END
+
 
 GO
 
@@ -7803,7 +11349,9 @@ SET
   @IsRequired_da48e68b = 0
 SET
   @LogValue_da48e68b = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_da48e68b,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_da48e68b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_da48e68b,
   @ActionID = @ActionID_da48e68b,
   @Name = @Name_da48e68b,
   @DefaultValue = @DefaultValue_da48e68b,
@@ -7816,6 +11364,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_da48e68b,
   @MediaModality = @MediaModality_da48e68b,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_da48e68b;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_da48e68b,
+  @ActionID = @ActionID_da48e68b,
+  @Name = @Name_da48e68b,
+  @DefaultValue = @DefaultValue_da48e68b,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_da48e68b,
+  @ValueType = @ValueType_da48e68b,
+  @IsArray = @IsArray_da48e68b,
+  @Description = @Description_da48e68b,
+  @IsRequired = @IsRequired_da48e68b,
+  @MediaModality = @MediaModality_da48e68b,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_da48e68b;
+END
+
 
 GO
 
@@ -7849,7 +11415,9 @@ SET
   @IsRequired_939a30b1 = 0
 SET
   @LogValue_939a30b1 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_939a30b1,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_939a30b1)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_939a30b1,
   @ActionID = @ActionID_939a30b1,
   @Name = @Name_939a30b1,
   @DefaultValue = @DefaultValue_939a30b1,
@@ -7862,6 +11430,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_939a30b1,
   @MediaModality = @MediaModality_939a30b1,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_939a30b1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_939a30b1,
+  @ActionID = @ActionID_939a30b1,
+  @Name = @Name_939a30b1,
+  @DefaultValue = @DefaultValue_939a30b1,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_939a30b1,
+  @ValueType = @ValueType_939a30b1,
+  @IsArray = @IsArray_939a30b1,
+  @Description = @Description_939a30b1,
+  @IsRequired = @IsRequired_939a30b1,
+  @MediaModality = @MediaModality_939a30b1,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_939a30b1;
+END
+
 
 GO
 
@@ -7895,7 +11481,9 @@ SET
   @IsRequired_227f9f65 = 0
 SET
   @LogValue_227f9f65 = 1
-EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_227f9f65,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionParam] WHERE [ID] = @ID_227f9f65)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_227f9f65,
   @ActionID = @ActionID_227f9f65,
   @Name = @Name_227f9f65,
   @DefaultValue = @DefaultValue_227f9f65,
@@ -7908,6 +11496,24 @@ EXEC [${flyway:defaultSchema}].spCreateActionParam @ID = @ID_227f9f65,
   @MediaModality = @MediaModality_227f9f65,
   @MediaModality_Clear = 1,
   @LogValue = @LogValue_227f9f65;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionParam @ID = @ID_227f9f65,
+  @ActionID = @ActionID_227f9f65,
+  @Name = @Name_227f9f65,
+  @DefaultValue = @DefaultValue_227f9f65,
+  @DefaultValue_Clear = 1,
+  @Type = @Type_227f9f65,
+  @ValueType = @ValueType_227f9f65,
+  @IsArray = @IsArray_227f9f65,
+  @Description = @Description_227f9f65,
+  @IsRequired = @IsRequired_227f9f65,
+  @MediaModality = @MediaModality_227f9f65,
+  @MediaModality_Clear = 1,
+  @LogValue = @LogValue_227f9f65;
+END
+
 
 GO
 
@@ -7926,11 +11532,24 @@ SET
 SET
   @IsSuccess_f85c082b = 1
 SET
-  @Description_f85c082b = N'Search completed and returned results.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_f85c082b,
+  @Description_f85c082b = N'Search completed and returned results.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_f85c082b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_f85c082b,
   @ActionID = @ActionID_f85c082b,
   @ResultCode = @ResultCode_f85c082b,
   @IsSuccess = @IsSuccess_f85c082b,
   @Description = @Description_f85c082b;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_f85c082b,
+  @ActionID = @ActionID_f85c082b,
+  @ResultCode = @ResultCode_f85c082b,
+  @IsSuccess = @IsSuccess_f85c082b,
+  @Description = @Description_f85c082b;
+END
+
 
 GO
 
@@ -7949,11 +11568,24 @@ SET
 SET
   @IsSuccess_50fe7d8e = 0
 SET
-  @Description_50fe7d8e = N'Query is required but was not provided.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_50fe7d8e,
+  @Description_50fe7d8e = N'Query is required but was not provided.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_50fe7d8e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_50fe7d8e,
   @ActionID = @ActionID_50fe7d8e,
   @ResultCode = @ResultCode_50fe7d8e,
   @IsSuccess = @IsSuccess_50fe7d8e,
   @Description = @Description_50fe7d8e;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_50fe7d8e,
+  @ActionID = @ActionID_50fe7d8e,
+  @ResultCode = @ResultCode_50fe7d8e,
+  @IsSuccess = @IsSuccess_50fe7d8e,
+  @Description = @Description_50fe7d8e;
+END
+
 
 GO
 
@@ -7972,11 +11604,24 @@ SET
 SET
   @IsSuccess_7284160a = 0
 SET
-  @Description_7284160a = N'Tavily API key not configured. Set tavily.apiKey in mj.config.cjs or TAVILY_API_KEY in the environment.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_7284160a,
+  @Description_7284160a = N'Tavily API key not configured. Set tavily.apiKey in mj.config.cjs or TAVILY_API_KEY in the environment.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_7284160a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_7284160a,
   @ActionID = @ActionID_7284160a,
   @ResultCode = @ResultCode_7284160a,
   @IsSuccess = @IsSuccess_7284160a,
   @Description = @Description_7284160a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_7284160a,
+  @ActionID = @ActionID_7284160a,
+  @ResultCode = @ResultCode_7284160a,
+  @IsSuccess = @IsSuccess_7284160a,
+  @Description = @Description_7284160a;
+END
+
 
 GO
 
@@ -7995,11 +11640,24 @@ SET
 SET
   @IsSuccess_43d63259 = 0
 SET
-  @Description_43d63259 = N'Tavily rejected the API key.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_43d63259,
+  @Description_43d63259 = N'Tavily rejected the API key.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_43d63259)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_43d63259,
   @ActionID = @ActionID_43d63259,
   @ResultCode = @ResultCode_43d63259,
   @IsSuccess = @IsSuccess_43d63259,
   @Description = @Description_43d63259;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_43d63259,
+  @ActionID = @ActionID_43d63259,
+  @ResultCode = @ResultCode_43d63259,
+  @IsSuccess = @IsSuccess_43d63259,
+  @Description = @Description_43d63259;
+END
+
 
 GO
 
@@ -8018,11 +11676,24 @@ SET
 SET
   @IsSuccess_fae0f0f6 = 0
 SET
-  @Description_fae0f0f6 = N'SearchDepth must be ''basic'' or ''advanced''.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_fae0f0f6,
+  @Description_fae0f0f6 = N'SearchDepth must be ''basic'' or ''advanced''.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_fae0f0f6)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_fae0f0f6,
   @ActionID = @ActionID_fae0f0f6,
   @ResultCode = @ResultCode_fae0f0f6,
   @IsSuccess = @IsSuccess_fae0f0f6,
   @Description = @Description_fae0f0f6;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_fae0f0f6,
+  @ActionID = @ActionID_fae0f0f6,
+  @ResultCode = @ResultCode_fae0f0f6,
+  @IsSuccess = @IsSuccess_fae0f0f6,
+  @Description = @Description_fae0f0f6;
+END
+
 
 GO
 
@@ -8041,11 +11712,24 @@ SET
 SET
   @IsSuccess_b7668f42 = 0
 SET
-  @Description_b7668f42 = N'Topic must be ''general'' or ''news''.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_b7668f42,
+  @Description_b7668f42 = N'Topic must be ''general'' or ''news''.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_b7668f42)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_b7668f42,
   @ActionID = @ActionID_b7668f42,
   @ResultCode = @ResultCode_b7668f42,
   @IsSuccess = @IsSuccess_b7668f42,
   @Description = @Description_b7668f42;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_b7668f42,
+  @ActionID = @ActionID_b7668f42,
+  @ResultCode = @ResultCode_b7668f42,
+  @IsSuccess = @IsSuccess_b7668f42,
+  @Description = @Description_b7668f42;
+END
+
 
 GO
 
@@ -8064,11 +11748,24 @@ SET
 SET
   @IsSuccess_6a02be6a = 0
 SET
-  @Description_6a02be6a = N'Tavily rejected the request as malformed.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_6a02be6a,
+  @Description_6a02be6a = N'Tavily rejected the request as malformed.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_6a02be6a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_6a02be6a,
   @ActionID = @ActionID_6a02be6a,
   @ResultCode = @ResultCode_6a02be6a,
   @IsSuccess = @IsSuccess_6a02be6a,
   @Description = @Description_6a02be6a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_6a02be6a,
+  @ActionID = @ActionID_6a02be6a,
+  @ResultCode = @ResultCode_6a02be6a,
+  @IsSuccess = @IsSuccess_6a02be6a,
+  @Description = @Description_6a02be6a;
+END
+
 
 GO
 
@@ -8087,11 +11784,24 @@ SET
 SET
   @IsSuccess_2279bbc8 = 0
 SET
-  @Description_2279bbc8 = N'Tavily rate limit reached. Retry later.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_2279bbc8,
+  @Description_2279bbc8 = N'Tavily rate limit reached. Retry later.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_2279bbc8)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_2279bbc8,
   @ActionID = @ActionID_2279bbc8,
   @ResultCode = @ResultCode_2279bbc8,
   @IsSuccess = @IsSuccess_2279bbc8,
   @Description = @Description_2279bbc8;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_2279bbc8,
+  @ActionID = @ActionID_2279bbc8,
+  @ResultCode = @ResultCode_2279bbc8,
+  @IsSuccess = @IsSuccess_2279bbc8,
+  @Description = @Description_2279bbc8;
+END
+
 
 GO
 
@@ -8110,11 +11820,24 @@ SET
 SET
   @IsSuccess_102456ae = 0
 SET
-  @Description_102456ae = N'Tavily returned an empty response.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_102456ae,
+  @Description_102456ae = N'Tavily returned an empty response.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_102456ae)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_102456ae,
   @ActionID = @ActionID_102456ae,
   @ResultCode = @ResultCode_102456ae,
   @IsSuccess = @IsSuccess_102456ae,
   @Description = @Description_102456ae;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_102456ae,
+  @ActionID = @ActionID_102456ae,
+  @ResultCode = @ResultCode_102456ae,
+  @IsSuccess = @IsSuccess_102456ae,
+  @Description = @Description_102456ae;
+END
+
 
 GO
 
@@ -8133,11 +11856,24 @@ SET
 SET
   @IsSuccess_abcb0418 = 0
 SET
-  @Description_abcb0418 = N'Tavily returned an error. The message carries the detail.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_abcb0418,
+  @Description_abcb0418 = N'Tavily returned an error. The message carries the detail.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_abcb0418)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_abcb0418,
   @ActionID = @ActionID_abcb0418,
   @ResultCode = @ResultCode_abcb0418,
   @IsSuccess = @IsSuccess_abcb0418,
   @Description = @Description_abcb0418;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_abcb0418,
+  @ActionID = @ActionID_abcb0418,
+  @ResultCode = @ResultCode_abcb0418,
+  @IsSuccess = @IsSuccess_abcb0418,
+  @Description = @Description_abcb0418;
+END
+
 
 GO
 
@@ -8156,11 +11892,24 @@ SET
 SET
   @IsSuccess_db01f20d = 0
 SET
-  @Description_db01f20d = N'The search failed unexpectedly.' EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_db01f20d,
+  @Description_db01f20d = N'The search failed unexpectedly.'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ActionResultCode] WHERE [ID] = @ID_db01f20d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateActionResultCode @ID = @ID_db01f20d,
   @ActionID = @ActionID_db01f20d,
   @ResultCode = @ResultCode_db01f20d,
   @IsSuccess = @IsSuccess_db01f20d,
   @Description = @Description_db01f20d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateActionResultCode @ID = @ID_db01f20d,
+  @ActionID = @ActionID_db01f20d,
+  @ResultCode = @ResultCode_db01f20d,
+  @IsSuccess = @IsSuccess_db01f20d,
+  @Description = @Description_db01f20d;
+END
+
 
 GO
 

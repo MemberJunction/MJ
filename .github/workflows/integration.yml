@@ -324,6 +324,260 @@ jobs:
         if: failure()
         run: tail -300 /tmp/mjapi.log || true
 
+  # ── PR-gate: upgrade where `mj sync push` ran BEFORE the migration chain caught up ──────
+  # Reproduces MJ#4503, which shipped for five weeks because no lane could see it. The
+  # shipped `Metadata_Sync` migrations replay record creations as `spCreate<X> @ID =
+  # '<fixed GUID>'`, and those same GUIDs are `primaryKey` values in metadata/ that
+  # `mj sync push` creates. On any database where a push landed a row before the migration
+  # that creates it had run, the migration dies on a primary-key violation.
+  #
+  # The `integration-sqlserver` lane above migrates FIRST and pushes SECOND, on a fresh DB —
+  # always that order, which is precisely the order that cannot collide. This lane inverts it:
+  # migrate to just short of the first colliding migration, push, then finish migrating.
+  # Post-fix every fixed-GUID create is wrapped in IF NOT EXISTS / ELSE spUpdate, so the
+  # second migrate takes the ELSE branch and converges the row on the release content.
+  #
+  # Complements, does not replace, migration-guards.yml: that gate reads new migrations
+  # statically and rejects an unguarded fixed-GUID create at authoring time. This one runs
+  # the whole shipped chain in the order that actually breaks, so a collision the static
+  # checker cannot recognise still gets caught.
+  push-before-migrate:
+    name: Upgrade survives a sync push that ran before migrating
+    # Same trigger set as the deterministic lane: PRs, merges, dispatch, and the nightly
+    # cron. The Sunday cron is the live-model lane's, and this gate already ran that morning.
+    if: github.event_name != 'schedule' || github.event.schedule == '0 6 * * *'
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: localhost
+      DB_DATABASE: test
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # The specimen collision, named once so the three assertion steps below cannot drift
+      # apart. This GUID is the `primaryKey` of the "Azure Blob Storage" record in
+      # metadata/credential-types/.credential-types.json AND the @ID of the
+      # spCreateCredentialType call in the migration named by COLLIDING_MIGRATION below —
+      # which is the only migration in the repo that writes it.
+      #
+      # Why this record and not one of the other 566 guarded creates: `MJ: Credential Types`
+      # is a small standalone metadata directory with no cross-directory @lookup refs, so
+      # `--include=credential-types` plants the collision in seconds instead of running a
+      # full metadata push, and COLLIDING_MIGRATION is the earliest guarded Metadata_Sync
+      # file that creates one of its rows. Cutting at the earliest one puts six of the eight
+      # rewritten Metadata_Sync migrations on the far side of the push, so the second
+      # `mj migrate` also proves the rewrite left the ordinary create path working.
+      COLLIDING_RECORD_ID: 82DFF26B-2ABB-4A69-8718-1FE550B60816
+      RELEASE_NAME: Azure Blob Storage
+      # Written over the pushed row before the second migrate so the guard's ELSE branch is
+      # observable — see the "Scuff" step. Must not collide with UQ_CredentialType_Name.
+      SENTINEL_NAME: MJ4503 pre-migration sentinel
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
+      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # setup instructions live once, on the build job in test.yml.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # ── Fresh SQL Server (identical provisioning to the deterministic lane above) ───────
+      - name: Create docker network
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      # Poll until SQL Server actually answers a query, rather than a blind sleep. A cold
+      # container that merely started (but is still doing recovery/tempdb setup) will accept
+      # a connection yet stall the first heavy transaction — which is what tripped the sync
+      # push's 15s request timeout. ~60s budget (30 × 2s); fails the step if never ready.
+      - name: Wait for SQL Server to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            echo "Waiting for SQL Server... (attempt $i/30)"
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Create SQL database
+        run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Narrower than the deterministic lane's filter on purpose: this lane runs only
+      # `mj migrate` and `mj sync push`, never boots MJAPI and never runs the aggregator,
+      # so the test-suite and mj_api graphs would be built and thrown away. `build` is
+      # `dependsOn: ["^build"]` (turbo.json), so filtering on the CLI still builds its whole
+      # dependency closure — metadata-sync, skyway-*, core, sqlserver-dataprovider,
+      # open-app-engine. Same narrowing the codegen-drift lane below applies.
+      - name: Build the mj CLI
+        run: npx turbo build --filter=@memberjunction/cli
+
+      # Build a migration tree that stops strictly before the first colliding migration.
+      #
+      # Selection is by the sortable numeric version in each filename, NOT by globbing the
+      # Metadata_Sync names: a glob list has to be extended by hand every time a migration
+      # lands outside its patterns, and the failure mode of forgetting is SILENT — the
+      # partial tree quietly becomes the full tree, the push below finds the row already
+      # created, and the whole job passes while testing nothing. A numeric cutoff needs no
+      # maintenance, and an unparseable filename fails the step instead of being skipped.
+      # (The "Assert the push actually planted it" step below is the backstop regardless.)
+      - name: Build a migration tree that stops before the first collision
+        env:
+          COLLIDING_MIGRATION: migrations/v6/V202608080752__v6.1.x__Metadata_Sync.sql
+        run: |
+          if [ ! -f "$COLLIDING_MIGRATION" ]; then
+            echo "::error::$COLLIDING_MIGRATION no longer exists. This job exists to replay the MJ#4503 collision that migration contains; without it the run would prove nothing. Re-point COLLIDING_MIGRATION (and COLLIDING_RECORD_ID) at the earliest Metadata_Sync migration that creates a fixed-GUID row which metadata/ also creates." >&2
+            exit 1
+          fi
+          CUTOFF="$(basename "$COLLIDING_MIGRATION")"
+          CUTOFF="${CUTOFF#V}"
+          CUTOFF="${CUTOFF%%__*}"
+
+          mkdir -p /tmp/mig-partial
+          cp -R migrations/. /tmp/mig-partial/
+
+          # A Flyway baseline migration (B-prefix) subsumes every migration up to and
+          # including its own version. So the day a baseline is cut at or past $CUTOFF, that
+          # baseline already CONTAINS the colliding create, and the partial tree plants the
+          # row by itself: the push below then finds it present rather than colliding, the
+          # second migrate has nothing left to apply, and the job dies at the very last step
+          # with "did not converge" — which reads as "the MJ#4503 guard rewrite is broken"
+          # and sends whoever opens the log hunting a bug that is not there. Catch it here,
+          # where the actual cause is in front of them.
+          while IFS= read -r b; do
+            base="${b##*/}"
+            bver="${base#B}"
+            bver="${bver%%__*}"
+            case "$bver" in
+              '' | *[!0-9]*)
+                echo "::error::Cannot read a numeric version from baseline filename '$base', so it cannot be shown to sit before the $CUTOFF cutoff. Refusing to run a test that may be vacuous." >&2
+                exit 1
+                ;;
+            esac
+            if [ "$bver" -ge "$CUTOFF" ]; then
+              echo "::error::Baseline $base is at or past the cutoff $CUTOFF, so it already subsumes the migration whose collision this job replays. The guard rewrite is NOT implicated — this lane simply can no longer reach the collision, and would otherwise have failed downstream at the convergence assertion with a misleading 'did not converge'. Re-point COLLIDING_MIGRATION and COLLIDING_RECORD_ID at the earliest post-baseline Metadata_Sync migration that creates a fixed-GUID row which metadata/ also creates; if no such migration survives the baseline, retire this lane (migration-guards.yml still gates new migrations statically)." >&2
+              exit 1
+            fi
+          done < <(find /tmp/mig-partial -type f -name 'B*.sql')
+
+          # Baselines (B*) — version-checked just above, never removed — the repeatable
+          # R__RefreshMetadata, and the non-.sql files are deliberately untouched: the
+          # partial tree must still provision a working schema.
+          REMOVED=0
+          while IFS= read -r f; do
+            base="${f##*/}"
+            ver="${base#V}"
+            ver="${ver%%__*}"
+            case "$ver" in
+              '' | *[!0-9]*)
+                echo "::error::Cannot read a numeric version from migration filename '$base', so the partial tree cannot be shown to stop before $CUTOFF. Refusing to run a test that may be vacuous." >&2
+                exit 1
+                ;;
+            esac
+            if [ "$ver" -ge "$CUTOFF" ]; then
+              rm -f "$f"
+              REMOVED=$((REMOVED + 1))
+            fi
+          done < <(find /tmp/mig-partial -type f -name 'V*.sql')
+
+          if [ "$REMOVED" -eq 0 ]; then
+            echo "::error::The version filter held back nothing, so the partial tree IS the full tree and the push below could never collide." >&2
+            exit 1
+          fi
+          echo "Partial tree stops before $CUTOFF (held back $REMOVED migration(s))."
+
+      - name: Migrate up to but not including the first collision
+        env:
+          # Headroom over mssql's 15s default for the first heavy workload on a cold server.
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: node packages/MJCLI/bin/run.js migrate --dir /tmp/mig-partial
+
+      # This is the step that makes the lane different from every other one: on a real site
+      # this is an operator running `mj sync push` against a database whose migration chain
+      # has not caught up. --include keeps it to the one directory that owns the specimen
+      # record, so the lane costs a fraction of a full metadata push.
+      - name: Sync push — plant the colliding row ahead of its migration
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata --include=credential-types --ci
+
+      # `mj sync push` can exit 0 without writing (the RLS fixture check on the lane above
+      # exists for the same reason). If the row is absent, the second migrate takes the
+      # CREATE branch, succeeds trivially, and this whole job passes having tested nothing.
+      - name: Assert the push actually planted the colliding row
+        run: |
+          COUNT=$(docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -d test -h -1 -W \
+            -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM __mj.[CredentialType] WHERE ID = '${COLLIDING_RECORD_ID}';")
+          COUNT=$(echo "$COUNT" | tr -d '[:space:]')
+          echo "Rows planted by the push for ${COLLIDING_RECORD_ID}: ${COUNT:-0}/1"
+          if [ "${COUNT:-0}" != "1" ]; then
+            echo "::error::The sync push did not plant ${COLLIDING_RECORD_ID}, so the migration below would take its CREATE branch and this job would pass vacuously. Check that metadata/credential-types/.credential-types.json still carries that primaryKey and that --include=credential-types still matches its directory." >&2
+            exit 1
+          fi
+
+      # The pushed row already carries the release Name, so re-reading it after the migrate
+      # would prove only that nothing corrupted it. Overwrite it first: now the final
+      # assertion can ONLY pass if the guard's ELSE branch actually ran spUpdate. No other
+      # migration in the tree writes this row's Name, so there is no second path to green.
+      - name: Scuff the planted row so the migration's update branch is observable
+        run: |
+          AFFECTED=$(docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -d test -h -1 -W \
+            -Q "SET NOCOUNT ON; UPDATE __mj.[CredentialType] SET [Name] = N'${SENTINEL_NAME}' WHERE ID = '${COLLIDING_RECORD_ID}'; SELECT @@ROWCOUNT;")
+          AFFECTED=$(echo "$AFFECTED" | tr -d '[:space:]')
+          if [ "${AFFECTED:-0}" != "1" ]; then
+            echo "::error::Could not write the sentinel Name onto ${COLLIDING_RECORD_ID} (rows affected: ${AFFECTED:-0}). Without it the convergence assertion below is tautological." >&2
+            exit 1
+          fi
+
+      # Pre-fix this failed at batch 1 of the colliding migration with a PK violation on
+      # PK__Credenti__*. Post-fix the IF NOT EXISTS guard takes the ELSE branch and applies.
+      - name: Finish migrating — this is the assertion
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: node packages/MJCLI/bin/run.js migrate
+
+      - name: Assert the row converged on the release content
+        run: |
+          NAME=$(docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -d test -h -1 -W \
+            -Q "SET NOCOUNT ON; SELECT [Name] FROM __mj.[CredentialType] WHERE ID = '${COLLIDING_RECORD_ID}';")
+          # Trim each line, drop the blanks sqlcmd pads around a result set, keep the value.
+          # Not `tr -d '[:space:]'` like the COUNT checks above — that would eat the spaces
+          # inside the name itself. `head` ends the pipeline, so an empty result yields an
+          # empty NAME and the explicit comparison below reports it, rather than exiting mute.
+          NAME=$(echo "$NAME" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$' | head -n 1)
+          echo "Name after the full migrate: '${NAME}'"
+          if [ "$NAME" != "$RELEASE_NAME" ]; then
+            echo "::error::The migration survived the pre-existing row but did not converge it on the release content (Name='${NAME}', expected '${RELEASE_NAME}'). A guard that skips the record entirely instead of updating it would leave a database permanently behind the release — that is the failure this checks for." >&2
+            exit 1
+          fi
+
   # ── WEEKLY live-model lane (Sunday 06:30 UTC + manual dispatch) ─────────────────────────
   # Runs "Integration Tests — Live Model" (15 tests: prompt-runner, agent-runner, shipped
   # agents, carry-forward, payload guards, skills, plan mode, compaction e2e, memory guards,

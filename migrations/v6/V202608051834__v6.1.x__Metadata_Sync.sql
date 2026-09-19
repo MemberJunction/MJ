@@ -29,7 +29,10 @@ SET
 SET
   @Description_1a3bf726 = N'How Explorer treats records opened from within apps: ''records'' (default) keeps the user in the current app, opens every record as its own tab, and shows the global Records pill + record tab strip; ''classic'' restores the previous behavior (records reassigned to the Home app, Golden Layout tab header as the multi-tab UI).'
 SET
-  @DefaultValue_1a3bf726 = N'records' EXEC [${flyway:defaultSchema}].spCreateInstanceConfiguration @ID = @ID_1a3bf726,
+  @DefaultValue_1a3bf726 = N'records'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[InstanceConfiguration] WHERE [ID] = @ID_1a3bf726)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateInstanceConfiguration @ID = @ID_1a3bf726,
   @FeatureKey = @FeatureKey_1a3bf726,
   @Value = @Value_1a3bf726,
   @ValueType = @ValueType_1a3bf726,
@@ -37,6 +40,19 @@ SET
   @DisplayName = @DisplayName_1a3bf726,
   @Description = @Description_1a3bf726,
   @DefaultValue = @DefaultValue_1a3bf726;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateInstanceConfiguration @ID = @ID_1a3bf726,
+  @FeatureKey = @FeatureKey_1a3bf726,
+  @Value = @Value_1a3bf726,
+  @ValueType = @ValueType_1a3bf726,
+  @Category = @Category_1a3bf726,
+  @DisplayName = @DisplayName_1a3bf726,
+  @Description = @Description_1a3bf726,
+  @DefaultValue = @DefaultValue_1a3bf726;
+END
+
 
 GO
 
@@ -246,7 +262,9 @@ SET
   @Comments_e5bab74e = N'GPT 5.6-terra price cut effective 2026-07-30: 20% reduction from $2.50/$15.00 to $2.00/$12.00 per 1M tokens (source: OpenAI ''Advancing the price-performance frontier with GPT-5.6'', July 30, 2026; VentureBeat, CNBC, MLQ News coverage). Prompt-caching discount continues to apply at 10% of input price. No architecture or capability change — pricing-only update.'
 SET
   @CacheReadPricePerUnit_e5bab74e = 0.2
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_e5bab74e,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_e5bab74e)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_e5bab74e,
   @ModelID = @ModelID_e5bab74e,
   @VendorID = @VendorID_e5bab74e,
   @StartedAt = @StartedAt_e5bab74e,
@@ -263,6 +281,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_e5bab74e,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_e5bab74e,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_e5bab74e,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_e5bab74e,
+  @ModelID = @ModelID_e5bab74e,
+  @VendorID = @VendorID_e5bab74e,
+  @StartedAt = @StartedAt_e5bab74e,
+  @EndedAt = @EndedAt_e5bab74e,
+  @EndedAt_Clear = 1,
+  @Status = @Status_e5bab74e,
+  @Currency = @Currency_e5bab74e,
+  @PriceTypeID = @PriceTypeID_e5bab74e,
+  @InputPricePerUnit = @InputPricePerUnit_e5bab74e,
+  @OutputPricePerUnit = @OutputPricePerUnit_e5bab74e,
+  @UnitTypeID = @UnitTypeID_e5bab74e,
+  @ProcessingType = @ProcessingType_e5bab74e,
+  @Comments = @Comments_e5bab74e,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_e5bab74e,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_e5bab74e,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -369,7 +409,9 @@ SET
   @Comments_a2be6bd4 = N'GPT 5.6-luna price cut effective 2026-07-30: 80% reduction from $1.00/$6.00 to $0.20/$1.20 per 1M tokens (source: OpenAI ''Advancing the price-performance frontier with GPT-5.6'', July 30, 2026; VentureBeat, CNBC, MLQ News coverage; positioned to compete on cost with DeepSeek V4 Flash at $0.14/$0.28). Prompt-caching discount continues at 10% of input price. No architecture or capability change — pricing-only update.'
 SET
   @CacheReadPricePerUnit_a2be6bd4 = 0.02
-EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_a2be6bd4,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[AIModelCost] WHERE [ID] = @ID_a2be6bd4)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_a2be6bd4,
   @ModelID = @ModelID_a2be6bd4,
   @VendorID = @VendorID_a2be6bd4,
   @StartedAt = @StartedAt_a2be6bd4,
@@ -386,6 +428,28 @@ EXEC [${flyway:defaultSchema}].spCreateAIModelCost @ID = @ID_a2be6bd4,
   @CacheReadPricePerUnit = @CacheReadPricePerUnit_a2be6bd4,
   @CacheWritePricePerUnit = @CacheWritePricePerUnit_a2be6bd4,
   @CacheWritePricePerUnit_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateAIModelCost @ID = @ID_a2be6bd4,
+  @ModelID = @ModelID_a2be6bd4,
+  @VendorID = @VendorID_a2be6bd4,
+  @StartedAt = @StartedAt_a2be6bd4,
+  @EndedAt = @EndedAt_a2be6bd4,
+  @EndedAt_Clear = 1,
+  @Status = @Status_a2be6bd4,
+  @Currency = @Currency_a2be6bd4,
+  @PriceTypeID = @PriceTypeID_a2be6bd4,
+  @InputPricePerUnit = @InputPricePerUnit_a2be6bd4,
+  @OutputPricePerUnit = @OutputPricePerUnit_a2be6bd4,
+  @UnitTypeID = @UnitTypeID_a2be6bd4,
+  @ProcessingType = @ProcessingType_a2be6bd4,
+  @Comments = @Comments_a2be6bd4,
+  @CacheReadPricePerUnit = @CacheReadPricePerUnit_a2be6bd4,
+  @CacheWritePricePerUnit = @CacheWritePricePerUnit_a2be6bd4,
+  @CacheWritePricePerUnit_Clear = 1;
+END
+
 
 GO
 
@@ -1479,7 +1543,9 @@ SET
   @UserID_55b5683a = 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E'
 SET
   @IsActive_55b5683a = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplate @ID = @ID_55b5683a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[Template] WHERE [ID] = @ID_55b5683a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplate @ID = @ID_55b5683a,
   @Name = @Name_55b5683a,
   @Description = @Description_55b5683a,
   @CategoryID = @CategoryID_55b5683a,
@@ -1491,6 +1557,23 @@ EXEC [${flyway:defaultSchema}].spCreateTemplate @ID = @ID_55b5683a,
   @DisabledAt = @DisabledAt_55b5683a,
   @DisabledAt_Clear = 1,
   @IsActive = @IsActive_55b5683a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplate @ID = @ID_55b5683a,
+  @Name = @Name_55b5683a,
+  @Description = @Description_55b5683a,
+  @CategoryID = @CategoryID_55b5683a,
+  @UserPrompt = @UserPrompt_55b5683a,
+  @UserPrompt_Clear = 1,
+  @UserID = @UserID_55b5683a,
+  @ActiveAt = @ActiveAt_55b5683a,
+  @ActiveAt_Clear = 1,
+  @DisabledAt = @DisabledAt_55b5683a,
+  @DisabledAt_Clear = 1,
+  @IsActive = @IsActive_55b5683a;
+END
+
 
 GO
 
@@ -1513,12 +1596,25 @@ SET
   @Priority_08d3df9a = 1
 SET
   @IsActive_08d3df9a = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateContent @ID = @ID_08d3df9a,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateContent] WHERE [ID] = @ID_08d3df9a)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateContent @ID = @ID_08d3df9a,
   @TemplateID = @TemplateID_08d3df9a,
   @TypeID = @TypeID_08d3df9a,
   @TemplateText = @TemplateText_08d3df9a,
   @Priority = @Priority_08d3df9a,
   @IsActive = @IsActive_08d3df9a;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateContent @ID = @ID_08d3df9a,
+  @TemplateID = @TemplateID_08d3df9a,
+  @TypeID = @TypeID_08d3df9a,
+  @TemplateText = @TemplateText_08d3df9a,
+  @Priority = @Priority_08d3df9a,
+  @IsActive = @IsActive_08d3df9a;
+END
+
 
 GO
 
@@ -1549,7 +1645,9 @@ SET
   @Type_c721e00b = N'Scalar'
 SET
   @IsRequired_c721e00b = 0
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_c721e00b,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_c721e00b)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_c721e00b,
   @TemplateID = @TemplateID_c721e00b,
   @Name = @Name_c721e00b,
   @Description = @Description_c721e00b,
@@ -1571,6 +1669,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_c721e00b,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_c721e00b,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_c721e00b,
+  @TemplateID = @TemplateID_c721e00b,
+  @Name = @Name_c721e00b,
+  @Description = @Description_c721e00b,
+  @Type = @Type_c721e00b,
+  @DefaultValue = @DefaultValue_c721e00b,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_c721e00b,
+  @LinkedParameterName = @LinkedParameterName_c721e00b,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_c721e00b,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_c721e00b,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_c721e00b,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_c721e00b,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_c721e00b,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_c721e00b,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -1601,7 +1726,9 @@ SET
   @Type_5747bc02 = N'Scalar'
 SET
   @IsRequired_5747bc02 = 1
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_5747bc02,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_5747bc02)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_5747bc02,
   @TemplateID = @TemplateID_5747bc02,
   @Name = @Name_5747bc02,
   @Description = @Description_5747bc02,
@@ -1623,6 +1750,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_5747bc02,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_5747bc02,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_5747bc02,
+  @TemplateID = @TemplateID_5747bc02,
+  @Name = @Name_5747bc02,
+  @Description = @Description_5747bc02,
+  @Type = @Type_5747bc02,
+  @DefaultValue = @DefaultValue_5747bc02,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_5747bc02,
+  @LinkedParameterName = @LinkedParameterName_5747bc02,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_5747bc02,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_5747bc02,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_5747bc02,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_5747bc02,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_5747bc02,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_5747bc02,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -1653,7 +1807,9 @@ SET
   @Type_b9507eac = N'Scalar'
 SET
   @IsRequired_b9507eac = 0
-EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_b9507eac,
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[TemplateParam] WHERE [ID] = @ID_b9507eac)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_b9507eac,
   @TemplateID = @TemplateID_b9507eac,
   @Name = @Name_b9507eac,
   @Description = @Description_b9507eac,
@@ -1675,6 +1831,33 @@ EXEC [${flyway:defaultSchema}].spCreateTemplateParam @ID = @ID_b9507eac,
   @OrderBy_Clear = 1,
   @TemplateContentID = @TemplateContentID_b9507eac,
   @TemplateContentID_Clear = 1;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateTemplateParam @ID = @ID_b9507eac,
+  @TemplateID = @TemplateID_b9507eac,
+  @Name = @Name_b9507eac,
+  @Description = @Description_b9507eac,
+  @Type = @Type_b9507eac,
+  @DefaultValue = @DefaultValue_b9507eac,
+  @DefaultValue_Clear = 1,
+  @IsRequired = @IsRequired_b9507eac,
+  @LinkedParameterName = @LinkedParameterName_b9507eac,
+  @LinkedParameterName_Clear = 1,
+  @LinkedParameterField = @LinkedParameterField_b9507eac,
+  @LinkedParameterField_Clear = 1,
+  @ExtraFilter = @ExtraFilter_b9507eac,
+  @ExtraFilter_Clear = 1,
+  @EntityID = @EntityID_b9507eac,
+  @EntityID_Clear = 1,
+  @RecordID = @RecordID_b9507eac,
+  @RecordID_Clear = 1,
+  @OrderBy = @OrderBy_b9507eac,
+  @OrderBy_Clear = 1,
+  @TemplateContentID = @TemplateContentID_b9507eac,
+  @TemplateContentID_Clear = 1;
+END
+
 
 GO
 
@@ -1724,7 +1907,10 @@ SET
 SET
   @ReasoningMode_4866044d = N'Prompt'
 SET
-  @AutomationLevel_4866044d = N'ReviewAll' EXEC [${flyway:defaultSchema}].spCreateEntityDocument @ID = @ID_4866044d,
+  @AutomationLevel_4866044d = N'ReviewAll'
+IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityDocument] WHERE [ID] = @ID_4866044d)
+BEGIN
+    EXEC [${flyway:defaultSchema}].spCreateEntityDocument @ID = @ID_4866044d,
   @Name = @Name_4866044d,
   @TypeID = @TypeID_4866044d,
   @EntityID = @EntityID_4866044d,
@@ -1746,6 +1932,33 @@ SET
   @ReasoningAgentID = @ReasoningAgentID_4866044d,
   @ReasoningAgentID_Clear = 1,
   @AutomationLevel = @AutomationLevel_4866044d;
+END
+ELSE
+BEGIN
+    EXEC [${flyway:defaultSchema}].spUpdateEntityDocument @ID = @ID_4866044d,
+  @Name = @Name_4866044d,
+  @TypeID = @TypeID_4866044d,
+  @EntityID = @EntityID_4866044d,
+  @VectorDatabaseID = @VectorDatabaseID_4866044d,
+  @Status = @Status_4866044d,
+  @TemplateID = @TemplateID_4866044d,
+  @AIModelID = @AIModelID_4866044d,
+  @PotentialMatchThreshold = @PotentialMatchThreshold_4866044d,
+  @AbsoluteMatchThreshold = @AbsoluteMatchThreshold_4866044d,
+  @VectorIndexID = @VectorIndexID_4866044d,
+  @Configuration = @Configuration_4866044d,
+  @Configuration_Clear = 1,
+  @EnableLLMReasoning = @EnableLLMReasoning_4866044d,
+  @ReasoningMode = @ReasoningMode_4866044d,
+  @ReasoningThreshold = @ReasoningThreshold_4866044d,
+  @ReasoningThreshold_Clear = 1,
+  @ReasoningPromptID = @ReasoningPromptID_4866044d,
+  @ReasoningPromptID_Clear = 1,
+  @ReasoningAgentID = @ReasoningAgentID_4866044d,
+  @ReasoningAgentID_Clear = 1,
+  @AutomationLevel = @AutomationLevel_4866044d;
+END
+
 
 GO
 
