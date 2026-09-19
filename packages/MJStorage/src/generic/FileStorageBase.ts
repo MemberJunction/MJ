@@ -458,6 +458,21 @@ export abstract class FileStorageBase {
   }
 
   /**
+   * Releases any resources (keep-alive sockets, connection pools, credential timers) held by
+   * this driver's underlying SDK client. Called by {@link FileStorageEngine} before a cached
+   * driver instance is dropped or replaced (e.g. `RefreshDriverCache()`, or the on-demand
+   * `GetDriver()` fallback overwriting a stale entry) so the old client doesn't keep its socket
+   * pool alive after nothing can reach it.
+   *
+   * Default is a no-op: most storage SDKs used here (Azure, Box, Dropbox, Google) don't expose
+   * an explicit client-teardown API, so there is nothing safe to call. Drivers whose SDK client
+   * *does* expose one (see {@link AWSFileStorage.Dispose}) should override this.
+   */
+  public Dispose(): void {
+    // no-op by default; see class doc comment
+  }
+
+  /**
    * Generates a pre-authenticated URL for uploading files to a storage provider.
    *
    * This method abstracts over different storage providers, allowing for a unified interface

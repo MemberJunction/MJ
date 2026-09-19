@@ -187,6 +187,18 @@ export class AWSFileStorage extends FileStorageBase {
   }
 
   /**
+   * Releases the underlying `S3Client`'s keep-alive sockets and credential-provider chain.
+   * Called by {@link FileStorageEngine} before this driver instance is dropped from its cache
+   * (e.g. on `RefreshDriverCache()`), mirroring the destroy-before-reassign already done inside
+   * {@link initialize} when the same instance is re-configured in place.
+   */
+  public override Dispose(): void {
+    if (this._client) {
+      this._client.destroy();
+    }
+  }
+
+  /**
    * Checks if AWS S3 provider is properly configured.
    * Returns true if access credentials and bucket name are present.
    * Logs detailed error messages if configuration is incomplete.
