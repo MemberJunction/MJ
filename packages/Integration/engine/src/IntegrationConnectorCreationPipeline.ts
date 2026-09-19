@@ -18,6 +18,22 @@ import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
 import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
+import { getHeapStatistics } from 'node:v8';
+
+/**
+ * Has the heap reached the point where a long stage must stop taking on new work?
+ *
+ * Pure, so the boundary is testable without arranging real memory pressure — the same reason the
+ * overlay deciders in IntegrationSchemaSync are pure.
+ *
+ * A limit of zero means V8 did not report a ceiling. That must read as "do not stop": a missing
+ * reading is not evidence of pressure, and treating it as pressure would halt sampling everywhere
+ * the statistic is unavailable.
+ */
+export function ShouldStopSamplingForHeap(usedBytes: number, limitBytes: number, stopFraction: number): boolean {
+    if (!(limitBytes > 0) || !(stopFraction > 0)) return false;
+    return usedBytes / limitBytes >= stopFraction;
+}
 
 /** Options for the creation/refresh pipeline run. */
 export interface ConnectorCreationPipelineOptions {
@@ -158,6 +174,16 @@ export class IntegrationConnectorCreationPipeline {
      * fires on work that has genuinely stopped, never on work that is merely big.
      */
     private static readonly DEFAULT_RUN_DEADLINE_MS = 45 * 60_000;
+    /**
+     * Heap fraction past which Introspect stops taking on NEW sampling work.
+     *
+     * Higher than a warning threshold on purpose. A warning exists to fire while there is still
+     * room to act; this is the last exit before V8 gives up, and past it the next large allocation
+     * is as likely to abort the process as to succeed. 0.92 leaves roughly the cost of one more
+     * object's sample plus the persist that follows — enough to land what has already been
+     * gathered, which is the entire point of stopping rather than being stopped.
+     */
+    private static readonly HEAP_STOP_FRACTION = 0.92;
     /** Just-completed runs by CompanyIntegrationID — coalesces a *sequential* duplicate within the window. */
     private static readonly recentRuns = new Map<string, { result: ConnectorCreationPipelineResult; at: number }>();
     /** Default coalesce window (ms) when the env override is unset/invalid. */
@@ -462,6 +488,31 @@ export class IntegrationConnectorCreationPipeline {
         // otherwise have completed.
         const budgetMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
         const outOfTime = (): boolean => budgetMs > 0 && Date.now() - startMs >= budgetMs;
+        // THE OTHER BUDGET. Introspect accumulates: `schema.Objects` holds every object with every
+        // field for the whole stage and is handed to the persist stage only at the end, so memory
+        // climbs monotonically with the size of the source and is never released mid-stage. On a
+        // large catalog that reaches V8's ceiling before the time budget is anywhere near spent —
+        // 888 objects, some with thousands of columns, is ~97k field descriptors held at once, and
+        // a first discovery samples the whole set TWICE.
+        //
+        // Running out of memory here is not like running out of time. Time ends the stage with
+        // everything gathered so far intact; the heap ceiling ends the PROCESS, so the run loses
+        // every object it had already sampled, writes no result, and stays in flight forever.
+        // Observed 2026-09-19: two hours of sampling discarded by
+        // `FATAL ERROR: Ineffective mark-compacts near heap limit`.
+        //
+        // So memory gets the same treatment time already has — stop taking on new sampling, keep
+        // what is gathered, let the stage finish and persist. A smaller catalog beats no catalog.
+        // Read synchronously and per object: `used_heap_size` is a counter V8 already maintains,
+        // and the alternative (the async whole-machine reading) cannot be afforded per item.
+        const outOfMemory = (): boolean => {
+            const heap = getHeapStatistics();
+            return ShouldStopSamplingForHeap(
+                heap.used_heap_size,
+                heap.heap_size_limit,
+                IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
+            );
+        };
         try {
             // U11 — determinate discovery progress: surface scanned/total on the structured
             // stream (IntegrationTailRunEvents carries counts) so a client can render a real
@@ -518,6 +569,7 @@ export class IntegrationConnectorCreationPipeline {
             const sampledDeclared = new Set<string>();
             let runtimeAdded = 0;
             let unsampledForTime = 0;
+            let unsampledForMemory = 0;
 
             // Per-object progress. Everything below this point is the expensive half of discovery —
             // one read-path sample per object — and it emitted nothing, so a consumer watching a
@@ -550,6 +602,7 @@ export class IntegrationConnectorCreationPipeline {
                 // reached the end of its object list, not one that stalled partway through it.
                 announceSample(d.Name);
                 if (outOfTime()) { unsampledForTime++; continue; }
+                if (outOfMemory()) { unsampledForMemory++; continue; }
                 if (seen.has(key)) {
                     // §case-3 (data-only-discoverable): a DECLARED object the connector ALSO surfaces at
                     // runtime. Sampling populates it IN PLACE so a name-only declaration becomes syncable
@@ -619,6 +672,7 @@ export class IntegrationConnectorCreationPipeline {
                 if (sampledDeclared.has(key) || !inScope(name)) continue;
                 announceSample(name);
                 if (outOfTime()) { unsampledForTime++; continue; }
+                if (outOfMemory()) { unsampledForMemory++; continue; }
                 const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
                 if (!existing) continue;
                 // Record it here too: two declared entries that differ only by case resolve to the
@@ -640,7 +694,21 @@ export class IntegrationConnectorCreationPipeline {
                 emitter.stageError('Introspect', msg, { code: 'sample-budget-exhausted' });
                 console.warn(`[IntrospectPipeline] ${msg}`);
             }
-            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} unsampled-for-time=${unsampledForTime} total=${schema.Objects.length}`);
+            if (unsampledForMemory > 0) {
+                // Deliberately the code the sync path already emits and the UI already renders,
+                // rather than a second vocabulary for the same condition.
+                const msg =
+                    `This workspace ran short of memory partway through reading your source, so ` +
+                    `${unsampledForMemory} object(s) were not sampled and keep their declared fields ` +
+                    `and catalog widths. Everything sampled before that point was kept. Re-run to ` +
+                    `finish the rest, or give the workspace more memory for a source this size.`;
+                emitter.warning('Introspect', 'HOST_MEMORY_PRESSURE', msg, {
+                    unsampledForMemory,
+                    sampled: announced.size - unsampledForMemory - unsampledForTime,
+                });
+                console.warn(`[IntrospectPipeline] ${msg}`);
+            }
+            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} unsampled-for-time=${unsampledForTime} unsampled-for-memory=${unsampledForMemory} total=${schema.Objects.length}`);
 
             const fieldCount = schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
             emitter.stageComplete('Introspect', {
@@ -654,6 +722,7 @@ export class IntegrationConnectorCreationPipeline {
                 durationMs: Date.now() - startMs,
                 discoverObjectsFailed,
                 unsampledForTime,
+                unsampledForMemory,
             });
             return schema;
         } catch (err) {
