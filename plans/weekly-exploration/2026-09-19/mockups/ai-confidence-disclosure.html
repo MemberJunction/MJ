@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Confidence &amp; Explainability</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-soft: #eef2fb;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--mj-text-muted); margin: 26px 0 12px; display: flex; align-items: center; gap: 8px; }
+  .section-label:first-child { margin-top: 0; }
+
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .compare-col-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 6px 4px; }
+  .compare-col-head.before { color: var(--mj-text-muted); }
+  .compare-col-head.after { color: var(--mj-brand-primary); }
+
+  .surface-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; margin-bottom: 10px; }
+  .surface-name { font-weight: 700; font-size: 13px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .surface-name i { color: var(--mj-brand-primary); }
+  .record-row { font-size: 12.5px; color: var(--mj-text-secondary); margin-bottom: 10px; }
+
+  /* BEFORE: bespoke, inconsistent badges */
+  .badge-raw { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: #eef2ff; color: #4338ca; margin-right: 6px;}
+  .badge-weight { display:inline-block; font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 12px; background: #fef9c3; color: #854d0e; }
+  .badge-grade { display:inline-block; font-size: 11.5px; font-weight: 800; padding: 3px 10px; border-radius: 4px; background:#1e293b; color:#fbbf24; letter-spacing:.03em; }
+  .tiny-link { font-size: 11px; color: var(--mj-brand-primary); text-decoration: underline; cursor: default; }
+
+  /* AFTER: unified AIConfidenceBadge */
+  .ai-badge { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 6px; border-radius: 20px; font-size: 12px; font-weight: 700; border: 1px solid; }
+  .ai-badge .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .ai-badge.high { background: var(--mj-status-success-bg); border-color: color-mix(in srgb, var(--mj-status-success) 35%, transparent); color: var(--mj-status-success); }
+  .ai-badge.high .dot { background: var(--mj-status-success); }
+  .ai-badge.medium { background: var(--mj-status-warning-bg); border-color: color-mix(in srgb, var(--mj-status-warning) 35%, transparent); color: var(--mj-status-warning); }
+  .ai-badge.medium .dot { background: var(--mj-status-warning); }
+  .ai-badge.low { background: var(--mj-status-error-bg); border-color: color-mix(in srgb, var(--mj-status-error) 35%, transparent); color: var(--mj-status-error); }
+  .ai-badge.low .dot { background: var(--mj-status-error); }
+
+  .explain-panel { margin-top: 10px; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--mj-text-secondary); }
+  .explain-panel .h { font-weight: 700; color: var(--mj-text-primary); font-size: 11.5px; margin-bottom: 4px; display:flex; align-items:center; gap:6px; }
+  .explain-panel .h i { color: var(--mj-brand-primary); }
+  .explain-panel .src { margin-top: 6px; font-size: 11px; color: var(--mj-brand-primary); }
+
+  .disclosure-banner { margin-top: 26px; background: var(--mj-brand-primary-soft); border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent); border-radius: 10px; padding: 16px 18px; display: flex; gap: 14px; align-items: flex-start; }
+  .disclosure-banner i { color: var(--mj-brand-primary); font-size: 18px; margin-top: 2px; }
+  .disclosure-banner .t { font-weight: 700; font-size: 13.5px; margin-bottom: 4px; }
+  .disclosure-banner .b { font-size: 12.5px; color: var(--mj-text-secondary); line-height: 1.55; }
+  .disclosure-banner .b strong { color: var(--mj-text-primary); }
+  .disclosure-banner a.tiny-link { display:inline-block; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-cube"></i> MJ Explorer</div>
+    <div class="nav-section">AI Trust</div>
+    <div class="nav-item active"><i class="fa-solid fa-circle-check"></i> Confidence Disclosure</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Execution Guardrails</div>
+    <div class="nav-item"><i class="fa-solid fa-key"></i> Encryption Health</div>
+    <div class="nav-section">Workspaces</div>
+    <div class="nav-item"><i class="fa-solid fa-clone"></i> Duplicate Detection</div>
+    <div class="nav-item"><i class="fa-solid fa-tags"></i> Content Tagging</div>
+    <div class="nav-item"><i class="fa-solid fa-chart-line"></i> Predictive Studio</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <h1><i class="fa-solid fa-circle-check"></i> AI Confidence &amp; Explainability Disclosure</h1>
+      <div class="sub">Three surfaces, three bespoke confidence scales, today — versus one shared, plain-language disclosure everywhere AI output reaches a person</div>
+    </div>
+
+    <div class="content">
+
+      <div class="compare-grid">
+        <div class="compare-col-head before"><i class="fa-solid fa-xmark" style="color:var(--mj-text-muted)"></i> Today — three bespoke, unexplained scales</div>
+        <div class="compare-col-head after"><i class="fa-solid fa-check"></i> With a shared AIConfidenceBadge / AIExplanationPanel</div>
+      </div>
+
+      <div class="section-label"><i class="fa-solid fa-clone"></i> Duplicate Detection — merge review</div>
+      <div class="compare-grid">
+        <div class="surface-card">
+          <div class="surface-name">Sarah J. Martinez ⇄ Sarah Martinez</div>
+          <div class="record-row">Two Contact records flagged as possible duplicates</div>
+          <span class="badge-raw">LLMConfidence: 0.87</span>
+          <div style="margin-top:8px;"><span class="tiny-link">View reasoning ›</span></div>
+        </div>
+        <div class="surface-card">
+          <div class="surface-name">Sarah J. Martinez ⇄ Sarah Martinez</div>
+          <div class="record-row">Two Contact records flagged as possible duplicates</div>
+          <div class="ai-badge high"><span class="dot"></span> High confidence — 87%</div>
+          <div class="explain-panel">
+            <div class="h"><i class="fa-solid fa-wand-magic-sparkles"></i> Why the AI suggests this</div>
+            Matching email domain, phone number, and mailing address; name variant is a common
+            middle-initial pattern. No conflicting employer or membership-tier data found.
+            <div class="src">Source: AIPromptRun #88213 — Dedup Reasoning Agent</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label"><i class="fa-solid fa-tags"></i> Content Tagging — tag review queue</div>
+      <div class="compare-grid">
+        <div class="surface-card">
+          <div class="surface-name">"2026 Annual Impact Report.pdf" → tag: Grant Reporting</div>
+          <div class="record-row">Auto-tagged during ingestion</div>
+          <span class="badge-weight">Weight: 0.62</span>
+          <div style="margin-top:8px;"><span class="tiny-link">Reasoning ›</span></div>
+        </div>
+        <div class="surface-card">
+          <div class="surface-name">"2026 Annual Impact Report.pdf" → tag: Grant Reporting</div>
+          <div class="record-row">Auto-tagged during ingestion</div>
+          <div class="ai-badge medium"><span class="dot"></span> Uncertain — review recommended (62%)</div>
+          <div class="explain-panel">
+            <div class="h"><i class="fa-solid fa-wand-magic-sparkles"></i> Why the AI suggests this</div>
+            Document mentions "grant outcomes" and "funder deliverables" twice, but the majority of
+            content reads as a general annual report rather than a grant-specific submission.
+            <div class="src">Source: AIPromptRun #91055 — Content Autotagging</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-label"><i class="fa-solid fa-chart-line"></i> Predictive Studio — lapse-risk score</div>
+      <div class="compare-grid">
+        <div class="surface-card">
+          <div class="surface-name">Member #40218 — Renewal Lapse Risk</div>
+          <div class="record-row">Model: Membership Lapse v4</div>
+          <span class="badge-grade">GOOD</span>
+          <div style="margin-top:8px;"><span class="tiny-link">What does "Good" mean? ›</span></div>
+        </div>
+        <div class="surface-card">
+          <div class="surface-name">Member #40218 — Renewal Lapse Risk</div>
+          <div class="record-row">Model: Membership Lapse v4</div>
+          <div class="ai-badge high"><span class="dot"></span> Good model trust (grade, not a probability)</div>
+          <div class="explain-panel">
+            <div class="h"><i class="fa-solid fa-wand-magic-sparkles"></i> What this grade means</div>
+            This model correctly ranks lapsing vs. renewing members 81% of the time on held-out
+            data (AUC 0.81) — solid for planning outreach, not precise enough for an automatic
+            cutoff. Original scale preserved, not converted into a false-precision percentage.
+            <div class="src">Source: Predictive Studio — Membership Lapse v4, last evaluated 2026-09-01</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="disclosure-banner">
+        <i class="fa-solid fa-scale-balanced"></i>
+        <div>
+          <div class="t">Optional: ConsequentialDecisionDisclosure — enabled for "Renewal Outreach Prioritization"</div>
+          <div class="b">
+            <strong>This suggestion was generated by AI.</strong> It ranks your renewal priority
+            based on giving history, engagement, and communication patterns. It does not
+            automatically change your membership status. To ask a question about this, contact
+            <strong>membership@example.org</strong>.
+          </div>
+          <a class="tiny-link">Configured per-workflow, not shown by default on every AI surface ›</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
