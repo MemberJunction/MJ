@@ -167,6 +167,8 @@ interface RunActionCall {
     params: ScriptedActionParam[];
     /** What BaseAgent.ExecuteSingleAction stamped as Context.ActiveSkillIDs (the run's active skills). */
     activeSkillIDs?: unknown;
+    /** What it stamped as Context.apiKeys (the run's runtime API keys) — absent when the run has none. */
+    apiKeys?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -349,8 +351,9 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown } }): Promise<ScriptedActionResult> => {
+            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown; apiKeys?: unknown } }): Promise<ScriptedActionResult> => {
                 const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
+                if (input.Context && 'apiKeys' in input.Context) call.apiKeys = input.Context.apiKeys;
                 this.runActionCalls.push(call);
                 return this.runAction(call);
             },
@@ -652,6 +655,53 @@ describe('BaseAgent.Execute — Context.ActiveSkillIDs carries the run\'s active
         ]);
         await agent.Execute(makeParams({ parentActivatedSkillIDs: [PARENT_SKILL] }));
         expect(harness.runActionCalls[0].activeSkillIDs).toEqual([PARENT_SKILL]);
+    });
+});
+
+describe('BaseAgent.Execute — Context.apiKeys carries the run\'s runtime API keys to every action', () => {
+    // Prompts have always received params.apiKeys (AIPromptRunner → GetAIAPIKey(driverClass, apiKeys)).
+    // Actions never did, so a run on a customer's OpenAI key still generated its images on the
+    // platform's. The stamp closes that gap; its ABSENCE when the run has no keys is the other half
+    // of the contract — an action must be able to pass Context.apiKeys straight to GetAIAPIKey and
+    // get the platform fallback for free.
+    it('stamps the run\'s apiKeys onto the action context, the same list the prompts get', async () => {
+        const KEYS = [{ driverClass: 'OpenAIImageGenerator', apiKey: 'sk-customer' }, { driverClass: 'OpenAILLM', apiKey: 'sk-customer' }];
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        await agent.Execute(makeParams({ apiKeys: KEYS }));
+        expect(harness.runActionCalls[0].apiKeys).toEqual(KEYS);
+    });
+
+    it('stamps them where no serialization can pick them up — readable by the action, absent from JSON, entries and spreads', async () => {
+        // actionContext IS params.context by reference, and context is copied into sub-agent params
+        // and recorded on run steps. A key that survives JSON.stringify is a key in the database.
+        const KEYS = [{ driverClass: 'OpenAIImageGenerator', apiKey: 'sk-customer' }];
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams({ apiKeys: KEYS, context: { tenant: 't1' } });
+        await agent.Execute(params);
+        const ctx = params.context as Record<string, unknown>;
+        expect(ctx.apiKeys).toEqual(KEYS);                        // the action can read it
+        expect('apiKeys' in ctx).toBe(true);
+        expect(JSON.stringify(ctx)).not.toContain('sk-customer');  // persistence cannot
+        expect(Object.keys(ctx)).not.toContain('apiKeys');
+        expect({ ...ctx }).not.toHaveProperty('apiKeys');
+    });
+
+    it('stamps nothing when the run has no runtime keys — absent, not an empty list', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        await agent.Execute(makeParams());
+        expect('apiKeys' in harness.runActionCalls[0]).toBe(false);
     });
 });
 
