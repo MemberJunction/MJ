@@ -9,11 +9,14 @@ import { AppLockGate } from '@/auth/AppLockGate';
 import { BootGate } from '@/boot/BootGate';
 import { PushNotificationsBoot } from '@/hooks/usePushRegistration';
 import { LoadHostedMobileResources } from '@/host/registry';
+import { LoadMobileArtifactRenderers } from '@/artifacts/renderers';
 
 // Hosted application surfaces register via `@RegisterClass` module side effects, which a bundler
 // will eliminate unless something references them. This call is that reference — see
 // `src/host/registry.ts` for why a native host needs a build-time manifest at all.
 LoadHostedMobileResources();
+// Artifact renderers register the same way and for the same reason — see the file's header.
+LoadMobileArtifactRenderers();
 
 // Two warnings fire on every launch, neither actionable from this package: require cycles inside
 // the published `@memberjunction/core` and `BaseAIEngine` bundles, and a debugger-connect notice.

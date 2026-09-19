@@ -9,6 +9,7 @@ import { useArtifact } from '@/hooks/useConversations';
 import type { LoadedArtifact } from '@/data/services/artifacts';
 import { DesktopFallback, InteractiveComponentRenderer } from '@/interactive/InteractiveComponentRenderer';
 import { AssessSpec } from '@/interactive/mobile-safety';
+import { ResolveMobileArtifactRenderer } from '@/artifacts/BaseMobileArtifactRenderer';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /** Horizontal padding applied by the scroll body, used to size charts. */
@@ -86,10 +87,32 @@ export default function ArtifactDetailScreen() {
     );
 }
 
-/** Dispatches a loaded artifact to the renderer matching its classified `kind`. */
+/**
+ * Dispatches a loaded artifact to its renderer.
+ *
+ * A REGISTERED renderer wins, resolved by artifact type name the same way `ng-conversations`
+ * resolves its viewer plugins — so an artifact type added to MJ metadata reaches a renderer by
+ * registration rather than by someone extending a sniffing heuristic.
+ *
+ * The `kind` switch below remains as the fallback for the types that have not moved onto the
+ * registry yet. It classifies by looking at the content, which works and is honest about being a
+ * guess, but it is not a contract.
+ */
 function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
     const { width } = useWindowDimensions();
     const contentWidth = width - BODY_PADDING * 2;
+
+    const Registered = ResolveMobileArtifactRenderer(artifact.typeName, artifact.contentType);
+    if (Registered) {
+        return (
+            <Registered
+                TypeName={artifact.typeName}
+                ContentType={artifact.contentType}
+                Content={artifact.content}
+                Name={artifact.name}
+            />
+        );
+    }
 
     switch (artifact.kind) {
         case 'json-table':

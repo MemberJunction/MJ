@@ -180,6 +180,15 @@ export type AdaptedMessage =
         status: 'Complete' | 'In-Progress' | 'Error';
         suggestedResponses: string[];
         completionMs: number | null;
+        /**
+         * The artifact this turn produced, when it produced one.
+         *
+         * `MJ: Conversation Details` carries `ArtifactID` directly, so the link from a message to
+         * the thing it made is a column read rather than a join — which is what lets the thread
+         * show an artifact card in place instead of only listing artifacts in a dock detached from
+         * the turn that created them.
+         */
+        artifactId: string | null;
     };
 
 /**
@@ -247,6 +256,7 @@ export function AdaptMessage(msg: ConversationMessage): AdaptedMessage {
         status: d.Status ?? 'Complete',
         suggestedResponses,
         completionMs: d.CompletionTime ?? null,
+        artifactId: d.ArtifactID ?? null,
     };
 }
 

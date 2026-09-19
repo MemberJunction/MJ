@@ -23,6 +23,9 @@ import { AttachCapturedFile, ComposeMessageWithAttachment, type CapturedAttachme
 import { GetDefaultAgentId } from '@/data/preferences';
 import { MentionsToPlainText } from '@/data/mention-display';
 import { MJRealtimeSessionCard } from '@/chat/realtime/RealtimeSessionCard';
+import { ArtifactMessageCard } from '@/chat/artifacts/ArtifactMessageCard';
+import { UUIDsEqual } from '@memberjunction/global';
+import type { MJConversationArtifactEntity } from '@memberjunction/core-entities';
 import { FindActiveTrigger, ApplyMention, MentionedAgentId, SerializeDraft, type InsertedMention } from '@/chat/mentions/trigger';
 import { MentionSuggestions } from '@/chat/mentions/MentionSuggestions';
 import { MJComposer } from '@/chat/composer/MJComposer';
@@ -273,7 +276,11 @@ export default function ChatThreadScreen() {
                               */}
                             {view.timeline.map((item) =>
                                 item.kind === 'message' ? (
-                                    <MessageRenderer key={item.message.id} message={item.message} />
+                                    <MessageRenderer
+                                        key={item.message.id}
+                                        message={item.message}
+                                        artifacts={view.artifacts}
+                                    />
                                 ) : (
                                     <MJRealtimeSessionCard
                                         key={`session:${item.group.SessionID}`}
@@ -425,7 +432,14 @@ function RecentsStrip({ activeId, chips }: { activeId: string; chips: RecentChip
  * {@link MarkdownView} body, an in-progress "Working…" indicator, and any
  * suggested-response chips.
  */
-function MessageRenderer({ message }: { message: AdaptedMessage }) {
+function MessageRenderer({
+    message,
+    artifacts,
+}: {
+    message: AdaptedMessage;
+    /** The conversation's artifacts, so a card can show a name and version without another read. */
+    artifacts: MJConversationArtifactEntity[];
+}) {
     if (message.kind === 'user') {
         return (
             <View style={styles.userMsgWrap}>
@@ -451,6 +465,18 @@ function MessageRenderer({ message }: { message: AdaptedMessage }) {
                     <Text style={styles.stepText}>Working…</Text>
                 </View>
             ) : null}
+            {/*
+              * The artifact this turn produced, in place. The dock above the composer still lists
+              * everything the conversation made — that answers a different question, and losing the
+              * turn that produced an artifact loses the request that explains it.
+              */}
+            {message.artifactId ? (
+                <ArtifactMessageCard
+                    ArtifactID={message.artifactId}
+                    Name={ArtifactNameFor(artifacts, message.artifactId)}
+                    TypeName={ArtifactTypeFor(artifacts, message.artifactId)}
+                />
+            ) : null}
             {message.suggestedResponses.length > 0 ? (
                 <View style={styles.chips}>
                     {message.suggestedResponses.map((action) => (
@@ -462,6 +488,23 @@ function MessageRenderer({ message }: { message: AdaptedMessage }) {
             ) : null}
         </View>
     );
+}
+
+/**
+ * The display name of a conversation artifact, or null when the list does not contain it.
+ *
+ * Tolerant on purpose: an artifact the conversation query did not return still gets a card, because
+ * the message's own `ArtifactID` is enough to open the viewer. Degrading to "Artifact" is better
+ * than hiding something the agent made.
+ */
+function ArtifactNameFor(artifacts: MJConversationArtifactEntity[], id: string): string | null {
+    return artifacts.find((a) => UUIDsEqual(a.ID, id))?.Name ?? null;
+}
+
+/** The artifact's type name, used for the card's icon and subtitle. */
+function ArtifactTypeFor(artifacts: MJConversationArtifactEntity[], id: string): string | null {
+    const found = artifacts.find((a) => UUIDsEqual(a.ID, id));
+    return (found as unknown as { ArtifactType?: string } | undefined)?.ArtifactType ?? null;
 }
 
 /** Splits user text on `@mention` tokens and wraps mentions in emphasized `<Text>`. */

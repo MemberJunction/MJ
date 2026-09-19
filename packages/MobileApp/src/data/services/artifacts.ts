@@ -29,6 +29,13 @@ export type LoadedArtifact = {
     versionCount: number;
     /** Raw version content. */
     content: string;
+    /**
+     * The version's MIME type, when the record carried one.
+     *
+     * Kept alongside the type name because a registered renderer matches on EITHER — an artifact
+     * written with `application/vnd.mj.data` but an unexpected type name still finds its renderer.
+     */
+    contentType: string | null;
     /** How the UI should render `content`. */
     kind: ArtifactRenderKind;
     /** When kind is json-table, parsed rows. */
@@ -150,6 +157,9 @@ export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): 
         name: artifact.Name,
         description: artifact.Description,
         typeName: artifact.ArtifactType ?? 'Artifact',
+        // Read off the version rather than the artifact: the MIME type belongs to the bytes, and a
+        // later version can legitimately differ from an earlier one.
+        contentType: (latest as unknown as { ContentType?: string | null } | undefined)?.ContentType ?? null,
         version: latest?.Version ?? 1,
         versionCount: versions.length,
         content,
