@@ -146,7 +146,8 @@ export class StubDropdownComponent implements ControlValueAccessor {
 /**
  * ControlValueAccessor double for `<mj-numeric-input>` (`MJNumericInputComponent` in
  * `@memberjunction/ng-ui-components`), mirroring its public inputs
- * (`Min`/`Max`/`Step`/`Format`/`Decimals`/`Disabled`/`Placeholder`).
+ * (`Min`/`Max`/`Step`/`Format`/`Decimals`/`Disabled`/`Placeholder`, plus the four accessible-name
+ * inputs it shares with the other named controls).
  *
  * Renders a real `<input type="number" class="mj-numeric-input">` wired to the CVA, so
  * specs can type into it (`typeInto(fixture, '.mj-numeric-input', '5')`) and the bound
@@ -166,6 +167,10 @@ export class StubNumericInputComponent implements ControlValueAccessor {
   @Input() Decimals: number | null = null;
   @Input() Disabled = false;
   @Input() Placeholder = '';
+  @Input() AriaLabel = '';
+  @Input() AriaLabelledBy = '';
+  @Input() InputId = '';
+  @Input() AriaDescribedBy = '';
 
   /** Last value written through the CVA (by the form or by typing into the input). */
   value: number | null = null;

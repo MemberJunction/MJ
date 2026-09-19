@@ -1,4 +1,14 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  EventEmitter,
+  Input,
+  Output,
+  ViewChild
+} from '@angular/core';
+import { MJNamedControlBase } from '../a11y/named-control.base';
+import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-page-search — Canonical in-page search input for dashboard headers and toolbars.
@@ -7,9 +17,16 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
  * Distinct from `mj-search-input` (the navbar/global search in `@memberjunction/ng-search`)
  * — this one is a simple text input used for filtering page content.
  *
+ * The `Placeholder` is the accessible name of last resort — it is what the name computation falls
+ * back to, and it disappears the moment the user types. Pass
+ * {@link MJNamedControlBase.AriaLabel} (or {@link MJNamedControlBase.AriaLabelledBy} when a visible
+ * label exists) so the box has a name that survives having text in it. The control is a real
+ * `<input>`, so {@link MJNamedControlBase.InputId} IS a valid `<label for>` target.
+ *
  * Example:
  * ```html
  * <mj-page-search
+ *   AriaLabel="Search templates"
  *   Placeholder="Search templates..."
  *   [Value]="searchTerm"
  *   (ValueChange)="onSearch($event)">
@@ -21,9 +38,15 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
   standalone: true,
   template: `
     <div class="mj-page-search" [class.mj-page-search--focused]="focused">
-      <i [class]="Icon"></i>
+      <!-- Decorative: the magnifier repeats what the name and placeholder already say. -->
+      <i [class]="Icon" aria-hidden="true"></i>
       <input
+        #searchInput
         type="text"
+        [attr.id]="InputId || null"
+        [attr.aria-label]="AriaLabel || null"
+        [attr.aria-labelledby]="AriaLabelledBy || null"
+        [attr.aria-describedby]="AriaDescribedBy || null"
         [placeholder]="Placeholder"
         [value]="Value"
         (input)="onInput($event)"
@@ -90,13 +113,25 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
     }
   `]
 })
-export class MJPageSearchComponent {
+export class MJPageSearchComponent extends MJNamedControlBase implements AfterViewInit {
   @Input() Placeholder: string = 'Search...';
   @Input() Value: string = '';
   @Input() Icon: string = 'fa-solid fa-search';
   @Output() ValueChange = new EventEmitter<string>();
 
+  @ViewChild('searchInput') private searchInputEl: ElementRef<HTMLInputElement> | undefined;
+
   public focused: boolean = false;
+
+  /**
+   * `placeholderIsName` is passed here and nowhere else: this is a toolbar widget whose placeholder
+   * ("Search templates…") IS the caller's statement of what the box searches, and whose default is
+   * never absent. On a form control a placeholder is not a name — it disappears as soon as the user
+   * types — so those controls warn without one.
+   */
+  public ngAfterViewInit(): void {
+    warnIfUnnamed(this.searchInputEl?.nativeElement, 'mj-page-search', { placeholderIsName: true });
+  }
 
   public onInput(event: Event): void {
     const v = (event.target as HTMLInputElement).value;

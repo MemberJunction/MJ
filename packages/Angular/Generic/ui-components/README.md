@@ -53,6 +53,25 @@ All colors resolve through `--mj-*` semantic tokens, so light/dark theming requi
 
 `mj-combobox`, `mj-dropdown`, `mj-datepicker`, `mj-numeric-input`, and `mj-switch` all implement `ControlValueAccessor` — they work with `[(ngModel)]` and reactive forms, including `setDisabledState`.
 
+## Accessible names — one contract across every control
+
+`mj-combobox`, `mj-dropdown`, `mj-datepicker`, `mj-numeric-input`, `mj-page-search` and `mj-switch` share four optional inputs, from `MJNamedControlBase`. **Name every one of them**: without a name a control announces as its role and state alone — "combobox, collapsed", "switch, on" — which fails WCAG 2.1 4.1.2 (Name, Role, Value).
+
+| input | for |
+|---|---|
+| **`AriaLabelledBy`** | the id of a **visible** label — the preferred wiring when one exists |
+| `AriaLabel` | when no visible label exists |
+| `AriaDescribedBy` | hint and error text |
+| `InputId` | an id on the focusable element, so other markup can reference it |
+
+Three things hold across all six:
+
+- **Absent beats empty** — an unset input renders no attribute at all. `aria-label=""` is worse than nothing, because an explicitly empty name overrides every other naming source.
+- **The name reaches the whole control** — the popup listbox, the calendar grid, the filter box, the toggle and clear buttons all take their name from the same source, so a form with six filterable dropdowns does not present six identical "Filter options" boxes. Under `AriaLabelledBy` this works through an `aria-labelledby` id list, the only mechanism that can compose a fixed word with a visible label's own text.
+- **`InputId` is a `<label for>` target only where the focusable element is a real form control** — true for `mj-combobox`, `mj-datepicker`, `mj-numeric-input` and `mj-page-search`; **not** for `mj-dropdown` (a `div[role=combobox]`) or `mj-switch` (a `<button>`), where `label[for]` neither names nor focuses and the visible-label path is `AriaLabelledBy`.
+
+**A control that renders with no accessible name warns in dev mode** (`warnIfUnnamed`, alongside the existing `mjButton` and `mjClickable` guards) and is silent in production. It fires when the name would be genuinely empty — including an `aria-labelledby` whose ids resolve to nothing, which names the control no better than no attribute at all. A `placeholder` does **not** count as a name for a form control, since it disappears the moment the user types; `mj-page-search` is the one control that opts into counting it, because its placeholder is the caller's statement of what the box searches.
+
 ---
 
 # Component catalog
@@ -69,17 +88,19 @@ Attribute directive that styles a **native** button or anchor. Variants: `primar
 ```
 
 ### `mj-combobox` — MJComboboxComponent
-Editable text-input combobox (CDK overlay): type-to-filter, keyboard nav, optional custom values (`[AllowCustom]`). Inputs: `Data`, `TextField`, `ValueField`, `ValuePrimitive`, `Filterable` (default true), `Placeholder`, `Disabled`. Outputs: `ValueChange`, `FilterChange`. Custom item template via `<ng-template #mjComboboxItem>`.
+Editable text-input combobox (CDK overlay): type-to-filter, keyboard nav, optional custom values (`[AllowCustom]`). Inputs: `Data`, `TextField`, `ValueField`, `ValuePrimitive`, `Filterable` (default true), `Placeholder`, `Disabled`, plus the four naming inputs above. Outputs: `ValueChange`, `FilterChange`. Custom item template via `<ng-template #mjComboboxItem>`.
+
+`role="combobox"` and its state attributes (`aria-expanded`, `aria-controls`, `aria-activedescendant`) sit on the **input** — the element that takes focus — not on the wrapper. The toggle and clear buttons take their names from the combobox's own name.
 
 ```html
-<mj-combobox [Data]="categories" TextField="text" ValueField="value"
+<mj-combobox AriaLabel="Category" [Data]="categories" TextField="text" ValueField="value"
              [(ngModel)]="selected" [ValuePrimitive]="true" [AllowCustom]="true" />
 ```
 
 ### `mj-dropdown` — MJDropdownComponent
 Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`, default false) and `DefaultItem` clear option. Same `Data`/`TextField`/`ValueField`/`ValuePrimitive` contract as combobox. Custom item template via `<ng-template #mjDropdownItem>`.
 
-**Give every dropdown an accessible name.** The trigger is a `div[role=combobox]`, so `<label for>` neither names nor focuses it — an unnamed dropdown announces as "combobox, collapsed" (WCAG 2.1 4.1.2). Use `AriaLabelledBy` when a visible label already exists, `AriaLabel` when none does; `AriaDescribedBy` carries hint/error text, and `InputId` puts an id on the trigger for other markup to reference. All are applied to the popup listbox as well as the trigger, and a filterable panel's filter box takes its name from the same source.
+**Give every dropdown an accessible name** — see [Accessible names](#accessible-names--one-contract-across-every-control). The trigger is a `div[role=combobox]`, so `<label for>` neither names nor focuses it: the visible-label path here is `AriaLabelledBy`, not `InputId`. The name is applied to the popup listbox as well as the trigger, and a filterable panel's filter box takes its name from the same source.
 
 ```html
 <!-- A visible label already on screen (preferred) -->
@@ -93,24 +114,24 @@ Non-editable select (CDK overlay) with optional in-panel filter (`[Filterable]`,
 ```
 
 ### `mj-datepicker` — MJDatepickerComponent
-Text input + calendar popup with `Min`/`Max` range disabling and typed-input parsing. Accepts `Date | string | null` through forms; emits `ValueChange: Date | null`. (Display format is currently fixed at `MM/dd/yyyy`.)
+Text input + calendar popup with `Min`/`Max` range disabling and typed-input parsing. Accepts `Date | string | null` through forms; emits `ValueChange: Date | null`. (Display format is currently fixed at `MM/dd/yyyy`.) The toggle button and the calendar grid take their names from the field's own name, so two pickers on one form do not present two grids both called "Calendar".
 
 ```html
-<mj-datepicker [(ngModel)]="dueDate" [Min]="minDate" [Max]="maxDate" Placeholder="Select a date" />
+<mj-datepicker AriaLabel="Due date" [(ngModel)]="dueDate" [Min]="minDate" [Max]="maxDate" Placeholder="Select a date" />
 ```
 
 ### `mj-numeric-input` — MJNumericInputComponent
 Native number input that clamps to `Min`/`Max`, rounds to `Decimals`, and formats on blur. Value flows through forms only (no separate output).
 
 ```html
-<mj-numeric-input [(ngModel)]="quantity" [Min]="0" [Max]="100" [Decimals]="2" />
+<mj-numeric-input AriaLabel="Quantity" [(ngModel)]="quantity" [Min]="0" [Max]="100" [Decimals]="2" />
 ```
 
 ### `mj-switch` — MJSwitchComponent
-Boolean toggle with `role="switch"`, optional `OnLabel`/`OffLabel`.
+Boolean toggle with `role="switch"`, optional `OnLabel`/`OffLabel`. Name it: `OnLabel`/`OffLabel` render inside the button, so an unnamed switch is named after its own **state** — "Off, switch, off" — and `AriaLabel`/`AriaLabelledBy` is what replaces that with its purpose.
 
 ```html
-<mj-switch [(ngModel)]="isEnabled" OnLabel="On" OffLabel="Off" />
+<mj-switch AriaLabel="Email notifications" [(ngModel)]="isEnabled" OnLabel="On" OffLabel="Off" />
 ```
 
 ### `[mjClickable]` — MJClickableDirective
@@ -213,7 +234,12 @@ The card is a **query container** (`container-type: size`): size content inside 
 Delayed (~450ms still-pointer), non-interactive, token-themed hover tooltip that by default shows only when the host is truncated (`scrollWidth > clientWidth`); `mjTipAlways` forces it for hosts whose truncation can't be measured (a native `<select>`). Used by the workspace tab strip for full labels on capped tabs.
 
 ### `mj-page-search` — MJPageSearchComponent
-Compact toolbar search input. `Placeholder`, `Value`, `Icon`; `(ValueChange)` on input.
+Compact toolbar search input. `Placeholder`, `Value`, `Icon`, plus the four naming inputs above; `(ValueChange)` on input. The placeholder is the name of last resort — it is what the name computation falls back to, and it disappears the moment the user types — so pass `AriaLabel` for a name that survives having text in the box.
+
+```html
+<mj-page-search AriaLabel="Search templates" Placeholder="Search templates..."
+                [Value]="q" (ValueChange)="q = $event" />
+```
 
 ### `mj-slide-panel` — MjSlidePanelComponent
 Chrome-only slide-in panel from the right (resizable) or centered dialog (`Mode: 'slide' | 'dialog'`). Inputs include `Title`, `Visible`, `Resizable`, `MinWidthPx`, `MaxWidthRatio`, `WidthPx`, and a `CanClose` guard callback. Outputs: `Closed`, `WidthChanged`. Dialog-mode body projects into `[dialog-content]`.
