@@ -69,6 +69,7 @@ EOF
 
   # Execute headless install
   mj install --yes --fast --config /tmp/install.config.json --dir /workspace
+  pnpm add -w @angular/compiler@21.2.22 2>/dev/null || true
 
   # Install Open App business context (More Cheese default or custom enterprise app)
   APP_URL="${OPEN_APP_INSTALL_URL:-https://github.com/MemberJunction/more-cheese}"
@@ -95,6 +96,57 @@ else
   echo "Existing MemberJunction workspace detected in /workspace."
   # Apply any pending migrations
   mj migrate || echo "Database migrations up to date."
+fi
+
+# Configure MJExplorer host binding and compiler alignment
+if [ -f "apps/MJExplorer/package.json" ]; then
+  node -e "
+    const fs = require('fs');
+    const p = 'apps/MJExplorer/package.json';
+    const pkg = JSON.parse(fs.readFileSync(p, 'utf8'));
+    let changed = false;
+    if (pkg.scripts && pkg.scripts.start && !pkg.scripts.start.includes('--host 0.0.0.0')) {
+      pkg.scripts.start = pkg.scripts.start.replace('ng serve', 'ng serve --host 0.0.0.0 --port 4200');
+      changed = true;
+    }
+    const cliVer = (pkg.devDependencies && pkg.devDependencies['@angular/compiler-cli']) || '21.2.22';
+    if (pkg.dependencies && pkg.dependencies['@angular/compiler'] !== cliVer) {
+      pkg.dependencies['@angular/compiler'] = cliVer;
+      changed = true;
+    }
+    if (changed) {
+      fs.writeFileSync(p, JSON.stringify(pkg, null, 2));
+    }
+  "
+fi
+
+# Sanitize dynamicPackages.client so non-browser packages are not bundled into MJExplorer
+if [ -f "mj.config.cjs" ]; then
+  node -e "
+    const fs = require('fs');
+    try {
+      const config = require('./mj.config.cjs');
+      if (config.dynamicPackages && Array.isArray(config.dynamicPackages.client)) {
+        let changed = false;
+        config.dynamicPackages.client.forEach(entry => {
+          if (!entry.PackageName.endsWith('-ng') || entry.PackageName === '@mj-biz-apps/sonar-ng') {
+            if (entry.Enabled !== false) {
+              entry.Enabled = false;
+              changed = true;
+            }
+          }
+        });
+        if (changed) {
+          let code = fs.readFileSync('mj.config.cjs', 'utf8');
+          const regex = /client:\s*\[[\s\S]*?\]\s*\},/m;
+          code = code.replace(regex, 'client: ' + JSON.stringify(config.dynamicPackages.client, null, 2) + '\n  },');
+          fs.writeFileSync('mj.config.cjs', code);
+        }
+      }
+    } catch (e) {
+      console.warn('Notice: dynamicPackages check skipped:', e.message);
+    }
+  "
 fi
 
 # 3. Start MJAPI and MJExplorer services via PM2
