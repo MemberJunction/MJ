@@ -33,7 +33,7 @@ SKIP_VERIFY=true FORCE_FAIL_THRESHOLD=disabled node "$SCRIPTS/bootstrap-db.cjs"
 echo ""
 
 echo "Step 2: Running MJ migrations..."
-npx mj migrate
+node /app/packages/MJCLI/bin/run.js migrate
 echo "  ✓ Migrations complete"
 echo ""
 
@@ -52,9 +52,9 @@ echo "Step 3: Running CodeGen to generate Angular entity forms..."
 # metadata that now includes those committed fields and regenerates the output
 # correctly. Without this, single-record reads + saves of demo entities fail
 # at runtime with "Cannot query field _mj__CreatedAt on type AssociationDemoMember_".
-npx mj codegen
+node /app/packages/MJCLI/bin/run.js codegen
 echo "  ↻ CodeGen pass 1 complete; re-running against settled metadata..."
-npx mj codegen
+node /app/packages/MJCLI/bin/run.js codegen
 echo "  ✓ CodeGen complete (2 passes)"
 echo ""
 
