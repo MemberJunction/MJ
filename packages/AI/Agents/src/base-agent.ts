@@ -7414,6 +7414,23 @@ The context is now within limits. Please retry your request with the recovered c
             if (this._resolvedStorageAccountId) {
                 (actionContext as Record<string, unknown>).__resolvedStorageAccountId = this._resolvedStorageAccountId;
             }
+            // The run's RUNTIME API KEYS, so an action that calls a vendor itself can use the same keys
+            // the run's prompts use. Prompts already get them (params.apiKeys → AIPromptRunner →
+            // GetAIAPIKey(driverClass, apiKeys)); actions were never handed the second argument, so a
+            // run on a customer's OpenAI key would still generate its images on the platform's. Stamped
+            // only when present: an absent key means "platform key", and GetAIAPIKey resolves that
+            // itself from an undefined list — no action has to special-case it.
+            //
+            // NON-ENUMERABLE, deliberately. actionContext IS params.context (by reference, see above),
+            // and context is copied into sub-agent params and can be serialized into run records. A
+            // plain property would ride along into JSON.stringify, Object.entries and spreads — i.e.
+            // into the database. A non-enumerable one is invisible to all three while remaining an
+            // ordinary property read (`context.apiKeys`, `'apiKeys' in context`) for the action.
+            if (params.apiKeys && params.apiKeys.length > 0) {
+                Object.defineProperty(actionContext, 'apiKeys', {
+                    value: params.apiKeys, enumerable: false, configurable: true, writable: true,
+                });
+            }
 
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({

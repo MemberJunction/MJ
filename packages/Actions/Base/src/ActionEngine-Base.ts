@@ -312,6 +312,15 @@ export class RunActionParams<TContext = any> {
     *
     * Note: Avoid including sensitive data like passwords unless absolutely necessary,
     * as context may be passed through multiple execution layers.
+    *
+    * Well-known keys stamped by BaseAgent when an action runs inside an agent run:
+    * - `AgentID` — the calling agent
+    * - `ActiveSkillIDs` — the skills active in the run (always present in a run; `[]` = none)
+    * - `apiKeys` — the run's runtime {@link AIAPIKey} list, when the run has one. An action that
+    *   calls an AI vendor directly should pass it as the second argument of `GetAIAPIKey()` so
+    *   a run on a customer's key uses that key; with no entry for a driver class, GetAIAPIKey
+    *   falls back to the platform key exactly as it does for prompts.
+    * - `__resolvedStorageAccountId` — the file storage account the run resolved
     */
    public Context?: TContext;
 
