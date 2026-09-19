@@ -6,6 +6,54 @@
 
 ---
 
+## ⚡ Getting Started (Choose Your Path)
+
+### Option A: The Agent-Driven Path (Recommended — Zero Manual Setup)
+You don't need to manually run CLI commands, configure Docker files, or edit JSON files by hand. Simply create a new empty directory, open your favorite AI coding agent (**Claude Code**, **Antigravity**, **Cursor**, **Codex**, or **Windsurf**), and paste this prompt:
+
+```markdown
+Please review the MemberJunction Citizen Agent Builder guide at:
+https://github.com/MemberJunction/MJ/tree/next/citizen-builder
+
+Follow the instructions in that guide:
+1. Initialize a new MemberJunction agent builder workspace here using `npx @memberjunction/cli agent init .`
+2. Start the local Docker environment and verify services are running.
+3. Review available entities and actions in CAPABILITIES.md.
+4. Build me an AI agent that:
+   [Describe your business goal here — e.g. "analyzes customer order frequency and overdue invoices, flags accounts at risk of churning, and drafts personalized retention outreach emails."]
+5. Push the metadata, run test executions, verify the run traces in the database, and package the final distributable bundle for promotion.
+```
+
+Your coding agent will read the guide, scaffold the workspace, start the local database and API, author the declarative agent metadata, test it against local data, and hand you a packaged distribution `.zip` file with an `AGENT_MANIFEST.md` report.
+
+---
+
+### Option B: The Manual / Step-by-Step Path
+If you prefer to initialize the workspace and start the Docker environment yourself before handing off to an agent:
+
+1. **Scaffold the workspace**:
+   ```bash
+   npx @memberjunction/cli agent init ./my-agents
+   cd ./my-agents
+   ```
+2. **Add your LLM API Key**:
+   Open `.env` and add your OpenAI, Anthropic, Gemini, or Groq API key:
+   ```bash
+   OPENAI_API_KEY=sk-...
+   ```
+3. **Start the local Docker stack**:
+   ```bash
+   docker compose up -d
+   ```
+4. **Launch your coding agent**:
+   Open your coding agent in `./my-agents` and tell it what you want to build:
+   ```
+   "Build me an agent that monitors accounts receivable aging and drafts payment follow-ups."
+   ```
+   The coding agent will detect `AGENTS.md`, adhere to the 3-tier safety boundaries, and build the agent for you.
+
+---
+
 ## 1. Overview & Architecture
 
 The **Citizen Agent Builder** provides an isolated, local MemberJunction environment that runs entirely inside Docker:
