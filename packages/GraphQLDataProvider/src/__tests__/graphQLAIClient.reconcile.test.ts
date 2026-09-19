@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { Subject } from 'rxjs';
 import { GraphQLAIClient } from '../graphQLAIClient';
+import { DEFAULT_IDLE_TIMEOUT_MS } from '../fireAndForgetHelper';
 import { GraphQLDataProvider } from '../graphQLDataProvider';
 import { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
@@ -11,7 +12,10 @@ import { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-
  *   path, the captured run id for the plain path)
  */
 
-const IDLE_MS = 12 * 60 * 1000; // GraphQLAIClient uses the FireAndForgetHelper default
+// Imported, never restated: this window and MJServer's liveness-pulse cadence are a matched
+// pair (see DEFAULT_IDLE_TIMEOUT_MS), and a hardcoded copy silently advances past several
+// windows when the real value shrinks — turning "one stall" into four.
+const IDLE_MS = DEFAULT_IDLE_TIMEOUT_MS;
 
 interface RunRow {
     ID: string;

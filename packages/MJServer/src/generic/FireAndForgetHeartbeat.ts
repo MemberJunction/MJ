@@ -2,8 +2,22 @@ import { PubSubEngine } from 'type-graphql';
 import { LogError } from '@memberjunction/core';
 import { publishStatusUpdate } from './PushStatusResolver.js';
 
-/** Default cadence for fire-and-forget liveness pulses (5 minutes). */
-export const DEFAULT_PULSE_INTERVAL_MS = 5 * 60 * 1000;
+/**
+ * Default cadence for fire-and-forget liveness pulses (60 seconds).
+ *
+ * MATCHED PAIR — do not change alone. The client's inactivity window
+ * (`DEFAULT_IDLE_TIMEOUT_MS` in GraphQLDataProvider's fireAndForgetHelper) is sized at roughly
+ * 3x this value, so a healthy run always refreshes the timer well before it expires. Lengthening
+ * this without lengthening that window makes every quiet stretch of a long agent run look like a
+ * stall and trips reconciliation; shortening the window without shortening this does the same.
+ *
+ * WAS 5 MINUTES (MJ #4222). Paired with the old 12-minute window, a client whose transport had
+ * silently died waited 12 minutes to notice — on runs that typically finish in 20 seconds. The
+ * pulse is a few dozen bytes and exists only while an operation is actually running, so the
+ * added traffic is negligible: a 40-minute run now sends ~40 pulses instead of ~8, and the
+ * 20-second run that motivated the change still sends none.
+ */
+export const DEFAULT_PULSE_INTERVAL_MS = 60 * 1000;
 
 /** The `type` discriminator carried by liveness pulse messages. */
 export const HEARTBEAT_MESSAGE_TYPE = 'Heartbeat';

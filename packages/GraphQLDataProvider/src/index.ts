@@ -110,3 +110,5 @@ export type {
     SourceObjectListItem,
     SourceObjectSelectionInput
 } from './graphQLIntegrationClient';
+export { GraphQLConversationClient } from './graphQLConversationClient';
+export type { ConversationRunEvent, ConversationTailResult } from './graphQLConversationClient';

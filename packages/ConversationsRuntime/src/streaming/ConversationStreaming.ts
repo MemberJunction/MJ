@@ -91,8 +91,15 @@ export type StreamingConnectionStatus = 'connected' | 'disconnected' | 'error' |
 /** How long late-arrival completion events remain replayable. */
 const RECENT_COMPLETION_TTL_MS = 5 * 60 * 1000;
 
-/** Reconnection delay after a subscription error or completion. */
+/** Base reconnection delay after a subscription error or completion. Doubles per attempt. */
 const RECONNECTION_DELAY_MS = 5_000;
+
+/**
+ * Ceiling on the backoff, and the only bound on the retry rate. Retries never stop, so a
+ * permanently unreachable server settles at one attempt per minute per tab rather than the
+ * every-5s storm an uncapped base delay would produce.
+ */
+const MAX_RECONNECTION_DELAY_MS = 60_000;
 
 /**
  * Global streaming service that manages PubSub subscriptions for all conversations.
@@ -123,6 +130,21 @@ export class ConversationStreaming {
     private readonly connectionStatus$ = new BehaviorSubject<StreamingConnectionStatus>('disconnected');
     private initialized = false;
     private reconnectionTimeout?: ReturnType<typeof setTimeout>;
+    /** Consecutive failed reconnects; drives the backoff and the stand-down cap. */
+    private reconnectionAttempts = 0;
+    /** True while recovering from a drop, so a successful re-subscribe can be told from first boot. */
+    private reconnecting = false;
+
+    /**
+     * Fires when the push-status subscription is re-established after having dropped — never on
+     * the first successful subscribe.
+     *
+     * Events published while the subscription was down are gone: the server's topic is an
+     * in-memory `PubSub` with no replay, and the client's `Subject` is explicitly unbuffered.
+     * A listener must therefore reconcile against durable state rather than assume the stream
+     * resumed seamlessly. Consumed by `ConversationLiveness` (MJ #4222).
+     */
+    public readonly streamReconnected$ = new Subject<void>();
 
     /**
      * Observable for components to subscribe to completion events in real-time.
@@ -151,6 +173,11 @@ export class ConversationStreaming {
             const dataProvider = GraphQLDataProvider.Instance;
             this.pushStatusSubscription = dataProvider.PushStatusUpdates().subscribe({
                 next: (status: unknown) => {
+                    // First frame on a new subscription is the only proof the transport actually
+                    // works. Subscribing succeeds against a dead socket — graphql-ws accepts the
+                    // request and returns an iterator that never yields — so this, not
+                    // initialize() returning, is what clears the backoff.
+                    this.noteStreamAlive();
                     void this.handlePushStatusUpdate(status);
                 },
                 error: (error: unknown) => {
@@ -166,6 +193,19 @@ export class ConversationStreaming {
 
             this.initialized = true;
             this.connectionStatus$.next('connected');
+
+            if (this.reconnecting) {
+                // Ask for a reconcile: whatever the server published during the gap was dropped,
+                // and reconciliation reads durable state over HTTP, so it is worth doing even if
+                // this subscription turns out to be dead too.
+                //
+                // `reconnectionAttempts` is deliberately NOT cleared here. Re-subscribing proves
+                // nothing — the call returns normally against a black-holed socket — so clearing it
+                // here would reset the counter every cycle and pin the delay at its base value.
+                // Only a delivered frame clears it; see noteStreamAlive().
+                this.reconnecting = false;
+                this.streamReconnected$.next();
+            }
         } catch (error) {
             console.error('[ConversationStreaming] Failed to initialize:', error);
             this.connectionStatus$.next('error');
@@ -553,6 +593,16 @@ export class ConversationStreaming {
     }
 
     /** Schedule a reconnection attempt after a connection error or completion. */
+    /**
+     * Record that the stream delivered something, which is the only evidence the transport is
+     * genuinely alive. Clears the reconnection backoff so the next outage starts from scratch.
+     */
+    private noteStreamAlive(): void {
+        if (this.reconnectionAttempts !== 0) {
+            this.reconnectionAttempts = 0;
+        }
+    }
+
     private scheduleReconnection(): void {
         if (this.reconnectionTimeout) {
             clearTimeout(this.reconnectionTimeout);
@@ -563,12 +613,22 @@ export class ConversationStreaming {
         // flow still delivers the correct final message), which also keeps
         // abandoned entries from lingering for the session.
         this.streamingAccumulator.clear();
+
+        // Exponential backoff with a ceiling, retried for as long as the page lives. Recovery has
+        // to be autonomous: no host calls initialize() outside ngOnInit, so a stream that stopped
+        // retrying would stay stopped until a reload.
+        const delay = Math.min(
+            RECONNECTION_DELAY_MS * 2 ** this.reconnectionAttempts,
+            MAX_RECONNECTION_DELAY_MS
+        );
+        this.reconnectionAttempts++;
+        this.reconnecting = true;
         this.connectionStatus$.next('reconnecting');
         this.reconnectionTimeout = setTimeout(() => {
-            console.log('[ConversationStreaming] Attempting to reconnect...');
+            console.log(`[ConversationStreaming] Attempting to reconnect (attempt ${this.reconnectionAttempts})...`);
             this.initialized = false;
             this.initialize();
-        }, RECONNECTION_DELAY_MS);
+        }, delay);
     }
 
     /** Evict completions older than the replay window to bound memory. */
