@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { MJPostgresTypes, parseInt8, parseNumeric, PG_INT8_OID, PG_NUMERIC_OID } from '../pgTypeParsers.js';
+import pg from 'pg';
+import { MJPostgresTypes, parseInt8, parseNumeric, parseDateOnly, PG_INT8_OID, PG_NUMERIC_OID, PG_DATE_OID } from '../pgTypeParsers.js';
 
 describe('parseNumeric', () => {
     it('parses decimal strings to numbers', () => {
@@ -54,5 +55,63 @@ describe('MJPostgresTypes.getTypeParser', () => {
         expect(binaryInt8).not.toBe(parseInt8);
         const binaryNumeric = MJPostgresTypes.getTypeParser(PG_NUMERIC_OID as never, 'binary' as never);
         expect(binaryNumeric).not.toBe(parseNumeric);
+    });
+});
+
+describe('DATE columns arrive as UTC midnight, the same shape the SQL Server driver delivers (MJ#4210)', () => {
+    /**
+     * A SQL `date` column is a calendar day with no time and no zone. node-postgres' default
+     * parser builds it as LOCAL midnight on the API server, so the instant it hands the framework
+     * depends on where the server runs: a stored 2026-11-20 becomes 2026-11-19T22:00Z on a server
+     * in Berlin, and every display path that reads the UTC parts (the form field, the grid, the
+     * cards) then shows the 19th. The SQL Server driver (tedious) returns UTC midnight, and the
+     * framework's date-only rendering is built on that shape. These tests PIN A TIMEZONE on both
+     * sides of Greenwich so a UTC runner cannot pass while the bug ships.
+     */
+    const AT = (tz: string, fn: () => void) => {
+        const original = process.env.TZ;
+        process.env.TZ = tz;
+        try {
+            fn();
+        } finally {
+            process.env.TZ = original;
+        }
+    };
+    const dateParser = () => MJPostgresTypes.getTypeParser(PG_DATE_OID as never, 'text' as never) as (v: string) => unknown;
+
+    it('parses a date as UTC midnight east of Greenwich', () => {
+        AT('Asia/Kolkata', () => {
+            expect((dateParser()('2026-11-20') as Date).toISOString()).toBe('2026-11-20T00:00:00.000Z');
+        });
+    });
+
+    it('parses a date as UTC midnight west of Greenwich', () => {
+        AT('America/New_York', () => {
+            expect((dateParser()('2026-11-20') as Date).toISOString()).toBe('2026-11-20T00:00:00.000Z');
+            expect((dateParser()('2026-01-01') as Date).toISOString()).toBe('2026-01-01T00:00:00.000Z');
+        });
+    });
+
+    it('is what parseDateOnly does, exported for pools the host builds itself', () => {
+        AT('Asia/Kolkata', () => {
+            expect(parseDateOnly('2026-11-20').toISOString()).toBe('2026-11-20T00:00:00.000Z');
+        });
+    });
+
+    it('keeps infinity and unparseable text as the pg default would', () => {
+        expect(parseDateOnly('infinity')).toBe(Infinity);
+        expect(parseDateOnly('-infinity')).toBe(-Infinity);
+        expect(parseDateOnly('not-a-date')).toBeNull();
+    });
+
+    it('leaves timestamps to the pg defaults — timestamptz carries its zone; a plain timestamp is left as pg reads it', () => {
+        const timestamptzParser = MJPostgresTypes.getTypeParser(1184 as never, 'text' as never);
+        expect(timestamptzParser).toBe(pg.types.getTypeParser(1184 as never, 'text' as never));
+        const timestampParser = MJPostgresTypes.getTypeParser(1114 as never, 'text' as never);
+        expect(timestampParser).toBe(pg.types.getTypeParser(1114 as never, 'text' as never));
+    });
+
+    it('delegates binary format to the pg default even for DATE', () => {
+        expect(MJPostgresTypes.getTypeParser(PG_DATE_OID as never, 'binary' as never)).not.toBe(parseDateOnly);
     });
 });
