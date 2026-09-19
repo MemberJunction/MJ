@@ -12,6 +12,7 @@
  * "build a new prediction" path is verifiable without the full LLM loop.
  */
 
+import { UUIDsEqual } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
 import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@memberjunction/predictive-studio-core';
@@ -261,7 +262,7 @@ export class PredictiveStudioPipelineBuilder {
 
     // Canonicalize any source bindings referencing target entity view or aliases
     for (const sb of config.sourceBindings ?? []) {
-      if (resolveEntity(sb.Ref, provider)?.ID === entity.ID) {
+      if (UUIDsEqual(resolveEntity(sb.Ref, provider)?.ID, entity.ID)) {
         sb.Ref = entity.Name;
       }
     }

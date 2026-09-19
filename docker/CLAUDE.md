@@ -18,7 +18,7 @@ This directory contains Docker configurations for MemberJunction. When working w
 - Five-container stack: `sqlserver` → `db-setup` (one-shot init) → `mjapi` → `mjexplorer` (nginx) → `test-runner` (Playwright + Chromium). An opt-in `form-generator` service (`profile: gen-forms`) re-runs codegen for Angular entity forms.
 - Project name `mj-regression`, host ports `11433` (SQL) and `14000` (API) to avoid conflicts with workbench
 - Database is **ephemeral** — wiped between runs via `docker compose down -v`
-- Tests are defined as MJ metadata in `metadata/tests/regression/` (25 Computer Use tests)
+- Tests are defined as MJ metadata in `metadata-optional/regression-test/` (155 Computer Use tests) — the opt-in sibling root, so they never reach an instance that only syncs `metadata/`
 - Test runs are persisted as **per-run folders** in `docker/regression/test-results/run-{TIMESTAMP}/` containing `results.json`, `report.md`, `report.html`, `preflight.json`, `diagnostics.json`, and `screenshots/` — runs never overwrite each other
 - A `latest` symlink in `test-results/` always points at the most recent run
 - The `test-metadata/` subdirectory holds Docker-only metadata (e.g., the `computeruse@bluecypress.io` test user with UI + Integration roles) — kept separate from repo-level `metadata/` so it's never pushed to a developer's local DB
