@@ -8,7 +8,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PSProcessRunRow, primaryAuc } from '../predictive-studio.view-models';
+import { PSProcessRunRow, primaryAuc, primaryModelScore, formatMetricValue } from '../predictive-studio.view-models';
 import { humanizeCron, StatusVariant } from '../production-distribution';
 import { PSOperateDialogComponent } from './ps-operate-dialog.component';
 
@@ -301,14 +301,15 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       null,
     );
     const lastRowCount = bindings.find((b) => b.LastRowCount != null)?.LastRowCount ?? null;
-    const auc = primaryAuc(m);
+    const score = primaryModelScore(m);
+    const holdoutMetric = score != null ? formatMetricValue(score.key, score.value) : '—';
     return {
       modelId: m.ID,
       label: this.engine.ModelDisplayName(m),
       algorithm: this.engine.AlgorithmName(m.AlgorithmID),
       problemType: m.ProblemType ?? '—',
       version: m.Version,
-      holdoutMetric: auc != null ? auc.toFixed(3) : '—',
+      holdoutMetric,
       deployState: bindings.length > 0 ? 'bound' : scheduledCount > 0 ? 'scheduled' : 'idle',
       bindingCount: bindings.length,
       processCount: processes.length,

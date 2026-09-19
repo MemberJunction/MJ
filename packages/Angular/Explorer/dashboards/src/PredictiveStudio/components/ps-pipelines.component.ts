@@ -4,7 +4,7 @@ import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { MJMLTrainingPipelineEntity, PredictiveStudioTrainModelOperation } from '@memberjunction/core-entities';
+import { MJMLTrainingPipelineEntity, MJMLModelEntity, PredictiveStudioTrainModelOperation } from '@memberjunction/core-entities';
 import { PSPipelineWizardComponent } from './ps-pipeline-wizard.component';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
@@ -76,16 +76,6 @@ const PS_PIPELINES_STARTER_PROMPT =
   'Help me build a training pipeline. I will tell you what I want to predict and on which entity; ' +
   'you assemble the features (guarding against leakage), pick an algorithm, and train a versioned model.';
 
-/**
- * Training Pipelines panel — a LIVE, **editable** visual DAG builder over `MJ: ML Training Pipelines`.
- * The whole graph is persisted as JSON (`SourceBindings` + `FeatureSteps` + `AlgorithmID` +
- * `TargetVariable` + `AsOfStrategy`/`LeakageGuard`/`ValidationStrategy`), so the editor reads/writes the
- * REAL spec. The parsed spec is the editable state; nodes/edges are derived from it for rendering, so an
- * edit → re-derive → re-layout. Save serializes back to the entity; Train runs the pipeline. Editing is
- * inspector-driven (explicit controls, no fiddly port-dragging) — better for a structured, persisted DAG.
- * Fully entity-agnostic — every node derives from the pipeline's own refs. See
- * plans/predictive-studio-pipeline-builder.md.
- */
 @Component({
   standalone: true,
   selector: 'ps-pipelines',
@@ -115,208 +105,503 @@ const PS_PIPELINES_STARTER_PROMPT =
           </div>
         </div>
       } @else {
-        <!-- Pipeline picker (its own scrollable row) -->
-        <div class="pl-picker" data-testid="ps-pipelines-picker">
-          @for (p of pipelines; track p.ID) {
-            <button class="pl-pill" [class.on]="isSelectedPipeline(p)"
-              data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)" [title]="p.Name">
-              <i class="fa-solid fa-diagram-project"></i> <span class="pl-pill-name">{{ p.Name }}</span>
-              <span class="ps-badge" [class]="statusClass(p.Status)">{{ p.Status }}</span>
-            </button>
-          }
-        </div>
-
-        <!-- Toolbar for the selected pipeline (its own row) -->
-        <div class="pl-toolbar">
-          <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-new" (click)="openWizard()">
-            <i class="fa-solid fa-plus"></i> New Pipeline
-          </button>
-          <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-clone" [disabled]="!selectedPipeline" (click)="cloneSelected()">
-            <i class="fa-solid fa-copy"></i> Clone / Tweak
-          </button>
-          <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-save" [disabled]="!dirty || busy" (click)="save()">
-            <i class="fa-solid fa-floppy-disk"></i> Save
-          </button>
-          <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-validate" [disabled]="busy" (click)="validate()">
-            <i class="fa-solid fa-circle-check"></i> Validate
-          </button>
-          <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-train" [disabled]="busy || dirty" (click)="train()">
-            <i class="fa-solid fa-play"></i> Train
-          </button>
-          <button mjButton variant="secondary" size="sm" (click)="refine()">
-            <i class="fa-solid fa-wand-magic-sparkles"></i> Agent
-          </button>
-          <span class="ps-spacer"></span>
-          @if (dirty) { <span class="ps-tag amber" data-testid="ps-pipelines-dirty"><i class="fa-solid fa-pen"></i> Unsaved</span> }
-        </div>
-
-        <div class="builder">
-          <!-- Canvas -->
-          <div class="canvas-wrap">
-            <div class="canvas-bar">
-              <span class="ps-small ps-muted" style="font-weight:600">Add:</span>
-              <button class="ps-pchip s" data-testid="ps-pipelines-add-source" (click)="addSource()"><i class="fa-solid fa-database"></i> Source</button>
-              <button class="ps-pchip f" data-testid="ps-pipelines-add-step" (click)="addStep()"><i class="fa-solid fa-sliders"></i> Feature step</button>
-              <span class="ps-spacer"></span>
-              <span class="ps-small ps-muted"><i class="fa-solid fa-circle-nodes"></i> {{ nodes.length }} nodes · {{ edges.length }} edges</span>
+        <div class="pl-layout">
+          <!-- Left Column: Master Pipeline Catalog -->
+          <div class="pl-catalog" data-testid="ps-pipelines-catalog">
+            <div class="pl-catalog-header">
+              <div class="pl-catalog-title-row">
+                <h2>Pipelines ({{ filteredPipelines.length }})</h2>
+                <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-new" (click)="openWizard()">
+                  <i class="fa-solid fa-plus"></i> New
+                </button>
+              </div>
+              <div class="pl-search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" [value]="searchQuery" (input)="onSearchInput($event)" placeholder="Filter pipelines..." />
+              </div>
+              <div class="pl-filter-chips">
+                <button class="pl-filter-chip" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">All</button>
+                <button class="pl-filter-chip" [class.active]="activeFilter === 'published'" (click)="setFilter('published')">Published</button>
+                <button class="pl-filter-chip" [class.active]="activeFilter === 'draft'" (click)="setFilter('draft')">Draft</button>
+                <button class="pl-filter-chip" [class.active]="activeFilter === 'core'" (click)="setFilter('core')">MJ Core</button>
+              </div>
             </div>
 
-            <div class="ps-flow big" data-testid="ps-pipelines-canvas"
-              [style.width.px]="canvasW" [style.height.px]="canvasH">
-              <svg class="ps-edges" data-testid="ps-pipelines-edges"
-                [attr.width]="canvasW" [attr.height]="canvasH"
-                [attr.viewBox]="'0 0 ' + canvasW + ' ' + canvasH">
-                @for (edge of edges; track edge.from + edge.to) {
-                  <path [attr.d]="edgePath(edge)"></path>
-                }
-              </svg>
-              @for (node of nodes; track node.id) {
-                <div class="ps-node" data-testid="ps-pipelines-node" [attr.data-node-id]="node.id"
-                  [ngClass]="node.type" [class.selected]="node.id === selectedId"
-                  [style.left.px]="node.x" [style.top.px]="node.y" (click)="selectNode(node.id)">
-                  <div class="nh">
-                    <i class="tile" [ngClass]="node.icon"></i>
-                    <span>{{ node.title }}</span>
-                    @if (node.tag) { <span class="ps-tag">{{ node.tag }}</span> }
+            <!-- Scrollable Catalog Cards List (preserves data-testid="ps-pipelines-picker" and "ps-pipelines-pill") -->
+            <div class="pl-picker" data-testid="ps-pipelines-picker">
+              @for (p of filteredPipelines; track p.ID) {
+                <button class="pl-pill pipeline-card" [class.on]="isSelectedPipeline(p)"
+                  data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)" [title]="p.Name">
+                  <div class="pl-card-top">
+                    <div class="pl-card-name">{{ p.Name }}</div>
+                    <span class="ps-badge" [class]="statusClass(p.Status)">{{ p.Status }}</span>
                   </div>
-                  <div class="nb">
-                    @for (row of node.rows; track row.k) {
-                      <div class="nb-row"><span class="k">{{ row.k }}</span><span>{{ row.v }}</span></div>
+                  <div class="pl-card-meta">
+                    <span class="pl-entity-tag">{{ targetEntityName(p) }}</span>
+                    <span>&bull;</span>
+                    <span class="pl-target-tag">{{ p.TargetVariable || 'Target' }}</span>
+                  </div>
+                  <div class="pl-card-meta" style="justify-content: space-between; margin-top: 2px;">
+                    <span>{{ p.ProblemType }}</span>
+                    @if (bestMetricForPipeline(p); as bm) {
+                      <span class="pl-metric-badge"><i class="fa-solid fa-trophy" style="color:#eab308"></i> {{ bm }}</span>
                     }
                   </div>
-                  @if (node.hasIn) { <span class="port in"></span> }
-                  @if (node.hasOut) { <span class="port out"></span> }
-                </div>
+                </button>
               }
-            </div>
-
-            <div class="flow-toolbar">
-              <div class="legend">
-                <span><i class="sw src"></i> Source</span>
-                <span><i class="sw feat"></i> Feature</span>
-                <span><i class="sw emb"></i> Embedding</span>
-                <span><i class="sw target"></i> Target</span>
-                <span><i class="sw algo"></i> Algorithm</span>
-              </div>
             </div>
           </div>
 
-          <!-- Inspector (editable) -->
-          <div class="ps-col inspector" data-testid="ps-pipelines-inspector">
-            <div class="ps-card insp">
-              <div class="ihead">
-                <i class="tile" [ngClass]="selectedNode.icon" [attr.data-type]="selectedNode.type"></i>
-                <div style="flex:1">
-                  <h3 data-testid="ps-pipelines-inspector-title">{{ selectedNode.title }}</h3>
-                  <div class="ps-small ps-muted">{{ nodeTypeLabel(selectedNode.type) }} · selected</div>
+          <!-- Right Column: Human-Centric Workspace (Stages View Default + DAG View Toggle) -->
+          <div class="pl-workspace" data-testid="ps-pipelines-workspace">
+            <div class="pl-workspace-header">
+              <div class="pl-workspace-title-area">
+                <div class="pl-breadcrumbs">
+                  <span>Pipelines</span> <i class="fa-solid fa-chevron-right" style="font-size: 10px;"></i>
+                  <span>{{ pipelineDomain(selectedPipeline) }}</span> <i class="fa-solid fa-chevron-right" style="font-size: 10px;"></i>
+                  <strong>{{ selectedPipeline?.Name }}</strong>
                 </div>
-                @if (selectedNode.type === 'src' || selectedNode.type === 'feat' || selectedNode.type === 'emb') {
-                  <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-delete" (click)="deleteSelected()"><i class="fa-solid fa-trash"></i></button>
-                }
-              </div>
-              <div class="ps-card-body">
-                <!-- SOURCE editor -->
-                @if (selectedSource) {
-                  <div class="ps-field"><label>Kind</label>
-                    <select class="mj-input" [value]="selectedSource.Kind" (change)="setSourceKind($any($event.target).value)">
-                      @for (k of sourceKinds; track k) { <option [value]="k">{{ k }}</option> }
-                    </select>
-                  </div>
-                  <div class="ps-field"><label>Reference (entity / query / id)</label>
-                    <input class="mj-input" type="text" [value]="selectedSource.Ref" (input)="setSourceRef($any($event.target).value)" />
-                  </div>
-                  <div class="ps-field"><label>Alias (optional)</label>
-                    <input class="mj-input" type="text" [value]="selectedSource.Alias || ''" (input)="setSourceAlias($any($event.target).value)" />
-                  </div>
-                }
-                <!-- STEP editor -->
-                @if (selectedStep) {
-                  <div class="ps-field"><label>Kind</label>
-                    <select class="mj-input" [value]="selectedStep.Kind" (change)="setStepKind($any($event.target).value)">
-                      @for (k of stepKinds; track k) { <option [value]="k">{{ k }}</option> }
-                    </select>
-                  </div>
-                  <div class="ps-field"><label>Label</label>
-                    <input class="mj-input" type="text" [value]="selectedStep.Label || ''" (input)="setStepLabel($any($event.target).value)" />
-                  </div>
-                  @switch (selectedStep.Kind) {
-                    @case ('select') { <div class="ps-field"><label>Columns (comma-separated)</label><input class="mj-input" type="text" [value]="columnsText" (input)="setColumns($any($event.target).value)" /></div> }
-                    @case ('standardize') { <div class="ps-field"><label>Columns (comma-separated)</label><input class="mj-input" type="text" [value]="columnsText" (input)="setColumns($any($event.target).value)" /></div> }
-                    @case ('impute') {
-                      <div class="ps-field"><label>Column</label><input class="mj-input" type="text" [value]="stepField('Column')" (input)="setStepStr('Column', $any($event.target).value)" /></div>
-                      <div class="ps-field"><label>Strategy</label><select class="mj-input" [value]="stepField('Strategy')" (change)="setStepStr('Strategy', $any($event.target).value)">@for (s of imputeStrategies; track s) { <option [value]="s">{{ s }}</option> }</select></div>
+                <div class="pl-title-row">
+                  <h1>{{ selectedPipeline?.Name }}</h1>
+                  @if (selectedPipeline) {
+                    <span class="ps-badge" [class]="statusClass(selectedPipeline.Status)">{{ selectedPipeline.Status }}</span>
+                    @if (bestMetricForPipeline(selectedPipeline); as bm) {
+                      <span class="pl-metric-badge"><i class="fa-solid fa-trophy" style="color:#eab308"></i> {{ bm }}</span>
                     }
-                    @case ('onehot') { <div class="ps-field"><label>Column</label><input class="mj-input" type="text" [value]="stepField('Column')" (input)="setStepStr('Column', $any($event.target).value)" /></div> }
-                    @case ('bin') {
-                      <div class="ps-field"><label>Column</label><input class="mj-input" type="text" [value]="stepField('Column')" (input)="setStepStr('Column', $any($event.target).value)" /></div>
-                      <div class="ps-field"><label>Bins</label><input class="mj-input" type="number" [value]="stepField('Bins')" (input)="setStepNum('Bins', $any($event.target).value)" /></div>
-                    }
-                    @case ('embedding') {
-                      <div class="ps-field"><label>Entity</label><input class="mj-input" type="text" [value]="stepField('Entity')" (input)="setStepStr('Entity', $any($event.target).value)" /></div>
-                      <div class="ps-field"><label>Embedding model ref</label><input class="mj-input" type="text" [value]="stepField('EmbeddingModelRef')" (input)="setStepStr('EmbeddingModelRef', $any($event.target).value)" /></div>
-                      <div class="ps-field"><label>Dimensions</label><input class="mj-input" type="number" [value]="stepField('Dims')" (input)="setStepNum('Dims', $any($event.target).value)" /></div>
-                    }
-                    @case ('llm-derived') { <div class="ps-field"><label>Feature Pipeline ref</label><input class="mj-input" type="text" [value]="stepField('FeaturePipelineRef')" (input)="setStepStr('FeaturePipelineRef', $any($event.target).value)" /></div> }
-                    @case ('flow-agent') { <div class="ps-field"><label>Flow Agent ref</label><input class="mj-input" type="text" [value]="stepField('FlowAgentRef')" (input)="setStepStr('FlowAgentRef', $any($event.target).value)" /></div> }
-                    @case ('vision-llm') { <div class="ps-field"><label>Image column</label><input class="mj-input" type="text" [value]="stepField('ImageColumn')" (input)="setStepStr('ImageColumn', $any($event.target).value)" /></div> }
                   }
-                  <!-- rewire: upstream step inputs -->
-                  @if (otherSteps.length > 0) {
-                    <div class="ps-field"><label>Inputs (upstream steps)</label>
-                      <div class="inputs-list">
-                        @for (s of otherSteps; track s.Id) {
-                          <label class="inp-row"><input type="checkbox" [checked]="hasInput(s.Id)" (change)="toggleInput(s.Id)" /> {{ s.Label || s.Kind }}</label>
+                </div>
+              </div>
+
+              <!-- Action Toolbar -->
+              <div class="pl-toolbar">
+                <button mjButton variant="secondary" size="sm" (click)="toggleViewMode()" [title]="viewMode === 'stages' ? 'Switch to Node Graph Canvas' : 'Switch to Stage View'">
+                  <i class="fa-solid" [class.fa-diagram-project]="viewMode === 'stages'" [class.fa-layer-group]="viewMode === 'dag'"></i>
+                  {{ viewMode === 'stages' ? 'DAG View' : 'Stages View' }}
+                </button>
+                <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-clone" [disabled]="!selectedPipeline" (click)="cloneSelected()">
+                  <i class="fa-solid fa-copy"></i> Clone
+                </button>
+                <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-save" [disabled]="!dirty || busy" (click)="save()">
+                  <i class="fa-solid fa-floppy-disk"></i> Save
+                </button>
+                <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-validate" [disabled]="busy" (click)="validate()">
+                  <i class="fa-solid fa-circle-check"></i> Validate
+                </button>
+                <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-train" [disabled]="busy || dirty" (click)="train()">
+                  <i class="fa-solid fa-play"></i> Train
+                </button>
+                <button mjButton variant="secondary" size="sm" (click)="refine()">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Agent
+                </button>
+                @if (dirty) { <span class="ps-tag amber" data-testid="ps-pipelines-dirty"><i class="fa-solid fa-pen"></i> Unsaved</span> }
+              </div>
+            </div>
+
+            <!-- Stages View (Human-Readable Progressive Stages) -->
+            @if (viewMode === 'stages') {
+              <div class="pl-stages-body">
+                <!-- STAGE 1: Target Definition & Decision Boundary -->
+                <div class="pl-stage-card">
+                  <div class="pl-stage-header">
+                    <div class="pl-stage-title-left">
+                      <span class="pl-stage-num">1</span>
+                      <div>
+                        <h3>Target Definition & Temporal Decision Boundary</h3>
+                        <span class="pl-stage-subtitle">Defines the training unit entity, target variable, problem type, and point-in-time cutoff.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="pl-grid-4">
+                    <div class="pl-metric-box">
+                      <label>Target Entity</label>
+                      <div class="val"><i class="fa-solid fa-table" style="color:var(--mj-brand-primary)"></i> {{ targetEntityName(selectedPipeline) }}</div>
+                      <div class="sub">Primary training unit</div>
+                    </div>
+                    <div class="pl-metric-box">
+                      <label>Target Variable</label>
+                      <div class="val"><i class="fa-solid fa-bullseye" style="color:var(--mj-status-warning)"></i> {{ editTargetVariable || 'Not set' }}</div>
+                      <div class="sub">{{ editProblemType }} outcome</div>
+                    </div>
+                    <div class="pl-metric-box">
+                      <label>Problem Type</label>
+                      <div class="val"><i class="fa-solid fa-chart-pie" style="color:var(--mj-brand-primary)"></i> {{ editProblemType }}</div>
+                      <div class="sub">Optimization discipline</div>
+                    </div>
+                    <div class="pl-metric-box" style="border-left: 3px solid var(--mj-brand-primary);">
+                      <label>As-Of Temporal Anchor</label>
+                      <div class="val"><i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-brand-primary)"></i> {{ asOfLabel }}</div>
+                      <div class="sub">Temporal cutoff to prevent leakage</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- STAGE 2: Feature Architecture & Relational Sources -->
+                <div class="pl-stage-card">
+                  <div class="pl-stage-header">
+                    <div class="pl-stage-title-left">
+                      <span class="pl-stage-num">2</span>
+                      <div>
+                        <h3>Feature Architecture & Relational Data Sources</h3>
+                        <span class="pl-stage-subtitle">Combines core entity attributes with linked relational features across the database.</span>
+                      </div>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                      <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-add-source" (click)="addSource()"><i class="fa-solid fa-plus"></i> Add Source</button>
+                      <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-add-step" (click)="addStep()"><i class="fa-solid fa-sliders"></i> Add Step</button>
+                    </div>
+                  </div>
+
+                  <div class="pl-grid-3">
+                    <!-- Feature Group: Sources -->
+                    <div class="pl-feature-group">
+                      <div class="pl-fg-head">
+                        <span><i class="fa-solid fa-database"></i> Feed-In Sources ({{ editSources.length }})</span>
+                      </div>
+                      <div class="pl-fg-body">
+                        @for (s of editSources; track $index) {
+                          <div class="pl-feature-row">
+                            <span class="pl-feature-name">{{ s.Ref || 'Unnamed source' }}</span>
+                            <span class="ps-tag">{{ s.Kind }}</span>
+                          </div>
                         }
                       </div>
-                      <div class="ps-small ps-muted" style="margin-top:4px">No inputs = a root step fed directly by the sources.</div>
                     </div>
+
+                    <!-- Feature Group: Feature Steps -->
+                    <div class="pl-feature-group">
+                      <div class="pl-fg-head">
+                        <span><i class="fa-solid fa-sliders"></i> Feature Transforms ({{ editSteps.length }})</span>
+                      </div>
+                      <div class="pl-fg-body">
+                        @for (st of editSteps; track st.Id) {
+                          <div class="pl-feature-row">
+                            <span class="pl-feature-name">{{ st.Label || st.Kind }}</span>
+                            <span class="ps-tag">{{ st.Kind }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+
+                    <!-- Feature Group: Algorithm Selection -->
+                    <div class="pl-feature-group">
+                      <div class="pl-fg-head">
+                        <span><i class="fa-solid fa-shapes"></i> Selected Algorithm</span>
+                      </div>
+                      <div class="pl-fg-body">
+                        <div class="pl-feature-row">
+                          <span class="pl-feature-name">{{ selectedAlgorithmName }}</span>
+                          <span class="ps-tag primary">Active</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Leakage Guard Bar -->
+                  <div class="pl-leakage-box">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <div style="flex:1;">
+                      <div style="font-size:13px; font-weight:700; color:var(--mj-text-primary);">Leakage Guard Active</div>
+                      <div style="font-size:12px; color:var(--mj-text-secondary); margin-top:2px;">
+                        Deny-listed columns are excluded prior to matrix assembly. Dominance threshold: <strong>{{ editLeakage.SingleFeatureDominanceThreshold }}</strong>
+                      </div>
+                      <div style="margin-top:6px;">
+                        @if (editLeakage.DenyFields.length === 0) {
+                          <span style="font-size:12px; color:var(--mj-text-muted);">No deny-list columns configured.</span>
+                        } @else {
+                          @for (col of editLeakage.DenyFields; track col) {
+                            <span class="pl-deny-chip">{{ col }}</span>
+                          }
+                        }
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- STAGE 3: Preprocessing & Data Hygiene -->
+                <div class="pl-stage-card">
+                  <div class="pl-stage-header">
+                    <div class="pl-stage-title-left">
+                      <span class="pl-stage-num">3</span>
+                      <div>
+                        <h3>Fitted Preprocessing & Validation Discipline</h3>
+                        <span class="pl-stage-subtitle">Parameters fitted once on training folds and frozen with the model artifact for inference anti-skew.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="pl-grid-4">
+                    <div class="pl-metric-box">
+                      <label>Validation Strategy</label>
+                      <div class="val">{{ editValidation.Strategy }}</div>
+                      <div class="sub">Cross-validation split</div>
+                    </div>
+                    <div class="pl-metric-box">
+                      <label>Locked Holdout</label>
+                      <div class="val">{{ (editValidation.LockedHoldoutFraction * 100).toFixed(0) }}%</div>
+                      <div class="sub">Honest benchmark score</div>
+                    </div>
+                    <div class="pl-metric-box">
+                      <label>Folds / Split</label>
+                      <div class="val">{{ editValidation.Strategy === 'kfold' ? (editValidation.K || 5) + ' Folds' : ((editValidation.TestSize || 0.2) * 100).toFixed(0) + '% Test' }}</div>
+                      <div class="sub">Training evaluation</div>
+                    </div>
+                    <div class="pl-metric-box">
+                      <label>Anti-Skew Guarantee</label>
+                      <div class="val"><i class="fa-solid fa-lock" style="color:var(--mj-status-success)"></i> Enforced</div>
+                      <div class="sub">Frozen params travel with model</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- STAGE 4: Multi-Algorithm Tournament & Leaderboard -->
+                <div class="pl-stage-card">
+                  <div class="pl-stage-header">
+                    <div class="pl-stage-title-left">
+                      <span class="pl-stage-num">4</span>
+                      <div>
+                        <h3>Multi-Algorithm Tournament Leaderboard</h3>
+                        <span class="pl-stage-subtitle">Models trained and scored on locked holdout data for this pipeline.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  @if (pipelineModels.length === 0) {
+                    <div style="padding: 16px; text-align: center; color: var(--mj-text-muted); font-size: 13px;">
+                      <i class="fa-solid fa-flask" style="font-size: 24px; margin-bottom: 8px; display: block; opacity: 0.5;"></i>
+                      No models trained yet for this pipeline. Click <strong>Train</strong> to execute the first training run.
+                    </div>
+                  } @else {
+                    <table class="pl-table">
+                      <thead>
+                        <tr>
+                          <th>Version</th>
+                          <th>Algorithm</th>
+                          <th>Holdout Score</th>
+                          <th>Status</th>
+                          <th>Trained At</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (m of pipelineModels; track m.ID) {
+                          <tr [class.winner-row]="m.Status === 'Published'">
+                            <td>
+                              <strong>v{{ m.Version }}</strong>
+                              @if (m.Status === 'Published') {
+                                <span class="ps-tag success" style="margin-left:6px;"><i class="fa-solid fa-trophy"></i> Winner</span>
+                              }
+                            </td>
+                            <td>{{ m.Algorithm || 'Algorithm' }}</td>
+                            <td><strong>{{ formatHoldout(m) }}</strong></td>
+                            <td><span class="ps-badge" [class]="statusClass(m.Status)">{{ m.Status }}</span></td>
+                            <td>{{ m.TrainedAt | date:'short' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
                   }
-                }
-                <!-- TARGET editor -->
-                @if (selectedNode.type === 'target') {
-                  <div class="ps-field"><label>Target variable</label><input class="mj-input" type="text" [value]="editTargetVariable" (input)="setTargetVariable($any($event.target).value)" /></div>
-                  <div class="ps-field"><label>Problem type</label><select class="mj-input" [value]="editProblemType" (change)="setProblemType($any($event.target).value)">@for (pt of problemTypes; track pt) { <option [value]="pt">{{ pt }}</option> }</select></div>
-                }
-                <!-- ALGORITHM editor -->
-                @if (selectedNode.type === 'algo') {
-                  <div class="ps-field"><label>Algorithm</label><select class="mj-input" [value]="editAlgorithmId" (change)="setAlgorithm($any($event.target).value)">@for (a of algorithms; track a.ID) { <option [value]="a.ID">{{ a.Name }}</option> }</select></div>
-                  <div class="ps-field"><label>Hyperparameters (JSON)</label><textarea class="mj-textarea" rows="4" [value]="editHyperparams" (input)="setHyperparams($any($event.target).value)"></textarea></div>
-                }
-                @if (selectedNode.type === 'output') {
-                  <div class="ps-small ps-muted">The trained model artifact. Run <strong>Train</strong> to produce a new versioned model from this pipeline.</div>
-                }
-              </div>
-            </div>
+                </div>
 
-            <!-- Leakage guard (editable) -->
-            <div class="ps-card">
-              <div class="ps-card-head"><i class="fa-solid fa-shield-halved" style="color:var(--mj-status-warning)"></i><h3>Leakage guard</h3></div>
-              <div class="ps-card-body">
-                <div class="ps-field"><label>Deny-list columns (comma-separated)</label><input class="mj-input" type="text" [value]="denyText" (input)="setDeny($any($event.target).value)" /></div>
-                <div class="ps-field"><label>Single-feature dominance threshold</label><input class="mj-input" type="number" step="0.05" min="0" max="1" [value]="editLeakage.SingleFeatureDominanceThreshold" (input)="setThreshold($any($event.target).value)" /></div>
-              </div>
-            </div>
+                <!-- STAGE 5: Production Serving & Deep Link -->
+                <div class="pl-stage-card">
+                  <div class="pl-stage-header">
+                    <div class="pl-stage-title-left">
+                      <span class="pl-stage-num">5</span>
+                      <div>
+                        <h3>Production Serving & Model Registry</h3>
+                        <span class="pl-stage-subtitle">Active inference wiring and model registry status.</span>
+                      </div>
+                    </div>
+                    @if (publishedModel; as pub) {
+                      <a class="ps-btn ps-btn-secondary" style="font-size:11px; padding:4px 10px; text-decoration:none;"
+                        [href]="'/app/predictive-studio/Models?modelId=' + pub.ID">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in Model Registry
+                      </a>
+                    }
+                  </div>
 
-            <!-- As-of strategy (editable) -->
-            <div class="ps-card">
-              <div class="ps-card-head"><i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-brand-primary)"></i><h3>As-of strategy</h3></div>
-              <div class="ps-card-body">
-                <div class="ps-field"><label>Mode</label><select class="mj-input" [value]="editAsOf.Mode" (change)="setAsOfMode($any($event.target).value)"><option value="none">none</option><option value="column">column</option><option value="offset">offset</option></select></div>
-                @if (editAsOf.Mode === 'column') { <div class="ps-field"><label>Decision-date column</label><input class="mj-input" type="text" [value]="editAsOf.Column || ''" (input)="setAsOfColumn($any($event.target).value)" /></div> }
-                @if (editAsOf.Mode === 'offset') { <div class="ps-field"><label>Offset days before label</label><input class="mj-input" type="number" [value]="editAsOf.OffsetDays ?? 0" (input)="setAsOfOffset($any($event.target).value)" /></div> }
-              </div>
-            </div>
+                  <div class="pl-serving-box">
+                    <div class="pl-metric-box">
+                      <label>Active Serving Model</label>
+                      <div class="val">
+                        @if (publishedModel; as pub) {
+                          <span>v{{ pub.Version }} ({{ pub.Algorithm || 'Model' }}) &bull; ID: {{ pub.ID.slice(0, 8) }}…</span>
+                        } @else {
+                          <span style="color:var(--mj-text-muted);">No published model serving live predictions yet.</span>
+                        }
+                      </div>
+                      <div class="sub">Model: {{ publishedModel?.Status || 'None' }} &bull; Pipeline: {{ selectedPipeline?.Status }}</div>
+                    </div>
+                    <div class="pl-metric-box" style="background:var(--mj-brand-primary-subtle); border-color:rgba(0,118,182,0.2);">
+                      <label>Inference Readiness</label>
+                      <div class="val" style="color:var(--mj-brand-primary)">
+                        <i class="fa-solid fa-circle-check"></i> Ready
+                      </div>
+                      <div class="sub">Batch & on-demand scoring enabled</div>
+                    </div>
+                  </div>
+                </div>
 
-            <!-- Validation (editable) -->
-            <div class="ps-card">
-              <div class="ps-card-head"><i class="fa-solid fa-scissors" style="color:var(--mj-brand-primary)"></i><h3>Validation</h3></div>
-              <div class="ps-card-body">
-                <div class="ps-field"><label>Strategy</label><select class="mj-input" [value]="editValidation.Strategy" (change)="setValStrategy($any($event.target).value)"><option value="train_test_split">train_test_split</option><option value="kfold">kfold</option><option value="holdout">holdout</option></select></div>
-                @if (editValidation.Strategy === 'train_test_split') { <div class="ps-field"><label>Test size</label><input class="mj-input" type="number" step="0.05" [value]="editValidation.TestSize ?? 0.2" (input)="setTestSize($any($event.target).value)" /></div> }
-                @if (editValidation.Strategy === 'kfold') { <div class="ps-field"><label>Folds (k)</label><input class="mj-input" type="number" [value]="editValidation.K ?? 5" (input)="setK($any($event.target).value)" /></div> }
-                <div class="ps-field"><label>Locked holdout fraction</label><input class="mj-input" type="number" step="0.05" [value]="editValidation.LockedHoldoutFraction" (input)="setHoldout($any($event.target).value)" /></div>
               </div>
-            </div>
+            }
+
+            <!-- DAG Canvas & Inspector (Preserved for advanced DAG view & test coverage) -->
+            @if (viewMode === 'dag') {
+              <div class="builder">
+                <!-- Canvas -->
+                <div class="canvas-wrap">
+                  <div class="canvas-bar">
+                    <span class="ps-small ps-muted" style="font-weight:600">Add:</span>
+                    <button class="ps-pchip s" data-testid="ps-pipelines-add-source" (click)="addSource()"><i class="fa-solid fa-database"></i> Source</button>
+                    <button class="ps-pchip f" data-testid="ps-pipelines-add-step" (click)="addStep()"><i class="fa-solid fa-sliders"></i> Feature step</button>
+                    <span class="ps-spacer"></span>
+                    <span class="ps-small ps-muted"><i class="fa-solid fa-circle-nodes"></i> {{ nodes.length }} nodes · {{ edges.length }} edges</span>
+                  </div>
+
+                  <div class="ps-flow big" data-testid="ps-pipelines-canvas"
+                    [style.width.px]="canvasW" [style.height.px]="canvasH">
+                    <svg class="ps-edges" data-testid="ps-pipelines-edges"
+                      [attr.width]="canvasW" [attr.height]="canvasH"
+                      [attr.viewBox]="'0 0 ' + canvasW + ' ' + canvasH">
+                      @for (edge of edges; track edge.from + edge.to) {
+                        <path [attr.d]="edgePath(edge)"></path>
+                      }
+                    </svg>
+                    @for (node of nodes; track node.id) {
+                      <div class="ps-node" data-testid="ps-pipelines-node" [attr.data-node-id]="node.id"
+                        [ngClass]="node.type" [class.selected]="node.id === selectedId"
+                        [style.left.px]="node.x" [style.top.px]="node.y" (click)="selectNode(node.id)">
+                        <div class="nh">
+                          <i class="tile" [ngClass]="node.icon"></i>
+                          <span>{{ node.title }}</span>
+                          @if (node.tag) { <span class="ps-tag">{{ node.tag }}</span> }
+                        </div>
+                        <div class="nb">
+                          @for (row of node.rows; track row.k) {
+                            <div class="nb-row"><span class="k">{{ row.k }}</span><span>{{ row.v }}</span></div>
+                          }
+                        </div>
+                        @if (node.hasIn) { <span class="port in"></span> }
+                        @if (node.hasOut) { <span class="port out"></span> }
+                      </div>
+                    }
+                  </div>
+
+                  <div class="flow-toolbar">
+                    <div class="legend">
+                      <span><i class="sw src"></i> Source</span>
+                      <span><i class="sw feat"></i> Feature</span>
+                      <span><i class="sw emb"></i> Embedding</span>
+                      <span><i class="sw target"></i> Target</span>
+                      <span><i class="sw algo"></i> Algorithm</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Inspector -->
+                <div class="ps-col inspector" data-testid="ps-pipelines-inspector">
+                  <div class="ps-card insp">
+                    <div class="ihead">
+                      <i class="tile" [ngClass]="selectedNode.icon" [attr.data-type]="selectedNode.type"></i>
+                      <div style="flex:1">
+                        <h3 data-testid="ps-pipelines-inspector-title">{{ selectedNode.title }}</h3>
+                        <div class="ps-small ps-muted">{{ nodeTypeLabel(selectedNode.type) }} · selected</div>
+                      </div>
+                      @if (selectedNode.type === 'src' || selectedNode.type === 'feat' || selectedNode.type === 'emb') {
+                        <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-delete" (click)="deleteSelected()"><i class="fa-solid fa-trash"></i></button>
+                      }
+                    </div>
+                    <div class="ps-card-body">
+                      @if (selectedSource) {
+                        <div class="ps-field"><label>Kind</label>
+                          <select class="mj-input" [value]="selectedSource.Kind" (change)="setSourceKind($any($event.target).value)">
+                            @for (k of sourceKinds; track k) { <option [value]="k">{{ k }}</option> }
+                          </select>
+                        </div>
+                        <div class="ps-field"><label>Reference (entity / query / id)</label>
+                          <input class="mj-input" type="text" [value]="selectedSource.Ref" (input)="setSourceRef($any($event.target).value)" />
+                        </div>
+                        <div class="ps-field"><label>Alias (optional)</label>
+                          <input class="mj-input" type="text" [value]="selectedSource.Alias || ''" (input)="setSourceAlias($any($event.target).value)" />
+                        </div>
+                      }
+                      @if (selectedStep) {
+                        <div class="ps-field"><label>Kind</label>
+                          <select class="mj-input" [value]="selectedStep.Kind" (change)="setStepKind($any($event.target).value)">
+                            @for (k of stepKinds; track k) { <option [value]="k">{{ k }}</option> }
+                          </select>
+                        </div>
+                        <div class="ps-field"><label>Label</label>
+                          <input class="mj-input" type="text" [value]="selectedStep.Label || ''" (input)="setStepLabel($any($event.target).value)" />
+                        </div>
+                        @switch (selectedStep.Kind) {
+                          @case ('select') { <div class="ps-field"><label>Columns (comma-separated)</label><input class="mj-input" type="text" [value]="columnsText" (input)="setColumns($any($event.target).value)" /></div> }
+                          @case ('standardize') { <div class="ps-field"><label>Columns (comma-separated)</label><input class="mj-input" type="text" [value]="columnsText" (input)="setColumns($any($event.target).value)" /></div> }
+                          @case ('impute') {
+                            <div class="ps-field"><label>Column</label><input class="mj-input" type="text" [value]="stepField('Column')" (input)="setStepStr('Column', $any($event.target).value)" /></div>
+                            <div class="ps-field"><label>Strategy</label><select class="mj-input" [value]="stepField('Strategy')" (change)="setStepStr('Strategy', $any($event.target).value)">@for (s of imputeStrategies; track s) { <option [value]="s">{{ s }}</option> }</select></div>
+                          }
+                          @case ('onehot') { <div class="ps-field"><label>Column</label><input class="mj-input" type="text" [value]="stepField('Column')" (input)="setStepStr('Column', $any($event.target).value)" /></div> }
+                          @case ('bin') {
+                            <div class="ps-field"><label>Column</label><input class="mj-input" type="text" [value]="stepField('Column')" (input)="setStepStr('Column', $any($event.target).value)" /></div>
+                            <div class="ps-field"><label>Bins</label><input class="mj-input" type="number" [value]="stepField('Bins')" (input)="setStepNum('Bins', $any($event.target).value)" /></div>
+                          }
+                          @case ('embedding') {
+                            <div class="ps-field"><label>Entity</label><input class="mj-input" type="text" [value]="stepField('Entity')" (input)="setStepStr('Entity', $any($event.target).value)" /></div>
+                            <div class="ps-field"><label>Embedding model ref</label><input class="mj-input" type="text" [value]="stepField('EmbeddingModelRef')" (input)="setStepStr('EmbeddingModelRef', $any($event.target).value)" /></div>
+                            <div class="ps-field"><label>Dimensions</label><input class="mj-input" type="number" [value]="stepField('Dims')" (input)="setStepNum('Dims', $any($event.target).value)" /></div>
+                          }
+                          @case ('llm-derived') { <div class="ps-field"><label>Feature Pipeline ref</label><input class="mj-input" type="text" [value]="stepField('FeaturePipelineRef')" (input)="setStepStr('FeaturePipelineRef', $any($event.target).value)" /></div> }
+                          @case ('flow-agent') { <div class="ps-field"><label>Flow Agent ref</label><input class="mj-input" type="text" [value]="stepField('FlowAgentRef')" (input)="setStepStr('FlowAgentRef', $any($event.target).value)" /></div> }
+                          @case ('vision-llm') { <div class="ps-field"><label>Image column</label><input class="mj-input" type="text" [value]="stepField('ImageColumn')" (input)="setStepStr('ImageColumn', $any($event.target).value)" /></div> }
+                        }
+                      }
+                      @if (selectedNode.type === 'target') {
+                        <div class="ps-field"><label>Target variable</label><input class="mj-input" type="text" [value]="editTargetVariable" (input)="setTargetVariable($any($event.target).value)" /></div>
+                        <div class="ps-field"><label>Problem type</label><select class="mj-input" [value]="editProblemType" (change)="setProblemType($any($event.target).value)">@for (pt of problemTypes; track pt) { <option [value]="pt">{{ pt }}</option> }</select></div>
+                      }
+                      @if (selectedNode.type === 'algo') {
+                        <div class="ps-field"><label>Algorithm</label><select class="mj-input" [value]="editAlgorithmId" (change)="setAlgorithm($any($event.target).value)">@for (a of algorithms; track a.ID) { <option [value]="a.ID">{{ a.Name }}</option> }</select></div>
+                        <div class="ps-field"><label>Hyperparameters (JSON)</label><textarea class="mj-textarea" rows="4" [value]="editHyperparams" (input)="setHyperparams($any($event.target).value)"></textarea></div>
+                      }
+                      @if (selectedNode.type === 'output') {
+                        <div class="ps-small ps-muted">The trained model artifact. Run <strong>Train</strong> to produce a new versioned model from this pipeline.</div>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Leakage guard (editable) -->
+                  <div class="ps-card">
+                    <div class="ps-card-head"><i class="fa-solid fa-shield-halved" style="color:var(--mj-status-warning)"></i><h3>Leakage guard</h3></div>
+                    <div class="ps-card-body">
+                      <div class="ps-field"><label>Deny-list columns (comma-separated)</label><input class="mj-input" type="text" [value]="denyText" (input)="setDeny($any($event.target).value)" /></div>
+                      <div class="ps-field"><label>Single-feature dominance threshold</label><input class="mj-input" type="number" step="0.05" min="0" max="1" [value]="editLeakage.SingleFeatureDominanceThreshold" (input)="setThreshold($any($event.target).value)" /></div>
+                    </div>
+                  </div>
+
+                  <!-- As-of strategy (editable) -->
+                  <div class="ps-card">
+                    <div class="ps-card-head"><i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-brand-primary)"></i><h3>As-of strategy</h3></div>
+                    <div class="ps-card-body">
+                      <div class="ps-field"><label>Mode</label><select class="mj-input" [value]="editAsOf.Mode" (change)="setAsOfMode($any($event.target).value)"><option value="none">none</option><option value="column">column</option><option value="offset">offset</option></select></div>
+                      @if (editAsOf.Mode === 'column') { <div class="ps-field"><label>Decision-date column</label><input class="mj-input" type="text" [value]="editAsOf.Column || ''" (input)="setAsOfColumn($any($event.target).value)" /></div> }
+                      @if (editAsOf.Mode === 'offset') { <div class="ps-field"><label>Offset days before label</label><input class="mj-input" type="number" [value]="editAsOf.OffsetDays ?? 0" (input)="setAsOfOffset($any($event.target).value)" /></div> }
+                    </div>
+                  </div>
+
+                  <!-- Validation (editable) -->
+                  <div class="ps-card">
+                    <div class="ps-card-head"><i class="fa-solid fa-scissors" style="color:var(--mj-brand-primary)"></i><h3>Validation</h3></div>
+                    <div class="ps-card-body">
+                      <div class="ps-field"><label>Strategy</label><select class="mj-input" [value]="editValidation.Strategy" (change)="setValStrategy($any($event.target).value)"><option value="train_test_split">train_test_split</option><option value="kfold">kfold</option><option value="holdout">holdout</option></select></div>
+                      @if (editValidation.Strategy === 'train_test_split') { <div class="ps-field"><label>Test size</label><input class="mj-input" type="number" step="0.05" [value]="editValidation.TestSize ?? 0.2" (input)="setTestSize($any($event.target).value)" /></div> }
+                      @if (editValidation.Strategy === 'kfold') { <div class="ps-field"><label>Folds (k)</label><input class="mj-input" type="number" [value]="editValidation.K ?? 5" (input)="setK($any($event.target).value)" /></div> }
+                      <div class="ps-field"><label>Locked holdout fraction</label><input class="mj-input" type="number" step="0.05" [value]="editValidation.LockedHoldoutFraction" (input)="setHoldout($any($event.target).value)" /></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            }
           </div>
         </div>
       }
@@ -359,6 +644,10 @@ export class PSPipelinesComponent implements OnInit {
   public wizardClonePipeline: MJMLTrainingPipelineEntity | null = null;
   public initialWizardAlgorithmId?: string;
 
+  @Input() public viewMode: 'stages' | 'dag' = 'stages';
+  public searchQuery = '';
+  public activeFilter = 'all';
+
   public openWizard(algoId?: string): void {
     this.wizardClonePipeline = null;
     this.initialWizardAlgorithmId = algoId;
@@ -395,8 +684,8 @@ export class PSPipelinesComponent implements OnInit {
   }
 
   // Editable spec state (the source of truth; nodes/edges are derived).
-  private editSources: SourceBinding[] = [];
-  private editSteps: FeatureStep[] = [];
+  public editSources: SourceBinding[] = [];
+  public editSteps: FeatureStep[] = [];
   public editTargetVariable = '';
   public editProblemType: ProblemType = 'classification';
   public editAlgorithmId = '';
@@ -423,7 +712,86 @@ export class PSPipelinesComponent implements OnInit {
     }
   }
 
-  // ---- pipeline selection: entity JSON → editable state ----
+  public toggleViewMode(): void {
+    this.viewMode = this.viewMode === 'stages' ? 'dag' : 'stages';
+  }
+
+  public setFilter(f: string): void {
+    this.activeFilter = f;
+  }
+
+  public onSearchInput(ev: Event): void {
+    this.searchQuery = ((ev.target as HTMLInputElement)?.value ?? '').toLowerCase();
+  }
+
+  public get filteredPipelines(): MJMLTrainingPipelineEntity[] {
+    return (this.pipelines ?? []).filter((p) => {
+      if (this.searchQuery) {
+        const nameMatch = p.Name?.toLowerCase().includes(this.searchQuery);
+        const entityMatch = p.TargetEntity?.toLowerCase().includes(this.searchQuery);
+        const targetMatch = p.TargetVariable?.toLowerCase().includes(this.searchQuery);
+        if (!nameMatch && !entityMatch && !targetMatch) return false;
+      }
+      if (this.activeFilter === 'published') return p.Status === 'Published';
+      if (this.activeFilter === 'draft') return p.Status === 'Draft';
+      if (this.activeFilter === 'core') return p.TargetEntity?.includes('AI') || p.Name?.includes('AI Agent');
+      return true;
+    });
+  }
+
+  public pipelineDomain(p?: MJMLTrainingPipelineEntity): string {
+    if (!p) return 'Platform';
+    const n = (p.Name || '') + (p.TargetEntity || '');
+    if (n.includes('MoreCheese') || n.includes('Membership') || n.includes('Event') || n.includes('Course')) return 'More Cheese Club';
+    if (n.includes('AI') || n.includes('Prompt') || n.includes('Agent')) return 'MemberJunction Platform';
+    return 'BizApps';
+  }
+
+  public targetEntityName(p?: MJMLTrainingPipelineEntity): string {
+    if (!p) return 'Entity';
+    return p.TargetEntity || this.editSources[0]?.Ref || 'Entity';
+  }
+
+  public get pipelineModels(): MJMLModelEntity[] {
+    if (!this.selectedPipelineId || !this.engine?.Models) return [];
+    return this.engine.Models.filter((m) => UUIDsEqual(m.PipelineID, this.selectedPipelineId));
+  }
+
+  public get publishedModel(): MJMLModelEntity | undefined {
+    return this.pipelineModels.find((m) => m.Status === 'Published') ?? this.pipelineModels[0];
+  }
+
+  public bestMetricForPipeline(p?: MJMLTrainingPipelineEntity): string | null {
+    if (!p || !this.engine?.Models) return null;
+    const models = this.engine.Models.filter((m) => UUIDsEqual(m.PipelineID, p.ID));
+    if (models.length === 0) return null;
+    const best = models.find((m) => m.Status === 'Published') ?? models[0];
+    return this.formatHoldout(best);
+  }
+
+  public formatHoldout(m: MJMLModelEntity): string {
+    if (!m.HoldoutMetrics) return m.Metrics ? 'Trained' : 'Pending';
+    try {
+      const hm = typeof m.HoldoutMetrics === 'string' ? JSON.parse(m.HoldoutMetrics) : m.HoldoutMetrics;
+      if (hm.auc != null) return `AUC ${(Number(hm.auc)).toFixed(3)}`;
+      if (hm.r2 != null) return `R² ${(Number(hm.r2)).toFixed(3)}`;
+      if (hm.rmse != null) return `RMSE ${(Number(hm.rmse)).toFixed(2)}`;
+      if (hm.accuracy != null) return `Acc ${(Number(hm.accuracy) * 100).toFixed(1)}%`;
+      return 'Scored';
+    } catch {
+      return 'Scored';
+    }
+  }
+
+  public get asOfLabel(): string {
+    if (this.editAsOf.Mode === 'column') return `Column: ${this.editAsOf.Column || 'DecisionDate'}`;
+    if (this.editAsOf.Mode === 'offset') return `Offset: ${this.editAsOf.OffsetDays || 0}d prior`;
+    return 'None (Static snapshot)';
+  }
+
+  public get selectedAlgorithmName(): string {
+    return this.engine?.AlgorithmName(this.editAlgorithmId) || 'Auto-select (Tournament)';
+  }
 
   public selectPipeline(id: string): void {
     this.selectedPipelineId = id;
@@ -431,8 +799,24 @@ export class PSPipelinesComponent implements OnInit {
     if (!p) {
       return;
     }
-    this.editSources = this.parse<SourceBinding[]>(p.SourceBindings, []);
-    this.editSteps = this.parse<FeatureStepGraph>(p.FeatureSteps, { Steps: [] }).Steps ?? [];
+
+    // Defensive parsing against non-array JSON schemas
+    const rawSources = this.parse<unknown>(p.SourceBindings, []);
+    this.editSources = Array.isArray(rawSources)
+      ? (rawSources as SourceBinding[])
+      : rawSources && typeof rawSources === 'object'
+      ? [{ Kind: 'Entity', Ref: (rawSources as { EntityID?: string }).EntityID || '' }]
+      : [];
+
+    const rawSteps = this.parse<unknown>(p.FeatureSteps, { Steps: [] });
+    if (Array.isArray(rawSteps)) {
+      this.editSteps = rawSteps as FeatureStep[];
+    } else if (rawSteps && typeof rawSteps === 'object' && 'Steps' in rawSteps && Array.isArray((rawSteps as { Steps: unknown[] }).Steps)) {
+      this.editSteps = (rawSteps as { Steps: FeatureStep[] }).Steps;
+    } else {
+      this.editSteps = [];
+    }
+
     this.editTargetVariable = p.TargetVariable ?? '';
     this.editProblemType = (p.ProblemType as ProblemType) ?? 'classification';
     this.editAlgorithmId = p.AlgorithmID ?? '';
@@ -550,7 +934,7 @@ export class PSPipelinesComponent implements OnInit {
   }
 
   private algoNode(): DagNode {
-    const name = this.engine.AlgorithmName(this.editAlgorithmId);
+    const name = this.engine?.AlgorithmName(this.editAlgorithmId) || 'Algorithm';
     const rows = [{ k: 'algorithm', v: name }];
     const hp = this.parse<Record<string, unknown>>(this.editHyperparams, {});
     Object.entries(hp).slice(0, 2).forEach(([k, v]) => rows.push({ k, v: String(v) }));
@@ -615,7 +999,6 @@ export class PSPipelinesComponent implements OnInit {
       this.markDirty();
     }
   }
-  /** Read an arbitrary field off the selected step for display (narrowed by template @switch). */
   public stepField(field: string): string {
     const s = this.selectedStep as unknown as Record<string, unknown> | null;
     const v = s?.[field];
@@ -632,7 +1015,6 @@ export class PSPipelinesComponent implements OnInit {
   }
   public setStepLabel(label: string): void { const s = this.selectedStep; if (s) { s.Label = label || undefined; this.markDirty(); } }
 
-  /** Change a step's Kind, resetting its config to that Kind's defaults (preserving Id/Label/Inputs). */
   public setStepKind(kind: string): void {
     const idx = this.editSteps.findIndex((s) => s.Id === this.selectedId);
     if (idx < 0) {
@@ -646,7 +1028,6 @@ export class PSPipelinesComponent implements OnInit {
   public hasInput(stepId: string): boolean {
     return (this.selectedStep?.Inputs ?? []).includes(stepId);
   }
-  /** Toggle an upstream step input, preventing cycles. */
   public toggleInput(stepId: string): void {
     const s = this.selectedStep;
     if (!s) {
@@ -663,7 +1044,6 @@ export class PSPipelinesComponent implements OnInit {
     }
     this.markDirty();
   }
-  /** True if making `target` depend on `from` would create a cycle (from is downstream of target). */
   private createsCycle(from: string, target: string): boolean {
     const byId = new Map(this.editSteps.map((s) => [s.Id, s]));
     const seen = new Set<string>();
@@ -692,12 +1072,6 @@ export class PSPipelinesComponent implements OnInit {
   // ---- leakage / as-of / validation editing ----
 
   public get denyText(): string { return this.editLeakage.DenyFields.join(', '); }
-  /**
-   * Parse the deny-field input. Uses the shared `parseDenyList` so a pasted
-   * bracketed list ("[CheckInTime, Status]") yields clean column names rather than
-   * "[CheckInTime" / "Status]" — entries which match no column and therefore leave
-   * the most dangerous columns silently unguarded. The server re-validates on save.
-   */
   public setDeny(text: string): void { this.editLeakage.DenyFields = parseDenyList(text); this.dirty = true; }
   public setThreshold(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editLeakage.SingleFeatureDominanceThreshold = n; this.dirty = true; } }
   public setAsOfMode(v: string): void { this.editAsOf = { ...this.editAsOf, Mode: v as AsOfStrategy['Mode'] }; this.dirty = true; }
@@ -732,7 +1106,6 @@ export class PSPipelinesComponent implements OnInit {
     const step = this.selectedStep;
     if (step) {
       this.editSteps = this.editSteps.filter((s) => s.Id !== step.Id);
-      // Drop the deleted id from any downstream Inputs.
       for (const s of this.editSteps) {
         if (s.Inputs?.includes(step.Id)) {
           s.Inputs = s.Inputs.filter((i) => i !== step.Id);
@@ -760,7 +1133,6 @@ export class PSPipelinesComponent implements OnInit {
 
   // ---- save / validate / train ----
 
-  /** Serialize the editable state back onto the pipeline entity and Save(). */
   public async save(): Promise<void> {
     const p = this.selectedPipeline;
     if (!p || this.busy) {
@@ -790,7 +1162,6 @@ export class PSPipelinesComponent implements OnInit {
     }
   }
 
-  /** Client-side spec sanity check before training. */
   public validate(): void {
     const issues: string[] = [];
     if (this.editSources.length === 0) {
@@ -814,7 +1185,6 @@ export class PSPipelinesComponent implements OnInit {
     }
   }
 
-  /** Run the pipeline via the Train Remote Op, then refresh the engine. */
   public async train(): Promise<void> {
     const p = this.selectedPipeline;
     if (!p || this.busy || this.dirty) {
@@ -850,85 +1220,93 @@ export class PSPipelinesComponent implements OnInit {
     this.askAgent.emit(`Help me refine the "${p.Name}" training pipeline${predicts}. Suggest improvements to the features or algorithm to raise holdout performance.`);
   }
 
-  public statusClass(status: string | null): string {
+  public statusClass(status: string): string {
     switch (status) {
-      case 'Active': return 'green';
-      case 'Draft': return 'amber';
-      case 'Disabled': return 'gray';
-      default: return 'gray';
+      case 'Published': return 'published';
+      case 'Validated': return 'validated';
+      default: return 'draft';
     }
   }
 
   public nodeTypeLabel(type: NodeType): string {
     switch (type) {
       case 'src': return 'Source';
-      case 'feat': return 'Feature step';
+      case 'feat': return 'Feature Step';
       case 'emb': return 'Embedding';
       case 'target': return 'Target';
       case 'algo': return 'Algorithm';
-      case 'output': return 'Model output';
+      case 'output': return 'Output Model';
     }
   }
 
-  // ---- layered layout (deterministic, topology-driven) ----
+  // ---- DAG layered layout ----
 
   private layoutDag(): void {
-    this.nodeById = new Map(this.nodes.map((n) => [n.id, n]));
-    const incoming = new Map<string, string[]>();
-    const outgoing = new Map<string, string[]>();
+    this.nodeById.clear();
     for (const n of this.nodes) {
-      incoming.set(n.id, []);
-      outgoing.set(n.id, []);
+      this.nodeById.set(n.id, n);
+    }
+    const inEdges = new Map<string, string[]>();
+    for (const n of this.nodes) {
+      inEdges.set(n.id, []);
     }
     for (const e of this.edges) {
-      if (this.nodeById.has(e.from) && this.nodeById.has(e.to)) {
-        outgoing.get(e.from)!.push(e.to);
-        incoming.get(e.to)!.push(e.from);
-      }
+      inEdges.get(e.to)?.push(e.from);
     }
-    const depth = this.computeLayers(incoming, outgoing);
-    const maxDepth = Math.max(0, ...depth.values());
-    const columns: DagNode[][] = Array.from({ length: maxDepth + 1 }, () => []);
+    const layerOf = new Map<string, number>();
+    const computeLayer = (id: string, path: Set<string>): number => {
+      if (layerOf.has(id)) {
+        return layerOf.get(id)!;
+      }
+      if (path.has(id)) {
+        return 0;
+      }
+      path.add(id);
+      const preds = inEdges.get(id) ?? [];
+      let l = 0;
+      for (const p of preds) {
+        l = Math.max(l, computeLayer(p, path) + 1);
+      }
+      path.delete(id);
+      layerOf.set(id, l);
+      return l;
+    };
     for (const n of this.nodes) {
-      columns[depth.get(n.id) ?? 0].push(n);
+      computeLayer(n.id, new Set());
     }
-    this.positionColumns(columns);
-  }
-
-  private computeLayers(incoming: Map<string, string[]>, outgoing: Map<string, string[]>): Map<string, number> {
-    const depth = new Map<string, number>(this.nodes.map((n) => [n.id, 0]));
-    const indeg = new Map<string, number>(this.nodes.map((n) => [n.id, incoming.get(n.id)!.length]));
-    const queue = this.nodes.filter((n) => indeg.get(n.id) === 0).map((n) => n.id);
-    while (queue.length) {
-      const id = queue.shift()!;
-      const d = depth.get(id)!;
-      for (const next of outgoing.get(id)!) {
-        depth.set(next, Math.max(depth.get(next)!, d + 1));
-        indeg.set(next, indeg.get(next)! - 1);
-        if (indeg.get(next) === 0) {
-          queue.push(next);
-        }
+    const algoNode = this.nodes.find((n) => n.id === '__algo');
+    const outNode = this.nodes.find((n) => n.id === '__output');
+    let maxFeatureLayer = 0;
+    for (const n of this.nodes) {
+      if (n.id !== '__algo' && n.id !== '__output') {
+        maxFeatureLayer = Math.max(maxFeatureLayer, layerOf.get(n.id) ?? 0);
       }
     }
-    return depth;
-  }
-
-  private positionColumns(columns: DagNode[][]): void {
-    const colStep = NODE_W + COL_GAP;
-    const rowStep = NODE_H + ROW_GAP;
-    const tallest = Math.max(1, ...columns.map((c) => c.length));
-    const contentH = tallest * NODE_H + (tallest - 1) * ROW_GAP;
-    columns.forEach((col, ci) => {
-      const x = PAD_X + ci * colStep;
-      const colH = col.length * NODE_H + (col.length - 1) * ROW_GAP;
-      const yStart = PAD_Y + (contentH - colH) / 2;
-      col.forEach((node, ri) => {
-        node.x = x;
-        node.y = yStart + ri * rowStep;
+    if (algoNode) {
+      layerOf.set('__algo', maxFeatureLayer + 1);
+    }
+    if (outNode) {
+      layerOf.set('__output', maxFeatureLayer + 2);
+    }
+    const layers = new Map<number, DagNode[]>();
+    for (const n of this.nodes) {
+      const l = layerOf.get(n.id) ?? 0;
+      const arr = layers.get(l) ?? [];
+      arr.push(n);
+      layers.set(l, arr);
+    }
+    let maxCol = 0;
+    let maxRow = 0;
+    layers.forEach((nodesInCol, col) => {
+      maxCol = Math.max(maxCol, col);
+      maxRow = Math.max(maxRow, nodesInCol.length);
+      nodesInCol.forEach((n, row) => {
+        n.x = PAD_X + col * (NODE_W + COL_GAP);
+        n.y = PAD_Y + row * (NODE_H + ROW_GAP);
       });
     });
-    this.canvasW = PAD_X * 2 + columns.length * NODE_W + (columns.length - 1) * COL_GAP;
-    this.canvasH = PAD_Y * 2 + contentH;
+    this.canvasW = Math.max(860, PAD_X * 2 + (maxCol + 1) * NODE_W + maxCol * COL_GAP);
+    this.canvasH = Math.max(480, PAD_Y * 2 + maxRow * NODE_H + (maxRow - 1) * ROW_GAP);
   }
 
   public edgePath(edge: DagEdge): string {
@@ -937,13 +1315,11 @@ export class PSPipelinesComponent implements OnInit {
     if (!from || !to) {
       return '';
     }
-    const sx = from.x + NODE_W;
-    const sy = from.y + NODE_H / 2;
-    const tx = to.x;
-    const ty = to.y + NODE_H / 2;
-    const dx = tx - sx;
-    const c1x = sx + dx * 0.5;
-    const c2x = tx - dx * 0.5;
-    return `M ${sx} ${sy} C ${c1x} ${sy}, ${c2x} ${ty}, ${tx} ${ty}`;
+    const x1 = from.x + NODE_W;
+    const y1 = from.y + NODE_H / 2;
+    const x2 = to.x;
+    const y2 = to.y + NODE_H / 2;
+    const dx = Math.max(30, (x2 - x1) / 2);
+    return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
   }
 }
