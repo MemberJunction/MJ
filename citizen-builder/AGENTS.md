@@ -9,7 +9,125 @@ Your user is a business user (operations lead, analyst, product manager, rev-ops
 
 ---
 
-## 1. The Three Tiers — Rules and Boundaries
+## 1. Documentation & Architecture References
+
+Before and during authoring, refer to the authoritative MemberJunction documentation:
+
+### A. Official Documentation Site (`docs.memberjunction.org`)
+When you need to understand MemberJunction concepts, entity APIs, or configuration shapes, use your web search/fetch tools to research:
+* **Documentation Portal**: [https://docs.memberjunction.org/](https://docs.memberjunction.org/)
+* **AI Agents Architecture**: [https://docs.memberjunction.org/ai/](https://docs.memberjunction.org/ai/) — Covers Agent Types (`Flow` vs `Loop`), Prompt bindings, model selection, execution lifecycle, and sub-agents.
+* **Actions Framework**: [https://docs.memberjunction.org/actions/](https://docs.memberjunction.org/actions/) — Action parameters, return codes, synchronous vs async execution.
+* **Metadata Sync System**: [https://docs.memberjunction.org/developer-guide/metadata-sync/](https://docs.memberjunction.org/developer-guide/metadata-sync/) — Explains how JSON metadata records represent database rows, reference resolution, and upsert semantics.
+* **Entity Data Platform**: [https://docs.memberjunction.org/concepts/entities/](https://docs.memberjunction.org/concepts/entities/) — Entities, entity fields, permissions, and query conventions.
+
+### B. MemberJunction Repository Reference Documents
+If you have access to the MemberJunction repository (or view them on GitHub at `https://github.com/MemberJunction/MJ/blob/next/`):
+* [`metadata/CLAUDE.md`](https://github.com/MemberJunction/MJ/blob/next/metadata/CLAUDE.md): **The Definitive Metadata Specification**. Authoritative rules on `@lookup`, `@file`, `@parent`, native JSON-type fields, and `mj sync push` mechanics.
+* [`packages/Actions/CLAUDE.md`](https://github.com/MemberJunction/MJ/blob/next/packages/Actions/CLAUDE.md): Conventions for Action authoring, parameter schemas, and error handling.
+* [`packages/AI/README.md`](https://github.com/MemberJunction/MJ/blob/next/packages/AI/README.md): Deep dive into AI providers, AgentManager state graphs, and execution engines.
+
+---
+
+## 2. MetadataSync & JSON Formatting Rules (CRITICAL)
+
+The MetadataSync engine (`mj sync push`) parses declarative JSON files under `./metadata/` and maps them into SQL Server records. Follow these rules strictly:
+
+### A. JSON-Type Fields: Native JSON Objects (NEVER Escaped Strings)
+In MemberJunction v6, database fields that hold structured JSON (such as `Configuration`, `Settings`, `Metadata`, etc.) **MUST be written as clean, native nested JSON objects** directly in your metadata files.
+
+```json
+// ❌ WRONG — Escaped strings break validation and reference resolution!
+{
+  "fields": {
+    "Name": "Invoice Analysis Agent",
+    "Configuration": "{\"Steps\":[{\"Name\":\"ProcessInvoice\",\"StepType\":\"Prompt\"}]}"
+  }
+}
+
+// ✅ CORRECT — Clean, native nested JSON object
+{
+  "fields": {
+    "Name": "Invoice Analysis Agent",
+    "Configuration": {
+      "Steps": [
+        {
+          "Name": "ProcessInvoice",
+          "StepType": "Prompt",
+          "TargetID": "@lookup:MJ: AI Prompts.Name=Invoice Analysis Prompt",
+          "ExecutionOrder": 1,
+          "OnError": "fail"
+        }
+      ]
+    }
+  }
+}
+```
+*Why this matters*: When formatted as native JSON, MetadataSync automatically crawls the object tree, resolves any `@lookup:` or `@file:` tokens inside the JSON to real UUIDs, and handles database serialization automatically.
+
+### B. Reference Tokens: `@lookup`, `@file`, `@parent`
+Never hardcode foreign key UUIDs. Use dynamic reference tokens:
+* **`@lookup:<EntityName>.<FieldName>=<Value>`**: Resolves foreign keys by querying records at sync time.
+  - *Single field*: `"TypeID": "@lookup:MJ: AI Agent Types.Name=Flow"`
+  - *Category lookup*: `"CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant"`
+  - *Multi-field lookup*: `"PromptID": "@lookup:MJ: AI Prompts.Name=My Prompt&Status=Active"`
+* **`@file:<relativePath>`**: Replaces the field value with the contents of an external file.
+  - Used for prompt templates: `"TemplateText": "@file:templates/my-agent.template.md"`
+  - *Note*: `@file:` paths are resolved at push time. If you modify a `.template.md` file, you must run `./scripts/sync-metadata.sh` again to push changes to the database.
+* **`@parent:<FieldName>`**: References a field on the parent record in nested hierarchical JSON files (e.g. `"AgentID": "@parent:ID"`).
+
+### C. System-Generated Fields: Do NOT Include `sync`
+* **NEVER author a `sync` block** (`lastModified`, `checksum`). `mj sync push` manages this block automatically. If you write it by hand, checksum calculation will fail.
+* **Do NOT include timestamp fields**: `CreatedAt`, `UpdatedAt`, `__mj_CreatedAt`, `__mj_UpdatedAt` are managed by the database engine.
+* **Assign deterministic `primaryKey`**: Assign a fresh UUID in uppercase (e.g., generated via CLI `uuidgen | tr '[:lower:]' '[:upper:]'`) so the entity retains the exact same ID across all environments.
+
+### D. Flow Agent Step Graph Schema
+For `Flow` agents, structure the `Configuration.Steps` array in `metadata/agents/.*.json` like this:
+```json
+"Configuration": {
+  "Steps": [
+    {
+      "Name": "Step 1 Name",
+      "Description": "Evaluates customer orders",
+      "StepType": "Prompt",
+      "TargetID": "@lookup:MJ: AI Prompts.Name=Step 1 Prompt",
+      "ExecutionOrder": 1,
+      "OnError": "fail",
+      "RetryCount": 0,
+      "TimeoutSeconds": 300
+    },
+    {
+      "Name": "Step 2 Name",
+      "Description": "Executes notification action",
+      "StepType": "Action",
+      "TargetID": "@lookup:MJ: Actions.Name=Send Email",
+      "ExecutionOrder": 2,
+      "OnError": "continue"
+    }
+  ]
+}
+```
+
+### E. File Naming & Directory Structure
+* **Agent definitions**: `metadata/agents/.<slug>-agent.json` (must start with `.` to match the `.*.json` pattern in `.mj-sync.json`).
+* **Prompt definitions**: `metadata/prompts/.<slug>-prompt.json`.
+* **Prompt templates**: `metadata/prompts/templates/<slug>.template.md`.
+```
+metadata/
+├── .mj-sync.json
+├── agents/
+│   ├── .mj-sync.json
+│   └── .<slug>-agent.json
+└── prompts/
+    ├── .mj-sync.json
+    ├── .<slug>-prompt.json
+    └── templates/
+        └── <slug>.template.md
+```
+
+---
+
+## 3. The Three Tiers — Rules and Boundaries
 
 The boundary between tiers is **code** and **schema**.
 
@@ -37,7 +155,7 @@ If the user asks for new tables, columns, or physical database modifications:
 
 ---
 
-## 2. Mandatory Authoring Defaults & Guardrails
+## 4. Mandatory Authoring Defaults & Guardrails
 
 These defaults prevent portability bugs and privilege escalation:
 
@@ -56,7 +174,7 @@ These defaults prevent portability bugs and privilege escalation:
 
 ---
 
-## 3. Security Checklist (Enforce Before Syncing)
+## 5. Security Checklist (Enforce Before Syncing)
 
 - [ ] **No Secrets:** No API keys, credentials, bearer tokens, or passwords in prompt text or action parameters.
 - [ ] **Data Access via Entities:** All data operations must use MemberJunction entity permissions or standard actions. Never embed raw SQL statements in prompt templates.
@@ -65,16 +183,16 @@ These defaults prevent portability bugs and privilege escalation:
 
 ---
 
-## 4. The Authoring, Testing, and Diagnostic Loop
+## 6. The Authoring, Testing, and Diagnostic Loop
 
 ```
 1. Elicit Intent  ──>  2. Write Metadata  ──>  3. Sync DB  ──>  4. Test & Inspect  ──>  5. Refine
 ```
 
 ### Step 1: Write Metadata
-- Create agent JSON in `metadata/agents/<name>.json`.
-- Create prompt JSON in `metadata/prompts/<name>-prompt.json`.
-- Create prompt template Markdown in `metadata/prompts/templates/<name>.template.md`.
+- Create agent JSON in `metadata/agents/.<slug>-agent.json`.
+- Create prompt JSON in `metadata/prompts/.<slug>-prompt.json`.
+- Create prompt template Markdown in `metadata/prompts/templates/<slug>.template.md`.
 
 ### Step 2: Push to Database
 Run the sync script to push your metadata to the local SQL Server:
@@ -83,16 +201,16 @@ Run the sync script to push your metadata to the local SQL Server:
 ```
 
 ### Step 3: Test
-1. **Interactive Testing:** The user can open MJ Explorer at `http://localhost:4200` to chat with the agent.
+1. **Interactive Testing:** The user can open MJ Explorer at `http://localhost:4202` to chat with the agent.
 2. **Headless Testing:** You can execute the agent directly to verify basic outputs:
    ```bash
-   docker compose exec api mj ai agents run -a "<Agent Name>" -p "<Test Input>"
+   docker compose exec -T mj mj ai agents run -a "<Agent Name>" -p "<Test Input>"
    ```
 
 ### Step 4: Inspect Execution Traces (Diagnose Errors)
 When an agent misbehaves or errors out, **do not ask the user for console logs**. Run:
 ```bash
-./scripts/query-run-history.sh
+./scripts/query-run-history.sh "<Agent Name>"
 ```
 This script queries the database for:
 * **`[__mj].[vwAIAgentRuns]`**: High-level status, duration, error messages, and total token usage.
@@ -103,7 +221,7 @@ Inspect the trace, identify what went wrong (e.g. prompt phrasing ambiguity, par
 
 ---
 
-## 5. Promotion & Packaging
+## 7. Promotion & Packaging
 
 When the user is happy with their agent and wants to share or promote it to staging/production:
 Use the **`package-agent` skill**:

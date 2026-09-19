@@ -10,14 +10,34 @@
 
 The **Citizen Agent Builder** provides an isolated, local MemberJunction environment that runs entirely inside Docker:
 * **`sqlserver` (Port 1433)**: Microsoft SQL Server 2022.
-* **`mj` (Ports 4000 & 4200)**: A Node 24 container that executes `mj install` on first boot, provisions the database schema, installs business context (More Cheese default, or enterprise apps like Blue Cypress), and serves:
+* **`mj` (Ports 4000 & 4202)**: A Node 24 container that executes `mj install` on first boot, provisions the database schema, installs business context (More Cheese default, or enterprise apps like Blue Cypress), and serves:
   * **MJAPI** at `http://localhost:4000` (GraphQL API and agent execution engine).
-  * **MJExplorer** at `http://localhost:4200` (Web UI for testing agents and viewing records).
+  * **MJExplorer** at `http://localhost:4202` (Web UI for testing agents and viewing records; port 4202 is an authorized redirect URI for Auth0/MSAL).
 * **Metadata Directory (`./metadata`)**: Local JSON and Markdown files mapped into the container. Pushing metadata to the database is done with a single command (`./scripts/sync-metadata.sh`).
 
 ---
 
-## 2. Step-by-Step Execution Guide for Coding Agents
+## 2. Documentation & Architecture References
+
+When authoring agents or researching MemberJunction APIs, consult these authoritative resources:
+
+### A. Official Documentation Portal (`docs.memberjunction.org`)
+Use your web search or fetch tools to research topics across the documentation portal:
+* **Documentation Portal**: [https://docs.memberjunction.org/](https://docs.memberjunction.org/)
+* **AI Agents Architecture**: [https://docs.memberjunction.org/ai/](https://docs.memberjunction.org/ai/) — Details on Agent Types (`Flow` deterministic step graphs vs `Loop` iterative tool-calling), Prompt bindings, model selection, execution lifecycles, and sub-agents.
+* **Actions Framework**: [https://docs.memberjunction.org/actions/](https://docs.memberjunction.org/actions/) — Available actions, parameter definitions, and result codes.
+* **Metadata Sync System**: [https://docs.memberjunction.org/developer-guide/metadata-sync/](https://docs.memberjunction.org/developer-guide/metadata-sync/) — Complete specification for declarative metadata files, reference resolution, and upsert mechanics.
+* **Entity Data Platform**: [https://docs.memberjunction.org/concepts/entities/](https://docs.memberjunction.org/concepts/entities/) — Core entities, schema relationships, permissions, and query patterns.
+
+### B. MemberJunction Repository Specifications
+If you have access to the repository (or view them on GitHub at `https://github.com/MemberJunction/MJ/blob/next/`):
+* [`metadata/CLAUDE.md`](https://github.com/MemberJunction/MJ/blob/next/metadata/CLAUDE.md): **The Definitive Metadata Specification**. Rules on `@lookup`, `@file`, `@parent`, native nested JSON objects, and `mj sync push` mechanics.
+* [`packages/Actions/CLAUDE.md`](https://github.com/MemberJunction/MJ/blob/next/packages/Actions/CLAUDE.md): Action authoring conventions and parameter schemas.
+* [`packages/AI/README.md`](https://github.com/MemberJunction/MJ/blob/next/packages/AI/README.md): AI Agent execution engine, state machines, and task graph dispatcher.
+
+---
+
+## 3. Step-by-Step Execution Guide for Coding Agents
 
 ### Step 1: Initialize & Start the Environment
 
@@ -42,12 +62,11 @@ The **Citizen Agent Builder** provides an isolated, local MemberJunction environ
    *On first start, the container runs `mj install`, applies core migrations, installs the business context app (More Cheese), and launches both MJAPI and MJExplorer.*
    Monitor startup until ready:
    ```bash
-   # Check logs
    docker compose logs -f mj
    ```
    Once the banner appears:
    * **MJAPI is live at**: `http://localhost:4000`
-   * **MJExplorer is live at**: `http://localhost:4200`
+   * **MJExplorer is live at**: `http://localhost:4202`
 
 ---
 
@@ -74,13 +93,22 @@ Always enforce these constraints when authoring agents:
 1. **Check Available Tools & Entities**:
    Review `CAPABILITIES.md` (or run `./scripts/generate-capabilities.sh` to update it). This file contains the exact entity names, fields, and available actions in the running instance.
 
-2. **Author Files**:
+2. **Metadata Formatting Rules (CRITICAL)**:
+   * **Native JSON Objects**: Fields storing JSON (such as `Configuration` or `Settings`) **MUST** be written as clean, native nested JSON objects. **NEVER** write escaped JSON strings (`"Configuration": "{\"Steps\":...}"`), as this breaks `@lookup` reference resolution!
+   * **No `sync` Blocks**: Do not author `sync` blocks (`lastModified`, `checksum`). `mj sync push` manages these automatically.
+   * **Assign Deterministic UUIDs**: Assign a fresh uppercase UUID for `primaryKey` (e.g. via CLI `uuidgen | tr '[:lower:]' '[:upper:]'`).
+   * **Use Dynamic References**:
+     - `@lookup:<EntityName>.<FieldName>=<Value>` for foreign keys (e.g. `@lookup:MJ: AI Agent Types.Name=Flow`).
+     - `@file:<relativePath>` for external template files (e.g. `@file:templates/<slug>.template.md`). Note that `@file:` paths are resolved at push time; running `./scripts/sync-metadata.sh` updates the database.
+     - `@parent:ID` for linking child records to parent records in nested structures.
+
+3. **Author Files**:
    * Prompt Markdown template: `metadata/prompts/templates/<slug>.template.md`
    * Prompt metadata JSON: `metadata/prompts/.<slug>-prompt.json`
    * Agent metadata JSON: `metadata/agents/.<slug>-agent.json`
    *(See `metadata/agents/.customer-insight-agent.json` for a reference Flow agent).*
 
-3. **Push to Local Database**:
+4. **Push to Local Database**:
    ```bash
    ./scripts/sync-metadata.sh
    ```
@@ -90,22 +118,22 @@ Always enforce these constraints when authoring agents:
 ### Step 4: Testing & Autonomous Diagnostics (The Dual Loop)
 
 1. **Interactive Testing (Explorer UI)**:
-   Invite the user to test in their browser at `http://localhost:4200`.
+   Invite the user to test in their browser at `http://localhost:4202`.
 
 2. **Headless Execution**:
    You can trigger test runs directly via CLI:
    ```bash
-   docker compose exec mj mj ai agents run -a "<Agent Name>" -p "<Test Input>"
+   docker compose exec -T mj mj ai agents run -a "<Agent Name>" -p "<Test Input>"
    ```
 
 3. **Diagnosing Errors via Database Run Traces**:
-   If an agent errors out or returns poor output, **do not ask the user for console logs**. Run:
+   If an agent errors out or returns unexpected output, **do not ask the user for console logs**. Run:
    ```bash
-   ./scripts/query-run-history.sh
+   ./scripts/query-run-history.sh "<Agent Name>"
    ```
    This script directly queries:
-   * **`[__mj].[vwAIAgentRuns]`**: High-level status, error messages, token usage.
-   * **`[__mj].[vwAIAgentRunSteps]`**: The exact prompt sent to the LLM, the model's raw completion, and action parameters for each step.
+   * **`[__mj].[vwAIAgentRuns]`**: High-level status, duration, error messages, and token usage.
+   * **`[__mj].[vwAIAgentRunSteps]`**: Step-by-step trace showing the exact prompt sent to the LLM, raw LLM completion, and action calls.
    * **`[__mj].[vwActionExecutionLogs]`**: Errors and payloads for executed tools.
    
    Analyze the trace, refine your prompt template or mapping, run `./scripts/sync-metadata.sh`, and re-test.
@@ -117,7 +145,7 @@ Always enforce these constraints when authoring agents:
 When the user is satisfied, package the agent for promotion to staging or production:
 
 1. Validate that all Tier 1 guardrails are met (no secrets, no hardcoded IDs, `ModelSelectionMode: "Agent Type"`).
-2. Query the last successful run metrics using `./scripts/query-run-history.sh`.
+2. Query the last successful run metrics using `./scripts/query-run-history.sh "<Agent Name>"`.
 3. Generate `AGENT_MANIFEST.md` detailing:
    * Agent Name, Purpose, and Author.
    * Tier Classification (Tier 1 vs Tier 2).
@@ -137,7 +165,7 @@ When the user is satisfied, package the agent for promotion to staging or produc
 
 ---
 
-## 3. Enterprise Organization Setup (e.g. Blue Cypress)
+## 4. Enterprise Organization Setup (e.g. Blue Cypress)
 
 By default, the builder runs against **More Cheese** (a rich synthetic dataset covering 9 business apps).
 
