@@ -1,4 +1,4 @@
-import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
+import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessageContent } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { HttpPost, HttpRequestConfig, IsHttpError, IsCancellationError } from '@memberjunction/network-utils';
 import * as Config from '../config';
@@ -10,12 +10,21 @@ export class BettyBotLLM extends BaseLLM {
     private APIKey: string;
     private JWTToken: string;
     private TokenExpiration: Date;
+    private UserId?: string;
 
-    constructor(apiKey: string) {
+    /**
+     * @param apiKey Betty Bot API key, exchanged for a JWT via the settings endpoint
+     * @param userId Optional caller identifier forwarded to Betty as the `userId` request-body field.
+     * Betty uses it to attribute traffic in its utilization reports and to give the caller its own
+     * rate-limit bucket instead of an anonymous per-IP bucket. When omitted, the request body is
+     * identical to what was sent before this parameter existed.
+     */
+    constructor(apiKey: string, userId?: string) {
         super(apiKey);
         this.APIKey = apiKey;
         this.JWTToken = '';
         this.TokenExpiration = new Date();
+        this.UserId = userId;
     }
 
     /**
@@ -108,9 +117,12 @@ export class BettyBotLLM extends BaseLLM {
                 return errorResult;
             }
 
-            const data = {
+            const data: { input: ChatMessageContent; userId?: string } = {
                 input: userMessage.content,
             };
+            if(this.UserId){
+                data.userId = this.UserId;
+            }
 
             const bettyResponse = await HttpPost<BettyResponse>(endpoint, data, config);
             if(!bettyResponse || !bettyResponse.Data){
