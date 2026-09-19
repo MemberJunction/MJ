@@ -20,6 +20,7 @@ import { PSExperimentsComponent } from './PredictiveStudio/components/ps-experim
 import { PSRegistryComponent } from './PredictiveStudio/components/ps-registry.component';
 import { PSCompareComponent } from './PredictiveStudio/components/ps-compare.component';
 import { PSProductionComponent } from './PredictiveStudio/components/ps-production.component';
+import { PSPredictionsGridComponent } from './PredictiveStudio/components/ps-predictions-grid.component';
 
 import { PSPredictionsResourceComponent } from './PredictiveStudio/resources/ps-predictions-resource.component';
 import { PSStudioResourceComponent } from './PredictiveStudio/resources/ps-studio-resource.component';
@@ -66,11 +67,13 @@ import { PSModelsResourceComponent } from './PredictiveStudio/resources/ps-model
     PSRegistryComponent,
     PSCompareComponent,
     PSProductionComponent,
+    PSPredictionsGridComponent,
   ],
   exports: [
     PSPredictionsResourceComponent,
     PSStudioResourceComponent,
     PSModelsResourceComponent,
+    PSPredictionsGridComponent,
   ],
 })
 export class PredictiveStudioDashboardsModule {}

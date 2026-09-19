@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, ViewEncapsulation, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, ViewEncapsulation, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -651,7 +651,7 @@ const PS_PIPELINES_STARTER_PROMPT =
     </div>
   `,
 })
-export class PSPipelinesComponent implements OnInit {
+export class PSPipelinesComponent implements OnInit, OnChanges {
   @Input() engine!: PredictiveStudioEngine;
   @Input() provider: IMetadataProvider | null = null;
   @Input() currentUser: UserInfo | null = null;
@@ -740,10 +740,22 @@ export class PSPipelinesComponent implements OnInit {
   private nodeById = new Map<string, DagNode>();
   private stepSeq = 0;
 
+  public ngOnChanges(_changes?: SimpleChanges): void {
+    this.refreshFromEngine();
+  }
+
   ngOnInit(): void {
+    this.refreshFromEngine();
+  }
+
+  public refreshFromEngine(): void {
     this.pipelines = this.engine?.Pipelines ?? [];
-    if (this.pipelines.length > 0) {
+    if (!this.selectedPipelineId && this.pipelines.length > 0) {
       this.selectPipeline(this.pipelines[0].ID);
+    } else if (this.selectedPipelineId && !this.pipelines.some((p) => UUIDsEqual(p.ID, this.selectedPipelineId))) {
+      if (this.pipelines.length > 0) {
+        this.selectPipeline(this.pipelines[0].ID);
+      }
     }
   }
 
