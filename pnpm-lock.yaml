@@ -695,6 +695,9 @@ importers:
       playwright:
         specifier: '>=1.40.0'
         version: 1.58.1
+      pngjs:
+        specifier: ^3.4.0
+        version: 3.4.0
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -4550,6 +4553,9 @@ importers:
       '@memberjunction/ng-archive-manager':
         specifier: 6.1.0
         version: link:../../Generic/archive-manager
+      '@memberjunction/ng-artifacts':
+        specifier: 6.1.0
+        version: link:../../Generic/artifacts
       '@memberjunction/ng-base-application':
         specifier: 6.1.0
         version: link:../base-application
@@ -13775,6 +13781,9 @@ importers:
       '@memberjunction/storage':
         specifier: 6.1.0
         version: link:../MJStorage
+      '@memberjunction/tag-engine-base':
+        specifier: 6.1.0
+        version: link:../AI/Knowledge/TagEngineBase
       nunjucks:
         specifier: ^3.2.4
         version: 3.2.4(chokidar@3.6.0)

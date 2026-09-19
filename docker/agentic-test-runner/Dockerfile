@@ -63,7 +63,7 @@ COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
 COPY docker/regression/scripts/ ./docker/regression/scripts/
 
 # ── Step 5: ComputerUseTestDriver bootstrap (@RegisterClass fires) ──────────
-RUN echo "import '@memberjunction/computer-use-engine';" > /app/bootstrap.mjs
+RUN echo "import '/app/packages/AI/MJComputerUse/dist/index.js';" > /app/bootstrap.mjs
 
 # ── Step 6: Dispatcher script ───────────────────────────────────────────────
 # Dispatcher is the entrypoint that routes `run|import-bacpac|export|exec|help`

@@ -66821,6 +66821,9 @@ export class MJQuery_ {
     @Field(() => Boolean, {nullable: true, description: `Author's declared intent that this Query should be materialized. CodeGen scans for IsMaterialized = 1 and, if the query qualifies (§9/§10), materializes it. The authoritative state lives on the linked MJ: Materialized Results row (found via the MaterializedResultQuery join table).`}) 
     IsMaterialized?: boolean;
         
+    @Field({nullable: true, description: `Optional JSON configuration bag defining query-level policies and semantic capabilities (shape = IQueryConfiguration). Includes Priority (1-100) for ground-truth ranking in the semantic layer, LogExecution to control query execution logging, AlternativeQuestions for multi-phrasing vector recall, UsageGuidance and WhenNotToUse bounds for AI agents, and DomainScope.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(50)
     Category?: string;
@@ -66919,6 +66922,9 @@ export class CreateMJQueryInput {
     @Field(() => Boolean, { nullable: true })
     IsMaterialized?: boolean;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -67000,6 +67006,9 @@ export class UpdateMJQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     IsMaterialized?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
