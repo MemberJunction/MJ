@@ -8,7 +8,7 @@
  * every mock-based test green.
  *
  * So these assertions follow the statements. They moved out of TypeScript and into
- * `migrations/v6/V202609171530__v6.2.x__TaskGraph_Guarded_Write_Sprocs.sql`, because a runtime login
+ * `migrations/v6/V202609191002__v6.2.x__TaskGraph_Guarded_Write_Sprocs.sql`, because a runtime login
  * may execute procedures and may not write tables — so the SQL assertions read the migration, and
  * the TypeScript assertions check that the store calls the right procedure with the right arguments.
  * Between the two, a dropped guard still fails a test.
