@@ -129,8 +129,8 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
          columns (canvas / inspector) can each own their scrollbar. */
       .ps-content.fill { overflow: hidden; display: flex; flex-direction: column; padding-bottom: 14px; }
       .ps-content.fill > * { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-      .ps-copilot { width: 440px; max-width: 44vw; flex: none; border-left: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; min-height: 0; transition: width .2s ease, max-width .2s ease; }
-      .ps-copilot.expanded { width: 880px; max-width: 75vw; }
+      .ps-copilot { width: 480px; max-width: 48vw; flex: none; border-left: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; min-height: 0; transition: width .2s ease, max-width .2s ease; }
+      .ps-copilot.expanded { width: 960px; max-width: 80vw; }
       .ps-copilot-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--mj-border-default); }
       .ps-copilot-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--mj-text-primary); }
       .ps-copilot-title i { color: var(--mj-brand-primary); }
