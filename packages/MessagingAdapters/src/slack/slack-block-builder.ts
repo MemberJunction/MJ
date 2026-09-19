@@ -9,7 +9,7 @@
  * @see https://api.slack.com/reference/block-kit
  */
 
-import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, ComposeEmailCommand, AutomaticCommand, AgentResponseForm, FormQuestion, MediaOutput } from '@memberjunction/ai-core-plus';
 import { parseBase64DataUrl } from '@memberjunction/ai';
 import { LogStatus } from '@memberjunction/core';
 import { markdownToBlocks } from './slack-formatter.js';
@@ -342,8 +342,9 @@ function isButtonSafeURL(url: unknown): boolean {
 /**
  * Build action buttons from agent actionable commands.
  *
- * Handles both command types:
+ * Handles:
  * - `open:url` → Slack URL button (opens external link)
+ * - `compose:email` → context note (a mailto: URL is not button-safe on Slack)
  * - `open:resource` → Deep-link button to MJ Explorer if `explorerBaseURL` is configured,
  *   otherwise rendered as an informational context block showing entity/resource info
  *
@@ -371,6 +372,12 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
       } else {
         resourceInfoItems.push(`<${cmd.url}|${escapeMrkdwn(cmd.label) || 'Open link'}>`);
       }
+    } else if (cmd.type === 'compose:email') {
+      // A mailto: URL fails isOpenableURI (http/https only), so Slack would silently drop a button
+      // built from one — and without an explicit branch the command renders as NOTHING AT ALL.
+      // Degrade to a note naming the draft and pointing back at Explorer, where the Email Draft
+      // artifact carries the full text.
+      resourceInfoItems.push(formatComposeEmailInfo(cmd));
     } else if (cmd.type === 'open:resource') {
       const resourceCmd = cmd as OpenResourceCommand;
       const deepLink = buildExplorerDeepLink(resourceCmd, explorerBaseURL);
@@ -403,6 +410,30 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
   }
 
   return blocks;
+}
+
+/**
+ * Describe a `compose:email` command as text for a context block.
+ *
+ * Slack cannot open a `mailto:` link from a button (its URL check accepts http/https only), so the
+ * draft is described rather than offered. The recipient and subject are included because they are
+ * what makes the note actionable — the reader can recognise which draft it refers to.
+ */
+function formatComposeEmailInfo(cmd: ComposeEmailCommand): string {
+  const parts: string[] = [];
+  const to = (cmd.to ?? []).filter((r) => r.trim().length > 0);
+  if (to.length > 0) {
+    parts.push(`to ${escapeMrkdwn(to.join(', '))}`);
+  }
+  if (cmd.subject) {
+    // Deliberately NOT wrapped in its own `_..._`: the whole note is already italic, and Slack
+    // pairs underscores left-to-right, so a nested pair closes the outer italic early and leaves
+    // the trailing underscores rendering literally. escapeMrkdwn does not escape `_`, so a subject
+    // containing one breaks it the same way — keeping the subject plain avoids both.
+    parts.push(escapeMrkdwn(cmd.subject));
+  }
+  const detail = parts.length > 0 ? ` (${parts.join(' — ')})` : '';
+  return `✉️ _${escapeMrkdwn(cmd.label) || 'Email draft'}${detail} — open it in MJ Explorer to send._`;
 }
 
 /**

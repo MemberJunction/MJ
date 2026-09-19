@@ -1,6 +1,7 @@
 /**
  * Unit tests for teams-card-builder.ts — rich Adaptive Card response builder.
  */
+import type { ComposeEmailCommand } from '@memberjunction/ai-core-plus';
 import { describe, it, expect } from 'vitest';
 import {
     buildRichAdaptiveCard,
@@ -732,5 +733,49 @@ describe('teams-card-builder', () => {
             );
             expect(truncationNotice).toBeDefined();
         });
+    });
+});
+
+describe('buildUnopenableResourceNotes — compose:email', () => {
+    // Teams drops a mailto: Action.OpenUrl (isOpenableURI is http/https only), so without a body
+    // note the command renders as nothing and the user never learns a draft exists.
+    const cmd = (over: Partial<ComposeEmailCommand> = {}): ComposeEmailCommand => ({
+        type: 'compose:email',
+        label: 'Open draft in Mail',
+        to: ['bob@example.com'],
+        subject: 'Membership renewal',
+        ...over,
+    });
+
+    it('emits a note naming the recipient and subject', () => {
+        const notes = buildUnopenableResourceNotes([cmd()]);
+        expect(notes.length).toBe(1);
+        const text = JSON.stringify(notes);
+        expect(text).toContain('bob@example.com');
+        expect(text).toContain('Membership renewal');
+    });
+
+    it('never puts a mailto: URL in an action button', () => {
+        const actions = buildActionButtons([cmd()]);
+        expect(JSON.stringify(actions)).not.toContain('mailto:');
+        expect(actions).toHaveLength(0);
+    });
+
+    it('still names the draft with no recipient', () => {
+        expect(JSON.stringify(buildUnopenableResourceNotes([cmd({ to: undefined })]))).toContain('Open draft in Mail');
+    });
+
+    // An Adaptive Card TextBlock renders a markdown subset INCLUDING links, and every field here
+    // is agent-authored — so an injected subject must not become a live hyperlink in an MJ card.
+    it('escapes markdown so agent text cannot inject a link', () => {
+        const notes = buildUnopenableResourceNotes([cmd({ subject: 'Renewal [click here](https://evil.example)' })]);
+        const text = String((notes[0] as { text: string }).text);
+        expect(text).not.toContain('[click here](https://evil.example)');
+        expect(text).toContain('\\[click here\\]');
+    });
+
+    it('escapes underscores so agent text cannot break out of the italics', () => {
+        const notes = buildUnopenableResourceNotes([cmd({ subject: 'a_b_c' })]);
+        expect(String((notes[0] as { text: string }).text)).toContain('a\\_b\\_c');
     });
 });
