@@ -34,12 +34,11 @@
       },
       {
         "kind": "action",
-        "actions": [{ "name": "Perplexity Search" }],
-        "allowAdditionalActions": true
-      },
-      {
-        "kind": "action",
-        "actions": [{ "name": "Google Custom Search" }],
+        "actions": [
+          {
+            "name": "Web Search"
+          }
+        ],
         "allowAdditionalActions": true
       }
     ]

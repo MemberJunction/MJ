@@ -1,0 +1,97 @@
+[
+  {
+    "fields": {
+      "Name": "Brave",
+      "Description": "Brave Search. Serves from its own 30B+ page index rather than reselling Google's or Bing's, so it fails independently of every other provider here. Returns title/url/snippet, and measured lowest latency of the providers in this set. Default primary.",
+      "DriverClass": "BraveWebSearchProvider",
+      "Status": "Active",
+      "Priority": 10,
+      "CredentialID": null,
+      "ProviderConfig": null,
+      "MaxResultsOverride": null,
+      "AllowResultCaching": false,
+      "DisplayName": "Brave",
+      "Icon": "fa-brands fa-brave",
+      "Comments": null
+    },
+    "primaryKey": {
+      "ID": "EC6DE0FC-4279-4297-846B-713C7F8CD0C0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tavily",
+      "Description": "Tavily. Results arrive as extracted page content rather than snippets plus links, which saves an agent a second round trip per result. Can also return a synthesized answer. An aggregator rather than an index of its own.",
+      "DriverClass": "TavilyWebSearchProvider",
+      "Status": "Active",
+      "Priority": 20,
+      "CredentialID": null,
+      "ProviderConfig": null,
+      "MaxResultsOverride": null,
+      "AllowResultCaching": false,
+      "DisplayName": "Tavily",
+      "Icon": "fa-solid fa-magnifying-glass-chart",
+      "Comments": null
+    },
+    "primaryKey": {
+      "ID": "48494F40-5F0F-4755-8C62-88BA77FE2C44"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Perplexity",
+      "Description": "Perplexity. Hits come from the raw /search endpoint (flat per-query price, sub-second); the Sonar chat models are used only when a synthesized answer is explicitly requested.",
+      "DriverClass": "PerplexityWebSearchProvider",
+      "Status": "Active",
+      "Priority": 30,
+      "CredentialID": null,
+      "ProviderConfig": null,
+      "MaxResultsOverride": null,
+      "AllowResultCaching": false,
+      "DisplayName": "Perplexity",
+      "Icon": "fa-solid fa-comment-dots",
+      "Comments": null
+    },
+    "primaryKey": {
+      "ID": "83CE4B34-C15F-44F4-8B41-DA9FE65407E6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Google Custom Search",
+      "Description": "Google Custom Search JSON API. CLOSED TO NEW CUSTOMERS and DISCONTINUED ON 2027-01-01 — present so hosts holding an existing key keep working through the transition. Remove this row once the key stops working.",
+      "DriverClass": "GoogleCustomSearchWebSearchProvider",
+      "Status": "Active",
+      "Priority": 40,
+      "CredentialID": null,
+      "ProviderConfig": null,
+      "MaxResultsOverride": null,
+      "AllowResultCaching": false,
+      "DisplayName": "Google Custom Search",
+      "Icon": "fa-brands fa-google",
+      "Comments": null
+    },
+    "primaryKey": {
+      "ID": "0F1A3C58-5994-4DC6-AFE4-7439A756D363"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DuckDuckGo",
+      "Description": "DuckDuckGo Instant Answer API. Needs no credential, so a host that has configured nothing still gets some capability — but it returns disambiguation topics rather than a ranked result set, so coverage is thin. Last resort; treat reliance on it as unconfigured.",
+      "DriverClass": "DuckDuckGoWebSearchProvider",
+      "Status": "Active",
+      "Priority": 90,
+      "CredentialID": null,
+      "ProviderConfig": null,
+      "MaxResultsOverride": null,
+      "AllowResultCaching": false,
+      "DisplayName": "DuckDuckGo",
+      "Icon": "fa-solid fa-shield-halved",
+      "Comments": null
+    },
+    "primaryKey": {
+      "ID": "5E0179CC-DAD2-4672-B9C0-F1FA0ADDA81B"
+    }
+  }
+]

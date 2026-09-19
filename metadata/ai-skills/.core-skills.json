@@ -16,7 +16,7 @@
         {
           "fields": {
             "SkillID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search"
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search"
           },
           "primaryKey": {
             "ID": "4CD2ADEA-A42F-493E-9A1A-C98FB666E2D3"
@@ -24,19 +24,6 @@
           "sync": {
             "lastModified": "2026-07-01T23:25:37.263Z",
             "checksum": "110eeb21526fbe58eead37a646520815fb791bd6b495ebd34f46ef44a088548c"
-          }
-        },
-        {
-          "fields": {
-            "SkillID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search"
-          },
-          "primaryKey": {
-            "ID": "CB66E6E9-3699-496D-A91C-F00AE27ADD98"
-          },
-          "sync": {
-            "lastModified": "2026-08-20T22:30:09.753Z",
-            "checksum": "2a5009b4b65a6469b40c0d16f96f8e78933c67cbf763f426122ffe1adb7fe3d8"
           }
         },
         {
@@ -89,6 +76,18 @@
           "sync": {
             "lastModified": "2026-07-01T23:25:37.324Z",
             "checksum": "86b2b241c67c589ba11983eceb4dcfe7eb704ccd250d6f4e94018d38ff3fe315"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search"
+          },
+          "primaryKey": {
+            "ID": "CB66E6E9-3699-496D-A91C-F00AE27ADD98"
+          },
+          "deleteRecord": {
+            "delete": true
           }
         }
       ]
