@@ -58,4 +58,13 @@ export interface IAuthProvider {
    * Checks if a given issuer URL belongs to this provider
    */
   matchesIssuer(issuer: string): boolean;
+
+  /**
+   * Releases any resources (keep-alive HTTP agent, JWKS client) this provider instance holds.
+   * Optional so implementations with nothing to release don't need a no-op override. Called by
+   * {@link AuthProviderFactory} before an existing provider is replaced (`register()`) or the
+   * registry is torn down (`clear()`), so a discarded provider's socket pool doesn't stay open
+   * until its own idle timeout.
+   */
+  Dispose?(): void;
 }
