@@ -664,13 +664,6 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * Begins dispatching.
-     *
-     * Runs reconciliation FIRST, before accepting any new work. On a restart this instance may be
-     * looking at tasks its own previous incarnation claimed and never released — reclaiming those
-     * up front is what turns a crash from "work stranded forever" into "work resumes".
-     */
-    /**
      * Says, once per episode, that this dispatcher cannot claim anything.
      *
      * Once per episode rather than once per task: the failure repeats on every task of every poll,
@@ -720,6 +713,13 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
     }
 
+    /**
+     * Begins dispatching.
+     *
+     * Runs reconciliation FIRST, before accepting any new work. On a restart this instance may be
+     * looking at tasks its own previous incarnation claimed and never released — reclaiming those
+     * up front is what turns a crash from "work stranded forever" into "work resumes".
+     */
     public async Start(): Promise<void> {
         if (this.running) return;
         this.running = true;
