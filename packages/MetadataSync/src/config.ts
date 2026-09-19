@@ -256,6 +256,22 @@ export interface EntityConfig {
      * under authoritative mode before push refuses (default: 20%).
      */
     maxImpliedDeletePercent?: number;
+    /**
+     * Fields that identify a collection item when its primary key does not, in priority
+     * order — the child's natural key.
+     *
+     * Without it a declared item is matched by `primaryKey` alone, so an item the server
+     * created on its own (a query parameter the extraction pipeline inferred, say) can
+     * never be matched: the declaration has no way to know the id that was generated for
+     * it. Push would then create a second row and collide on the child's unique
+     * constraint. Naming the natural key lets the declaration adopt that row and update it
+     * in place.
+     *
+     * Items matched this way should omit `primaryKey` entirely — the natural key IS their
+     * identity, which keeps the same metadata portable across databases whose generated
+     * ids differ.
+     */
+    matchOn?: string[];
   }>;
   /** Pull command specific configuration */
   pull?: {
