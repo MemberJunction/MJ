@@ -24,48 +24,62 @@ echo "========================================================================"
 echo " Recent MemberJunction AI Agent Runs & Step Traces"
 echo "========================================================================"
 
+if [ -n "$AGENT_FILTER" ]; then
+  SQL_FILTER_VAR="DECLARE @AgentFilter NVARCHAR(100) = '${AGENT_FILTER//\'/\'\'}';"
+else
+  SQL_FILTER_VAR="DECLARE @AgentFilter NVARCHAR(100) = NULL;"
+fi
+
 SQL_QUERY="
 SET NOCOUNT ON;
+${SQL_FILTER_VAR}
 
-PRINT '=== [1] LATEST AGENT RUN ===';
-SELECT TOP 3 
+PRINT '=== [1] AGENT RUNS ===';
+SELECT TOP 5 
     CAST(ID AS VARCHAR(36)) AS RunID,
-    CAST(AgentName AS VARCHAR(40)) AS AgentName,
+    CAST(Agent AS VARCHAR(40)) AS AgentName,
     CAST(Status AS VARCHAR(15)) AS Status,
-    CAST(TotalTokens AS VARCHAR(10)) AS Tokens,
-    CAST(DurationSeconds AS VARCHAR(10)) AS DurationSec,
-    CAST(ErrorMessage AS VARCHAR(120)) AS ErrorMessage
+    Success,
+    CAST(TotalTokensUsed AS VARCHAR(10)) AS Tokens,
+    CAST(DATEDIFF(second, StartedAt, CompletedAt) AS VARCHAR(10)) AS DurationSec,
+    CAST(COALESCE(ErrorMessage, '') AS VARCHAR(120)) AS ErrorMessage
 FROM [__mj].[vwAIAgentRuns]
-ORDER BY CreatedAt DESC;
+WHERE (@AgentFilter IS NULL OR Agent LIKE '%' + @AgentFilter + '%')
+ORDER BY __mj_CreatedAt DESC;
 
 PRINT '';
-PRINT '=== [2] STEP EXECUTION TRACES (Latest Run) ===';
-DECLARE @LatestRunID UNIQUEIDENTIFIER = (SELECT TOP 1 ID FROM [__mj].[vwAIAgentRuns] ORDER BY CreatedAt DESC);
+PRINT '=== [2] STEP EXECUTION TRACES ===';
+DECLARE @TargetRunID UNIQUEIDENTIFIER = (
+    SELECT TOP 1 ID FROM [__mj].[vwAIAgentRuns] 
+    WHERE (@AgentFilter IS NULL OR Agent LIKE '%' + @AgentFilter + '%')
+    ORDER BY __mj_CreatedAt DESC
+);
 
-IF @LatestRunID IS NOT NULL
+IF @TargetRunID IS NOT NULL
 BEGIN
     SELECT 
         StepNumber,
         CAST(StepType AS VARCHAR(20)) AS StepType,
-        CAST(COALESCE(ActionName, 'N/A') AS VARCHAR(30)) AS ActionOrSubAgent,
+        CAST(COALESCE(StepName, 'N/A') AS VARCHAR(45)) AS StepName,
         CAST(Status AS VARCHAR(15)) AS Status,
-        SUBSTRING(COALESCE(PromptText, ''), 1, 200) AS PromptSnippet,
-        SUBSTRING(COALESCE(ResponseText, ''), 1, 200) AS ResponseSnippet,
+        Success,
+        SUBSTRING(COALESCE(InputData, ''), 1, 80) AS InputSnippet,
+        SUBSTRING(COALESCE(OutputData, ''), 1, 100) AS OutputSnippet,
         CAST(COALESCE(ErrorMessage, '') AS VARCHAR(100)) AS StepError
     FROM [__mj].[vwAIAgentRunSteps]
-    WHERE AgentRunID = @LatestRunID
+    WHERE AgentRunID = @TargetRunID
     ORDER BY StepNumber ASC;
 END
 
 PRINT '';
 PRINT '=== [3] RECENT ACTION EXECUTION ERRORS ===';
-SELECT TOP 3
-    CAST(ActionName AS VARCHAR(35)) AS ActionName,
-    CAST(Status AS VARCHAR(15)) AS Status,
-    CAST(ErrorMessage AS VARCHAR(150)) AS ErrorMessage
+SELECT TOP 5
+    CAST(Action AS VARCHAR(35)) AS ActionName,
+    CAST(ResultCode AS VARCHAR(15)) AS ResultCode,
+    CAST(COALESCE(Message, '') AS VARCHAR(150)) AS ErrorMessage
 FROM [__mj].[vwActionExecutionLogs]
-WHERE Status = 'Failed'
-ORDER BY CreatedAt DESC;
+WHERE ResultCode <> 'Success'
+ORDER BY __mj_CreatedAt DESC;
 "
 
 docker compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd \
