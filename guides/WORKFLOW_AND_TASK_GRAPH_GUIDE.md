@@ -549,7 +549,7 @@ The dispatcher is running, the graph is `Pending`, and the log says nothing inte
 `[TaskGraphDispatcher] Cannot claim tasks` or `[TaskGraph] guarded write … FAILED`.
 
 The claim protocol runs through `spTaskGraph*` stored procedures, which are granted to
-`cdp_Developer` and `cdp_Integration`. A database principal in neither role can execute none of
+`cdp_Developer` and `cdp_Integration`. A database principal in neither role cannot execute any of
 them, so no task is ever claimed. Grant one of those roles to the principal the server connects as
 and restart; the dispatcher also checks this at startup and names the missing grant.
 
