@@ -48,7 +48,7 @@ export default function TabsLayout() {
               * breaks the moment a tab is reordered.
               */}
             <Tabs.Screen
-                name="index"
+                name="(home)"
                 options={{
                     tabBarButtonTestID: 'tab-home',
                     title: 'Home',
@@ -58,7 +58,7 @@ export default function TabsLayout() {
                 }}
             />
             <Tabs.Screen
-                name="conversations"
+                name="(chats)"
                 options={{
                     tabBarButtonTestID: 'tab-chats',
                     title: 'Chats',
@@ -68,7 +68,7 @@ export default function TabsLayout() {
                 }}
             />
             <Tabs.Screen
-                name="apps"
+                name="(apps)"
                 options={{
                     tabBarButtonTestID: 'tab-apps',
                     title: 'Apps',
@@ -78,7 +78,7 @@ export default function TabsLayout() {
                 }}
             />
             <Tabs.Screen
-                name="profile"
+                name="(you)"
                 options={{
                     tabBarButtonTestID: 'tab-you',
                     title: 'You',

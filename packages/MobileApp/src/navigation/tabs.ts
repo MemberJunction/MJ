@@ -24,6 +24,14 @@ export type TabDestination = {
     Label: string;
     /** Key in the `Icons` map. */
     Icon: 'Home' | 'MessageSquare' | 'Grid' | 'User';
+    /**
+     * The route GROUP the tab owns, i.e. `app/(tabs)/(<Group>)/`.
+     *
+     * Each tab owns a stack, and every drill-down reachable from it lives inside that group — a
+     * screen pushed on the root stack covers the tab bar, which is how a user three levels into
+     * Data Explorer ended up pressing back three times to get anywhere else.
+     */
+    Group: 'home' | 'chats' | 'apps' | 'you';
 };
 
 /**
@@ -34,10 +42,10 @@ export type TabDestination = {
  * card on Home instead. If a fifth ever earns its place, this array is the only thing to change.
  */
 export const TAB_DESTINATIONS: TabDestination[] = [
-    { Route: '/', Label: 'Home', Icon: 'Home' },
-    { Route: '/conversations', Label: 'Chats', Icon: 'MessageSquare' },
-    { Route: '/apps', Label: 'Apps', Icon: 'Grid' },
-    { Route: '/profile', Label: 'You', Icon: 'User' },
+    { Route: '/', Label: 'Home', Icon: 'Home', Group: 'home' },
+    { Route: '/conversations', Label: 'Chats', Icon: 'MessageSquare', Group: 'chats' },
+    { Route: '/apps', Label: 'Apps', Icon: 'Grid', Group: 'apps' },
+    { Route: '/profile', Label: 'You', Icon: 'User', Group: 'you' },
 ];
 
 /**

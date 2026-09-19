@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { TAB_DESTINATIONS, HOME_ONLY_DESTINATIONS } from '@/navigation/tabs';
 import { Greeting } from '@/navigation/greeting';
@@ -34,14 +34,33 @@ describe('tab destinations', () => {
         // is exactly the kind of thing that survives to a device.
         for (const t of TAB_DESTINATIONS) {
             const name = String(t.Route).replace(/^\//, '') || 'index';
-            expect(() => read(`(tabs)/${name}.tsx`), `${t.Route} -> ${name}.tsx`).not.toThrow();
+            expect(() => read(`(tabs)/(${t.Group})/${name}.tsx`), `${t.Route}`).not.toThrow();
         }
+    });
+
+    it('every tab owns a stack, so drilling in keeps the bar on screen', () => {
+        // A screen pushed on the ROOT stack covers the tab bar — which is how a user three levels
+        // into Data Explorer ended up pressing back three times to reach anywhere else.
+        for (const t of TAB_DESTINATIONS) {
+            const layout = read(`(tabs)/(${t.Group})/_layout.tsx`);
+            expect(layout, `${t.Group} must own a Stack`).toContain('<Stack');
+        }
+    });
+
+    it('no drill-down screen sits on the root stack where it would cover the bar', () => {
+        // Modes belong at the root (the voice call, login, full-screen previews). PLACES do not.
+        const rootScreens = readdirSync(APP, { withFileTypes: true })
+            .filter((e) => e.name !== '_layout.tsx' && !e.name.startsWith('('))
+            .map((e) => e.name.replace(/\.tsx$/, ''));
+        expect(rootScreens.sort()).toEqual(
+            ['devchat', 'interactive-demo', 'login', 'markdown-preview', 'new-conversation', 'voice-mode'].sort(),
+        );
     });
 
     it('every tab is declared in the navigator, and the navigator declares nothing else', () => {
         const layout = read('(tabs)/_layout.tsx');
         const declared = [...layout.matchAll(/<Tabs\.Screen\s+name="([^"]+)"/g)].map((m) => m[1]);
-        expect(declared).toEqual(TAB_DESTINATIONS.map((t) => String(t.Route).replace(/^\//, '') || 'index'));
+        expect(declared).toEqual(TAB_DESTINATIONS.map((t) => `(${t.Group})`));
     });
 
     it('labels are short enough for a four-up bar', () => {
@@ -63,7 +82,7 @@ describe('reachability', () => {
     it('Home links to every destination that has no tab', () => {
         // Data Explorer is deliberately not a tab. That is only defensible while something links
         // to it — the previous design orphaned destinations exactly this way.
-        const home = read('(tabs)/index.tsx');
+        const home = read('(tabs)/(home)/index.tsx');
         for (const route of HOME_ONLY_DESTINATIONS) {
             expect(home, `Home must link to ${String(route)}`).toContain(`'${String(route)}'`);
         }
@@ -71,14 +90,14 @@ describe('reachability', () => {
 
     it('a chat thread offers a way back rather than a navigation sheet', () => {
         // The thread is a drill-down over the tab shell now; going anywhere else is the bar's job.
-        const chat = read('chat/[id].tsx');
+        const chat = read('(tabs)/(chats)/chat/[id].tsx');
         expect(chat).toContain('accessibilityLabel="Back"');
         expect(chat).not.toContain('GlobalNav');
     });
 
     it('no top-level screen ships a control with nothing behind it', () => {
         // Both of these rendered, depressed, and did nothing. A dead control reads as a broken app.
-        const conversations = read('(tabs)/conversations.tsx');
+        const conversations = read('(tabs)/(chats)/conversations.tsx');
         const pressablesWithoutHandlers = [...conversations.matchAll(/<Pressable(?![^>]*onPress)[^>]*>/g)];
         expect(pressablesWithoutHandlers.map((m) => m[0])).toEqual([]);
     });
