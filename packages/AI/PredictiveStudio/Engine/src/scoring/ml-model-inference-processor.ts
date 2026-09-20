@@ -40,7 +40,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import type {
   IRecordProcessor,
   RecordProcessorContext,
@@ -198,12 +198,15 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     if (!bytes) {
       throw new Error(`MLModelInferenceProcessor: artifact '${model.ArtifactFileID}' not found for model '${this.modelId}'`);
     }
-    return this.buildLoadedModel(model, bytes);
+    return this.buildLoadedModel(model, bytes, context);
   }
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */
-  private buildLoadedModel(model: MJMLModelEntity, bytes: Uint8Array): LoadedModel {
-    const pipeline = this.resolvePipelineConfig(model);
+  private async buildLoadedModel(model: MJMLModelEntity, bytes: Uint8Array, context: RecordProcessorContext): Promise<LoadedModel> {
+    let pipeline = this.resolvePipelineConfig(model);
+    if ((pipeline.featureSteps.Steps.length === 0 || !pipeline.targetEntityName) && model.PipelineID) {
+      pipeline = await this.loadPipelineFallback(model.PipelineID, pipeline, context);
+    }
     return {
       modelId: model.ID,
       targetEntityName: pipeline.targetEntityName,
@@ -217,6 +220,55 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       asOf: pipeline.asOf,
       leakageGuard: pipeline.leakageGuard,
     };
+  }
+
+  /**
+   * Fallback to query `MJ: ML Training Pipelines` when the model's frozen lineage blob
+   * lacks featureSteps or targetEntityName.
+   */
+  private async loadPipelineFallback(
+    pipelineId: string,
+    existing: ResolvedScoringPipeline,
+    context: RecordProcessorContext,
+  ): Promise<ResolvedScoringPipeline> {
+    try {
+      const rv = context.provider ? RunView.FromMetadataProvider(context.provider) : new RunView();
+      interface PipelineViewRow {
+        TargetEntityID?: string;
+        TargetEntity?: string;
+        SourceBindings?: string;
+        FeatureSteps?: string;
+        AsOfStrategy?: string;
+      }
+      const res = await rv.RunView<PipelineViewRow>(
+        {
+          EntityName: 'MJ: ML Training Pipelines',
+          ExtraFilter: `ID='${pipelineId}'`,
+          ResultType: 'simple',
+          MaxRows: 1,
+        },
+        context.contextUser,
+      );
+      if (res.Success && res.Results.length > 0) {
+        const row = res.Results[0];
+        const rawSteps = parseJson<FeatureStepGraph>(row.FeatureSteps, { Steps: [] });
+        const targetEntity =
+          row.TargetEntity ||
+          (row.TargetEntityID && context.provider ? context.provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
+          existing.targetEntityName;
+
+        return {
+          targetEntityName: existing.targetEntityName || targetEntity,
+          sourceBindings: existing.sourceBindings.length > 0 ? existing.sourceBindings : parseJson<SourceBinding[]>(row.SourceBindings, []),
+          featureSteps: existing.featureSteps.Steps.length > 0 ? existing.featureSteps : (isFeatureStepGraph(rawSteps) ? rawSteps : { Steps: [] }),
+          asOf: existing.asOf.Mode !== 'none' ? existing.asOf : parseJson<AsOfStrategy>(row.AsOfStrategy, { Mode: 'none' }),
+          leakageGuard: existing.leakageGuard,
+        };
+      }
+    } catch (err) {
+      LogError(`MLModelInferenceProcessor: failed to load fallback pipeline '${pipelineId}': ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return existing;
   }
 
   /**
@@ -252,7 +304,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     rows: SourceRow[],
     context: RecordProcessorContext,
   ): Promise<FeatureAssemblyResult> {
-    return this.assembler.assemble({
+    const assembly = await this.assembler.assemble({
       targetEntityName: model.targetEntityName,
       records: rows,
       sources: model.sourceBindings,
@@ -266,6 +318,16 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       contextUser: context.contextUser,
       provider: context.provider,
     });
+
+    if (assembly.matrix.columns.length === 0 && model.featureSchema.length > 0) {
+      throw new Error(
+        `MLModelInferenceProcessor: feature assembly produced 0 columns for model '${model.modelId}' ` +
+          `which requires ${model.featureSchema.length} feature(s) [${model.featureSchema.map((f) => f.Name).join(', ')}]. ` +
+          `Refusing to score with empty features to avoid degenerate predictions.`,
+      );
+    }
+
+    return assembly;
   }
 
   // region: sidecar predict -----------------------------------------------------
