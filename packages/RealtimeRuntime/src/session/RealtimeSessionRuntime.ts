@@ -716,6 +716,39 @@ export class RealtimeSessionRuntime {
    */
   private clientToolHandlers = new Map<string, RealtimeClientToolHandler>();
 
+  /**
+   * Monotonic id for the current start attempt, bumped by every {@link teardown}.
+   *
+   * A session start is a multi-await sequence — mint, acquire the microphone, connect — and a host
+   * can end the session part-way through it (the user taps back while the mint is still in flight).
+   * Teardown at that moment has nothing to tear down: the stream and the client do not exist yet.
+   * Without this, the in-flight start then proceeds to open a microphone and a provider connection
+   * nobody is watching. Each start captures the generation it began under and abandons itself the
+   * moment it no longer matches.
+   */
+  private startGeneration = 0;
+
+  /**
+   * The teardown currently running, so a second call awaits it rather than racing it.
+   *
+   * Ending a session commonly fires twice — an explicit stop followed by the host unmounting — and
+   * `teardown` flips `_active$` only at the end, so the second call passes the `IsActive` guard and
+   * runs concurrently with the first: two `Disconnect()` calls, two `CloseAgentSession` mutations,
+   * two `SessionEnded$` emissions for one session.
+   */
+  private teardownInFlight: Promise<void> | null = null;
+
+  /**
+   * Why the last session start failed, or `null` when none has.
+   *
+   * The runtime reports failure as `'error'` on {@link ConnectionState$}, which is enough to show
+   * *that* something went wrong but not *what* — and the difference matters at exactly one point:
+   * microphone permission. A host that cannot tell "you denied the mic" from "the provider is
+   * down" has to show the same unhelpful copy for both. `AcquireMicrophone` rejects inside the
+   * runtime's own try/catch, so the host never sees that rejection itself.
+   */
+  private lastStartError: Error | null = null;
+
   // ── Interactive channels (registry-resolved plugins) ───────────────────────
   /** Debounce window for persisting a channel's state of record after a change burst. */
   private static readonly ChannelSaveDebounceMs = 3000;
@@ -830,7 +863,52 @@ export class RealtimeSessionRuntime {
       return;
     }
 
+    if (!this.hostCanUseProvider(session.Provider)) {
+      await this.abortUnusableSession(session);
+      return;
+    }
+
     await this.runMintedSession(session, conversationId ?? null, consent);
+  }
+
+  /**
+   * Declares which provider keys this host can actually carry audio for.
+   *
+   * The server resolves a realtime model by rank across every configured vendor, so it can
+   * legitimately return a provider whose client driver this host cannot run. A browser can run all
+   * of them; React Native can run the WebRTC ones but not those needing a Web Audio PCM plane.
+   * Connecting anyway gets as far as constructing the driver's playback engine and then throws —
+   * a crash, where the honest answer is "this workspace's voice provider is not one this app can
+   * use".
+   *
+   * The default accepts everything, so existing hosts are unaffected. Override to narrow it.
+   *
+   * @param provider The `Provider` key the server stamped on the minted session.
+   */
+  protected hostCanUseProvider(_provider: string): boolean {
+    return true;
+  }
+
+  /**
+   * Closes a session that was minted but will never be connected, and reports why.
+   *
+   * Minting creates a durable `MJ: AI Agent Sessions` row server-side, so declining to connect
+   * still has to close it — otherwise every rejected attempt leaks an `Active` session for the
+   * janitor to reconcile fifteen minutes later.
+   */
+  private async abortUnusableSession(session: StartRealtimeClientSessionResult): Promise<void> {
+    const reason =
+      `[RealtimeSession] This host cannot carry provider '${session.Provider}' ` +
+      `(model '${session.ModelName ?? session.Model}'); closing the minted session without connecting.`;
+    console.error(reason);
+    this.lastStartError = new Error(reason);
+    // Adopt the session id so the shared teardown closes it — and so this path unwinds through
+    // exactly one implementation. The prologue has already initialized the channel plugins and
+    // published them on ActiveChannels$; skipping teardown would leave them undisposed, their tool
+    // handlers registered, and their subscriptions live until the next start replaced them.
+    this.agentSessionId = session.AgentSessionId ?? this.agentSessionId;
+    this._connectionState$.next('error');
+    await this.teardown(true);
   }
 
   /**
@@ -862,6 +940,10 @@ export class RealtimeSessionRuntime {
     }
 
     const effectiveOptions = options ?? {};
+    if (!this.hostCanUseProvider(result.Provider)) {
+      await this.abortUnusableSession(result);
+      return;
+    }
     const consent = this.beginSessionStart(effectiveOptions);
     await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent);
   }
@@ -911,6 +993,8 @@ export class RealtimeSessionRuntime {
     inputConversationId: string | null,
     consent: boolean
   ): Promise<void> {
+    // Captured up front: every await below is a window in which the host can end the session.
+    const generation = this.startGeneration;
     try {
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
@@ -929,8 +1013,20 @@ export class RealtimeSessionRuntime {
       this.client = client;
       this.wireClientHandlers(client);
 
+      // Everything past here awaits on hardware and the network, during which the host may end the
+      // session. Each await is followed by a staleness check so an abandoned start releases what it
+      // just acquired instead of leaving a live microphone and a live call behind it.
       this.localStream = await this.mediaHost.AcquireMicrophone();
+      if (this.startGeneration !== generation) {
+        await this.unwindAbandonedStart(session, client);
+        return;
+      }
+
       await client.Connect(this.buildClientConfig(session), this.localStream);
+      if (this.startGeneration !== generation) {
+        await this.unwindAbandonedStart(session, client);
+        return;
+      }
 
       // Notify active channels that the session client is connected and tracks are established
       for (const channel of this._activeChannels$.value) {
@@ -981,11 +1077,58 @@ export class RealtimeSessionRuntime {
   }
 
   /**
+   * Releases everything a start acquired after the host had already ended the session.
+   *
+   * Reached only when {@link teardown} ran while this start was awaiting the microphone or the
+   * provider connection. Teardown found nothing to release because nothing existed yet, so this
+   * start owns the cleanup: stop the microphone, close the provider connection, and close the
+   * server-side session row that the mint created.
+   */
+  private async unwindAbandonedStart(
+    session: StartRealtimeClientSessionResult,
+    client: BaseRealtimeClient
+  ): Promise<void> {
+    console.warn('[RealtimeSession] Session was ended while starting — releasing the partial session.');
+    this.localStream?.getTracks().forEach(t => t.stop());
+    this.localStream = null;
+    try {
+      await client.Disconnect();
+    } catch (error) {
+      console.error('[RealtimeSession] Disconnect of an abandoned start failed:', error);
+    }
+    // Only clear the shared slots when they still point at THIS attempt — a newer start may
+    // already have replaced them.
+    if (this.client === client) {
+      this.client = null;
+    }
+    // Close the server session only if teardown has NOT already done so. It nulls `agentSessionId`
+    // after closing, so a still-matching id means this attempt still owns the row; a cleared one
+    // means the teardown that invalidated this start already closed it, and closing again would
+    // send a second `CloseAgentSession` for one session.
+    if (session.AgentSessionId && this.agentSessionId === session.AgentSessionId) {
+      this.agentSessionId = null;
+      await this.closeServerSession(session.AgentSessionId);
+    }
+  }
+
+  /**
+   * Why the last session start failed, or `null` when the last start succeeded or none has run.
+   *
+   * Read it when {@link ConnectionState$} reports `'error'`, to tell a denied microphone apart from
+   * a provider or backend failure and show copy the user can act on. Cleared at the start of every
+   * session.
+   */
+  public get LastStartError(): Error | null {
+    return this.lastStartError;
+  }
+
+  /**
    * The single failure path for a session start (mint half or run half): report it, latch the
    * overlay into 'error', and unwind whatever the half-built session already opened.
    */
   private async failSessionStart(error: unknown): Promise<void> {
     console.error('[RealtimeSession] Failed to start session:', error);
+    this.lastStartError = error instanceof Error ? error : new Error(String(error));
     this._connectionState$.next('error');
     await this.teardown(false);
   }
@@ -2782,6 +2925,24 @@ export class RealtimeSessionRuntime {
    * @param closeServerSession when true, calls `CloseAgentSession` on the server.
    */
   private async teardown(closeServerSession: boolean): Promise<void> {
+    // Invalidate any start still in flight BEFORE anything else, so it abandons itself at its next
+    // await rather than opening a microphone behind a session that is being ended.
+    this.startGeneration++;
+
+    // Coalesce concurrent teardowns onto one run. Callers still get a promise that resolves when
+    // teardown is actually complete.
+    if (this.teardownInFlight) {
+      await this.teardownInFlight;
+      return;
+    }
+    this.teardownInFlight = this.runTeardown(closeServerSession).finally(() => {
+      this.teardownInFlight = null;
+    });
+    await this.teardownInFlight;
+  }
+
+  /** The body of {@link teardown}; never called concurrently with itself. */
+  private async runTeardown(closeServerSession: boolean): Promise<void> {
     // First: stop asserting liveness. A pulse racing the close would re-stamp LastActiveAt on a
     // session we are deliberately ending, leaving an Idle row the janitor then has to age out.
     this.stopLivenessPulse();
@@ -2796,6 +2957,16 @@ export class RealtimeSessionRuntime {
     // tracks it was handed — track.stop() is idempotent).
     this.localStream?.getTracks().forEach(t => t.stop());
     this.localStream = null;
+
+    // Hand the platform back whatever acquiring the microphone changed. Stopping the tracks is not
+    // the same thing: iOS, for instance, is put into a record-and-play audio category for the call,
+    // and leaving it there changes the route and volume behaviour of every sound the app makes
+    // afterwards. Best-effort by contract — a failure here must never block ending a call.
+    try {
+      await this.mediaHost.ReleaseMicrophone?.();
+    } catch (error) {
+      console.error('[RealtimeSession] Media host failed to release the microphone:', error);
+    }
 
     if (this.client) {
       await this.client.Disconnect();

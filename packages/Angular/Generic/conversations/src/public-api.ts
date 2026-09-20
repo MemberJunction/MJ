@@ -32,6 +32,7 @@ export * from './lib/services/artifact-permission.service';
 export * from './lib/services/artifact-use-tracking.service';
 export * from './lib/services/collection-state.service';
 export * from './lib/services/conversation-attachment.service';
+export * from './lib/services/graphql-attachment-blob-store';
 export * from './lib/services/ui-command-handler.service';
 export * from './lib/services/conversation-bridge.service';
 export * from './lib/services/realtime-session.service';

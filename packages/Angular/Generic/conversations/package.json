@@ -19,9 +19,9 @@
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
+    "@memberjunction/ng-test-utils": "6.1.0",
     "sass": "^1.97.3",
-    "vitest": "^4.0.18",
-    "@memberjunction/ng-test-utils": "6.1.0"
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "@angular/animations": "^21.2.22",
