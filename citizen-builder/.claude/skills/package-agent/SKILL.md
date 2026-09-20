@@ -16,13 +16,18 @@ Inspect the agent's files and verify against the security rules:
 - [ ] If Tier 2 Runtime Actions are included, ensure an explicit `allowedEntities` list is specified.
 
 ## Step 2: Extract Last Successful Execution Receipt
-Run a quick query or use `./scripts/query-run-history.sh` to grab the ID and metrics of the latest successful run:
+Run `./scripts/query-run-history.sh` to grab the ID and metrics of the latest successful run:
 ```bash
-./scripts/query-run-history.sh
+# List recent runs for the agent
+./scripts/query-run-history.sh "<Agent Name>"
+
+# Fetch structured JSON audit for the target RunID
+./scripts/query-run-history.sh <RunID> --format json
 ```
 Record:
 - Timestamp of test run
 - Total tokens consumed
+- Verified actions executed (`actionsUsed`)
 - Sample input and generated output summary
 
 ## Step 3: Generate `AGENT_MANIFEST.md`
