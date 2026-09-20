@@ -258,6 +258,34 @@ and rewriting them would change Flyway checksums on every existing database for 
 `bootstrap-clean-db` skill. A migration whose correctness depends on local state cannot be caught
 any other way, and is cheapest to fix before a release cut.
 
+### Amending a migration that has already shipped
+
+The paragraph above says a literal `Sequence` in an already-released migration is left alone,
+because rewriting it "would change Flyway checksums on every existing database for no benefit."
+That is a judgement about *benefit*, not a prohibition — and the two halves are easy to misread as
+one rule, so the other half is recorded here.
+
+**Amending a shipped migration is permitted when the amendment fixes a failure that is still
+ahead of some databases.** MJ#4503 is the worked example: eight released `Metadata_Sync` files
+replay `spCreate` with fixed GUIDs and die on a primary-key violation wherever `mj sync push` ran
+before the chain caught up. A database that already applied those files never re-runs them, so it
+is unaffected; a database that has not reached them yet gets the repaired version. The repair
+reaches exactly the population that needs it.
+
+**It rests on one invariant: nothing in MJ ever compares a Flyway checksum.** All three legs:
+
+- `packages/MJCLI/src/commands/migrate/index.ts` calls `skyway.Migrate()`. There is no
+  `Validate()` or `Repair()` call on a Skyway object anywhere in this repo.
+- `ChecksumMismatchError` is *defined* in `@memberjunction/skyway-core` (`dist/core/errors.js`)
+  and has **no throw site** in the package. Checksum comparison lives only in `Validate()` /
+  `Repair()`.
+- MJ#4489 already amended a released migration in place and applied cleanly to databases past it.
+
+**🚨 If you add `mj migrate validate` or `mj migrate repair`, this invariant dies with it.** Every
+amended file then reports a checksum mismatch on every database that already applied it. That is
+not a reason to avoid adding the command — it is a reason to ship a baseline-checksum repair step
+*with* it. Check `git log --diff-filter=M -- migrations/` for which files have been amended.
+
 ### 🚨 ONE DATABASE PER AGENT — never point two sessions at the same one
 
 **Before running `mj migrate`, `mj codegen`, or `mj sync push`, confirm the database in your
