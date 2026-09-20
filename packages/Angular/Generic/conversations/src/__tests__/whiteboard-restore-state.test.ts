@@ -4,7 +4,7 @@ import '@angular/compiler';
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { Type } from '@angular/core';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
-import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardChannel } from '../lib/components/realtime/whiteboard/whiteboard-channel';
 import { WhiteboardStickyItem, WhiteboardTextItem } from '@memberjunction/ng-whiteboard';
 

@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Subject } from 'rxjs';
 import { RealtimeSessionState, RealtimeSessionStreams } from '../lib/components/realtime/realtime-session-state';
-import type {
-  RealtimeCaption,
-  RealtimeDelegationNarration,
-  RealtimeDelegationProgress,
-  RealtimeDelegationResult
-} from '../lib/services/realtime-session.service';
+import type { RealtimeCaption, RealtimeDelegationNarration, RealtimeDelegationProgress, RealtimeDelegationResult } from '@memberjunction/realtime-runtime';
 
 /** Test harness: drives the four session streams the state merges. */
 function buildStreams(): {

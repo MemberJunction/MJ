@@ -8,7 +8,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Colors, Spacing, Type } from '@/theme/tokens';
-import { chartColorAt, type ChartDatum } from './chart-spec';
+import { ChartColorAt, type ChartDatum } from './chart-spec';
 
 /** Props for {@link PieChart}. */
 export type PieChartProps = {
@@ -57,13 +57,13 @@ export function PieChart({ data, width, title }: PieChartProps) {
             <View style={styles.row}>
                 <Svg width={DIAMETER} height={DIAMETER}>
                     {slices.map((s) => (
-                        <Path key={`slice-${s.idx}`} d={s.path} fill={chartColorAt(s.idx)} />
+                        <Path key={`slice-${s.idx}`} d={s.path} fill={ChartColorAt(s.idx)} />
                     ))}
                 </Svg>
                 <View style={styles.legend}>
                     {data.map((datum, idx) => (
                         <View key={`legend-${idx}`} style={styles.legendRow}>
-                            <View style={[styles.swatch, { backgroundColor: chartColorAt(idx) }]} />
+                            <View style={[styles.swatch, { backgroundColor: ChartColorAt(idx) }]} />
                             <Text style={styles.legendLabel} numberOfLines={1}>{datum.label}</Text>
                             <Text style={styles.legendValue}>
                                 {formatValue(datum.value)}

@@ -40,3 +40,8 @@ export * from './task-graph/task-rows-to-spec';
 export * from './task-graph/task-graph-to-agent-spec';
 export * from './task-graph/workflow-spec';
 export * from './task-graph/workflow-spec-validator';
+
+// The conversation-attachment blob seam. Lives here rather than in `@memberjunction/aiengine`
+// because browser and React Native hosts implement it, and a package they can reach must not
+// declare a server-only dependency — not even for a type. See the file header for the incident.
+export * from './attachment-blob-store';
