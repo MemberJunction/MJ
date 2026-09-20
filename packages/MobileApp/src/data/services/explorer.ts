@@ -474,8 +474,23 @@ function kindFromTypeName(name: string): DashboardPartKind {
     return 'unknown';
 }
 
-/** Parse `UIConfigDetails` into raw panels, tolerating malformed JSON. */
-function parsePanels(uiConfigDetails: string): RawPanel[] {
+/**
+ * Parse `UIConfigDetails` into raw panels, tolerating malformed JSON.
+ *
+ * Exported for tests. The shape this has to survive is **Golden Layout's native
+ * `ResolvedLayoutConfig`**, which is what MJ Explorer persists — not the simplified tree the
+ * mobile composer writes. Two properties of that format matter and are easy to get wrong:
+ *
+ * - **Components live inside `stack` nodes**, always, even a stack of one. A walk that only
+ *   descends rows and columns finds nothing in a real Explorer dashboard.
+ * - **Panels in the SAME stack are tabs on a desktop.** A phone has no tabs, so they flatten into
+ *   the panel list in order and stack vertically. Nothing is hidden behind a tab the user cannot
+ *   reach.
+ *
+ * The walk therefore keys on `type === 'component'` and recurses on `content` regardless of node
+ * type — the same thing the Angular viewer's own walker does.
+ */
+export function parsePanels(uiConfigDetails: string): RawPanel[] {
     if (!uiConfigDetails || uiConfigDetails.trim() === '') return [];
     try {
         const parsed: unknown = JSON.parse(uiConfigDetails);
