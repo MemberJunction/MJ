@@ -44,12 +44,13 @@ export interface RowDriver {
 }
 
 /** Parse + humanize the raw per-record `drivers` (post-preprocessing `feature`/`value`) into {@link RowDriver}s. */
-function parseRowDrivers(raw: unknown): RowDriver[] | null {
+export function parseRowDrivers(raw: unknown): RowDriver[] | null {
   if (!Array.isArray(raw) || raw.length === 0) return null;
   const out: RowDriver[] = [];
-  for (const d of raw as Array<{ feature?: unknown; value?: unknown }>) {
+  for (const d of raw as Array<{ feature?: unknown; value?: unknown; importance?: unknown; weight?: unknown }>) {
     const feature = typeof d?.feature === 'string' ? d.feature : '';
-    const value = typeof d?.value === 'number' ? d.value : NaN;
+    const rawVal = typeof d?.value === 'number' ? d.value : typeof d?.importance === 'number' ? d.importance : typeof d?.weight === 'number' ? d.weight : NaN;
+    const value = Number(rawVal);
     if (!feature || !Number.isFinite(value)) continue;
     // Keep the one-hot category: for a per-record "why", the category IS the story — "Membership Type =
     // Student lowers risk" is actionable where a collapsed "Membership Type" is close to meaningless.
@@ -67,6 +68,8 @@ function parseRowDrivers(raw: unknown): RowDriver[] | null {
 export function labelFromRecord(row: Record<string, unknown> | undefined | null): string | null {
   if (!row) return null;
   const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+  const member = str(row['MemberName'] || row['Member'] || row['FullName']);
+  if (member) return member;
   const name = str(row['Name']);
   if (name) return name;
   const full = `${str(row['FirstName'])} ${str(row['LastName'])}`.trim();
@@ -87,13 +90,25 @@ export interface RunDetailLike {
   ResultPayload?: string | null;
 }
 
+/** Options for parsing predictions into at-risk rows. */
+export interface ParseAtRiskOptions {
+  /**
+   * When true, the model predicts probability of a positive outcome (e.g. `P(Renewed)`).
+   * Churn / adverse risk is therefore inverted: `riskScore = 1.0 - score`.
+   * High score (0.99) -> Low Risk (1%, green). Low score (0.10) -> High Risk (90%, red).
+   */
+  invertedRisk?: boolean;
+}
+
 function bandFor(score: number): AtRiskRow['band'] {
   return score >= 0.7 ? 'high' : score >= 0.4 ? 'medium' : 'low';
 }
 
 /** Parse + rank the per-record predictions into the at-risk list (highest risk first). */
-export function parseAtRiskRows(details: RunDetailLike[]): AtRiskRow[] {
+export function parseAtRiskRows(details: RunDetailLike[], options?: ParseAtRiskOptions): AtRiskRow[] {
   const rows: AtRiskRow[] = [];
+  const isInverted = options?.invertedRisk === true;
+
   for (const d of details) {
     if (!d.ResultPayload) continue;
     let parsed: {
@@ -111,17 +126,20 @@ export function parseAtRiskRows(details: RunDetailLike[]): AtRiskRow[] {
     const p = parsed.output ?? parsed;
     if (typeof p.score !== 'number' || !Number.isFinite(p.score)) continue;
     const score = p.score;
+    const effectiveRisk = isInverted ? Math.max(0, Math.min(1, 1 - score)) : score;
+    const riskPct = Math.round(effectiveRisk * 100);
+
     rows.push({
       recordId: d.recordId,
       label: null,
       score,
-      riskPct: Math.round(score * 100),
+      riskPct,
       class: p.class ?? null,
-      band: bandFor(score),
+      band: bandFor(effectiveRisk),
       drivers: parseRowDrivers(p.drivers),
     });
   }
-  return rows.sort((a, b) => b.score - a.score);
+  return rows.sort((a, b) => b.riskPct - a.riskPct);
 }
 
 /**

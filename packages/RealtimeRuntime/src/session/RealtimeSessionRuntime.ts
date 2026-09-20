@@ -4,7 +4,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject, JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, DEFAULT_REALTIME_AUDIO_TRACKS, JSONObject, JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import {
   BaseRealtimeClient,
@@ -159,6 +159,61 @@ interface RealtimeChannelDefinitionRow {
 export interface RealtimeDelegationNarration {
   /** The narration transcript text. */
   Text: string;
+}
+
+/**
+ * Converts a {@link RealtimeTrackDescriptor} to its JSON form for the session-config bag.
+ *
+ * Every field's VALUE is already JSON-safe; the interface simply is not assignable to `JSONValue`
+ * because it declares no index signature and `UsageBasis` is `readonly`. Written out field by field
+ * rather than asserted, so adding a descriptor field is a compile error here instead of a field that
+ * silently stops reaching the driver.
+ */
+function trackDescriptorToJSON(track: RealtimeTrackDescriptor): JSONObject {
+  const json: JSONObject = { Modality: track.Modality, Direction: track.Direction };
+  if (track.Encoding !== undefined) {
+    json['Encoding'] = track.Encoding;
+  }
+  if (track.Rate !== undefined) {
+    json['Rate'] = track.Rate;
+  }
+  if (track.UsageBasis !== undefined) {
+    json['UsageBasis'] = [...track.UsageBasis];
+  }
+  if (track.RequiresConsent !== undefined) {
+    json['RequiresConsent'] = track.RequiresConsent;
+  }
+  return json;
+}
+
+/**
+ * Reads the `Direction:Modality` dedupe key off an already-JSON track entry, or `null` when the
+ * entry is not a track-shaped object. Used for tracks the mint supplied, which arrive as raw JSON.
+ */
+function trackKeyFromJSON(raw: JSONValue): string | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+  const direction = raw['Direction'];
+  const modality = raw['Modality'];
+  if (typeof direction !== 'string' || typeof modality !== 'string') {
+    return null;
+  }
+  return `${direction}:${modality}`;
+}
+
+/**
+ * One thought/reasoning narration emitted on {@link RealtimeSessionRuntime.ThoughtNarration$}.
+ * Distinct from spoken progress narrations: thought summaries are authored by reasoning models
+ * (e.g. Gemini 3.8 Live Extended Thinking) and are NOT spoken aloud.
+ */
+export interface RealtimeThoughtNarration {
+  /** Correlating call ID if associated with a delegation/turn; otherwise generated or empty. */
+  CallID?: string;
+  /** The model's thought / reasoning text. */
+  Text: string;
+  /** Whether this emission represents the complete finalized thought turn. */
+  IsFinal?: boolean;
 }
 
 /**
@@ -324,6 +379,7 @@ export class RealtimeSessionRuntime {
   private _delegationProgress$ = new Subject<RealtimeDelegationProgress>();
   private _delegationResult$ = new Subject<RealtimeDelegationResult>();
   private _delegationNarration$ = new Subject<RealtimeDelegationNarration>();
+  private _thoughtNarration$ = new Subject<RealtimeThoughtNarration>();
   private _agentName$ = new BehaviorSubject<string>('Sage');
   private _modelName$ = new BehaviorSubject<string | null>(null);
   private _minimized$ = new BehaviorSubject<boolean>(false);
@@ -358,6 +414,11 @@ export class RealtimeSessionRuntime {
    * renders them as a transient "live note" near the active working card.
    */
   public readonly DelegationNarration$: Observable<RealtimeDelegationNarration> = this._delegationNarration$.asObservable();
+  /**
+   * Model-authored thought / reasoning narrations (see {@link RealtimeThoughtNarration}). These are
+   * reasoning summaries author-emitted during extended thinking, separate from spoken progress updates.
+   */
+  public readonly ThoughtNarration$: Observable<RealtimeThoughtNarration> = this._thoughtNarration$.asObservable();
   /** Display name of the agent the active session fronts (set at session start). */
   public readonly AgentName$: Observable<string> = this._agentName$.asObservable();
   /**
@@ -871,6 +932,15 @@ export class RealtimeSessionRuntime {
       this.localStream = await this.mediaHost.AcquireMicrophone();
       await client.Connect(this.buildClientConfig(session), this.localStream);
 
+      // Notify active channels that the session client is connected and tracks are established
+      for (const channel of this._activeChannels$.value) {
+        try {
+          channel.OnSessionStarted?.();
+        } catch (err) {
+          console.error(`[RealtimeSession] Error in channel '${channel.ChannelName}' OnSessionStarted:`, err);
+        }
+      }
+
       // Start browser-side recording (mic + agent mix) when consented. Best-effort: an
       // unsupported browser / missing remote stream degrades gracefully (mic-only or off)
       // and never blocks the call. The remote stream may still be null here (the WebRTC
@@ -1033,6 +1103,30 @@ export class RealtimeSessionRuntime {
    */
   public GetAudioActivity(): RealtimeAudioActivity | null {
     return this.client?.GetAudioActivity() ?? null;
+  }
+
+  /**
+   * The active {@link BaseRealtimeClient} driving the media plane, or null when not connected.
+   */
+  public get Client(): BaseRealtimeClient | null {
+    return this.client;
+  }
+
+  /**
+   * Relays a video frame to the underlying realtime client if active.
+   */
+  public SendVideoFrame(base64Image: string, mimeType?: string): void {
+    if (!this.client || !this.isSessionLive()) {
+      return;
+    }
+    this.client.SendVideoFrame?.(base64Image, mimeType);
+  }
+
+  /**
+   * Checks whether a media track is established on the active realtime client.
+   */
+  public IsTrackEstablished(modality: string, direction: RealtimeTrackDirection): boolean {
+    return this.client?.IsTrackEstablished(modality, direction) ?? false;
   }
 
   // ── Browser-side call recording ────────────────────────────────────────────
@@ -1378,7 +1472,12 @@ export class RealtimeSessionRuntime {
       // (Explorer) feeds both; absent on hosts that supply no app context / register no client tools.
       AppContext$: this.AppContext$,
       ExecuteClientTool: (name: string, params: Record<string, unknown>) =>
-        this.executeAppClientTool(name, params)
+        this.executeAppClientTool(name, params),
+      get Client(): BaseRealtimeClient | null {
+        return service.client;
+      },
+      SendVideoFrame: (base64Image: string, mimeType?: string) => this.SendVideoFrame(base64Image, mimeType),
+      IsTrackEstablished: (modality: string, direction: RealtimeTrackDirection) => this.IsTrackEstablished(modality, direction)
     };
   }
 
@@ -1623,14 +1722,44 @@ export class RealtimeSessionRuntime {
     return client;
   }
 
-  /** Builds the client-direct session config the realtime client connects with. */
-  private buildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
+  /**
+   * Builds the client-direct session config the realtime client connects with.
+   * Aggregates tracks sourced by active channels into `requestedTracks` so the driver
+   * can negotiate them (e.g., establishing inbound video streaming for Whiteboard / RemoteBrowser).
+   */
+  public buildClientConfig(session: StartRealtimeClientSessionResult): ClientRealtimeSessionConfig {
+    const sessionConfig = this.parseSessionConfig(session.SessionConfigJson);
+    const channelTracks = this._activeChannels$.value.flatMap((c) => c.GetSourcedTracks());
+    if (channelTracks.length > 0) {
+      // `requestedTracks` crosses a JSON boundary — the driver reads it back out of the session
+      // config bag (`GeminiRealtimeClient.parseSessionConfig`). A `RealtimeTrackDescriptor` is NOT
+      // structurally a `JSONValue`: it has no index signature and `UsageBasis` is readonly, so the
+      // conversion is written out rather than asserted. Dedupe key and precedence are unchanged —
+      // audio floor first, then anything the mint supplied, then the channels' own tracks.
+      const existing: readonly JSONValue[] = Array.isArray(sessionConfig['requestedTracks'])
+        ? sessionConfig['requestedTracks']
+        : [];
+      const trackMap = new Map<string, JSONValue>();
+      for (const t of DEFAULT_REALTIME_AUDIO_TRACKS) {
+        trackMap.set(`${t.Direction}:${t.Modality}`, trackDescriptorToJSON(t));
+      }
+      for (const raw of existing) {
+        const key = trackKeyFromJSON(raw);
+        if (key) {
+          trackMap.set(key, raw);
+        }
+      }
+      for (const t of channelTracks) {
+        trackMap.set(`${t.Direction}:${t.Modality}`, trackDescriptorToJSON(t));
+      }
+      sessionConfig['requestedTracks'] = Array.from(trackMap.values());
+    }
     return {
       Provider: session.Provider,
       Model: session.Model,
       EphemeralToken: session.EphemeralToken,
       ExpiresAt: session.ExpiresAt,
-      SessionConfig: this.parseSessionConfig(session.SessionConfigJson)
+      SessionConfig: sessionConfig
     };
   }
 
@@ -1753,11 +1882,19 @@ export class RealtimeSessionRuntime {
       this.hasActiveInterimUserCaption = false;
       this.pendingUserCaption = '';
       if (transcript.Kind === 'narration') {
-        this._delegationNarration$.next({ Text: transcript.Text });
-        // Remember what was actually SAID so later updates build on it instead of repeating.
-        this.spokenNarrations.push(transcript.Text);
-        if (this.spokenNarrations.length > RealtimeSessionRuntime.MaxPriorNarrations) {
-          this.spokenNarrations.shift();
+        if (transcript.IsThought) {
+          this._thoughtNarration$.next({
+            CallID: 'thought-session',
+            Text: transcript.Text,
+            IsFinal: transcript.IsFinal ?? true,
+          });
+        } else {
+          this._delegationNarration$.next({ Text: transcript.Text });
+          // Remember what was actually SAID so later updates build on it instead of repeating.
+          this.spokenNarrations.push(transcript.Text);
+          if (this.spokenNarrations.length > RealtimeSessionRuntime.MaxPriorNarrations) {
+            this.spokenNarrations.shift();
+          }
         }
       } else if (transcript.ReplacesPrevious) {
         // CORRECTION (e.g. ElevenLabs post-barge-in re-finalization): this final

@@ -41,6 +41,7 @@ export {
     type RealtimeClientToolHandler,
     type RealtimeChannelFocusEvent,
     type RealtimeDelegationNarration,
+    type RealtimeThoughtNarration,
     type StartRealtimeClientSessionResult,
     type RealtimeSessionRunOptions,
 } from './session/RealtimeSessionRuntime';

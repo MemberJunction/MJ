@@ -1,0 +1,312 @@
+[
+  {
+    "fields": {
+      "Name": "Brave Search",
+      "Description": "Web search through the Brave Search API. Returns ranked title/url/snippet results from Brave's own independent index rather than reselling Google's or Bing's, so it does not share a failure mode with the Google Custom Search action (discontinued 2027-01-01) or with SERP-proxy vendors.",
+      "DriverClass": "Brave Search",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-brands fa-brave",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Web"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Search query text. Required. Brave rejects queries over 400 characters.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A8E7A103-1A13-4EAB-A687-C5608AC9F5EF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Count",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of results to return, 1-20. Values above the cap are clamped. Default: 10.",
+            "IsRequired": false,
+            "DefaultValue": "10"
+          },
+          "primaryKey": {
+            "ID": "B6B6B1C5-1747-4A27-A781-D5368101451B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Offset",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Zero-based page offset, 0-9. Counts pages, not results. Default: 0.",
+            "IsRequired": false,
+            "DefaultValue": "0"
+          },
+          "primaryKey": {
+            "ID": "A3A7D469-8CB2-42BE-B79B-61E617DE2802"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Country",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Two-letter country code for result localisation, e.g. 'US', 'GB'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "49346353-9A48-40D7-9186-AD918D9EEA78"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchLang",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Language code for results, e.g. 'en'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5AD17538-1F33-4C09-81A6-996AC974ABE7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SafeSearch",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Adult-content filter: 'off', 'moderate' or 'strict'. Default: moderate.",
+            "IsRequired": false,
+            "DefaultValue": "moderate"
+          },
+          "primaryKey": {
+            "ID": "7D39119A-97AA-4B66-A565-C412EA47931B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Freshness",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restrict by age: 'pd' (past day), 'pw' (week), 'pm' (month), 'py' (year), or a 'YYYY-MM-DDtoYYYY-MM-DD' range.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2BA900CE-8C11-4FFF-B1AD-B34F7943EFA5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExtraSnippets",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Return additional snippets per result. Brave gates this on plan tier. Default: false.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "90874FB4-FF56-44AF-9E08-B398000C3B1D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Ranked results, each with title, url, snippet, displayUrl and (when Brave dates the page) age and pageAge.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "652E879B-D5AF-4BCB-8A06-7E7641206634"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of results returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "12E61C0F-A3C3-43C9-A2FA-971D4EFB856F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultDetails",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "The complete response envelope, including the query Brave actually searched for when it rewrote the original.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "127CB2FE-B13D-4A6A-8C74-B546EE0BD5E9"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search completed. Zero results is reported here rather than as a failure."
+          },
+          "primaryKey": {
+            "ID": "A229FD85-87A3-4060-8F2C-D2D5BC9588D1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_QUERY",
+            "IsSuccess": false,
+            "Description": "Query is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "A729E4A7-14DD-4B2B-8865-82990313332B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_TOO_LONG",
+            "IsSuccess": false,
+            "Description": "Query exceeds Brave's 400-character limit."
+          },
+          "primaryKey": {
+            "ID": "AC8C139C-F052-47BF-AAEE-025B7BAE2FF0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "IsSuccess": false,
+            "Description": "Brave API key not configured. Set braveApiKey in mj.config.cjs or the BRAVE_SEARCH_API_KEY environment variable."
+          },
+          "primaryKey": {
+            "ID": "AAFC705F-6476-47F8-8AF2-21A156843003"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_API_KEY",
+            "IsSuccess": false,
+            "Description": "Brave rejected the API key."
+          },
+          "primaryKey": {
+            "ID": "7C6AA80D-637D-4239-842F-47D8EFA03AA1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_SAFESEARCH",
+            "IsSuccess": false,
+            "Description": "SafeSearch must be 'off', 'moderate' or 'strict'."
+          },
+          "primaryKey": {
+            "ID": "7877DB4F-98FF-4757-B430-204E5E993470"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_FRESHNESS",
+            "IsSuccess": false,
+            "Description": "Freshness must be pd, pw, pm, py or a YYYY-MM-DDtoYYYY-MM-DD range."
+          },
+          "primaryKey": {
+            "ID": "1A3F1D0E-D50A-442E-8E61-55CEE7457932"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_REQUEST",
+            "IsSuccess": false,
+            "Description": "Brave rejected the request as malformed."
+          },
+          "primaryKey": {
+            "ID": "4B381D42-AC3D-41D4-BC91-211571663807"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RATE_LIMITED",
+            "IsSuccess": false,
+            "Description": "Brave rate limit or plan quota reached. Brave meters against a stored card, so this can indicate spend, not just pacing."
+          },
+          "primaryKey": {
+            "ID": "68803A17-C1AB-4958-958A-D171AB401115"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMPTY_RESPONSE",
+            "IsSuccess": false,
+            "Description": "Brave returned an empty response."
+          },
+          "primaryKey": {
+            "ID": "175E172C-9910-46FA-9EBA-CD85E343DFF9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "IsSuccess": false,
+            "Description": "Brave returned an error. The message carries the detail."
+          },
+          "primaryKey": {
+            "ID": "28413738-6F6C-4F87-8F8F-DE592CC68FFC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEARCH_FAILED",
+            "IsSuccess": false,
+            "Description": "The search failed unexpectedly, e.g. a timeout or network failure."
+          },
+          "primaryKey": {
+            "ID": "8FFE3FC1-32AA-4709-A621-5CDA2631C294"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "01DA2F20-7433-462F-B7F5-6DB7953DFCFA"
+    }
+  }
+]

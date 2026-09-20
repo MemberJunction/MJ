@@ -8,9 +8,10 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PSProcessRunRow, primaryAuc } from '../predictive-studio.view-models';
+import { PSProcessRunRow, primaryAuc, primaryModelScore, formatMetricValue } from '../predictive-studio.view-models';
 import { humanizeCron, StatusVariant } from '../production-distribution';
 import { PSOperateDialogComponent } from './ps-operate-dialog.component';
+import { PSPredictionsGridComponent } from './ps-predictions-grid.component';
 
 /** A model's deployment state, derived purely from cached bindings + Record Processes. */
 type DeployState = 'bound' | 'scheduled' | 'idle';
@@ -68,7 +69,7 @@ interface RunDetailVM {
 @Component({
   standalone: true,
   selector: 'ps-production',
-  imports: [CommonModule, SharedGenericModule, MJButtonDirective, PSOperateDialogComponent],
+  imports: [CommonModule, SharedGenericModule, MJButtonDirective, PSOperateDialogComponent, PSPredictionsGridComponent],
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.css', './ps-production.component.css'],
   template: `
@@ -168,29 +169,22 @@ interface RunDetailVM {
               <div class="ps-card-head"><h3>Run history</h3><span class="ps-muted ps-small">last 90 days · newest first</span></div>
               <div class="ps-card-body">
                 @if (selectedRunId) {
-                  <!-- run drill-in: per-record predictions from Process Run Details -->
-                  <button class="run-back" data-testid="ps-production-run-back" (click)="closeRun()">
-                    <i class="fa-solid fa-arrow-left"></i> All runs
-                  </button>
-                  @if (loadingDetails) {
-                    <mj-loading text="Loading predictions..." size="small"></mj-loading>
-                  } @else if (runDetails.length === 0) {
-                    <div class="ps-small ps-muted">No per-record predictions recorded for this run.</div>
-                  } @else {
-                    <table class="runs-table" data-testid="ps-production-run-detail">
-                      <thead><tr><th>Record</th><th>Status</th><th>Prediction</th><th>Scored</th></tr></thead>
-                      <tbody>
-                        @for (d of runDetails; track d.recordId) {
-                          <tr>
-                            <td class="ps-mono ps-small">{{ d.recordId }}</td>
-                            <td><span class="ps-badge" [class]="runBadge(d.status)">{{ d.status }}</span></td>
-                            <td class="ps-mono">{{ d.score }}@if (d.class) { <span class="ps-muted"> · {{ d.class }}</span> }</td>
-                            <td class="ps-small ps-muted">{{ d.scoredAt ? (d.scoredAt | date:'short') : '—' }}</td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
-                  }
+                  <!-- run drill-in: unified predictions grid with virtual scrolling, name resolution, charts & history -->
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                    <button class="run-back" data-testid="ps-production-run-back" (click)="closeRun()">
+                      <i class="fa-solid fa-arrow-left"></i> All runs
+                    </button>
+                    <span class="ps-tag ps-mono ps-small">Run: {{ selectedRunId }}</span>
+                  </div>
+                  <ps-predictions-grid
+                    data-testid="ps-production-run-grid"
+                    [modelId]="selected.modelId"
+                    [runId]="selectedRunId"
+                    [entityName]="selectedTargetEntityName"
+                    [problemType]="selected.problemType"
+                    [title]="selected.label + ' — Run Predictions'"
+                    height="540px">
+                  </ps-predictions-grid>
                 } @else if (loadingRuns) {
                   <mj-loading text="Loading runs..." size="small"></mj-loading>
                 } @else if (runs.length === 0) {
@@ -301,14 +295,15 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       null,
     );
     const lastRowCount = bindings.find((b) => b.LastRowCount != null)?.LastRowCount ?? null;
-    const auc = primaryAuc(m);
+    const score = primaryModelScore(m);
+    const holdoutMetric = score != null ? formatMetricValue(score.key, score.value) : '—';
     return {
       modelId: m.ID,
       label: this.engine.ModelDisplayName(m),
       algorithm: this.engine.AlgorithmName(m.AlgorithmID),
       problemType: m.ProblemType ?? '—',
       version: m.Version,
-      holdoutMetric: auc != null ? auc.toFixed(3) : '—',
+      holdoutMetric,
       deployState: bindings.length > 0 ? 'bound' : scheduledCount > 0 ? 'scheduled' : 'idle',
       bindingCount: bindings.length,
       processCount: processes.length,
@@ -342,6 +337,21 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       if (entity) return entity.Name;
     }
     return '—';
+  }
+
+  public get selectedTargetEntityName(): string | null {
+    if (this.selectedBindings.length > 0 && this.selectedBindings[0].targetEntity !== '—') {
+      return this.selectedBindings[0].targetEntity;
+    }
+    const model = this.engine?.PublishedModels?.find((m) => UUIDsEqual(m.ID, this.selected.modelId));
+    if (model?.PipelineID) {
+      const pipeline = this.engine?.Pipelines?.find((p) => UUIDsEqual(p.ID, model.PipelineID));
+      if (pipeline?.TargetEntityID) {
+        const ent = this.ProviderToUse.Entities.find((e) => UUIDsEqual(e.ID, pipeline.TargetEntityID));
+        if (ent) return ent.Name;
+      }
+    }
+    return null;
   }
 
   // ---- selection + on-demand run history ----
