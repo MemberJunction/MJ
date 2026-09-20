@@ -99,7 +99,12 @@ export class TrainingEngine {
 
     try {
       const assembly = await this.assemble(resolved, input, deps);
-      const split = this.carveLockedHoldout(assembly.matrix, resolved.validation, resolved.targetVariable);
+      const targetIdx = assembly.matrix.columns.indexOf(resolved.targetVariable);
+      const cleanRows = targetIdx >= 0
+        ? assembly.matrix.rows.filter((r) => r[targetIdx] !== null && r[targetIdx] !== undefined)
+        : assembly.matrix.rows;
+      const cleanMatrix: MatrixData = { columns: assembly.matrix.columns, rows: cleanRows };
+      const split = this.carveLockedHoldout(cleanMatrix, resolved.validation, resolved.targetVariable);
       const validation = this.buildValidationConfig(resolved.validation);
       const trainRequest = this.buildTrainRequest(resolved, assembly, split.training, validation);
 

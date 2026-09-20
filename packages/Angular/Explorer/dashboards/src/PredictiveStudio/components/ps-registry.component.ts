@@ -14,12 +14,14 @@ import { PSFeatureBar, PS_LIFECYCLE_STEPS, PSLifecycleStep } from '../predictive
 import {
   PS_FEATURE_DOMINANCE_THRESHOLD,
   PSMetricDisplay,
+  formatMetricValue,
   maxFeatureImportance,
   metricsToDisplay,
   overfitGap,
   parseFeatureImportance,
   parseMetrics,
   primaryAuc,
+  primaryModelScore,
 } from '../predictive-studio.view-models';
 import { PSConfirmModalComponent } from './ps-confirm-modal.component';
 import { humanizeFeatureName } from '../at-risk.view-models';
@@ -30,6 +32,8 @@ interface ModelRowVM {
   version: number;
   algorithm: string;
   holdoutAuc: string;
+  holdoutScore: string;
+  scoreLabel: string;
   status: string;
   iconClass: string;
 }
@@ -85,7 +89,7 @@ interface PendingPromotion {
                     <div class="ln2 ps-muted ps-small">v{{ m.version }} · {{ m.algorithm }}</div>
                   </div>
                   <div class="auc">
-                    <div class="v">{{ m.holdoutAuc }}</div>
+                    <div class="v">{{ m.holdoutScore }}</div>
                     <div class="st" [class]="statusClass(m.status)">{{ m.status }}</div>
                   </div>
                 </div>
@@ -130,8 +134,8 @@ interface PendingPromotion {
               <div class="ps-card-head"><h3>Performance</h3><span class="ps-muted ps-small">Holdout = held-out test fold, never seen in training</span></div>
               <div class="ps-card-body">
                 <div class="metric-pair">
-                  <div class="mtile"><div class="ps-section-title">Train AUC</div><div class="v">{{ trainAuc }}</div><div class="ps-muted ps-small">in-sample · optimistic</div></div>
-                  <div class="mtile honest"><div class="ps-section-title">Holdout AUC</div><div class="v">{{ selected.holdoutAuc }}</div><div class="ps-muted ps-small">out-of-sample · the honest number</div></div>
+                  <div class="mtile"><div class="ps-section-title">Train {{ primaryScoreLabel }}</div><div class="v">{{ trainPrimaryScore }}</div><div class="ps-muted ps-small">in-sample · optimistic</div></div>
+                  <div class="mtile honest"><div class="ps-section-title">Holdout {{ primaryScoreLabel }}</div><div class="v">{{ selected.holdoutScore }}</div><div class="ps-muted ps-small">out-of-sample · the honest number</div></div>
                 </div>
                 @if (secondaryMetrics.length > 0) {
                   <div class="stat-bar">
@@ -242,6 +246,24 @@ export class PSRegistryComponent implements OnInit {
   public lifecycleSteps = PS_LIFECYCLE_STEPS;
   public readonly dominanceThreshold = PS_FEATURE_DOMINANCE_THRESHOLD.toFixed(2);
 
+  private _initialModelId?: string;
+  @Input()
+  public set initialModelId(id: string | undefined) {
+    this._initialModelId = id;
+    if (id) {
+      if (this.models.length === 0 || !this.models.some((m) => UUIDsEqual(m.id, id))) {
+        this.buildModels();
+      }
+      if (this.models.some((m) => UUIDsEqual(m.id, id))) {
+        this.selectedId = id;
+      }
+      this.cdr.detectChanges();
+    }
+  }
+  public get initialModelId(): string | undefined {
+    return this._initialModelId;
+  }
+
   /** Pending confirmation (null when no modal is open). */
   public pending: PendingPromotion | null = null;
   /** Remote Op in flight — drives the modal spinner + disables the buttons. */
@@ -249,7 +271,11 @@ export class PSRegistryComponent implements OnInit {
 
   ngOnInit(): void {
     this.buildModels();
-    this.selectedId = this.models[0]?.id ?? '';
+    if (this._initialModelId && this.models.some((m) => UUIDsEqual(m.id, this._initialModelId))) {
+      this.selectedId = this._initialModelId;
+    } else {
+      this.selectedId = this.models[0]?.id ?? '';
+    }
   }
 
   // ---- selection + master list ----
@@ -294,19 +320,41 @@ export class PSRegistryComponent implements OnInit {
     return max != null && max >= PS_FEATURE_DOMINANCE_THRESHOLD;
   }
 
-  /** Holdout AUC hero number, formatted, or '—'. */
+  /** Dynamic score label (AUC for classification, R² or RMSE for regression). */
+  public get primaryScoreLabel(): string {
+    const e = this.selectedEntity;
+    if (!e) return 'AUC';
+    const score = primaryModelScore(e);
+    return score?.label ?? 'AUC';
+  }
+
+  /** In-sample training score for the primary metric. */
+  public get trainPrimaryScore(): string {
+    const e = this.selectedEntity;
+    if (!e) return '—';
+    const score = primaryModelScore(e);
+    if (!score) return this.trainAuc;
+    const trainMetrics = parseMetrics(e.Metrics);
+    const val = trainMetrics[score.key];
+    return val != null ? formatMetricValue(score.key, val) : '—';
+  }
+
+  /** Holdout AUC hero number, formatted, or '—' (retained for backward compatibility). */
   public get trainAuc(): string {
     const train = parseMetrics(this.selectedEntity?.Metrics).AUC;
     return train != null ? train.toFixed(3) : '—';
   }
 
-  /** Secondary metric tiles (precision/recall/F1/log-loss/…) — only those actually recorded. */
+  /** Secondary metric tiles (precision/recall/F1/log-loss/…) — only those actually recorded, excluding primary. */
   public get secondaryMetrics(): PSMetricDisplay[] {
     const e = this.selectedEntity;
     if (!e) return [];
+    const score = primaryModelScore(e);
+    const primaryKey = score?.key;
     // Prefer holdout metrics for the honest secondary numbers; fall back to training metrics.
-    const holdout = metricsToDisplay(parseMetrics(e.HoldoutMetrics));
-    return holdout.length > 0 ? holdout : metricsToDisplay(parseMetrics(e.Metrics));
+    const holdout = metricsToDisplay(parseMetrics(e.HoldoutMetrics), { excludeAuc: false });
+    const all = holdout.length > 0 ? holdout : metricsToDisplay(parseMetrics(e.Metrics), { excludeAuc: false });
+    return primaryKey ? all.filter((m) => m.key !== primaryKey) : all.filter((m) => m.key !== 'AUC');
   }
 
   /** The formatted train–holdout overfit gap, or '' when not computable. */
@@ -363,7 +411,7 @@ export class PSRegistryComponent implements OnInit {
     return this.selected.status === 'Draft';
   }
   public get canPublish(): boolean {
-    return this.selected.status === 'Validated' || this.selected.status === 'Draft';
+    return this.selected.status === 'Validated';
   }
   public get canArchive(): boolean {
     return this.selected.status === 'Published' || this.selected.status === 'Validated';
@@ -389,7 +437,7 @@ export class PSRegistryComponent implements OnInit {
       modelId: entity.ID,
       modelName: this.selected.name,
       targetStatus,
-      leakageFlagged: targetStatus === 'Published' && this.leakageFlagged,
+      leakageFlagged: this.leakageFlagged && targetStatus !== 'Archived',
     };
   }
 
@@ -484,19 +532,23 @@ export class PSRegistryComponent implements OnInit {
 
   private toVM(m: MJMLModelEntity): ModelRowVM {
     const holdout = primaryAuc(m);
+    const score = primaryModelScore(m);
+    const formattedScore = score != null ? formatMetricValue(score.key, score.value) : (holdout != null ? holdout.toFixed(3) : '—');
     return {
       id: m.ID,
       name: this.engine.ModelDisplayName(m),
       version: m.Version,
       algorithm: this.engine.AlgorithmName(m.AlgorithmID),
-      holdoutAuc: holdout != null ? holdout.toFixed(3) : '—',
+      holdoutAuc: holdout != null ? holdout.toFixed(3) : formattedScore,
+      holdoutScore: formattedScore,
+      scoreLabel: score?.label ?? 'AUC',
       status: m.Status,
       iconClass: 'xgb',
     };
   }
 
   private placeholder(): ModelRowVM {
-    return { id: '', name: 'No model', version: 0, algorithm: '—', holdoutAuc: '—', status: 'Draft', iconClass: 'xgb' };
+    return { id: '', name: 'No model', version: 0, algorithm: '—', holdoutAuc: '—', holdoutScore: '—', scoreLabel: 'AUC', status: 'Draft', iconClass: 'xgb' };
   }
 }
 

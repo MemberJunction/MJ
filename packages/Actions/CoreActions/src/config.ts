@@ -13,10 +13,31 @@ const apiIntegrationsSchema = z.object({
    * Used by: Perplexity Search action
    * Get your API key from: https://www.perplexity.ai/settings/api
    *
-   * This is the recommended web-search credential for new deployments — a single key with no
-   * engine ID, and open to new customers. See `google.customSearch` below for why.
+   * Serves two distinct products behind one key, selected by the action's `Mode` parameter:
+   * `search` (default) calls Perplexity's raw `/search` endpoint, which returns structured
+   * title/url/snippet results at a flat per-query price; `answer` calls the Sonar chat models,
+   * which return prose plus citations and are billed per token.
+   *
+   * For a web-search role prefer `braveApiKey` below — an independent index with lower latency.
+   * Use this when a synthesised answer is genuinely what the caller wants.
    */
   perplexityApiKey: z.string().optional(),
+
+  /**
+   * Brave Search API Key for independent web search
+   * Used by: Brave Search action
+   * Get your API key from: https://api-dashboard.search.brave.com/
+   *
+   * This is the recommended web-search credential for new deployments. Brave serves from its
+   * own index rather than reselling Google's or Bing's, so it does not share a failure mode
+   * with the SERP-proxy vendors or with `google.customSearch` below. It returns the same
+   * title/url/snippet shape the Google action returns, which is what makes it a migration
+   * rather than a rewrite.
+   *
+   * NOTE: Brave retired its free tier in early 2026. Keys now meter against a stored card
+   * with no spending cap, so set a budget alert before pointing production traffic at it.
+   */
+  braveApiKey: z.string().optional(),
 
   /**
    * Tavily API Key for search built for LLM consumption
@@ -46,9 +67,15 @@ const apiIntegrationsSchema = z.object({
      *
      * NOTE: the Custom Search JSON API is CLOSED TO NEW CUSTOMERS. Projects that already have it
      * enabled are served until 2027-01-01, when the API is discontinued. New deployments should
-     * configure `perplexityApiKey` above instead — Google's stated successor (Vertex AI Search)
-     * searches your own indexed content rather than the public web and yields neither an API key
-     * nor a CX, so it is not a drop-in for this action.
+     * configure `braveApiKey` above instead — it is the only credential here that yields the same
+     * title/url/snippet result shape from an index that is not Google's.
+     *
+     * Google's stated successor (Vertex AI Search, since renamed Agent Search) searches your own
+     * indexed content or up to 50 verified domains rather than the public web, and yields neither
+     * an API key nor a CX. Gemini's `google_search` grounding does reach the public index, but
+     * returns expiring redirect URLs with no snippets, and its terms forbid caching or analysing
+     * the results — so neither is a drop-in for this action. `perplexityApiKey` is a reasonable
+     * fallback, but note its default mode is an answer engine rather than a search index.
      */
     customSearch: z.object({
       /**
@@ -117,6 +144,7 @@ export function getCoreActionsConfig(): CoreActionsConfig {
       apiIntegrations: {
         perplexityApiKey: fileConfig?.perplexityApiKey || process.env.PERPLEXITY_API_KEY,
         tavilyApiKey: fileConfig?.tavilyApiKey || process.env.TAVILY_API_KEY,
+        braveApiKey: fileConfig?.braveApiKey || process.env.BRAVE_SEARCH_API_KEY,
         gammaApiKey: fileConfig?.gammaApiKey || process.env.GAMMA_API_KEY,
         google: {
           customSearch: {
