@@ -23,6 +23,8 @@ import { ShimReact } from './react-native-shim';
 import { BuildMobileComponentStyles } from './component-styles';
 import { BuildSaveUserSettings, LoadUserSettings } from './user-settings';
 import { ResolveHierarchy } from './hierarchy-resolver';
+import { CapturedData, WrapUtilitiesWithCapture } from './captured-data';
+import { CapturedDataFallback } from './CapturedDataFallback';
 
 /** A message a component raised through `callbacks.CreateSimpleNotification`. */
 type ComponentNotice = { Message: string; Style: string };
@@ -202,6 +204,10 @@ async function compileSpec(
         // any component with data requirements had nothing to fetch with.
         const savedUserSettings = await LoadUserSettings(spec, user);
 
+        // Recorded as the component fetches, so a crash mid-render can still show the rows it
+        // already had rather than a dead card. See `captured-data.ts`.
+        const captured = new CapturedData();
+
         const props = {
             // `components` is the flat map of every loaded descendant, already unwrapped to plain
             // React components by `loadHierarchy`. The compiler's generated child bindings read it
@@ -210,7 +216,10 @@ async function compileSpec(
             ...runtime.buildComponentProps(
                 {},
                 savedUserSettings,
-                runtime.createRuntimeUtilities().buildUtilities(false, Metadata.Provider),
+                WrapUtilitiesWithCapture(
+                    runtime.createRuntimeUtilities().buildUtilities(false, Metadata.Provider),
+                    captured,
+                ),
                 buildCallbacks(notify),
                 result.components ?? {},
                 BuildMobileComponentStyles(spec),
@@ -223,7 +232,9 @@ async function compileSpec(
         };
 
         const Boundary = runtime.createErrorBoundary(ShimReact, {
-            fallback: <DesktopFallback reason="This interactive component ran into an error on mobile." />,
+            // The fallback is resolved when it renders, not when the boundary is built — by which
+            // point the component has usually finished fetching, so the captured rows are there.
+            fallback: <ComponentErrorFallback Captured={captured} />,
             // Matches the bridge: log the error, and offer a retry rather than leaving the reader
             // on a dead card after a transient failure.
             logErrors: true,
@@ -307,6 +318,21 @@ function buildCallbacks(notify: (message: string, style: string) => void): Param
 
 /** Alias to derive the exact `buildComponentProps` callbacks parameter type. */
 type InteractiveRuntimeBuildProps = Awaited<ReturnType<typeof GetInteractiveRuntime>>['buildComponentProps'];
+
+/**
+ * What a failed component shows: its data when it got that far, an explanation when it did not.
+ *
+ * Read at render time rather than captured when the boundary is built — a component typically
+ * throws after its data has arrived, so deciding earlier would always decide "no data".
+ *
+ * @param props.Captured The recorder the component's utilities were writing to.
+ */
+function ComponentErrorFallback({ Captured }: { Captured: CapturedData }): React.ReactElement {
+    if (Captured.HasData) {
+        return <CapturedDataFallback Tables={Captured.ToTables()} />;
+    }
+    return <DesktopFallback reason="This interactive component ran into an error on mobile." />;
+}
 
 /**
  * Fallback card shown when a component can't or shouldn't render on-device.

@@ -8,6 +8,8 @@ import type { ComponentUtilities } from '@memberjunction/interactive-component-t
 import { router } from 'expo-router';
 import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
 import { BuildHostPage } from './host-page';
+import { CapturedData } from '../captured-data';
+import { CapturedDataFallback } from '../CapturedDataFallback';
 import {
     ParsePageMessage,
     SerializeNativeMessage,
@@ -81,16 +83,40 @@ function Utilities(): ComponentUtilities {
  * @param method The requested call.
  * @param args Its arguments, as sent by the page.
  */
-async function ServeRequest(method: BridgeMethod, args: unknown[]): Promise<unknown> {
+async function ServeRequest(
+    method: BridgeMethod,
+    args: unknown[],
+    captured: CapturedData,
+): Promise<unknown> {
     const u = Utilities();
 
+    /** Records a view or query result, so a crash in the page can still show the rows. */
+    const record = (source: string, result: unknown): unknown => {
+        try {
+            captured.Record(source, (result as { Results?: unknown })?.Results);
+        } catch {
+            /* best effort — capturing must never change what the component received */
+        }
+        return result;
+    };
+
     switch (method) {
-        case 'rv.RunView':
-            return u.rv.RunView(args[0] as Parameters<typeof u.rv.RunView>[0]);
-        case 'rv.RunViews':
-            return u.rv.RunViews(args[0] as Parameters<typeof u.rv.RunViews>[0]);
-        case 'rq.RunQuery':
-            return u.rq.RunQuery(args[0] as Parameters<typeof u.rq.RunQuery>[0]);
+        // Capture is nearly free here: every data call the page makes already funnels through this
+        // one place, so there is nothing to wrap.
+        case 'rv.RunView': {
+            const p = args[0] as Parameters<typeof u.rv.RunView>[0];
+            return record(String(p?.EntityName ?? 'View'), await u.rv.RunView(p));
+        }
+        case 'rv.RunViews': {
+            const p = args[0] as Parameters<typeof u.rv.RunViews>[0];
+            const results = await u.rv.RunViews(p);
+            (results ?? []).forEach((r, i) => record(String(p?.[i]?.EntityName ?? `View ${i + 1}`), r));
+            return results;
+        }
+        case 'rq.RunQuery': {
+            const p = args[0] as Parameters<typeof u.rq.RunQuery>[0];
+            return record(String(p?.QueryName ?? p?.QueryID ?? 'Query'), await u.rq.RunQuery(p));
+        }
 
         case 'md.Entities':
             return (u.md.Entities ?? []).map((e) => ({
@@ -154,6 +180,9 @@ export function DomComponentHost({
     const [height, setHeight] = useState(INITIAL_HEIGHT);
     const [ready, setReady] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // Rows the component fetched, so a page that fails to draw can still show them.
+    const captured = useRef(new CapturedData()).current;
+    const [failed, setFailed] = useState(false);
 
     // Built once per library set: rebuilding the HTML would reload the page and remount the
     // component, discarding whatever state the user had built up in it.
@@ -195,10 +224,14 @@ export function DomComponentHost({
                     // showing a partially working component, so this only records it.
                     setError(message.Message);
                     setReady(true);
+                    // Only a page that never mounted is treated as failed. One that reported an
+                    // error after rendering may be perfectly usable, and replacing it with a table
+                    // would take away a working component.
+                    if (!ready) setFailed(true);
                     return;
 
                 case 'rpc':
-                    void ServeRequest(message.Method, message.Args)
+                    void ServeRequest(message.Method, message.Args, captured)
                         .then((value) => post({ Type: 'rpc-result', ID: message.ID, Value: value }))
                         .catch((e: unknown) =>
                             post({
@@ -214,8 +247,13 @@ export function DomComponentHost({
                     return;
             }
         },
-        [post, OnSaveUserSettings, OnNotify],
+        [post, OnSaveUserSettings, OnNotify, captured, ready],
     );
+
+    // A page that never rendered, but whose data arrived, shows the data rather than an error.
+    if (failed && captured.HasData) {
+        return <CapturedDataFallback Reason={error ?? undefined} Tables={captured.ToTables()} />;
+    }
 
     return (
         <View style={styles.wrap}>

@@ -193,12 +193,18 @@ code. `utilities` and callbacks are proxied over a closed, named-method bridge t
 which owns the one authenticated provider. A component can ask for what the signed-in user could
 already read, and nothing else.
 
-**Known cost, stated plainly.** The runtime UMD bundle is 11 MB because minification is disabled in
-its webpack config — not for indifference to size, but because terser's name mangling collides
-between `ClassFactory` and entity classes and breaks bundle initialisation. So the first DOM-hosted
-render on a device needs a connection and takes a few seconds; afterwards the WebView caches it.
-Fixing that means fixing the mangling collision or shipping the bundle as a local asset, and is left
-as a deliberate follow-up rather than flipping a flag whose comment documents why it is off.
+**The UMD bundle is now minified, and 55% smaller.** It was 11 MB with minification disabled — for
+a real reason, not indifference: `MJGlobal.ClassFactory` keys every registration on `class.name`,
+and terser's default mangling renames classes, so distinct classes collapse onto one identifier and
+their registrations collide. `keep_classnames` / `keep_fnames` remove the cause rather than the
+symptom; everything else still minifies, taking it to 5.1 MB. That size is now a first-render wait
+on a phone rather than a number on disk, which is why it was worth fixing properly.
+
+A test evaluates the built bundle in a `vm` sandbox and asserts both that it initialises and that
+its class names survived — verified to fail when plain mangling is restored, so re-enabling it
+cannot pass silently here and break wherever a component is actually rendered.
+
+The first DOM-hosted render still needs a connection; the WebView caches the bundle afterwards.
 
 **Routing happens after resolution, not before.** `AssessSpec` is synchronous, so it can only see
 the spec it is handed — and a dashboard whose parent uses lodash while a registry-backed child draws
@@ -209,3 +215,33 @@ therefore resolved first and the renderer chosen against the resolved tree.
 The resolver also returns the tree with every registry child's code **inlined**, because the DOM host
 page has no provider: a child it still had to fetch would throw inside the WebView. The native
 renderer gets the same inlined spec, which costs nothing and means both paths reason about one thing.
+
+---
+
+## A crash no longer costs the reader the data
+
+By the time most components throw, the fetching has succeeded — the failure is in the drawing.
+Replacing the whole thing with "this component ran into an error" discards rows the reader came for
+and could still read perfectly well.
+
+`utilities` is wrapped so every view and query result is recorded, and a component that fails after
+loading shows those rows instead of a dead card, under an explanation that does not pretend anything
+worked. `MJReactComponent` captures for the same reason and calls it a fallback snapshot; the
+difference here is that it is *shown*, because on a phone there is no second pane to offer it in.
+
+In the DOM host the capture is nearly free — every data call already funnels through the one bridge
+handler — and only a page that never mounted is treated as failed, so a component that reports an
+error after rendering is not replaced by a table it did not ask for.
+
+Rendering goes through the Data artifact view, so captured rows and query-builder output cannot
+drift into describing a row differently.
+
+**Verified on both platforms.** The DOM host, its bridge, the canvas chart, registry-resolved
+children and the drill-down all behave identically on Android and iOS. `react-native-webview` is a
+native module, so the app needs a rebuild rather than a Metro reload.
+
+**Deliberately not built:** the rest of the host-facing method API (`validate`, `isDirty`, `reset`,
+`scrollTo`, `focus`, `invokeMethod`). Those exist on the web so an Angular container can drive an
+embedded component; mobile has no such container, and adding the surface with no caller would be
+speculative. `getCurrentDataState`'s purpose — a fallback when the component cannot show its own
+data — is served above.
