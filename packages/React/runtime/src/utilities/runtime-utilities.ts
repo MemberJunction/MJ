@@ -16,14 +16,17 @@
  * the moment either side added a capability — and the components asking for `utilities.rv.RunView`
  * are authored once, for both.
  *
- * ## A caveat about overriding, carried over unchanged
+ * ## Overriding
  *
- * The `@RegisterClass` registration below suggests a host can substitute its own subclass, and
- * server-side it can. In a browser it cannot: `createRuntimeUtilities` consults `ClassFactory` only
- * when `typeof window === 'undefined'` and otherwise returns `new RuntimeUtilities()` directly, so
- * the registration is inert on every browser and React Native host. That predates this move and is
- * left as it is rather than changed under cover of relocating the file — flipping it would alter
- * what every existing browser host builds. Worth fixing deliberately.
+ * `createRuntimeUtilities` resolves through `MJGlobal.ClassFactory`, so a host that registers a
+ * higher-priority subclass of {@link RuntimeUtilities} gets it — on every host, browser included.
+ *
+ * It did not always. The factory used to consult `ClassFactory` only when
+ * `typeof window === 'undefined'`, which made the `@RegisterClass` registration below inert on
+ * every browser and React Native host: the base class still worked, but nobody could substitute
+ * one. Removing the guard changes nothing for an app that registers no subclass — with a null key
+ * `CreateInstance` matches the base's own registration and constructs the same class the fallback
+ * would have — and makes the documented extension point real for the ones that do.
  */
 
 import {
@@ -455,22 +458,19 @@ export class RuntimeUtilities {
  * In a browser environment, it will use the base class directly
  */
 export function createRuntimeUtilities(): RuntimeUtilities {
-  // Check if we're in a Node.js environment with MJGlobal available
-  if (typeof window === 'undefined') {
-    try {
-      // Use ClassFactory to get the registered class, defaulting to base RuntimeUtilities
-      const obj = MJGlobal.Instance.ClassFactory.CreateInstance<RuntimeUtilities>(RuntimeUtilities);
-      if (!obj) {
-        throw new Error('Failed to create RuntimeUtilities instance');
-      }
-
-      // Ensure the object is an instance of RuntimeUtilities
+  try {
+    // Resolve through ClassFactory so a host that registers a higher-priority subclass gets it.
+    // `CreateInstance` with a null key matches any registration for this root class, and the
+    // decorator below registers the base itself, so an app with no override still gets a plain
+    // `RuntimeUtilities` — the resolution is the same object either way.
+    const obj = MJGlobal.Instance.ClassFactory.CreateInstance<RuntimeUtilities>(RuntimeUtilities);
+    if (obj) {
       return obj;
-    } catch (e) {
-      // Fall through to default
     }
+  } catch {
+    // ClassFactory throws when a base is declared as unable to stand alone. That is not this
+    // class — it is perfectly usable on its own — so fall through rather than fail the component.
   }
-  
-  // Default: just use the base class
+
   return new RuntimeUtilities();
 }

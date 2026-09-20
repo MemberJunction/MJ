@@ -85,10 +85,14 @@ Angular concept. A native host previously had to reimplement it or pass `{}`, wh
 component with data requirements could not read a row. The `@RegisterClass` registration moves with it
 unchanged and ng-react now imports the factory instead of owning it.
 
-Noted while verifying, not changed here: `createRuntimeUtilities` consults `ClassFactory` only when
-`typeof window === 'undefined'`, so that registration is inert on every browser and React Native
-host — the override path works server-side only. It predates this move; flipping it would change
-what every existing browser host builds, so it is called out rather than quietly altered.
+**And the override now works where it never did.** `createRuntimeUtilities` consulted
+`ClassFactory` only when `typeof window === 'undefined'`, returning `new RuntimeUtilities()`
+directly otherwise — so the `@RegisterClass` registration was inert on every browser and React
+Native host. The base class still built working utilities, which is exactly why this went
+unnoticed: nothing broke, a documented extension point simply did nothing. The guard is removed.
+For an app that registers no subclass this changes nothing — with a null key `CreateInstance`
+matches the base's own registration and constructs the same class the fallback would have — and for
+one that does, substitution finally happens. A jsdom test pins it: it fails against the old guard.
 
 **`styles` — was `undefined`**, which `buildComponentProps` turns into the runtime's frozen default
 palette, and silently discarded the spec's `styleOverrides` (the mechanism that keeps "make the
