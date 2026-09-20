@@ -131,6 +131,7 @@
     "@memberjunction/ng-agents": "6.1.0",
     "@memberjunction/ng-ai-test-harness": "6.1.0",
     "@memberjunction/ng-archive-manager": "6.1.0",
+    "@memberjunction/ng-artifacts": "6.1.0",
     "@memberjunction/ng-base-application": "6.1.0",
     "@memberjunction/ng-base-forms": "6.1.0",
     "@memberjunction/ng-base-types": "6.1.0",

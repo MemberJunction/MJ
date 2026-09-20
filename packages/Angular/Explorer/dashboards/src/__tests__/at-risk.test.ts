@@ -14,6 +14,20 @@ describe('parseAtRiskRows', () => {
     expect(rows[2].band).toBe('low');
   });
 
+  it('inverts risk when invertedRisk option is true (e.g. renewal models predicting P(Renewed))', () => {
+    const rows = parseAtRiskRows([
+      { recordId: 'loyal', ResultPayload: JSON.stringify({ score: 0.98, class: 'Renewed' }) },
+      { recordId: 'borderline', ResultPayload: JSON.stringify({ score: 0.50, class: 'Renewed' }) },
+      { recordId: 'churning', ResultPayload: JSON.stringify({ score: 0.15, class: 'Lapsed' }) },
+    ], { invertedRisk: true });
+
+    // Highest risk of churn is ranked first
+    expect(rows.map((r) => r.recordId)).toEqual(['churning', 'borderline', 'loyal']);
+    expect(rows[0]).toMatchObject({ recordId: 'churning', score: 0.15, riskPct: 85, band: 'high' });
+    expect(rows[1]).toMatchObject({ recordId: 'borderline', score: 0.50, riskPct: 50, band: 'medium' });
+    expect(rows[2]).toMatchObject({ recordId: 'loyal', score: 0.98, riskPct: 2, band: 'low' });
+  });
+
   it('parses per-record drivers: humanizes labels, KEEPS the one-hot category, and signs them', () => {
     const rows = parseAtRiskRows([
       {

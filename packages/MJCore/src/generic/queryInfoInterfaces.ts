@@ -251,6 +251,12 @@ export interface IQueryInfoBase {
      */
     UsesTemplate: boolean;
     /**
+     * Optional JSON configuration bag defining query-level policies and semantic capabilities (shape = IQueryConfiguration).
+     * Includes Priority (1-100) for ground-truth ranking in the semantic layer, LogExecution to control query execution logging,
+     * AlternativeQuestions for multi-phrasing vector recall, UsageGuidance and WhenNotToUse bounds for AI agents, and DomainScope.
+     */
+    Configuration?: string | null;
+    /**
      * Whether this query has been formally approved for production use.
      * Derived from `Status === 'Approved'`.
      */
