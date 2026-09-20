@@ -517,6 +517,57 @@
   color: var(--mj-text-primary);
 }
 
+.ps-pipelines .pl-feature-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  padding: 6px 8px;
+  background: var(--mj-bg-surface-subtle);
+  border-radius: 4px;
+  border: 1px solid var(--mj-border-subtle);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ps-pipelines .pl-feature-card:hover {
+  background: var(--mj-bg-surface-hover);
+  border-color: var(--mj-border-default);
+}
+
+.ps-pipelines .pl-feature-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.ps-pipelines .pl-col-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.ps-pipelines .pl-col-chip {
+  font-family: monospace;
+  font-size: 11px;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  border: 1px solid var(--mj-border-default);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.ps-pipelines .pl-step-inputs {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
 /* Leakage Guard Box */
 .ps-pipelines .pl-leakage-box {
   background: var(--mj-status-warning-subtle);

@@ -100,6 +100,87 @@ export interface ParseAtRiskOptions {
   invertedRisk?: boolean;
 }
 
+/** Result of detecting whether a model is a renewal model and what its output score represents. */
+export interface RenewalPolarityResult {
+  isRenewalModel: boolean;
+  /**
+   * True if `score` represents adverse lapse risk (P(Lapse) / Churn Risk), e.g. 0.01 = 1% risk.
+   * False if `score` represents positive outcome probability (P(Renewed)), e.g. 0.99 = 99% renewal chance.
+   */
+  scoreIsLapseRisk: boolean;
+}
+
+/**
+ * Robustly inspects model metadata and sample scoring payloads to determine:
+ * 1. Whether this is a renewal/retention/churn model (`isRenewalModel`)
+ * 2. Whether the raw payload `score` represents adverse lapse risk (P(Lapse)) or positive outcome (P(Renewed))
+ */
+export function resolveRenewalPolarity(
+  rawPayloads: Array<string | null | undefined>,
+  targetVariable?: string | null,
+  modelName?: string | null,
+): RenewalPolarityResult {
+  const target = (targetVariable ?? '').toLowerCase();
+  const name = (modelName ?? '').toLowerCase();
+  const isTargetRenewal =
+    target.includes('renew') ||
+    target.includes('lapse') ||
+    target.includes('retention') ||
+    target.includes('churn') ||
+    target === 'status' ||
+    name.includes('renew') ||
+    name.includes('retention') ||
+    name.includes('churn');
+
+  let hasRenewalKeywords = false;
+  const sampleScoresForRenewed: number[] = [];
+
+  for (const p of rawPayloads.slice(0, 50)) {
+    if (!p) continue;
+    if (
+      p.includes('"Renewed"') ||
+      p.includes('"renewed"') ||
+      p.includes('"Lapsed"') ||
+      p.includes('"lapsed"') ||
+      p.includes('Renewal Risk')
+    ) {
+      hasRenewalKeywords = true;
+    }
+    try {
+      const parsed = JSON.parse(p);
+      const out = (parsed.output ?? parsed) as { score?: number; class?: string };
+      if (typeof out.score === 'number' && typeof out.class === 'string') {
+        const cls = out.class.toLowerCase();
+        if (cls === 'renewed' || cls === 'active') {
+          sampleScoresForRenewed.push(out.score);
+        }
+      }
+    } catch {
+      // skip invalid json
+    }
+  }
+
+  const isRenewalModel = isTargetRenewal || hasRenewalKeywords;
+  if (!isRenewalModel) {
+    return { isRenewalModel: false, scoreIsLapseRisk: false };
+  }
+
+  if (sampleScoresForRenewed.length > 0) {
+    const avg = sampleScoresForRenewed.reduce((a, b) => a + b, 0) / sampleScoresForRenewed.length;
+    // If members predicted 'Renewed' have small scores (< 0.5), the score represents Lapse Risk (P(Lapse))
+    return { isRenewalModel: true, scoreIsLapseRisk: avg < 0.5 };
+  }
+
+  // Fallback: target or name containing "risk", "lapse", or "churn" outputs lapse probability
+  const scoreIsLapseRisk =
+    target.includes('risk') ||
+    target.includes('lapse') ||
+    target.includes('churn') ||
+    name.includes('risk') ||
+    name.includes('churn');
+  return { isRenewalModel: true, scoreIsLapseRisk };
+}
+
 function bandFor(score: number): AtRiskRow['band'] {
   return score >= 0.7 ? 'high' : score >= 0.4 ? 'medium' : 'low';
 }

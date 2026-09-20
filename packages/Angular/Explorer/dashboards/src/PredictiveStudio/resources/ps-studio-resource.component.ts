@@ -75,7 +75,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
           <section class="ps-content" [class.fill]="activeSection === 'pipelines'" [attr.data-testid]="'ps-panel-' + activeSection">
             @switch (activeSection) {
               @case ('home') { <ps-home [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (navigate)="mapNavigate($event)" (askAgent)="onAskAgent($event)"></ps-home> }
-              @case ('pipelines') { <ps-pipelines #pipelinesComp [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (askAgent)="onAskAgent($event)"></ps-pipelines> }
+              @case ('pipelines') { <ps-pipelines #pipelinesComp [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (askAgent)="onAskAgent($event)" (navigate)="mapNavigate($event)"></ps-pipelines> }
               @case ('catalog') { <ps-catalog [engine]="engine" (askAgent)="onAskAgent($event)" (createPipeline)="onCreatePipelineFromCatalog($event)"></ps-catalog> }
               @case ('experiments') { <ps-experiments [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-experiments> }
               @case ('compare') { <ps-compare [engine]="engine"></ps-compare> }

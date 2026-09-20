@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { parseAtRiskRows, topGlobalDrivers, humanizeFeatureName } from '../PredictiveStudio/at-risk.view-models';
+import {
+  parseAtRiskRows,
+  resolveRenewalPolarity,
+  topGlobalDrivers,
+  humanizeFeatureName,
+} from '../PredictiveStudio/at-risk.view-models';
 
 describe('parseAtRiskRows', () => {
   it('parses + ranks per-record predictions highest-risk first, with bands', () => {
@@ -87,5 +92,39 @@ describe('humanizeFeatureName', () => {
   });
   it('passes already-spaced labels through unchanged (aside from leading capitalization)', () => {
     expect(humanizeFeatureName('Event Attendance')).toBe('Event Attendance');
+  });
+});
+
+describe('resolveRenewalPolarity', () => {
+  it('detects adverse lapse risk models (score is P(Lapse), low score for Renewed records)', () => {
+    const payloads = [
+      JSON.stringify({ output: { score: 0.0112, class: 'Renewed', target: 'Renewal Risk' } }),
+      JSON.stringify({ output: { score: 0.0245, class: 'Renewed', target: 'Renewal Risk' } }),
+      JSON.stringify({ output: { score: 0.8912, class: 'Lapsed', target: 'Renewal Risk' } }),
+    ];
+    const result = resolveRenewalPolarity(payloads, 'Renewal Risk', 'MoreCheese: Member Renewal Risk');
+    expect(result.isRenewalModel).toBe(true);
+    expect(result.scoreIsLapseRisk).toBe(true);
+  });
+
+  it('detects positive outcome renewal models (score is P(Renewed), high score for Renewed records)', () => {
+    const payloads = [
+      JSON.stringify({ score: 0.985, class: 'Renewed' }),
+      JSON.stringify({ score: 0.920, class: 'Renewed' }),
+      JSON.stringify({ score: 0.150, class: 'Lapsed' }),
+    ];
+    const result = resolveRenewalPolarity(payloads, 'Status', 'Contract Renewal Propensity');
+    expect(result.isRenewalModel).toBe(true);
+    expect(result.scoreIsLapseRisk).toBe(false);
+  });
+
+  it('correctly marks non-renewal models as isRenewalModel = false', () => {
+    const payloads = [
+      JSON.stringify({ score: 0.75, class: 'Breached' }),
+      JSON.stringify({ score: 0.12, class: 'OnTrack' }),
+    ];
+    const result = resolveRenewalPolarity(payloads, 'IsSLABreached', 'Tasks: SLA Breach Risk');
+    expect(result.isRenewalModel).toBe(false);
+    expect(result.scoreIsLapseRisk).toBe(false);
   });
 });

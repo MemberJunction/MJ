@@ -41,6 +41,8 @@ import {
 
 import {
   parseAtRiskRows,
+  resolveRenewalPolarity,
+  type RenewalPolarityResult,
   type RowDriver,
 } from '../at-risk.view-models';
 import {
@@ -465,16 +467,20 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       }
 
       // 4. Determine polarity and parse per-record predictions
-      const isInverted = this.checkIsInvertedRisk(
+      const polarity = resolveRenewalPolarity(
         detailsRes.Results.map((d) => d.ResultPayload),
-        model,
+        model?.TargetVariable,
       );
-      this.isRenewalModel = isInverted;
+      this.isRenewalModel = polarity.isRenewalModel;
       this.setupColumnDefs();
+
+      // When the model outputs P(Renewed) (scoreIsLapseRisk = false), adverse risk is inverted (1 - score).
+      // When the model outputs P(Lapse) (scoreIsLapseRisk = true), adverse risk is ALREADY score (invertedRisk = false).
+      const shouldInvertRisk = polarity.isRenewalModel ? !polarity.scoreIsLapseRisk : false;
 
       const parsedAtRisk = parseAtRiskRows(
         detailsRes.Results.map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })),
-        { invertedRisk: isInverted },
+        { invertedRisk: shouldInvertRisk },
       );
 
       // Map details into indexed lookup for scoredAt timestamp
@@ -486,11 +492,18 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       this.allRows = parsedAtRisk.map((r) => {
         const detail = detailByRecord.get(NormalizeUUID(r.recordId));
         const dt = detail?.CompletedAt ?? detail?.__mj_CreatedAt ?? null;
+        // For renewal models, the primary displayed score is Renewal Probability (0–1).
+        // If the raw score was lapse risk, renewal probability is 1 - r.score.
+        // Otherwise, raw score is already renewal probability.
+        const displayScore = polarity.isRenewalModel
+          ? (polarity.scoreIsLapseRisk ? Math.max(0, Math.min(1, 1 - r.score)) : r.score)
+          : r.score;
+
         return {
           recordId: r.recordId,
           recordName: r.label ?? r.recordId,
-          score: r.score,
-          scoreFormatted: (r.score * 100).toFixed(1) + '%',
+          score: displayScore,
+          scoreFormatted: (displayScore * 100).toFixed(1) + '%',
           riskPct: r.riskPct,
           band: r.band,
           class: r.class,
@@ -547,19 +560,6 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         }
       }
     }
-  }
-
-  private checkIsInvertedRisk(rawPayloads: Array<string | null | undefined>, model: MJMLModelEntity | null): boolean {
-    const target = (model?.TargetVariable ?? '').toLowerCase();
-    if (target === 'status' || target === 'renewed' || target === 'renewal' || target === 'retention') {
-      return true;
-    }
-    for (const p of rawPayloads.slice(0, 50)) {
-      if (p && (p.includes('"Renewed"') || p.includes('"renewed"') || p.includes('"Lapsed"'))) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /**

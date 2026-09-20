@@ -20,6 +20,7 @@ import {
   type ValidationStrategy,
   type ProblemType,
 } from '@memberjunction/predictive-studio-core';
+import { PSPanelKey } from '../predictive-studio.types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 
 type NodeType = 'src' | 'feat' | 'emb' | 'target' | 'algo' | 'output';
@@ -297,9 +298,28 @@ const PS_PIPELINES_STARTER_PROMPT =
                       </div>
                       <div class="pl-fg-body">
                         @for (st of editSteps; track st.Id) {
-                          <div class="pl-feature-row">
-                            <span class="pl-feature-name">{{ st.Label || st.Kind }}</span>
-                            <span class="ps-tag">{{ st.Kind }}</span>
+                          <div class="pl-feature-card" data-testid="ps-pipelines-step-card" (click)="selectStep(st.Id)">
+                            <div class="pl-feature-card-header">
+                              <span class="pl-feature-name">{{ st.Label || st.Kind }}</span>
+                              <span class="ps-tag">{{ st.Kind }}</span>
+                            </div>
+                            @if (getStepColumns(st); as cols) {
+                              @if (cols.length > 0) {
+                                <div class="pl-col-chips">
+                                  @for (col of cols; track col) {
+                                    <span class="pl-col-chip">{{ col }}</span>
+                                  }
+                                </div>
+                              }
+                            }
+                            @if (getStepInputs(st); as inputs) {
+                              @if (inputs.length > 0) {
+                                <div class="pl-step-inputs">
+                                  <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                                  <span>From: {{ inputs.join(', ') }}</span>
+                                </div>
+                              }
+                            }
                           </div>
                         }
                       </div>
@@ -444,13 +464,20 @@ const PS_PIPELINES_STARTER_PROMPT =
                         <span class="pl-stage-subtitle">Active inference wiring and model registry status.</span>
                       </div>
                     </div>
-                    @if (publishedModel; as pub) {
-                      <button mjButton variant="secondary" size="sm" type="button"
-                        (click)="openModelRecord(pub.ID)"
-                        title="Open model record in Explorer">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in Model Registry
-                      </button>
-                    }
+                    <div style="display:flex;gap:8px;align-items:center;">
+                      @if (publishedModel; as pub) {
+                        <button mjButton variant="secondary" size="sm" type="button"
+                          (click)="openModelRecord(pub.ID)"
+                          title="Open model record in Explorer">
+                          <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Model Record
+                        </button>
+                        <button mjButton variant="secondary" size="sm" type="button"
+                          (click)="viewTrainingRuns(pub.ID)"
+                          title="View training runs for this model">
+                          <i class="fa-solid fa-flask"></i> View Training Runs
+                        </button>
+                      }
+                    </div>
                   </div>
 
                   <div class="pl-serving-box">
@@ -626,9 +653,69 @@ const PS_PIPELINES_STARTER_PROMPT =
                       @if (selectedNode.type === 'algo') {
                         <div class="ps-field"><label>Algorithm</label><select class="mj-input" [value]="editAlgorithmId" (change)="setAlgorithm(inputVal($event))">@for (a of algorithms; track a.ID) { <option [value]="a.ID">{{ a.Name }}</option> }</select></div>
                         <div class="ps-field"><label>Hyperparameters (JSON)</label><textarea class="mj-textarea" rows="4" [value]="editHyperparams" (input)="setHyperparams(inputVal($event))"></textarea></div>
+                        @if (publishedModel; as pub) {
+                          <div style="margin-top:12px;padding:10px;border-radius:var(--mj-radius-sm);background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);">
+                            <div class="ps-small ps-muted" style="margin-bottom:6px;">Current Serving Winner</div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                              <span style="font-size:var(--mj-text-xs);font-weight:600;">v{{ pub.Version }} ({{ pub.Algorithm || 'Model' }})</span>
+                              <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Active</span>
+                            </div>
+                            <div style="display:flex;gap:6px;">
+                              <button mjButton variant="secondary" size="sm" type="button" (click)="openModelRecord(pub.ID)" style="flex:1;justify-content:center;" title="Open model record in Explorer">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> Model
+                              </button>
+                              <button mjButton variant="secondary" size="sm" type="button" (click)="viewTrainingRuns(pub.ID)" style="flex:1;justify-content:center;" title="View training runs">
+                                <i class="fa-solid fa-flask"></i> Runs
+                              </button>
+                            </div>
+                          </div>
+                        }
                       }
                       @if (selectedNode.type === 'output') {
-                        <div class="ps-small ps-muted">The trained model artifact. Run <strong>Train</strong> to produce a new versioned model from this pipeline.</div>
+                        @if (pipelineModels.length === 0) {
+                          <div class="ps-small ps-muted">The trained model artifact. Run <strong>Train</strong> to produce a new versioned model from this pipeline.</div>
+                        } @else {
+                          <div style="display:flex;flex-direction:column;gap:12px;">
+                            @if (pipelineModels.length > 1) {
+                              <div class="ps-field">
+                                <label>Model Version</label>
+                                <select class="mj-input" [value]="inspectedModel?.ID" (change)="selectModelVersion(inputVal($event))">
+                                  @for (m of pipelineModels; track m.ID) {
+                                    <option [value]="m.ID">v{{ m.Version }} · {{ m.Algorithm || 'Algorithm' }} ({{ m.Status }})</option>
+                                  }
+                                </select>
+                              </div>
+                            }
+                            @if (inspectedModel; as mdl) {
+                              <div style="border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-md);padding:12px;background:var(--mj-bg-surface-sunken);display:flex;flex-direction:column;gap:8px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                  <div style="display:flex;align-items:center;gap:6px;">
+                                    <strong>v{{ mdl.Version }}</strong>
+                                    @if (mdl.Status === 'Published') {
+                                      <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Winner</span>
+                                    }
+                                    <span class="ps-badge" [class]="statusClass(mdl.Status)">{{ mdl.Status }}</span>
+                                  </div>
+                                  <span class="ps-mono ps-small ps-muted" [title]="mdl.ID">{{ mdl.ID.slice(0, 8) }}…</span>
+                                </div>
+                                <div style="font-size:var(--mj-text-xs);color:var(--mj-text-secondary);">
+                                  Algorithm: <strong>{{ mdl.Algorithm || selectedAlgorithmName }}</strong>
+                                </div>
+                                <div style="font-size:var(--mj-text-xs);color:var(--mj-text-secondary);">
+                                  Holdout Score: <strong>{{ formatHoldout(mdl) }}</strong>
+                                </div>
+                                <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+                                  <button mjButton variant="primary" size="sm" type="button" (click)="openModelRecord(mdl.ID)" style="width:100%;justify-content:center;">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Model Details
+                                  </button>
+                                  <button mjButton variant="secondary" size="sm" type="button" (click)="viewTrainingRuns(mdl.ID)" style="width:100%;justify-content:center;">
+                                    <i class="fa-solid fa-flask"></i> View Training Runs
+                                  </button>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        }
                       }
                     </div>
                   </div>
@@ -692,6 +779,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   @Input() currentUser: UserInfo | null = null;
 
   @Output() askAgent = new EventEmitter<string>();
+  @Output() navigate = new EventEmitter<PSPanelKey>();
 
   private cdr = inject(ChangeDetectorRef);
   private notifications = inject(MJNotificationService);
@@ -837,6 +925,32 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     }
   }
 
+  public viewTrainingRuns(modelId?: string): void {
+    if (this.navigate.observed) {
+      this.navigate.emit('experiments');
+      return;
+    }
+    try {
+      const p = this.provider || Metadata.Provider;
+      if (!p) return;
+      const runs = this.engine?.TrainingRuns ?? [];
+      const match = modelId
+        ? runs.find((r) => UUIDsEqual(r.ResultingModelID, modelId))
+        : runs.find((r) => this.selectedPipelineId && UUIDsEqual(r.PipelineID, this.selectedPipelineId));
+      if (match) {
+        const entity = p.EntityByName('MJ: ML Training Runs');
+        if (entity) {
+          const ck = CompositeKey.FromURLSegment(entity, match.ID);
+          this.navigationService.OpenEntityRecord('MJ: ML Training Runs', ck);
+          return;
+        }
+      }
+      this.navigationService.OpenNavItemByName('Experiments');
+    } catch (err) {
+      this.notifications.CreateSimpleNotification(`Could not open training runs: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
+  }
+
   public refreshFromEngine(): void {
     this.pipelines = this.engine?.Pipelines ?? [];
     if (!this.selectedPipelineId && this.pipelines.length > 0) {
@@ -921,12 +1035,49 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     return this.pipelineModels.find((m) => m.Status === 'Published') ?? this.pipelineModels[0];
   }
 
+  public selectedModelVersionId: string | null = null;
+
+  public get inspectedModel(): MJMLModelEntity | undefined {
+    if (this.selectedModelVersionId) {
+      const found = this.pipelineModels.find((m) => UUIDsEqual(m.ID, this.selectedModelVersionId));
+      if (found) return found;
+    }
+    return this.publishedModel;
+  }
+
+  public selectModelVersion(id: string): void {
+    this.selectedModelVersionId = id;
+    this.cdr.markForCheck();
+  }
+
   public bestMetricForPipeline(p?: MJMLTrainingPipelineEntity): string | null {
     if (!p || !this.engine?.Models) return null;
     const models = this.engine.Models.filter((m) => UUIDsEqual(m.PipelineID, p.ID));
     if (models.length === 0) return null;
     const best = models.find((m) => m.Status === 'Published') ?? models[0];
     return this.formatHoldout(best);
+  }
+
+  public selectStep(id: string): void {
+    this.selectNode(id);
+  }
+
+  public getStepColumns(step: FeatureStep): string[] {
+    switch (step.Kind) {
+      case 'select':
+      case 'standardize':
+        return step.Columns ?? [];
+      case 'impute':
+      case 'onehot':
+      case 'bin':
+        return step.Column ? [step.Column] : [];
+      default:
+        return [];
+    }
+  }
+
+  public getStepInputs(step: FeatureStep): string[] {
+    return step.Inputs ?? [];
   }
 
   public formatHoldout(m: MJMLModelEntity): string {
@@ -955,6 +1106,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   public selectPipeline(id: string): void {
     this.selectedPipelineId = id;
+    this.selectedModelVersionId = null;
     const p = this.pipelines.find((x) => UUIDsEqual(x.ID, id));
     if (!p) {
       return;
@@ -1042,16 +1194,35 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     });
 
     const stepIds = new Set(this.editSteps.map((s) => s.Id));
+    const sourceKeyToId = new Map<string, string>();
+    this.editSources.forEach((sb, i) => {
+      const sid = `src:${i}`;
+      sourceKeyToId.set(sid.toLowerCase(), sid);
+      if (sb.Ref) sourceKeyToId.set(sb.Ref.toLowerCase(), sid);
+      if (sb.Alias) sourceKeyToId.set(sb.Alias.toLowerCase(), sid);
+    });
+
+    const stepSourcesConnected = new Set<string>();
     const referenced = new Set<string>();
     for (const step of this.editSteps) {
       for (const input of step.Inputs ?? []) {
         if (stepIds.has(input)) {
           edges.push({ from: input, to: step.Id });
           referenced.add(input);
+        } else {
+          const matchedSrc = sourceKeyToId.get(input.toLowerCase());
+          if (matchedSrc) {
+            edges.push({ from: matchedSrc, to: step.Id });
+            stepSourcesConnected.add(step.Id);
+          }
         }
       }
     }
-    const roots = this.editSteps.filter((s) => (s.Inputs ?? []).filter((i) => stepIds.has(i)).length === 0);
+    const roots = this.editSteps.filter((s) => {
+      const hasStepInput = (s.Inputs ?? []).some((i) => stepIds.has(i));
+      const hasSourceInput = stepSourcesConnected.has(s.Id);
+      return !hasStepInput && !hasSourceInput;
+    });
     const sourceIds = this.editSources.map((_s, i) => `src:${i}`);
     if (this.editSteps.length > 0) {
       for (const sid of sourceIds) {
@@ -1081,14 +1252,25 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   }
 
   private sourceNode(sb: SourceBinding, i: number): DagNode {
+    const md = this.provider || Metadata.Provider;
+    let title = sb.Alias;
+    if (!title && sb.Kind === 'Entity') {
+      const entity = md?.Entities?.find((e) => e.Name.toLowerCase() === sb.Ref.toLowerCase());
+      title = entity?.DisplayName || entity?.Name;
+    }
+    title = title || sb.Ref || 'source';
+
     const rows: { k: string; v: string }[] = [{ k: 'kind', v: sb.Kind }];
     if (sb.Alias) {
-      rows.push({ k: 'entity', v: sb.Ref || '—' });
+      rows.push({ k: 'alias', v: sb.Alias });
+    }
+    if (sb.Kind === 'Entity' && title !== sb.Ref) {
+      rows.push({ k: 'entity', v: sb.Ref });
     }
     return {
       id: `src:${i}`,
       type: 'src',
-      title: sb.Alias || sb.Ref || 'source',
+      title,
       icon: SOURCE_ICONS[sb.Kind] ?? 'fa-solid fa-database',
       tag: sb.Kind,
       rows,
@@ -1116,9 +1298,19 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   private stepRows(step: FeatureStep): { k: string; v: string }[] {
     switch (step.Kind) {
-      case 'select': return [{ k: 'columns', v: `${step.Columns.length} cols` }];
+      case 'select': {
+        const preview = step.Columns.length <= 3
+          ? step.Columns.join(', ')
+          : `${step.Columns.slice(0, 2).join(', ')} +${step.Columns.length - 2} more`;
+        return [{ k: 'columns', v: preview || '0 cols' }];
+      }
       case 'impute': return [{ k: 'column', v: step.Column }, { k: 'strategy', v: step.Strategy }];
-      case 'standardize': return [{ k: 'columns', v: `${step.Columns.length} cols` }, { k: 'scaler', v: 'z-score' }];
+      case 'standardize': {
+        const preview = step.Columns.length <= 3
+          ? step.Columns.join(', ')
+          : `${step.Columns.slice(0, 2).join(', ')} +${step.Columns.length - 2} more`;
+        return [{ k: 'columns', v: preview || '0 cols' }, { k: 'scaler', v: 'z-score' }];
+      }
       case 'onehot': return [{ k: 'column', v: step.Column }];
       case 'bin': return [{ k: 'column', v: step.Column }, { k: 'bins', v: String(step.Bins) }];
       case 'embedding': return [{ k: 'entity', v: step.Entity }, { k: 'dims', v: String(step.Dims) }];

@@ -1,20 +1,15 @@
-import { Component } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { Component, OnInit } from '@angular/core';
+import { RegisterClass, RegisterClassEx } from '@memberjunction/global';
+import { BaseFormComponent, BaseFormPolicy, FormChromeContext, FormChromeSpec } from '@memberjunction/ng-base-forms';
 import { MJMLModelFormComponent } from '../../generated/Entities/MJMLModel/mjmlmodel.form.component';
 
 /**
  * Custom form override for `MJ: ML Models` (priority 100).
- * Replaces the raw generated field layout with the unified `<ps-model-detail>` component —
- * the exact same rich, interactive visualization used in Predictive Studio's Model Registry.
- *
- * Opening any ML Model record anywhere in MemberJunction Explorer now renders:
- * - Versioned model identity & algorithm details
- * - 4-stage lifecycle stepper (Draft → Validated → Published → Archived)
- * - In-sample vs holdout metric comparison (AUC, Accuracy, Precision, Recall, F1, Log Loss, etc.)
- * - Feature importance rankings with dominance warning
- * - Target leakage sign-off gate verification
- * - Full lifecycle actions (Validate, Publish, Archive)
+ * Presents the ML Model in a left-nav experience with:
+ * - Lead panel: "Overview & Lifecycle" (<ps-model-detail>)
+ * - Details card: Model Identity & Status, Schema & Configuration, Training & Performance
+ * - Related grids: ML Training Runs, ML Model Scoring Bindings
+ * - More folder: System Metadata
  */
 @RegisterClass(BaseFormComponent, 'MJ: ML Models', 100)
 @Component({
@@ -23,9 +18,43 @@ import { MJMLModelFormComponent } from '../../generated/Entities/MJMLModel/mjmlm
     templateUrl: './ml-model-form.component.html',
     styleUrls: ['./ml-model-form.component.css'],
 })
-export class MLModelFormComponentExtended extends MJMLModelFormComponent {}
+export class MLModelFormComponentExtended extends MJMLModelFormComponent implements OnInit {
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'modelOverview', sectionName: 'Overview & Lifecycle', isExpanded: true },
+            { sectionKey: 'modelIdentityStatus', sectionName: 'Model Identity & Status', isExpanded: true },
+            { sectionKey: 'schemaConfiguration', sectionName: 'Schema & Configuration', isExpanded: true },
+            { sectionKey: 'trainingPerformance', sectionName: 'Training & Performance', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJMLTrainingRuns', sectionName: 'ML Training Runs', isExpanded: false },
+            { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false }
+        ]);
+    }
+}
 
-/** Tree-shaking guard so the override registers with the ClassFactory. */
+/**
+ * Policy ensuring that the Overview & Lifecycle panel sits as the lead group
+ * before the Details group on the left-nav rail.
+ */
+@RegisterClassEx(BaseFormPolicy, { key: 'MJ: ML Models', metadata: { entity: 'MJ: ML Models' } })
+export class MLModelFormPolicy extends BaseFormPolicy {
+    public override DecorateChrome(spec: FormChromeSpec, _ctx: FormChromeContext): FormChromeSpec {
+        const overview = spec.Groups.find(g => g.Key === 'modelOverview');
+        if (overview) {
+            overview.IsLead = true;
+            const remaining = spec.Groups.filter(g => g.Key !== 'modelOverview');
+            return {
+                ...spec,
+                Groups: [overview, ...remaining],
+            };
+        }
+        return spec;
+    }
+}
+
+/** Tree-shaking guard so the override and policy register with the ClassFactory. */
 export function LoadMLModelFormComponentExtended(): void {
-    // intentionally empty
+    void MLModelFormComponentExtended;
+    void MLModelFormPolicy;
 }
