@@ -1,11 +1,12 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ViewChild, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, UserInfo } from '@memberjunction/core';
-import { MJConversationEntity, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLAlgorithmEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { PSPanelKey } from '../predictive-studio.types';
+import { PSPipelinesComponent } from '../components/ps-pipelines.component';
 import {
   STUDIO_SECTIONS,
   PSSection,
@@ -15,8 +16,13 @@ import {
   hasSection,
   routeHomeNavigate,
 } from '../predictive-studio.nav';
-import { buildStudioAgentContext, resolvePSRecord, buildPSNotFoundError } from '../predictive-studio-agent-context';
+import {
+  buildStudioAgentContext,
+  resolvePSRecord,
+  buildPSNotFoundError,
+} from '../predictive-studio-agent-context';
 import { validateStringParam } from '../../shared/agent-tool-validation';
+import type { NavigationRequest } from '@memberjunction/ng-artifacts';
 
 /** Predictive Studio application ID (from `metadata/applications/.predictive-studio-application.json`). */
 const PREDICTIVE_STUDIO_APP_ID = '299C9272-8D38-40CA-85D4-0980F2C9FAD1';
@@ -69,31 +75,35 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
           <section class="ps-content" [class.fill]="activeSection === 'pipelines'" [attr.data-testid]="'ps-panel-' + activeSection">
             @switch (activeSection) {
               @case ('home') { <ps-home [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (navigate)="mapNavigate($event)" (askAgent)="onAskAgent($event)"></ps-home> }
-              @case ('pipelines') { <ps-pipelines [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (askAgent)="onAskAgent($event)"></ps-pipelines> }
-              @case ('catalog') { <ps-catalog [engine]="engine" (askAgent)="onAskAgent($event)"></ps-catalog> }
+              @case ('pipelines') { <ps-pipelines #pipelinesComp [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (askAgent)="onAskAgent($event)"></ps-pipelines> }
+              @case ('catalog') { <ps-catalog [engine]="engine" (askAgent)="onAskAgent($event)" (createPipeline)="onCreatePipelineFromCatalog($event)"></ps-catalog> }
               @case ('experiments') { <ps-experiments [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-experiments> }
               @case ('compare') { <ps-compare [engine]="engine"></ps-compare> }
             }
           </section>
 
           @if (chatOpen) {
-            <aside class="ps-copilot" data-testid="ps-studio-copilot">
+            <aside class="ps-copilot" [class.expanded]="copilotExpanded" data-testid="ps-studio-copilot">
               <div class="ps-copilot-head">
                 <div class="ps-copilot-title"><i class="fa-solid fa-robot"></i> Model Dev Agent</div>
-                <button class="ps-copilot-close" (click)="closeChat()" aria-label="Close agent chat"><i class="fa-solid fa-xmark"></i></button>
+                <div class="ps-copilot-actions">
+                  <button class="ps-copilot-btn" (click)="toggleCopilotExpanded()" [title]="copilotExpanded ? 'Collapse panel' : 'Expand panel'"><i class="fa-solid" [class.fa-up-right-and-down-left-from-center]="!copilotExpanded" [class.fa-down-left-and-up-right-to-center]="copilotExpanded"></i></button>
+                  <button class="ps-copilot-close" (click)="closeChat()" aria-label="Close agent chat"><i class="fa-solid fa-xmark"></i></button>
+                </div>
               </div>
               <div class="ps-copilot-body">
                 @if (currentUser) {
                   <mj-conversation-chat-area
                     [Provider]="Provider" [environmentId]="chatEnvironmentId" [currentUser]="currentUser"
                     [conversation]="chatConversation" [conversationId]="chatConversationId" [isNewConversation]="chatIsNewConversation"
-                    [suppressNewConversationEmptyState]="true" [allowMentions]="false" [overlayMode]="true"
-                    [showExportButton]="false" [showShareButton]="false" [showArtifactIndicator]="false"
+                    [suppressNewConversationEmptyState]="true" [allowMentions]="false" [overlayMode]="false"
+                    [showExportButton]="false" [showShareButton]="false" [showArtifactIndicator]="true"
                     [showAgentPicker]="false" [showAgentModePicker]="false"
                     [defaultAgentId]="modelDevAgentId" [pendingMessage]="pendingPrompt"
                     [applicationScope]="'Application'" [applicationId]="applicationId" [appContext]="chatAppContext"
                     (conversationCreated)="onChatConversationCreated($event)"
-                    (pendingMessageConsumed)="onChatPendingMessageConsumed()">
+                    (pendingMessageConsumed)="onChatPendingMessageConsumed()"
+                    (navigationRequest)="onNavigationRequest($event)">
                   </mj-conversation-chat-area>
                 } @else { <div class="ps-copilot-empty"><mj-loading text="Connecting…" size="small"></mj-loading></div> }
               </div>
@@ -119,10 +129,14 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
          columns (canvas / inspector) can each own their scrollbar. */
       .ps-content.fill { overflow: hidden; display: flex; flex-direction: column; padding-bottom: 14px; }
       .ps-content.fill > * { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-      .ps-copilot { width: 420px; max-width: 42vw; flex: none; border-left: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; min-height: 0; }
+      .ps-copilot { width: 480px; max-width: 48vw; flex: none; border-left: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; min-height: 0; transition: width .2s ease, max-width .2s ease; }
+      .ps-copilot.expanded { width: 960px; max-width: 80vw; }
       .ps-copilot-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--mj-border-default); }
       .ps-copilot-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--mj-text-primary); }
       .ps-copilot-title i { color: var(--mj-brand-primary); }
+      .ps-copilot-actions { display: flex; align-items: center; gap: 4px; }
+      .ps-copilot-btn { background: transparent; border: none; cursor: pointer; padding: 6px 8px; border-radius: 6px; color: var(--mj-text-muted); }
+      .ps-copilot-btn:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-secondary); }
       .ps-copilot-close { background: transparent; border: none; cursor: pointer; padding: 6px 8px; border-radius: 6px; color: var(--mj-text-muted); }
       .ps-copilot-close:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-secondary); }
       .ps-copilot-body { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
@@ -148,6 +162,15 @@ export class PSStudioResourceComponent extends PSResourceBase {
   /** The active workbench section (which panel renders). Round-trips through the `section` query param. */
   public activeSection: PSPanelKey = 'home';
   public readonly sections: readonly PSSection[] = STUDIO_SECTIONS;
+
+  @ViewChild('pipelinesComp') pipelinesComponent?: PSPipelinesComponent;
+
+  public onCreatePipelineFromCatalog(algo: MJMLAlgorithmEntity): void {
+    this.selectSection('pipelines');
+    setTimeout(() => {
+      this.pipelinesComponent?.openWizard(algo.ID);
+    }, 50);
+  }
 
   // ── docked Model Dev Agent copilot ───────────────────────────────
   public chatOpen = false;
@@ -291,8 +314,24 @@ export class PSStudioResourceComponent extends PSResourceBase {
   public closeChat(): void {
     this.chatOpen = false;
     this.pendingPrompt = null;
+    this.copilotExpanded = false;
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
+  }
+
+  public copilotExpanded = false;
+
+  public toggleCopilotExpanded(): void {
+    this.copilotExpanded = !this.copilotExpanded;
+    this.cdrLocal.detectChanges();
+  }
+
+  public onNavigationRequest(req: NavigationRequest): void {
+    if (req.navItemName === 'Models' || req.queryParams?.['modelId']) {
+      void this.navigationService.SwitchToApp(PREDICTIVE_STUDIO_APP_ID, 'Models', req.queryParams);
+    } else if (req.appName) {
+      void this.navigationService.SwitchToApp(req.appName, req.navItemName, req.queryParams);
+    }
   }
 
   /** Chat-area created its backing conversation on the first send — capture it + leave new-mode so the thread renders. */

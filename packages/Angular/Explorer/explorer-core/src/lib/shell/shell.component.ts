@@ -40,6 +40,7 @@ import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AppSwitcherStyle } from './components/header/app-switcher.component';
 import { ApplyShellChromePolicy, BaseShellChromePolicy, ShellChromeFlags } from './shell-chrome-policy';
+import { setReadinessBeacon } from './readiness-beacon';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -63,7 +64,24 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private initialNavigationComplete = false; // Track if initial navigation has completed
 
   activeApp: BaseApplication | null = null;
-  loading = true;
+  private _loading = true;
+  /**
+   * Shell loading-screen flag, and the source of the Computer Use readiness
+   * beacon. When it clears, the shell has finished loading the active route's
+   * resource, so `data-mj-ready="true"` is published on `<html>`; raising it
+   * again on navigation clears the beacon.
+   *
+   * The beacon lives in this setter rather than at the call sites because ~22
+   * places assign `loading` — routing, resource load, app switch, error paths.
+   * Publishing here means every one of them stays correct for free.
+   */
+  get loading(): boolean {
+    return this._loading;
+  }
+  set loading(value: boolean) {
+    this._loading = value;
+    setReadinessBeacon(!value);
+  }
   initialized = false;
   private waitingForFirstResource = false;
   tabBarVisible = true; // Controlled by workspace manager

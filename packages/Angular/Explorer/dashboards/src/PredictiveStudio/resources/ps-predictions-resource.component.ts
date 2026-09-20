@@ -125,40 +125,16 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                       @for (d of drivers; track d) { <span class="ps-driver-chip">{{ d }}</span> }
                     </div>
                   }
-                  @if (atRiskLoading) {
-                    <mj-loading text="Loading who's at risk…" size="small"></mj-loading>
-                  } @else if (atRiskError) {
-                    <div class="ps-atrisk-error" data-testid="ps-atrisk-error" role="alert">
-                      <i class="fa-solid fa-triangle-exclamation"></i>
-                      <span class="ps-atrisk-error-msg">Couldn't load who's at risk: {{ atRiskError }}</span>
-                      <button mjButton variant="secondary" size="sm" (click)="retryAtRisk()"><i class="fa-solid fa-rotate-right"></i> Try again</button>
-                    </div>
-                  } @else if (atRiskRows.length > 0) {
-                    <div class="ps-atrisk" data-testid="ps-atrisk-list" #atriskList>
-                      <div class="ps-atrisk-head"><span>Member</span><span class="ps-atrisk-rcol">Likelihood</span></div>
-                      @for (r of atRiskRows.slice(0, 50); track r.recordId) {
-                        <div class="ps-atrisk-row" data-testid="ps-atrisk-row">
-                          <div class="ps-atrisk-idcell">
-                            <span class="ps-atrisk-id" [class.mono]="!r.label" [title]="r.recordId">{{ r.label || r.recordId }}</span>
-                            @if (r.drivers && r.drivers.length > 0) {
-                              <span class="ps-atrisk-why" data-testid="ps-atrisk-why">
-                                @for (d of r.drivers.slice(0, 2); track d.label) {
-                                  <span class="ps-why-chip" [class.up]="d.up" [class.down]="!d.up" [title]="(d.up ? 'Increases risk: ' : 'Lowers risk: ') + d.label">
-                                    <i class="fa-solid" [class.fa-arrow-up]="d.up" [class.fa-arrow-down]="!d.up"></i> {{ d.label }}
-                                  </span>
-                                }
-                              </span>
-                            }
-                          </div>
-                          <span class="ps-atrisk-bar"><span class="ps-atrisk-fill" [class]="'risk-' + r.band" [style.width.%]="r.riskPct"></span></span>
-                          <span class="ps-atrisk-pct" [class]="'risk-' + r.band">{{ r.riskPct }}%</span>
-                        </div>
-                      }
-                      <div class="ps-atrisk-foot muted">{{ atRiskRows.length > 50 ? 'Showing top 50 of ' + atRiskRows.length : atRiskRows.length + ' members' }} · highest first</div>
-                    </div>
-                  } @else {
-                    <div class="ps-atrisk-empty muted" data-testid="ps-atrisk-empty">No results yet — run this prediction from <strong>Models in Production</strong> to see who's at risk.</div>
-                  }
+                  <ps-predictions-grid
+                    data-testid="ps-atrisk-list"
+                    #atriskList
+                    [modelId]="selected.modelId"
+                    [runId]="latestRunId"
+                    [title]="selected.title"
+                    [entityName]="selectedTargetEntityName"
+                    [problemType]="selectedProblemType"
+                    height="580px">
+                  </ps-predictions-grid>
                 }
                 <div class="ps-action-bar" [class.locked]="!selected.canOpen" data-testid="ps-action-bar">
                   @if (selected.canOpen) {
@@ -332,6 +308,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   /** "Send to a list" in-flight guard + last-result message (P1 #4). */
   public creatingList = false;
   public listResult: string | null = null;
+  public latestRunId: string | null = null;
 
   /** Capability cards for the first-run intro (what PS can do), shown when the catalog is empty. */
   public readonly capabilityCards: readonly PSCapabilityCard[] = PS_CAPABILITY_CARDS;
@@ -471,6 +448,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const user = provider.CurrentUser ?? undefined;
       const runs = await this.engine.LoadRecentRunsForModel(c.modelId, provider, user, { maxRows: 1 });
       const latest = runs[0];
+      this.latestRunId = latest?.ID ?? null;
       if (latest?.ID) {
         const res = await RunView.FromMetadataProvider(provider).RunView<MJProcessRunDetailEntity>(
           { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${latest.ID}'`, MaxRows: 2137, ResultType: 'entity_object' },
@@ -501,7 +479,18 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
    * model's target entity, so the list reads like a call sheet instead of a column of UUIDs. Resolves the
    * top-risk rows (capped) to keep the lookup light; unresolved rows fall back to their id in the template.
    */
-  /** Resolve a model's scored target entity (id + name) via its pipeline — the model row itself only carries PipelineID. */
+  public get selectedTargetEntityName(): string | null {
+    if (!this.selected) return null;
+    const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, this.selected?.modelId));
+    return this.targetEntityForModel(model)?.name ?? null;
+  }
+
+  public get selectedProblemType(): string | null {
+    if (!this.selected) return null;
+    const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, this.selected?.modelId));
+    return model?.ProblemType ?? null;
+  }
+
   private targetEntityForModel(model: MJMLModelEntity | undefined): { id: string; name: string } | null {
     const pipeline = model ? this.engine.Pipelines.find((pp) => UUIDsEqual(pp.ID, model.PipelineID)) : undefined;
     const id = pipeline?.TargetEntityID;
@@ -552,6 +541,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public backToCatalog(): void {
     this.view = 'catalog';
     this.selected = null;
+    this.latestRunId = null;
     this.atRiskRows = [];
     this.drivers = [];
     this.atRiskError = null;
