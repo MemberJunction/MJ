@@ -59,7 +59,7 @@ export default function ExplorerHomeScreen() {
                     <Tile
                         wide
                         title="Dashboards"
-                        sub="Most dashboards are built for desktop and may not render optimally on mobile."
+                        sub="Dashboards you composed from saved queries and artifacts."
                         stat={counts ? `${counts.dashboards} available` : '…'}
                         iconBg={Colors.warnSoft}
                         icon={<Icons.Sparkle size={22} color={Colors.warn} strokeWidth={2} />}

@@ -302,6 +302,16 @@ export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardL
     const result = await rv.RunView<{ ID: string; Name: string; Description: string | null }>(
         {
             EntityName: 'MJ: Dashboards',
+            // `Config` only. The other two types are not dashboards this app can open: a `Code`
+            // dashboard's panels ARE an Angular component and a `Dynamic Code` dashboard's are
+            // generated at runtime for a browser — neither has anything a native surface could
+            // render, which is why every one of them used to arrive here and then apologise.
+            //
+            // Listing a row that can only disappoint is worse than not listing it: the list stops
+            // being a menu of things you can do and becomes a menu of things you mostly cannot.
+            // A `Config` dashboard is data — panels of queries and artifacts — and renders here
+            // properly, which makes this list exactly the dashboards mobile supports.
+            ExtraFilter: `Type = 'Config'`,
             Fields: ['ID', 'Name', 'Description'],
             OrderBy: 'Name',
             MaxRows: 200,

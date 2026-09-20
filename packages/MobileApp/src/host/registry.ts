@@ -1,4 +1,5 @@
 import { LoadFieldNotesMobileResource } from '@/sample-app/FieldNotesResource';
+import { LoadDataExplorerMobileResources } from './data-explorer-resources';
 import { LoadGenericMobileResources } from './generic-resources';
 
 /**
@@ -39,6 +40,9 @@ export function LoadHostedMobileResources(): void {
     // Generic resource types — surfaces the shell itself provides for nav items that name a record
     // rather than a driver class. Registered first so an application can override one by name.
     LoadGenericMobileResources();
+    // Data Explorer — this app's own entity, query and dashboard surfaces, claimed by the driver
+    // classes the application's nav metadata already names.
+    LoadDataExplorerMobileResources();
     // Sample application — the worked example behind the authoring guide.
     LoadFieldNotesMobileResource();
 }
