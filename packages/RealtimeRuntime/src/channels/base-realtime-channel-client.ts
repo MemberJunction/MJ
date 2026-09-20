@@ -1,9 +1,28 @@
-import type { Type } from '@angular/core';
 import type { Observable } from 'rxjs';
 import { IMetadataProvider } from '@memberjunction/core';
 import { JSONValue, RealtimeToolDefinition, RealtimeTrackDescriptor, RealtimeTrackDirection } from '@memberjunction/ai';
 import type { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
+
+/**
+ * A UI framework's component-class reference, as far as this runtime is concerned.
+ *
+ * This was `Type<T>` from `@angular/core`. That import was the *only* Angular tie in this file —
+ * and it was never a real dependency: the runtime receives a component class from a channel plugin
+ * and hands it to the host to render. It never constructs one, never reads a property off one, and
+ * never cares what framework produced it.
+ *
+ * It is deliberately opaque. Trying to describe a component class *structurally* here would be
+ * dishonest precision: each framework's constructor contract differs, and narrowing to any one of
+ * them re-couples the runtime to that framework. The runtime only ever carries this value from the
+ * plugin to the host, so "a class" is the whole of what it needs to know — the host, which does
+ * know what a component is, narrows it at the single point where it instantiates one.
+ *
+ * Angular's `Type<T>` satisfies this unchanged, so no existing plugin needs editing. Without it,
+ * every interactive channel — the whiteboard, the remote browser, the media surface — is
+ * permanently Angular-only, which is exactly why a non-Angular host could not offer channels.
+ */
+export type RealtimeSurfaceComponentType = Function;
 
 /**
  * Host services handed to a {@link BaseRealtimeChannelClient} at {@link BaseRealtimeChannelClient.Initialize}.
@@ -286,7 +305,7 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
    * Default: `null` (server-only). A channel with a rendered surface overrides this to return its
    * component type.
    */
-  public GetSurfaceComponent(): Type<TSurface> | null {
+  public GetSurfaceComponent(): RealtimeSurfaceComponentType | null {
     return null;
   }
 
