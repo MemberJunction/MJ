@@ -20,42 +20,155 @@ const REPO = join(HERE, '..', '..');
 const GUID = /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i;
 
 /**
- * A create call, located within its batch. Captures the schema as written so a rewrite keeps
- * the author's own spelling instead of silently converting it.
+ * T-SQL states its procedure-call grammar as one production:
  *
- * Both schema spellings are accepted because the rest of this file always accepted both:
- * buildProcTableMap's PROC_RE and isGuardedFor's tableTest each take `__mj` or the placeholder.
- * Only this pattern did not, so `EXEC [__mj].spCreateX` — repo vocabulary, used by
- * migrations/v2/V202506131707 and V202506151907 — matched nothing and was invisible to the gate
- * AND to --fix, while the gate printed "all guarded". One file cannot hold three regexes that
- * disagree about what a schema looks like; the odd one out was this.
+ *     EXEC[UTE] [ @return_status = ] [ [ [ server. ] database. ] schema. ] module [ arguments ]
+ *
+ * This file used to model that with TWO regexes — a strict one that --fix re-emits from, and a
+ * loose "backstop" meant to be strictly broader, so that anything the strict one could not parse
+ * raised instead of vanishing. Separating recognition from parsing was the right idea; a regex
+ * could not deliver it. The backstop was itself one spelling of the grammar (EXEC, at most one
+ * optional qualifier, spCreate<X>), so every production it did not spell was invisible to BOTH
+ * patterns at once — and invisible does not read as "unknown", it reads as "no create here".
+ *
+ * That is one failure mode, found six times: no trailing ';', then `EXEC [__mj]`, then a guard
+ * block closed before the create, then a foreign-key column passing as the primary key, then
+ * `EXEC @rc =`, then a three-part name. Patching the sixth leaves the seventh, because the
+ * enumeration is of an infinite set.
+ *
+ * Two matchers obliged to agree about a grammar will eventually disagree, so there is now one.
+ * The walk below CONSUMES the productions — the optional return-status assignment, the optional
+ * qualifier chain, the module name — instead of matching a rendering of them. Case, whitespace,
+ * brackets, EXEC vs EXECUTE, `@rc =` and n-part names stop being shapes to enumerate; they are
+ * one production read correctly. Anything the walk resolves to a create but cannot parse is
+ * refused by name, never skipped.
+ *
+ * The other half matters as much: ordinary calls must stay silent. `EXEC sp_executesql`,
+ * `EXEC (@sql)`, a return-status call to a proc that is not a create, and a module named by a
+ * variable are all simply not creates. A gate that raises on everyday T-SQL is a gate nobody
+ * keeps green, and a gate nobody keeps green has stopped being a gate.
  */
-const EXEC_RE =
-  /EXEC\s+(\[?(?:\$\{flyway:defaultSchema\}|__mj)\]?)\.\[?spCreate(\w+)\]?\s+([\s\S]*?);/gd;
+const EXEC_KEYWORD_RE = /\bEXEC(?:UTE)?\b/gi;
+const CREATE_MODULE_RE = /^spCreate\w+$/i;
+const KNOWN_SCHEMA_RE = /^\[?(?:\$\{flyway:defaultSchema\}|__mj)\]?$/;
+/** A name part that is not bracketed: everything up to the next delimiter T-SQL could use. */
+const BARE_NAME_PART_RE = /^[^\s.\[\];,()=]+/;
 
 /**
- * Backstop: ANY invocation of a spCreate proc, in any shape, parseable or not.
- *
- * EXEC_RE above is deliberately strict — it has to be, because --fix re-emits what it captures.
- * A strict matcher used ALONE is fail-open by construction: a shape it does not match is not
- * reported as unknown, it is not reported at all, and "no calls in this batch" reads as "nothing
- * to guard". That is how a create with no trailing ';' (a terminator T-SQL treats as optional)
- * and the `EXEC [__mj]` form both passed a gate whose whole purpose is to find them.
- *
- * So recognition and parsing are separated: this pattern decides THAT a create is here, EXEC_RE
- * decides what it says. Anything this finds and EXEC_RE cannot parse raises, rather than
- * vanishing. That is what makes the gate closed against the next shape nobody enumerated, which
- * matters more than usual here: the plan is to gate PR #4519's emitter on this script, and a gate
- * reporting "all guarded" over an unguarded create is worse than no gate, because it converts a
- * visible problem into an invisible one.
- *
- * Kept loose on purpose — EXECUTE as well as EXEC, either schema spelling or none, brackets
- * optional. It never rewrites anything, so a false alarm costs an author one restatement in the
- * canonical form, while a miss costs MJ#4503 shipping again.
+ * Reads the qualifier chain and module name beginning at `from`, e.g. `[db].[schema].[spCreateX]`.
+ * Returns each part with its offsets so a rewrite can reuse the author's own spelling, and the
+ * offset just past the name. Null when no name starts here at all.
  */
-const ANY_CREATE_EXEC_SRC = String.raw`\bEXEC(?:UTE)?\s+(?:(?:\[[^\]]*\]|[^\s.\[\];]+)\s*\.\s*)?\[?spCreate(\w+)\]?`;
-const ANY_CREATE_EXEC_RE = new RegExp(ANY_CREATE_EXEC_SRC, 'gi');
-const HAS_CREATE_EXEC_RE = new RegExp(ANY_CREATE_EXEC_SRC, 'i');
+function readDottedName(code, from) {
+  const parts = [];
+  let i = skipSpace(code, from);
+  for (;;) {
+    const start = i;
+    if (code[i] === '[') {
+      const close = code.indexOf(']', i + 1);
+      if (close === -1) break;
+      i = close + 1;
+    } else {
+      const bare = BARE_NAME_PART_RE.exec(code.slice(i));
+      if (!bare) break;
+      i += bare[0].length;
+    }
+    parts.push({ text: code.slice(start, i).replace(/^\[|\]$/g, ''), start, end: i });
+    const afterDot = skipSpace(code, i);
+    if (code[afterDot] !== '.') break;
+    i = skipSpace(code, afterDot + 1);
+  }
+  return parts.length === 0 ? null : { parts, end: parts[parts.length - 1].end };
+}
+
+function skipSpace(code, i) {
+  while (i < code.length && /\s/.test(code[i])) i++;
+  return i;
+}
+
+/**
+ * Every spCreate invocation in `code`, in source order, each either parsed or refused.
+ *
+ * Takes both maskings of the same batch, and they are not interchangeable:
+ *   - `code` has comments AND string literals masked, and is what the walk READS. An EXEC inside
+ *     a block comment is prose and an EXEC inside a dynamic-SQL string is data; this tool may
+ *     rewrite neither, so neither is a call.
+ *   - `withStrings` has only comments masked, and is used for ONE thing: locating the ';'. Read
+ *     there, a ';' inside a Description ends the capture early — which is wrong, and is exactly
+ *     what the unbalanced-quote postcondition downstream exists to catch and refuse. Finding the
+ *     real terminator here instead would silently retire that refusal, so the boundary is
+ *     deliberately taken from the same text the rewrite is sliced from.
+ * Both maskings are length-preserving, so every offset indexes the original batch too.
+ */
+function findCreateCalls(code, withStrings) {
+  const found = [];
+  for (const kw of code.matchAll(EXEC_KEYWORD_RE)) {
+    let i = skipSpace(code, kw.index + kw[0].length);
+    if (code[i] === '(') continue; // EXEC (@sql) — dynamic SQL, not a module call
+
+    // `EXEC @x = proc` assigns the return status; `EXEC @x` names the module THROUGH a variable,
+    // which no static tool can resolve and which is therefore passed over rather than refused.
+    let returnStatus = null;
+    if (code[i] === '@') {
+      const local = /^@\w+/.exec(code.slice(i));
+      if (!local) continue;
+      const eq = skipSpace(code, i + local[0].length);
+      if (code[eq] !== '=' || code[eq + 1] === '=') continue;
+      returnStatus = local[0];
+      i = skipSpace(code, eq + 1);
+    }
+
+    const name = readDottedName(code, i);
+    if (!name) continue;
+    const module = name.parts[name.parts.length - 1];
+    if (!CREATE_MODULE_RE.test(module.text)) continue; // not a create — nothing to guard
+
+    const call = { at: kw.index, keyword: kw[0], returnStatus, module: module.text };
+    const qualifiers = name.parts.slice(0, -1);
+    if (qualifiers.length === 0) {
+      found.push({ ...call, refusal: 'is called with no schema qualifier, so the table it writes cannot be named' });
+      continue;
+    }
+    if (qualifiers.length > 1) {
+      found.push({
+        ...call,
+        refusal:
+          `is called through a multi-part name (${name.parts.map((p) => p.text).join('.')}). A guard for it ` +
+          `would have to read the table in that other database, which this tool has never emitted — and a ` +
+          `guard reading the wrong database is one that is never true`,
+      });
+      continue;
+    }
+    const schema = code.slice(qualifiers[0].start, qualifiers[0].end);
+    if (!KNOWN_SCHEMA_RE.test(schema)) {
+      found.push({ ...call, refusal: `is called through schema ${schema}, which this gate does not know` });
+      continue;
+    }
+    // The statement runs to its terminator, located in `withStrings` — see the docblock: the
+    // capture must end where the REWRITE's slice would end, so that a ';' inside a string literal
+    // still trips the unbalanced-quote postcondition rather than being quietly stepped over.
+    const argsStart = skipSpace(code, name.end);
+    const semi = withStrings.indexOf(';', argsStart);
+    if (semi === -1) {
+      found.push({
+        ...call,
+        refusal:
+          `has no ';' terminator. T-SQL treats the terminator as optional, but without one the ` +
+          `statement's end cannot be located, and guessing a boundary would re-emit a truncated ` +
+          `call into both guard branches`,
+      });
+      continue;
+    }
+    found.push({
+      ...call,
+      schemaStart: qualifiers[0].start,
+      schemaEnd: qualifiers[0].end,
+      argsStart,
+      end: semi + 1,
+    });
+  }
+  return found;
+}
 /**
  * A literal GUID assigned to a local, in ANY T-SQL syntax.
  *
@@ -211,15 +324,15 @@ function readParenGroup(text, from) {
  * result are offsets into the original. Optionally blanks single-quoted string literals too.
  *
  * Exists because every pattern in this file used to read raw text, which cannot tell a statement
- * from a sentence about one. That is not hypothetical: the first version of the backstop below
- * brought the whole gate down on migrations/v6/V202608301800, whose block comment explains a
- * deprecation by quoting `EXEC spCreateAIModelCost`. Prose is not code. Neither is a
- * commented-out statement, and reading one as a guard would be a fail-open of exactly the kind
- * this gate exists to close.
+ * from a sentence about one. That is not hypothetical: an early recogniser brought the whole gate
+ * down on migrations/v6/V202608301800, whose block comment explains a deprecation by quoting
+ * `EXEC spCreateAIModelCost`. Prose is not code. Neither is a commented-out statement, and
+ * reading one as a guard would be a fail-open of exactly the kind this gate exists to close.
  *
- * `blankStrings` is off for statement parsing — a fixed GUID lives inside a string literal, and
- * blanking it would hide the very thing being detected — and on for the backstop, where an EXEC
- * inside a dynamic-SQL string is text this tool must not rewrite and must not raise over.
+ * `blankStrings` is on for RECOGNITION — an EXEC inside a dynamic-SQL string is data this tool
+ * must not rewrite and must not raise over — and off for the two reads that need the literals
+ * themselves: the fixed GUID a create passes as its @ID lives inside one, and so does the ';'
+ * that the unbalanced-quote postcondition exists to catch.
  *
  * Bracketed identifiers are stepped over rather than blanked: they are code, but a `'` or `--`
  * inside one starts neither a string nor a comment.
@@ -375,28 +488,23 @@ function guardFile(sql, procTable, label) {
   let skipped = 0;
 
   const rewritten = batches.map((batch) => {
-    // Parse against comment-masked text so prose and commented-out statements are not read as
-    // code, and slice the ORIGINAL for anything re-emitted — masking is length-preserving, so
-    // every offset is valid in both. The backstop additionally ignores string literals: an EXEC
-    // inside dynamic SQL is not a statement this tool can rewrite or should raise over.
+    // Two maskings of the same batch, and slice the ORIGINAL for anything re-emitted — every
+    // masking is length-preserving, so an offset is valid in all three. `codeOnly` hides string
+    // literals as well as comments and is what the walk reads; `code` keeps the literals, because
+    // the @ID GUID lives inside one and so does the ';' the quote postcondition catches.
     const code = maskInertText(batch);
     const codeOnly = maskInertText(batch, { blankStrings: true });
     const assignments = literalGuidAssignments(code);
-    const calls = [...code.matchAll(EXEC_RE)];
+    const calls = findCreateCalls(codeOnly, code);
 
-    // Before anything else: every create the backstop can see must be one EXEC_RE actually
-    // parsed. Checked ahead of the `calls.length === 0` return below, because a batch whose ONLY
-    // create is unparseable has no calls at all — the exact case that used to return silently.
-    const parsedAt = new Set(calls.map((m) => m.index));
-    for (const seen of codeOnly.matchAll(ANY_CREATE_EXEC_RE)) {
-      if (parsedAt.has(seen.index)) continue;
+    // Before anything else: a create the walk resolved but could not parse is refused BY NAME.
+    // Raised ahead of the `calls.length === 0` return below, because a batch whose only create is
+    // unparseable would otherwise return silently — which is how every fail-open shape in this
+    // file's history presented itself: not as a wrong answer, but as no answer at all.
+    for (const call of calls) {
+      if (!call.refusal) continue;
       throw new Error(
-        `${label}: found an EXEC of spCreate${seen[1]} that this tool cannot parse as a complete ` +
-          `statement. A create is recognised only as ` +
-          `EXEC [<schema>].spCreate<X> <named args>; — note the trailing ';'. T-SQL treats the ` +
-          `terminator as optional, but without one the statement's end cannot be located, and ` +
-          `guessing a boundary would re-emit a truncated call into both guard branches. ` +
-          `Refusing to certify a create this tool cannot read.`,
+        `${label}: ${call.module} ${call.refusal}. Refusing to certify a create this tool cannot read.`,
       );
     }
 
@@ -409,13 +517,20 @@ function guardFile(sql, procTable, label) {
     let out = '';
     let cursor = 0;
     for (const m of calls) {
-      // Sliced from `batch`, never from `code`: a masked comment inside an argument list would
-      // otherwise be re-emitted blanked into both guard branches.
-      const schema = batch.slice(...m.indices[1]);
-      const entity = batch.slice(...m.indices[2]);
-      const args = batch.slice(...m.indices[3]);
+      // Sliced from `batch`, never from either masking: a blanked comment or string inside an
+      // argument list would otherwise be re-emitted blanked into both guard branches.
+      const schema = batch.slice(m.schemaStart, m.schemaEnd);
+      const args = batch.slice(m.argsStart, m.end - 1);
+      // The proc's own spelling is reused rather than rebuilt from a canonical prefix: the
+      // author's `[__mj]`, `EXECUTE` and `@rc =` are all preserved for the same reason, and a
+      // rewrite that normalises what it did not have to is a silent change nobody asked for.
+      const createName = m.module;
+      const updateName = `spUpdate${m.module.slice('spCreate'.length)}`;
+      // `EXEC @rc = …` captures the proc's return status. It must appear in BOTH branches, or
+      // the ELSE path quietly stops setting the local the author is about to read.
+      const invoke = (proc) => `${m.keyword} ${m.returnStatus ? `${m.returnStatus} = ` : ''}${schema}.${proc} ${args};`;
 
-      // Postcondition on the capture itself: EXEC_RE's non-greedy match stops at the FIRST
+      // Postcondition on the capture itself: the terminator scan stops at the FIRST
       // ';', which is the wrong boundary if that ';' sits inside a string literal (a
       // Description, prompt template or JSON value) rather than terminating the statement.
       // Detect it by requiring unescaped single quotes to balance — T-SQL escapes a literal
@@ -426,7 +541,7 @@ function guardFile(sql, procTable, label) {
       if ((unescaped.match(/'/g) ?? []).length % 2 !== 0) {
         const fragment = args.length > 160 ? `${args.slice(0, 160)}…` : args;
         throw new Error(
-          `${label}: EXEC capture for spCreate${entity} has an unbalanced quote — the capture ` +
+          `${label}: EXEC capture for ${createName} has an unbalanced quote — the capture ` +
             `likely ended at a ';' inside a string literal instead of the statement's real ` +
             `terminator. Fragment: ${fragment}`,
         );
@@ -441,45 +556,45 @@ function guardFile(sql, procTable, label) {
         // mistake that let SELECT-assigned literals through.
         if (args.trim() !== '' && !/@\w+\s*=/.test(args))
           throw new Error(
-            `${label}: spCreate${entity} is called with positional arguments, so its @ID cannot be ` +
+            `${label}: ${createName} is called with positional arguments, so its @ID cannot be ` +
               `located. Refusing to certify a create whose identity this tool cannot read — ` +
               `rewrite the call with named parameters (@ID = …).`,
           );
         // Genuinely no @ID among the named arguments: the SP defaults it, nothing to collide with.
-        out += batch.slice(cursor, m.index + m[0].length);
-        cursor = m.index + m[0].length;
+        out += batch.slice(cursor, m.end);
+        cursor = m.end;
         continue;
       }
       const idRef = idArg[1] ?? `'${idArg[2]}'`;
       // idArg[1] carries the leading `@` (e.g. `@ID_8f85b67b`); the assignment regexes'
       // capture group excludes it (they key on `ID_8f85b67b`) — strip it before the lookup.
       const guid = idArg[1]
-        ? localGuidAt(assignments, idArg[1].slice(1), m.index)
+        ? localGuidAt(assignments, idArg[1].slice(1), m.at)
         : idArg[2]?.toUpperCase();
       if (!guid || !GUID.test(guid)) {
         skipped++;
-        out += batch.slice(cursor, m.index + m[0].length); // computed @ID — cannot collide deterministically
-        cursor = m.index + m[0].length;
+        out += batch.slice(cursor, m.end); // computed @ID — cannot collide deterministically
+        cursor = m.end;
         continue;
       }
 
       // Resolved BEFORE the guard check, not after: recognising an existing guard needs the
       // table just as much as emitting a new one does, and without it the check can only
       // verify half of the row's identity.
-      const table = procTable.get(`spCreate${entity}`);
+      const table = procTable.get(createName);
       if (!table)
         throw new Error(
-          `${label}: cannot resolve a table for spCreate${entity}. ` +
+          `${label}: cannot resolve a table for ${createName}. ` +
             `Refusing to guess — a guard naming the wrong table breaks the migration for every database.`,
         );
 
-      if (isGuardedFor(code.slice(cursor, m.index), idRef, table)) {
-        out += batch.slice(cursor, m.index + m[0].length); // already guarded, on THIS id AND this table
-        cursor = m.index + m[0].length;
+      if (isGuardedFor(code.slice(cursor, m.at), idRef, table)) {
+        out += batch.slice(cursor, m.end); // already guarded, on THIS id AND this table
+        cursor = m.end;
         continue;
       }
 
-      const head = batch.slice(cursor, m.index).trimEnd();
+      const head = batch.slice(cursor, m.at).trimEnd();
       // Shape matches SQLServerDataProvider.RenderReplaySaveSQL in PR #4519 (Layer 1), so a
       // regenerated file and a freshly emitted one are structurally the same statement.
       // `schema` is the create's own spelling, reused verbatim rather than normalised to the
@@ -488,11 +603,11 @@ function guardFile(sql, procTable, label) {
       // the placeholder, so this is byte-identical for every one of them.
       const body =
         `\nIF NOT EXISTS (SELECT 1 FROM ${schema}.[${table}] WHERE [ID] = ${idRef})\n` +
-        `BEGIN\n    EXEC ${schema}.spCreate${entity} ${args};\nEND\n` +
+        `BEGIN\n    ${invoke(createName)}\nEND\n` +
         `ELSE\n` +
-        `BEGIN\n    EXEC ${schema}.spUpdate${entity} ${args};\nEND\n`;
+        `BEGIN\n    ${invoke(updateName)}\nEND\n`;
       out += head + body;
-      cursor = m.index + m[0].length;
+      cursor = m.end;
       guarded++;
     }
     out += batch.slice(cursor);
@@ -675,8 +790,8 @@ function runSelfTest() {
   }
 
   // Case 12 — a create with NO statement terminator. T-SQL does not require one, so this is a
-  // legal fixed-GUID create; EXEC_RE ends its capture at the first ';' and therefore matched
-  // nothing at all, which the gate reported as "all guarded". A create the parser never sees is
+  // legal fixed-GUID create; the strict matcher ended its capture at the first ';' and therefore
+  // matched nothing at all, which the gate reported as "all guarded". A create never seen is
   // the worst of the fail-open shapes because --fix cannot repair what it cannot find. Where the
   // statement ends is genuinely unknowable without a terminator, and guessing the boundary is
   // what the unbalanced-quote postcondition already refuses to do — so refuse, as with a
@@ -696,7 +811,8 @@ function runSelfTest() {
   // Case 13 — `EXEC [__mj].[spCreateX]`, the direct-schema form. Repo vocabulary (two v2
   // migrations use it), fully parseable, and accepted everywhere else in this file:
   // buildProcTableMap's PROC_RE and isGuardedFor's tableTest both take `__mj` or the
-  // placeholder. Only EXEC_RE did not, so the call was invisible to the gate and to --fix. It
+  // placeholder. Only the strict matcher did not, so the call was invisible to the gate and to
+  // --fix. It
   // must be guarded like any other — and the guard must keep the author's own schema spelling
   // rather than silently rewriting it to the placeholder.
   const directInput = readFileSync(join(dir, 'direct-schema-input.sql'), 'utf8');
@@ -710,22 +826,24 @@ function runSelfTest() {
     failures++;
   }
 
-  // Case 14 — the backstop must read CODE, not prose. A migration that merely mentions
+  // Case 14 — the walk must read CODE, not prose. A migration that merely mentions
   // `EXEC spCreateX` in a comment, or carries one inside a dynamic-SQL string, has no create
-  // there to guard. Found the honest way: the first version of the backstop scanned raw text and
+  // there to guard. Found the honest way: an early recogniser scanned raw text and
   // brought the whole gate down on migrations/v6/V202608301800, which discusses
   // `EXEC spCreateAIModelCost` in a block comment explaining a deprecation. A fail-closed gate
   // still has to be able to tell a statement from a sentence, or it is simply broken.
   //
-  // The dynamic-SQL line is expected to count as ONE skip, and that is recorded here rather than
-  // waved through: EXEC_RE reads comment-masked text but leaves string literals intact, because a
-  // fixed GUID lives inside a literal and blanking those would hide what the gate is looking for.
-  // A skip is reported in the gate's own output ("N computed-@ID create(s) skipped"), so it is
-  // visible and conservative — categorically unlike the fail-open shapes above, which printed
-  // "all guarded" over a create that was never examined at all.
+  // The dynamic-SQL line counts as NOTHING, and that is a change worth recording. It used to
+  // count as one skip, because the strict parser read strings-intact text while the backstop
+  // masked them — so the same bytes were "not a call" to one matcher and "a call with a computed
+  // @ID" to the other. That disagreement is the whole defect this walk removes, and the skip was
+  // a symptom of it: a skip is printed in the gate's own output ("N computed-@ID create(s)
+  // skipped — cannot collide deterministically"), so reporting a string literal there was the
+  // gate stating something untrue about the tree. Recognition is now one text — comments and
+  // strings both masked — and a literal is data in both directions.
   const commentedInput = readFileSync(join(dir, 'commented-create-input.sql'), 'utf8');
   const commentedGot = guardFile(commentedInput, procTable, 'commented-create-input.sql');
-  if (commentedGot.text !== commentedInput || commentedGot.guarded !== 0 || commentedGot.skipped !== 1) {
+  if (commentedGot.text !== commentedInput || commentedGot.guarded !== 0 || commentedGot.skipped !== 0) {
     console.error(
       `FAIL: a create named only in comments/strings was treated as real (guarded=${commentedGot.guarded}, skipped=${commentedGot.skipped}, rewritten=${commentedGot.text !== commentedInput})`,
     );
@@ -774,7 +892,88 @@ function runSelfTest() {
     failures++;
   }
 
-  console.log(failures === 0 ? 'self-test: PASS (16 cases)' : `self-test: FAIL (${failures})`);
+  // Case 17 — `EXEC @rc = <proc>`, the return-status form. T-SQL's call grammar is
+  // EXEC[UTE] [ @return_status = ] [[[server.]database.]schema.]procedure, and the recogniser
+  // modelled only the last two productions, so the assignment prefix put the create outside
+  // every pattern in this file at once: the gate printed "all guarded" and --fix reported
+  // nothing to repair. Detection alone is not the fix — the prefix has to survive into BOTH
+  // branches, or the ELSE quietly stops capturing the status the author asked for.
+  const rcInput = readFileSync(join(dir, 'return-status-input.sql'), 'utf8');
+  const rcExpected = readFileSync(join(dir, 'return-status-expected.sql'), 'utf8');
+  const rcGot = guardFile(rcInput, procTable, 'return-status-input.sql');
+  if (rcGot.text !== rcExpected || rcGot.guarded !== 1 || rcGot.skipped !== 0) {
+    console.error(
+      `FAIL: return-status create not guarded (guarded=${rcGot.guarded}, skipped=${rcGot.skipped})`,
+    );
+    console.error('--- got ---\n' + rcGot.text + '\n--- expected ---\n' + rcExpected);
+    failures++;
+  }
+  const rcAgain = guardFile(rcExpected, procTable, 'return-status-expected.sql');
+  if (rcAgain.text !== rcExpected || rcAgain.guarded !== 0) {
+    console.error('FAIL: the emitted return-status guard was not recognised on a second --fix');
+    failures++;
+  }
+
+  // Case 18 — the return-status prefix with every other axis at its non-canonical end at once:
+  // EXECUTE rather than EXEC, `[__mj]` rather than the placeholder. Each was closed in its own
+  // round; a recogniser can handle each alone and still miss them combined, which is the whole
+  // reason this is pinned rather than argued. All three spellings are the author's and must
+  // come back out unchanged.
+  const rcxInput = readFileSync(join(dir, 'return-status-execute-direct-input.sql'), 'utf8');
+  const rcxExpected = readFileSync(join(dir, 'return-status-execute-direct-expected.sql'), 'utf8');
+  const rcxGot = guardFile(rcxInput, procTable, 'return-status-execute-direct-input.sql');
+  if (rcxGot.text !== rcxExpected || rcxGot.guarded !== 1 || rcxGot.skipped !== 0) {
+    console.error(
+      `FAIL: EXECUTE/@rc/__mj create not guarded with its own spellings preserved (guarded=${rcxGot.guarded}, skipped=${rcxGot.skipped})`,
+    );
+    console.error('--- got ---\n' + rcxGot.text + '\n--- expected ---\n' + rcxExpected);
+    failures++;
+  }
+  const rcxAgain = guardFile(rcxExpected, procTable, 'return-status-execute-direct-expected.sql');
+  if (rcxAgain.text !== rcxExpected || rcxAgain.guarded !== 0) {
+    console.error('FAIL: the emitted EXECUTE/@rc guard was not recognised on a second --fix');
+    failures++;
+  }
+
+  // Case 19 — a three-part name, the other half of the same grammar production the
+  // return-status prefix sits in. One qualifier level was admitted, so `db.schema.spCreateX`
+  // matched nothing and passed silently. Refuse rather than guard: the guard's SELECT would
+  // have to name the table in that other database, which this tool has never emitted, and a
+  // guard reading the wrong database is one that is never true — the cross-table failure of
+  // Case 9 with a wider blast radius.
+  const multipartInput = readFileSync(join(dir, 'multipart-name-input.sql'), 'utf8');
+  try {
+    guardFile(multipartInput, procTable, 'multipart-name-input.sql');
+    console.error('FAIL: a multi-part-named create passed through unexamined');
+    failures++;
+  } catch (err) {
+    if (!/multi-part/i.test(err.message)) {
+      console.error(`FAIL: wrong error for a multi-part-named create: ${err.message}`);
+      failures++;
+    }
+  }
+
+  // Case 20 — the counterweight, and a regression guard rather than a new behaviour: the walk
+  // inspects EVERY EXEC in every migration now, not only ones already shaped like a create, so
+  // the cost of closing the shape holes is paid here. `EXEC sp_executesql`, `EXEC (@sql)`, a
+  // return-status call to a non-create proc, and a module name held in a variable must all pass
+  // over in silence. Noisy-closed is still broken: a gate that raises on ordinary T-SQL is one
+  // nobody can keep green, and a gate nobody keeps green stops being a gate.
+  const nonCreateInput = readFileSync(join(dir, 'non-create-execs-input.sql'), 'utf8');
+  try {
+    const nonCreateGot = guardFile(nonCreateInput, procTable, 'non-create-execs-input.sql');
+    if (nonCreateGot.text !== nonCreateInput || nonCreateGot.guarded !== 0 || nonCreateGot.skipped !== 0) {
+      console.error(
+        `FAIL: ordinary non-create EXECs were not left alone (guarded=${nonCreateGot.guarded}, skipped=${nonCreateGot.skipped}, rewritten=${nonCreateGot.text !== nonCreateInput})`,
+      );
+      failures++;
+    }
+  } catch (err) {
+    console.error(`FAIL: ordinary non-create EXECs raised: ${err.message}`);
+    failures++;
+  }
+
+  console.log(failures === 0 ? 'self-test: PASS (20 cases)' : `self-test: FAIL (${failures})`);
   return failures === 0 ? 0 : 1;
 }
 
@@ -797,10 +996,11 @@ function run(fix) {
   for (const scanRoot of scanRoots) {
     for (const f of sqlFilesUnder(scanRoot)) {
       const sql = readFileSync(f, 'utf8');
-      // The broad recogniser, not EXEC_RE's strict one: a file whose only create is in a shape
-      // EXEC_RE cannot parse must still reach guardFile, or the backstop there never runs and the
-      // file is skipped before anything looks at it.
-      if (!HAS_CREATE_EXEC_RE.test(sql)) continue;
+      // Deliberately broader than the walk itself — the bare identifier, with no call grammar
+      // around it. A pre-filter narrower than the detector is a fail-open hole in its own right:
+      // it decides a file is uninteresting before anything has looked at it, which is precisely
+      // how every shape in this file's history escaped. Cheap, and it can only over-admit.
+      if (!/spCreate/i.test(sql)) continue;
       const rel = relative(REPO, f);
       const res = guardFile(sql, procTable, rel);
       totalSkipped += res.skipped;
