@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   resolveOutcomeConfig,
   resolveScoreBand,
   resolveOutcomeStyle,
   formatPredictionScore,
+  DEFAULT_POSITIVE_BANDS,
+  DEFAULT_NEUTRAL_BANDS,
   type OutcomeConfig,
 } from '../index';
 
@@ -15,7 +17,7 @@ describe('resolveOutcomeConfig', () => {
       Polarity: 'adverse',
       Bands: [
         { Key: 'severe', Label: 'Severe', Min: 0.8, Max: 1.0, BadgeColor: 'red', Icon: 'fa-triangle-exclamation' },
-        { Key: 'safe', Label: 'Safe', Min: 0.0, Max: 0.799, BadgeColor: 'green', Icon: 'fa-circle-check' },
+        { Key: 'safe', Label: 'Safe', Min: 0.0, Max: 0.8, BadgeColor: 'green', Icon: 'fa-circle-check' },
       ],
       OutcomeStyles: {
         Late: { BadgeColor: 'red', Icon: 'fa-xmark' },
@@ -40,7 +42,7 @@ describe('resolveOutcomeConfig', () => {
         Polarity: 'positive',
         Bands: [
           { Key: 'pass', Label: 'Pass', Min: 0.5, Max: 1.0, BadgeColor: 'green' },
-          { Key: 'fail', Label: 'Fail', Min: 0.0, Max: 0.499, BadgeColor: 'red' },
+          { Key: 'fail', Label: 'Fail', Min: 0.0, Max: 0.5, BadgeColor: 'red' },
         ],
       },
     });
@@ -52,8 +54,17 @@ describe('resolveOutcomeConfig', () => {
     expect(resolved.Bands).toHaveLength(2);
   });
 
-  it('infers positive renewal config when target is renewal or retention', () => {
-    const resolved = resolveOutcomeConfig({ TargetVariable: 'Status' });
+  it('logs a warning on malformed Lineage JSON and falls back safely', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const resolved = resolveOutcomeConfig({ Lineage: '{ malformed json' });
+    expect(warnSpy).toHaveBeenCalled();
+    expect(resolved.ScoreLabel).toBe('Prediction Score');
+    expect(resolved.Polarity).toBeUndefined();
+    warnSpy.mockRestore();
+  });
+
+  it('infers positive renewal config when target contains renew or retention', () => {
+    const resolved = resolveOutcomeConfig({ TargetVariable: 'MemberRenewal' });
     expect(resolved.ScoreLabel).toBe('Renewal Probability');
     expect(resolved.StatusLabel).toBe('Renewal Status');
     expect(resolved.Polarity).toBe('positive');
@@ -62,65 +73,101 @@ describe('resolveOutcomeConfig', () => {
     expect(resolved.Bands![0].BadgeColor).toBe('green');
   });
 
-  it('infers adverse risk config by default for other targets', () => {
-    const resolved = resolveOutcomeConfig({ TargetVariable: 'LatePaymentOutcome' });
-    expect(resolved.ScoreLabel).toBe('Prediction Score');
+  it('infers adverse risk config when target indicates risk, churn, lapse, or default', () => {
+    const resolved = resolveOutcomeConfig({ TargetVariable: 'LatePaymentRisk' });
+    expect(resolved.ScoreLabel).toBe('Risk Score');
     expect(resolved.StatusLabel).toBe('Risk Level');
     expect(resolved.Polarity).toBe('adverse');
     expect(resolved.Bands).toHaveLength(3);
     expect(resolved.Bands![0].Label).toBe('High Risk');
     expect(resolved.Bands![0].BadgeColor).toBe('red');
   });
+
+  it('returns neutral config with no polarity claim for generic targets like Status', () => {
+    const resolved = resolveOutcomeConfig({ TargetVariable: 'Status' });
+    expect(resolved.ScoreLabel).toBe('Prediction Score');
+    expect(resolved.StatusLabel).toBe('Prediction Tier');
+    expect(resolved.Polarity).toBeUndefined();
+    expect(resolved.Bands).toHaveLength(3);
+    expect(resolved.Bands![0].Label).toBe('High');
+    expect(resolved.Bands![0].BadgeColor).toBe('gray');
+  });
 });
 
 describe('resolveScoreBand', () => {
-  it('maps scores to correct positive bands', () => {
-    const cfg = resolveOutcomeConfig({ TargetVariable: 'Status' });
+  it('evaluates half-open intervals [Min, Max) with top band inclusive without boundary overlap', () => {
+    const cfg: OutcomeConfig = {
+      Polarity: 'positive',
+      Bands: [...DEFAULT_POSITIVE_BANDS], // High [0.6, 1.0], Med [0.4, 0.6), Low [0.0, 0.4)
+    };
 
-    // High: >= 0.6
-    expect(resolveScoreBand(0.99, cfg)?.Label).toBe('High');
+    // Right below the 0.6 threshold: must resolve to Medium, NOT High!
+    expect(resolveScoreBand(0.5999, cfg)?.Label).toBe('Medium');
+    expect(resolveScoreBand(0.59995, cfg)?.Label).toBe('Medium');
+    expect(resolveScoreBand(0.5999, cfg)?.BadgeColor).toBe('amber');
+
+    // Exactly on 0.6 threshold: resolves to High
     expect(resolveScoreBand(0.60, cfg)?.Label).toBe('High');
-    expect(resolveScoreBand(0.99, cfg)?.BadgeColor).toBe('green');
+    expect(resolveScoreBand(0.60, cfg)?.BadgeColor).toBe('green');
 
-    // Medium: 0.4 - 0.599
-    expect(resolveScoreBand(0.55, cfg)?.Label).toBe('Medium');
+    // Right below the 0.4 threshold: must resolve to Low, NOT Medium!
+    expect(resolveScoreBand(0.39995, cfg)?.Label).toBe('Low');
+    expect(resolveScoreBand(0.39995, cfg)?.BadgeColor).toBe('red');
+
+    // Exactly on 0.4 threshold: resolves to Medium
     expect(resolveScoreBand(0.40, cfg)?.Label).toBe('Medium');
-    expect(resolveScoreBand(0.55, cfg)?.BadgeColor).toBe('amber');
+    expect(resolveScoreBand(0.40, cfg)?.BadgeColor).toBe('amber');
 
-    // Low: < 0.4
-    expect(resolveScoreBand(0.25, cfg)?.Label).toBe('Low');
-    expect(resolveScoreBand(0.01, cfg)?.Label).toBe('Low');
-    expect(resolveScoreBand(0.25, cfg)?.BadgeColor).toBe('red');
+    // Top boundary inclusive: 1.0 resolves to High
+    expect(resolveScoreBand(1.0, cfg)?.Label).toBe('High');
+
+    // Bottom boundary inclusive: 0.0 resolves to Low
+    expect(resolveScoreBand(0.0, cfg)?.Label).toBe('Low');
   });
 
-  it('maps scores to custom 4-tier bands', () => {
+  it('returns null for out-of-range scores instead of silently clamping', () => {
+    const cfg: OutcomeConfig = {
+      Polarity: 'positive',
+      Bands: [...DEFAULT_POSITIVE_BANDS],
+    };
+
+    expect(resolveScoreBand(1.5, cfg)).toBeNull();
+    expect(resolveScoreBand(-0.2, cfg)).toBeNull();
+    expect(resolveScoreBand(NaN, cfg)).toBeNull();
+  });
+
+  it('maps scores to custom 4-tier bands with half-open semantics', () => {
     const customCfg: OutcomeConfig = {
       ScoreLabel: 'Escalation Probability',
       StatusLabel: 'Escalation Severity',
       Polarity: 'adverse',
       Bands: [
         { Key: 'crit', Label: 'Critical', Min: 0.85, Max: 1.0, BadgeColor: 'red' },
-        { Key: 'high', Label: 'High', Min: 0.65, Max: 0.849, BadgeColor: 'amber' },
-        { Key: 'med', Label: 'Medium', Min: 0.35, Max: 0.649, BadgeColor: 'blue' },
-        { Key: 'low', Label: 'Low', Min: 0.0, Max: 0.349, BadgeColor: 'green' },
+        { Key: 'high', Label: 'High', Min: 0.65, Max: 0.85, BadgeColor: 'amber' },
+        { Key: 'med', Label: 'Medium', Min: 0.35, Max: 0.65, BadgeColor: 'blue' },
+        { Key: 'low', Label: 'Low', Min: 0.0, Max: 0.35, BadgeColor: 'green' },
       ],
     };
 
     expect(resolveScoreBand(0.95, customCfg)?.Label).toBe('Critical');
-    expect(resolveScoreBand(0.70, customCfg)?.Label).toBe('High');
+    expect(resolveScoreBand(0.85, customCfg)?.Label).toBe('Critical');
+    expect(resolveScoreBand(0.849, customCfg)?.Label).toBe('High');
+    expect(resolveScoreBand(0.65, customCfg)?.Label).toBe('High');
     expect(resolveScoreBand(0.50, customCfg)?.Label).toBe('Medium');
+    expect(resolveScoreBand(0.35, customCfg)?.Label).toBe('Medium');
     expect(resolveScoreBand(0.10, customCfg)?.Label).toBe('Low');
+    expect(resolveScoreBand(0.0, customCfg)?.Label).toBe('Low');
   });
 
-  it('correctly resolves continuous monetary/regression bands without 0..1 clamping', () => {
+  it('correctly resolves continuous monetary/regression bands', () => {
     const ltvCfg: OutcomeConfig = {
       ScoreLabel: 'Customer Lifetime Value',
       StatusLabel: 'LTV Tier',
       Polarity: 'positive',
       Bands: [
-        { Key: 'high', Label: 'High Value', Min: 2500, Max: 1000000, BadgeColor: 'green' },
-        { Key: 'medium', Label: 'Medium Value', Min: 500, Max: 2499.99, BadgeColor: 'amber' },
-        { Key: 'low', Label: 'Standard Value', Min: 0, Max: 499.99, BadgeColor: 'gray' },
+        { Key: 'high', Label: 'High Value', Min: 2500, Max: Infinity, BadgeColor: 'green' },
+        { Key: 'medium', Label: 'Medium Value', Min: 500, Max: 2500, BadgeColor: 'amber' },
+        { Key: 'low', Label: 'Standard Value', Min: 0, Max: 500, BadgeColor: 'gray' },
       ],
     };
 
@@ -133,7 +180,6 @@ describe('resolveScoreBand', () => {
     expect(resolveScoreBand(250, ltvCfg)?.Label).toBe('Standard Value');
     expect(resolveScoreBand(250, ltvCfg)?.BadgeColor).toBe('gray');
 
-    // Score exceeding max falls back to closest boundary band (High Value)
     expect(resolveScoreBand(1500000, ltvCfg)?.Label).toBe('High Value');
   });
 });
@@ -189,4 +235,3 @@ describe('formatPredictionScore', () => {
     expect(formatPredictionScore(42.5, numCfg, 'regression')).toBe('42.5');
   });
 });
-

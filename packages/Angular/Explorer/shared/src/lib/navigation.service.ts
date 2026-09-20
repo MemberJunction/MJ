@@ -506,10 +506,7 @@ export class NavigationService implements OnDestroy {
     const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
     const compositeKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(entityInfo, recordId) : new CompositeKey();
     const md = Metadata.Provider;
-    const hasCachedRecordName = md?.HasCachedRecordName ? md.HasCachedRecordName(entityName, compositeKey) : false;
-    const cachedRecordName = hasCachedRecordName
-      ? md?.GetCachedRecordNameOnlyIfCached?.(entityName, compositeKey)
-      : md?.GetCachedRecordNameOnlyIfCached?.(entityName, compositeKey) || md?.GetCachedRecordNameSync?.(entityName, compositeKey);
+    const cachedRecordName = md ? md.GetCachedRecordNameOnlyIfCached(entityName, compositeKey) : undefined;
     const initialTitle = cachedRecordName || friendlyEntityName;
 
     const request: TabRequest = {
@@ -682,7 +679,7 @@ export class NavigationService implements OnDestroy {
         const parentEntityInfo = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === parentEntity.toLowerCase());
         const parentKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(parentEntityInfo, parentRecordId) : new CompositeKey();
         const md = Metadata.Provider;
-        const cachedParentName = md?.GetCachedRecordNameOnlyIfCached?.(parentEntity, parentKey) || md?.GetCachedRecordNameSync?.(parentEntity, parentKey);
+        const cachedParentName = md ? md.GetCachedRecordNameOnlyIfCached(parentEntity, parentKey) : undefined;
         const fallbackParentLabel = parentEntityInfo?.DisplayName || parentEntityInfo?.Name || parentEntity;
         const sourceLabel = cachedParentName || (activeTab.title && !activeTab.title.includes(parentRecordId) ? activeTab.title : fallbackParentLabel);
         context['sourceLabel'] = sourceLabel;

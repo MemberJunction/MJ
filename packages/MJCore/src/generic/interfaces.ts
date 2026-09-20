@@ -853,7 +853,7 @@ export interface IMetadataProvider {
      * @param compositeKey - The primary key value(s) for the record
      * @returns True if the record name is cached in memory, false otherwise
      */
-    HasCachedRecordName?(entityName: string, compositeKey: CompositeKey): boolean;
+    HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean;
 
     /**
      * Retrieves an entity record name from the in-memory LRU cache if already cached.
@@ -862,12 +862,7 @@ export interface IMetadataProvider {
      * @param compositeKey - The primary key value(s) for the record
      * @returns The cached display name, or undefined if not in cache
      */
-    GetCachedRecordNameOnlyIfCached?(entityName: string, compositeKey: CompositeKey): string | undefined;
-
-    /**
-     * @deprecated Use {@link GetCachedRecordNameOnlyIfCached} instead.
-     */
-    GetCachedRecordNameSync?(entityName: string, compositeKey: CompositeKey): string | undefined;
+    GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined;
 
     /**
      * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().

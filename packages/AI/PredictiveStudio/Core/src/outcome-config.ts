@@ -86,7 +86,7 @@ export const DEFAULT_POSITIVE_BANDS: OutcomeBand[] = [
     Key: 'medium',
     Label: 'Medium',
     Min: 0.4,
-    Max: 0.59999,
+    Max: 0.6,
     BadgeColor: 'amber',
     Icon: 'fa-triangle-exclamation',
     Description: 'Moderate likelihood of positive outcome',
@@ -95,7 +95,7 @@ export const DEFAULT_POSITIVE_BANDS: OutcomeBand[] = [
     Key: 'low',
     Label: 'Low',
     Min: 0.0,
-    Max: 0.39999,
+    Max: 0.4,
     BadgeColor: 'red',
     Icon: 'fa-circle-exclamation',
     Description: 'Low likelihood of positive outcome (at risk)',
@@ -119,7 +119,7 @@ export const DEFAULT_ADVERSE_BANDS: OutcomeBand[] = [
     Key: 'medium',
     Label: 'Med Risk',
     Min: 0.4,
-    Max: 0.69999,
+    Max: 0.7,
     BadgeColor: 'amber',
     Icon: 'fa-triangle-exclamation',
     Description: 'Moderate adverse risk (monitor closely)',
@@ -128,10 +128,43 @@ export const DEFAULT_ADVERSE_BANDS: OutcomeBand[] = [
     Key: 'low',
     Label: 'Low Risk',
     Min: 0.0,
-    Max: 0.39999,
+    Max: 0.4,
     BadgeColor: 'green',
     Icon: 'fa-circle-check',
     Description: 'Low adverse risk (healthy)',
+  },
+];
+
+/**
+ * Standard default bands for neutral models where polarity is unknown or unspecified.
+ */
+export const DEFAULT_NEUTRAL_BANDS: OutcomeBand[] = [
+  {
+    Key: 'high',
+    Label: 'High',
+    Min: 0.6,
+    Max: 1.0,
+    BadgeColor: 'gray',
+    Icon: 'fa-circle',
+    Description: 'High score (0.6 - 1.0)',
+  },
+  {
+    Key: 'medium',
+    Label: 'Medium',
+    Min: 0.4,
+    Max: 0.6,
+    BadgeColor: 'gray',
+    Icon: 'fa-circle',
+    Description: 'Medium score (0.4 - 0.6)',
+  },
+  {
+    Key: 'low',
+    Label: 'Low',
+    Min: 0.0,
+    Max: 0.4,
+    BadgeColor: 'gray',
+    Icon: 'fa-circle',
+    Description: 'Low score (0.0 - 0.4)',
   },
 ];
 
@@ -143,7 +176,7 @@ export const DEFAULT_MONETARY_BANDS: OutcomeBand[] = [
     Key: 'high',
     Label: 'High Value',
     Min: 2500,
-    Max: 1000000,
+    Max: Infinity,
     BadgeColor: 'green',
     Icon: 'fa-arrow-trend-up',
     Description: 'High lifetime value ($2,500+)',
@@ -152,16 +185,16 @@ export const DEFAULT_MONETARY_BANDS: OutcomeBand[] = [
     Key: 'medium',
     Label: 'Medium Value',
     Min: 500,
-    Max: 2499.99,
+    Max: 2500,
     BadgeColor: 'amber',
     Icon: 'fa-minus',
-    Description: 'Medium lifetime value ($500 - $2,499.99)',
+    Description: 'Medium lifetime value ($500 - $2,500)',
   },
   {
     Key: 'standard',
     Label: 'Standard Value',
     Min: 0,
-    Max: 499.99,
+    Max: 500,
     BadgeColor: 'gray',
     Icon: 'fa-arrow-trend-down',
     Description: 'Standard lifetime value (< $500)',
@@ -191,8 +224,8 @@ export function resolveOutcomeConfig(modelLike?: {
       if (cfg && typeof cfg === 'object') {
         return normalizeOutcomeConfig(cfg);
       }
-    } catch {
-      // ignore JSON parse errors in Lineage
+    } catch (err) {
+      console.warn('resolveOutcomeConfig: failed to parse Lineage JSON', err);
     }
   }
 
@@ -219,10 +252,10 @@ export function resolveOutcomeConfig(modelLike?: {
     };
   }
 
+  // Positive polarity: explicit renewal / retention models
   const isRenewal =
     target.includes('renew') ||
-    target.includes('retention') ||
-    target === 'status';
+    target.includes('retention');
 
   if (isRenewal) {
     return {
@@ -241,19 +274,39 @@ export function resolveOutcomeConfig(modelLike?: {
     };
   }
 
-  // Default adverse risk model (e.g. churn risk, late payment, escalation)
+  // Adverse polarity: explicit churn, lapse, risk, or default models
+  const isAdverse =
+    target.includes('churn') ||
+    target.includes('lapse') ||
+    target.includes('risk') ||
+    target.includes('late') ||
+    target.includes('escalat') ||
+    target.includes('fraud') ||
+    target.includes('default');
+
+  if (isAdverse) {
+    return {
+      ScoreLabel: 'Risk Score',
+      StatusLabel: 'Risk Level',
+      Polarity: 'adverse',
+      Format: 'percentage',
+      Bands: [...DEFAULT_ADVERSE_BANDS],
+      OutcomeStyles: {
+        Late: { BadgeColor: 'red', Icon: 'fa-circle-exclamation' },
+        OnTime: { BadgeColor: 'green', Icon: 'fa-check' },
+        Escalated: { BadgeColor: 'red', Icon: 'fa-triangle-exclamation' },
+        Normal: { BadgeColor: 'green', Icon: 'fa-check' },
+      },
+    };
+  }
+
+  // Safe fallback: neutral config with no polarity claim and gray styling
   return {
     ScoreLabel: 'Prediction Score',
-    StatusLabel: 'Risk Level',
-    Polarity: 'adverse',
+    StatusLabel: 'Prediction Tier',
     Format: 'percentage',
-    Bands: [...DEFAULT_ADVERSE_BANDS],
-    OutcomeStyles: {
-      Late: { BadgeColor: 'red', Icon: 'fa-circle-exclamation' },
-      OnTime: { BadgeColor: 'green', Icon: 'fa-check' },
-      Escalated: { BadgeColor: 'red', Icon: 'fa-triangle-exclamation' },
-      Normal: { BadgeColor: 'green', Icon: 'fa-check' },
-    },
+    Bands: [...DEFAULT_NEUTRAL_BANDS],
+    OutcomeStyles: {},
   };
 }
 
@@ -261,11 +314,28 @@ export function resolveOutcomeConfig(modelLike?: {
  * Normalizes an incoming OutcomeConfig to ensure sensible defaults for any omitted properties.
  */
 function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
-  const polarity = cfg.Polarity ?? 'adverse';
-  const defaultBands = polarity === 'positive' ? DEFAULT_POSITIVE_BANDS : DEFAULT_ADVERSE_BANDS;
+  const polarity = cfg.Polarity;
+  const defaultBands =
+    polarity === 'positive'
+      ? DEFAULT_POSITIVE_BANDS
+      : polarity === 'adverse'
+        ? DEFAULT_ADVERSE_BANDS
+        : DEFAULT_NEUTRAL_BANDS;
   return {
-    ScoreLabel: cfg.ScoreLabel ?? (polarity === 'positive' ? 'Renewal Probability' : 'Prediction Score'),
-    StatusLabel: cfg.StatusLabel ?? (polarity === 'positive' ? 'Renewal Status' : 'Risk Level'),
+    ScoreLabel:
+      cfg.ScoreLabel ??
+      (polarity === 'positive'
+        ? 'Renewal Probability'
+        : polarity === 'adverse'
+          ? 'Risk Score'
+          : 'Prediction Score'),
+    StatusLabel:
+      cfg.StatusLabel ??
+      (polarity === 'positive'
+        ? 'Renewal Status'
+        : polarity === 'adverse'
+          ? 'Risk Level'
+          : 'Prediction Tier'),
     Polarity: polarity,
     Format: cfg.Format,
     Bands: cfg.Bands && cfg.Bands.length > 0 ? cfg.Bands : [...defaultBands],
@@ -275,36 +345,45 @@ function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
 
 /**
  * Finds the matching OutcomeBand for a given score.
- * Supports both standard normalized probability scales [0, 1] and continuous
- * regression/monetary scales (e.g. LTV $0 - $10,000+).
+ * Evaluates half-open intervals [Min, Max) with the top band inclusive [Min, Max].
+ * Order-independent matching identical to assignBand (#4104).
+ * Returns null if the score is out of range or not finite.
  */
 export function resolveScoreBand(score: number, config?: OutcomeConfig | null): OutcomeBand | null {
+  if (typeof score !== 'number' || !Number.isFinite(score)) return null;
   if (!config) return null;
-  const bands = config.Bands ?? (config.Polarity === 'positive' ? DEFAULT_POSITIVE_BANDS : DEFAULT_ADVERSE_BANDS);
+  const bands = config.Bands ?? (config.Polarity === 'positive' ? DEFAULT_POSITIVE_BANDS : config.Polarity === 'adverse' ? DEFAULT_ADVERSE_BANDS : DEFAULT_NEUTRAL_BANDS);
   if (!bands || bands.length === 0) return null;
 
-  // Determine whether bands define a standard 0..1 probability scale or an arbitrary continuous/monetary range
-  const isNormalizedProbability = bands.every(b => b.Min >= -1e-4 && b.Max <= 1 + 1e-4);
-  const s = isNormalizedProbability ? Math.max(0, Math.min(1, score)) : score;
+  // Check normalized [0, 1] bounds without silent clamping
+  const isNormalizedProbability = bands.every(b => b.Min >= 0 && b.Max <= 1);
+  if (isNormalizedProbability && (score < 0 || score > 1)) {
+    return null;
+  }
 
-  // Match band where Min <= s <= Max (or within float tolerance of 1e-4)
+  // Find the top band boundary (highest Max value)
+  let maxBoundary = -Infinity;
   for (const b of bands) {
-    if (s >= b.Min - 1e-4 && s <= b.Max + 1e-4) {
-      return b;
+    if (b.Max > maxBoundary) {
+      maxBoundary = b.Max;
     }
   }
 
-  // Fallback to closest band if score falls outside all explicit ranges
-  let bestBand = bands[0];
-  let minDistance = Infinity;
+  // Half-open interval matching: [Min, Max) except for top band which is [Min, Max]
   for (const b of bands) {
-    const dist = s < b.Min ? b.Min - s : s > b.Max ? s - b.Max : 0;
-    if (dist < minDistance) {
-      minDistance = dist;
-      bestBand = b;
+    const isTopBand = b.Max === maxBoundary;
+    if (isTopBand) {
+      if (score >= b.Min && score <= b.Max) {
+        return b;
+      }
+    } else {
+      if (score >= b.Min && score < b.Max) {
+        return b;
+      }
     }
   }
-  return bestBand;
+
+  return null;
 }
 
 /**

@@ -96,11 +96,6 @@ describe('ProviderBase entity record name cache', () => {
         expect(provider.lookupCallCount).toBe(0);
     });
 
-    it('GetCachedRecordNameSync delegates to GetCachedRecordNameOnlyIfCached for backward compatibility', () => {
-        expect(provider.GetCachedRecordNameSync('Accounts', keyFor('1'))).toBeUndefined();
-        provider.SetCachedRecordName('Accounts', keyFor('1'), 'Acme Corp');
-        expect(provider.GetCachedRecordNameSync('Accounts', keyFor('1'))).toBe('Acme Corp');
-    });
 
     it('GetCachedRecordName returns undefined when not cached and loadIfNeeded is false', async () => {
         const cached = await provider.GetCachedRecordName('Accounts', keyFor('missing'));

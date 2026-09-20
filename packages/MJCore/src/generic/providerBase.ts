@@ -807,13 +807,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * @deprecated Use {@link GetCachedRecordNameOnlyIfCached} instead.
-     */
-    public GetCachedRecordNameSync(entityName: string, compositeKey: CompositeKey): string | undefined {
-        return this.GetCachedRecordNameOnlyIfCached(entityName, compositeKey);
-    }
-
-    /**
      * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
      * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
      * @param entityName - The name of the entity
