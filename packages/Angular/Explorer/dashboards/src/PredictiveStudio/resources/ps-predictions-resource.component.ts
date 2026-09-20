@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
-import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity, MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity, MJListEntity, MJListDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { trustDots, trustEvidenceLine } from '@memberjunction/predictive-studio-core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -53,127 +53,133 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
         </div>
       } @else {
         <div class="ps-biz-host" [class.chat-open]="chatOpen">
-          <div class="ps-biz-main">
-            <!-- ───────── CATALOG ───────── -->
-            @if (view === 'catalog') {
-              @if (cards.length === 0) {
-                <div class="ps-biz-intro" data-testid="ps-predictions-empty">
-                  <div class="ps-biz-intro-head">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-                    <h2>Predict what's next for your data</h2>
-                    <p>Predictive Studio turns your records into plain-language predictions — describe what you want to know, and the agent builds and trains a model with you. Here's what you can do:</p>
-                  </div>
-                  <div class="ps-cap-grid">
-                    @for (cap of capabilityCards; track cap.title) {
-                      <div class="ps-cap-card">
-                        <i [class]="cap.icon"></i>
-                        <div class="ps-cap-title">{{ cap.title }}</div>
-                        <div class="ps-cap-blurb">{{ cap.blurb }}</div>
+          <as-split direction="horizontal" class="biz-copilot-splitter" unit="percent" [gutterSize]="chatOpen ? 6 : 0" (dragEnd)="onCopilotSplitDragEnd($event.sizes)">
+            <as-split-area [size]="chatOpen ? mainSizePct : 100" [minSize]="30">
+              <div class="ps-biz-main">
+                <!-- ───────── CATALOG ───────── -->
+                @if (view === 'catalog') {
+                  @if (cards.length === 0) {
+                    <div class="ps-biz-intro" data-testid="ps-predictions-empty">
+                      <div class="ps-biz-intro-head">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <h2>Predict what's next for your data</h2>
+                        <p>Predictive Studio turns your records into plain-language predictions — describe what you want to know, and the agent builds and trains a model with you. Here's what you can do:</p>
                       </div>
-                    }
-                  </div>
-                  <button mjButton variant="primary" size="md" data-testid="ps-intro-build" (click)="newPrediction()"><i class="fa-solid fa-plus"></i> Build your first prediction</button>
-                </div>
-              } @else {
-                <div class="ps-biz-grid" data-testid="ps-predictions-grid">
-                  @for (c of cards; track c.modelId) {
-                    <div class="ps-biz-card" [class.blocked]="!c.canOpen" data-testid="ps-prediction-card">
-                      <div class="ps-biz-card-top">
-                        <span class="ps-trust-badge" [class]="'trust-' + c.trust.grade.toLowerCase()" data-testid="ps-trust-badge">
-                          <i class="fa-solid fa-shield-halved"></i> {{ c.canOpen ? c.trust.grade : 'Not ready' }}
-                        </span>
-                      </div>
-                      <h3 class="ps-biz-card-title">{{ c.title }}</h3>
-                      <p class="ps-biz-card-line">{{ c.canOpen ? c.trust.oneLiner : c.blockedReason }}</p>
-                      <div class="ps-biz-card-foot">
-                        @if (c.canOpen) {
-                          <button mjButton variant="secondary" size="sm" data-testid="ps-open-prediction" (click)="open(c)">Open <i class="fa-solid fa-arrow-right"></i></button>
-                        } @else {
-                          <button mjButton variant="secondary" size="sm" data-testid="ps-improve-prediction" (click)="improvePrediction(c)"><i class="fa-solid fa-wand-magic-sparkles"></i> Improve this</button>
+                      <div class="ps-cap-grid">
+                        @for (cap of capabilityCards; track cap.title) {
+                          <div class="ps-cap-card">
+                            <i [class]="cap.icon"></i>
+                            <div class="ps-cap-title">{{ cap.title }}</div>
+                            <div class="ps-cap-blurb">{{ cap.blurb }}</div>
+                          </div>
                         }
                       </div>
+                      <button mjButton variant="primary" size="md" data-testid="ps-intro-build" (click)="newPrediction()"><i class="fa-solid fa-plus"></i> Build your first prediction</button>
                     </div>
-                  }
-                </div>
-              }
-            }
-
-            <!-- ───────── WORKSPACE (trust gate) ───────── -->
-            @if (view === 'workspace' && selected) {
-              <nav class="ps-biz-crumb">
-                <a (click)="backToCatalog()" data-testid="ps-crumb-home">Predictions</a>
-                <i class="fa-solid fa-chevron-right"></i> <span>{{ selected.title }}</span>
-              </nav>
-
-              <div class="ps-trust-banner" [class]="'trust-' + selected.trust.grade.toLowerCase()" data-testid="ps-trust-banner">
-                <div class="ps-trust-dots">
-                  @for (d of [1,2,3,4,5]; track d) { <i class="fa-solid fa-star" [class.on]="d <= dots(selected)"></i> }
-                </div>
-                <div class="ps-trust-text">
-                  <div class="ps-trust-grade">{{ selected.canOpen ? 'You can rely on this — ' + selected.trust.grade : 'Not reliable yet' }}</div>
-                  <div class="ps-trust-line">{{ selected.trust.oneLiner }}</div>
-                  <div class="ps-trust-explain muted">{{ selected.trust.explanation }}</div>
-                  <div class="ps-trust-evidence muted">{{ evidence() }}</div>
-                </div>
-              </div>
-
-              <div class="ps-biz-workspace-body" data-testid="ps-workspace-body">
-                @if (selected.canOpen) {
-                  @if (drivers.length > 0) {
-                    <div class="ps-drivers" data-testid="ps-drivers">
-                      <i class="fa-solid fa-lightbulb"></i> <strong>What's driving this:</strong>
-                      @for (d of drivers; track d) { <span class="ps-driver-chip">{{ d }}</span> }
-                    </div>
-                  }
-                  <ps-predictions-grid
-                    data-testid="ps-atrisk-list"
-                    #atriskList
-                    [modelId]="selected.modelId"
-                    [runId]="latestRunId"
-                    [title]="selected.title"
-                    [entityName]="selectedTargetEntityName"
-                    [problemType]="selectedProblemType"
-                    height="580px">
-                  </ps-predictions-grid>
-                }
-                <div class="ps-action-bar" [class.locked]="!selected.canOpen" data-testid="ps-action-bar">
-                  @if (selected.canOpen) {
-                    <button mjButton variant="primary" size="sm" data-testid="ps-act-review" (click)="scrollToList()"><i class="fa-solid fa-list-check"></i> Review the call list</button>
-                    <button mjButton variant="secondary" size="sm" data-testid="ps-act-save" (click)="askAgentTo('Save these prediction scores onto the records so my team can use them.')"><i class="fa-solid fa-floppy-disk"></i> Save scores to records</button>
-                    <button mjButton variant="secondary" size="sm" data-testid="ps-act-list" [disabled]="creatingList || atRiskRows.length === 0" (click)="sendToList()"><i class="fa-solid" [class.fa-paper-plane]="!creatingList" [class.fa-spinner]="creatingList" [class.fa-spin]="creatingList"></i> Send to a list</button>
-                    <button mjButton variant="secondary" size="sm" data-testid="ps-act-export" [disabled]="atRiskRows.length === 0" (click)="exportList()"><i class="fa-solid fa-file-export"></i> Share / export</button>
                   } @else {
-                    <div class="ps-action-locked"><i class="fa-solid fa-lock"></i> {{ selected.trust.gateReason }}</div>
+                    <div class="ps-biz-grid" data-testid="ps-predictions-grid">
+                      @for (c of cards; track c.modelId) {
+                        <div class="ps-biz-card" [class.blocked]="!c.canOpen" data-testid="ps-prediction-card">
+                          <div class="ps-biz-card-top">
+                            <span class="ps-trust-badge" [class]="'trust-' + c.trust.grade.toLowerCase()" data-testid="ps-trust-badge">
+                              <i class="fa-solid fa-shield-halved"></i> {{ c.canOpen ? c.trust.grade : 'Not ready' }}
+                            </span>
+                          </div>
+                          <h3 class="ps-biz-card-title">{{ c.title }}</h3>
+                          <p class="ps-biz-card-line">{{ c.canOpen ? c.trust.oneLiner : c.blockedReason }}</p>
+                          <div class="ps-biz-card-foot">
+                            @if (c.canOpen) {
+                              <button mjButton variant="secondary" size="sm" data-testid="ps-open-prediction" (click)="open(c)">Open <i class="fa-solid fa-arrow-right"></i></button>
+                            } @else {
+                              <button mjButton variant="secondary" size="sm" data-testid="ps-improve-prediction" (click)="improvePrediction(c)"><i class="fa-solid fa-wand-magic-sparkles"></i> Improve this</button>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
                   }
-                </div>
-                @if (listResult) { <div class="ps-list-result muted" data-testid="ps-list-result">{{ listResult }}</div> }
-              </div>
-            }
-          </div>
+                }
 
-          @if (chatOpen) {
-            <aside class="ps-biz-copilot" data-testid="ps-predictions-copilot">
-              <div class="ps-biz-copilot-head">
-                <div class="ps-biz-copilot-title"><i class="fa-solid fa-robot"></i> New prediction</div>
-                <button class="ps-biz-copilot-close" (click)="closeChat()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                <!-- ───────── WORKSPACE (trust gate) ───────── -->
+                @if (view === 'workspace' && selected) {
+                  <nav class="ps-biz-crumb">
+                    <a (click)="backToCatalog()" data-testid="ps-crumb-home">Predictions</a>
+                    <i class="fa-solid fa-chevron-right"></i> <span>{{ selected.title }}</span>
+                  </nav>
+
+                  <div class="ps-trust-banner" [class]="'trust-' + selected.trust.grade.toLowerCase()" data-testid="ps-trust-banner">
+                    <div class="ps-trust-dots">
+                      @for (d of [1,2,3,4,5]; track d) { <i class="fa-solid fa-star" [class.on]="d <= dots(selected)"></i> }
+                    </div>
+                    <div class="ps-trust-text">
+                      <div class="ps-trust-grade">{{ selected.canOpen ? 'You can rely on this — ' + selected.trust.grade : 'Not reliable yet' }}</div>
+                      <div class="ps-trust-line">{{ selected.trust.oneLiner }}</div>
+                      <div class="ps-trust-explain muted">{{ selected.trust.explanation }}</div>
+                      <div class="ps-trust-evidence muted">{{ evidence() }}</div>
+                    </div>
+                  </div>
+
+                  <div class="ps-biz-workspace-body" data-testid="ps-workspace-body">
+                    @if (selected.canOpen) {
+                      @if (drivers.length > 0) {
+                        <div class="ps-drivers" data-testid="ps-drivers">
+                          <i class="fa-solid fa-lightbulb"></i> <strong>What's driving this:</strong>
+                          @for (d of drivers; track d) { <span class="ps-driver-chip">{{ d }}</span> }
+                        </div>
+                      }
+                      <ps-predictions-grid
+                        data-testid="ps-atrisk-list"
+                        #atriskList
+                        [modelId]="selected.modelId"
+                        [runId]="latestRunId"
+                        [title]="selected.title"
+                        [entityName]="selectedTargetEntityName"
+                        [problemType]="selectedProblemType"
+                        height="580px">
+                      </ps-predictions-grid>
+                    }
+                    <div class="ps-action-bar" [class.locked]="!selected.canOpen" data-testid="ps-action-bar">
+                      @if (selected.canOpen) {
+                        <button mjButton variant="primary" size="sm" data-testid="ps-act-review" (click)="scrollToList()"><i class="fa-solid fa-list-check"></i> Review the call list</button>
+                        <button mjButton variant="secondary" size="sm" data-testid="ps-act-save" (click)="askAgentTo('Save these prediction scores onto the records so my team can use them.')"><i class="fa-solid fa-floppy-disk"></i> Save scores to records</button>
+                        <button mjButton variant="secondary" size="sm" data-testid="ps-act-list" [disabled]="creatingList || atRiskRows.length === 0" (click)="sendToList()"><i class="fa-solid" [class.fa-paper-plane]="!creatingList" [class.fa-spinner]="creatingList" [class.fa-spin]="creatingList"></i> Send to a list</button>
+                        <button mjButton variant="secondary" size="sm" data-testid="ps-act-export" [disabled]="atRiskRows.length === 0" (click)="exportList()"><i class="fa-solid fa-file-export"></i> Share / export</button>
+                      } @else {
+                        <div class="ps-action-locked"><i class="fa-solid fa-lock"></i> {{ selected.trust.gateReason }}</div>
+                      }
+                    </div>
+                    @if (listResult) { <div class="ps-list-result muted" data-testid="ps-list-result">{{ listResult }}</div> }
+                  </div>
+                }
               </div>
-              <div class="ps-biz-copilot-body">
-                @if (currentUser) {
-                  <mj-conversation-chat-area
-                    [Provider]="Provider" [environmentId]="chatEnvironmentId" [currentUser]="currentUser"
-                    [conversation]="chatConversation" [conversationId]="chatConversationId" [isNewConversation]="chatIsNewConversation"
-                    [suppressNewConversationEmptyState]="true" [allowMentions]="false" [overlayMode]="true"
-                    [showExportButton]="false" [showShareButton]="false" [showArtifactIndicator]="false"
-                    [showAgentPicker]="false" [showAgentModePicker]="false"
-                    [defaultAgentId]="modelDevAgentId" [pendingMessage]="pendingPrompt"
-                    [applicationScope]="'Application'" [applicationId]="applicationId" [appContext]="chatAppContext"
-                    (conversationCreated)="onChatConversationCreated($event)"
-                    (pendingMessageConsumed)="onChatPendingMessageConsumed()">
-                  </mj-conversation-chat-area>
-                } @else { <div class="ps-biz-copilot-empty"><mj-loading text="Connecting…" size="small"></mj-loading></div> }
-              </div>
-            </aside>
-          }
+            </as-split-area>
+
+            @if (chatOpen) {
+              <as-split-area [size]="copilotSizePct" [minSize]="20" [maxSize]="65">
+                <aside class="ps-biz-copilot" data-testid="ps-predictions-copilot">
+                  <div class="ps-biz-copilot-head">
+                    <div class="ps-biz-copilot-title"><i class="fa-solid fa-robot"></i> New prediction</div>
+                    <button class="ps-biz-copilot-close" (click)="closeChat()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                  </div>
+                  <div class="ps-biz-copilot-body">
+                    @if (currentUser) {
+                      <mj-conversation-chat-area
+                        [Provider]="Provider" [environmentId]="chatEnvironmentId" [currentUser]="currentUser"
+                        [conversation]="chatConversation" [conversationId]="chatConversationId" [isNewConversation]="chatIsNewConversation"
+                        [suppressNewConversationEmptyState]="true" [allowMentions]="false" [overlayMode]="true"
+                        [showExportButton]="false" [showShareButton]="false" [showArtifactIndicator]="false"
+                        [showAgentPicker]="false" [showAgentModePicker]="false"
+                        [defaultAgentId]="modelDevAgentId" [pendingMessage]="pendingPrompt"
+                        [applicationScope]="'Application'" [applicationId]="applicationId" [appContext]="chatAppContext"
+                        (conversationCreated)="onChatConversationCreated($event)"
+                        (pendingMessageConsumed)="onChatPendingMessageConsumed()">
+                      </mj-conversation-chat-area>
+                    } @else { <div class="ps-biz-copilot-empty"><mj-loading text="Connecting…" size="small"></mj-loading></div> }
+                  </div>
+                </aside>
+              </as-split-area>
+            }
+          </as-split>
         </div>
       }
     </mj-page-body-interior>
@@ -182,7 +188,11 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
     `
       :host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
       .ps-biz-host { display: flex; flex: 1; min-height: 0; overflow: hidden; }
-      .ps-biz-main { flex: 1; min-width: 0; overflow-y: auto; padding: 16px 18px 28px; }
+      .biz-copilot-splitter { flex: 1; width: 100%; height: 100%; min-height: 0; min-width: 0; }
+      .biz-copilot-splitter .as-split-gutter { background: transparent; transition: background-color 0.15s ease; position: relative; }
+      .biz-copilot-splitter .as-split-gutter:hover { background-color: var(--mj-brand-primary, #6366f1); }
+      .biz-copilot-splitter .as-split-gutter::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 2px; height: 24px; border-radius: 1px; background: var(--mj-border-strong, #cbd5e1); }
+      .ps-biz-main { width: 100%; height: 100%; flex: 1; min-width: 0; overflow-y: auto; padding: 16px 18px 28px; }
       .ps-biz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
       .ps-biz-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--mj-radius-md); padding: 18px; display: flex; flex-direction: column; gap: 10px; transition: border-color .12s, background .12s; }
       .ps-biz-card:hover { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 4%, var(--mj-bg-surface)); }
@@ -258,7 +268,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
       .ps-load-error-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
       .ps-load-error-text strong { color: var(--mj-text-primary); }
       .ps-load-error-detail { color: var(--mj-text-secondary); font-size: var(--mj-text-sm); word-break: break-word; }
-      .ps-biz-copilot { width: 560px; min-width: 380px; max-width: 60vw; flex: none; border-left: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; min-height: 0; }
+      .ps-biz-copilot { width: 100%; height: 100%; max-width: none; flex: 1; border-left: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; min-height: 0; }
       .ps-biz-copilot-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--mj-border-default); }
       .ps-biz-copilot-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--mj-text-primary); }
       .ps-biz-copilot-title i { color: var(--mj-brand-primary); }
@@ -296,6 +306,42 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public chatConversation: MJConversationEntity | null = null;
   public chatConversationId: string | null = null;
   public chatIsNewConversation = true;
+  public mainSizePct = 68;
+  public copilotSizePct = 32;
+
+  override ngOnInit(): void {
+    super.ngOnInit();
+    this.loadLayoutPrefs();
+  }
+
+  public onCopilotSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number' && typeof sizes[1] === 'number') {
+      this.mainSizePct = Math.round(sizes[0]);
+      this.copilotSizePct = Math.round(sizes[1]);
+      this.saveLayoutPrefs();
+    }
+  }
+
+  private loadLayoutPrefs(): void {
+    const saved = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.predictions.layout');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.copilotSizePct === 'number' && parsed.copilotSizePct >= 20 && parsed.copilotSizePct <= 60) {
+          this.copilotSizePct = parsed.copilotSizePct;
+          this.mainSizePct = 100 - this.copilotSizePct;
+        }
+      } catch {}
+    }
+  }
+
+  private saveLayoutPrefs(): void {
+    const prefs = {
+      copilotSizePct: this.copilotSizePct,
+      mainSizePct: this.mainSizePct,
+    };
+    UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.predictions.layout', JSON.stringify(prefs));
+  }
 
   /** The ranked at-risk rows for the open prediction's latest run (empty until loaded / when no run yet). */
   public atRiskRows: AtRiskRow[] = [];

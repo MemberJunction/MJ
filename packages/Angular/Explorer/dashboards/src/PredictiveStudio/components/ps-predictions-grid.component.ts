@@ -46,6 +46,13 @@ import {
   type RowDriver,
 } from '../at-risk.view-models';
 import {
+  type OutcomeConfig,
+  type OutcomeBand,
+  resolveOutcomeConfig,
+  resolveScoreBand,
+  resolveOutcomeStyle,
+} from '@memberjunction/predictive-studio-core';
+import {
   PredictiveStudioScoreHistoryService,
   type ModelScoreHistoryPoint,
 } from '../predictive-studio-score-history.service';
@@ -60,11 +67,25 @@ export interface PredictionGridRow {
   score: number;
   scoreFormatted: string;
   riskPct: number;
-  band: 'high' | 'medium' | 'low';
+  band: string;
+  badgeColor?: string;
+  icon?: string;
   class: string | null;
   drivers: RowDriver[];
   status: string;
   scoredAtDate: Date | null;
+}
+
+/** Summary of one dynamic outcome band for toolbar filtering and KPI cards. */
+export interface VisibleBandSummary {
+  key: string;
+  label: string;
+  count: number;
+  pct: number;
+  avgScore: number;
+  badgeColor: string;
+  icon?: string;
+  description?: string;
 }
 
 interface HistogramBin {
@@ -147,7 +168,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public filteredRows: PredictionGridRow[] = [];
 
   public searchText = '';
-  public selectedTier: 'all' | 'high' | 'medium' | 'low' = 'all';
+  public selectedTier: string = 'all';
+  public outcomeConfig: OutcomeConfig = resolveOutcomeConfig();
+  public visibleBands: VisibleBandSummary[] = [];
 
   public activeView: 'grid' | 'chart' = 'grid';
   public readonly viewOptions = [
@@ -241,7 +264,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public columnDefs: ColDef<PredictionGridRow>[] = [];
 
   public setupColumnDefs(): void {
-    const isRenewal = this.isRenewalModel;
+    const scoreLabel = this.outcomeConfig.ScoreLabel || 'Prediction Score';
+    const statusLabel = this.outcomeConfig.StatusLabel || 'Risk Level';
+
     this.columnDefs = [
       {
         field: 'recordName',
@@ -268,21 +293,19 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       },
       {
         field: 'score',
-        headerName: isRenewal ? 'Renewal Probability' : 'Prediction Score',
+        headerName: scoreLabel,
         width: 175,
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data) return '';
           const pct = Math.min(100, Math.max(0, Math.round(params.data.score * 100)));
-          const band = params.data.band;
-          const colorClass = isRenewal
-            ? (band === 'low' ? 'risk-low' : band === 'medium' ? 'risk-medium' : 'risk-high')
-            : (band === 'high' ? 'risk-high' : band === 'medium' ? 'risk-medium' : 'risk-low');
+          const badgeColor = params.data.badgeColor || 'gray';
+          const colorClass = `badge-${badgeColor}`;
           const formatted = this.escapeHtml(params.data.scoreFormatted);
           return `
             <div class="pg-score-cell">
-              <span class="pg-score-pct ${colorClass}">${formatted}</span>
-              <div class="pg-score-bar-track">
-                <div class="pg-score-bar-fill ${colorClass}" style="width: ${pct}%"></div>
+              <span class="pg-score-val ${colorClass}">${formatted}</span>
+              <div class="pg-score-bar">
+                <div class="pg-score-fill ${colorClass}" style="width: ${pct}%"></div>
               </div>
             </div>
           `;
@@ -290,29 +313,15 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       },
       {
         field: 'riskPct',
-        headerName: isRenewal ? 'Renewal Status' : 'Risk Level',
-        width: 145,
+        headerName: statusLabel,
+        width: 155,
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data) return '';
-          const band = params.data.band;
-          const riskPct = params.data.riskPct;
-          if (isRenewal) {
-            const renewalPct = Math.round(params.data.score * 100);
-            if (band === 'low') {
-              return `<span class="ps-badge green" title="${renewalPct}% Renewal Probability"><i class="fa-solid fa-circle-check"></i> High (${renewalPct}%)</span>`;
-            } else if (band === 'medium') {
-              return `<span class="ps-badge amber" title="${renewalPct}% Renewal Probability"><i class="fa-solid fa-triangle-exclamation"></i> Medium (${renewalPct}%)</span>`;
-            } else {
-              return `<span class="ps-badge red" title="${renewalPct}% Renewal Probability"><i class="fa-solid fa-circle-exclamation"></i> Low (${renewalPct}%)</span>`;
-            }
-          }
-          if (band === 'high') {
-            return `<span class="ps-badge red" title="${riskPct}% Risk"><i class="fa-solid fa-circle-exclamation"></i> High Risk (${riskPct}%)</span>`;
-          } else if (band === 'medium') {
-            return `<span class="ps-badge amber" title="${riskPct}% Risk"><i class="fa-solid fa-triangle-exclamation"></i> Med Risk (${riskPct}%)</span>`;
-          } else {
-            return `<span class="ps-badge green" title="${riskPct}% Risk"><i class="fa-solid fa-circle-check"></i> Low Risk (${riskPct}%)</span>`;
-          }
+          const badgeColor = params.data.badgeColor || 'gray';
+          const icon = params.data.icon ? `<i class="fa-solid ${this.escapeHtml(params.data.icon)}"></i> ` : '';
+          const label = this.escapeHtml(params.data.status || params.data.band);
+          const pct = Math.round(params.data.score * 100);
+          return `<span class="ps-badge ${badgeColor}" title="${pct}% ${scoreLabel}">${icon}${label} (${pct}%)</span>`;
         },
       },
       {
@@ -322,13 +331,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data || !params.data.class) return '<span class="ps-muted">—</span>';
           const cls = this.escapeHtml(params.data.class);
-          const lower = cls.toLowerCase();
-          if (lower === 'renewed' || lower === 'active') {
-            return `<span class="ps-badge green"><i class="fa-solid fa-check"></i> ${cls}</span>`;
-          } else if (lower === 'lapsed' || lower === 'cancelled' || lower === 'churn') {
-            return `<span class="ps-badge red"><i class="fa-solid fa-xmark"></i> ${cls}</span>`;
-          }
-          return `<span class="ps-badge gray">${cls}</span>`;
+          const style = resolveOutcomeStyle(params.data.class, this.outcomeConfig);
+          const icon = style.Icon ? `<i class="fa-solid ${style.Icon}"></i> ` : '';
+          return `<span class="ps-badge ${style.BadgeColor}">${icon}${cls}</span>`;
         },
       },
       {
@@ -497,13 +502,15 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         return;
       }
 
-      // 4. Determine polarity and parse per-record predictions
+      // 4. Resolve OutcomeConfig and determine polarity
+      this.outcomeConfig = resolveOutcomeConfig(model ?? undefined);
+      this.isRenewalModel = this.outcomeConfig.Polarity === 'positive';
+      this.setupColumnDefs();
+
       const polarity = resolveRenewalPolarity(
         detailsRes.Results.map((d) => d.ResultPayload),
         model?.TargetVariable,
       );
-      this.isRenewalModel = polarity.isRenewalModel;
-      this.setupColumnDefs();
 
       // When the model outputs P(Renewed) (scoreIsLapseRisk = false), adverse risk is inverted (1 - score).
       // When the model outputs P(Lapse) (scoreIsLapseRisk = true), adverse risk is ALREADY score (invertedRisk = false).
@@ -511,7 +518,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
       const parsedAtRisk = parseAtRiskRows(
         detailsRes.Results.map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })),
-        { invertedRisk: shouldInvertRisk },
+        { invertedRisk: shouldInvertRisk, outcomeConfig: this.outcomeConfig },
       );
 
       // Map details into indexed lookup for scoredAt timestamp
@@ -530,20 +537,27 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           ? (polarity.scoreIsLapseRisk ? Math.max(0, Math.min(1, 1 - r.score)) : r.score)
           : r.score;
 
+        const resolved = this.outcomeConfig
+          ? resolveScoreBand(displayScore, this.outcomeConfig)
+          : null;
+
         return {
           recordId: r.recordId,
           recordName: r.label ?? r.recordId,
           score: displayScore,
           scoreFormatted: (displayScore * 100).toFixed(1) + '%',
           riskPct: r.riskPct,
-          band: r.band,
+          band: resolved?.Key ?? r.band,
+          badgeColor: resolved?.BadgeColor ?? r.badgeColor,
+          icon: resolved?.Icon ?? r.icon,
           class: r.class,
           drivers: r.drivers ?? [],
-          status: detail?.Status ?? 'Succeeded',
+          status: resolved?.Label ?? r.status ?? detail?.Status ?? 'Succeeded',
           scoredAtDate: dt instanceof Date ? dt : dt ? new Date(dt) : null,
         };
       });
 
+      this.computeVisibleBands();
       this.applyFilter();
 
       // 5. Schedule lazy lookup of record names for visible rows
@@ -792,15 +806,72 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.applyFilter();
   }
 
-  public setTier(tier: 'all' | 'high' | 'medium' | 'low'): void {
+  public setTier(tier: string): void {
     this.selectedTier = tier;
     this.applyFilter();
   }
 
-  public setTierAndGrid(tier: 'high' | 'medium' | 'low'): void {
+  public setTierAndGrid(tier: string): void {
     this.selectedTier = tier;
     this.activeView = 'grid';
     this.applyFilter();
+  }
+
+  public getOutcomeBadgeClass(className: string | null | undefined): string {
+    return resolveOutcomeStyle(className, this.outcomeConfig).BadgeColor;
+  }
+
+  public getBadgeColorVar(color: string): string {
+    switch (color) {
+      case 'green':
+        return 'var(--mj-status-success)';
+      case 'red':
+        return 'var(--mj-status-error)';
+      case 'amber':
+        return 'var(--mj-status-warning)';
+      case 'blue':
+        return 'var(--mj-brand-primary)';
+      default:
+        return 'var(--mj-text-muted)';
+    }
+  }
+
+  private computeVisibleBands(): void {
+    const total = this.allRows.length;
+    const bands = this.outcomeConfig.Bands ?? [];
+    this.visibleBands = bands.map((b) => {
+      const matching = this.allRows.filter((r) => r.band === b.Key);
+      const count = matching.length;
+      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+      const avgScore = count > 0 ? Math.round((matching.reduce((sum, r) => sum + r.score, 0) / count) * 100) : 0;
+      return {
+        key: b.Key,
+        label: b.Label,
+        count,
+        pct,
+        avgScore,
+        badgeColor: b.BadgeColor,
+        icon: b.Icon,
+        description: b.Description,
+      };
+    });
+
+    const knownKeys = new Set(bands.map((b) => b.Key));
+    const extraKeys = new Set(this.allRows.map((r) => r.band).filter((k) => !knownKeys.has(k)));
+    for (const k of extraKeys) {
+      const matching = this.allRows.filter((r) => r.band === k);
+      const count = matching.length;
+      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+      const avgScore = count > 0 ? Math.round((matching.reduce((sum, r) => sum + r.score, 0) / count) * 100) : 0;
+      this.visibleBands.push({
+        key: k,
+        label: k.charAt(0).toUpperCase() + k.slice(1),
+        count,
+        pct,
+        avgScore,
+        badgeColor: 'gray',
+      });
+    }
   }
 
   public onViewToggle(key: string): void {
@@ -1100,31 +1171,10 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       // Power scale height so smaller decile bins (e.g. 2, 21, 35) are visible alongside 5,390
       const height = count === 0 ? 0 : Math.round(14 + Math.pow(count / maxCount, 0.45) * 116);
 
-      let color: string;
-      let riskLabel: string;
-      if (this.isRenewalModel) {
-        if (idx <= 2) {
-          color = 'var(--mj-status-error)';
-          riskLabel = 'High Churn Risk';
-        } else if (idx <= 5) {
-          color = 'var(--mj-status-warning)';
-          riskLabel = 'Medium Risk';
-        } else {
-          color = 'var(--mj-status-success)';
-          riskLabel = 'Low Risk / Healthy';
-        }
-      } else {
-        if (idx >= 7) {
-          color = 'var(--mj-status-error)';
-          riskLabel = 'High Risk';
-        } else if (idx >= 4) {
-          color = 'var(--mj-status-warning)';
-          riskLabel = 'Medium Risk';
-        } else {
-          color = 'var(--mj-status-success)';
-          riskLabel = 'Low Risk';
-        }
-      }
+      const centerScore = (idx + 0.5) / 10;
+      const band = resolveScoreBand(centerScore, this.outcomeConfig);
+      const color = band ? this.getBadgeColorVar(band.BadgeColor) : 'var(--mj-brand-primary)';
+      const riskLabel = band ? band.Label : `${lower}%–${upper}%`;
 
       return {
         idx,
@@ -1188,7 +1238,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const x = pts.length === 1 ? (xStart + xEnd) / 2 : Math.round(xStart + i * step);
       const clampedScore = Math.max(0, Math.min(1, pt.score));
       const y = Math.round(yBottom - clampedScore * ySpan);
-      const color = pt.band === 'high' ? 'var(--mj-status-error)' : pt.band === 'medium' ? 'var(--mj-status-warning)' : 'var(--mj-status-success)';
+      const band = resolveScoreBand(pt.score, this.outcomeConfig);
+      const color = band ? this.getBadgeColorVar(band.BadgeColor) : 'var(--mj-brand-primary)';
       return {
         runId: pt.runId,
         x,
@@ -1218,16 +1269,14 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public exportCSV(): void {
     if (this.allRows.length === 0) return;
 
-    const headers = this.isRenewalModel
-      ? ['Record ID', 'Record Name', 'Renewal Probability', 'Renewal Status', 'Predicted Class', 'Top Drivers', 'Scored At']
-      : ['Record ID', 'Record Name', 'Prediction Score', 'Risk Level', 'Predicted Class', 'Top Drivers', 'Scored At'];
+    const scoreHeader = this.outcomeConfig.ScoreLabel || 'Prediction Score';
+    const statusHeader = this.outcomeConfig.StatusLabel || 'Risk Level';
+    const headers = ['Record ID', 'Record Name', scoreHeader, statusHeader, 'Predicted Class', 'Top Drivers', 'Scored At'];
     const lines = [headers.join(',')];
 
     for (const r of this.filteredRows) {
       const driversStr = r.drivers.map((d) => `${d.up ? '+' : '-'}${d.label}`).join('; ');
-      const statusStr = this.isRenewalModel
-        ? (r.band === 'low' ? `HIGH (${Math.round(r.score * 100)}%)` : r.band === 'medium' ? `MEDIUM (${Math.round(r.score * 100)}%)` : `LOW (${Math.round(r.score * 100)}%)`)
-        : r.band.toUpperCase();
+      const statusStr = `${r.status || r.band} (${r.scoreFormatted})`;
       const rowData = [
         `"${r.recordId.replace(/"/g, '""')}"`,
         `"${(r.recordName || r.recordId).replace(/"/g, '""')}"`,

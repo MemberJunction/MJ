@@ -258,9 +258,14 @@
   border-radius: var(--mj-radius-full);
 }
 
-.pg-score-fill.risk-high { background: var(--mj-status-error); }
-.pg-score-fill.risk-medium { background: var(--mj-status-warning); }
-.pg-score-fill.risk-low { background: var(--mj-status-success); }
+.pg-score-fill.risk-high,
+.pg-score-fill.badge-red { background: var(--mj-status-error); }
+.pg-score-fill.risk-medium,
+.pg-score-fill.badge-amber { background: var(--mj-status-warning); }
+.pg-score-fill.risk-low,
+.pg-score-fill.badge-green { background: var(--mj-status-success); }
+.pg-score-fill.badge-blue { background: var(--mj-brand-primary); }
+.pg-score-fill.badge-gray { background: var(--mj-text-muted); }
 
 .pg-score-val {
   font-weight: 700;
@@ -270,9 +275,14 @@
   text-align: right;
 }
 
-.pg-score-val.risk-high { color: var(--mj-status-error-text); }
-.pg-score-val.risk-medium { color: var(--mj-status-warning-text); }
-.pg-score-val.risk-low { color: var(--mj-status-success-text); }
+.pg-score-val.risk-high,
+.pg-score-val.badge-red { color: var(--mj-status-error-text, var(--mj-status-error)); }
+.pg-score-val.risk-medium,
+.pg-score-val.badge-amber { color: var(--mj-status-warning-text, var(--mj-status-warning)); }
+.pg-score-val.risk-low,
+.pg-score-val.badge-green { color: var(--mj-status-success-text, var(--mj-status-success)); }
+.pg-score-val.badge-blue { color: var(--mj-brand-primary); }
+.pg-score-val.badge-gray { color: var(--mj-text-muted); }
 
 .pg-drivers-cell {
   display: flex;
@@ -611,9 +621,14 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, .12);
 }
 
-.pg-detail-score-circle.risk-high { background: var(--mj-status-error); }
-.pg-detail-score-circle.risk-medium { background: var(--mj-status-warning); }
-.pg-detail-score-circle.risk-low { background: var(--mj-status-success); }
+.pg-detail-score-circle.risk-high,
+.pg-detail-score-circle.badge-red { background: var(--mj-status-error); }
+.pg-detail-score-circle.risk-medium,
+.pg-detail-score-circle.badge-amber { background: var(--mj-status-warning); }
+.pg-detail-score-circle.risk-low,
+.pg-detail-score-circle.badge-green { background: var(--mj-status-success); }
+.pg-detail-score-circle.badge-blue { background: var(--mj-brand-primary); }
+.pg-detail-score-circle.badge-gray { background: var(--mj-text-muted); }
 
 .pg-detail-meta {
   display: flex;

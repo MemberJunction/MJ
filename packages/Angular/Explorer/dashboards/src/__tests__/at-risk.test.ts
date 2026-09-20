@@ -66,6 +66,65 @@ describe('parseAtRiskRows', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ recordId: 'w', riskPct: 77 });
   });
+
+  it('resolves dynamic band, status, badgeColor, and icon from outcomeConfig', () => {
+    const customConfig = {
+      ScoreLabel: 'Renewal Probability',
+      StatusLabel: 'Renewal Status',
+      Polarity: 'positive' as const,
+      Bands: [
+        { Key: 'super-safe', Label: 'Very Safe', Min: 0.8, Max: 1.0, BadgeColor: 'green' as const, Icon: 'fa-star' },
+        { Key: 'watch', Label: 'Needs Watch', Min: 0.4, Max: 0.7999, BadgeColor: 'amber' as const, Icon: 'fa-eye' },
+        { Key: 'danger', Label: 'Critical Danger', Min: 0.0, Max: 0.3999, BadgeColor: 'red' as const, Icon: 'fa-skull' },
+      ],
+    };
+
+    const rows = parseAtRiskRows([
+      { recordId: 'safe', ResultPayload: JSON.stringify({ score: 0.95, class: 'Renewed' }) },
+      { recordId: 'med', ResultPayload: JSON.stringify({ score: 0.55, class: 'Renewed' }) },
+      { recordId: 'crit', ResultPayload: JSON.stringify({ score: 0.10, class: 'Lapsed' }) },
+    ], { outcomeConfig: customConfig });
+
+    expect(rows).toHaveLength(3);
+    const safeRow = rows.find((r) => r.recordId === 'safe');
+    expect(safeRow).toMatchObject({
+      band: 'super-safe',
+      status: 'Very Safe',
+      badgeColor: 'green',
+      icon: 'fa-star',
+    });
+
+    const critRow = rows.find((r) => r.recordId === 'crit');
+    expect(critRow).toMatchObject({
+      band: 'danger',
+      status: 'Critical Danger',
+      badgeColor: 'red',
+      icon: 'fa-skull',
+    });
+  });
+
+  it('respects pre-evaluated payload fields (status, band, badgeColor, icon) when present', () => {
+    const rows = parseAtRiskRows([
+      {
+        recordId: 'pre-eval',
+        ResultPayload: JSON.stringify({
+          score: 0.88,
+          class: 'Active',
+          status: 'Custom High Status',
+          band: 'custom-band',
+          badgeColor: 'blue',
+          icon: 'fa-shield',
+        }),
+      },
+    ]);
+
+    expect(rows[0]).toMatchObject({
+      band: 'custom-band',
+      status: 'Custom High Status',
+      badgeColor: 'blue',
+      icon: 'fa-shield',
+    });
+  });
 });
 
 describe('topGlobalDrivers', () => {

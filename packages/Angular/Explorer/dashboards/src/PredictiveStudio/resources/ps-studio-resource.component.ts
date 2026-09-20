@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ViewChild, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { LogError, UserInfo } from '@memberjunction/core';
-import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLAlgorithmEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLAlgorithmEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
@@ -59,56 +59,87 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
           <button mjButton variant="secondary" size="sm" (click)="retryLoad()"><i class="fa-solid fa-rotate-right"></i> Try again</button>
         </div>
       } @else {
-        <div class="ps-studio-host" [class.chat-open]="chatOpen" data-testid="ps-studio-shell">
-          <aside class="ps-leftnav">
-            @for (group of groups; track group) {
-              @if (group) { <div class="ps-nav-group">{{ group }}</div> }
-              @for (item of itemsForGroup(group); track item.key) {
-                <button class="ps-nav-item" [class.active]="activeSection === item.key"
-                  [attr.data-testid]="'ps-nav-' + item.key" (click)="selectSection(item.key)">
-                  <i [class]="item.icon"></i> <span>{{ item.label }}</span>
-                </button>
-              }
-            }
-          </aside>
-
-          <section class="ps-content" [class.fill]="activeSection === 'pipelines'" [attr.data-testid]="'ps-panel-' + activeSection">
-            @switch (activeSection) {
-              @case ('home') { <ps-home [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (navigate)="mapNavigate($event)" (askAgent)="onAskAgent($event)"></ps-home> }
-              @case ('pipelines') { <ps-pipelines #pipelinesComp [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (askAgent)="onAskAgent($event)" (navigate)="mapNavigate($event)"></ps-pipelines> }
-              @case ('catalog') { <ps-catalog [engine]="engine" (askAgent)="onAskAgent($event)" (createPipeline)="onCreatePipelineFromCatalog($event)"></ps-catalog> }
-              @case ('experiments') { <ps-experiments [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-experiments> }
-              @case ('compare') { <ps-compare [engine]="engine"></ps-compare> }
-            }
-          </section>
-
-          @if (chatOpen) {
-            <aside class="ps-copilot" [class.expanded]="copilotExpanded" data-testid="ps-studio-copilot">
-              <div class="ps-copilot-head">
-                <div class="ps-copilot-title"><i class="fa-solid fa-robot"></i> Model Dev Agent</div>
-                <div class="ps-copilot-actions">
-                  <button class="ps-copilot-btn" (click)="toggleCopilotExpanded()" [title]="copilotExpanded ? 'Collapse panel' : 'Expand panel'"><i class="fa-solid" [class.fa-up-right-and-down-left-from-center]="!copilotExpanded" [class.fa-down-left-and-up-right-to-center]="copilotExpanded"></i></button>
-                  <button class="ps-copilot-close" (click)="closeChat()" aria-label="Close agent chat"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-              </div>
-              <div class="ps-copilot-body">
-                @if (currentUser) {
-                  <mj-conversation-chat-area
-                    [Provider]="Provider" [environmentId]="chatEnvironmentId" [currentUser]="currentUser"
-                    [conversation]="chatConversation" [conversationId]="chatConversationId" [isNewConversation]="chatIsNewConversation"
-                    [suppressNewConversationEmptyState]="true" [allowMentions]="false" [overlayMode]="false"
-                    [showExportButton]="false" [showShareButton]="false" [showArtifactIndicator]="true"
-                    [showAgentPicker]="false" [showAgentModePicker]="false"
-                    [defaultAgentId]="modelDevAgentId" [pendingMessage]="pendingPrompt"
-                    [applicationScope]="'Application'" [applicationId]="applicationId" [appContext]="chatAppContext"
-                    (conversationCreated)="onChatConversationCreated($event)"
-                    (pendingMessageConsumed)="onChatPendingMessageConsumed()"
-                    (navigationRequest)="onNavigationRequest($event)">
-                  </mj-conversation-chat-area>
-                } @else { <div class="ps-copilot-empty"><mj-loading text="Connecting…" size="small"></mj-loading></div> }
-              </div>
-            </aside>
+        <div class="ps-studio-host" [class.nav-collapsed]="isNavCollapsed" [class.chat-open]="chatOpen" data-testid="ps-studio-shell">
+          @if (isNavCollapsed) {
+            <div class="ps-nav-collapsed-strip" role="region" aria-label="Studio navigation (collapsed)">
+              <button class="ps-nav-rail-collapse" type="button" (click)="toggleNav()" aria-label="Expand studio navigation" title="Expand navigation">
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
+              <div class="ps-nav-collapsed-strip-label"><i class="fa-solid fa-flask-vial"></i> Studio</div>
+            </div>
           }
+
+          <as-split direction="horizontal" class="studio-outer-splitter" unit="percent" [gutterSize]="isNavCollapsed ? 0 : 6" (dragEnd)="onNavSplitDragEnd($event.sizes)">
+            @if (!isNavCollapsed) {
+              <as-split-area [size]="navSizePct" [minSize]="10" [maxSize]="30">
+                <aside class="ps-leftnav">
+                  <div class="ps-leftnav-header">
+                    <span class="ps-leftnav-title">Studio</span>
+                    <button class="ps-leftnav-collapse-btn" type="button" (click)="toggleNav()" title="Collapse navigation" aria-label="Collapse navigation">
+                      <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+                  </div>
+                  @for (group of groups; track group) {
+                    @if (group) { <div class="ps-nav-group">{{ group }}</div> }
+                    @for (item of itemsForGroup(group); track item.key) {
+                      <button class="ps-nav-item" [class.active]="activeSection === item.key"
+                        [attr.data-testid]="'ps-nav-' + item.key" (click)="selectSection(item.key)">
+                        <i [class]="item.icon"></i> <span>{{ item.label }}</span>
+                      </button>
+                    }
+                  }
+                </aside>
+              </as-split-area>
+            }
+
+            <as-split-area [size]="isNavCollapsed ? 100 : (100 - navSizePct)" [minSize]="60">
+              <div class="ps-studio-workspace">
+                <as-split direction="horizontal" class="studio-copilot-splitter" unit="percent" [gutterSize]="chatOpen ? 6 : 0" (dragEnd)="onCopilotSplitDragEnd($event.sizes)">
+                  <as-split-area [size]="chatOpen ? (copilotExpanded ? 40 : mainSizePct) : 100" [minSize]="30">
+                    <section class="ps-content" [class.fill]="activeSection === 'pipelines'" [attr.data-testid]="'ps-panel-' + activeSection">
+                      @switch (activeSection) {
+                        @case ('home') { <ps-home [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (navigate)="mapNavigate($event)" (askAgent)="onAskAgent($event)"></ps-home> }
+                        @case ('pipelines') { <ps-pipelines #pipelinesComp [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (askAgent)="onAskAgent($event)" (navigate)="mapNavigate($event)"></ps-pipelines> }
+                        @case ('catalog') { <ps-catalog [engine]="engine" (askAgent)="onAskAgent($event)" (createPipeline)="onCreatePipelineFromCatalog($event)"></ps-catalog> }
+                        @case ('experiments') { <ps-experiments [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-experiments> }
+                        @case ('compare') { <ps-compare [engine]="engine"></ps-compare> }
+                      }
+                    </section>
+                  </as-split-area>
+
+                  @if (chatOpen) {
+                    <as-split-area [size]="copilotExpanded ? 60 : copilotSizePct" [minSize]="20" [maxSize]="70">
+                      <aside class="ps-copilot" [class.expanded]="copilotExpanded" data-testid="ps-studio-copilot">
+                        <div class="ps-copilot-head">
+                          <div class="ps-copilot-title"><i class="fa-solid fa-robot"></i> Model Dev Agent</div>
+                          <div class="ps-copilot-actions">
+                            <button class="ps-copilot-btn" (click)="toggleCopilotExpanded()" [title]="copilotExpanded ? 'Collapse panel' : 'Expand panel'"><i class="fa-solid" [class.fa-up-right-and-down-left-from-center]="!copilotExpanded" [class.fa-down-left-and-up-right-to-center]="copilotExpanded"></i></button>
+                            <button class="ps-copilot-close" (click)="closeChat()" aria-label="Close agent chat"><i class="fa-solid fa-xmark"></i></button>
+                          </div>
+                        </div>
+                        <div class="ps-copilot-body">
+                          @if (currentUser) {
+                            <mj-conversation-chat-area
+                              [Provider]="Provider" [environmentId]="chatEnvironmentId" [currentUser]="currentUser"
+                              [conversation]="chatConversation" [conversationId]="chatConversationId" [isNewConversation]="chatIsNewConversation"
+                              [suppressNewConversationEmptyState]="true" [allowMentions]="false" [overlayMode]="false"
+                              [showExportButton]="false" [showShareButton]="false" [showArtifactIndicator]="true"
+                              [showAgentPicker]="false" [showAgentModePicker]="false"
+                              [defaultAgentId]="modelDevAgentId" [pendingMessage]="pendingPrompt"
+                              [applicationScope]="'Application'" [applicationId]="applicationId" [appContext]="chatAppContext"
+                              (conversationCreated)="onChatConversationCreated($event)"
+                              (pendingMessageConsumed)="onChatPendingMessageConsumed()"
+                              (navigationRequest)="onNavigationRequest($event)">
+                            </mj-conversation-chat-area>
+                          } @else { <div class="ps-copilot-empty"><mj-loading text="Connecting…" size="small"></mj-loading></div> }
+                        </div>
+                      </aside>
+                    </as-split-area>
+                  }
+                </as-split>
+              </div>
+            </as-split-area>
+          </as-split>
         </div>
       }
     </mj-page-body-interior>
@@ -116,21 +147,42 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
   styles: [
     `
       :host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
-      .ps-studio-host { display: flex; flex: 1; min-height: 0; overflow: hidden; }
-      .ps-leftnav { width: 210px; flex: none; border-right: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); overflow-y: auto; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; }
-      .ps-nav-group { font-size: var(--mj-text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); padding: 12px 10px 4px; }
+      .ps-studio-host { display: flex; flex: 1; min-height: 0; overflow: hidden; width: 100%; height: 100%; }
+      .studio-outer-splitter { flex: 1; width: 100%; height: 100%; min-height: 0; min-width: 0; background: transparent; }
+      .studio-outer-splitter .as-split-gutter { background: transparent; transition: background-color 0.15s ease; position: relative; }
+      .studio-outer-splitter .as-split-gutter:hover { background-color: var(--mj-brand-primary, #6366f1); }
+      .studio-outer-splitter .as-split-gutter::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 2px; height: 24px; border-radius: 1px; background: var(--mj-border-strong, #cbd5e1); }
+      .studio-outer-splitter .as-split-gutter:hover::after { background: #ffffff; }
+
+      .ps-nav-collapsed-strip { width: 44px; min-width: 44px; max-width: 44px; flex: none; background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 14px; z-index: 2; }
+      .ps-nav-rail-collapse { background: var(--mj-bg-surface-subtle); border: 1px solid var(--mj-border-default); border-radius: 6px; color: var(--mj-text-secondary); cursor: pointer; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; font-size: 11px; transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
+      .ps-nav-rail-collapse:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+      .ps-nav-collapsed-strip-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--mj-text-muted); display: flex; align-items: center; gap: 8px; text-transform: uppercase; }
+
+      .ps-leftnav { width: 100%; height: 100%; border-right: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; box-sizing: border-box; }
+      .ps-leftnav-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 8px; border-bottom: 1px solid var(--mj-border-subtle); margin-bottom: 4px; }
+      .ps-leftnav-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--mj-text-muted); }
+      .ps-leftnav-collapse-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-muted); cursor: pointer; transition: all 0.15s ease; padding: 0; }
+      .ps-leftnav-collapse-btn:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+
+      .ps-nav-group { font-size: var(--mj-text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); padding: 10px 8px 4px; }
       .ps-nav-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border: none; background: transparent; border-radius: var(--mj-radius-md); cursor: pointer; color: var(--mj-text-secondary); font-size: var(--mj-text-sm); font-weight: 500; transition: background .12s, color .12s; }
       .ps-nav-item i { width: 18px; text-align: center; color: var(--mj-text-muted); }
       .ps-nav-item:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
       .ps-nav-item.active { background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary); font-weight: 600; }
       .ps-nav-item.active i { color: var(--mj-brand-primary); }
-      .ps-content { flex: 1; min-width: 0; overflow-y: auto; padding: 8px 14px 24px; }
+
+      .ps-studio-workspace { display: flex; flex: 1; width: 100%; height: 100%; min-height: 0; min-width: 0; overflow: hidden; }
+      .studio-copilot-splitter { flex: 1; width: 100%; height: 100%; min-height: 0; min-width: 0; }
+      .studio-copilot-splitter .as-split-gutter { background: transparent; transition: background-color 0.15s ease; position: relative; }
+      .studio-copilot-splitter .as-split-gutter:hover { background-color: var(--mj-brand-primary, #6366f1); }
+      .studio-copilot-splitter .as-split-gutter::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 2px; height: 24px; border-radius: 1px; background: var(--mj-border-strong, #cbd5e1); }
+      .ps-content { width: 100%; height: 100%; flex: 1; min-width: 0; overflow-y: auto; padding: 8px 14px 24px; }
       /* Fill mode (pipelines): the section stops page-scrolling so the panel's inner
          columns (canvas / inspector) can each own their scrollbar. */
       .ps-content.fill { overflow: hidden; display: flex; flex-direction: column; padding-bottom: 14px; }
       .ps-content.fill > * { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-      .ps-copilot { width: 480px; max-width: 48vw; flex: none; border-left: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; min-height: 0; transition: width .2s ease, max-width .2s ease; }
-      .ps-copilot.expanded { width: 960px; max-width: 80vw; }
+      .ps-copilot { width: 100%; height: 100%; max-width: none; flex: 1; border-left: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; min-height: 0; }
       .ps-copilot-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--mj-border-default); }
       .ps-copilot-title { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--mj-text-primary); }
       .ps-copilot-title i { color: var(--mj-brand-primary); }
@@ -180,11 +232,66 @@ export class PSStudioResourceComponent extends PSResourceBase {
   public chatConversation: MJConversationEntity | null = null;
   public chatConversationId: string | null = null;
   public chatIsNewConversation = true;
+  public isNavCollapsed = false;
+  public navSizePct = 14;
+  public mainSizePct = 68;
+  public copilotSizePct = 32;
 
   override ngOnInit(): void {
     super.ngOnInit();
     const initial = this.GetQueryParams()['section'] as PSPanelKey | undefined;
     if (initial && hasSection(this.sections, initial)) this.activeSection = initial;
+    this.loadLayoutPrefs();
+  }
+
+  public toggleNav(): void {
+    this.isNavCollapsed = !this.isNavCollapsed;
+    this.saveLayoutPrefs();
+    this.cdrLocal.detectChanges();
+  }
+
+  public onNavSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number') {
+      this.navSizePct = Math.round(sizes[0]);
+      this.saveLayoutPrefs();
+    }
+  }
+
+  public onCopilotSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number' && typeof sizes[1] === 'number') {
+      this.mainSizePct = Math.round(sizes[0]);
+      this.copilotSizePct = Math.round(sizes[1]);
+      this.saveLayoutPrefs();
+    }
+  }
+
+  private loadLayoutPrefs(): void {
+    const saved = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.studio.layout');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.navSizePct === 'number' && parsed.navSizePct >= 10 && parsed.navSizePct <= 35) {
+          this.navSizePct = parsed.navSizePct;
+        }
+        if (typeof parsed.isNavCollapsed === 'boolean') {
+          this.isNavCollapsed = parsed.isNavCollapsed;
+        }
+        if (typeof parsed.copilotSizePct === 'number' && parsed.copilotSizePct >= 20 && parsed.copilotSizePct <= 60) {
+          this.copilotSizePct = parsed.copilotSizePct;
+          this.mainSizePct = 100 - this.copilotSizePct;
+        }
+      } catch {}
+    }
+  }
+
+  private saveLayoutPrefs(): void {
+    const prefs = {
+      navSizePct: this.navSizePct,
+      isNavCollapsed: this.isNavCollapsed,
+      copilotSizePct: this.copilotSizePct,
+      mainSizePct: this.mainSizePct,
+    };
+    UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.studio.layout', JSON.stringify(prefs));
   }
 
   /** React to deep-link / back-forward `section` changes after the initial mount. */

@@ -508,23 +508,28 @@ const PS_PIPELINES_STARTER_PROMPT =
             <!-- Graph Canvas & Inspector -->
             @if (isGraphView) {
               <div class="builder">
-                <!-- Canvas Wrap -->
-                <div class="canvas-wrap">
-                  <div class="canvas-bar">
-                    <div class="canvas-bar-left">
-                      <span class="ps-small ps-muted" style="font-weight:600">Add to Graph:</span>
-                      <button class="ps-pchip s" data-testid="ps-pipelines-add-source" (click)="addSource()"><i class="fa-solid fa-database"></i> Source</button>
-                      <button class="ps-pchip f" data-testid="ps-pipelines-add-step" (click)="addStep()"><i class="fa-solid fa-sliders"></i> Feature step</button>
-                    </div>
-                    <div class="canvas-bar-right">
-                      <div class="ps-zoom-controls">
-                        <button class="ps-icon-btn" (click)="zoomOut()" [disabled]="zoomLevel <= 0.5" title="Zoom Out"><i class="fa-solid fa-minus"></i></button>
-                        <span class="ps-zoom-label" (click)="resetZoom()" title="Reset to 100%">{{ Math.round(zoomLevel * 100) }}%</span>
-                        <button class="ps-icon-btn" (click)="zoomIn()" [disabled]="zoomLevel >= 2.0" title="Zoom In"><i class="fa-solid fa-plus"></i></button>
+                <as-split direction="horizontal" class="builder-splitter" unit="percent" [gutterSize]="6" (dragEnd)="onInspectorSplitDragEnd($event.sizes)">
+                  <as-split-area [size]="isInspectorCollapsed ? 100 : canvasSizePct" [minSize]="40">
+                    <!-- Canvas Wrap -->
+                    <div class="canvas-wrap">
+                      <div class="canvas-bar">
+                        <div class="canvas-bar-left">
+                          <span class="ps-small ps-muted" style="font-weight:600">Add to Graph:</span>
+                          <button class="ps-pchip s" data-testid="ps-pipelines-add-source" (click)="addSource()"><i class="fa-solid fa-database"></i> Source</button>
+                          <button class="ps-pchip f" data-testid="ps-pipelines-add-step" (click)="addStep()"><i class="fa-solid fa-sliders"></i> Feature step</button>
+                        </div>
+                        <div class="canvas-bar-right">
+                          <div class="ps-zoom-controls">
+                            <button class="ps-icon-btn" (click)="zoomOut()" [disabled]="zoomLevel <= 0.5" title="Zoom Out"><i class="fa-solid fa-minus"></i></button>
+                            <span class="ps-zoom-label" (click)="resetZoom()" title="Reset to 100%">{{ Math.round(zoomLevel * 100) }}%</span>
+                            <button class="ps-icon-btn" (click)="zoomIn()" [disabled]="zoomLevel >= 2.0" title="Zoom In"><i class="fa-solid fa-plus"></i></button>
+                          </div>
+                          <button class="ps-icon-btn" [class.active]="!isInspectorCollapsed" (click)="toggleInspector()" [title]="isInspectorCollapsed ? 'Open Inspector' : 'Collapse Inspector'">
+                            <i class="fa-solid fa-circle-info"></i>
+                          </button>
+                          <span class="ps-small ps-muted ps-node-count"><i class="fa-solid fa-circle-nodes"></i> {{ nodes.length }} nodes · {{ edges.length }} edges</span>
+                        </div>
                       </div>
-                      <span class="ps-small ps-muted ps-node-count"><i class="fa-solid fa-circle-nodes"></i> {{ nodes.length }} nodes · {{ edges.length }} edges</span>
-                    </div>
-                  </div>
 
                   <div class="ps-flow big" data-testid="ps-pipelines-canvas">
                     <div class="ps-graph-viewport"
@@ -587,7 +592,10 @@ const PS_PIPELINES_STARTER_PROMPT =
                     </div>
                   </div>
                 </div>
+              </as-split-area>
 
+            @if (!isInspectorCollapsed) {
+              <as-split-area [size]="inspectorSizePct" [minSize]="20" [maxSize]="55">
                 <!-- Inspector -->
                 <div class="ps-col inspector" data-testid="ps-pipelines-inspector">
                   <div class="ps-card insp">
@@ -597,6 +605,9 @@ const PS_PIPELINES_STARTER_PROMPT =
                         <h3 data-testid="ps-pipelines-inspector-title">{{ selectedNode.title }}</h3>
                         <div class="ps-small ps-muted">{{ nodeTypeLabel(selectedNode.type) }} · selected</div>
                       </div>
+                      <button class="insp-collapse-btn" type="button" (click)="toggleInspector()" title="Collapse inspector" aria-label="Collapse inspector">
+                        <i class="fa-solid fa-chevron-right"></i>
+                      </button>
                       @if (selectedNode.type === 'src' || selectedNode.type === 'feat' || selectedNode.type === 'emb') {
                         <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-delete" (click)="deleteSelected()"><i class="fa-solid fa-trash"></i></button>
                       }
@@ -749,9 +760,12 @@ const PS_PIPELINES_STARTER_PROMPT =
                       <div class="ps-field"><label>Locked holdout fraction</label><input class="mj-input" type="number" step="0.05" [value]="editValidation.LockedHoldoutFraction" (input)="setHoldout(inputVal($event))" /></div>
                     </div>
                   </div>
-                </div>
-              </div>
-            }
+                  </div>
+                </as-split-area>
+              }
+            </as-split>
+          </div>
+        }
               </div>
             </as-split-area>
           </as-split>
@@ -788,6 +802,9 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   public isCatalogCollapsed = false;
   public catalogSizePct = 28;
   public workspaceSizePct = 72;
+  public isInspectorCollapsed = false;
+  public canvasSizePct = 72;
+  public inspectorSizePct = 28;
 
   public readonly starterPrompt = PS_PIPELINES_STARTER_PROMPT;
   public readonly sourceKinds = SOURCE_KINDS;
@@ -884,6 +901,13 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
         if (typeof parsed.isCatalogCollapsed === 'boolean') {
           this.isCatalogCollapsed = parsed.isCatalogCollapsed;
         }
+        if (typeof parsed.canvasSizePct === 'number' && parsed.canvasSizePct >= 40 && parsed.canvasSizePct <= 85) {
+          this.canvasSizePct = parsed.canvasSizePct;
+          this.inspectorSizePct = 100 - this.canvasSizePct;
+        }
+        if (typeof parsed.isInspectorCollapsed === 'boolean') {
+          this.isInspectorCollapsed = parsed.isInspectorCollapsed;
+        }
       } catch {}
     }
     this.refreshFromEngine();
@@ -903,10 +927,27 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     this.cdr.markForCheck();
   }
 
+  public onInspectorSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number' && typeof sizes[1] === 'number') {
+      this.canvasSizePct = Math.round(sizes[0]);
+      this.inspectorSizePct = Math.round(sizes[1]);
+      this.saveLayoutPrefs();
+    }
+  }
+
+  public toggleInspector(): void {
+    this.isInspectorCollapsed = !this.isInspectorCollapsed;
+    this.saveLayoutPrefs();
+    this.cdr.markForCheck();
+  }
+
   private saveLayoutPrefs(): void {
     const prefs = {
       catalogSizePct: this.catalogSizePct,
       isCatalogCollapsed: this.isCatalogCollapsed,
+      canvasSizePct: this.canvasSizePct,
+      inspectorSizePct: this.inspectorSizePct,
+      isInspectorCollapsed: this.isInspectorCollapsed,
     };
     UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.pipelines.layout', JSON.stringify(prefs));
   }

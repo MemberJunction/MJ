@@ -9,6 +9,11 @@
  * Framework-free + deterministic → unit-tested with no Angular.
  */
 
+import {
+  type OutcomeConfig,
+  resolveScoreBand,
+} from '@memberjunction/predictive-studio-core';
+
 /** A scored record in the at-risk list. */
 export interface AtRiskRow {
   recordId: string;
@@ -23,8 +28,14 @@ export interface AtRiskRow {
   riskPct: number;
   /** Predicted class label, when present (classification). */
   class: string | null;
-  /** Risk band, for color. */
-  band: 'high' | 'medium' | 'low';
+  /** Risk band, for color / filtering. */
+  band: 'high' | 'medium' | 'low' | string;
+  /** Qualitative status label (e.g. "High", "Critical", "Low Risk"). */
+  status?: string;
+  /** Semantic badge color. */
+  badgeColor?: string;
+  /** Icon class. */
+  icon?: string;
   /**
    * Top signed per-record drivers behind THIS row's prediction (P1-5), humanized + one-hot-collapsed for
    * display. `up: true` pushed the risk up, `false` down. Null when the model doesn't produce per-record
@@ -98,6 +109,11 @@ export interface ParseAtRiskOptions {
    * High score (0.99) -> Low Risk (1%, green). Low score (0.10) -> High Risk (90%, red).
    */
   invertedRisk?: boolean;
+  /**
+   * Configured outcome metadata for the model (labels, thresholds, colors, icons).
+   * When provided, `resolveScoreBand()` evaluates the dynamic band, status, badgeColor, and icon.
+   */
+  outcomeConfig?: OutcomeConfig;
 }
 
 /** Result of detecting whether a model is a renewal model and what its output score represents. */
@@ -189,14 +205,27 @@ function bandFor(score: number): AtRiskRow['band'] {
 export function parseAtRiskRows(details: RunDetailLike[], options?: ParseAtRiskOptions): AtRiskRow[] {
   const rows: AtRiskRow[] = [];
   const isInverted = options?.invertedRisk === true;
+  const outcomeConfig = options?.outcomeConfig;
 
   for (const d of details) {
     if (!d.ResultPayload) continue;
     let parsed: {
       score?: number;
       class?: string;
+      status?: string;
+      band?: string;
+      badgeColor?: string;
+      icon?: string;
       drivers?: unknown;
-      output?: { score?: number; class?: string; drivers?: unknown };
+      output?: {
+        score?: number;
+        class?: string;
+        status?: string;
+        band?: string;
+        badgeColor?: string;
+        icon?: string;
+        drivers?: unknown;
+      };
     };
     try {
       parsed = JSON.parse(d.ResultPayload);
@@ -210,13 +239,37 @@ export function parseAtRiskRows(details: RunDetailLike[], options?: ParseAtRiskO
     const effectiveRisk = isInverted ? Math.max(0, Math.min(1, 1 - score)) : score;
     const riskPct = Math.round(effectiveRisk * 100);
 
+    let bandKey: string;
+    let status: string | undefined = p.status;
+    let badgeColor: string | undefined = p.badgeColor;
+    let icon: string | undefined = p.icon;
+
+    if (outcomeConfig) {
+      const resolved = resolveScoreBand(score, outcomeConfig);
+      if (resolved) {
+        bandKey = resolved.Key;
+        status = status ?? resolved.Label;
+        badgeColor = badgeColor ?? resolved.BadgeColor;
+        icon = icon ?? resolved.Icon;
+      } else {
+        bandKey = p.band ?? bandFor(effectiveRisk);
+      }
+    } else if (p.band) {
+      bandKey = p.band;
+    } else {
+      bandKey = bandFor(effectiveRisk);
+    }
+
     rows.push({
       recordId: d.recordId,
       label: null,
       score,
       riskPct,
       class: p.class ?? null,
-      band: bandFor(effectiveRisk),
+      band: bandKey,
+      status,
+      badgeColor,
+      icon,
       drivers: parseRowDrivers(p.drivers),
     });
   }
