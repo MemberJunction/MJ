@@ -3,6 +3,7 @@ import {
   ChangeDetectorRef, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { Subscription } from 'rxjs';
 import { RealtimeSessionState, RealtimeThreadItem } from './realtime-session-state';
 import { RealtimeDelegationCardComponent } from './realtime-delegation-card.component';
@@ -22,7 +23,7 @@ import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 @Component({
   standalone: true,
   selector: 'mj-realtime-session-thread',
-  imports: [CommonModule, RealtimeDelegationCardComponent],
+  imports: [CommonModule, RealtimeDelegationCardComponent, MarkdownModule],
   templateUrl: './realtime-session-thread.component.html',
   styleUrl: './realtime-session-thread.component.css'
 })
@@ -63,7 +64,7 @@ export class RealtimeSessionThreadComponent implements OnInit, AfterViewChecked,
   private pendingScroll = false;
 
   private changedSub?: Subscription;
-  private cdr = inject(ChangeDetectorRef);
+  private cdr = inject(ChangeDetectorRef, { optional: true });
 
   ngOnInit(): void {
     this.changedSub = this.State.Changed$.subscribe(() => this.onStateChanged());
@@ -98,12 +99,62 @@ export class RealtimeSessionThreadComponent implements OnInit, AfterViewChecked,
       && item.Card.CallID === this.State.ActiveCallId;
   }
 
+  /** Set of item indices whose long text has been expanded by the user. */
+  public ExpandedItems = new Set<number>();
+
+  /**
+   * Returns true when the caption text is considered a "long blob" (>280 chars or >4 lines)
+   * that warrants height clamping and an expand/collapse toggle.
+   */
+  public IsLongText(text: string | null | undefined): boolean {
+    if (!text) {
+      return false;
+    }
+    return text.length > 280 || text.split('\n').length > 4;
+  }
+
+  /** Returns whether the caption item at the specified index is expanded. */
+  public IsExpanded(index: number): boolean {
+    return this.ExpandedItems.has(index);
+  }
+
+  /** Toggles expanded/collapsed state for the caption item at the given index. */
+  public ToggleExpanded(index: number, event?: Event): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    if (this.ExpandedItems.has(index)) {
+      this.ExpandedItems.delete(index);
+    } else {
+      this.ExpandedItems.add(index);
+    }
+    this.cdr?.markForCheck();
+  }
+
+  /**
+   * Prepares text for markdown rendering, restoring structure (headings, horizontal rules,
+   * bullet items) if newlines were stripped by single-line input paste or speech-to-text.
+   */
+  public FormatMarkdownText(text: string | null | undefined): string {
+    if (!text) {
+      return '';
+    }
+    let cleaned = text;
+    // Restore newlines before markdown headings on same line: "Title ### Heading" -> "Title\n\n### Heading"
+    cleaned = cleaned.replace(/[ \t]+(?:—\s*)?(#{1,6}[ \t]+)/g, '\n\n$1');
+    // Restore newlines around horizontal rules on same line: "Text --- ##" -> "Text\n\n---\n\n##"
+    cleaned = cleaned.replace(/[ \t]+(?:—\s*)?(---|___|\*\*\*)[ \t]*/g, '\n\n$1\n\n');
+    // Restore newlines before bullet items on same line: "around: - Item 1 - Item 2" -> "around:\n- Item 1\n- Item 2"
+    cleaned = cleaned.replace(/[ \t]+-[ \t]+(?=[A-Za-z0-9\*])/g, '\n- ');
+    return cleaned;
+  }
+
   /** Marks for check on every state change; auto-scrolls when the thread grew. */
   private onStateChanged(): void {
     if (this.State.Items.length > this.lastItemCount) {
       this.pendingScroll = true;
     }
     this.lastItemCount = this.State.Items.length;
-    this.cdr.markForCheck();
+    this.cdr?.markForCheck();
   }
 }

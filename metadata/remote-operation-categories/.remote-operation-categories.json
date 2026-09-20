@@ -96,5 +96,15 @@
       "lastModified": "2026-09-03T17:21:06.573Z",
       "checksum": "1bffd9df08981ef83ab6e70434aea2484a39942eb9cf8c74b9c41f6dfa27e4c0"
     }
+  },
+  {
+    "fields": {
+      "Name": "Web Search",
+      "Description": "External web search operations backed by the WebSearchProvider registry.",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "8050D894-D38C-472C-8189-FE78E4337D56"
+    }
   }
 ]

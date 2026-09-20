@@ -105,6 +105,18 @@ export interface SyncConfig {
      * Defaults to false.
      */
     alwaysPush?: boolean;
+    /**
+     * Default for every entity directory in this tree: whether each JSON-root graph gets its own
+     * connection and transaction. Defaults to false, and an entity directory's own
+     * `push.isolatedTransactions` overrides it.
+     * - `false` (default): all-or-nothing. Every create, update and delete runs in one database
+     *   transaction, one graph at a time. If anything fails, nothing is saved.
+     * - `true`: sibling graphs run in parallel (`--parallel-batch-size`) on their own connections,
+     *   and each create and update commits as soon as it is saved. A failure does NOT roll those
+     *   back. For entities that manage their own transaction scopes and want the parallelism.
+     * The CLI flags `--isolated-transactions` / `--no-isolated-transactions` override both.
+     */
+    isolatedTransactions?: boolean;
   };
   /** SQL logging configuration (only applies to root-level config, not inherited by subdirectories) */
   sqlLogging?: {
@@ -276,12 +288,29 @@ export interface EntityConfig {
         extension?: string;
       }
     } | Array<{
-      /** Field name to externalize */
+      /** Field name to externalize, or a dotted path to a property inside a JSON field.
+       *
+       * A bare name externalizes the whole field: "TemplateText".
+       *
+       * A dotted path externalizes just that property and leaves an `@file:` reference in
+       * its place, so a column that mixes hand-authored config with a machine-generated
+       * artifact stays readable: "Configuration.ReplayScript". Push already resolves
+       * nested references, so the value round-trips with no push-side configuration.
+       *
+       * A property the record does not carry is skipped entirely — no file, no key — so
+       * records that never produced the artifact are left byte-identical. A whole-field
+       * config for the same field takes precedence over its dotted paths.
+       *
+       * NOTE: externalization is driven entirely by this config, not by what the metadata
+       * file already contains. Pulling a field (or sub-property) that currently holds an
+       * `@file:` reference *without* an entry here inlines the database value and orphans
+       * the file.
+       */
       field: string;
       /** Pattern for the output file. Supports placeholders:
        * - {Name}: Entity's name field value
        * - {ID}: Entity's ID
-       * - {FieldName}: The field being externalized
+       * - {FieldName}: The field being externalized (the leaf name, for a dotted path)
        * - Any other {FieldName} from the entity
        * Example: "@file:templates/{Name}.template.md"
        */
@@ -316,6 +345,17 @@ export interface EntityConfig {
      * Per-entity, not a global CLI kill switch.
      */
     skipGeoCoding?: boolean;
+    /**
+     * Whether this entity's JSON-root graphs each get their own connection and transaction, so
+     * siblings can be written in parallel. Overrides the root config; the CLI flags
+     * `--isolated-transactions` / `--no-isolated-transactions` override this.
+     *
+     * `true` buys parallelism and costs atomicity: each create and update commits as it is saved,
+     * so a later failure leaves them behind. Nested transaction scopes inside a save work either
+     * way — on the shared connection they become savepoints — so choose this for throughput on
+     * entities whose partial writes are acceptable, not to make nested scopes work.
+     */
+    isolatedTransactions?: boolean;
     /**
      * When false, skips creating or updating sync metadata blocks (`record.sync`)
      * on records pushed from this directory. Used by decision metadata directories

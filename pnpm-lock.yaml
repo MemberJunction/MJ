@@ -697,6 +697,9 @@ importers:
       playwright:
         specifier: '>=1.40.0'
         version: 1.58.1
+      pngjs:
+        specifier: ^3.4.0
+        version: 3.4.0
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -2546,8 +2549,8 @@ importers:
   packages/AI/RealtimeClient:
     dependencies:
       '@google/genai':
-        specifier: ^1.40.0
-        version: 1.52.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))
+        specifier: ^2.8.0
+        version: 2.8.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))
       '@memberjunction/ai':
         specifier: 6.1.0
         version: link:../Core
@@ -3705,6 +3708,9 @@ importers:
       '@memberjunction/storage':
         specifier: 6.1.0
         version: link:../../MJStorage
+      '@memberjunction/web-search-engine':
+        specifier: 6.1.0
+        version: link:../../WebSearchEngine
       '@types/d3-cloud':
         specifier: ^1.2.9
         version: 1.2.9
@@ -4549,6 +4555,9 @@ importers:
       '@memberjunction/ng-archive-manager':
         specifier: 6.1.0
         version: link:../../Generic/archive-manager
+      '@memberjunction/ng-artifacts':
+        specifier: 6.1.0
+        version: link:../../Generic/artifacts
       '@memberjunction/ng-base-application':
         specifier: 6.1.0
         version: link:../base-application
@@ -11705,8 +11714,8 @@ importers:
         specifier: 1.1.1
         version: 1.1.1
       '@google/genai':
-        specifier: ^1.40.0
-        version: 1.52.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
+        specifier: ^2.8.0
+        version: 2.8.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
       '@lezer/highlight':
         specifier: ^1.2.3
         version: 1.2.3
@@ -13676,16 +13685,10 @@ importers:
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
-      uuid:
-        specifier: ^13.0.0
-        version: 13.0.0
     devDependencies:
       '@types/mssql':
         specifier: ^9.1.9
         version: 9.1.9
-      '@types/uuid':
-        specifier: ^11.0.0
-        version: 11.0.0
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -13898,6 +13901,9 @@ importers:
       '@memberjunction/storage':
         specifier: 6.1.0
         version: link:../MJStorage
+      '@memberjunction/tag-engine-base':
+        specifier: 6.1.0
+        version: link:../AI/Knowledge/TagEngineBase
       nunjucks:
         specifier: ^3.2.4
         version: 3.2.4(chokidar@3.6.0)
@@ -14266,6 +14272,9 @@ importers:
       '@memberjunction/testing-integration':
         specifier: 6.1.0
         version: link:../TestingFramework/testing-integration
+      '@memberjunction/web-search-engine':
+        specifier: 6.1.0
+        version: link:../WebSearchEngine
       cosmiconfig:
         specifier: ^9.0.0
         version: 9.0.0(typescript@5.9.3)
@@ -15174,6 +15183,31 @@ importers:
       jsdom:
         specifier: 26.1.0
         version: 26.1.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/WebSearchEngine:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0
+        version: link:../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0
+        version: link:../MJCoreEntities
+      '@memberjunction/credentials':
+        specifier: 6.1.0
+        version: link:../Credentials/Engine
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../MJGlobal
+      '@memberjunction/network-utils':
+        specifier: 6.1.0
+        version: link:../NetworkUtils
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -18200,15 +18234,6 @@ packages:
   '@google-cloud/storage@7.19.0':
     resolution: {integrity: sha512-n2FjE7NAOYyshogdc7KQOl/VZb4sneqPjWouSyia9CMDdMhRX5+RIbqalNmC7LOLzuLAN89VlF2HvG8na9G+zQ==}
     engines: {node: '>=14'}
-
-  '@google/genai@1.52.0':
-    resolution: {integrity: sha512-gwSvbpiN/17O9TbsqSsE/OzZcpv5Fo4RQjdngGgogtuB9RsyJ8ZHhX5KjHj1bp5N9snN2eK8LDGXSaWW2hof8Q==}
-    engines: {node: '>=20.0.0'}
-    peerDependencies:
-      '@modelcontextprotocol/sdk': ^1.25.2
-    peerDependenciesMeta:
-      '@modelcontextprotocol/sdk':
-        optional: true
 
   '@google/genai@2.8.0':
     resolution: {integrity: sha512-pc2ayxqO5+O7AvnHBqpNHIk7PAZkHZgL31tbyx0gJZBSS9qPYiQoqwK7oYOw/ePmG6QY4EMSu+304vD5QlhXAw==}
@@ -35005,7 +35030,7 @@ snapshots:
       - encoding
       - supports-color
 
-  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))':
+  '@google/genai@2.8.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))':
     dependencies:
       google-auth-library: 10.9.1
       p-retry: 4.6.2
@@ -35013,19 +35038,6 @@ snapshots:
       ws: 8.19.0
     optionalDependencies:
       '@modelcontextprotocol/sdk': 1.30.0(zod@3.25.76)
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-
-  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(zod@4.3.6))':
-    dependencies:
-      google-auth-library: 10.9.1
-      p-retry: 4.6.2
-      protobufjs: 7.5.4
-      ws: 8.19.0
-    optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.30.0(zod@4.3.6)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
