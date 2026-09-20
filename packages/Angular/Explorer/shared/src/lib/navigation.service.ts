@@ -505,7 +505,11 @@ export class NavigationService implements OnDestroy {
     const entityInfo = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
     const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
     const compositeKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(entityInfo, recordId) : new CompositeKey();
-    const cachedRecordName = Metadata.Provider?.GetCachedRecordNameSync?.(entityName, compositeKey);
+    const md = Metadata.Provider;
+    const hasCachedRecordName = md?.HasCachedRecordName ? md.HasCachedRecordName(entityName, compositeKey) : false;
+    const cachedRecordName = hasCachedRecordName
+      ? md?.GetCachedRecordNameOnlyIfCached?.(entityName, compositeKey)
+      : md?.GetCachedRecordNameOnlyIfCached?.(entityName, compositeKey) || md?.GetCachedRecordNameSync?.(entityName, compositeKey);
     const initialTitle = cachedRecordName || friendlyEntityName;
 
     const request: TabRequest = {
@@ -535,6 +539,20 @@ export class NavigationService implements OnDestroy {
       tabId = this.workspaceManager.OpenTabForced(request, appColor);
     } else {
       tabId = this.workspaceManager.OpenTab(request, appColor);
+    }
+
+    // If the friendly record name was not already in the LRU cache, fire-and-forget
+    // an async lookup so the tab title upgrades smoothly once resolved without stalling tab open.
+    if (!cachedRecordName && typeof md?.GetEntityRecordName === 'function') {
+      md.GetEntityRecordName(entityName, compositeKey)
+        .then(resolvedName => {
+          if (resolvedName && typeof this.workspaceManager?.GetTab === 'function' && this.workspaceManager.GetTab(tabId)) {
+            this.workspaceManager.UpdateTabTitle?.(tabId, resolvedName);
+          }
+        })
+        .catch(() => {
+          // Non-fatal cache warm / tab retitle miss; initialTitle remains
+        });
     }
 
     if (tabsMode) {
@@ -663,7 +681,8 @@ export class NavigationService implements OnDestroy {
         context['sourceTabId'] = activeTab.id;
         const parentEntityInfo = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === parentEntity.toLowerCase());
         const parentKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(parentEntityInfo, parentRecordId) : new CompositeKey();
-        const cachedParentName = Metadata.Provider?.GetCachedRecordNameSync?.(parentEntity, parentKey);
+        const md = Metadata.Provider;
+        const cachedParentName = md?.GetCachedRecordNameOnlyIfCached?.(parentEntity, parentKey) || md?.GetCachedRecordNameSync?.(parentEntity, parentKey);
         const fallbackParentLabel = parentEntityInfo?.DisplayName || parentEntityInfo?.Name || parentEntity;
         const sourceLabel = cachedParentName || (activeTab.title && !activeTab.title.includes(parentRecordId) ? activeTab.title : fallbackParentLabel);
         context['sourceLabel'] = sourceLabel;

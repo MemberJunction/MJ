@@ -211,14 +211,17 @@ function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
 
 /**
  * Finds the matching OutcomeBand for a given score.
+ * Supports both standard normalized probability scales [0, 1] and continuous
+ * regression/monetary scales (e.g. LTV $0 - $10,000+).
  */
 export function resolveScoreBand(score: number, config?: OutcomeConfig | null): OutcomeBand | null {
   if (!config) return null;
   const bands = config.Bands ?? (config.Polarity === 'positive' ? DEFAULT_POSITIVE_BANDS : DEFAULT_ADVERSE_BANDS);
   if (!bands || bands.length === 0) return null;
 
-  // Clamp normalized score to [0, 1] with small epsilon tolerance
-  const s = Math.max(0, Math.min(1, score));
+  // Determine whether bands define a standard 0..1 probability scale or an arbitrary continuous/monetary range
+  const isNormalizedProbability = bands.every(b => b.Min >= -1e-4 && b.Max <= 1 + 1e-4);
+  const s = isNormalizedProbability ? Math.max(0, Math.min(1, score)) : score;
 
   // Match band where Min <= s <= Max (or within float tolerance of 1e-4)
   for (const b of bands) {
@@ -227,8 +230,17 @@ export function resolveScoreBand(score: number, config?: OutcomeConfig | null): 
     }
   }
 
-  // Fallback to closest band
-  return bands[bands.length - 1];
+  // Fallback to closest band if score falls outside all explicit ranges
+  let bestBand = bands[0];
+  let minDistance = Infinity;
+  for (const b of bands) {
+    const dist = s < b.Min ? b.Min - s : s > b.Max ? s - b.Max : 0;
+    if (dist < minDistance) {
+      minDistance = dist;
+      bestBand = b;
+    }
+  }
+  return bestBand;
 }
 
 /**

@@ -93,6 +93,7 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
           FirstPrimaryKey: { Name: 'ID' }
         }
       ],
+      GetCachedRecordNameOnlyIfCached: () => undefined,
       GetCachedRecordNameSync: () => undefined
     };
 
@@ -123,6 +124,7 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
           FirstPrimaryKey: { Name: 'ID' }
         }
       ],
+      GetCachedRecordNameOnlyIfCached: () => 'ORD-00042',
       GetCachedRecordNameSync: () => 'ORD-00042'
     };
 

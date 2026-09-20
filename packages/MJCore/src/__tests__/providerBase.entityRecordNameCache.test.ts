@@ -82,7 +82,21 @@ describe('ProviderBase entity record name cache', () => {
         expect(cached).toBe('Acme Corp');
     });
 
-    it('GetCachedRecordNameSync returns cached name synchronously or undefined when not cached', () => {
+    it('HasCachedRecordName returns false when not cached and true after being cached', () => {
+        expect(provider.HasCachedRecordName('Accounts', keyFor('1'))).toBe(false);
+        provider.SetCachedRecordName('Accounts', keyFor('1'), 'Acme Corp');
+        expect(provider.HasCachedRecordName('Accounts', keyFor('1'))).toBe(true);
+    });
+
+    it('GetCachedRecordNameOnlyIfCached returns cached name or undefined without triggering lookup', () => {
+        expect(provider.GetCachedRecordNameOnlyIfCached('Accounts', keyFor('1'))).toBeUndefined();
+        expect(provider.lookupCallCount).toBe(0);
+        provider.SetCachedRecordName('Accounts', keyFor('1'), 'Acme Corp');
+        expect(provider.GetCachedRecordNameOnlyIfCached('Accounts', keyFor('1'))).toBe('Acme Corp');
+        expect(provider.lookupCallCount).toBe(0);
+    });
+
+    it('GetCachedRecordNameSync delegates to GetCachedRecordNameOnlyIfCached for backward compatibility', () => {
         expect(provider.GetCachedRecordNameSync('Accounts', keyFor('1'))).toBeUndefined();
         provider.SetCachedRecordName('Accounts', keyFor('1'), 'Acme Corp');
         expect(provider.GetCachedRecordNameSync('Accounts', keyFor('1'))).toBe('Acme Corp');

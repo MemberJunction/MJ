@@ -270,7 +270,7 @@ export class ResourceResolver implements Resolve<void> {
             tabTitle = `New ${friendlyName}`;
           } else {
             const pk = CompositeKey.FromURLSegment(entityInfo, recordId);
-            const cachedName = md.GetCachedRecordNameSync?.(entityName, pk);
+            const cachedName = md.GetCachedRecordNameOnlyIfCached?.(entityName, pk) || md.GetCachedRecordNameSync?.(entityName, pk);
             tabTitle = cachedName || friendlyName;
           }
 
@@ -529,7 +529,7 @@ export class ResourceResolver implements Resolve<void> {
         tabTitle = `New ${friendlyName}`;
       } else {
         const pk = CompositeKey.FromURLSegment(entityInfo, recordId);
-        const cachedName = md.GetCachedRecordNameSync?.(entityName, pk);
+        const cachedName = md.GetCachedRecordNameOnlyIfCached?.(entityName, pk) || md.GetCachedRecordNameSync?.(entityName, pk);
         tabTitle = cachedName || friendlyName;
       }
 

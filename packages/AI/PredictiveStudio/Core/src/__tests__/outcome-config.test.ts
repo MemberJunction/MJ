@@ -110,6 +110,31 @@ describe('resolveScoreBand', () => {
     expect(resolveScoreBand(0.50, customCfg)?.Label).toBe('Medium');
     expect(resolveScoreBand(0.10, customCfg)?.Label).toBe('Low');
   });
+
+  it('correctly resolves continuous monetary/regression bands without 0..1 clamping', () => {
+    const ltvCfg: OutcomeConfig = {
+      ScoreLabel: 'Customer Lifetime Value',
+      StatusLabel: 'LTV Tier',
+      Polarity: 'positive',
+      Bands: [
+        { Key: 'high', Label: 'High Value', Min: 2500, Max: 1000000, BadgeColor: 'green' },
+        { Key: 'medium', Label: 'Medium Value', Min: 500, Max: 2499.99, BadgeColor: 'amber' },
+        { Key: 'low', Label: 'Standard Value', Min: 0, Max: 499.99, BadgeColor: 'gray' },
+      ],
+    };
+
+    expect(resolveScoreBand(3500, ltvCfg)?.Label).toBe('High Value');
+    expect(resolveScoreBand(3500, ltvCfg)?.BadgeColor).toBe('green');
+
+    expect(resolveScoreBand(1250, ltvCfg)?.Label).toBe('Medium Value');
+    expect(resolveScoreBand(1250, ltvCfg)?.BadgeColor).toBe('amber');
+
+    expect(resolveScoreBand(250, ltvCfg)?.Label).toBe('Standard Value');
+    expect(resolveScoreBand(250, ltvCfg)?.BadgeColor).toBe('gray');
+
+    // Score exceeding max falls back to closest boundary band (High Value)
+    expect(resolveScoreBand(1500000, ltvCfg)?.Label).toBe('High Value');
+  });
 });
 
 describe('resolveOutcomeStyle', () => {

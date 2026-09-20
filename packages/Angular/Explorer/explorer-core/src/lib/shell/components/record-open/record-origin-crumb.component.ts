@@ -136,7 +136,8 @@ export class RecordOriginCrumbComponent {
       }
       const entity = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === this.Origin?.sourceRecordEntity?.toLowerCase());
       const key = CompositeKey.FromURLSegment(entity, this.Origin.sourceRecordId);
-      const cached = Metadata.Provider?.GetCachedRecordNameSync?.(this.Origin.sourceRecordEntity, key);
+      const cached = Metadata.Provider?.GetCachedRecordNameOnlyIfCached?.(this.Origin.sourceRecordEntity, key) ||
+                     Metadata.Provider?.GetCachedRecordNameSync?.(this.Origin.sourceRecordEntity, key);
       if (cached) {
         return cached;
       }
@@ -153,7 +154,8 @@ export class RecordOriginCrumbComponent {
     if (this.Origin?.sourceRecordEntity && this.Origin?.sourceRecordId && Metadata.Provider) {
       const entity = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === this.Origin?.sourceRecordEntity?.toLowerCase());
       const key = CompositeKey.FromURLSegment(entity, this.Origin.sourceRecordId);
-      const cached = Metadata.Provider?.GetCachedRecordNameSync?.(this.Origin.sourceRecordEntity, key);
+      const cached = Metadata.Provider?.GetCachedRecordNameOnlyIfCached?.(this.Origin.sourceRecordEntity, key) ||
+                     Metadata.Provider?.GetCachedRecordNameSync?.(this.Origin.sourceRecordEntity, key);
       if (cached) {
         this.asyncResolvedLabel = cached;
         return;
