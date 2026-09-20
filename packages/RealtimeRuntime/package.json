@@ -2,7 +2,7 @@
   "name": "@memberjunction/realtime-runtime",
   "type": "module",
   "version": "6.1.0",
-  "description": "MemberJunction: Framework-agnostic Realtime Session Runtime \u2014 client-direct realtime co-agent session orchestration (mint, driver resolution, transcripts, tool relay, delegation narration, channel lifecycle, usage relay). Pure TypeScript, zero UX dependencies. Consumable from browser (Angular/React/Vue), React Native, or Node test harnesses.",
+  "description": "MemberJunction: Framework-agnostic Realtime Session Runtime — client-direct realtime co-agent session orchestration (mint, driver resolution, transcripts, tool relay, delegation narration, channel lifecycle, usage relay). Pure TypeScript, zero UX dependencies. Consumable from browser (Angular/React/Vue), React Native, or Node test harnesses.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
