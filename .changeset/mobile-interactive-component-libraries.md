@@ -163,6 +163,39 @@ in this Babel version it miscompiles real component code (`Property name expecte
 got undefined`) — measured across the registry, it broke 12 components that otherwise transpile
 cleanly. The narrower transform is both sufficient and safe. A test asserts it stays out.
 
-Measured against this deployment's 118 registered components: **73 have a fully resolvable hierarchy
-and declare only libraries mobile can provide.** The remaining 45 are blocked by Chart.js,
-ApexCharts or ECharts — canvas-bound, and the one genuinely unsolved piece.
+Measured against this deployment's 118 registered components: 73 have a fully resolvable hierarchy
+and declare only libraries the native runtime can provide. The other 45 declare Chart.js, ApexCharts
+or ECharts — which the DOM host below now serves.
+
+---
+
+## Canvas and DOM components: a second renderer rather than a refusal
+
+Chart.js and ApexCharts are the two most-declared libraries in the component registry, and both draw
+into an `HTMLCanvasElement`. AG Grid, antd and Leaflet mount DOM nodes. None of that fails natively
+for want of effort — React Native has no canvas and no DOM. Reimplementing each library's
+configuration surface against `react-native-svg` would mean being subtly wrong forever against a
+moving target.
+
+A WebView is a browser, so a component that needs one gets one. `dom-host/` renders the component in
+a real document using the **same** react-runtime UMD bundle the Playwright test harness loads, the
+**same** CDN URLs recorded in `MJ: Component Libraries`, and the same compile path. That is parity by
+construction rather than parity by imitation.
+
+`AssessSpec` is no longer a yes/no gate: it returns a `RenderMode`. Components that can run natively
+still do — faster, native scrolling, the app's typography — and only the ones that genuinely need a
+browser take the other path. Which renderer is used is not a difference in what a component
+*receives*: both get the same `utilities`, `styles`, `savedUserSettings` and callbacks.
+
+**The page holds no credential.** It cannot call `RunView` — it has no provider and no token, and
+giving it one would put the app's session inside a document that just executed third-party library
+code. `utilities` and callbacks are proxied over a closed, named-method bridge to the native side,
+which owns the one authenticated provider. A component can ask for what the signed-in user could
+already read, and nothing else.
+
+**Known cost, stated plainly.** The runtime UMD bundle is 11 MB because minification is disabled in
+its webpack config — not for indifference to size, but because terser's name mangling collides
+between `ClassFactory` and entity classes and breaks bundle initialisation. So the first DOM-hosted
+render on a device needs a connection and takes a few seconds; afterwards the WebView caches it.
+Fixing that means fixing the mangling collision or shipping the bundle as a local asset, and is left
+as a deliberate follow-up rather than flipping a flag whose comment documents why it is off.

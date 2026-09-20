@@ -28,14 +28,27 @@
  */
 
 import type { ComponentSpec } from '@memberjunction/react-runtime';
-import { DESKTOP_ONLY, FindMobileLibrary } from './library-registry';
+import { FindMobileLibrary } from './library-registry';
 
-/** Verdict from {@link AssessSpec}: whether the spec can render on-device. */
+/** Which renderer a spec should go to. */
+export type RenderMode =
+    /** Compile and run in the React Native runtime — faster, native scrolling and typography. */
+    | 'native'
+    /** Run in a real browser document, because it needs a DOM or a canvas. */
+    | 'dom'
+    /** Nothing can render this. */
+    | 'none';
+
+/** Verdict from {@link AssessSpec}. */
 export interface SpecAssessment {
-    /** True when the spec is safe to compile + render in the RN runtime. */
+    /** True when some renderer can show this. */
     renderable: boolean;
-    /** Human-readable reason shown in the desktop fallback when not renderable. */
+    /** Which renderer to use. */
+    mode: RenderMode;
+    /** Human-readable reason, when nothing can render it. */
     reason?: string;
+    /** The libraries that forced the DOM host, for diagnostics. */
+    domLibraries?: string[];
 }
 
 /** True when the spec has a non-empty name and a real code body. */
@@ -66,11 +79,16 @@ function WalkHierarchy(spec: ComponentSpec, visit: (node: ComponentSpec) => void
 }
 
 /**
- * Names the libraries declared anywhere in the hierarchy that this app has no way to supply.
+ * Names the libraries the native runtime cannot supply, which route the whole component to the
+ * DOM host.
+ *
+ * All-or-nothing per component, not per library: a component's libraries have to coexist in one
+ * document, so one canvas-bound library sends the whole thing to the browser. Splitting a
+ * component across two renderers is not a thing that can exist.
  *
  * @param spec The root spec.
  */
-function unsupportedLibraries(spec: ComponentSpec): string[] {
+function domHostLibraries(spec: ComponentSpec): string[] {
     const names: string[] = [];
     const seen = new Set<string>();
     WalkHierarchy(spec, (node) => {
@@ -79,25 +97,10 @@ function unsupportedLibraries(spec: ComponentSpec): string[] {
             const key = ref.globalVariable || ref.name;
             if (!key || seen.has(key)) continue;
             seen.add(key);
-            const reason = DESKTOP_ONLY[ref.globalVariable];
-            names.push(reason ? `${ref.name} — ${reason}` : ref.name);
+            names.push(ref.name);
         }
     });
     return names;
-}
-
-/**
- * Turns the unsupported-library list into one sentence.
- *
- * Naming the library matters: "uses external libraries" is a dead end, while "needs Chart.js, which
- * draws into a browser canvas" tells the reader both why the phone declined and that a desktop will
- * not.
- *
- * @param names The unsupported libraries, already annotated with their reason where known.
- */
-function describeUnsupported(names: string[]): string {
-    if (names.length === 1) return `This component needs ${names[0]}, which isn't available on mobile.`;
-    return `This component needs libraries that aren't available on mobile: ${names.join('; ')}.`;
 }
 
 /**
@@ -108,13 +111,14 @@ function describeUnsupported(names: string[]): string {
  */
 export function AssessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
     if (!spec || !hasRenderableCode(spec)) {
-        return { renderable: false, reason: 'This artifact does not contain a renderable component.' };
+        return { renderable: false, mode: 'none', reason: 'This artifact does not contain a renderable component.' };
     }
 
-    const unsupported = unsupportedLibraries(spec);
-    if (unsupported.length > 0) {
-        return { renderable: false, reason: describeUnsupported(unsupported) };
+    const domOnly = domHostLibraries(spec);
+    if (domOnly.length > 0) {
+        // Not a refusal any more. A library that needs a canvas gets one — see `dom-host/`.
+        return { renderable: true, mode: 'dom', domLibraries: domOnly };
     }
 
-    return { renderable: true };
+    return { renderable: true, mode: 'native' };
 }

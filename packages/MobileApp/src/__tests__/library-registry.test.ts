@@ -258,25 +258,30 @@ describe('PublishLibraryGlobals', () => {
 });
 
 describe('AssessSpec — libraries', () => {
-    it('renders a component whose libraries mobile can provide', () => {
+    it('renders natively when every library can be supplied on-device', () => {
         // The regression this guards: every one of these used to hit "best viewed on desktop".
         const spec = SpecWith([
             { name: 'lodash', globalVariable: '_' },
             { name: 'simple-statistics', globalVariable: 'ss' },
             { name: 'dayjs', globalVariable: 'dayjs' },
         ]);
-        expect(AssessSpec(spec).renderable).toBe(true);
+        const verdict = AssessSpec(spec);
+        expect(verdict.renderable).toBe(true);
+        expect(verdict.mode).toBe('native');
     });
 
-    it('declines only for the library it actually cannot provide, and says which', () => {
+    it('routes to the DOM host for a library the native runtime cannot supply', () => {
+        // Chart.js draws into a canvas. Rather than refuse, the component gets a real browser
+        // document — see `dom-host/`. It is still renderable; only the renderer changes.
         const spec = SpecWith([
             { name: 'lodash', globalVariable: '_' },
             { name: 'chart.js', globalVariable: 'Chart' },
         ]);
         const verdict = AssessSpec(spec);
-        expect(verdict.renderable).toBe(false);
-        expect(verdict.reason).toContain('chart.js');
-        expect(verdict.reason).not.toContain('lodash');
+        expect(verdict.renderable).toBe(true);
+        expect(verdict.mode).toBe('dom');
+        expect(verdict.domLibraries).toContain('chart.js');
+        expect(verdict.domLibraries).not.toContain('lodash');
     });
 
     it('renders a spec whose child carries its own code and its own libraries', () => {
@@ -295,9 +300,9 @@ describe('AssessSpec — libraries', () => {
         expect(AssessSpec(spec).renderable).toBe(true);
     });
 
-    it('declines when a child needs a library mobile cannot provide', () => {
-        // The child's libraries are checked as carefully as the root's: the root compiling is no
-        // use if the child it renders throws on its first line.
+    it('routes the whole component to the DOM host when a CHILD needs a browser library', () => {
+        // All-or-nothing per component: a component's libraries have to coexist in one document,
+        // so one canvas-bound child sends the whole tree to the browser.
         const spec = {
             ...SpecWith([{ name: 'lodash', globalVariable: '_' }]),
             dependencies: [
@@ -309,8 +314,8 @@ describe('AssessSpec — libraries', () => {
             ],
         } as ComponentSpec;
         const verdict = AssessSpec(spec);
-        expect(verdict.renderable).toBe(false);
-        expect(verdict.reason).toContain('chart.js');
+        expect(verdict.mode).toBe('dom');
+        expect(verdict.domLibraries).toContain('chart.js');
     });
 
     it('does not decline a child the spec names instead of carrying', () => {
@@ -325,7 +330,7 @@ describe('AssessSpec — libraries', () => {
         expect(AssessSpec(spec).renderable).toBe(true);
     });
 
-    it('checks libraries at every depth, not just the first', () => {
+    it('detects a browser-only library at any depth, not just the first', () => {
         const spec = {
             ...SpecWith([]),
             dependencies: [
@@ -342,7 +347,7 @@ describe('AssessSpec — libraries', () => {
                 },
             ],
         } as ComponentSpec;
-        expect(AssessSpec(spec).reason).toContain('leaflet');
+        expect(AssessSpec(spec).domLibraries).toContain('leaflet');
     });
 
     it('still declines a spec with no code', () => {

@@ -3,8 +3,8 @@ import { HtmlRenderer } from '@/components/artifacts/html-renderer';
 import { Chart } from '@/components/charts/Chart';
 import { HighlightCode } from '@/components/markdown/highlight';
 import type { LoadedArtifact } from '@/data/services/artifacts';
-import { DesktopFallback, InteractiveComponentRenderer } from '@/interactive/InteractiveComponentRenderer';
-import { AssessSpec } from '@/interactive/mobile-safety';
+import { DesktopFallback } from '@/interactive/InteractiveComponentRenderer';
+import { ComponentRenderer } from '@/interactive/ComponentRenderer';
 import { ResolveMobileArtifactRenderer } from '@/artifacts/BaseMobileArtifactRenderer';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -93,16 +93,17 @@ export function ArtifactContentView({ artifact }: { artifact: LoadedArtifact }) 
 }
 
 /**
- * Interactive artifact dispatcher: renders the react-runtime component natively
- * when the spec is mobile-safe (no external libraries / child dependencies),
- * otherwise shows the "view on desktop" fallback with the specific reason.
+ * Interactive artifact dispatcher.
+ *
+ * Which renderer a component gets — native, or a real browser document for the ones needing a
+ * canvas — is decided by `ComponentRenderer`, so every surface that shows an artifact makes the
+ * same choice.
  */
 function InteractiveArtifact({ artifact }: { artifact: LoadedArtifact }) {
-    const assessment = AssessSpec(artifact.spec);
-    if (artifact.spec && assessment.renderable) {
-        return <InteractiveComponentRenderer spec={artifact.spec} />;
+    if (!artifact.spec) {
+        return <DesktopFallback reason="This artifact does not contain a renderable component." />;
     }
-    return <DesktopFallback reason={assessment.reason} />;
+    return <ComponentRenderer spec={artifact.spec} />;
 }
 
 /**
