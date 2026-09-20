@@ -26,12 +26,29 @@ export default function DashboardsScreen() {
                     <Icons.ChevronLeft size={22} color={Colors.ink} strokeWidth={2.2} />
                 </Pressable>
                 <Text style={styles.title}>Dashboards</Text>
-                <View style={styles.iconBtn} />
+                <Pressable
+                    hitSlop={8}
+                    style={styles.iconBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="New dashboard"
+                    onPress={() => router.push('/explorer/dashboard/new')}
+                >
+                    <Icons.Plus size={22} color={Colors.ink} strokeWidth={2.2} />
+                </Pressable>
             </View>
 
+            {/*
+              * The notice is about the dashboards that were already here. Every one of them is
+              * `Type = 'Code'` — its panels are an Angular component, which is exactly why they do
+              * not render anywhere but Explorer. A dashboard composed with + above is `Config`:
+              * data rather than code, and it renders here properly.
+              */}
             <View style={styles.notice}>
                 <Icons.Sparkle size={14} color={Colors.warn} strokeWidth={2.2} />
-                <Text style={styles.noticeText}>Most dashboards are built for desktop and may not render optimally on mobile.</Text>
+                <Text style={styles.noticeText}>
+                    Dashboards built for desktop may not render here. Tap + to compose one from
+                    saved queries that will.
+                </Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.list}>

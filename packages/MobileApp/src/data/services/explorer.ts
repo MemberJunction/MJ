@@ -6,6 +6,7 @@
 
 import { Metadata, RunView, RunQuery, CompositeKey, type UserInfo, type EntityInfo, type EntityFieldInfo } from '@memberjunction/core';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
+import { BuildDashboardConfig, type DashboardPanelSpec } from '@/dashboards/dashboard-config';
 
 // ---------------------------------------------------------------------------
 // Entities
@@ -199,6 +200,14 @@ export type QueryListItem = {
     name: string;
     description: string | null;
     category: string | null;
+    /**
+     * Whether the query needs a parameter with no default before it can run.
+     *
+     * A dashboard panel supplies no parameters, so one of these renders as
+     * `Parameter validation failed: Required parameter 'X' is missing` — an error where a panel
+     * should be. The composer needs to know BEFORE offering it, not after saving.
+     */
+    requiresParameters: boolean;
 };
 
 /**
@@ -216,6 +225,8 @@ export function LoadQueries(): QueryListItem[] {
             name: q.Name ?? '(unnamed query)',
             description: q.Description ?? null,
             category: q.CategoryInfo?.Name ?? null,
+            // A parameter with a default is fine — the query runs without being asked.
+            requiresParameters: (q.Parameters ?? []).some((p) => p.IsRequired && !p.DefaultValue),
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -300,6 +311,50 @@ export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardL
     );
     if (!result.Success) return [];
     return (result.Results ?? []).map((d) => ({ id: d.ID, name: d.Name, description: d.Description }));
+}
+
+/**
+ * Creates a `Config` dashboard from a set of saved queries.
+ *
+ * The layout it writes is the Golden Layout tree MJ Explorer reads, so a dashboard composed on a
+ * phone opens on the desktop and can be rearranged there — see `dashboard-config.ts` for why a
+ * simpler mobile-only shape was rejected.
+ *
+ * `Type` is `Config` rather than `Code`: every dashboard currently in MJ is a `Code` dashboard
+ * whose panels are an Angular component, which is precisely why none of them render anywhere but
+ * Explorer. A `Config` dashboard is data, and data renders wherever there is a renderer.
+ *
+ * @param name The dashboard's name.
+ * @param description Optional description.
+ * @param panels The panels, in the order the user arranged them.
+ * @param contextUser Optional acting user.
+ * @returns The new dashboard's id, or null with a reason when the save failed.
+ */
+export async function CreateConfigDashboard(
+    name: string,
+    description: string | null,
+    panels: readonly DashboardPanelSpec[],
+    contextUser?: UserInfo,
+): Promise<{ ID: string } | { Error: string }> {
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+    const currentUser = contextUser ?? md.CurrentUser;
+    if (!currentUser) return { Error: 'Not signed in.' };
+
+    const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards', currentUser);
+    dashboard.NewRecord();
+    dashboard.Name = name;
+    dashboard.Description = description;
+    dashboard.UserID = currentUser.ID;
+    dashboard.Type = 'Config';
+    // `Global` rather than `App`: a dashboard composed from Data Explorer is not scoped to an
+    // application, and an `App` scope with no ApplicationID is not a valid row.
+    dashboard.Scope = 'Global';
+    dashboard.UIConfigDetails = BuildDashboardConfig(panels);
+
+    if (!(await dashboard.Save())) {
+        return { Error: dashboard.LatestResult?.Message ?? 'The dashboard could not be saved.' };
+    }
+    return { ID: dashboard.ID };
 }
 
 /** Renderable dashboard part kinds (mirrors MJ's Dashboard Part Types). */

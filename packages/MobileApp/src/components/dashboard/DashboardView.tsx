@@ -160,26 +160,40 @@ function QueryResultView({ result, width }: { result: QueryRunResult; width: num
     }
 }
 
-/** Compact preview table for tabular query results. */
+/**
+ * Tabular query results, stacked as one card per row.
+ *
+ * This WAS a horizontally-scrolling grid showing the first four columns. On a phone that produced
+ * exactly what you would expect: a row of GUIDs, each clipped mid-value, with the columns that
+ * actually meant something pushed off the right edge. The reader could see that data existed and
+ * not what it was.
+ *
+ * Stacking label above value is the same decision the Data artifact renderer makes, and for the
+ * same reason — it is the only layout where a wide row stays readable without panning. A wide
+ * result becomes a taller card rather than an unreadable one.
+ */
 function ResultTable({ columns, rows }: { columns: string[]; rows: Record<string, unknown>[] }) {
-    const cols = columns.slice(0, 4);
+    // Six, not four: the constraint is vertical now, and cutting columns is throwing away the
+    // answer. The cap only exists to keep one panel from dominating the dashboard.
+    const cols = columns.slice(0, 6);
     return (
-        <ScrollView horizontal directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false}>
-            <View style={styles.table}>
-                <View style={[styles.tableRow, styles.tableHeaderRow]}>
+        <View style={styles.rowCards}>
+            {rows.slice(0, 5).map((row, r) => (
+                <View key={r} style={styles.rowCard}>
                     {cols.map((c) => (
-                        <Text key={c} style={[styles.tableCell, styles.tableHeadCell]} numberOfLines={1}>{c}</Text>
+                        <View key={c} style={styles.rowField}>
+                            <Text style={styles.rowFieldLabel} numberOfLines={1}>{c}</Text>
+                            <Text style={styles.rowFieldValue} numberOfLines={2}>{formatCell(row[c])}</Text>
+                        </View>
                     ))}
                 </View>
-                {rows.slice(0, 8).map((row, r) => (
-                    <View key={r} style={styles.tableRow}>
-                        {cols.map((c) => (
-                            <Text key={c} style={styles.tableCell} numberOfLines={1}>{formatCell(row[c])}</Text>
-                        ))}
-                    </View>
-                ))}
-            </View>
-        </ScrollView>
+            ))}
+            {rows.length > 5 ? (
+                <Text style={styles.rowCardsMore}>
+                    +{rows.length - 5} more row{rows.length - 5 === 1 ? '' : 's'}
+                </Text>
+            ) : null}
+        </View>
     );
 }
 
@@ -337,6 +351,17 @@ const styles = StyleSheet.create({
     kpiLabel: { fontSize: 10.5, color: Colors.ink3, fontWeight: Type.semibold, letterSpacing: 0.8 },
     kpiValue: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4, color: Colors.ink, marginTop: 4 },
 
+    rowCards: { gap: 8 },
+    rowCard: {
+        backgroundColor: Colors.surface2,
+        borderRadius: Radius.md,
+        padding: 11,
+        gap: 7,
+    },
+    rowField: { gap: 1 },
+    rowFieldLabel: { fontSize: 10.5, fontWeight: '700', letterSpacing: 0.6, color: Colors.ink3, textTransform: 'uppercase' },
+    rowFieldValue: { fontSize: 13.5, color: Colors.ink, lineHeight: 18 },
+    rowCardsMore: { fontSize: 12, color: Colors.ink3, paddingTop: 2 },
     table: { borderWidth: 1, borderColor: Colors.line2, borderRadius: Radius.sm, overflow: 'hidden' },
     tableRow: { flexDirection: 'row' },
     tableHeaderRow: { backgroundColor: Colors.surface2 },
