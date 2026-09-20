@@ -14,6 +14,8 @@ Only the presentation layer is new.
   [`plans/mobile-app-react-native/README.md`](../../plans/mobile-app-react-native/README.md)
 - Visual handoff (open in a browser):
   [`plans/mobile-app-react-native/index.html`](../../plans/mobile-app-react-native/index.html)
+- **Start here if you have not seen the app**: [`docs/VISUAL_TOUR.md`](docs/VISUAL_TOUR.md) — a
+  screen-by-screen walkthrough on both platforms, including what is deliberately absent
 - Package-local deep dives: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) ·
   [`docs/SCREENS.md`](docs/SCREENS.md) · [`docs/RENDERING.md`](docs/RENDERING.md) ·
   [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)
