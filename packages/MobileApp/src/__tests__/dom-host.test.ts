@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { ParsePageMessage, SerializeNativeMessage } from '../interactive/dom-host/bridge-protocol';
+import {
+    ParsePageMessage,
+    SerializeNativeMessage,
+    UNPROXYABLE_UTILITIES,
+    type BridgeMethod,
+} from '../interactive/dom-host/bridge-protocol';
 import { BuildHostPage } from '../interactive/dom-host/host-page';
 import { DeclaredGlobals } from '../interactive/dom-host/library-definitions';
 import type { ComponentSpec } from '@memberjunction/react-runtime';
@@ -132,6 +137,53 @@ describe('BuildHostPage', () => {
     it('leaves no unresolved template interpolation in the output', () => {
         // A `${...}` that survives into the page is a value that never got substituted.
         expect(BuildHostPage([])).not.toMatch(/\$\{/);
+    });
+});
+
+describe('the bridge and the page agree', () => {
+    /** Every `namespace.Method` string the generated page actually calls. */
+    function MethodsCalledByPage(): string[] {
+        const html = BuildHostPage([]);
+        return [...html.matchAll(/rpc\('([a-z]+\.[A-Za-z]+)'/g)].map((m) => m[1]).sort();
+    }
+
+    it('calls only methods the protocol declares', () => {
+        // The failure this prevents is silent and remote: the page asks for something the native
+        // side has no case for, the promise rejects inside a WebView, and the component renders an
+        // error nobody can trace back here.
+        const declared = new Set<BridgeMethod>([
+            'rv.RunView', 'rv.RunViews', 'rq.RunQuery', 'md.Entities',
+            'ai.ExecutePrompt', 'ai.EmbedText', 'ml.listModels', 'ml.score',
+            'search.Search', 'search.PreviewSearch',
+        ]);
+        for (const method of MethodsCalledByPage()) {
+            expect(declared.has(method as BridgeMethod)).toBe(true);
+        }
+    });
+
+    it('exposes the whole utilities surface it can, not a subset', () => {
+        // A capability the native renderer provides but the DOM host silently drops is a component
+        // that works in one and breaks in the other.
+        const called = MethodsCalledByPage();
+        for (const method of ['rv.RunView', 'rq.RunQuery', 'ai.ExecutePrompt', 'ml.listModels', 'search.Search']) {
+            expect(called).toContain(method);
+        }
+    });
+
+    it('does not proxy anything recorded as unproxyable', () => {
+        const called = MethodsCalledByPage().join(' ');
+        for (const name of Object.keys(UNPROXYABLE_UTILITIES)) {
+            const member = name.split('.').pop() as string;
+            expect(called).not.toContain(member);
+        }
+    });
+
+    it('says why each unproxyable capability is absent', () => {
+        // The reason is the whole value of the record: "unsupported" tells a component author
+        // nothing they can act on.
+        for (const reason of Object.values(UNPROXYABLE_UTILITIES)) {
+            expect(reason.length).toBeGreaterThan(20);
+        }
     });
 });
 

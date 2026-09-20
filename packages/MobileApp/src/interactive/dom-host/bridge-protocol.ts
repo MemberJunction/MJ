@@ -20,13 +20,44 @@
  * by the native handler — means a change that breaks one side fails to compile on the other.
  */
 
-/** Methods the page may invoke on the native side, spelled as `namespace.Method`. */
+/**
+ * Methods the page may invoke on the native side, spelled as `namespace.Method`.
+ *
+ * These are the members of `ComponentUtilities` that survive a JSON boundary — parameters in, a
+ * serialisable result out. The two that do not are called out in {@link UNPROXYABLE_UTILITIES}.
+ */
 export type BridgeMethod =
     | 'rv.RunView'
     | 'rv.RunViews'
     | 'rq.RunQuery'
     | 'md.Entities'
-    | 'ai.ExecutePrompt';
+    | 'ai.ExecutePrompt'
+    | 'ai.EmbedText'
+    | 'ml.listModels'
+    | 'ml.score'
+    | 'search.Search'
+    | 'search.PreviewSearch';
+
+/**
+ * Parts of `ComponentUtilities` a DOM-hosted component cannot reach, and why.
+ *
+ * Two return *live objects with methods* — a `BaseEntity` you then call `Save()` on, and a vector
+ * service holding in-memory state. The third is worse: `ResolvePointToLocation` is **synchronous**,
+ * and a bridge can only answer asynchronously, so a proxy would hand back a Promise and a component
+ * reading `.country` off it would get `undefined` and draw a map with no labels.
+ *
+ * In every case a lookalike that silently did nothing would be worse than absence: the contract
+ * already says a component must cope with an absent capability, and absence is detectable.
+ *
+ * A natively-rendered component still gets both. This is a real difference between the two
+ * renderers rather than a limitation of the platform, and the fix — proxying each object's methods
+ * individually — is worth doing deliberately, not inferring.
+ */
+export const UNPROXYABLE_UTILITIES: Readonly<Record<string, string>> = {
+    'md.GetEntityObject': 'returns a live BaseEntity whose methods cannot cross the bridge',
+    'ai.VectorService': 'holds in-memory state that cannot cross the bridge',
+    'geoDataEngine': 'ResolvePointToLocation is synchronous; a bridge can only answer asynchronously',
+};
 
 /** Callbacks the page raises that the native host acts on. */
 export type BridgeCallback =

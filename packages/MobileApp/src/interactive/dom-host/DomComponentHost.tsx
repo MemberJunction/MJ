@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import { Metadata, RunQuery, RunView } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/core';
 import type { ComponentSpec } from '@memberjunction/react-runtime';
-import { resolveEntityRecordKey } from '@memberjunction/react-runtime';
+import { createRuntimeUtilities, resolveEntityRecordKey } from '@memberjunction/react-runtime';
+import type { ComponentUtilities } from '@memberjunction/interactive-component-types';
 import { router } from 'expo-router';
 import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
 import { BuildHostPage } from './host-page';
@@ -50,37 +51,90 @@ const INITIAL_HEIGHT = 260;
 const MAX_HEIGHT = 4000;
 
 /**
+ * The utilities object the native side serves bridge requests from.
+ *
+ * Built by the same `createRuntimeUtilities()` the natively-rendered path uses, so the two
+ * renderers cannot diverge in what a component can do — a capability added there appears here
+ * without anyone remembering to mirror it. Memoized because building it configures engines.
+ */
+let sharedUtilities: ComponentUtilities | null = null;
+
+/** Lazily builds the shared utilities object. */
+function Utilities(): ComponentUtilities {
+    if (!sharedUtilities) {
+        sharedUtilities = createRuntimeUtilities().buildUtilities(false, Metadata.Provider);
+    }
+    return sharedUtilities;
+}
+
+/**
  * Executes one bridged request against this app's provider.
  *
- * The method list is closed on purpose. An open `eval`-shaped bridge would let page content reach
- * anything the app can reach; this exposes exactly the calls the component contract defines, and
- * an unknown method is an error rather than a silent no-op.
+ * Dispatches onto the real `ComponentUtilities` rather than reimplementing each call. The method
+ * list is closed on purpose: an open, `eval`-shaped bridge would let page content reach anything the
+ * app can reach, so this resolves only the named members of the component contract, and an unknown
+ * method is an error rather than a silent no-op.
+ *
+ * `md.Entities` is trimmed deliberately — the full `EntityInfo` graph is large and self-referential,
+ * and a component asking for it wants to know what exists, not to traverse the model.
  *
  * @param method The requested call.
  * @param args Its arguments, as sent by the page.
  */
 async function ServeRequest(method: BridgeMethod, args: unknown[]): Promise<unknown> {
+    const u = Utilities();
+
     switch (method) {
         case 'rv.RunView':
-            return new RunView().RunView(args[0] as Parameters<RunView['RunView']>[0]);
+            return u.rv.RunView(args[0] as Parameters<typeof u.rv.RunView>[0]);
         case 'rv.RunViews':
-            return new RunView().RunViews(args[0] as Parameters<RunView['RunViews']>[0]);
+            return u.rv.RunViews(args[0] as Parameters<typeof u.rv.RunViews>[0]);
         case 'rq.RunQuery':
-            return new RunQuery().RunQuery(args[0] as Parameters<RunQuery['RunQuery']>[0]);
+            return u.rq.RunQuery(args[0] as Parameters<typeof u.rq.RunQuery>[0]);
+
         case 'md.Entities':
-            // Names and fields only: the full EntityInfo graph is large, and crossing the bridge
-            // with it on every mount would cost more than it gives a component that mostly wants
-            // to know what exists.
-            return (Metadata.Provider?.Entities ?? []).map((e) => ({
+            return (u.md.Entities ?? []).map((e) => ({
                 Name: e.Name,
                 SchemaName: e.SchemaName,
                 BaseView: e.BaseView,
+                Description: e.Description,
             }));
+
         case 'ai.ExecutePrompt':
-            throw new Error('AI prompts are not available to components on mobile yet.');
+            return Require(u.ai, 'ai').ExecutePrompt(args[0] as never);
+        case 'ai.EmbedText':
+            return Require(u.ai, 'ai').EmbedText(args[0] as never);
+
+        case 'ml.listModels':
+            return Require(u.ml, 'ml').listModels(args[0] as never);
+        case 'ml.score':
+            return Require(u.ml, 'ml').score(args[0] as string, args[1] as never, args[2] as never);
+
+        case 'search.Search':
+            return Require(u.search, 'search').Search(args[0] as never);
+        case 'search.PreviewSearch':
+            return Require(u.search, 'search').PreviewSearch(args[0] as string, args[1] as number | undefined);
+
         default:
             throw new Error(`Unsupported bridge method: ${String(method)}`);
     }
+}
+
+/**
+ * Narrows an optional capability, failing with a message a component author can act on.
+ *
+ * The component contract says these may be absent, so a component should have a fallback — but when
+ * it does not, "the ml capability is not available in this environment" beats a `TypeError` on
+ * `undefined`.
+ *
+ * @param value The capability, if the host has one.
+ * @param name Its name in `ComponentUtilities`.
+ */
+function Require<T>(value: T | undefined, name: string): T {
+    if (!value) {
+        throw new Error(`The ${name} capability is not available in this environment.`);
+    }
+    return value;
 }
 
 /**

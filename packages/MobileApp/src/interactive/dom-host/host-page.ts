@@ -190,7 +190,16 @@ export function BuildHostPage(libraries: readonly DomHostLibrary[]): string {
         throw new Error((first.componentName ? first.componentName + ': ' : '') + (first.message || 'Component failed to load'));
       }
 
-      // The same prop bag the native renderer builds — utilities proxied rather than local.
+      // The same prop bag the native renderer builds. Every member is proxied to the native side,
+      // which serves it from the SAME ComponentUtilities object the native renderer hands
+      // components directly — so a capability added there reaches here without being mirrored.
+      //
+      // md.GetEntityObject, ai.VectorService and geoDataEngine are absent on purpose. The first two
+      // return live objects with methods; geoDataEngine.ResolvePointToLocation is SYNCHRONOUS, and a
+      // bridge can only answer asynchronously — a component reading .country off the returned
+      // Promise would get undefined and draw a map with no labels on it. The contract already
+      // requires components to cope with an absent capability, and absence is detectable where
+      // silently-wrong is not.
       var utilities = {
         rv: {
           RunView: function (p) { return rpc('rv.RunView', [p]); },
@@ -198,7 +207,18 @@ export function BuildHostPage(libraries: readonly DomHostLibrary[]): string {
         },
         rq: { RunQuery: function (p) { return rpc('rq.RunQuery', [p]); } },
         md: { Entities: [] },
-        ai: { ExecutePrompt: function (p) { return rpc('ai.ExecutePrompt', [p]); } }
+        ai: {
+          ExecutePrompt: function (p) { return rpc('ai.ExecutePrompt', [p]); },
+          EmbedText: function (p) { return rpc('ai.EmbedText', [p]); }
+        },
+        ml: {
+          listModels: function (f) { return rpc('ml.listModels', [f]); },
+          score: function (id, records, opts) { return rpc('ml.score', [id, records, opts]); }
+        },
+        search: {
+          Search: function (p) { return rpc('search.Search', [p]); },
+          PreviewSearch: function (q, n) { return rpc('search.PreviewSearch', [q, n]); }
+        }
       };
       try { utilities.md.Entities = await rpc('md.Entities', []); } catch (e) { /* non-fatal */ }
 
