@@ -14,7 +14,7 @@ export class FieldExternalizer {
     fieldName: string,
     fieldValue: any,
     pattern: string,
-    recordData: BaseEntity,
+    recordData: Record<string, unknown>,
     targetDir: string,
     existingFileReference?: string,
     mergeStrategy: string = 'merge',
@@ -46,7 +46,7 @@ export class FieldExternalizer {
    */
   private determineFilePath(
     pattern: string,
-    recordData: BaseEntity,
+    recordData: Record<string, unknown>,
     targetDir: string,
     existingFileReference?: string,
     mergeStrategy: string = 'merge',
@@ -93,7 +93,7 @@ export class FieldExternalizer {
    */
   private createNewFileReference(
     pattern: string,
-    recordData: BaseEntity,
+    recordData: Record<string, unknown>,
     targetDir: string,
     fieldName: string,
     verbose?: boolean
@@ -113,12 +113,12 @@ export class FieldExternalizer {
   /**
    * Processes pattern placeholders with actual values
    */
-  private processPattern(pattern: string, recordData: BaseEntity, fieldName: string): string {
+  private processPattern(pattern: string, recordData: Record<string, unknown>, fieldName: string): string {
     let processedPattern = pattern;
     
     // Replace common placeholders
-    processedPattern = this.replacePlaceholder(processedPattern, 'Name', (recordData as any).Name);
-    processedPattern = this.replacePlaceholder(processedPattern, 'ID', (recordData as any).ID);
+    processedPattern = this.replacePlaceholder(processedPattern, 'Name', recordData.Name);
+    processedPattern = this.replacePlaceholder(processedPattern, 'ID', recordData.ID);
     processedPattern = this.replacePlaceholder(processedPattern, 'FieldName', fieldName);
     
     // Replace any other field placeholders
@@ -141,10 +141,10 @@ export class FieldExternalizer {
   /**
    * Replaces field placeholders with values from the record
    */
-  private replaceFieldPlaceholders(pattern: string, recordData: BaseEntity): string {
+  private replaceFieldPlaceholders(pattern: string, recordData: Record<string, unknown>): string {
     let processedPattern = pattern;
     
-    for (const [key, value] of Object.entries(recordData as any)) {
+    for (const [key, value] of Object.entries(recordData)) {
       if (value != null) {
         const sanitizedValue = this.sanitizeForFilename(String(value));
         processedPattern = processedPattern.replace(new RegExp(`\\{${key}\\}`, 'g'), sanitizedValue);

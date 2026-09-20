@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { PSPanelKey } from '../predictive-studio.types';
@@ -50,7 +50,7 @@ import { validateStringParam } from '../../shared/agent-tool-validation';
 
           <section class="ps-content" [class.fill]="activeSection === 'registry'" [attr.data-testid]="'ps-panel-' + activeSection">
             @switch (activeSection) {
-              @case ('registry') { <ps-registry [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-registry> }
+              @case ('registry') { <ps-registry [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" [initialModelId]="initialModelId"></ps-registry> }
               @case ('production') { <ps-production [engine]="engine"></ps-production> }
             }
           </section>
@@ -92,19 +92,28 @@ export class PSModelsResourceComponent extends PSResourceBase {
 
   public activeSection: PSPanelKey = 'registry';
   public readonly sections: readonly PSSection[] = MODELS_SECTIONS;
+  public initialModelId?: string;
 
   override ngOnInit(): void {
     super.ngOnInit();
-    const initial = this.GetQueryParams()['section'] as PSPanelKey | undefined;
+    const qp = this.GetQueryParams();
+    const initial = qp['section'] as PSPanelKey | undefined;
     if (initial && hasSection(this.sections, initial)) this.activeSection = initial;
+    if (qp['modelId']) this.initialModelId = qp['modelId'];
   }
 
-  protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+  protected override async OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): Promise<void> {
     const next = params['section'] as PSPanelKey | undefined;
     if (next && next !== this.activeSection && hasSection(this.sections, next)) {
       this.activeSection = next;
-      this.cdrLocal.detectChanges();
     }
+    if (params['modelId']) {
+      this.initialModelId = params['modelId'];
+      if (this.engine && !this.engine.Models.some((m) => UUIDsEqual(m.ID, params['modelId']))) {
+        await this.engine.Config(true, this.ProviderToUse.CurrentUser ?? undefined, this.ProviderToUse);
+      }
+    }
+    this.cdrLocal.detectChanges();
   }
 
   /** Deep agent context for the Models door: active section + trained-model lifecycle counts. */
