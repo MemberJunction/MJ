@@ -721,3 +721,31 @@
 .pg-delta-pill.up { background: var(--mj-status-error-bg); color: var(--mj-status-error-text); }
 .pg-delta-pill.down { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
 .pg-delta-pill.neutral { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
+
+/* ───────── CHART DRILLDOWN GRID ───────── */
+.pg-chart-drilldown-section {
+  padding: 16px 18px;
+  gap: 12px;
+}
+
+.pg-chart-grid-host {
+  width: 100%;
+  height: 440px;
+  min-height: 320px;
+  border-radius: var(--mj-radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--mj-border-default);
+}
+
+.pg-chart-ag-grid {
+  width: 100%;
+  height: 100%;
+}
+
+.pg-drilldown-footer {
+  display: flex;
+  justify-content: flex-end;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+  padding-top: 2px;
+}

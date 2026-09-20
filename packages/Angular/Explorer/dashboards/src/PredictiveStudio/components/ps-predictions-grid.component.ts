@@ -170,6 +170,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public subjectRecordName: string | null = null;
 
   private gridApi: GridApi<PredictionGridRow> | null = null;
+  private chartGridApi: GridApi<PredictionGridRow> | null = null;
 
   // Viewport-visible record name lookup cache and state
   private recordNameCache = new Map<string, string>();
@@ -197,6 +198,22 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   });
 
   public GridOptions: GridOptions<PredictionGridRow> = {
+    animateRows: true,
+    rowHeight: 46,
+    headerHeight: 40,
+    suppressCellFocus: true,
+    enableCellTextSelection: true,
+    suppressNoRowsOverlay: true,
+    rowSelection: { mode: 'singleRow', enableClickSelection: false },
+    getRowId: (params: GetRowIdParams<PredictionGridRow>) => params.data.recordId,
+    onBodyScrollEnd: () => this.scheduleVisibleRowsLookup(),
+    onViewportChanged: () => this.scheduleVisibleRowsLookup(),
+    onFirstDataRendered: () => this.scheduleVisibleRowsLookup(),
+    onModelUpdated: () => this.scheduleVisibleRowsLookup(),
+    onCellClicked: (event: CellClickedEvent<PredictionGridRow>) => this.onCellClicked(event),
+  };
+
+  public chartGridOptions: GridOptions<PredictionGridRow> = {
     animateRows: true,
     rowHeight: 46,
     headerHeight: 40,
@@ -273,18 +290,28 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       },
       {
         field: 'riskPct',
-        headerName: 'Risk Level',
-        width: 140,
+        headerName: isRenewal ? 'Renewal Status' : 'Risk Level',
+        width: 145,
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data) return '';
           const band = params.data.band;
           const riskPct = params.data.riskPct;
+          if (isRenewal) {
+            const renewalPct = Math.round(params.data.score * 100);
+            if (band === 'low') {
+              return `<span class="ps-badge green" title="${renewalPct}% Renewal Probability"><i class="fa-solid fa-circle-check"></i> High (${renewalPct}%)</span>`;
+            } else if (band === 'medium') {
+              return `<span class="ps-badge amber" title="${renewalPct}% Renewal Probability"><i class="fa-solid fa-triangle-exclamation"></i> Medium (${renewalPct}%)</span>`;
+            } else {
+              return `<span class="ps-badge red" title="${renewalPct}% Renewal Probability"><i class="fa-solid fa-circle-exclamation"></i> Low (${renewalPct}%)</span>`;
+            }
+          }
           if (band === 'high') {
-            return `<span class="ps-badge red" title="${riskPct}% Churn Risk"><i class="fa-solid fa-circle-exclamation"></i> High Risk (${riskPct}%)</span>`;
+            return `<span class="ps-badge red" title="${riskPct}% Risk"><i class="fa-solid fa-circle-exclamation"></i> High Risk (${riskPct}%)</span>`;
           } else if (band === 'medium') {
-            return `<span class="ps-badge amber" title="${riskPct}% Churn Risk"><i class="fa-solid fa-triangle-exclamation"></i> Med Risk (${riskPct}%)</span>`;
+            return `<span class="ps-badge amber" title="${riskPct}% Risk"><i class="fa-solid fa-triangle-exclamation"></i> Med Risk (${riskPct}%)</span>`;
           } else {
-            return `<span class="ps-badge green" title="${riskPct}% Churn Risk"><i class="fa-solid fa-circle-check"></i> Low Risk (${riskPct}%)</span>`;
+            return `<span class="ps-badge green" title="${riskPct}% Risk"><i class="fa-solid fa-circle-check"></i> Low Risk (${riskPct}%)</span>`;
           }
         },
       },
@@ -350,6 +377,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     if (this.gridApi) {
       this.gridApi.setGridOption('columnDefs', this.columnDefs);
     }
+    if (this.chartGridApi) {
+      this.chartGridApi.setGridOption('columnDefs', this.columnDefs);
+    }
   }
 
   ngOnInit(): void {
@@ -382,6 +412,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.recordNameCache.clear();
     this.inFlightLookups.clear();
     this.gridApi = null;
+    this.chartGridApi = null;
   }
 
   // ── Data Loading & Name Resolution ──
@@ -567,22 +598,26 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
    * Virtualized grids only render rows visible on screen (plus a small buffer).
    */
   private getVisibleRowNodes(): IRowNode<PredictionGridRow>[] {
-    if (!this.gridApi) return [];
-
-    const rendered = this.gridApi.getRenderedNodes();
-    if (rendered && rendered.length > 0) {
-      return rendered;
-    }
-
-    const firstIdx = this.gridApi.getFirstDisplayedRowIndex();
-    const lastIdx = this.gridApi.getLastDisplayedRowIndex();
-    if (firstIdx < 0 || lastIdx < 0) return [];
+    const apis = [this.gridApi, this.chartGridApi].filter((api): api is GridApi<PredictionGridRow> => Boolean(api));
+    if (apis.length === 0) return [];
 
     const nodes: IRowNode<PredictionGridRow>[] = [];
-    for (let i = firstIdx; i <= lastIdx; i++) {
-      const node = this.gridApi.getDisplayedRowAtIndex(i);
-      if (node) {
-        nodes.push(node);
+    for (const api of apis) {
+      const rendered = api.getRenderedNodes();
+      if (rendered && rendered.length > 0) {
+        nodes.push(...rendered);
+        continue;
+      }
+
+      const firstIdx = api.getFirstDisplayedRowIndex();
+      const lastIdx = api.getLastDisplayedRowIndex();
+      if (firstIdx < 0 || lastIdx < 0) continue;
+
+      for (let i = firstIdx; i <= lastIdx; i++) {
+        const node = api.getDisplayedRowAtIndex(i);
+        if (node) {
+          nodes.push(node);
+        }
       }
     }
     return nodes;
@@ -606,7 +641,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
    * using ProviderToUse.GetEntityRecordNames.
    */
   private async resolveVisibleRecordNames(): Promise<void> {
-    if (!this.gridApi || !this.resolvedEntityName) {
+    if ((!this.gridApi && !this.chartGridApi) || !this.resolvedEntityName) {
       return;
     }
 
@@ -645,8 +680,13 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       needed.push({ normId, recordId: data.recordId, node });
     }
 
-    if (cachedToUpdate.length > 0 && this.gridApi) {
-      this.gridApi.refreshCells({ rowNodes: cachedToUpdate, columns: ['recordName'], force: true });
+    if (cachedToUpdate.length > 0) {
+      if (this.gridApi) {
+        this.gridApi.refreshCells({ rowNodes: cachedToUpdate, columns: ['recordName'], force: true });
+      }
+      if (this.chartGridApi) {
+        this.chartGridApi.refreshCells({ rowNodes: cachedToUpdate, columns: ['recordName'], force: true });
+      }
     }
 
     if (needed.length === 0) {
@@ -696,8 +736,13 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         }
       }
 
-      if (this.gridApi && nodesToRefresh.length > 0) {
-        this.gridApi.refreshCells({ rowNodes: nodesToRefresh, columns: ['recordName'], force: true });
+      if (nodesToRefresh.length > 0) {
+        if (this.gridApi) {
+          this.gridApi.refreshCells({ rowNodes: nodesToRefresh, columns: ['recordName'], force: true });
+        }
+        if (this.chartGridApi) {
+          this.chartGridApi.refreshCells({ rowNodes: nodesToRefresh, columns: ['recordName'], force: true });
+        }
       }
 
       this.cdr.markForCheck();
@@ -714,6 +759,11 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   public onGridReady(event: GridReadyEvent<PredictionGridRow>): void {
     this.gridApi = event.api;
+    this.scheduleVisibleRowsLookup(50);
+  }
+
+  public onChartGridReady(event: GridReadyEvent<PredictionGridRow>): void {
+    this.chartGridApi = event.api;
     this.scheduleVisibleRowsLookup(50);
   }
 
@@ -770,6 +820,15 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       this.selectedDecileIndex = idx;
     }
     this.applyFilter();
+
+    if (this.selectedDecileIndex !== null) {
+      setTimeout(() => {
+        const el = document.getElementById('pg-drilldown-anchor');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }, 50);
+    }
   }
 
   public clearDecileFilter(): void {
@@ -1159,16 +1218,21 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public exportCSV(): void {
     if (this.allRows.length === 0) return;
 
-    const headers = ['Record ID', 'Record Name', 'Prediction Score', 'Risk Level', 'Predicted Class', 'Top Drivers', 'Scored At'];
+    const headers = this.isRenewalModel
+      ? ['Record ID', 'Record Name', 'Renewal Probability', 'Renewal Status', 'Predicted Class', 'Top Drivers', 'Scored At']
+      : ['Record ID', 'Record Name', 'Prediction Score', 'Risk Level', 'Predicted Class', 'Top Drivers', 'Scored At'];
     const lines = [headers.join(',')];
 
     for (const r of this.filteredRows) {
       const driversStr = r.drivers.map((d) => `${d.up ? '+' : '-'}${d.label}`).join('; ');
+      const statusStr = this.isRenewalModel
+        ? (r.band === 'low' ? `HIGH (${Math.round(r.score * 100)}%)` : r.band === 'medium' ? `MEDIUM (${Math.round(r.score * 100)}%)` : `LOW (${Math.round(r.score * 100)}%)`)
+        : r.band.toUpperCase();
       const rowData = [
         `"${r.recordId.replace(/"/g, '""')}"`,
         `"${(r.recordName || r.recordId).replace(/"/g, '""')}"`,
         r.scoreFormatted,
-        r.band.toUpperCase(),
+        statusStr,
         `"${(r.class || '').replace(/"/g, '""')}"`,
         `"${driversStr.replace(/"/g, '""')}"`,
         `"${r.scoredAtDate ? r.scoredAtDate.toISOString() : ''}"`,
