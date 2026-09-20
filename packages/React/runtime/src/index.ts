@@ -116,6 +116,10 @@ export {
 } from './utilities/core-libraries';
 
 export {
+  generateComponentHierarchyHash
+} from './utilities/component-hash';
+
+export {
   LibraryRegistry,
   LibraryDefinition
 } from './utilities/library-registry';

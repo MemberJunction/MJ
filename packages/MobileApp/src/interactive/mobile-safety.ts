@@ -1,15 +1,30 @@
 /**
  * @fileoverview On-device renderability gate for interactive component specs.
  *
- * React Native can compile and run a self-contained React component via
- * `new Function`/eval (confirmed on Hermes), but it CANNOT run the runtime's
- * `LibraryLoader` (which fetches 3rd-party UMD bundles from CDNs) nor resolve
- * child-component `dependencies` through a single `loadComponent` call. This
- * module screens a spec so only clean, library-free, dependency-free components
- * are rendered natively; everything else falls back to "view on desktop".
+ * React Native can compile and run a React component via `new Function`/eval (confirmed on Hermes);
+ * `library-registry.ts` satisfies a component's declared libraries through `RuntimeContext.libraries`
+ * plus the matching globals; and the renderer loads child components through the runtime's own
+ * `loadHierarchy`, which is the same call `MJReactComponent` makes. So the question here is narrow:
+ * is there anything in this hierarchy that this app genuinely cannot obtain?
+ *
+ * Two things qualify, and neither is "the spec declares something".
+ *
+ * **A library with no native equivalent.** DOM- and canvas-bound libraries cannot be shimmed into
+ * something that draws; a fake would render nothing and report no error.
+ *
+ * **A child component whose code isn't in the spec.** `ComponentManager.needsFetch` treats
+ * `location === 'registry' && !code` as requiring a fetch from a component registry, which this app
+ * cannot perform. Agent-authored specs embed their children's code inline, so this is the uncommon
+ * case — but when it happens the component cannot be assembled here and saying so beats a blank
+ * panel.
+ *
+ * The earlier version of this file refused any spec that declared libraries *or* dependencies at
+ * all. Both refusals were wrong in the expensive direction: they sent the majority of real
+ * components to a "best viewed on desktop" card over capabilities the app either had or could get.
  */
 
 import type { ComponentSpec } from '@memberjunction/react-runtime';
+import { DESKTOP_ONLY, FindMobileLibrary } from './library-registry';
 
 /** Verdict from {@link AssessSpec}: whether the spec can render on-device. */
 export interface SpecAssessment {
@@ -25,12 +40,91 @@ function hasRenderableCode(spec: ComponentSpec): boolean {
 }
 
 /**
- * Determine whether an interactive component spec can be rendered natively.
+ * Visits the root spec and every descendant exactly once.
  *
- * Not renderable when the spec is empty/invalid, declares any 3rd-party
- * `libraries` (the CDN library loader can't run on native), or declares child
- * component `dependencies` (a single-component load can't satisfy them). Only a
- * clean, standalone, React-only spec is renderable.
+ * Identity-tracked rather than name-tracked, so a hierarchy that legitimately reuses a child spec
+ * object is walked once while two distinct children sharing a name are both seen.
+ *
+ * @param spec The root spec.
+ * @param visit Called for each spec in the tree.
+ */
+function WalkHierarchy(spec: ComponentSpec, visit: (node: ComponentSpec) => void): void {
+    const seen = new Set<ComponentSpec>();
+    const go = (node: ComponentSpec | null | undefined): void => {
+        if (!node || seen.has(node)) return;
+        seen.add(node);
+        visit(node);
+        for (const dep of node.dependencies ?? []) {
+            go(dep as ComponentSpec);
+        }
+    };
+    go(spec);
+}
+
+/**
+ * Names the libraries declared anywhere in the hierarchy that this app has no way to supply.
+ *
+ * @param spec The root spec.
+ */
+function unsupportedLibraries(spec: ComponentSpec): string[] {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    WalkHierarchy(spec, (node) => {
+        for (const ref of node.libraries ?? []) {
+            if (FindMobileLibrary(ref)) continue;
+            const key = ref.globalVariable || ref.name;
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            const reason = DESKTOP_ONLY[ref.globalVariable];
+            names.push(reason ? `${ref.name} — ${reason}` : ref.name);
+        }
+    });
+    return names;
+}
+
+/**
+ * Names the child components the hierarchy references but does not carry the code for.
+ *
+ * Two cases, one answer. `ComponentManager.needsFetch` treats `location === 'registry' && !code` as
+ * needing a registry fetch, which this app cannot perform; and a child with no code and no location
+ * has nothing to compile at all — the runtime would reach `Component "X" is not defined in the
+ * provided code` at compile time. Both mean the same thing to the reader: a piece of this component
+ * is not here.
+ *
+ * Checked ahead of the load rather than left to surface as a compile error, because the
+ * pre-flight verdict is what decides between "render it" and "offer the desktop", and a component
+ * that is provably missing a part should take the second path without a failed compile first.
+ *
+ * @param spec The root spec.
+ */
+function unfetchableDependencies(spec: ComponentSpec): string[] {
+    const names: string[] = [];
+    WalkHierarchy(spec, (node) => {
+        if (node === spec) return;
+        const hasCode = typeof node.code === 'string' && node.code.trim().length > 0;
+        if (!hasCode) {
+            names.push(node.name);
+        }
+    });
+    return names;
+}
+
+/**
+ * Turns the unsupported-library list into one sentence.
+ *
+ * Naming the library matters: "uses external libraries" is a dead end, while "needs Chart.js, which
+ * draws into a browser canvas" tells the reader both why the phone declined and that a desktop will
+ * not.
+ *
+ * @param names The unsupported libraries, already annotated with their reason where known.
+ */
+function describeUnsupported(names: string[]): string {
+    if (names.length === 1) return `This component needs ${names[0]}, which isn't available on mobile.`;
+    return `This component needs libraries that aren't available on mobile: ${names.join('; ')}.`;
+}
+
+/**
+ * Determine whether an interactive component spec can be rendered natively.
  *
  * @param spec The parsed interactive component spec.
  * @returns A {@link SpecAssessment} describing the decision and, if negative, why.
@@ -39,11 +133,19 @@ export function AssessSpec(spec: ComponentSpec | null | undefined): SpecAssessme
     if (!spec || !hasRenderableCode(spec)) {
         return { renderable: false, reason: 'This artifact does not contain a renderable component.' };
     }
-    if (spec.libraries && spec.libraries.length > 0) {
-        return { renderable: false, reason: 'This component uses external libraries that only run on desktop.' };
+
+    const unsupported = unsupportedLibraries(spec);
+    if (unsupported.length > 0) {
+        return { renderable: false, reason: describeUnsupported(unsupported) };
     }
-    if (spec.dependencies && spec.dependencies.length > 0) {
-        return { renderable: false, reason: 'This component depends on other components not available on mobile.' };
+
+    const unfetchable = unfetchableDependencies(spec);
+    if (unfetchable.length > 0) {
+        return {
+            renderable: false,
+            reason: `This component is built from parts this app can't fetch yet: ${unfetchable.join(', ')}.`,
+        };
     }
+
     return { renderable: true };
 }

@@ -13,3 +13,4 @@ export * from './component-error-analyzer';
 export * from './resource-manager';
 export * from './cache-manager';
 export * from './component-unwrapper';
+export * from './component-hash';

@@ -36,7 +36,8 @@ import {
   userStateStorageKey,
   parseStoredUserSettings,
   mergeUserSettings,
-  applyUserSettingsUpdate
+  applyUserSettingsUpdate,
+  generateComponentHierarchyHash
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
 import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, RunViewParams, RunViewResult, RunQueryParams, RunQueryResult, DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
@@ -626,38 +627,15 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
  
 
   /**
-   * Generate a hash from component code for versioning
-   * Uses a simple hash function that's fast and sufficient for version differentiation
+   * Generate a hash from component code for versioning.
+   *
+   * Delegates to the runtime so every host derives the same version for the same spec. When this
+   * lived here, the React Native app had to reimplement it to load the same component, and two
+   * implementations of a registry key is how one surface silently compiles a second copy of a
+   * component the other already has.
    */
   private generateComponentHash(spec: ComponentSpec): string {
-    // Collect all code from the component hierarchy
-    const codeStrings: string[] = [];
-    
-    const collectCode = (s: ComponentSpec) => {
-      if (s.code) {
-        codeStrings.push(s.code);
-      }
-      if (s.dependencies) {
-        for (const dep of s.dependencies) {
-          collectCode(dep);
-        }
-      }
-    };
-    
-    collectCode(spec);
-    
-    // Generate hash from concatenated code
-    const fullCode = codeStrings.join('|');
-    let hash = 0;
-    for (let i = 0; i < fullCode.length; i++) {
-      const char = fullCode.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
-    }
-    
-    // Convert to hex string and take first 8 characters for readability
-    const hexHash = Math.abs(hash).toString(16).padStart(8, '0').substring(0, 8);
-    return `v${hexHash}`;
+    return generateComponentHierarchyHash(spec);
   }
 
   /**
