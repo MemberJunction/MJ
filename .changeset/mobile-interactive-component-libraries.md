@@ -131,3 +131,38 @@ behaviourally: registered lazily through `ng-react` via the existing `lazy-featu
 
 `utilities` is not wrapped for data capture (the bridge's fallback-snapshot support), and component
 methods (`print` / `refresh` / `invokeMethod`) are not exposed to the host.
+
+---
+
+## Registry-backed child components, and Hermes's async limit
+
+Two things were still stopping real agent-authored components from rendering, both found by
+running the deployment's actual component registry rather than hand-written samples.
+
+**Children named instead of inlined.** A spec routinely references `DataGrid`, `OpenRecordButton`,
+`SingleRecordView` by name with no code — that is what `metadata/components/CLAUDE.md` prescribes
+for anything non-trivial. `loadHierarchy` fetches those itself, but it *compiles each child as it
+fetches it*, and a component's library bindings are emitted at the top of its factory — so a
+registry child's libraries are unknowable until it is too late to load them. `hierarchy-resolver.ts`
+walks the tree first through the same `ComponentMetadataEngine.FindComponent` the runtime will use,
+purely to learn the library set; the specs it reads come back from `ComponentManager`'s own fetch
+cache, so the second read is free. `AssessSpec` no longer refuses children — it cannot judge them
+synchronously, and refusing them declined the majority of real components over a lookup the app can
+perform.
+
+**`async` in runtime-compiled code.** Hermes compiles the app's own modules ahead of time, where
+async is fully supported. Components take the other path — compiled at runtime, executed through
+`new Function` — and Hermes's runtime compiler rejects async outright: `async functions are
+unsupported`. A component doing `const rows = await utilities.rv.RunView(…)` therefore failed to
+compile, with an error naming neither cause nor remedy. Mobile now compiles with
+`transform-async-to-generator`. Hermes accepts the generators that produces; it is only `async`
+syntax it refuses.
+
+`transform-regenerator` was tried and rejected on evidence: it would also remove the generators, but
+in this Babel version it miscompiles real component code (`Property name expected type of string but
+got undefined`) — measured across the registry, it broke 12 components that otherwise transpile
+cleanly. The narrower transform is both sufficient and safe. A test asserts it stays out.
+
+Measured against this deployment's 118 registered components: **73 have a fully resolvable hierarchy
+and declare only libraries mobile can provide.** The remaining 45 are blocked by Chart.js,
+ApexCharts or ECharts — canvas-bound, and the one genuinely unsolved piece.

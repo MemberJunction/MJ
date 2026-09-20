@@ -22,6 +22,7 @@ import { GetInteractiveRuntime } from './runtime-loader';
 import { ShimReact } from './react-native-shim';
 import { BuildMobileComponentStyles } from './component-styles';
 import { BuildSaveUserSettings, LoadUserSettings } from './user-settings';
+import { ResolveHierarchy } from './hierarchy-resolver';
 
 /** A message a component raised through `callbacks.CreateSimpleNotification`. */
 type ComponentNotice = { Message: string; Style: string };
@@ -158,12 +159,18 @@ async function compileSpec(
     try {
         const runtime = await GetInteractiveRuntime();
 
-        // Libraries first, for the WHOLE hierarchy: the compiler emits `const _ = libraries['_']`
+        // Resolve registry-backed children first. A spec routinely names its children instead of
+        // carrying their code, and those children declare libraries of their own that are invisible
+        // until the registry is read — see `hierarchy-resolver.ts` for why that has to happen
+        // before anything compiles.
+        const user = Metadata.Provider?.CurrentUser;
+        const hierarchy = await ResolveHierarchy(spec, user);
+
+        // Libraries for the WHOLE resolved hierarchy: the compiler emits `const _ = libraries['_']`
         // at the top of each component's factory, so a library that arrives after that component
-        // compiles is a library it never sees. `AssessSpec` has already declined anything
-        // unprovidable, so a non-empty `missing` here means a spec declared something this build
-        // doesn't know about — report it rather than rendering undefined bindings.
-        const missing = await runtime.EnsureLibraries(spec);
+        // compiles is a library it never sees. `AssessSpec` screened the spec's own libraries; this
+        // is the first point at which the children's are knowable.
+        const missing = await runtime.EnsureLibraries(spec, hierarchy.Libraries);
         if (missing.length > 0) {
             return { status: 'failed', reason: `This component needs ${missing.join(', ')}.` };
         }
@@ -176,6 +183,14 @@ async function compileSpec(
 
         const compiled = UnwrapRootComponent(result.rootComponent);
         if (!result.success || !compiled) {
+            // Name the parts that could not be obtained when that is what went wrong — "DataGrid
+            // could not be loaded" is actionable in a way that a compiler message is not.
+            if (hierarchy.Unresolved.length > 0) {
+                return {
+                    status: 'failed',
+                    reason: `This component is built from parts that couldn't be loaded: ${hierarchy.Unresolved.join(', ')}.`,
+                };
+            }
             return { status: 'failed', reason: describeErrors(result.errors) };
         }
 
@@ -185,7 +200,6 @@ async function compileSpec(
         // comes from the runtime's `createRuntimeUtilities`, the same factory the Angular bridge
         // calls, so a component's query behaves identically on both. It was `{}` here, which meant
         // any component with data requirements had nothing to fetch with.
-        const user = Metadata.Provider?.CurrentUser;
         const savedUserSettings = await LoadUserSettings(spec, user);
 
         const props = {

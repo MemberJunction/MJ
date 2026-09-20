@@ -7,7 +7,7 @@
  * `loadHierarchy`, which is the same call `MJReactComponent` makes. So the question here is narrow:
  * is there anything in this hierarchy that this app genuinely cannot obtain?
  *
- * Two things qualify, and neither is "the spec declares something".
+ * One thing qualifies, and it is not "the spec declares something".
  *
  * **A library with no native equivalent.** DOM- and canvas-bound libraries cannot be shimmed into
  * something that draws; a fake would render nothing and report no error.
@@ -21,6 +21,10 @@
  * The earlier version of this file refused any spec that declared libraries *or* dependencies at
  * all. Both refusals were wrong in the expensive direction: they sent the majority of real
  * components to a "best viewed on desktop" card over capabilities the app either had or could get.
+ *
+ * Note what this means for the library check below: it can only see libraries declared in the spec
+ * it is handed. A registry-backed child's libraries are invisible until that child is fetched, so
+ * the renderer re-runs the same check against the fully resolved tree before compiling.
  */
 
 import type { ComponentSpec } from '@memberjunction/react-runtime';
@@ -83,33 +87,6 @@ function unsupportedLibraries(spec: ComponentSpec): string[] {
 }
 
 /**
- * Names the child components the hierarchy references but does not carry the code for.
- *
- * Two cases, one answer. `ComponentManager.needsFetch` treats `location === 'registry' && !code` as
- * needing a registry fetch, which this app cannot perform; and a child with no code and no location
- * has nothing to compile at all — the runtime would reach `Component "X" is not defined in the
- * provided code` at compile time. Both mean the same thing to the reader: a piece of this component
- * is not here.
- *
- * Checked ahead of the load rather than left to surface as a compile error, because the
- * pre-flight verdict is what decides between "render it" and "offer the desktop", and a component
- * that is provably missing a part should take the second path without a failed compile first.
- *
- * @param spec The root spec.
- */
-function unfetchableDependencies(spec: ComponentSpec): string[] {
-    const names: string[] = [];
-    WalkHierarchy(spec, (node) => {
-        if (node === spec) return;
-        const hasCode = typeof node.code === 'string' && node.code.trim().length > 0;
-        if (!hasCode) {
-            names.push(node.name);
-        }
-    });
-    return names;
-}
-
-/**
  * Turns the unsupported-library list into one sentence.
  *
  * Naming the library matters: "uses external libraries" is a dead end, while "needs Chart.js, which
@@ -137,14 +114,6 @@ export function AssessSpec(spec: ComponentSpec | null | undefined): SpecAssessme
     const unsupported = unsupportedLibraries(spec);
     if (unsupported.length > 0) {
         return { renderable: false, reason: describeUnsupported(unsupported) };
-    }
-
-    const unfetchable = unfetchableDependencies(spec);
-    if (unfetchable.length > 0) {
-        return {
-            renderable: false,
-            reason: `This component is built from parts this app can't fetch yet: ${unfetchable.join(', ')}.`,
-        };
     }
 
     return { renderable: true };

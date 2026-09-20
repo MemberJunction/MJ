@@ -23,6 +23,7 @@
 import type { ComponentSpec } from '@memberjunction/react-runtime';
 import { ShimReact } from './react-native-shim';
 import { CollectHierarchyLibraries, PublishLibraryGlobals, ResolveMobileLibraries } from './library-registry';
+import { HERMES_COMPILER_CONFIG } from './hermes-babel';
 
 /**
  * Static type view of the react-runtime module. `typeof import(...)` is a
@@ -64,8 +65,10 @@ export interface InteractiveRuntime {
      * caller can say which one forced a fallback.
      *
      * @param spec The root spec about to be compiled.
+     * @param extraLibraries Libraries discovered by resolving registry-backed children, which the
+     *   spec itself does not list.
      */
-    EnsureLibraries: (spec: ComponentSpec) => Promise<string[]>;
+    EnsureLibraries: (spec: ComponentSpec, extraLibraries?: NonNullable<ComponentSpec['libraries']>) => Promise<string[]>;
     /**
      * The live libraries map handed to components as the `libraries` prop.
      *
@@ -97,7 +100,10 @@ async function initializeRuntime(): Promise<InteractiveRuntime> {
     // One map, filled over time. `createReactRuntime` captures the context object by reference, so
     // every later compile sees whatever has been loaded into it by then.
     const libraries: Record<string, unknown> = {};
-    const instance = runtime.createReactRuntime(babel, undefined, { React: ShimReact, libraries });
+    const instance = runtime.createReactRuntime(babel, { compiler: HERMES_COMPILER_CONFIG }, {
+        React: ShimReact,
+        libraries,
+    });
 
     return {
         manager: instance.manager,
@@ -106,11 +112,16 @@ async function initializeRuntime(): Promise<InteractiveRuntime> {
         generateComponentHierarchyHash: runtime.generateComponentHierarchyHash,
         createRuntimeUtilities: runtime.createRuntimeUtilities,
         Libraries: libraries,
-        EnsureLibraries: async (spec: ComponentSpec): Promise<string[]> => {
+        EnsureLibraries: async (
+            spec: ComponentSpec,
+            extraLibraries?: NonNullable<ComponentSpec['libraries']>,
+        ): Promise<string[]> => {
             // The whole hierarchy, not just the root: `loadHierarchy` compiles each child against
             // ITS OWN declared libraries, so a child using d3 while its parent uses lodash needs
-            // both loaded before any of them compile.
-            const resolved = await ResolveMobileLibraries(CollectHierarchyLibraries(spec));
+            // both loaded before any of them compile. `extraLibraries` carries the ones found by
+            // resolving registry-backed children, which are invisible in the spec itself.
+            const declared = [...CollectHierarchyLibraries(spec), ...(extraLibraries ?? [])];
+            const resolved = await ResolveMobileLibraries(declared);
             // Both halves of what a UMD `<script>` tag does on the web: the runtime gets its map,
             // and the component body gets the global it actually reads. See
             // `PublishLibraryGlobals` for why the map alone is not enough.

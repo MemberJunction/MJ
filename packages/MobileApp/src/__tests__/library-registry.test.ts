@@ -313,16 +313,16 @@ describe('AssessSpec — libraries', () => {
         expect(verdict.reason).toContain('chart.js');
     });
 
-    it('declines a child whose code the spec does not carry', () => {
-        // `ComponentManager.needsFetch` would send this to a component registry this app cannot
-        // reach; a child with no code at all cannot compile either. Same answer to the reader.
+    it('does not decline a child the spec names instead of carrying', () => {
+        // Naming children rather than inlining them is what the component authoring guide
+        // prescribes, and it is how most registry components are built. Refusing them here — as
+        // this gate once did — declined the majority of real components over a registry lookup the
+        // app can perform. Resolution is the renderer's job now; see `hierarchy-resolver.ts`.
         const spec = {
             ...SpecWith([]),
-            dependencies: [{ name: 'RemoteChild', location: 'registry' }],
+            dependencies: [{ name: 'DataGrid', location: 'registry' }],
         } as ComponentSpec;
-        const verdict = AssessSpec(spec);
-        expect(verdict.renderable).toBe(false);
-        expect(verdict.reason).toContain('RemoteChild');
+        expect(AssessSpec(spec).renderable).toBe(true);
     });
 
     it('checks libraries at every depth, not just the first', () => {
