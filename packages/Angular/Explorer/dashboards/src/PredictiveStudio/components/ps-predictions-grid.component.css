@@ -187,18 +187,45 @@
   line-height: 1.2;
 }
 
+.pg-record-title-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.pg-record-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  text-decoration: none;
+  cursor: pointer;
+  min-width: 0;
+}
+
 .pg-record-name {
   font-weight: 600;
   font-size: var(--mj-text-sm);
   color: var(--mj-text-link);
-  cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.pg-record-name:hover {
+.pg-record-link:hover .pg-record-name {
   text-decoration: underline;
+}
+
+.pg-record-open-icon {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+  flex-shrink: 0;
+  transition: transform .15s, color .15s;
+}
+
+.pg-record-link:hover .pg-record-open-icon {
+  transform: translateY(-1px) translateX(1px);
+  color: var(--mj-text-primary);
 }
 
 .pg-record-id {

@@ -7,7 +7,7 @@ import {
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
-import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM } from '@memberjunction/core';
+import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
@@ -264,9 +264,19 @@ export class ResourceResolver implements Resolve<void> {
             return;
           }
 
+          const friendlyName = entityInfo.DisplayName || entityInfo.Name;
+          let tabTitle: string;
+          if (isNew) {
+            tabTitle = `New ${friendlyName}`;
+          } else {
+            const pk = CompositeKey.FromURLSegment(entityInfo, recordId);
+            const cachedName = md.GetCachedRecordNameSync?.(entityName, pk);
+            tabTitle = cachedName || friendlyName;
+          }
+
           this.tabService.OpenTab({
             ApplicationId: app.ID,
-            Title: isNew ? `New ${entityName}` : `${entityName} - ${recordId}`,
+            Title: tabTitle,
             Configuration: {
               resourceType: RECORDS_RESOURCE_TYPE,
               Entity: entityName,
@@ -513,10 +523,20 @@ export class ResourceResolver implements Resolve<void> {
         return;
       }
 
+      const friendlyName = entityInfo.DisplayName || entityInfo.Name;
+      let tabTitle: string;
+      if (isNew) {
+        tabTitle = `New ${friendlyName}`;
+      } else {
+        const pk = CompositeKey.FromURLSegment(entityInfo, recordId);
+        const cachedName = md.GetCachedRecordNameSync?.(entityName, pk);
+        tabTitle = cachedName || friendlyName;
+      }
+
       // Queue tab request via TabService
       this.tabService.OpenTab({
         ApplicationId: SYSTEM_APP_ID,
-        Title: isNew ? `New ${entityName}` : `${entityName} - ${recordId}`,
+        Title: tabTitle,
         Configuration: {
           resourceType: RECORDS_RESOURCE_TYPE,
           Entity: entityName,

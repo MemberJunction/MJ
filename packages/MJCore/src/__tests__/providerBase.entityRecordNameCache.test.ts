@@ -82,6 +82,12 @@ describe('ProviderBase entity record name cache', () => {
         expect(cached).toBe('Acme Corp');
     });
 
+    it('GetCachedRecordNameSync returns cached name synchronously or undefined when not cached', () => {
+        expect(provider.GetCachedRecordNameSync('Accounts', keyFor('1'))).toBeUndefined();
+        provider.SetCachedRecordName('Accounts', keyFor('1'), 'Acme Corp');
+        expect(provider.GetCachedRecordNameSync('Accounts', keyFor('1'))).toBe('Acme Corp');
+    });
+
     it('GetCachedRecordName returns undefined when not cached and loadIfNeeded is false', async () => {
         const cached = await provider.GetCachedRecordName('Accounts', keyFor('missing'));
         expect(cached).toBeUndefined();

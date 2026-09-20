@@ -9,21 +9,119 @@
   overflow: hidden;
 }
 
-/* Master-Detail Layout */
+/* Master-Detail Layout with Resizable Splitter */
 .ps-pipelines .pl-layout {
-  display: grid;
-  grid-template-columns: 320px 1fr;
+  display: flex;
+  flex-direction: row;
   flex: 1;
   min-height: 0;
   height: 100%;
   overflow: hidden;
   background: var(--mj-bg-page);
+  position: relative;
 }
 
-@media (max-width: 1024px) {
-  .ps-pipelines .pl-layout {
-    grid-template-columns: 260px 1fr;
-  }
+.ps-pipelines .pl-splitter {
+  width: 100%;
+  height: 100%;
+  background: var(--mj-bg-page);
+}
+
+.ps-pipelines .pl-collapsed-strip {
+  width: 44px;
+  flex: 0 0 44px;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  z-index: 10;
+}
+
+.ps-pipelines .pl-rail-collapse {
+  background: transparent;
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  border-radius: var(--mj-radius-sm);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ps-pipelines .pl-rail-collapse:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-brand-primary);
+}
+
+.ps-pipelines .pl-collapsed-strip-label {
+  color: var(--mj-text-muted);
+  font-size: 16px;
+  margin-top: 8px;
+}
+
+.ps-pipelines .pl-collapse-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--mj-text-muted);
+  border-radius: var(--mj-radius-sm);
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ps-pipelines .pl-collapse-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-default);
+}
+
+.ps-pipelines .pl-model-row {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.ps-pipelines .pl-model-row:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.ps-pipelines .pl-model-link {
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ps-pipelines .pl-model-link:hover {
+  text-decoration: underline;
+}
+
+.ps-pipelines .pl-action-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--mj-text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--mj-radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.ps-pipelines .pl-action-icon-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-brand-primary);
 }
 
 /* Left Column: Pipeline Catalog */

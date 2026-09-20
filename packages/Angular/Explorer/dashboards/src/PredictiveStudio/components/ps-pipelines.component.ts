@@ -3,8 +3,10 @@ import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { MJMLTrainingPipelineEntity, MJMLModelEntity, PredictiveStudioTrainModelOperation } from '@memberjunction/core-entities';
+import { CompositeKey, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
+import { MJMLTrainingPipelineEntity, MJMLModelEntity, PredictiveStudioTrainModelOperation, UserInfoEngine } from '@memberjunction/core-entities';
+import { NavigationService } from '@memberjunction/ng-shared';
+import { AngularSplitModule } from 'angular-split';
 import { PSPipelineWizardComponent } from './ps-pipeline-wizard.component';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
@@ -79,7 +81,7 @@ const PS_PIPELINES_STARTER_PROMPT =
 @Component({
   standalone: true,
   selector: 'ps-pipelines',
-  imports: [CommonModule, MJButtonDirective, PSPipelineWizardComponent],
+  imports: [CommonModule, MJButtonDirective, PSPipelineWizardComponent, AngularSplitModule],
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.css', './ps-pipelines.component.css'],
   template: `
@@ -105,55 +107,75 @@ const PS_PIPELINES_STARTER_PROMPT =
           </div>
         </div>
       } @else {
-        <div class="pl-layout">
-          <!-- Left Column: Master Pipeline Catalog -->
-          <div class="pl-catalog" data-testid="ps-pipelines-catalog">
-            <div class="pl-catalog-header">
-              <div class="pl-catalog-title-row">
-                <h2>Pipelines ({{ filteredPipelines.length }})</h2>
-                <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-new" (click)="openWizard()">
-                  <i class="fa-solid fa-plus"></i> New
-                </button>
-              </div>
-              <div class="pl-search-box">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" [value]="searchQuery" (input)="onSearchInput($event)" placeholder="Filter pipelines..." />
-              </div>
-              <div class="pl-filter-chips">
-                <button class="pl-filter-chip" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">All</button>
-                <button class="pl-filter-chip" [class.active]="activeFilter === 'published'" (click)="setFilter('published')">Published</button>
-                <button class="pl-filter-chip" [class.active]="activeFilter === 'draft'" (click)="setFilter('draft')">Draft</button>
-                <button class="pl-filter-chip" [class.active]="activeFilter === 'core'" (click)="setFilter('core')">MJ Core</button>
-              </div>
+        <div class="pl-layout" [class.catalog-collapsed]="isCatalogCollapsed">
+          @if (isCatalogCollapsed) {
+            <div class="pl-collapsed-strip" role="region" aria-label="Pipelines catalog (collapsed)">
+              <button class="pl-rail-collapse" type="button" (click)="toggleCatalog()" aria-label="Expand pipelines catalog" title="Expand catalog">
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
+              <div class="pl-collapsed-strip-label"><i class="fa-solid fa-diagram-project"></i></div>
             </div>
+          }
 
-            <!-- Scrollable Catalog Cards List (preserves data-testid="ps-pipelines-picker" and "ps-pipelines-pill") -->
-            <div class="pl-picker" data-testid="ps-pipelines-picker">
-              @for (p of filteredPipelines; track p.ID) {
-                <button class="pl-pill pipeline-card" [class.on]="isSelectedPipeline(p)"
-                  data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)" [title]="p.Name">
-                  <div class="pl-card-top">
-                    <div class="pl-card-name">{{ p.Name }}</div>
-                    <span class="ps-badge" [class]="statusClass(p.Status)">{{ p.Status }}</span>
+          <as-split direction="horizontal" class="pl-splitter" unit="percent" [gutterSize]="6" (dragEnd)="onSplitDragEnd($event.sizes)">
+            @if (!isCatalogCollapsed) {
+              <as-split-area [size]="catalogSizePct" [minSize]="18" [maxSize]="50">
+                <!-- Left Column: Master Pipeline Catalog -->
+                <div class="pl-catalog" data-testid="ps-pipelines-catalog">
+                  <div class="pl-catalog-header">
+                    <div class="pl-catalog-title-row">
+                      <h2>Pipelines ({{ filteredPipelines.length }})</h2>
+                      <div style="display:flex;gap:6px;align-items:center">
+                        <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-new" (click)="openWizard()">
+                          <i class="fa-solid fa-plus"></i> New
+                        </button>
+                        <button class="pl-collapse-btn" type="button" (click)="toggleCatalog()" title="Collapse catalog" aria-label="Collapse catalog">
+                          <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="pl-search-box">
+                      <i class="fa-solid fa-magnifying-glass"></i>
+                      <input type="text" [value]="searchQuery" (input)="onSearchInput($event)" placeholder="Filter pipelines..." />
+                    </div>
+                    <div class="pl-filter-chips">
+                      <button class="pl-filter-chip" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">All</button>
+                      <button class="pl-filter-chip" [class.active]="activeFilter === 'published'" (click)="setFilter('published')">Published</button>
+                      <button class="pl-filter-chip" [class.active]="activeFilter === 'draft'" (click)="setFilter('draft')">Draft</button>
+                      <button class="pl-filter-chip" [class.active]="activeFilter === 'core'" (click)="setFilter('core')">MJ Core</button>
+                    </div>
                   </div>
-                  <div class="pl-card-meta">
-                    <span class="pl-entity-tag">{{ targetEntityName(p) }}</span>
-                    <span>&bull;</span>
-                    <span class="pl-target-tag">{{ p.TargetVariable || 'Target' }}</span>
-                  </div>
-                  <div class="pl-card-meta" style="justify-content: space-between; margin-top: 2px;">
-                    <span>{{ p.ProblemType }}</span>
-                    @if (bestMetricForPipeline(p); as bm) {
-                      <span class="pl-metric-badge"><i class="fa-solid fa-trophy" style="color:#eab308"></i> {{ bm }}</span>
+
+                  <!-- Scrollable Catalog Cards List (preserves data-testid="ps-pipelines-picker" and "ps-pipelines-pill") -->
+                  <div class="pl-picker" data-testid="ps-pipelines-picker">
+                    @for (p of filteredPipelines; track p.ID) {
+                      <button class="pl-pill pipeline-card" [class.on]="isSelectedPipeline(p)"
+                        data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)" [title]="p.Name">
+                        <div class="pl-card-top">
+                          <div class="pl-card-name">{{ p.Name }}</div>
+                          <span class="ps-badge" [class]="statusClass(p.Status)">{{ p.Status }}</span>
+                        </div>
+                        <div class="pl-card-meta">
+                          <span class="pl-entity-tag">{{ targetEntityName(p) }}</span>
+                          <span>&bull;</span>
+                          <span class="pl-target-tag">{{ p.TargetVariable || 'Target' }}</span>
+                        </div>
+                        <div class="pl-card-meta" style="justify-content: space-between; margin-top: 2px;">
+                          <span>{{ p.ProblemType }}</span>
+                          @if (bestMetricForPipeline(p); as bm) {
+                            <span class="pl-metric-badge"><i class="fa-solid fa-trophy" style="color:#eab308"></i> {{ bm }}</span>
+                          }
+                        </div>
+                      </button>
                     }
                   </div>
-                </button>
-              }
-            </div>
-          </div>
+                </div>
+              </as-split-area>
+            }
 
-          <!-- Right Column: Human-Centric Workspace (Stages View Default + DAG View Toggle) -->
-          <div class="pl-workspace" data-testid="ps-pipelines-workspace">
+            <as-split-area [size]="isCatalogCollapsed ? 100 : workspaceSizePct" [minSize]="40">
+              <!-- Right Column: Human-Centric Workspace (Stages View Default + DAG View Toggle) -->
+              <div class="pl-workspace" data-testid="ps-pipelines-workspace">
             <div class="pl-workspace-header">
               <div class="pl-workspace-title-area">
                 <div class="pl-breadcrumbs">
@@ -380,21 +402,31 @@ const PS_PIPELINES_STARTER_PROMPT =
                           <th>Holdout Score</th>
                           <th>Status</th>
                           <th>Trained At</th>
+                          <th></th>
                         </tr>
                       </thead>
                       <tbody>
                         @for (m of pipelineModels; track m.ID) {
-                          <tr [class.winner-row]="m.Status === 'Published'">
+                          <tr [class.winner-row]="m.Status === 'Published'" class="pl-model-row" (click)="openModelRecord(m.ID)" style="cursor:pointer;" title="Open model record in Explorer">
                             <td>
-                              <strong>v{{ m.Version }}</strong>
-                              @if (m.Status === 'Published') {
-                                <span class="ps-tag success" style="margin-left:6px;"><i class="fa-solid fa-trophy"></i> Winner</span>
-                              }
+                              <div style="display:flex;align-items:center;gap:6px">
+                                <a class="pl-model-link" href="javascript:void(0)" (click)="$event.stopPropagation(); openModelRecord(m.ID)">
+                                  <strong>v{{ m.Version }}</strong>
+                                </a>
+                                @if (m.Status === 'Published') {
+                                  <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Winner</span>
+                                }
+                              </div>
                             </td>
                             <td>{{ m.Algorithm || 'Algorithm' }}</td>
                             <td><strong>{{ formatHoldout(m) }}</strong></td>
                             <td><span class="ps-badge" [class]="statusClass(m.Status)">{{ m.Status }}</span></td>
                             <td>{{ m.TrainedAt | date:'short' }}</td>
+                            <td style="text-align:right">
+                              <button type="button" class="pl-action-icon-btn" (click)="$event.stopPropagation(); openModelRecord(m.ID)" title="Open model record in Explorer">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                              </button>
+                            </td>
                           </tr>
                         }
                       </tbody>
@@ -413,10 +445,11 @@ const PS_PIPELINES_STARTER_PROMPT =
                       </div>
                     </div>
                     @if (publishedModel; as pub) {
-                      <a class="ps-btn ps-btn-secondary" style="font-size:11px; padding:4px 10px; text-decoration:none;"
-                        [href]="'/app/predictive-studio/Models?modelId=' + pub.ID">
+                      <button mjButton variant="secondary" size="sm" type="button"
+                        (click)="openModelRecord(pub.ID)"
+                        title="Open model record in Explorer">
                         <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in Model Registry
-                      </a>
+                      </button>
                     }
                   </div>
 
@@ -632,7 +665,9 @@ const PS_PIPELINES_STARTER_PROMPT =
                 </div>
               </div>
             }
-          </div>
+              </div>
+            </as-split-area>
+          </as-split>
         </div>
       }
 
@@ -660,6 +695,11 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   private cdr = inject(ChangeDetectorRef);
   private notifications = inject(MJNotificationService);
+  private navigationService = inject(NavigationService);
+
+  public isCatalogCollapsed = false;
+  public catalogSizePct = 28;
+  public workspaceSizePct = 72;
 
   public readonly starterPrompt = PS_PIPELINES_STARTER_PROMPT;
   public readonly sourceKinds = SOURCE_KINDS;
@@ -745,7 +785,56 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   }
 
   ngOnInit(): void {
+    const saved = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.pipelines.layout');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.catalogSizePct === 'number' && parsed.catalogSizePct >= 15 && parsed.catalogSizePct <= 60) {
+          this.catalogSizePct = parsed.catalogSizePct;
+          this.workspaceSizePct = 100 - this.catalogSizePct;
+        }
+        if (typeof parsed.isCatalogCollapsed === 'boolean') {
+          this.isCatalogCollapsed = parsed.isCatalogCollapsed;
+        }
+      } catch {}
+    }
     this.refreshFromEngine();
+  }
+
+  public onSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number' && typeof sizes[1] === 'number') {
+      this.catalogSizePct = Math.round(sizes[0]);
+      this.workspaceSizePct = Math.round(sizes[1]);
+      this.saveLayoutPrefs();
+    }
+  }
+
+  public toggleCatalog(): void {
+    this.isCatalogCollapsed = !this.isCatalogCollapsed;
+    this.saveLayoutPrefs();
+    this.cdr.markForCheck();
+  }
+
+  private saveLayoutPrefs(): void {
+    const prefs = {
+      catalogSizePct: this.catalogSizePct,
+      isCatalogCollapsed: this.isCatalogCollapsed,
+    };
+    UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.pipelines.layout', JSON.stringify(prefs));
+  }
+
+  public openModelRecord(modelId: string): void {
+    if (!modelId) return;
+    try {
+      const p = this.provider || Metadata.Provider;
+      if (!p) return;
+      const entity = p.EntityByName('MJ: ML Models');
+      if (!entity) return;
+      const ck = CompositeKey.FromURLSegment(entity, modelId);
+      this.navigationService.OpenEntityRecord('MJ: ML Models', ck);
+    } catch (err) {
+      this.notifications.CreateSimpleNotification(`Could not open model: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
   }
 
   public refreshFromEngine(): void {

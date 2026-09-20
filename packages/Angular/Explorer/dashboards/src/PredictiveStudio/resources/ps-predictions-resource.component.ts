@@ -30,7 +30,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
   template: `
     <mj-page-header-interior
       [Title]="view === 'workspace' ? (selected?.title ?? 'Prediction') : 'Predictions'"
-      [Subtitle]="view === 'workspace' ? 'Who to focus on, how much to trust it, and what to do next' : 'Ready-to-use predictions for your members'">
+      [Subtitle]="view === 'workspace' ? 'Who to focus on, how much to trust it, and what to do next' : 'Ready-to-use predictions for your records'">
       <div actions>
         @if (view === 'catalog') {
           <button mjButton variant="primary" size="sm" data-testid="ps-new-prediction" (click)="newPrediction()">
@@ -139,7 +139,7 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                 <div class="ps-action-bar" [class.locked]="!selected.canOpen" data-testid="ps-action-bar">
                   @if (selected.canOpen) {
                     <button mjButton variant="primary" size="sm" data-testid="ps-act-review" (click)="scrollToList()"><i class="fa-solid fa-list-check"></i> Review the call list</button>
-                    <button mjButton variant="secondary" size="sm" data-testid="ps-act-save" (click)="askAgentTo('Save these renewal-risk scores onto the member records so my team can use them.')"><i class="fa-solid fa-floppy-disk"></i> Save scores to records</button>
+                    <button mjButton variant="secondary" size="sm" data-testid="ps-act-save" (click)="askAgentTo('Save these prediction scores onto the records so my team can use them.')"><i class="fa-solid fa-floppy-disk"></i> Save scores to records</button>
                     <button mjButton variant="secondary" size="sm" data-testid="ps-act-list" [disabled]="creatingList || atRiskRows.length === 0" (click)="sendToList()"><i class="fa-solid" [class.fa-paper-plane]="!creatingList" [class.fa-spinner]="creatingList" [class.fa-spin]="creatingList"></i> Send to a list</button>
                     <button mjButton variant="secondary" size="sm" data-testid="ps-act-export" [disabled]="atRiskRows.length === 0" (click)="exportList()"><i class="fa-solid fa-file-export"></i> Share / export</button>
                   } @else {
@@ -328,7 +328,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   }
 
   public dots(c: BusinessPredictionCard): number { return trustDots(c.trust.grade); }
-  public evidence(): string { return trustEvidenceLine({ noun: 'members' }); }
+  public evidence(): string { return trustEvidenceLine({ noun: 'records' }); }
 
   /** Deep agent context for the Predictions door: catalog counts + names, and (in workspace) the selection + at-risk breakdown. */
   protected override extraAgentContext(): Record<string, unknown> {
@@ -609,8 +609,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const failed = members.length - added;
       this.listResult =
         failed === 0
-          ? `Added ${added} at-risk member${added === 1 ? '' : 's'} to “${list.Name}”.`
-          : `Added ${added} of ${members.length} members to “${list.Name}” — ${failed} failed to add (first error: ${firstFailure}).`;
+          ? `Added ${added} at-risk record${added === 1 ? '' : 's'} to “${list.Name}”.`
+          : `Added ${added} of ${members.length} records to “${list.Name}” — ${failed} failed to add (first error: ${firstFailure}).`;
       if (failed > 0) LogError(`PSPredictionsResource.sendToList: ${failed}/${members.length} adds failed. First: ${firstFailure}`);
     } catch (err) {
       this.listResult = `Couldn't create the list: ${err instanceof Error ? err.message : String(err)}`;
@@ -635,7 +635,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   public exportList(): void {
     if (this.atRiskRows.length === 0) return;
     const csv = [
-      'Member,Likelihood %,Predicted',
+      'Record,Likelihood %,Predicted',
       ...this.atRiskRows.map((r) => `${this.csvCell(r.label ?? r.recordId)},${r.riskPct},${this.csvCell(r.class ?? '')}`),
     ].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));

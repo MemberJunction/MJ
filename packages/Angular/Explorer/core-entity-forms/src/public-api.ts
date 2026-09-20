@@ -26,6 +26,9 @@ export { MJTestRubricFormComponentExtended } from './lib/custom/Tests/test-rubri
 export { MJListFormComponentExtended } from './lib/custom/Lists/list-form.component';
 export { MJAIAgentSessionFormComponentExtended } from './lib/custom/AIAgentSessions/ai-agent-session-form.component';
 export { MJAIAgentChannelFormComponentExtended } from './lib/custom/AIAgentChannels/ai-agent-channel-form.component';
+export { MLModelFormComponentExtended, LoadMLModelFormComponentExtended } from './lib/custom/MLModels/ml-model-form.component';
+export { PSModelDetailComponent } from './lib/custom/MLModels/ps-model-detail.component';
+export * from './lib/custom/MLModels/ml-model-view-models';
 
 // Custom form supporting components
 export { TemplateEditorComponent } from './lib/shared/components/template-editor.component';

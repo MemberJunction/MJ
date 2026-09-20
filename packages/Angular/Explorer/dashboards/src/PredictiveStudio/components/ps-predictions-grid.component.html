@@ -105,7 +105,8 @@
           [gridOptions]="GridOptions"
           [rowData]="filteredRows"
           (gridReady)="onGridReady($event)"
-          (rowClicked)="onRowClicked($event)">
+          (rowClicked)="onRowClicked($event)"
+          (cellClicked)="onCellClicked($event)">
         </ag-grid-angular>
 
         <div class="pg-footer">
@@ -244,7 +245,8 @@
       Mode="slide"
       Title="Record Prediction & Score History"
       [Resizable]="true"
-      [WidthPx]="640"
+      [WidthPx]="drawerWidthPx"
+      (WidthChanged)="onDrawerWidthChanged($event)"
       (Closed)="closeDetail()">
 
       <div class="pg-detail-body">
@@ -257,13 +259,26 @@
               <span class="ps-mono ps-small ps-muted">{{ selectedRow.recordId }}</span>
             </div>
           </div>
-          <button
-            mjButton
-            variant="primary"
-            size="sm"
-            (click)="drillThrough(selectedRow)">
-            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in Explorer
-          </button>
+          <div class="pg-detail-record-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button
+              mjButton
+              variant="primary"
+              size="sm"
+              (click)="drillThrough(selectedRow)"
+              title="Open record in Explorer">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Open {{ entityDisplayName || 'Record' }}
+            </button>
+            @if (subjectEntityName && subjectRecordId) {
+              <button
+                mjButton
+                variant="secondary"
+                size="sm"
+                (click)="openSubjectRecord()"
+                title="Open subject record (e.g. Person, Account) in Explorer">
+                <i class="fa-solid fa-user"></i> Open {{ subjectEntityName.replace('MJ_BizApps_Common: ', '').replace('MJ_BizApps_', '') }} ({{ subjectRecordName || 'Profile' }})
+              </button>
+            }
+          </div>
         </div>
 
         <!-- Prediction Summary Card -->

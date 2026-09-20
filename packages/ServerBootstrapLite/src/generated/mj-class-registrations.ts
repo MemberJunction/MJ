@@ -864,12 +864,7 @@ import {
     MJScheduledJobEntityExtended,
 } from '@memberjunction/scheduling-engine-base';
 
-// @memberjunction/tag-engine-base (1 classes)
-import {
-    TagEngineBase,
-} from '@memberjunction/tag-engine-base';
-
-// @memberjunction/search-engine (15 classes)
+// @memberjunction/search-engine (14 classes)
 import {
     AzureAISearchProvider,
     BGEReRanker,
@@ -882,11 +877,15 @@ import {
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
-    TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
 } from '@memberjunction/search-engine';
+
+// @memberjunction/tag-engine-base (1 classes)
+import {
+    TagEngineBase,
+} from '@memberjunction/tag-engine-base';
 
 // @memberjunction/templates (3 classes)
 import {
@@ -1914,7 +1913,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DatabaseWellKnownUserSource,
     RecordComparisonCompareServerOperation,
     MJScheduledJobEntityExtended,
-    TagEngineBase,
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
@@ -1926,10 +1924,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
-    TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
+    TagEngineBase,
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
@@ -2296,8 +2294,8 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/generic-database-provider',
     '@memberjunction/record-comparison',
     '@memberjunction/scheduling-engine-base',
-    '@memberjunction/tag-engine-base',
     '@memberjunction/search-engine',
+    '@memberjunction/tag-engine-base',
     '@memberjunction/templates',
     '@memberjunction/ai-prompts',
     '@memberjunction/ai-reranker',

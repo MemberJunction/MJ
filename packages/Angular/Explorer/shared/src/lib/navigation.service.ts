@@ -2,7 +2,7 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, Metadata, IsNewEntityRecordUrlId } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { map, distinctUntilChanged } from 'rxjs/operators';
@@ -502,9 +502,15 @@ export class NavigationService implements OnDestroy {
     // a record, which is the protection the old unconditional force provided.
     let forceNew = this.shouldForceNewTab(options);
 
+    const entityInfo = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
+    const compositeKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(entityInfo, recordId) : new CompositeKey();
+    const cachedRecordName = Metadata.Provider?.GetCachedRecordNameSync?.(entityName, compositeKey);
+    const initialTitle = cachedRecordName || friendlyEntityName;
+
     const request: TabRequest = {
       ApplicationId: appId,
-      Title: `${entityName} - ${recordId}`,
+      Title: initialTitle,
       Configuration: {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
@@ -655,7 +661,12 @@ export class NavigationService implements OnDestroy {
       const parentRecordId = activeTab.resourceRecordId || activeTab.configuration?.['recordId'];
       if (typeof parentEntity === 'string' && typeof parentRecordId === 'string' && parentRecordId) {
         context['sourceTabId'] = activeTab.id;
-        context['sourceLabel'] = activeTab.title;
+        const parentEntityInfo = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === parentEntity.toLowerCase());
+        const parentKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(parentEntityInfo, parentRecordId) : new CompositeKey();
+        const cachedParentName = Metadata.Provider?.GetCachedRecordNameSync?.(parentEntity, parentKey);
+        const fallbackParentLabel = parentEntityInfo?.DisplayName || parentEntityInfo?.Name || parentEntity;
+        const sourceLabel = cachedParentName || (activeTab.title && !activeTab.title.includes(parentRecordId) ? activeTab.title : fallbackParentLabel);
+        context['sourceLabel'] = sourceLabel;
         context['sourceRecordEntity'] = parentEntity;
         context['sourceRecordId'] = parentRecordId;
         // Carry the parent's OWN origin forward. Preview-tab replacement
@@ -1034,9 +1045,12 @@ export class NavigationService implements OnDestroy {
     // a record the user is reading.
     let forceNew = tabsMode || this.shouldForceNewTab(options);
 
+    const entityInfo = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
+
     const request: TabRequest = {
       ApplicationId: appId,
-      Title: `New ${entityName}`,
+      Title: `New ${friendlyEntityName}`,
       Configuration: {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component

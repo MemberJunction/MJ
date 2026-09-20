@@ -1,0 +1,18 @@
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    <div class="ml-model-form-content">
+        <ps-model-detail
+            [model]="record"
+            [provider]="ProviderToUse"
+            [currentUser]="ProviderToUse.CurrentUser ?? null">
+        </ps-model-detail>
+    </div>
+
+</mj-record-form-container>
+}

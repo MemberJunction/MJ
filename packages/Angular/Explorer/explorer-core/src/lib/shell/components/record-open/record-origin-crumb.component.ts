@@ -1,5 +1,6 @@
-import { Component, Input, inject } from '@angular/core';
+import { Component, Input, inject, ChangeDetectorRef } from '@angular/core';
 import { NavigationService, RecordSourceContext, RecordSourceHasReturnTarget } from '@memberjunction/ng-shared';
+import { CompositeKey, Metadata } from '@memberjunction/core';
 
 /**
  * Pane-level origin crumb — the FIRST element inside a record's golden-layout
@@ -28,9 +29,9 @@ import { NavigationService, RecordSourceContext, RecordSourceHasReturnTarget } f
     @if (Origin) {
       @if (Clickable) {
         <i class="fa-solid fa-arrow-left crumb-lead" aria-hidden="true"></i>
-        @if (Origin.sourceLabel) {
+        @if (DisplayLabel) {
           <button type="button" class="crumb-seg" (click)="OnPageClick()" title="Back to where you opened this record">
-            {{ Origin.sourceLabel }}
+            {{ DisplayLabel }}
           </button>
         } @else {
           <button type="button" class="crumb-seg" (click)="OnAppClick()" [title]="'Go to ' + Origin.sourceAppName">
@@ -45,7 +46,7 @@ import { NavigationService, RecordSourceContext, RecordSourceHasReturnTarget } f
         }
       } @else {
         <!-- Provenance only — no return target (e.g. opened by an agent) -->
-        <span class="origin-static">From {{ Origin.sourceLabel }}</span>
+        <span class="origin-static">From {{ DisplayLabel || Origin.sourceLabel }}</span>
       }
     }
   `,
@@ -108,12 +109,67 @@ import { NavigationService, RecordSourceContext, RecordSourceHasReturnTarget } f
   `]
 })
 export class RecordOriginCrumbComponent {
-  @Input() Origin: RecordSourceContext | null = null;
+  private _origin: RecordSourceContext | null = null;
+  public asyncResolvedLabel?: string;
+
+  @Input()
+  set Origin(value: RecordSourceContext | null) {
+    this._origin = value;
+    this.asyncResolvedLabel = undefined;
+    this.resolveAsyncLabel();
+  }
+  get Origin(): RecordSourceContext | null {
+    return this._origin;
+  }
 
   private navigationService = inject(NavigationService);
+  private cdr = inject(ChangeDetectorRef);
 
   get Clickable(): boolean {
     return RecordSourceHasReturnTarget(this.Origin);
+  }
+
+  get DisplayLabel(): string | undefined {
+    if (this.Origin?.sourceRecordEntity && this.Origin?.sourceRecordId) {
+      if (this.asyncResolvedLabel) {
+        return this.asyncResolvedLabel;
+      }
+      const entity = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === this.Origin?.sourceRecordEntity?.toLowerCase());
+      const key = CompositeKey.FromURLSegment(entity, this.Origin.sourceRecordId);
+      const cached = Metadata.Provider?.GetCachedRecordNameSync?.(this.Origin.sourceRecordEntity, key);
+      if (cached) {
+        return cached;
+      }
+      const fallbackEntityLabel = entity?.DisplayName || entity?.Name || this.Origin.sourceRecordEntity;
+      if (this.Origin.sourceLabel && !this.Origin.sourceLabel.includes(this.Origin.sourceRecordId)) {
+        return this.Origin.sourceLabel;
+      }
+      return fallbackEntityLabel;
+    }
+    return this.Origin?.sourceLabel;
+  }
+
+  private resolveAsyncLabel(): void {
+    if (this.Origin?.sourceRecordEntity && this.Origin?.sourceRecordId && Metadata.Provider) {
+      const entity = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === this.Origin?.sourceRecordEntity?.toLowerCase());
+      const key = CompositeKey.FromURLSegment(entity, this.Origin.sourceRecordId);
+      const cached = Metadata.Provider?.GetCachedRecordNameSync?.(this.Origin.sourceRecordEntity, key);
+      if (cached) {
+        this.asyncResolvedLabel = cached;
+        return;
+      }
+      const entityName = this.Origin.sourceRecordEntity;
+      if (typeof Metadata.Provider?.GetEntityRecordName === 'function') {
+        Metadata.Provider.GetEntityRecordName(entityName, key).then(name => {
+          if (name && this.Origin?.sourceRecordEntity === entityName) {
+            this.asyncResolvedLabel = name;
+            this.cdr.markForCheck();
+          }
+        }).catch(() => {
+          // Silently ignore async name fetch error, fallback will remain active
+        });
+      }
+    }
   }
 
   /** Page segment: full restore — the captured page, section state included */

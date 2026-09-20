@@ -33,7 +33,10 @@ vi.mock('@memberjunction/ng-base-types', () => ({ BaseAngularComponent: class {}
 vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {},
   Metadata: class {},
-  CompositeKey: class { SimpleLoadFromURLSegment() { /* no-op for these specs */ } },
+  CompositeKey: class MockCompositeKey {
+    SimpleLoadFromURLSegment() { /* no-op for these specs */ }
+    static FromURLSegment() { return new MockCompositeKey(); }
+  },
   LogError: vi.fn(),
 }));
 vi.mock('@memberjunction/core-entities', () => ({

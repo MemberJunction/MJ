@@ -786,6 +786,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Synchronous lookup of a cached entity record name. Returns the cached name if available in the LRU cache, or undefined if not cached.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns The cached display name, or undefined if not in cache
+     */
+    public GetCachedRecordNameSync(entityName: string, compositeKey: CompositeKey): string | undefined {
+        return this._entityRecordNameCache.Get(this.getCacheKey(entityName, compositeKey));
+    }
+
+    /**
      * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
      * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
      * @param entityName - The name of the entity

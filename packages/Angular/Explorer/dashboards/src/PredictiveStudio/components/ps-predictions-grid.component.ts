@@ -19,18 +19,20 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CompositeKey, LogError, RunView } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { MJProcessRunDetailEntity, MJMLModelEntity } from '@memberjunction/core-entities';
+import { MJProcessRunDetailEntity, MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AgGridModule } from 'ag-grid-angular';
 import {
   AllCommunityModule,
+  CellClickedEvent,
   ColDef,
   GetRowIdParams,
   GridApi,
   GridOptions,
   GridReadyEvent,
   ICellRendererParams,
+  IRowNode,
   ModuleRegistry,
   RowClickedEvent,
   Theme,
@@ -39,11 +41,8 @@ import {
 
 import {
   parseAtRiskRows,
-  labelFromRecord,
-  type AtRiskRow,
   type RowDriver,
 } from '../at-risk.view-models';
-import { BuildRecordIdFilter } from '../../shared/record-id-filter';
 import {
   PredictiveStudioScoreHistoryService,
   type ModelScoreHistoryPoint,
@@ -156,6 +155,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   // Slide-in detail state
   public detailOpen = false;
+  public drawerWidthPx = 640;
   public selectedRow: PredictionGridRow | null = null;
   public historyLoading = false;
   public historyPoints: ModelScoreHistoryPoint[] = [];
@@ -163,7 +163,16 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public resolvedEntityId: string | null = null;
   public resolvedEntityName: string | null = null;
 
+  public subjectEntityName: string | null = null;
+  public subjectRecordId: string | null = null;
+  public subjectRecordName: string | null = null;
+
   private gridApi: GridApi<PredictionGridRow> | null = null;
+
+  // Viewport-visible record name lookup cache and state
+  private recordNameCache = new Map<string, string>();
+  private inFlightLookups = new Set<string>();
+  private visibleLookupDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── AG Grid Configuration ──
   public Theme: Theme = themeAlpine.withParams({
@@ -194,6 +203,11 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     suppressNoRowsOverlay: true,
     rowSelection: { mode: 'singleRow', enableClickSelection: false },
     getRowId: (params: GetRowIdParams<PredictionGridRow>) => params.data.recordId,
+    onBodyScrollEnd: () => this.scheduleVisibleRowsLookup(),
+    onViewportChanged: () => this.scheduleVisibleRowsLookup(),
+    onFirstDataRendered: () => this.scheduleVisibleRowsLookup(),
+    onModelUpdated: () => this.scheduleVisibleRowsLookup(),
+    onCellClicked: (event: CellClickedEvent<PredictionGridRow>) => this.onCellClicked(event),
   };
 
   public defaultColDef: ColDef = {
@@ -212,7 +226,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.columnDefs = [
       {
         field: 'recordName',
-        headerName: 'Record / Member',
+        headerName: 'Record',
         flex: 2,
         minWidth: 220,
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
@@ -222,7 +236,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           const id = this.escapeHtml(params.data.recordId);
           return `
             <div class="pg-record-cell">
-              <span class="pg-record-name" title="${name}">${name}</span>
+              <div class="pg-record-title-row">
+                <a class="pg-record-link" data-action="open-record" href="javascript:void(0)" title="Open record in Explorer">
+                  <span class="pg-record-name">${name}</span>
+                  <i class="fa-solid fa-arrow-up-right-from-square pg-record-open-icon"></i>
+                </a>
+              </div>
               ${hasCustomName ? `<span class="pg-record-id ps-mono" title="${id}">${id}</span>` : ''}
             </div>
           `;
@@ -332,6 +351,13 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   }
 
   ngOnInit(): void {
+    const pref = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.predictions.drawerWidth');
+    if (pref) {
+      const w = parseInt(pref, 10);
+      if (!isNaN(w) && w >= 360 && w <= 1400) {
+        this.drawerWidthPx = w;
+      }
+    }
     this.setupColumnDefs();
     void this.loadPredictions();
   }
@@ -347,6 +373,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   }
 
   ngOnDestroy(): void {
+    if (this.visibleLookupDebounceTimer) {
+      clearTimeout(this.visibleLookupDebounceTimer);
+      this.visibleLookupDebounceTimer = null;
+    }
+    this.recordNameCache.clear();
+    this.inFlightLookups.clear();
     this.gridApi = null;
   }
 
@@ -470,8 +502,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
       this.applyFilter();
 
-      // 5. Asynchronously resolve friendly display names from target entity in background
-      void this.resolveRecordNames(this.allRows);
+      // 5. Schedule lazy lookup of record names for visible rows
+      this.scheduleVisibleRowsLookup(0);
     } catch (err) {
       this.loadError = err instanceof Error ? err.message : String(err);
       LogError(`PSPredictionsGridComponent.loadPredictions: ${this.loadError}`);
@@ -531,60 +563,150 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   }
 
   /**
-   * Resolve friendly record names (e.g. Member name, Person full name, Order title)
-   * for the records in batches without blocking the initial grid display.
+   * Returns row nodes currently rendered in the AG Grid viewport.
+   * Virtualized grids only render rows visible on screen (plus a small buffer).
    */
-  private async resolveRecordNames(rows: PredictionGridRow[]): Promise<void> {
-    if (!this.resolvedEntityName || rows.length === 0) return;
+  private getVisibleRowNodes(): IRowNode<PredictionGridRow>[] {
+    if (!this.gridApi) return [];
+
+    const rendered = this.gridApi.getRenderedNodes();
+    if (rendered && rendered.length > 0) {
+      return rendered;
+    }
+
+    const firstIdx = this.gridApi.getFirstDisplayedRowIndex();
+    const lastIdx = this.gridApi.getLastDisplayedRowIndex();
+    if (firstIdx < 0 || lastIdx < 0) return [];
+
+    const nodes: IRowNode<PredictionGridRow>[] = [];
+    for (let i = firstIdx; i <= lastIdx; i++) {
+      const node = this.gridApi.getDisplayedRowAtIndex(i);
+      if (node) {
+        nodes.push(node);
+      }
+    }
+    return nodes;
+  }
+
+  /**
+   * Schedule lazy lookup of record names for rows currently visible in the AG Grid viewport.
+   * Debounced so rapid scrolling does not trigger redundant batches.
+   */
+  public scheduleVisibleRowsLookup(delayMs: number = 60): void {
+    if (this.visibleLookupDebounceTimer) {
+      clearTimeout(this.visibleLookupDebounceTimer);
+    }
+    this.visibleLookupDebounceTimer = setTimeout(() => {
+      void this.resolveVisibleRecordNames();
+    }, delayMs);
+  }
+
+  /**
+   * Resolve display names (e.g. member name, company name) ONLY for visible rows in the viewport
+   * using ProviderToUse.GetEntityRecordNames.
+   */
+  private async resolveVisibleRecordNames(): Promise<void> {
+    if (!this.gridApi || !this.resolvedEntityName) {
+      return;
+    }
+
+    const provider = this.ProviderToUse;
+    const entity = provider.EntityByName(this.resolvedEntityName);
+    if (!entity) {
+      return;
+    }
+
+    const visibleNodes = this.getVisibleRowNodes();
+    if (visibleNodes.length === 0) {
+      return;
+    }
+
+    const needed: { normId: string; recordId: string; node: IRowNode<PredictionGridRow> }[] = [];
+    const cachedToUpdate: IRowNode<PredictionGridRow>[] = [];
+
+    for (const node of visibleNodes) {
+      const data = node.data;
+      if (!data || !data.recordId) continue;
+
+      const normId = NormalizeUUID(data.recordId);
+      if (this.recordNameCache.has(normId)) {
+        const cachedName = this.recordNameCache.get(normId);
+        if (cachedName && data.recordName !== cachedName) {
+          data.recordName = cachedName;
+          cachedToUpdate.push(node);
+        }
+        continue;
+      }
+
+      if (this.inFlightLookups.has(normId)) {
+        continue;
+      }
+
+      needed.push({ normId, recordId: data.recordId, node });
+    }
+
+    if (cachedToUpdate.length > 0 && this.gridApi) {
+      this.gridApi.refreshCells({ rowNodes: cachedToUpdate, columns: ['recordName'], force: true });
+    }
+
+    if (needed.length === 0) {
+      return;
+    }
+
+    // Mark as in-flight
+    for (const item of needed) {
+      this.inFlightLookups.add(item.normId);
+    }
 
     try {
-      const provider = this.ProviderToUse;
-      const entity = provider.EntityByName(this.resolvedEntityName);
-      if (!entity) return;
+      const inputs: EntityRecordNameInput[] = needed.map((item) => ({
+        EntityName: entity.Name,
+        CompositeKey: CompositeKey.FromURLSegment(entity, item.recordId),
+      }));
 
-      const pkNames = entity.PrimaryKeys.map((pk) => pk.Name);
-      const candidates = ['MemberName', 'Member', 'FullName', 'Name', 'FirstName', 'LastName', 'Email', 'Title', 'Description'];
-      const labelFields = candidates.filter((c) => entity.Fields.some((f) => f.Name.toLowerCase() === c.toLowerCase()));
+      const results: EntityRecordNameResult[] = await provider.GetEntityRecordNames(
+        inputs,
+        provider.CurrentUser ?? undefined,
+      );
 
-      const batchSize = 100;
-      for (let i = 0; i < Math.min(rows.length, 500); i += batchSize) {
-        const batch = rows.slice(i, i + batchSize);
-        const ids = batch.map((r) => r.recordId);
+      const nodesToRefresh: IRowNode<PredictionGridRow>[] = [];
 
-        const res = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>(
-          {
-            EntityName: entity.Name,
-            ExtraFilter: BuildRecordIdFilter(entity, ids),
-            ...(labelFields.length > 0 ? { Fields: [...pkNames, ...labelFields] } : {}),
-            ResultType: 'simple',
-            MaxRows: ids.length,
-          },
-          provider.CurrentUser ?? undefined,
-        );
+      for (let i = 0; i < results.length; i++) {
+        const res = results[i];
+        const item = needed[i];
+        if (!item) continue;
 
-        if (!res.Success || !res.Results) continue;
-
-        const byId = new Map<string, Record<string, unknown>>();
-        for (const row of res.Results) {
-          const key = CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment();
-          byId.set(NormalizeUUID(key), row);
-        }
-
-        for (const r of batch) {
-          const rec = byId.get(NormalizeUUID(r.recordId));
-          if (rec) {
-            const lbl = labelFromRecord(rec);
-            if (lbl) r.recordName = lbl;
+        if (res && res.Success && res.RecordName) {
+          this.recordNameCache.set(item.normId, res.RecordName);
+          if (item.node.data) {
+            item.node.data.recordName = res.RecordName;
+            nodesToRefresh.push(item.node);
           }
-        }
-
-        if (this.gridApi) {
-          this.gridApi.applyTransaction({ update: batch });
+        } else {
+          // Fallback: cache the recordId to avoid repeatedly re-querying failed records
+          this.recordNameCache.set(item.normId, item.recordId);
         }
       }
+
+      // Keep allRows in sync so client-side filter and view toggle retain resolved names
+      for (const row of this.allRows) {
+        const cached = this.recordNameCache.get(NormalizeUUID(row.recordId));
+        if (cached && row.recordName !== cached) {
+          row.recordName = cached;
+        }
+      }
+
+      if (this.gridApi && nodesToRefresh.length > 0) {
+        this.gridApi.refreshCells({ rowNodes: nodesToRefresh, columns: ['recordName'], force: true });
+      }
+
       this.cdr.markForCheck();
-    } catch {
-      // Cosmetic resolution failure: rows keep their recordId
+    } catch (err) {
+      LogError(`PSPredictionsGridComponent.resolveVisibleRecordNames failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      for (const item of needed) {
+        this.inFlightLookups.delete(item.normId);
+      }
     }
   }
 
@@ -592,9 +714,23 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   public onGridReady(event: GridReadyEvent<PredictionGridRow>): void {
     this.gridApi = event.api;
+    this.scheduleVisibleRowsLookup(50);
+  }
+
+  public onCellClicked(event: CellClickedEvent<PredictionGridRow>): void {
+    const target = event.event?.target as HTMLElement | null;
+    if (target && target.closest('[data-action="open-record"]')) {
+      if (event.data) {
+        this.drillThrough(event.data);
+      }
+    }
   }
 
   public onRowClicked(event: RowClickedEvent<PredictionGridRow>): void {
+    const target = event.event?.target as HTMLElement | null;
+    if (target && target.closest('[data-action="open-record"]')) {
+      return; // Handled by cell link click; do not open detail drawer
+    }
     if (event.data) {
       this.openDetail(event.data);
     }
@@ -671,6 +807,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
     this.filteredRows = rows;
     this.cdr.markForCheck();
+    this.scheduleVisibleRowsLookup(30);
   }
 
   // ── Drill-Through Navigation ──
@@ -680,13 +817,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     if (!entName) return;
 
     try {
-      const ck = new CompositeKey();
       const entity = this.ProviderToUse.EntityByName(entName);
-      if (entity) {
-        ck.LoadFromURLSegment(entity, row.recordId);
-      } else {
-        ck.SimpleLoadFromURLSegment(row.recordId);
-      }
+      const ck = CompositeKey.FromURLSegment(entity, row.recordId);
       this.navigationService.OpenEntityRecord(entName, ck);
     } catch (err) {
       LogError(`PSPredictionsGridComponent.drillThrough failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -695,21 +827,126 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   // ── Slide-In Detail & Score History ──
 
+  public onDrawerWidthChanged(width: number): void {
+    this.drawerWidthPx = width;
+    UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.predictions.drawerWidth', width.toString());
+  }
+
   public openDetail(row: PredictionGridRow): void {
     this.selectedRow = row;
     this.detailOpen = true;
     this.historyPoints = [];
     this.historyLoading = true;
+    this.subjectEntityName = null;
+    this.subjectRecordId = null;
+    this.subjectRecordName = null;
     this.cdr.markForCheck();
 
     void this.loadScoreHistory(row.recordId);
+
+    const entName = this.resolvedEntityName || this.entityName;
+    if (entName) {
+      void this.resolveSubjectRecord(entName, row.recordId);
+    }
   }
 
   public closeDetail(): void {
     this.detailOpen = false;
     this.selectedRow = null;
     this.historyPoints = [];
+    this.subjectEntityName = null;
+    this.subjectRecordId = null;
+    this.subjectRecordName = null;
     this.cdr.markForCheck();
+  }
+
+  public openSubjectRecord(): void {
+    if (!this.subjectEntityName || !this.subjectRecordId) return;
+    try {
+      const entity = this.ProviderToUse.EntityByName(this.subjectEntityName);
+      if (!entity) return;
+      const ck = CompositeKey.FromURLSegment(entity, this.subjectRecordId);
+      this.navigationService.OpenEntityRecord(this.subjectEntityName, ck);
+    } catch (err) {
+      LogError(`PSPredictionsGridComponent.openSubjectRecord failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  private async resolveSubjectRecord(targetEntityName: string, recordId: string): Promise<void> {
+    try {
+      const provider = this.ProviderToUse;
+      const entity = provider.EntityByName(targetEntityName);
+      if (!entity) return;
+
+      const candidates = [
+        { field: 'PersonID', entity: 'MJ_BizApps_Common: People' },
+        { field: 'MemberID', entity: 'MoreCheese: Member Profiles' },
+        { field: 'ContactID', entity: 'MJ_BizApps_Common: Contacts' },
+        { field: 'AccountID', entity: 'MJ_BizApps_Common: Accounts' },
+        { field: 'CustomerID', entity: 'MJ_BizApps_Common: Customers' },
+      ];
+
+      let matchedField: string | null = null;
+      let targetRelatedEntityName: string | null = null;
+
+      for (const c of candidates) {
+        const f = entity.Fields.find((fld) => fld.Name.toLowerCase() === c.field.toLowerCase());
+        if (f) {
+          matchedField = f.Name;
+          targetRelatedEntityName = f.RelatedEntity || c.entity;
+          break;
+        }
+      }
+
+      if (!matchedField || !targetRelatedEntityName) {
+        const personField = entity.Fields.find((fld) => fld.RelatedEntity && fld.RelatedEntity.toLowerCase().includes('people'));
+        if (personField) {
+          matchedField = personField.Name;
+          targetRelatedEntityName = personField.RelatedEntity;
+        }
+      }
+
+      if (!matchedField || !targetRelatedEntityName) return;
+
+      const recRes = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>(
+        {
+          EntityName: entity.Name,
+          ExtraFilter: `${entity.FirstPrimaryKey.Name} = '${recordId.replace(/'/g, "''")}'`, // first-pk-ok: Single-key entity lookup by recordId
+          MaxRows: 1,
+          ResultType: 'simple',
+          Fields: [matchedField],
+        },
+        provider.CurrentUser ?? undefined,
+      );
+
+      if (recRes.Success && recRes.Results && recRes.Results.length > 0) {
+        const subjectId = recRes.Results[0][matchedField];
+        if (typeof subjectId === 'string' && subjectId) {
+          this.subjectEntityName = targetRelatedEntityName;
+          this.subjectRecordId = subjectId;
+
+          const relatedEntity = provider.EntityByName(targetRelatedEntityName);
+          if (relatedEntity) {
+            const names = await provider.GetEntityRecordNames(
+              [
+                {
+                  EntityName: targetRelatedEntityName,
+                  CompositeKey: CompositeKey.FromURLSegment(relatedEntity, subjectId),
+                },
+              ],
+              provider.CurrentUser ?? undefined,
+            );
+
+            if (names && names.length > 0 && names[0].Success) {
+              this.subjectRecordName = names[0].RecordName ?? null;
+            }
+          }
+          this.cdr.markForCheck();
+        }
+      }
+    } catch (err) {
+      LogError(`PSPredictionsGridComponent.resolveSubjectRecord failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private async loadScoreHistory(recordId: string): Promise<void> {

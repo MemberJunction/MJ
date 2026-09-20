@@ -1,7 +1,17 @@
+import '@angular/compiler';
 import { describe, it, expect, vi } from 'vitest';
+import { getTestBed } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import { NavigationService } from '@memberjunction/ng-shared';
+import { Metadata } from '@memberjunction/core';
 import { RecordOriginCrumbComponent } from './record-origin-crumb.component';
+
+try {
+  getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+} catch {
+  // already initialized
+}
 
 /**
  * DOM coverage for the pane-level origin crumb — the first element inside a
@@ -70,5 +80,65 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
     const { fixture } = render(null);
     expect(query(fixture, '.crumb-seg')).toBeNull();
     expect(query(fixture, '.origin-static')).toBeNull();
+  });
+
+  it('renders entity DisplayName instead of raw PKEY when opened from another record', () => {
+    // Provide metadata for entity lookup
+    const prevProvider = (globalThis as Record<string, unknown>)['__mock_provider'];
+    (Metadata as { Provider: unknown }).Provider = {
+      Entities: [
+        {
+          Name: 'MJ_BizApps_Orders: Order Headers',
+          DisplayName: 'Order Headers',
+          FirstPrimaryKey: { Name: 'ID' }
+        }
+      ],
+      GetCachedRecordNameSync: () => undefined
+    };
+
+    try {
+      const { fixture } = render({
+        sourceAppId: 'app-orders',
+        sourceAppName: 'Orders',
+        sourceRecordEntity: 'MJ_BizApps_Orders: Order Headers',
+        sourceRecordId: 'EFEF4E06-A42B-536B-AD2F-0D09F82E8CBD',
+        sourceLabel: 'MJ_BizApps_Orders: Order Headers - EFEF4E06-A42B-536B-AD2F-0D09F82E8CBD'
+      });
+      const segs = fixture.nativeElement.querySelectorAll('.crumb-seg');
+      expect(segs.length).toBe(1);
+      // It should NOT show the raw entity or PKEY, but the friendly DisplayName!
+      expect(segs[0].textContent?.trim()).toBe('Order Headers');
+    } finally {
+      (Metadata as { Provider: unknown }).Provider = prevProvider;
+    }
+  });
+
+  it('renders cached record name when available in metadata cache', () => {
+    const prevProvider = (globalThis as Record<string, unknown>)['__mock_provider'];
+    (Metadata as { Provider: unknown }).Provider = {
+      Entities: [
+        {
+          Name: 'MJ_BizApps_Orders: Order Headers',
+          DisplayName: 'Order Headers',
+          FirstPrimaryKey: { Name: 'ID' }
+        }
+      ],
+      GetCachedRecordNameSync: () => 'ORD-00042'
+    };
+
+    try {
+      const { fixture } = render({
+        sourceAppId: 'app-orders',
+        sourceAppName: 'Orders',
+        sourceRecordEntity: 'MJ_BizApps_Orders: Order Headers',
+        sourceRecordId: 'EFEF4E06-A42B-536B-AD2F-0D09F82E8CBD',
+        sourceLabel: 'MJ_BizApps_Orders: Order Headers - EFEF4E06-A42B-536B-AD2F-0D09F82E8CBD'
+      });
+      const segs = fixture.nativeElement.querySelectorAll('.crumb-seg');
+      expect(segs.length).toBe(1);
+      expect(segs[0].textContent?.trim()).toBe('ORD-00042');
+    } finally {
+      (Metadata as { Provider: unknown }).Provider = prevProvider;
+    }
   });
 });

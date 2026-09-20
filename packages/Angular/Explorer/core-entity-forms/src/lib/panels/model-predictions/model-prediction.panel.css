@@ -157,3 +157,343 @@
     background: color-mix(in srgb, var(--mj-brand-primary) 70%, transparent);
     transition: width 0.3s ease;
 }
+
+/* ---- Card History Action Button ---- */
+.mpp-head-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.mpp-card-history-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm, 4px);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mpp-card-history-btn:hover {
+    color: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+    background: var(--mj-bg-surface-hover);
+}
+
+/* ---- Prediction History Section ---- */
+.mpp-history-section {
+    margin-top: 14px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md, 8px);
+    background: var(--mj-bg-surface-card);
+    overflow: hidden;
+}
+
+.mpp-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--mj-bg-surface);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+.mpp-history-header:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.mpp-history-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.mpp-history-title i {
+    color: var(--mj-brand-primary);
+}
+
+.mpp-history-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 999px;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse, #fff);
+}
+
+.mpp-history-chevron {
+    font-size: 0.8rem;
+    color: var(--mj-text-muted);
+}
+
+.mpp-history-body {
+    padding: 12px 14px;
+    border-top: 1px solid var(--mj-border-default);
+}
+
+.mpp-history-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--mj-text-muted);
+    padding: 8px 0;
+}
+
+.mpp-history-empty {
+    font-size: 0.8rem;
+    color: var(--mj-text-muted);
+    padding: 8px 0;
+}
+
+/* ---- Multi-Model Filter Tabs ---- */
+.mpp-model-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.mpp-filter-pill {
+    padding: 3px 10px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mpp-filter-pill:hover {
+    color: var(--mj-text-primary);
+    border-color: var(--mj-border-hover, var(--mj-brand-primary));
+}
+
+.mpp-filter-pill.active {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse, #fff);
+    border-color: var(--mj-brand-primary);
+}
+
+/* ---- History Table ---- */
+.mpp-history-table-wrap {
+    overflow-x: auto;
+}
+
+.mpp-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.mpp-history-table th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--mj-text-muted);
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.mpp-history-table th.actions-th {
+    text-align: right;
+}
+
+.mpp-history-table td {
+    padding: 8px;
+    border-bottom: 1px solid var(--mj-border-subtle, var(--mj-border-default));
+    vertical-align: middle;
+}
+
+.mpp-history-row:hover td {
+    background: var(--mj-bg-surface-hover);
+}
+
+.mpp-history-row.expanded td {
+    background: var(--mj-bg-surface-sunken);
+}
+
+.mpp-col-date {
+    white-space: nowrap;
+    color: var(--mj-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.mpp-col-model {
+    min-width: 140px;
+}
+
+.mpp-history-model-name {
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.mpp-history-model-prov {
+    font-size: 0.72rem;
+    color: var(--mj-text-muted);
+}
+
+.mpp-col-pred {
+    white-space: nowrap;
+}
+
+.mpp-history-pred-val {
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.mpp-history-pred-sub {
+    margin-left: 4px;
+    font-size: 0.72rem;
+    color: var(--mj-text-muted);
+}
+
+/* Status Pill */
+.mpp-status-pill {
+    display: inline-block;
+    padding: 1px 7px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.mpp-status-succeeded {
+    background: color-mix(in srgb, var(--mj-status-success, #16a34a) 15%, transparent);
+    color: var(--mj-status-success, #16a34a);
+}
+
+.mpp-status-failed {
+    background: color-mix(in srgb, var(--mj-status-danger, #dc2626) 15%, transparent);
+    color: var(--mj-status-danger, #dc2626);
+}
+
+.mpp-status-pending,
+.mpp-status-skipped {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+}
+
+/* Actions in History Row */
+.mpp-col-actions {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.mpp-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm, 4px);
+    cursor: pointer;
+    margin-left: 4px;
+    transition: all 0.15s ease;
+}
+
+.mpp-action-btn:hover {
+    color: var(--mj-text-primary);
+    border-color: var(--mj-border-hover, var(--mj-brand-primary));
+}
+
+.mpp-action-drilldown {
+    color: var(--mj-brand-primary);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+}
+
+.mpp-action-drilldown:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+    border-color: var(--mj-brand-primary);
+}
+
+/* Inspection Drawer */
+.mpp-history-detail-row td {
+    padding: 0;
+    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.mpp-history-detail-pane {
+    padding: 12px 16px;
+    background: var(--mj-bg-surface-sunken);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.mpp-detail-subtitle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--mj-text-secondary);
+    margin-bottom: 6px;
+}
+
+.mpp-detail-error {
+    font-size: 0.78rem;
+    color: var(--mj-status-danger, #dc2626);
+    background: color-mix(in srgb, var(--mj-status-danger, #dc2626) 8%, transparent);
+    padding: 6px 10px;
+    border-radius: var(--mj-radius-sm, 4px);
+}
+
+.mpp-detail-driver-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 380px;
+}
+
+.mpp-detail-driver-item {
+    display: grid;
+    grid-template-columns: minmax(80px, 45%) 1fr;
+    align-items: center;
+    gap: 8px;
+}
+
+.mpp-detail-payload {
+    margin-top: 2px;
+}
+
+.mpp-payload-pre {
+    margin: 0;
+    padding: 8px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm, 4px);
+    overflow-x: auto;
+    max-height: 200px;
+    color: var(--mj-text-primary);
+}
