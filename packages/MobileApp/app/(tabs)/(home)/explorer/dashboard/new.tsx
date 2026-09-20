@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView,
     StyleSheet, Text, TextInput, View,
@@ -6,7 +6,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Icons } from '@/components/Icon';
-import { LoadQueries, CreateConfigDashboard, type QueryListItem } from '@/data/services/explorer';
+import {
+    LoadQueries, LoadDashboardArtifactOptions, CreateConfigDashboard,
+    type QueryListItem, type DashboardArtifactOption,
+} from '@/data/services/explorer';
 import { useMJ } from '@/providers/mj-provider';
 import { Colors, Radius, Type } from '@/theme/tokens';
 
@@ -32,11 +35,42 @@ import { Colors, Radius, Type } from '@/theme/tokens';
  * and orders them; the layout written is ordinary Golden Layout two-to-a-row, so a desktop inherits
  * a real dashboard and can rearrange it properly.
  */
+/**
+ * A panel the user picked, or one they could pick.
+ *
+ * `Key` exists because a query id and an artifact id come from different tables and could in
+ * principle collide; prefixing keeps the picked-list keying and de-duplication honest.
+ */
+type PickedPanel = {
+    Key: string;
+    QueryID?: string;
+    ArtifactID?: string;
+    Title: string;
+    Subtitle: string | null;
+    /** What the panel will be, shown as a chip so the composer is not a list of indistinguishable rows. */
+    Kind: 'Query' | 'Artifact' | 'Interactive';
+};
+
+/** The kind chip. `Interactive` gets its own colour because it behaves differently — it runs. */
+function KindChip({ Kind }: { Kind: PickedPanel['Kind'] }) {
+    const tint = Kind === 'Interactive'
+        ? { bg: Colors.brandSoft, fg: Colors.brand }
+        : Kind === 'Artifact'
+            ? { bg: Colors.positiveSoft, fg: Colors.positive }
+            : { bg: Colors.surface2, fg: Colors.ink3 };
+    return (
+        <View style={[styles.chip, { backgroundColor: tint.bg }]}>
+            <Text style={[styles.chipText, { color: tint.fg }]}>{Kind.toUpperCase()}</Text>
+        </View>
+    );
+}
+
 export default function NewDashboardScreen() {
     const { status } = useMJ();
     const [name, setName] = useState('');
     const [search, setSearch] = useState('');
-    const [picked, setPicked] = useState<QueryListItem[]>([]);
+    const [picked, setPicked] = useState<PickedPanel[]>([]);
+    const [artifacts, setArtifacts] = useState<DashboardArtifactOption[]>([]);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -51,14 +85,34 @@ export default function NewDashboardScreen() {
         () => (status === 'ready' ? LoadQueries().filter((q) => q.requiresParameters).length : 0),
         [status],
     );
+    const loadArtifacts = useCallback(async () => {
+        if (status !== 'ready') return;
+        setArtifacts(await LoadDashboardArtifactOptions());
+    }, [status]);
+    useEffect(() => { void loadArtifacts(); }, [loadArtifacts]);
+
+    // Queries and artifacts land in one searchable list, because from the user's side both answers
+    // are just "a thing to put on the dashboard" — the distinction matters to the layout writer,
+    // not to the person composing.
+    const options = useMemo<PickedPanel[]>(() => [
+        ...queries.map((q): PickedPanel => ({
+            Key: `q:${q.id}`, QueryID: q.id, Title: q.name, Subtitle: q.category, Kind: 'Query',
+        })),
+        ...artifacts.map((a): PickedPanel => ({
+            Key: `a:${a.id}`, ArtifactID: a.id, Title: a.name,
+            Subtitle: a.conversation ? `${a.typeName} · ${a.conversation}` : a.typeName,
+            Kind: a.typeName === 'Component' ? 'Interactive' : 'Artifact',
+        })),
+    ], [queries, artifacts]);
+
     const results = useMemo(() => {
         const q = search.trim().toLowerCase();
-        const available = queries.filter((x) => !picked.some((p) => p.id === x.id));
+        const available = options.filter((x) => !picked.some((p) => p.Key === x.Key));
         if (!q) return available.slice(0, 40);
         return available
-            .filter((x) => x.name.toLowerCase().includes(q) || (x.category ?? '').toLowerCase().includes(q))
+            .filter((x) => x.Title.toLowerCase().includes(q) || (x.Subtitle ?? '').toLowerCase().includes(q))
             .slice(0, 40);
-    }, [queries, search, picked]);
+    }, [options, search, picked]);
 
     const canSave = name.trim().length > 0 && picked.length > 0 && !saving;
 
@@ -79,7 +133,9 @@ export default function NewDashboardScreen() {
         const result = await CreateConfigDashboard(
             name.trim(),
             null,
-            picked.map((p) => ({ QueryID: p.id, Title: p.name })),
+            picked.map((p) => (p.ArtifactID
+                ? { ArtifactID: p.ArtifactID, Title: p.Title }
+                : { QueryID: p.QueryID, Title: p.Title })),
         );
         setSaving(false);
         if ('Error' in result) {
@@ -130,16 +186,19 @@ export default function NewDashboardScreen() {
                             <Text style={styles.sectionTitle}>Panels · {picked.length}</Text>
                             <View style={styles.card}>
                                 {picked.map((p, i) => (
-                                    <View key={p.id} style={styles.row}>
+                                    <View key={p.Key} style={styles.row}>
                                         <View style={styles.rowBody}>
-                                            <Text style={styles.rowTitle} numberOfLines={1}>{p.name}</Text>
-                                            {p.category ? (
-                                                <Text style={styles.rowSub} numberOfLines={1}>{p.category}</Text>
+                                            <View style={styles.titleRow}>
+                                                <Text style={styles.rowTitle} numberOfLines={1}>{p.Title}</Text>
+                                                <KindChip Kind={p.Kind} />
+                                            </View>
+                                            {p.Subtitle ? (
+                                                <Text style={styles.rowSub} numberOfLines={1}>{p.Subtitle}</Text>
                                             ) : null}
                                         </View>
                                         <Pressable
                                             hitSlop={6} style={styles.moveBtn}
-                                            accessibilityRole="button" accessibilityLabel={`Move ${p.name} up`}
+                                            accessibilityRole="button" accessibilityLabel={`Move ${p.Title} up`}
                                             disabled={i === 0} onPress={() => move(i, -1)}
                                         >
                                             <Icons.ChevronUp size={18} strokeWidth={2}
@@ -147,7 +206,7 @@ export default function NewDashboardScreen() {
                                         </Pressable>
                                         <Pressable
                                             hitSlop={6} style={styles.moveBtn}
-                                            accessibilityRole="button" accessibilityLabel={`Move ${p.name} down`}
+                                            accessibilityRole="button" accessibilityLabel={`Move ${p.Title} down`}
                                             disabled={i === picked.length - 1} onPress={() => move(i, 1)}
                                         >
                                             <Icons.ChevronDown size={18} strokeWidth={2}
@@ -155,8 +214,8 @@ export default function NewDashboardScreen() {
                                         </Pressable>
                                         <Pressable
                                             hitSlop={6} style={styles.moveBtn}
-                                            accessibilityRole="button" accessibilityLabel={`Remove ${p.name}`}
-                                            onPress={() => setPicked((prev) => prev.filter((x) => x.id !== p.id))}
+                                            accessibilityRole="button" accessibilityLabel={`Remove ${p.Title}`}
+                                            onPress={() => setPicked((prev) => prev.filter((x) => x.Key !== p.Key))}
                                         >
                                             <Icons.X size={17} color={Colors.danger} strokeWidth={2} />
                                         </Pressable>
@@ -166,8 +225,9 @@ export default function NewDashboardScreen() {
                         </View>
                     ) : (
                         <Text style={styles.hint}>
-                            Pick saved queries below. Each becomes a panel — numbers render as a tile,
-                            a single series as a chart, anything else as a table.
+                            Pick saved queries and artifacts below. Each becomes a panel — numbers
+                            render as a tile, a single series as a chart, and an interactive
+                            component runs right in the panel.
                         </Text>
                     )}
 
@@ -189,18 +249,21 @@ export default function NewDashboardScreen() {
                                         ? 'No approved saved queries are available to you.'
                                         : `Nothing matching “${search}”.`}
                                 </Text>
-                            ) : results.map((qi) => (
+                            ) : results.map((opt) => (
                                 <Pressable
-                                    key={qi.id}
+                                    key={opt.Key}
                                     style={styles.row}
                                     accessibilityRole="button"
-                                    accessibilityLabel={`Add ${qi.name}`}
-                                    onPress={() => { setPicked((prev) => [...prev, qi]); setSearch(''); }}
+                                    accessibilityLabel={`Add ${opt.Title}`}
+                                    onPress={() => { setPicked((prev) => [...prev, opt]); setSearch(''); }}
                                 >
                                     <View style={styles.rowBody}>
-                                        <Text style={styles.rowTitle} numberOfLines={1}>{qi.name}</Text>
-                                        {qi.category ? (
-                                            <Text style={styles.rowSub} numberOfLines={1}>{qi.category}</Text>
+                                        <View style={styles.titleRow}>
+                                            <Text style={styles.rowTitle} numberOfLines={1}>{opt.Title}</Text>
+                                            <KindChip Kind={opt.Kind} />
+                                        </View>
+                                        {opt.Subtitle ? (
+                                            <Text style={styles.rowSub} numberOfLines={1}>{opt.Subtitle}</Text>
                                         ) : null}
                                     </View>
                                     <Icons.Plus size={18} color={Colors.brand} strokeWidth={2.2} />
@@ -255,7 +318,10 @@ const styles = StyleSheet.create({
     },
     row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 13, paddingVertical: 11 },
     rowBody: { flex: 1, gap: 2 },
-    rowTitle: { fontSize: 14.5, color: Colors.ink, fontWeight: Type.medium },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+    rowTitle: { flexShrink: 1, fontSize: 14.5, color: Colors.ink, fontWeight: Type.medium },
+    chip: { paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 999 },
+    chipText: { fontSize: 9.5, fontWeight: '700', letterSpacing: 0.4 },
     rowSub: { fontSize: 12, color: Colors.ink3 },
     moveBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
     empty: { padding: 14, fontSize: 13.5, color: Colors.ink3 },

@@ -3,6 +3,7 @@ import {
     BuildDashboardConfig,
     ReadDashboardQueryIDs,
     QUERY_PART_TYPE_ID,
+    ARTIFACT_PART_TYPE_ID,
 } from '@/dashboards/dashboard-config';
 
 /**
@@ -75,6 +76,30 @@ describe('BuildDashboardConfig', () => {
         const parsed = JSON.parse(BuildDashboardConfig([])) as { layout: { root: { content: unknown[] } } };
         expect(parsed.layout.root.content).toEqual([]);
         expect(collectComponentStates(BuildDashboardConfig([]))).toEqual([]);
+    });
+});
+
+describe('artifact panels', () => {
+    const mixed = [
+        { QueryID: 'Q-1', Title: 'Active users' },
+        { ArtifactID: 'A-1', Title: 'AI model catalog' },
+    ];
+
+    it('stamps the Artifact part type on artifact panels and Query on query panels', () => {
+        // Getting this backwards renders an interactive component as a failed query, which is the
+        // kind of thing that looks like a data problem and is actually a layout-writer bug.
+        const states = collectComponentStates(BuildDashboardConfig(mixed));
+        expect(states[0].partTypeId).toBe(QUERY_PART_TYPE_ID);
+        expect(states[1].partTypeId).toBe(ARTIFACT_PART_TYPE_ID);
+    });
+
+    it('writes artifactId rather than queryId for an artifact panel', () => {
+        const states = collectComponentStates(BuildDashboardConfig(mixed));
+        expect(states[1].config).toEqual({ type: 'Artifact', artifactId: 'A-1' });
+    });
+
+    it('round-trips a mixed dashboard in order', () => {
+        expect(ReadDashboardQueryIDs(BuildDashboardConfig(mixed))).toEqual(mixed);
     });
 });
 

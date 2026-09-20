@@ -9,7 +9,7 @@ import { useArtifact } from '@/hooks/useConversations';
 import type { LoadedArtifact } from '@/data/services/artifacts';
 import { DesktopFallback, InteractiveComponentRenderer } from '@/interactive/InteractiveComponentRenderer';
 import { AssessSpec } from '@/interactive/mobile-safety';
-import { ResolveMobileArtifactRenderer } from '@/artifacts/BaseMobileArtifactRenderer';
+import { ArtifactContentView } from '@/artifacts/ArtifactContentView';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /** Horizontal padding applied by the scroll body, used to size charts. */
@@ -68,7 +68,7 @@ export default function ArtifactDetailScreen() {
             ) : (
                 <ScrollView contentContainerStyle={styles.body}>
                     {artifact.description ? <Text style={styles.description}>{artifact.description}</Text> : null}
-                    <ArtifactContent artifact={artifact} />
+                    <ArtifactContentView artifact={artifact} />
                 </ScrollView>
             )}
 
@@ -84,137 +84,6 @@ export default function ArtifactDetailScreen() {
                 </View>
             ) : null}
         </SafeAreaView>
-    );
-}
-
-/**
- * Dispatches a loaded artifact to its renderer.
- *
- * A REGISTERED renderer wins, resolved by artifact type name the same way `ng-conversations`
- * resolves its viewer plugins — so an artifact type added to MJ metadata reaches a renderer by
- * registration rather than by someone extending a sniffing heuristic.
- *
- * The `kind` switch below remains as the fallback for the types that have not moved onto the
- * registry yet. It classifies by looking at the content, which works and is honest about being a
- * guess, but it is not a contract.
- */
-function ArtifactContent({ artifact }: { artifact: LoadedArtifact }) {
-    const { width } = useWindowDimensions();
-    const contentWidth = width - BODY_PADDING * 2;
-
-    const Registered = ResolveMobileArtifactRenderer(artifact.typeName, artifact.contentType);
-    if (Registered) {
-        return (
-            <Registered
-                TypeName={artifact.typeName}
-                ContentType={artifact.contentType}
-                Content={artifact.content}
-                Name={artifact.name}
-            />
-        );
-    }
-
-    switch (artifact.kind) {
-        case 'json-table':
-            return (
-                <View style={styles.cards}>
-                    {(artifact.rows ?? []).slice(0, 100).map((row, idx) => {
-                        const keys = Object.keys(row).slice(0, 6);
-                        return (
-                            <View key={idx} style={styles.recordCard}>
-                                {keys.map((k) => (
-                                    <View key={k} style={styles.cell}>
-                                        <Text style={styles.cellKey}>{k}</Text>
-                                        <Text style={styles.cellVal} numberOfLines={2}>
-                                            {row[k] === null || row[k] === undefined ? '—' : String(row[k])}
-                                        </Text>
-                                    </View>
-                                ))}
-                            </View>
-                        );
-                    })}
-                </View>
-            );
-        case 'json':
-            return <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
-        case 'chart':
-            return artifact.chart
-                ? <View style={styles.chartCard}><Chart spec={artifact.chart} width={contentWidth - 28} /></View>
-                : <Text style={styles.code}>{JSON.stringify(artifact.json, null, 2)}</Text>;
-        case 'interactive':
-            return <InteractiveArtifact artifact={artifact} />;
-        case 'html':
-            return <HtmlRenderer html={artifact.content} />;
-        case 'code':
-            return <CodeView code={artifact.content} language={artifact.language} />;
-        case 'markdown':
-            return <MarkdownView source={artifact.content} />;
-        case 'text':
-        default:
-            return <Text style={styles.text}>{artifact.content}</Text>;
-    }
-}
-
-/**
- * Interactive artifact dispatcher: renders the react-runtime component natively
- * when the spec is mobile-safe (no external libraries / child dependencies),
- * otherwise shows the "view on desktop" fallback with the specific reason.
- */
-function InteractiveArtifact({ artifact }: { artifact: LoadedArtifact }) {
-    const assessment = AssessSpec(artifact.spec);
-    if (artifact.spec && assessment.renderable) {
-        return <InteractiveComponentRenderer spec={artifact.spec} />;
-    }
-    return <DesktopFallback reason={assessment.reason} />;
-}
-
-/**
- * Syntax-highlighted, horizontally-scrollable code block. Reuses the shared
- * prismjs-based highlighter so code artifacts match fenced code in markdown.
- */
-function CodeView({ code, language }: { code: string; language?: string }) {
-    return (
-        <ScrollView horizontal directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} style={styles.codeScroll}>
-            <Text style={styles.code}>
-                {HighlightCode(code, language).map((run, i) => (
-                    <Text key={i} style={{ color: run.color }}>{run.text}</Text>
-                ))}
-            </Text>
-        </ScrollView>
-    );
-}
-
-/**
- * Lightweight markdown renderer — headings, bold, and bullet lists.
- * Phase 1 placeholder until the shared @memberjunction/markdown-core
- * extraction lands (plan §4.3).
- */
-function MarkdownView({ source }: { source: string }) {
-    const lines = source.split('\n');
-    return (
-        <View>
-            {lines.map((line, idx) => {
-                if (/^#{1,6}\s/.test(line)) {
-                    const level = line.match(/^#+/)?.[0].length ?? 1;
-                    return <Text key={idx} style={[styles.mdH, level <= 2 ? styles.mdH1 : styles.mdH2]}>{line.replace(/^#+\s/, '')}</Text>;
-                }
-                if (/^[-*]\s/.test(line)) {
-                    return <Text key={idx} style={styles.mdBullet}>• {renderBold(line.replace(/^[-*]\s/, ''))}</Text>;
-                }
-                if (line.trim() === '') return <View key={idx} style={{ height: 8 }} />;
-                return <Text key={idx} style={styles.mdP}>{renderBold(line)}</Text>;
-            })}
-        </View>
-    );
-}
-
-/** Inline `**bold**` → `<Text>` runs; non-bold spans pass through unchanged. */
-function renderBold(text: string): React.ReactNode {
-    const parts = text.split(/(\*\*[^*]+\*\*)/g);
-    return parts.map((part, idx) =>
-        part.startsWith('**') && part.endsWith('**')
-            ? <Text key={idx} style={styles.bold}>{part.slice(2, -2)}</Text>
-            : part,
     );
 }
 

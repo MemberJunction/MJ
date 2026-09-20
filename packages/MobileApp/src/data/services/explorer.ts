@@ -313,6 +313,50 @@ export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardL
     return (result.Results ?? []).map((d) => ({ id: d.ID, name: d.Name, description: d.Description }));
 }
 
+/** An artifact that can be placed on a dashboard. */
+export type DashboardArtifactOption = {
+    id: string;
+    name: string;
+    typeName: string;
+    /** The conversation it came from, so a user can tell two similarly-named artifacts apart. */
+    conversation: string | null;
+};
+
+/**
+ * Lists the artifacts a user can put on a dashboard, newest first.
+ *
+ * Restricted to the types that render as a PANEL rather than a document: an interactive component,
+ * a data/query result, a chart. A 40-page markdown report is an artifact too, and putting it in a
+ * dashboard tile helps nobody.
+ *
+ * @param contextUser Optional acting user (server-side scoping).
+ */
+export async function LoadDashboardArtifactOptions(contextUser?: UserInfo): Promise<DashboardArtifactOption[]> {
+    const rv = new RunView();
+    const result = await rv.RunView<{
+        ID: string; Name: string; ArtifactType: string | null; Conversation: string | null;
+    }>(
+        {
+            EntityName: 'MJ: Conversation Artifacts',
+            Fields: ['ID', 'Name', 'ArtifactType', 'Conversation'],
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 100,
+            ResultType: 'simple',
+        },
+        contextUser,
+    );
+    if (!result.Success) return [];
+    const panelTypes = new Set(['component', 'data', 'data snapshot', 'json', 'image', 'svg image']);
+    return (result.Results ?? [])
+        .filter((a) => panelTypes.has((a.ArtifactType ?? '').trim().toLowerCase()))
+        .map((a) => ({
+            id: a.ID,
+            name: a.Name,
+            typeName: a.ArtifactType ?? 'Artifact',
+            conversation: a.Conversation ?? null,
+        }));
+}
+
 /**
  * Creates a `Config` dashboard from a set of saved queries.
  *

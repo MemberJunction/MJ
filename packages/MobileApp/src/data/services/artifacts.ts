@@ -30,10 +30,11 @@ export type LoadedArtifact = {
     /** Raw version content. */
     content: string;
     /**
-     * The version's MIME type, when the record carried one.
+     * The version's MIME type, when the record carries one.
      *
-     * Kept alongside the type name because a registered renderer matches on EITHER — an artifact
-     * written with `application/vnd.mj.data` but an unexpected type name still finds its renderer.
+     * Always null for `MJ: Conversation Artifact Versions`, which has no such column — the type
+     * name is its only classifier. Kept on the shape because a registered renderer matches on
+     * EITHER, and the newer `MJ: Artifact Versions` model does record a MIME type.
      */
     contentType: string | null;
     /** How the UI should render `content`. */
@@ -157,9 +158,11 @@ export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): 
         name: artifact.Name,
         description: artifact.Description,
         typeName: artifact.ArtifactType ?? 'Artifact',
-        // Read off the version rather than the artifact: the MIME type belongs to the bytes, and a
-        // later version can legitimately differ from an earlier one.
-        contentType: (latest as unknown as { ContentType?: string | null } | undefined)?.ContentType ?? null,
+        // Always null for this entity: `MJ: Conversation Artifact Versions` has no content-type
+        // column — the type name is the only classifier it carries. Kept on the shape because a
+        // registered renderer matches on EITHER, and the newer `MJ: Artifact Versions` model does
+        // record a MIME type.
+        contentType: null,
         version: latest?.Version ?? 1,
         versionCount: versions.length,
         content,

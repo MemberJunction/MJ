@@ -503,8 +503,7 @@ function ArtifactNameFor(artifacts: MJConversationArtifactEntity[], id: string):
 
 /** The artifact's type name, used for the card's icon and subtitle. */
 function ArtifactTypeFor(artifacts: MJConversationArtifactEntity[], id: string): string | null {
-    const found = artifacts.find((a) => UUIDsEqual(a.ID, id));
-    return (found as unknown as { ArtifactType?: string } | undefined)?.ArtifactType ?? null;
+    return artifacts.find((a) => UUIDsEqual(a.ID, id))?.ArtifactType ?? null;
 }
 
 /** Splits user text on `@mention` tokens and wraps mentions in emphasized `<Text>`. */

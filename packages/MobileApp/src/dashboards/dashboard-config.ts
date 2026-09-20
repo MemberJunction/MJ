@@ -20,10 +20,22 @@
 /** `MJ: Dashboard Part Types` id for a Query panel. */
 export const QUERY_PART_TYPE_ID = '0EBDB415-EE18-46D4-B12E-03F3770921BA';
 
-/** One panel a user picked for their dashboard. */
+/** `MJ: Dashboard Part Types` id for an Artifact panel. */
+export const ARTIFACT_PART_TYPE_ID = '7191FBEE-C686-4D5F-94BA-1B4C6BF700C5';
+
+/**
+ * One panel a user picked for their dashboard.
+ *
+ * A panel is either a saved query or an artifact. Artifacts matter here because an agent-authored
+ * interactive component IS an artifact — putting one on a dashboard is how a chart with a
+ * drill-down stops being something you open from a chat thread and starts being something you
+ * check.
+ */
 export type DashboardPanelSpec = {
-    /** `MJ: Queries.ID` the panel runs. */
-    QueryID: string;
+    /** `MJ: Queries.ID` when the panel runs a query. */
+    QueryID?: string;
+    /** `MJ: Conversation Artifacts.ID` when the panel shows an artifact. */
+    ArtifactID?: string;
     /** Panel heading. */
     Title: string;
 };
@@ -50,6 +62,7 @@ const PANELS_PER_ROW = 2;
 
 /** Builds the component node for one panel. */
 function ComponentNode(panel: DashboardPanelSpec, index: number): LayoutNode {
+    const isArtifact = typeof panel.ArtifactID === 'string' && panel.ArtifactID.length > 0;
     return {
         type: 'component',
         componentName: 'dashboard-part',
@@ -57,10 +70,12 @@ function ComponentNode(panel: DashboardPanelSpec, index: number): LayoutNode {
         componentState: {
             id: `part-${index + 1}`,
             title: panel.Title,
-            partTypeId: QUERY_PART_TYPE_ID,
+            partTypeId: isArtifact ? ARTIFACT_PART_TYPE_ID : QUERY_PART_TYPE_ID,
             // `type` duplicates the part type by NAME because `LoadDashboard` falls back to it when
             // the part-type lookup is unavailable — a dashboard should still open if that read fails.
-            config: { type: 'Query', queryId: panel.QueryID },
+            config: isArtifact
+                ? { type: 'Artifact', artifactId: panel.ArtifactID }
+                : { type: 'Query', queryId: panel.QueryID },
         },
     };
 }
@@ -94,7 +109,7 @@ export function BuildDashboardConfig(panels: readonly DashboardPanelSpec[]): str
 }
 
 /**
- * Reads the query ids out of a config, in layout order.
+ * Reads the panels out of a config, in layout order.
  *
  * The inverse of {@link BuildDashboardConfig}, used to reopen a dashboard for editing without
  * re-deriving the panel list from the rendered parts.
@@ -113,14 +128,15 @@ export function ReadDashboardQueryIDs(uiConfigDetails: string | null | undefined
             if (!node) return;
             if (node.type === 'component') {
                 const state = node.componentState as
-                    | { title?: unknown; config?: { queryId?: unknown } }
+                    | { title?: unknown; config?: { queryId?: unknown; artifactId?: unknown } }
                     | undefined;
+                const title = typeof state?.title === 'string' ? state.title : 'Panel';
                 const queryId = state?.config?.queryId;
+                const artifactId = state?.config?.artifactId;
                 if (typeof queryId === 'string' && queryId.length > 0) {
-                    out.push({
-                        QueryID: queryId,
-                        Title: typeof state?.title === 'string' ? state.title : 'Panel',
-                    });
+                    out.push({ QueryID: queryId, Title: title });
+                } else if (typeof artifactId === 'string' && artifactId.length > 0) {
+                    out.push({ ArtifactID: artifactId, Title: title });
                 }
             }
             node.content?.forEach(visit);

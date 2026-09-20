@@ -5,6 +5,8 @@ import { Icons } from '@/components/Icon';
 import { Chart } from '@/components/charts/Chart';
 import type { ChartDatum, ChartSpec } from '@/components/charts/chart-spec';
 import { useDashboard, useQueryRun } from '@/hooks/useExplorer';
+import { useArtifact } from '@/hooks/useConversations';
+import { ArtifactContentView } from '@/artifacts/ArtifactContentView';
 import type { DashboardPart, QueryRunResult } from '@/data/services/explorer';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -197,22 +199,44 @@ function ResultTable({ columns, rows }: { columns: string[]; rows: Record<string
     );
 }
 
-/** An artifact part: links into the artifact viewer (which renders the payload). */
+/**
+ * An artifact part: renders the artifact IN the panel.
+ *
+ * This used to be a link row reading "Open artifact". A dashboard whose panels are doors to things
+ * is not a dashboard — the whole point is seeing several things at once without opening any of
+ * them. It now renders through `ArtifactContentView`, the same dispatch the artifact detail screen
+ * uses, so an interactive component drawn here and the same component drawn from a chat thread
+ * cannot diverge.
+ *
+ * The footer link stays: a panel is a summary, and a chart with a drill-down deserves the full
+ * screen when you want to work in it.
+ */
 function ArtifactPart({ part }: { part: DashboardPart }) {
     const artifactId = typeof part.config.artifactId === 'string' ? part.config.artifactId : undefined;
+    const { artifact, loading, error } = useArtifact(artifactId);
+
     if (!artifactId) return <DesktopOnlyPart part={part} />;
+
     return (
         <Panel title={part.title}>
-            <Pressable
-                style={styles.artifactRow}
-                onPress={() => router.push({ pathname: '/artifact/[id]', params: { id: artifactId } })}
-            >
-                <View style={styles.artifactIcon}>
-                    <Icons.Database size={18} color={Colors.brand} strokeWidth={2.2} />
-                </View>
-                <Text style={styles.artifactText}>Open artifact</Text>
-                <Icons.ChevronRight size={16} color={Colors.ink3} strokeWidth={2} />
-            </Pressable>
+            {loading ? (
+                <ActivityIndicator color={Colors.brand} />
+            ) : error || !artifact ? (
+                <Text style={styles.partError}>{error?.message ?? 'This artifact could not be loaded.'}</Text>
+            ) : (
+                <>
+                    <ArtifactContentView artifact={artifact} />
+                    <Pressable
+                        style={styles.artifactOpen}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Open ${artifact.name} full screen`}
+                        onPress={() => router.push({ pathname: '/artifact/[id]', params: { id: artifactId } })}
+                    >
+                        <Text style={styles.artifactOpenText}>Open full screen</Text>
+                        <Icons.ChevronRight size={15} color={Colors.brand} strokeWidth={2.2} />
+                    </Pressable>
+                </>
+            )}
         </Panel>
     );
 }
@@ -368,6 +392,8 @@ const styles = StyleSheet.create({
     tableCell: { paddingHorizontal: 12, paddingVertical: 8, borderWidth: 0.5, borderColor: Colors.line2, minWidth: 96, fontSize: 12, color: Colors.ink2 },
     tableHeadCell: { fontWeight: Type.semibold, color: Colors.ink },
 
+    artifactOpen: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start', paddingTop: 12 },
+    artifactOpenText: { fontSize: 13, fontWeight: Type.semibold, color: Colors.brand },
     artifactRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: Colors.surface2, borderRadius: 10, padding: 12 },
     artifactIcon: { width: 34, height: 34, borderRadius: 9, backgroundColor: Colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
     artifactText: { flex: 1, fontSize: 13.5, fontWeight: Type.medium, color: Colors.ink },
