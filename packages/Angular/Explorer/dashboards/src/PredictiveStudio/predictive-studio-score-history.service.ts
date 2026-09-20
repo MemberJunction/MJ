@@ -3,6 +3,11 @@ import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core'
 import { MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { parseRowDrivers, type RowDriver } from './at-risk.view-models';
+import {
+  formatPredictionScore,
+  resolveScoreBand,
+  type OutcomeConfig,
+} from '@memberjunction/predictive-studio-core';
 
 /** One historical score point for an entity record produced by a model run. */
 export interface ModelScoreHistoryPoint {
@@ -12,7 +17,7 @@ export interface ModelScoreHistoryPoint {
   scoreFormatted: string;
   riskPct: number;
   class: string | null;
-  band: 'high' | 'medium' | 'low';
+  band: 'high' | 'medium' | 'low' | string;
   status: string;
   durationMs: number | null;
   drivers: RowDriver[];
@@ -27,6 +32,8 @@ export interface LoadScoreHistoryParams {
   recordId: string;
   modelId?: string | null;
   maxRuns?: number;
+  outcomeConfig?: OutcomeConfig | null;
+  problemType?: string | null;
 }
 
 function bandForScore(score: number): 'high' | 'medium' | 'low' {
@@ -45,7 +52,7 @@ export class PredictiveStudioScoreHistoryService {
    * Load the history of predictions for a specific record across all runs (ordered oldest to newest).
    */
   public async LoadRecordScoreHistory(params: LoadScoreHistoryParams): Promise<ModelScoreHistoryPoint[]> {
-    const { provider, user, entityId, recordId, modelId, maxRuns = 50 } = params;
+    const { provider, user, entityId, recordId, modelId, maxRuns = 50, outcomeConfig, problemType } = params;
     if (!recordId) return [];
 
     let extraFilter = `RecordID = '${recordId.replace(/'/g, "''")}'`;
@@ -103,15 +110,17 @@ export class PredictiveStudioScoreHistoryService {
 
         const runDate = d.CompletedAt ?? d.__mj_CreatedAt ?? new Date();
 
+        const resolvedBand = outcomeConfig ? resolveScoreBand(score, outcomeConfig) : null;
+
         points.push({
           runId: d.ProcessRunID,
           runDate: runDate instanceof Date ? runDate : new Date(runDate),
           score,
-          scoreFormatted: (score * 100).toFixed(1) + '%',
+          scoreFormatted: formatPredictionScore(score, outcomeConfig, problemType),
           riskPct: Math.round(score * 100),
           class: p.class ?? null,
-          band: bandForScore(score),
-          status: d.Status ?? 'Completed',
+          band: resolvedBand?.Key ?? bandForScore(score),
+          status: resolvedBand?.Label ?? d.Status ?? 'Completed',
           durationMs: d.DurationMs ?? null,
           drivers: parseRowDrivers(p.drivers) ?? [],
           delta,

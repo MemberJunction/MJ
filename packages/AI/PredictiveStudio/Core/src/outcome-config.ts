@@ -52,6 +52,13 @@ export interface OutcomeConfig {
    */
   Polarity?: 'positive' | 'adverse';
   /**
+   * Value formatting mode for the score:
+   * - 'percentage': Render as percentage (e.g. '95.2%'). Default for classification.
+   * - 'currency': Render as currency (e.g. '$12,520').
+   * - 'number': Render as localized decimal number.
+   */
+  Format?: 'percentage' | 'currency' | 'number';
+  /**
    * Threshold bands mapping ranges of predicted scores to qualitative status labels and badge styles.
    */
   Bands?: OutcomeBand[];
@@ -129,6 +136,39 @@ export const DEFAULT_ADVERSE_BANDS: OutcomeBand[] = [
 ];
 
 /**
+ * Standard default bands for monetary / regression models (e.g. Customer Lifetime Value).
+ */
+export const DEFAULT_MONETARY_BANDS: OutcomeBand[] = [
+  {
+    Key: 'high',
+    Label: 'High Value',
+    Min: 2500,
+    Max: 1000000,
+    BadgeColor: 'green',
+    Icon: 'fa-arrow-trend-up',
+    Description: 'High lifetime value ($2,500+)',
+  },
+  {
+    Key: 'medium',
+    Label: 'Medium Value',
+    Min: 500,
+    Max: 2499.99,
+    BadgeColor: 'amber',
+    Icon: 'fa-minus',
+    Description: 'Medium lifetime value ($500 - $2,499.99)',
+  },
+  {
+    Key: 'standard',
+    Label: 'Standard Value',
+    Min: 0,
+    Max: 499.99,
+    BadgeColor: 'gray',
+    Icon: 'fa-arrow-trend-down',
+    Description: 'Standard lifetime value (< $500)',
+  },
+];
+
+/**
  * Resolves an effective OutcomeConfig from a model or pipeline, falling back to sensible
  * domain defaults when no explicit configuration is provided.
  */
@@ -156,8 +196,29 @@ export function resolveOutcomeConfig(modelLike?: {
     }
   }
 
-  // 3. Infer intelligent default based on target variable name
+  // 3. Infer intelligent default based on target variable name and problem type
   const target = (modelLike?.TargetVariable ?? '').toLowerCase();
+  const problemType = (modelLike?.ProblemType ?? '').toLowerCase();
+
+  const isMonetary =
+    target.includes('ltv') ||
+    target.includes('revenue') ||
+    target.includes('spend') ||
+    target.includes('gross') ||
+    target.includes('balance') ||
+    target.includes('amount');
+
+  if (problemType === 'regression' || isMonetary) {
+    return {
+      ScoreLabel: isMonetary ? 'Predicted Customer LTV' : 'Predicted Value',
+      StatusLabel: isMonetary ? 'LTV Tier' : 'Value Tier',
+      Polarity: 'positive',
+      Format: isMonetary ? 'currency' : 'number',
+      Bands: isMonetary ? [...DEFAULT_MONETARY_BANDS] : [],
+      OutcomeStyles: {},
+    };
+  }
+
   const isRenewal =
     target.includes('renew') ||
     target.includes('retention') ||
@@ -168,6 +229,7 @@ export function resolveOutcomeConfig(modelLike?: {
       ScoreLabel: 'Renewal Probability',
       StatusLabel: 'Renewal Status',
       Polarity: 'positive',
+      Format: 'percentage',
       Bands: [...DEFAULT_POSITIVE_BANDS],
       OutcomeStyles: {
         Renewed: { BadgeColor: 'green', Icon: 'fa-check' },
@@ -184,6 +246,7 @@ export function resolveOutcomeConfig(modelLike?: {
     ScoreLabel: 'Prediction Score',
     StatusLabel: 'Risk Level',
     Polarity: 'adverse',
+    Format: 'percentage',
     Bands: [...DEFAULT_ADVERSE_BANDS],
     OutcomeStyles: {
       Late: { BadgeColor: 'red', Icon: 'fa-circle-exclamation' },
@@ -204,6 +267,7 @@ function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
     ScoreLabel: cfg.ScoreLabel ?? (polarity === 'positive' ? 'Renewal Probability' : 'Prediction Score'),
     StatusLabel: cfg.StatusLabel ?? (polarity === 'positive' ? 'Renewal Status' : 'Risk Level'),
     Polarity: polarity,
+    Format: cfg.Format,
     Bands: cfg.Bands && cfg.Bands.length > 0 ? cfg.Bands : [...defaultBands],
     OutcomeStyles: cfg.OutcomeStyles ?? {},
   };
@@ -275,3 +339,47 @@ export function resolveOutcomeStyle(className: string | undefined | null, config
 
   return { BadgeColor: 'gray' };
 }
+
+/**
+ * Formats a predicted score into a human-readable display string based on
+ * the model's OutcomeConfig format, problem type, and score magnitude.
+ */
+export function formatPredictionScore(
+  score: number,
+  config?: OutcomeConfig | null,
+  problemType?: string | null,
+): string {
+  if (typeof score !== 'number' || !Number.isFinite(score)) {
+    return '—';
+  }
+
+  const pType = (problemType ?? '').toLowerCase();
+  const isCurrency =
+    config?.Format === 'currency' ||
+    (pType === 'regression' &&
+      (config?.ScoreLabel?.toLowerCase().includes('ltv') ||
+        config?.ScoreLabel?.toLowerCase().includes('spend') ||
+        config?.ScoreLabel?.toLowerCase().includes('revenue') ||
+        config?.ScoreLabel?.includes('$'))) ||
+    (!config?.Format && score > 1.05 && (config?.ScoreLabel?.toLowerCase().includes('ltv') || config?.ScoreLabel?.toLowerCase().includes('value')));
+
+  if (isCurrency) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: score >= 100 ? 0 : 2,
+    }).format(score);
+  }
+
+  const isNumeric =
+    config?.Format === 'number' ||
+    (pType === 'regression' && config?.Format !== 'percentage');
+
+  if (isNumeric) {
+    return score.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+
+  // Default: percentage (0.0 - 1.0 scale)
+  return (score * 100).toFixed(1) + '%';
+}
+

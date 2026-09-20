@@ -127,7 +127,7 @@
                 <span class="pg-chart-card-val" [style.color]="getBadgeColorVar(b.badgeColor)">
                   {{ b.count | number }}
                 </span>
-                <span class="pg-chart-card-sub">{{ b.pct }}% of cohort (avg {{ b.avgScore }}% {{ outcomeConfig.ScoreLabel }})</span>
+                <span class="pg-chart-card-sub">{{ b.pct }}% of cohort (avg {{ b.avgScoreFormatted }} {{ outcomeConfig.ScoreLabel }})</span>
               </div>
             }
           </div>
@@ -137,10 +137,10 @@
             <div class="pg-chart-section-title">
               <div style="display:flex;align-items:center;gap:8px">
                 <i class="fa-solid fa-chart-simple ps-muted"></i>
-                <span>{{ outcomeConfig.ScoreLabel }} Distribution (10-Decile Bins)</span>
+                <span>{{ outcomeConfig.ScoreLabel }} Distribution (10 Bins)</span>
               </div>
               <div class="pg-chart-meta">
-                <span class="ps-small ps-muted">Cohort Mean: <strong>{{ meanScorePct }}%</strong></span>
+                <span class="ps-small ps-muted">Cohort Mean: <strong>{{ meanScoreFormatted }}</strong></span>
                 @if (selectedDecileIndex !== null) {
                   <button type="button" class="pg-clear-decile-btn" (click)="clearDecileFilter()">
                     <i class="fa-solid fa-xmark"></i> Clear Decile Filter

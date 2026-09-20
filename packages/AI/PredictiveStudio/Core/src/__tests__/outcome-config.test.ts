@@ -3,6 +3,7 @@ import {
   resolveOutcomeConfig,
   resolveScoreBand,
   resolveOutcomeStyle,
+  formatPredictionScore,
   type OutcomeConfig,
 } from '../index';
 
@@ -163,3 +164,29 @@ describe('resolveOutcomeStyle', () => {
     expect(resolveOutcomeStyle(null).BadgeColor).toBe('gray');
   });
 });
+
+describe('formatPredictionScore', () => {
+  it('formats classification probability as percentage', () => {
+    expect(formatPredictionScore(0.8523)).toBe('85.2%');
+    expect(formatPredictionScore(0.012)).toBe('1.2%');
+    expect(formatPredictionScore(1.0)).toBe('100.0%');
+  });
+
+  it('formats currency when Format is currency or problem type is regression for LTV', () => {
+    const ltvCfg: OutcomeConfig = {
+      ScoreLabel: 'Predicted Customer LTV',
+      Format: 'currency',
+    };
+    expect(formatPredictionScore(12521.69, ltvCfg, 'regression')).toBe('$12,522');
+    expect(formatPredictionScore(450.5, ltvCfg, 'regression')).toBe('$451');
+  });
+
+  it('formats continuous numbers when Format is number', () => {
+    const numCfg: OutcomeConfig = {
+      ScoreLabel: 'Lead Score',
+      Format: 'number',
+    };
+    expect(formatPredictionScore(42.5, numCfg, 'regression')).toBe('42.5');
+  });
+});
+

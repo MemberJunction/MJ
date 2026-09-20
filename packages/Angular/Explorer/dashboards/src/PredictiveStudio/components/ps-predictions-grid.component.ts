@@ -51,6 +51,7 @@ import {
   resolveOutcomeConfig,
   resolveScoreBand,
   resolveOutcomeStyle,
+  formatPredictionScore,
 } from '@memberjunction/predictive-studio-core';
 import {
   PredictiveStudioScoreHistoryService,
@@ -83,6 +84,7 @@ export interface VisibleBandSummary {
   count: number;
   pct: number;
   avgScore: number;
+  avgScoreFormatted: string;
   badgeColor: string;
   icon?: string;
   description?: string;
@@ -261,6 +263,14 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public isRenewalModel = false;
   public selectedDecileIndex: number | null = null;
 
+  public get isRegression(): boolean {
+    return (
+      (this.problemType ?? '').toLowerCase() === 'regression' ||
+      this.outcomeConfig?.Format === 'currency' ||
+      this.outcomeConfig?.Format === 'number'
+    );
+  }
+
   public columnDefs: ColDef<PredictionGridRow>[] = [];
 
   public setupColumnDefs(): void {
@@ -297,10 +307,19 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         width: 175,
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data) return '';
-          const pct = Math.min(100, Math.max(0, Math.round(params.data.score * 100)));
           const badgeColor = params.data.badgeColor || 'gray';
           const colorClass = `badge-${badgeColor}`;
           const formatted = this.escapeHtml(params.data.scoreFormatted);
+
+          if (this.isRegression) {
+            return `
+              <div class="pg-score-cell">
+                <span class="pg-score-val ${colorClass}" style="font-weight: 600; font-size: 13.5px;">${formatted}</span>
+              </div>
+            `;
+          }
+
+          const pct = Math.min(100, Math.max(0, Math.round(params.data.score * 100)));
           return `
             <div class="pg-score-cell">
               <span class="pg-score-val ${colorClass}">${formatted}</span>
@@ -320,6 +339,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           const badgeColor = params.data.badgeColor || 'gray';
           const icon = params.data.icon ? `<i class="fa-solid ${this.escapeHtml(params.data.icon)}"></i> ` : '';
           const label = this.escapeHtml(params.data.status || params.data.band);
+          if (this.isRegression) {
+            return `<span class="ps-badge ${badgeColor}" title="${scoreLabel}: ${this.escapeHtml(params.data.scoreFormatted)}">${icon}${label}</span>`;
+          }
           const pct = Math.round(params.data.score * 100);
           return `<span class="ps-badge ${badgeColor}" title="${pct}% ${scoreLabel}">${icon}${label} (${pct}%)</span>`;
         },
@@ -503,8 +525,11 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       }
 
       // 4. Resolve OutcomeConfig and determine polarity
+      if (model?.ProblemType) {
+        this.problemType = model.ProblemType.toLowerCase();
+      }
       this.outcomeConfig = resolveOutcomeConfig(model ?? undefined);
-      this.isRenewalModel = this.outcomeConfig.Polarity === 'positive';
+      this.isRenewalModel = this.outcomeConfig.Polarity === 'positive' && !this.isRegression;
       this.setupColumnDefs();
 
       const polarity = resolveRenewalPolarity(
@@ -541,11 +566,13 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           ? resolveScoreBand(displayScore, this.outcomeConfig)
           : null;
 
+        const formatted = formatPredictionScore(displayScore, this.outcomeConfig, this.problemType);
+
         return {
           recordId: r.recordId,
           recordName: r.label ?? r.recordId,
           score: displayScore,
-          scoreFormatted: (displayScore * 100).toFixed(1) + '%',
+          scoreFormatted: formatted,
           riskPct: r.riskPct,
           band: resolved?.Key ?? r.band,
           badgeColor: resolved?.BadgeColor ?? r.badgeColor,
@@ -843,13 +870,16 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const matching = this.allRows.filter((r) => r.band === b.Key);
       const count = matching.length;
       const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-      const avgScore = count > 0 ? Math.round((matching.reduce((sum, r) => sum + r.score, 0) / count) * 100) : 0;
+      const rawAvg = count > 0 ? matching.reduce((sum, r) => sum + r.score, 0) / count : 0;
+      const avgScore = Math.round(rawAvg * 100);
+      const avgScoreFormatted = formatPredictionScore(rawAvg, this.outcomeConfig, this.problemType);
       return {
         key: b.Key,
         label: b.Label,
         count,
         pct,
         avgScore,
+        avgScoreFormatted,
         badgeColor: b.BadgeColor,
         icon: b.Icon,
         description: b.Description,
@@ -862,13 +892,16 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       const matching = this.allRows.filter((r) => r.band === k);
       const count = matching.length;
       const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-      const avgScore = count > 0 ? Math.round((matching.reduce((sum, r) => sum + r.score, 0) / count) * 100) : 0;
+      const rawAvg = count > 0 ? matching.reduce((sum, r) => sum + r.score, 0) / count : 0;
+      const avgScore = Math.round(rawAvg * 100);
+      const avgScoreFormatted = formatPredictionScore(rawAvg, this.outcomeConfig, this.problemType);
       this.visibleBands.push({
         key: k,
         label: k.charAt(0).toUpperCase() + k.slice(1),
         count,
         pct,
         avgScore,
+        avgScoreFormatted,
         badgeColor: 'gray',
       });
     }
@@ -1088,6 +1121,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         entityId: this.resolvedEntityId,
         recordId,
         modelId: this.modelId,
+        outcomeConfig: this.outcomeConfig,
+        problemType: this.problemType,
       });
     } finally {
       this.historyLoading = false;
@@ -1150,36 +1185,74 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return Math.round((total / this.allRows.length) * 100);
   }
 
+  public get meanScoreFormatted(): string {
+    if (this.allRows.length === 0) return '—';
+    const total = this.allRows.reduce((acc, r) => acc + r.score, 0);
+    const avg = total / this.allRows.length;
+    return formatPredictionScore(avg, this.outcomeConfig, this.problemType);
+  }
+
   public get histogramBins(): HistogramBin[] {
     const total = this.allRows.length;
     if (total === 0) return [];
 
+    const isReg = this.isRegression;
+    let minScore = 0;
+    let maxScore = 1;
+
+    if (isReg) {
+      const scores = this.allRows.map((r) => r.score);
+      minScore = Math.min(...scores);
+      maxScore = Math.max(...scores);
+      if (maxScore <= minScore) {
+        maxScore = minScore + 1;
+      }
+    }
+
+    const range = maxScore - minScore;
+    const step = range / 10;
     const counts = new Array(10).fill(0);
+
     for (const r of this.allRows) {
-      const idx = Math.min(9, Math.floor(r.score * 10));
+      const normalized = isReg ? (r.score - minScore) / range : r.score;
+      const idx = Math.min(9, Math.max(0, Math.floor(normalized * 10)));
       counts[idx]++;
     }
 
     const maxCount = Math.max(...counts, 1);
 
     return counts.map((count, idx) => {
-      const lower = idx * 10;
-      const upper = (idx + 1) * 10;
+      const binMin = minScore + idx * step;
+      const binMax = minScore + (idx + 1) * step;
       const pct = (count / total) * 100;
       const pctFormatted = pct < 0.1 && count > 0 ? '<0.1%' : pct.toFixed(1) + '%';
 
       // Power scale height so smaller decile bins (e.g. 2, 21, 35) are visible alongside 5,390
       const height = count === 0 ? 0 : Math.round(14 + Math.pow(count / maxCount, 0.45) * 116);
 
-      const centerScore = (idx + 0.5) / 10;
+      const centerScore = (binMin + binMax) / 2;
       const band = resolveScoreBand(centerScore, this.outcomeConfig);
       const color = band ? this.getBadgeColorVar(band.BadgeColor) : 'var(--mj-brand-primary)';
-      const riskLabel = band ? band.Label : `${lower}%–${upper}%`;
+
+      let label: string;
+      let shortLabel: string;
+      if (isReg) {
+        const fmtMin = formatPredictionScore(binMin, this.outcomeConfig, this.problemType);
+        const fmtMax = formatPredictionScore(binMax, this.outcomeConfig, this.problemType);
+        label = `${fmtMin}–${fmtMax}`;
+        shortLabel = fmtMin;
+      } else {
+        const lower = idx * 10;
+        const upper = (idx + 1) * 10;
+        label = `${lower}%–${upper}%`;
+        shortLabel = `${lower}%`;
+      }
+      const riskLabel = band ? band.Label : label;
 
       return {
         idx,
-        label: `${lower}%–${upper}%`,
-        shortLabel: `${lower}%`,
+        label,
+        shortLabel,
         count,
         pct: Math.round(pct),
         pctFormatted,
@@ -1226,6 +1299,19 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     const pts = this.historyPoints;
     if (pts.length === 0) return [];
 
+    const isReg = this.isRegression;
+    let minScore = 0;
+    let maxScore = 1;
+    if (isReg) {
+      const scores = pts.map((p) => p.score);
+      minScore = Math.min(...scores);
+      maxScore = Math.max(...scores);
+      if (maxScore <= minScore) {
+        maxScore = minScore + 1;
+      }
+    }
+    const range = maxScore - minScore;
+
     const xStart = 60;
     const xEnd = 500;
     const yTop = 20;
@@ -1236,7 +1322,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
     return pts.map((pt, i) => {
       const x = pts.length === 1 ? (xStart + xEnd) / 2 : Math.round(xStart + i * step);
-      const clampedScore = Math.max(0, Math.min(1, pt.score));
+      const clampedScore = isReg
+        ? Math.max(0, Math.min(1, (pt.score - minScore) / range))
+        : Math.max(0, Math.min(1, pt.score));
       const y = Math.round(yBottom - clampedScore * ySpan);
       const band = resolveScoreBand(pt.score, this.outcomeConfig);
       const color = band ? this.getBadgeColorVar(band.BadgeColor) : 'var(--mj-brand-primary)';
