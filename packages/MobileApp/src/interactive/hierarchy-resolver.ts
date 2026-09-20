@@ -39,6 +39,15 @@ export type ResolvedHierarchy = {
     Libraries: ComponentLibraryDependency[];
     /** Child components that could not be resolved, by name. */
     Unresolved: string[];
+    /**
+     * The spec with every registry-backed child's code inlined.
+     *
+     * The native renderer does not need this — `loadHierarchy` fetches children itself, against the
+     * app's provider. The DOM host does: its page runs in a WebView with no provider and no token,
+     * so the same fetch inside the page would throw. Handing it a self-contained spec means the
+     * page never has to ask anyone for anything.
+     */
+    Spec: ComponentSpec | null;
 };
 
 /** Reads a component row's stored specification, or `null` when it is absent or unparseable. */
@@ -71,7 +80,7 @@ export async function ResolveHierarchy(
     spec: ComponentSpec | null | undefined,
     contextUser?: UserInfo,
 ): Promise<ResolvedHierarchy> {
-    const out: ResolvedHierarchy = { Libraries: [], Unresolved: [] };
+    const out: ResolvedHierarchy = { Libraries: [], Unresolved: [], Spec: null };
     if (!spec) return out;
 
     const seenLibraries = new Set<string>();
@@ -86,26 +95,44 @@ export async function ResolveHierarchy(
         }
     };
 
-    const visit = async (node: ComponentSpec): Promise<void> => {
+    /**
+     * Walks a node, returning a copy whose children all carry their own code.
+     *
+     * A copy rather than a mutation: the spec belongs to the artifact that loaded it, and rewriting
+     * it in place would mean the second render of the same artifact saw a tree the first one had
+     * already changed.
+     */
+    const visit = async (node: ComponentSpec): Promise<ComponentSpec> => {
         collect(node);
+        const children: ComponentSpec[] = [];
 
         for (const dep of node.dependencies ?? []) {
             const name = dep.name;
-            if (!name || visitedComponents.has(name)) continue;
-            visitedComponents.add(name);
+            if (!name) continue;
 
             // Carries its own code: nothing to fetch, just keep walking.
             if (typeof dep.code === 'string' && dep.code.trim().length > 0) {
-                await visit(dep as ComponentSpec);
+                children.push(await visit(dep as ComponentSpec));
                 continue;
             }
 
             // An external registry needs the runtime's GraphQL registry client, which is
-            // `loadHierarchy`'s job. Record that this subtree went unscanned.
+            // `loadHierarchy`'s job. Record that this subtree went unscanned and pass the
+            // reference through untouched so the runtime can still try.
             if (dep.registry) {
                 out.Unresolved.push(name);
+                children.push(dep as ComponentSpec);
                 continue;
             }
+
+            // A cycle, or a child two parents share. Already collected; passing the reference
+            // through unresolved would make the page fetch it, so keep the reference as-is and let
+            // the runtime's own circular-dependency guard handle it.
+            if (visitedComponents.has(name)) {
+                children.push(dep as ComponentSpec);
+                continue;
+            }
+            visitedComponents.add(name);
 
             try {
                 const row = await ComponentMetadataEngine.Instance.FindComponent(
@@ -117,15 +144,19 @@ export async function ResolveHierarchy(
                 const childSpec = ParseSpecification(row?.Specification);
                 if (!childSpec) {
                     out.Unresolved.push(name);
+                    children.push(dep as ComponentSpec);
                     continue;
                 }
-                await visit(childSpec);
+                children.push(await visit(childSpec));
             } catch {
                 out.Unresolved.push(name);
+                children.push(dep as ComponentSpec);
             }
         }
+
+        return children.length > 0 ? { ...node, dependencies: children } : node;
     };
 
-    await visit(spec);
+    out.Spec = await visit(spec);
     return out;
 }

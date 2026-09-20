@@ -116,6 +116,52 @@ describe('ResolveHierarchy', () => {
     });
 
     it('returns nothing for an absent spec', async () => {
-        expect(await ResolveHierarchy(null)).toEqual({ Libraries: [], Unresolved: [] });
+        expect(await ResolveHierarchy(null)).toEqual({ Libraries: [], Unresolved: [], Spec: null });
+    });
+
+    it('returns the tree with registry children inlined', async () => {
+        // The DOM host page has no provider, so a child it still had to fetch would throw inside
+        // the WebView. It gets a self-contained spec instead.
+        Registry({
+            Child: { name: 'Child', code: 'function Child(){}', libraries: [{ name: 'd3', globalVariable: 'd3' }] },
+        });
+        const spec = {
+            name: 'Root',
+            code: 'function Root(){}',
+            dependencies: [{ name: 'Child', location: 'registry' }],
+        } as ComponentSpec;
+
+        const r = await ResolveHierarchy(spec);
+        const child = r.Spec?.dependencies?.[0] as ComponentSpec;
+        expect(child.code).toContain('function Child');
+        expect(child.libraries?.[0].globalVariable).toBe('d3');
+    });
+
+    it('does not mutate the spec it was given', async () => {
+        // The spec belongs to the artifact that loaded it; rewriting it in place would mean the
+        // second render of the same artifact saw a tree the first had already changed.
+        Registry({ Child: { name: 'Child', code: 'function Child(){}' } });
+        const spec = {
+            name: 'Root',
+            code: 'function Root(){}',
+            dependencies: [{ name: 'Child', location: 'registry' }],
+        } as ComponentSpec;
+
+        await ResolveHierarchy(spec);
+        expect((spec.dependencies?.[0] as ComponentSpec).code).toBeUndefined();
+    });
+
+    it('keeps an unresolvable child in the tree rather than dropping it', async () => {
+        // Dropping it would render a parent with a silent hole where a child should be; the
+        // runtime still has paths this pre-pass does not.
+        Registry({});
+        const spec = {
+            name: 'Root',
+            code: 'x',
+            dependencies: [{ name: 'Missing', location: 'registry' }],
+        } as ComponentSpec;
+        const r = await ResolveHierarchy(spec);
+        expect(r.Spec?.dependencies).toHaveLength(1);
+        expect(r.Unresolved).toEqual(['Missing']);
     });
 });

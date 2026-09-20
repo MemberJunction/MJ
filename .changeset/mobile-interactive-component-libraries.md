@@ -199,3 +199,13 @@ between `ClassFactory` and entity classes and breaks bundle initialisation. So t
 render on a device needs a connection and takes a few seconds; afterwards the WebView caches it.
 Fixing that means fixing the mangling collision or shipping the bundle as a local asset, and is left
 as a deliberate follow-up rather than flipping a flag whose comment documents why it is off.
+
+**Routing happens after resolution, not before.** `AssessSpec` is synchronous, so it can only see
+the spec it is handed — and a dashboard whose parent uses lodash while a registry-backed child draws
+a Chart.js canvas looks native-renderable right up until the child fails. The component that most
+needs the DOM host is exactly the one whose canvas library is buried a level down. The hierarchy is
+therefore resolved first and the renderer chosen against the resolved tree.
+
+The resolver also returns the tree with every registry child's code **inlined**, because the DOM host
+page has no provider: a child it still had to fetch would throw inside the WebView. The native
+renderer gets the same inlined spec, which costs nothing and means both paths reason about one thing.
