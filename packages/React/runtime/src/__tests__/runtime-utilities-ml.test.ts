@@ -71,7 +71,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
   return { ...actual };
 });
 
-import { RuntimeUtilities } from '../lib/utilities/runtime-utilities';
+import { RuntimeUtilities } from '../utilities/runtime-utilities';
 
 describe('RuntimeUtilities — SimpleMLTools', () => {
   beforeEach(() => {

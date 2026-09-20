@@ -37,9 +37,10 @@ import {
   parseStoredUserSettings,
   mergeUserSettings,
   applyUserSettingsUpdate,
-  generateComponentHierarchyHash
+  generateComponentHierarchyHash,
+  createRuntimeUtilities,
+  resolveEntityRecordKey
 } from '@memberjunction/react-runtime';
-import { createRuntimeUtilities } from '../utilities/runtime-utilities';
 import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, RunViewParams, RunViewResult, RunQueryParams, RunQueryResult, DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentMetadataEngine, UserInfoEngine } from '@memberjunction/core-entities';
@@ -1075,73 +1076,11 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
         );
       },
       OpenEntityRecord: async (entityName: string, key: CompositeKey) => {
-        let keyToUse: CompositeKey | null = null;
-        if (key instanceof Array) {
-          keyToUse = CompositeKey.FromKeyValuePairs(key);
-        }
-        else if (typeof key === 'object' && !!key.GetValueByFieldName) {
-          keyToUse = key as CompositeKey;
-        }
-        else if (typeof key === 'object') {
-          //} && !!key.FieldName && !!key.Value) {
-          // possible that have an object that is a simple key/value pair with
-          // FieldName and value properties
-          const keyAny = key as any;
-          if (keyAny.FieldName && keyAny.Value) {
-            keyToUse = CompositeKey.FromKeyValuePairs([keyAny as KeyValuePair]);
-          }
-        }
+        // Shape coercion and the non-primary-key lookup both live in the runtime now, so the
+        // React Native host resolves a component's key exactly the way this one does. What stays
+        // here is the only part that is Angular's: what "open" means.
+        const keyToUse = await resolveEntityRecordKey(entityName, key, this.ProviderToUse);
         if (keyToUse) {
-          // now in some cases we have key/value pairs that the component we are hosting
-          // use, but are not the pkey, so if that is the case, we'll run a quick view to try
-          // and get the pkey so that we can emit the openEntityRecord call with the pkey
-          const md = this.ProviderToUse;
-          const e = md.EntityByName(entityName);
-          if (!e) {
-            console.warn(`Entity not found: ${entityName}`);
-            return;
-          }
-          let shouldRunView = false;
-          // now check each key in the keyToUse to see if it is a pkey
-          for (const singleKey of keyToUse.KeyValuePairs) {
-            const field = e.Fields.find(f => f.Name.trim().toLowerCase() === singleKey.FieldName.trim().toLowerCase());
-            if (!field) {
-              // if we get here this is a problem, the component has given us a non-matching field, this shouldn't ever happen
-              // but if it doesn't log warning to console and exit
-              console.warn(`Non-matching field found for key: ${JSON.stringify(keyToUse)}`);
-              return;
-            }
-            else if (!field.IsPrimaryKey) {
-              // if we get here that means we have a non-pkey so we'll want to do a lookup via a RunView
-              // to get the actual pkey value
-              shouldRunView = true;
-              break;
-            }
-          }
-
-          // if we get here and shouldRunView is true, we need to run a view using the info provided
-          // by our contained component to get the pkey
-          if (shouldRunView) {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const result = await rv.RunView({
-              EntityName: entityName,
-              ExtraFilter: keyToUse.ToWhereClause()
-            })
-            if (result && result.Success && result.Results.length > 0) {
-              // we have a match, use the first row and update our keyToUse
-              const kvPairs: KeyValuePair[] = [];
-              e.PrimaryKeys.forEach(pk => {
-                kvPairs.push(
-                  {
-                    FieldName: pk.Name,
-                    Value: result.Results[0][pk.Name]
-                  }
-                )
-              })
-              keyToUse = CompositeKey.FromKeyValuePairs(kvPairs);
-            }
-          }
-
           this.openEntityRecord.emit({ entityName, key: keyToUse });
         }
       },

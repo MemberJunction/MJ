@@ -43,6 +43,13 @@ export interface InteractiveRuntime {
     /** Wraps a compiled component in a React error boundary. */
     createErrorBoundary: RuntimeModule['createErrorBoundary'];
     /**
+     * Builds the `utilities` prop — `md`, `rv`, `rq`, `ai`, `geoDataEngine`, `ml`.
+     *
+     * The same factory `MJReactComponent` calls. It resolves through `MJGlobal.ClassFactory`, so a
+     * host that registers a subclass gets its own; mobile registers none and gets the base.
+     */
+    createRuntimeUtilities: RuntimeModule['createRuntimeUtilities'];
+    /**
      * Derives the registry version key for a spec that carries no explicit `version`.
      *
      * Re-exposed from the runtime rather than reimplemented here: `MJReactComponent` passes the
@@ -97,6 +104,7 @@ async function initializeRuntime(): Promise<InteractiveRuntime> {
         buildComponentProps: runtime.buildComponentProps,
         createErrorBoundary: runtime.createErrorBoundary,
         generateComponentHierarchyHash: runtime.generateComponentHierarchyHash,
+        createRuntimeUtilities: runtime.createRuntimeUtilities,
         Libraries: libraries,
         EnsureLibraries: async (spec: ComponentSpec): Promise<string[]> => {
             // The whole hierarchy, not just the root: `loadHierarchy` compiles each child against

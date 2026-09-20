@@ -31,6 +31,7 @@
     "@memberjunction/core-entities": "6.1.0",
     "@memberjunction/global": "6.1.0",
     "@memberjunction/graphql-dataprovider": "6.1.0",
+    "@memberjunction/interactive-component-types": "6.1.0",
     "@memberjunction/markdown-core": "6.1.0",
     "@memberjunction/react-runtime": "6.1.0",
     "@memberjunction/realtime-runtime": "6.1.0",

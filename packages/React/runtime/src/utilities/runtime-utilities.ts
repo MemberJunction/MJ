@@ -1,6 +1,29 @@
 /**
- * @fileoverview Runtime utilities for React components providing access to MemberJunction core functionality
- * @module @memberjunction/ng-react/utilities
+ * @fileoverview The `utilities` prop every interactive component receives — `md`, `rv`, `rq`, `ai`,
+ * `geoDataEngine`, `ml` — built over MemberJunction core.
+ * @module @memberjunction/react-runtime/utilities
+ *
+ * ## Why this is not in the Angular package
+ *
+ * It was, for its whole life, and it imports nothing from `@angular/*`: 450 lines of pure
+ * TypeScript over `@memberjunction/core`, `core-entities` and `graphql-dataprovider`. That made it
+ * unreachable from any non-Angular host, and `utilities` is not an Angular concept — it is the
+ * data surface the component contract promises. A React Native host either reimplemented it or
+ * passed `{}` and shipped components that could not read a row.
+ *
+ * It lives here, beside the compiler and prop-builder that the same components go through, so every
+ * host builds the same `utilities` object from the same code. A second implementation would drift
+ * the moment either side added a capability — and the components asking for `utilities.rv.RunView`
+ * are authored once, for both.
+ *
+ * ## A caveat about overriding, carried over unchanged
+ *
+ * The `@RegisterClass` registration below suggests a host can substitute its own subclass, and
+ * server-side it can. In a browser it cannot: `createRuntimeUtilities` consults `ClassFactory` only
+ * when `typeof window === 'undefined'` and otherwise returns `new RuntimeUtilities()` directly, so
+ * the registration is inert on every browser and React Native host. That predates this move and is
+ * left as it is rather than changed under cover of relocating the file — flipping it would alter
+ * what every existing browser host builds. Worth fixing deliberately.
  */
 
 import {

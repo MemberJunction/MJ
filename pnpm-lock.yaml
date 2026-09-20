@@ -12847,6 +12847,9 @@ importers:
       '@memberjunction/graphql-dataprovider':
         specifier: 6.1.0
         version: link:../GraphQLDataProvider
+      '@memberjunction/interactive-component-types':
+        specifier: 6.1.0
+        version: link:../InteractiveComponents
       '@memberjunction/markdown-core':
         specifier: 6.1.0
         version: link:../MarkdownCore
@@ -13265,6 +13268,9 @@ importers:
       '@babel/standalone':
         specifier: ^7.29.1
         version: 7.29.1
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.1.0
+        version: link:../../AI/Vectors/Memory
       '@memberjunction/core':
         specifier: 6.1.0
         version: link:../../MJCore

@@ -70,3 +70,60 @@ copy.
 **What mobile still declines, and why it is not "dependencies".** A child whose code the spec does
 not carry: `location: 'registry'` without inline `code` needs a component-registry fetch this app
 cannot perform, and a child with no code at all cannot compile. The fallback names the missing part.
+
+---
+
+## The rest of the prop contract
+
+`MJReactComponent` hands a component eight things. Mobile was supplying three. The remaining gaps
+closed here, each by moving the implementation rather than writing a second one:
+
+**`utilities` — was `{}`.** `RuntimeUtilities` (452 lines, zero `@angular/*` imports) moves from
+`@memberjunction/ng-react` to `@memberjunction/react-runtime`. It builds `md`, `rv`, `rq`, `ai`,
+`geoDataEngine` and `ml` over MJ core — the data surface the component contract promises, and not an
+Angular concept. A native host previously had to reimplement it or pass `{}`, which meant any
+component with data requirements could not read a row. The `@RegisterClass` registration moves with it
+unchanged and ng-react now imports the factory instead of owning it.
+
+Noted while verifying, not changed here: `createRuntimeUtilities` consults `ClassFactory` only when
+`typeof window === 'undefined'`, so that registration is inert on every browser and React Native
+host — the override path works server-side only. It predates this move; flipping it would change
+what every existing browser host builds, so it is called out rather than quietly altered.
+
+**`styles` — was `undefined`**, which `buildComponentProps` turns into the runtime's frozen default
+palette, and silently discarded the spec's `styleOverrides` (the mechanism that keeps "make the
+charts blue" out of generated code as a hardcoded literal). `BuildStylesFromTheme` now accepts a
+`ThemeTokenReader` as well as an element, so React Native — which holds the same `--mj-*` token
+values but has no stylesheet to read them from — feeds them through the *identical* mapping instead
+of a copy. Mobile then applies `ApplyStyleOverrides` on top, as the bridge does.
+
+**`savedUserSettings` / `onSaveUserSettings` — were absent**, so every sort order, selected tab and
+collapsed panel reset on each open while the same component remembered them on the web. Mobile now
+uses the same four `react-runtime` helpers and the same `UserInfoEngine` (`MJ: User Settings`)
+storage, which means the same key: settings saved on a desktop open on a phone. A mobile-only key
+format would have quietly given each user two profiles.
+
+**`callbacks.OpenEntityRecord` — was `key.GetValueByIndex(0)`.** Components routinely identify a
+record by something that is *not* its primary key, because that is what their query returned. The
+Angular component did the full resolution inline; `resolveEntityRecordKey` now lives in the runtime
+and does it for both — coercing the three shapes a component may pass, then running a view to
+translate a non-primary-key field. `NotifyEvent` was missing entirely and is now accepted.
+
+**`CreateSimpleNotification` — was `console.log`.** It now renders above the component that raised
+it, dismissed by tap rather than a timer so a failed-save message cannot vanish unread.
+
+**Error boundary** now matches the bridge's options (`logErrors`, `recovery: 'retry'`).
+
+## Manifest scoping
+
+`@memberjunction/react-runtime` is excluded from all four class-registration manifests
+(`ng-bootstrap`, `ng-bootstrap-lite`, `server-bootstrap`, `server-bootstrap-lite`). Moving a
+`@RegisterClass` into it made the package eagerly reachable from every bootstrap's dependency walk,
+which would have pulled `@babel/standalone` (~3 MB) out of Explorer's lazy ng-react chunk and into
+its initial bundle, and into the server bundle besides. `RuntimeUtilities` stays where it was
+behaviourally: registered lazily through `ng-react` via the existing `lazy-feature-config` entry.
+
+## Still not at parity
+
+`utilities` is not wrapped for data capture (the bridge's fallback-snapshot support), and component
+methods (`print` / `refresh` / `invokeMethod`) are not exposed to the host.
