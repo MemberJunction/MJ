@@ -4410,6 +4410,9 @@ importers:
       '@memberjunction/ng-versions':
         specifier: 6.1.0
         version: link:../../Generic/versions
+      '@memberjunction/predictive-studio-core':
+        specifier: 6.1.0
+        version: link:../../../AI/PredictiveStudio/Core
       '@memberjunction/templates-base-types':
         specifier: 6.1.0
         version: link:../../../Templates/base-types
