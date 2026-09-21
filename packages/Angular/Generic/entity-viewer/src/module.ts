@@ -10,7 +10,7 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { MapViewModule } from '@memberjunction/ng-map-view';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { RecordMergeModule } from '@memberjunction/ng-record-merge';
-import { MjSlidePanelComponent, MJButtonDirective, MJAccordionModule, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
+import { MjSlidePanelComponent, MJButtonDirective, MJAccordionModule, MJEmptyStateComponent, MJAlertComponent, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
@@ -106,6 +106,7 @@ LoadEntityActionUX();
     RecordChangesModule,
     RecordMergeModule,
     MjSlidePanelComponent,
+    MJDialogComponent,
     MJButtonDirective,
     MJAccordionModule,
     MJEmptyStateComponent,

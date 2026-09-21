@@ -61,6 +61,7 @@ class TestOrderEntity extends BaseEntity {}
 
 const ORDER_ID = '11111111-2222-3333-4444-555555555555';
 const CUSTOMER_ID = 'c1111111-0000-0000-0000-000000000001';
+const RECENT_ID = 'c1111111-0000-0000-0000-000000000002';
 
 function orderEntityInfo(): EntityInfo {
   return new EntityInfo({
@@ -319,15 +320,47 @@ describe('mj-form-field FK lookup strategy', () => {
   });
 
   it('offers the user recent picks above the strategy rows on the browse list', async () => {
-    LinkedFieldOptionsStore.Instance.PushRecentPick('Test Orders', 'PartyID', CUSTOMER_ID);
+    LinkedFieldOptionsStore.Instance.PushRecentPick('Test Orders', 'PartyID', RECENT_ID);
 
     // The recent-pick hydration is the only RunView the field itself issues.
     const f = renderFK({
-      Provider: fkProvider([{ ID: CUSTOMER_ID, Name: 'Northwind Institute', City: 'Springfield' }]),
+      Provider: fkProvider([{ ID: RECENT_ID, Name: 'Eastwind Co', City: 'Riverton' }]),
     });
     await openDropdown(f);
 
     expect(text(f, '.mj-fk-group-head')).toContain('Recent');
     expect(f.componentInstance.FKGroups.map(g => g.Key)).toEqual(['__recent', 'customers', 'all']);
+  });
+
+  it('lists a recent pick once when the strategy already offers it, and never the linked value', async () => {
+    LinkedFieldOptionsStore.Instance.PushRecentPick('Test Orders', 'PartyID', CUSTOMER_ID);
+    LinkedFieldOptionsStore.Instance.PushRecentPick('Test Orders', 'PartyID', RECENT_ID);
+
+    // RECENT_ID is the linked value, so it is pinned above the grid; CUSTOMER_ID is already a
+    // strategy row. Neither belongs under "Recent", and no empty header may remain.
+    const f = renderFK({
+      Record: makeOrder({ PartyID: RECENT_ID }),
+      Provider: fkProvider([{ ID: CUSTOMER_ID, Name: 'Northwind Institute', City: 'Springfield' }]),
+    });
+    await openDropdown(f);
+
+    expect(f.componentInstance.FKGroups.map(g => g.Key)).toEqual(['customers', 'all']);
+    expect(text(f, '.mj-fk-group-head')).not.toContain('Recent');
+  });
+
+  it('hands BeforeSelect the row the strategy returned, not a rebuilt key and name', async () => {
+    const veto = vi.spyOn(GroupedTestStrategy.prototype, 'BeforeSelect').mockResolvedValue(true);
+    try {
+      const f = renderFK();
+      await openDropdown(f);
+      mousedown(f, '.mj-fk-grid-row:not(.mj-fk-grid-row--header):not(.mj-fk-group-head)');
+      await f.whenStable();
+
+      const row = veto.mock.calls[0][1];
+      expect(row.Values['City']).toBe('Springfield');
+      expect(row.Chips?.[0]?.Text).toBe('4 orders');
+    } finally {
+      veto.mockRestore();
+    }
   });
 });

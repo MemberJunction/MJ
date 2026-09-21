@@ -76,6 +76,11 @@ export interface FKLookupContext {
   PkField: string;
   /** The related entity's name field name. */
   NameField: string;
+  /**
+   * The field the user is searching — the name field unless they chose another column on the
+   * dropdown's scope pill. A typed query is matched against this column.
+   */
+  SearchField: string;
   /** What the user has typed. Empty when the dropdown was opened by focus. */
   Query: string;
   Scope: FKLookupScope;
@@ -116,6 +121,15 @@ export abstract class FKLookupStrategy {
    */
   public async BeforeSelect(_context: FKLookupContext, _row: FKLookupRow): Promise<boolean> {
     return true;
+  }
+
+  /**
+   * WHERE fragment the field applies when it hydrates the user's recent picks, so a record this
+   * strategy's population no longer includes stops being offered under "Recent". Empty means no
+   * filter beyond the primary-key list.
+   */
+  public RecentFilter(_context: FKLookupContext): string {
+    return '';
   }
 
   /** Values to prefill when the user creates a new related record from the dropdown's footer. */

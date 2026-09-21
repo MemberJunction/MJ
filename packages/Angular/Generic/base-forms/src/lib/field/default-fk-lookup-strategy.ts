@@ -9,7 +9,6 @@
 
 import {
   RunView,
-  type EntityInfo,
   type EntitySearchResult,
   type IMetadataProvider,
   type SearchEntityParams,
@@ -19,8 +18,6 @@ import {
   type FKLookupContext,
   type FKLookupGroup,
   type FKLookupRow,
-  type FKLookupScope,
-  type FKLookupScopeLabels,
 } from './fk-lookup-strategy';
 import { EscapeSqlLikeValue, QuoteSqlIdList, RankByPrefix } from './fk-search-utils';
 
@@ -37,20 +34,6 @@ type SearchCapableProvider = IMetadataProvider & {
 function asSearchSource(provider: IMetadataProvider): SearchCapableProvider | null {
   const candidate = provider as SearchCapableProvider;
   return typeof candidate.SearchEntity === 'function' ? candidate : null;
-}
-
-/** True when the related entity has a `Status` field whose value list includes Active. */
-export function HasActiveStatus(entity: EntityInfo): boolean {
-  const status = entity.Fields.find(f => f.Name.toLowerCase() === 'status');
-  return !!status && status.EntityFieldValues.some(v => String(v.Value).toLowerCase() === 'active');
-}
-
-/**
- * `[Status] = 'Active'` in the primary scope of an entity that has an active status, so the
- * dropdown does not offer records nobody should be linking to any more. Empty otherwise.
- */
-export function BuildStatusFilter(entity: EntityInfo, scope: FKLookupScope): string {
-  return scope === 'primary' && HasActiveStatus(entity) ? `[Status] = 'Active'` : '';
 }
 
 /** AND-join the non-empty fragments, each parenthesized so precedence survives. */
@@ -77,50 +60,57 @@ function buildLikePattern(predicate: string | null, escaped: string): string {
 }
 
 /**
- * The stock lookup: browse by name for the empty query, `SearchEntity` for a typed one, with the
- * field's `RelatedEntityFilter`, the `[FKExtraFilter]` input and the active-status scope applied
- * to both.
+ * The stock lookup: browse by name for the empty query; for a typed one, an escaped `LIKE` on the
+ * column the user is searching, prefix matches first. The field's `RelatedEntityFilter` and the
+ * `[FKExtraFilter]` input apply to both, in SQL. `{ SearchMode: 'hybrid' }` in `[FKLookupOptions]`
+ * ranks through the platform search API instead and hydrates the winners in search order.
  *
  * Subclass it rather than {@link FKLookupStrategy} when an app wants MJ's querying but its own
  * grouping or decoration — `fieldsFor` and `baseFilter` are the hooks for that.
  */
 export class DefaultFKLookupStrategy extends FKLookupStrategy {
   /**
-   * `SearchEntity` takes no filter, so the scope and metadata filters can only be applied when
-   * hydrating the IDs it returned. Over-fetch so a filter that removes most of the matches still
-   * leaves a usable list.
+   * `SearchEntity` takes no filter, so the metadata filter can only be applied when hydrating the
+   * IDs it returned. Over-fetch so a filter that removes most of the matches still leaves a usable
+   * list; when it removes all of them the LIKE path, which filters in SQL, answers instead.
    */
   private static readonly SEARCH_OVERFETCH = 4;
   private static readonly SEARCH_MIN_TOPK = 25;
 
-  public override ScopeLabels(context: FKLookupContext): FKLookupScopeLabels | null {
-    return HasActiveStatus(context.RelatedEntity)
-      ? { primary: 'Active only', all: 'Include inactive' }
-      : null;
-  }
-
   public async Lookup(context: FKLookupContext): Promise<FKLookupGroup[]> {
-    const rows = this.shouldSearch(context) ? await this.search(context) : await this.browse(context);
+    const rows = !context.Query.trim()
+      ? await this.browse(context)
+      : this.shouldSearch(context)
+        ? await this.search(context)
+        : await this.likeSearch(context);
     return [{ Key: 'results', Label: null, Rows: rows }];
   }
 
-  /**
-   * A typed query goes through search, except on a field metadata marks as `Dropdown` — a small
-   * reference table the user is meant to read rather than search.
-   */
-  protected shouldSearch(context: FKLookupContext): boolean {
-    if (!context.Query.trim()) return false;
-    return context.FieldInfo.RelatedEntityDisplayType !== 'Dropdown';
+  /** The filter the browse and search paths apply, so a recent pick outside it stops being offered. */
+  public override RecentFilter(context: FKLookupContext): string {
+    return this.baseFilter(context);
   }
 
-  /** The scope + metadata + caller filters, AND-ed. Subclasses widen this. */
+  /**
+   * The search API ranks across every searchable field of the related entity, so it answers only
+   * when the field opted into hybrid ranking AND the user is searching the name field — a column
+   * chosen on the scope pill needs a LIKE on that column. A field metadata marks as `Dropdown` is a
+   * small reference table the user is meant to read, and a composite key's search result is a
+   * compact key segment rather than a SQL literal to hydrate with an IN list; both take the LIKE path.
+   */
+  protected shouldSearch(context: FKLookupContext): boolean {
+    return (
+      context.Options['SearchMode'] === 'hybrid' &&
+      context.SearchField === context.NameField &&
+      context.FieldInfo.RelatedEntityDisplayType !== 'Dropdown' &&
+      context.RelatedEntity.PrimaryKeys.length === 1
+    );
+  }
+
+  /** The metadata + caller filters, AND-ed. Subclasses widen this. */
   protected baseFilter(context: FKLookupContext): string {
     const fromInput = typeof context.Options['ExtraFilter'] === 'string' ? context.Options['ExtraFilter'] : '';
-    return CombineFilters(
-      context.FieldInfo.RelatedEntityFilter,
-      fromInput,
-      BuildStatusFilter(context.RelatedEntity, context.Scope)
-    );
+    return CombineFilters(context.FieldInfo.RelatedEntityFilter, fromInput);
   }
 
   /** Fields to read per row. Subclasses widen this for a second line or chips. */
@@ -147,28 +137,25 @@ export class DefaultFKLookupStrategy extends FKLookupStrategy {
   }
 
   /**
-   * Rank through the platform search API, then hydrate the winners so the dropdown has display
-   * columns. Falls back to a LIKE when search returns nothing, so the field still works on a
-   * server with no search index.
+   * Rank through the platform search API, then hydrate the winners in search order so the
+   * dropdown has display columns. Falls back to a LIKE when search returns nothing — a server
+   * with no search index — or when the filter removes every hit it did return.
    */
   protected async search(context: FKLookupContext): Promise<FKLookupRow[]> {
-    if (context.RelatedEntity.PrimaryKeys.length !== 1) {
-      // A composite key's search result is a compact key segment, not a SQL literal, so it
-      // cannot be hydrated with an IN list. Those entities take the LIKE path.
-      return this.likeSearch(context);
-    }
     const ids = await this.searchIds(context);
     if (ids.length === 0) {
       return this.likeSearch(context);
     }
     const rows = await this.hydrate(context, ids);
-    return RankByPrefix(rows, context.Query, context.NameField).slice(0, context.MaxRows);
+    if (rows.length === 0) {
+      return this.likeSearch(context);
+    }
+    return this.orderByIds(rows, ids, context.PkField).slice(0, context.MaxRows);
   }
 
   private async searchIds(context: FKLookupContext): Promise<string[]> {
     const source = asSearchSource(context.Provider);
     if (!source) return [];
-    const mode = context.Options['SearchMode'] === 'hybrid' ? 'hybrid' : 'lexical';
     const topK = Math.max(
       context.MaxRows * DefaultFKLookupStrategy.SEARCH_OVERFETCH,
       DefaultFKLookupStrategy.SEARCH_MIN_TOPK
@@ -177,7 +164,7 @@ export class DefaultFKLookupStrategy extends FKLookupStrategy {
       const results: EntitySearchResult[] = await source.SearchEntity({
         entityName: context.RelatedEntity.Name,
         searchText: context.Query.trim(),
-        options: { mode, topK },
+        options: { mode: 'hybrid', topK },
       });
       return results.map(r => r.recordId);
     } catch {
@@ -200,22 +187,31 @@ export class DefaultFKLookupStrategy extends FKLookupStrategy {
     return result.Success ? result.Results.map(Values => ({ Values })) : [];
   }
 
-  /** Name-field `LIKE`, escaped, honouring the field's own search predicate. */
+  /** Re-impose the search API's ranking, which the hydrating view does not preserve. */
+  private orderByIds(rows: FKLookupRow[], ids: string[], pkField: string): FKLookupRow[] {
+    const rank = new Map(ids.map((id, i) => [id.trim().toLowerCase(), i]));
+    const rankOf = (row: FKLookupRow): number =>
+      rank.get(String(row.Values[pkField] ?? '').trim().toLowerCase()) ?? ids.length;
+    return [...rows].sort((a, b) => rankOf(a) - rankOf(b));
+  }
+
+  /** `LIKE` on the column the user is searching, escaped, honouring that field's own predicate. */
   private async likeSearch(context: FKLookupContext): Promise<FKLookupRow[]> {
-    const nameField = context.RelatedEntity.Fields.find(f => f.Name === context.NameField);
+    const searchField = context.SearchField || context.NameField;
+    const field = context.RelatedEntity.Fields.find(f => f.Name === searchField);
     const pattern = buildLikePattern(
-      nameField?.UserSearchPredicateAPI ?? null,
+      field?.UserSearchPredicateAPI ?? null,
       EscapeSqlLikeValue(context.Query.trim())
     );
     const result = await RunView.FromMetadataProvider(context.Provider).RunView<Record<string, unknown>>({
       EntityName: context.RelatedEntity.Name,
-      ExtraFilter: CombineFilters(`[${context.NameField}] LIKE ${pattern}`, this.baseFilter(context)),
-      OrderBy: `[${context.NameField}]`,
+      ExtraFilter: CombineFilters(`[${searchField}] LIKE ${pattern}`, this.baseFilter(context)),
+      OrderBy: `[${searchField}]`,
       MaxRows: context.MaxRows,
       ResultType: 'simple',
       Fields: this.fieldsFor(context),
     });
     if (!result.Success) return [];
-    return RankByPrefix(result.Results.map(Values => ({ Values })), context.Query, context.NameField);
+    return RankByPrefix(result.Results.map(Values => ({ Values })), context.Query, searchField);
   }
 }

@@ -129,7 +129,8 @@
         @if (HasRelatedEntity) {
           <div class="mj-fk-search"
               [class.mj-fk-search--matched]="FKHasLinkedValue"
-              [class.mj-fk-search--scoped]="FKFocused && FKSearchableFields.length > 1">
+              [class.mj-fk-search--scoped]="FKFocused && FKSearchableFields.length > 1"
+              [class.mj-fk-search--toggle]="FKFocused && !!FKScopeLabels">
             @if (FKHasLinkedValue && !(FKFocused && FKSearchableFields.length > 1)) {
               <i class="fa-solid fa-link mj-fk-link-icon" title="Linked record"></i>
             }
@@ -291,8 +292,8 @@
                       <!-- Data rows, under their group's header. A strategy that returns one
                            unlabelled group renders exactly as before. -->
                       @for (group of FKGroups; track group.Key) {
-                        @if (group.Label) {
-                          <div class="mj-fk-grid-row mj-fk-group-head" [style.grid-column]="'1 / -1'">{{ group.Label }}</div>
+                        @if (group.Label && FKSuggestionsInGroup(group.Key).length > 0) {
+                          <div class="mj-fk-grid-row mj-fk-group-head" (mousedown)="$event.preventDefault()">{{ group.Label }}</div>
                         }
                         @for (suggestion of FKSuggestionsInGroup(group.Key); track suggestion.PrimaryKeyValue) {
                           <div class="mj-fk-grid-row"

@@ -105,10 +105,11 @@ Key inputs: `[Record]` (required), `FieldName`, `[EditMode]`, `Type`
 
 ### Choosing what a foreign key offers
 
-By default a foreign key offers rows of the related entity ranked by relevance, scoped by the
-field's `RelatedEntityFilter` / `RelatedEntityOrderBy` metadata, with the user's recent picks
-first and inactive records behind a toggle. `[FKExtraFilter]` and `[FKOrderBy]` override the
-metadata for one instance of the form.
+By default a foreign key offers rows of the related entity matching what the user types on the
+column they chose, prefix matches first, scoped by the field's `RelatedEntityFilter` /
+`RelatedEntityOrderBy` metadata, with the user's recent picks first. `[FKExtraFilter]` and
+`[FKOrderBy]` override the metadata for one instance of the form; `[FKLookupOptions]="{ SearchMode:
+'hybrid' }"` ranks through the platform search API instead.
 
 When the right population cannot be expressed as a filter — "organizations we actually sell
 to, most recently active first" — register a lookup strategy instead. The field keeps owning

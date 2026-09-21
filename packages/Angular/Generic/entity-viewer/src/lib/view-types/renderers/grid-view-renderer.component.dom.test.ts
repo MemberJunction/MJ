@@ -11,6 +11,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { renderComponentFixture, query, text, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { EntityInfo, type IMetadataProvider, type RecordMergeRequest } from '@memberjunction/core';
 import { RecordComparisonService } from '@memberjunction/ng-record-merge';
+import { MJButtonDirective, MJDialogComponent } from '@memberjunction/ng-ui-components';
 import { GridViewRendererComponent } from './grid-view-renderer.component';
 
 @Component({ standalone: true, selector: 'mj-entity-data-grid', template: '' })
@@ -59,10 +60,11 @@ function partyEntity(options: { allowMerge?: boolean; canUpdate?: boolean; canDe
     BaseView: 'vwParties',
     AllowRecordMerge: options.allowMerge ?? true,
     Fields: [
-      { ID: 'P1', Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true },
-      { ID: 'P2', Name: 'Name', Type: 'nvarchar', Length: 200, AllowsNull: false, IsNameField: true },
+      { ID: 'P1', Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true, AllowUpdateAPI: false },
+      { ID: 'P2', Name: 'Name', Type: 'nvarchar', Length: 200, AllowsNull: false, IsNameField: true, AllowUpdateAPI: true },
+      { ID: 'P4', Name: 'Entity', Type: 'nvarchar', Length: 200, AllowsNull: true, IsVirtual: true, AllowUpdateAPI: false },
       ...(options.compositeKey
-        ? [{ ID: 'P3', Name: 'TenantID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true }]
+        ? [{ ID: 'P3', Name: 'TenantID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true, AllowUpdateAPI: false }]
         : []),
     ],
   });
@@ -88,7 +90,7 @@ function provider(overrides: Partial<Record<string, unknown>> = {}): IMetadataPr
 
 function render(entity: EntityInfo | null, p: IMetadataProvider) {
   return renderComponentFixture(GridViewRendererComponent, {
-    imports: [GridStub, MergePanelStub, ListDialogStub, ConfirmDialogStub],
+    imports: [GridStub, MergePanelStub, ListDialogStub, ConfirmDialogStub, MJDialogComponent, MJButtonDirective],
     declarations: [GridViewRendererComponent],
     providers: [
       {
@@ -104,6 +106,8 @@ function render(entity: EntityInfo | null, p: IMetadataProvider) {
                   Cells: [{ ColumnIndex: 0, Value: PARTY_A, EqualsReference: true }, { ColumnIndex: 1, Value: PARTY_B, EqualsReference: false }] },
                 { FieldName: 'Name', DisplayName: 'Name', Category: null, Differs: true,
                   Cells: [{ ColumnIndex: 0, Value: 'Northwind Institute', EqualsReference: true }, { ColumnIndex: 1, Value: 'Northwind Institute (Regional)', EqualsReference: false }] },
+                { FieldName: 'Entity', DisplayName: 'Entity', Category: null, Differs: true,
+                  Cells: [{ ColumnIndex: 0, Value: 'Parties', EqualsReference: true }, { ColumnIndex: 1, Value: 'Parties (Regional)', EqualsReference: false }] },
               ],
             },
           }),
@@ -118,12 +122,13 @@ type MergeHost = {
   effectiveShowMergeButton: boolean;
   mergeNotice: string | null;
   mergeState: {
-    Fields: { FieldName: string; HasConflict: boolean; IsReadOnly: boolean }[];
+    Fields: { FieldName: string; HasConflict: boolean; IsReadOnly: boolean; SelectedSide: string }[];
     DependencyNote: string | null;
-    Config: { LeftRecordID: string; RightRecordID: string };
+    Config: { LeftRecordID: string; RightRecordID: string; SurvivorSide: 'left' | 'right'; LeftLabel: string; RightLabel: string; EntityName: string };
   } | null;
   onMergeRequested(e: { entityInfo: EntityInfo; records: Record<string, unknown>[] }): Promise<void>;
   onMergeConfirmed(e: unknown): Promise<void>;
+  onSurvivorChange(side: 'left' | 'right'): void;
 };
 
 function host(fixture: ReturnType<typeof render>): MergeHost {
@@ -164,16 +169,66 @@ describe('GridViewRendererComponent merge wiring', () => {
     f.detectChanges();
 
     const state = host(f).mergeState;
-    expect(state?.Fields.map(x => x.FieldName)).toEqual(['ID', 'Name']);
+    expect(state?.Fields.map(x => x.FieldName)).toEqual(['ID', 'Name', 'Entity']);
     expect(state?.Fields.find(x => x.FieldName === 'ID')?.IsReadOnly).toBe(true);
     expect(state?.Fields.find(x => x.FieldName === 'Name')?.HasConflict).toBe(true);
+    expect(state?.Fields.find(x => x.FieldName === 'Name')?.IsReadOnly).toBe(false);
+    // A joined display column the ORM will never write is not offered as a choice.
+    expect(state?.Fields.find(x => x.FieldName === 'Entity')?.IsReadOnly).toBe(true);
     expect(state?.DependencyNote).toContain('0 on the left');
     expect(query(f, '.merge-panel-stub')).not.toBeNull();
   });
 
+  it('lets the user choose the survivor, defaulting the other fields to that record', async () => {
+    const mergeRecords = vi.fn(async (_request: RecordMergeRequest) => ({ Success: true, OverallStatus: 'Complete' }));
+    const f = render(partyEntity(), provider({ MergeRecords: mergeRecords }));
+    await host(f).onMergeRequested({ entityInfo: partyEntity(), records: twoParties });
+    f.detectChanges();
+    expect(text(f, '.mj-ev-merge-survivor-note')).toContain('Northwind Institute (Regional) will be deleted');
+
+    host(f).onSurvivorChange('right');
+    const state = host(f).mergeState!;
+    expect(state.Config.SurvivorSide).toBe('right');
+    expect(state.Fields.find(x => x.FieldName === 'Name')?.SelectedSide).toBe('right');
+    expect(text(f, '.mj-ev-merge-survivor-note')).toContain('Northwind Institute will be deleted');
+
+    await host(f).onMergeConfirmed({ Config: state.Config, ResolvedFields: state.Fields });
+    const request = mergeRecords.mock.calls[0][0];
+    expect(request.SurvivingRecordCompositeKey.KeyValuePairs[0].Value).toBe(PARTY_B);
+    expect(request.RecordsToMerge[0].KeyValuePairs[0].Value).toBe(PARTY_A);
+    expect(request.FieldMap).toEqual([]);
+  });
+
+  it('refuses to merge records of an IS-A subtype entity', async () => {
+    const entity = partyEntity();
+    entity.ParentID = 'E0000009-0000-0000-0000-000000000009';
+    const f = render(entity, provider());
+    await host(f).onMergeRequested({ entityInfo: entity, records: twoParties });
+    f.detectChanges();
+
+    expect(host(f).mergeState).toBeNull();
+    expect(text(f, '.mj-ev-merge-notice')).toContain('extend a parent type');
+  });
+
+  it('reports a failed pre-flight query instead of rejecting silently', async () => {
+    const failing = renderComponentFixture(GridViewRendererComponent, {
+      imports: [GridStub, MergePanelStub, ListDialogStub, ConfirmDialogStub, MJDialogComponent, MJButtonDirective],
+      declarations: [GridViewRendererComponent],
+      providers: [
+        { provide: RecordComparisonService, useValue: { GetRecordComparison: async () => { throw new Error('socket closed'); } } },
+      ],
+      inputs: { entity: partyEntity(), records: [], config: {}, Provider: provider() },
+    });
+    await host(failing).onMergeRequested({ entityInfo: partyEntity(), records: twoParties });
+    failing.detectChanges();
+
+    expect(host(failing).mergeState).toBeNull();
+    expect(text(failing, '.mj-ev-merge-notice')).toContain('socket closed');
+  });
+
   it('surfaces a comparison failure rather than opening an empty panel', async () => {
     const f = renderComponentFixture(GridViewRendererComponent, {
-      imports: [GridStub, MergePanelStub, ListDialogStub, ConfirmDialogStub],
+      imports: [GridStub, MergePanelStub, ListDialogStub, ConfirmDialogStub, MJDialogComponent, MJButtonDirective],
       declarations: [GridViewRendererComponent],
       providers: [
         {

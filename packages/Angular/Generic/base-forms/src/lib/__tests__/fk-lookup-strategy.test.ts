@@ -66,6 +66,10 @@ describe('FKLookupStrategy defaults', () => {
     expect(new FieldScopedStrategy().ScopeLabels(context)).toBeNull();
   });
 
+  it('applies no filter to recent picks unless a subclass scopes them', () => {
+    expect(new FieldScopedStrategy().RecentFilter(context)).toBe('');
+  });
+
   it('allows the pick unless a subclass vetoes it', async () => {
     expect(await new FieldScopedStrategy().BeforeSelect(context, {} as FKLookupRow)).toBe(true);
   });

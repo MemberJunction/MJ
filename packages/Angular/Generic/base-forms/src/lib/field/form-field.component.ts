@@ -17,7 +17,7 @@ import {
   type FKLookupScope,
   type FKLookupScopeLabels,
 } from './fk-lookup-strategy';
-import { DefaultFKLookupStrategy } from './default-fk-lookup-strategy';
+import { CombineFilters, DefaultFKLookupStrategy } from './default-fk-lookup-strategy';
 
 /**
  * Rows a foreign-key lookup returns by default. Module scope because the `FKMaxRows` input's
@@ -97,6 +97,11 @@ export interface FKSuggestion {
   Secondary?: string;
   /** Small markers beside the name, e.g. "4 orders". Supplied by the lookup strategy. */
   Chips?: FKLookupChip[];
+  /**
+   * The row the strategy returned, so {@link FKLookupStrategy.BeforeSelect} sees every value it
+   * supplied rather than a rebuilt key + name. Absent on the cached path, which has no strategy row.
+   */
+  Row?: FKLookupRow;
 }
 
 /**
@@ -688,7 +693,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /**
    * Extra WHERE fragment applied to every lookup on this field, AND-ed with the related
-   * entity's `RelatedEntityFilter` metadata and the active-status scope. Use this for a
+   * entity's `RelatedEntityFilter` metadata. Use this for a
    * scope only this instance of the form knows about; prefer the metadata column when the
    * rule is true of the field everywhere it appears.
    */
@@ -1058,6 +1063,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return this._fkStrategyIsRegistered;
   }
 
+  /** True when metadata or this instance's inputs scope or order the related rows. */
+  private hasFKScoping(): boolean {
+    return !!(
+      this.FieldInfo?.RelatedEntityFilter ||
+      this.FieldInfo?.RelatedEntityOrderBy ||
+      this.FKExtraFilter ||
+      this.FKOrderBy
+    );
+  }
+
   /** Everything the strategy needs for one lookup. Null when the field is not fully resolved. */
   private buildLookupContext(plan: FKColumnPlan, query: string): FKLookupContext | null {
     const relatedEntity = this.getRelatedEntityInfo();
@@ -1075,6 +1090,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       Fields: fields,
       PkField: plan.PkFieldName,
       NameField: plan.NameFieldName,
+      SearchField: searchField,
       Query: query,
       Scope: this.FKScope,
       MaxRows: this.FKMaxRows,
@@ -1093,11 +1109,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    *
    * A registered strategy always wins: it exists precisely because "every row of the related
    * entity, filtered by name" is the wrong answer for this field, and filtering a cache in memory
-   * would silently reinstate that answer.
+   * would silently reinstate that answer. So does any scoping the default strategy would apply
+   * (`RelatedEntityFilter`, `RelatedEntityOrderBy`, `[FKExtraFilter]`, `[FKOrderBy]`): the cache
+   * cannot honour it, and the answer must not depend on which engines a page happened to load.
    */
   private getCachedRecordsForRelatedEntity(): BaseEntity[] | null {
     const relatedName = this.FieldInfo?.RelatedEntity;
-    if (!relatedName || this.hasCustomStrategy()) return null;
+    if (!relatedName || this.hasCustomStrategy() || this.hasFKScoping()) return null;
     const registry = BaseEngineRegistry.Instance;
     const records = registry.TryGetCachedRecords<BaseEntity>(relatedName, { unfilteredOnly: true });
     // Treat an empty (or absent) cache as "no usable cache" so callers fall through
@@ -1355,7 +1373,8 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         Icon: (rowIcon || plan.EntityIcon) || null,
         GroupKey: groupKey,
         Secondary: decoration[index]?.Secondary,
-        Chips: decoration[index]?.Chips
+        Chips: decoration[index]?.Chips,
+        Row: decoration[index]
       };
     });
   }
@@ -1859,7 +1878,8 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const plan = this.buildColumnPlan();
     const context = plan ? this.buildLookupContext(plan, this._fkQuery) : null;
     if (plan && context) {
-      const row: FKLookupRow = {
+      // The strategy's own row when it supplied one, so a veto can read every value it returned.
+      const row: FKLookupRow = suggestion.Row ?? {
         Values: {
           [plan.PkFieldName]: suggestion.PrimaryKeyValue,
           [plan.NameFieldName]: suggestion.DisplayName,
@@ -2033,10 +2053,14 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (seq !== this._fkSearchSeq) return;
     this.FKLoading = false;
 
-    const allGroups: FKLookupGroup[] = recent.length
-      ? [{ Key: MjFormFieldComponent.FK_RECENT_GROUP, Label: 'Recent', Rows: recent }, ...groups]
+    // A recent pick the strategy also returned renders once, in the strategy's group.
+    const pkOf = (r: FKLookupRow): string => String(r.Values[plan.PkFieldName] ?? '').toLowerCase();
+    const offered = new Set(groups.flatMap(g => g.Rows.map(pkOf)));
+    const recentOnly = recent.filter(r => !offered.has(pkOf(r)));
+    const allGroups: FKLookupGroup[] = recentOnly.length
+      ? [{ Key: MjFormFieldComponent.FK_RECENT_GROUP, Label: 'Recent', Rows: recentOnly }, ...groups]
       : groups;
-    this.FKGroups = allGroups.map(g => ({ Key: g.Key, Label: g.Label }));
+    this.FKGroups = allGroups.filter(g => g.Rows.length > 0).map(g => ({ Key: g.Key, Label: g.Label }));
 
     const accessor = (r: FKLookupRow) => ({ get: (field: string) => r.Values[field] });
     const suggestions = allGroups.flatMap(g =>
@@ -2048,19 +2072,26 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /**
    * Hydrate the user's last picks for this field into rows. Run through the related entity's
-   * own view so a record that has since been deleted, or that the user may no longer read,
-   * simply stops appearing rather than surfacing as a broken row.
+   * own view, under the strategy's {@link FKLookupStrategy.RecentFilter}, so a record that has
+   * since been deleted, that the user may no longer read, or that the field no longer offers
+   * simply stops appearing rather than leading the list.
    */
   private async loadRecentPicks(context: FKLookupContext): Promise<FKLookupRow[]> {
     const hostEntity = this.Record?.EntityInfo?.Name ?? '';
+    // The linked value is pinned above the grid already; it is not "recent" as well.
+    const current = this.Value;
     const ids = LinkedFieldOptionsStore.Instance
       .RecentPicks(hostEntity, this.FieldName)
+      .filter(id => current == null || current === '' || !UUIDsEqual(String(current), id))
       .slice(0, MjFormFieldComponent.FK_RECENT_SHOWN);
     if (ids.length === 0 || context.RelatedEntity.PrimaryKeys.length !== 1) return [];
 
     const result = await RunView.FromMetadataProvider(context.Provider).RunView<Record<string, unknown>>({
       EntityName: context.RelatedEntity.Name,
-      ExtraFilter: `[${context.PkField}] IN (${QuoteSqlIdList(ids)})`,
+      ExtraFilter: CombineFilters(
+        `[${context.PkField}] IN (${QuoteSqlIdList(ids)})`,
+        this.resolveStrategy().RecentFilter(context)
+      ),
       ResultType: 'simple',
       Fields: context.Fields,
     });

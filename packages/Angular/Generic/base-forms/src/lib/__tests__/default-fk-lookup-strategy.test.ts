@@ -1,15 +1,11 @@
 /**
- * Tests for MJ's stock foreign-key lookup: what SQL it asks for, how the scope and metadata
- * filters combine, and when it searches rather than browses.
+ * Tests for MJ's stock foreign-key lookup: what SQL it asks for, how the metadata and input
+ * filters combine, which column a typed query is matched against, and when it ranks through the
+ * platform search API rather than a LIKE.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { EntityInfo, type EntityFieldInfo, type IMetadataProvider, type RunViewParams } from '@memberjunction/core';
-import {
-  DefaultFKLookupStrategy,
-  BuildStatusFilter,
-  CombineFilters,
-  HasActiveStatus,
-} from '../field/default-fk-lookup-strategy';
+import { DefaultFKLookupStrategy, CombineFilters } from '../field/default-fk-lookup-strategy';
 import type { FKLookupContext } from '../field/fk-lookup-strategy';
 
 const PARTY_FIELDS = [
@@ -18,16 +14,7 @@ const PARTY_FIELDS = [
   { ID: 'P3', Name: 'City', Type: 'nvarchar', Length: 100, AllowsNull: true },
 ];
 
-const ACTIVE_STATUS_FIELD = {
-  ID: 'P4',
-  Name: 'Status',
-  Type: 'nvarchar',
-  Length: 25,
-  AllowsNull: false,
-  EntityFieldValues: [{ Value: 'Active' }, { Value: 'Inactive' }],
-};
-
-function partyEntity(options: { withStatus?: boolean; compositeKey?: boolean } = {}): EntityInfo {
+function partyEntity(options: { compositeKey?: boolean } = {}): EntityInfo {
   return new EntityInfo({
     ID: 'E0000002-0000-0000-0000-000000000002',
     Name: 'Test Parties',
@@ -39,13 +26,17 @@ function partyEntity(options: { withStatus?: boolean; compositeKey?: boolean } =
       ...(options.compositeKey
         ? [{ ID: 'P5', Name: 'TenantID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true }]
         : []),
-      ...(options.withStatus ? [ACTIVE_STATUS_FIELD] : []),
     ],
   });
 }
 
-/** Records every RunView it is asked for, and answers SearchEntity with the supplied IDs. */
-function fakeProvider(searchIds: string[], rows: Record<string, unknown>[]) {
+type Rows = Record<string, unknown>[];
+
+/**
+ * Records every RunView it is asked for, and answers SearchEntity with the supplied IDs. `rows`
+ * may be a function of the RunView params, for paths that issue more than one query.
+ */
+function fakeProvider(searchIds: string[], rows: Rows | ((params: RunViewParams) => Rows)) {
   const runViewCalls: RunViewParams[] = [];
   const provider = {
     runViewCalls,
@@ -60,7 +51,8 @@ function fakeProvider(searchIds: string[], rows: Record<string, unknown>[]) {
     ),
     RunView: vi.fn(async (params: RunViewParams) => {
       runViewCalls.push(params);
-      return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ErrorMessage: '' };
+      const results = typeof rows === 'function' ? rows(params) : rows;
+      return { Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length, ErrorMessage: '' };
     }),
   };
   return provider as unknown as IMetadataProvider & { runViewCalls: RunViewParams[]; SearchEntity: ReturnType<typeof vi.fn> };
@@ -85,6 +77,7 @@ function context(overrides: Partial<FKLookupContext>, provider: IMetadataProvide
     Fields: ['ID', 'Name', 'City'],
     PkField: 'ID',
     NameField: 'Name',
+    SearchField: 'Name',
     Query: '',
     Scope: 'primary',
     MaxRows: 20,
@@ -93,6 +86,8 @@ function context(overrides: Partial<FKLookupContext>, provider: IMetadataProvide
   };
 }
 
+const HYBRID = { SearchMode: 'hybrid' };
+
 describe('CombineFilters', () => {
   it('parenthesizes and AND-joins, dropping empties', () => {
     expect(CombineFilters(`Kind = 'Org'`, '', null, 'IsDeleted = 0')).toBe(`(Kind = 'Org') AND (IsDeleted = 0)`);
@@ -100,20 +95,6 @@ describe('CombineFilters', () => {
 
   it('returns an empty string when nothing is supplied', () => {
     expect(CombineFilters(null, undefined, '  ')).toBe('');
-  });
-});
-
-describe('HasActiveStatus / BuildStatusFilter', () => {
-  it('sees an Active value list on a Status field', () => {
-    expect(HasActiveStatus(partyEntity({ withStatus: true }))).toBe(true);
-    expect(HasActiveStatus(partyEntity())).toBe(false);
-  });
-
-  it('filters to Active in the primary scope only', () => {
-    const withStatus = partyEntity({ withStatus: true });
-    expect(BuildStatusFilter(withStatus, 'primary')).toBe(`[Status] = 'Active'`);
-    expect(BuildStatusFilter(withStatus, 'all')).toBe('');
-    expect(BuildStatusFilter(partyEntity(), 'primary')).toBe('');
   });
 });
 
@@ -144,35 +125,51 @@ describe('DefaultFKLookupStrategy', () => {
     expect(provider.runViewCalls[1].OrderBy).toBe('[Name] DESC');
   });
 
-  it('searches then hydrates by ID, ranking prefix matches first', async () => {
-    const provider = fakeProvider(['2', '1'], [{ ID: '1', Name: 'Summit' }, { ID: '2', Name: 'Executive Summary' }]);
+  it('matches a typed query with one escaped LIKE on the name field, prefix matches first', async () => {
+    const provider = fakeProvider(['9'], [{ ID: '1', Name: 'Executive Summary' }, { ID: '2', Name: 'Summit' }]);
     const groups = await new DefaultFKLookupStrategy().Lookup(context({ Query: 'sum' }, provider));
 
-    expect(provider.SearchEntity).toHaveBeenCalledWith(
-      expect.objectContaining({ entityName: 'Test Parties', searchText: 'sum' })
-    );
-    expect(provider.runViewCalls[0].ExtraFilter).toContain(`[ID] IN ('2','1')`);
+    expect(provider.SearchEntity).not.toHaveBeenCalled();
+    expect(provider.runViewCalls).toHaveLength(1);
+    expect(provider.runViewCalls[0].ExtraFilter).toContain(`[Name] LIKE '%sum%'`);
+    expect(provider.runViewCalls[0].OrderBy).toBe('[Name]');
     expect(groups[0].Rows.map(r => r.Values.Name)).toEqual(['Summit', 'Executive Summary']);
   });
 
-  it('searches lexically by default and over-fetches to absorb the post-filter shrink', async () => {
-    const provider = fakeProvider(['1'], [{ ID: '1', Name: 'Summit' }]);
-    await new DefaultFKLookupStrategy().Lookup(context({ Query: 'sum', MaxRows: 20 }, provider));
-
-    expect(provider.SearchEntity).toHaveBeenCalledWith(
-      expect.objectContaining({ options: { mode: 'lexical', topK: 80 } })
+  it('matches the column the user chose on the scope pill, even in hybrid mode', async () => {
+    const provider = fakeProvider(['1'], [{ ID: '1', Name: 'Northwind', City: 'Springfield' }]);
+    await new DefaultFKLookupStrategy().Lookup(
+      context({ Query: 'spring', SearchField: 'City', Options: HYBRID }, provider)
     );
+
+    expect(provider.SearchEntity).not.toHaveBeenCalled();
+    expect(provider.runViewCalls[0].ExtraFilter).toContain(`[City] LIKE '%spring%'`);
+    expect(provider.runViewCalls[0].OrderBy).toBe('[City]');
   });
 
-  it('asks for hybrid ranking when the field opts in', async () => {
-    const provider = fakeProvider(['1'], [{ ID: '1', Name: 'Summit' }]);
-    await new DefaultFKLookupStrategy().Lookup(
-      context({ Query: 'sum', Options: { SearchMode: 'hybrid' } }, provider)
-    );
+  it('ranks through the search API when the field opts into hybrid mode, hydrating in search order', async () => {
+    const provider = fakeProvider(['2', '1'], [{ ID: '1', Name: 'Summit' }, { ID: '2', Name: 'Executive Summary' }]);
+    const groups = await new DefaultFKLookupStrategy().Lookup(context({ Query: 'sum', Options: HYBRID }, provider));
 
     expect(provider.SearchEntity).toHaveBeenCalledWith(
-      expect.objectContaining({ options: expect.objectContaining({ mode: 'hybrid' }) })
+      expect.objectContaining({ entityName: 'Test Parties', searchText: 'sum', options: { mode: 'hybrid', topK: 80 } })
     );
+    expect(provider.runViewCalls[0].ExtraFilter).toContain(`[ID] IN ('2','1')`);
+    expect(groups[0].Rows.map(r => r.Values.Name)).toEqual(['Executive Summary', 'Summit']);
+  });
+
+  it('falls back to LIKE when the filter removes every hybrid hit', async () => {
+    const provider = fakeProvider(['9'], params =>
+      params.ExtraFilter?.includes(' IN (') ? [] : [{ ID: '1', Name: 'Summit' }]
+    );
+    const groups = await new DefaultFKLookupStrategy().Lookup(
+      context({ Query: 'sum', Options: HYBRID, FieldInfo: fieldInfo({ RelatedEntityFilter: `Kind = 'Org'` }) }, provider)
+    );
+
+    expect(provider.runViewCalls).toHaveLength(2);
+    expect(provider.runViewCalls[1].ExtraFilter).toContain(`[Name] LIKE '%sum%'`);
+    expect(provider.runViewCalls[1].ExtraFilter).toContain(`Kind = 'Org'`);
+    expect(groups[0].Rows.map(r => r.Values.Name)).toEqual(['Summit']);
   });
 
   it('applies the metadata filter and the input filter with AND', async () => {
@@ -187,57 +184,44 @@ describe('DefaultFKLookupStrategy', () => {
     expect(provider.runViewCalls[0].ExtraFilter).toBe(`(Kind = 'Org') AND (IsDeleted = 0)`);
   });
 
-  it('offers an include-inactive scope only when the entity has a Status with Active', () => {
+  it('scopes recent picks with the same filter and offers no scope toggle of its own', () => {
     const strategy = new DefaultFKLookupStrategy();
     const provider = fakeProvider([], []);
+    const scoped = context({ FieldInfo: fieldInfo({ RelatedEntityFilter: `Kind = 'Org'` }) }, provider);
 
-    expect(strategy.ScopeLabels(context({ RelatedEntity: partyEntity({ withStatus: true }) }, provider))).toEqual({
-      primary: 'Active only',
-      all: 'Include inactive',
-    });
-    expect(strategy.ScopeLabels(context({}, provider))).toBeNull();
+    expect(strategy.RecentFilter(scoped)).toBe(`(Kind = 'Org')`);
+    expect(strategy.ScopeLabels(scoped)).toBeNull();
   });
 
-  it('hides non-active rows in the primary scope and shows them in the all scope', async () => {
-    const provider = fakeProvider([], []);
-    const strategy = new DefaultFKLookupStrategy();
-    const withStatus = partyEntity({ withStatus: true });
-
-    await strategy.Lookup(context({ RelatedEntity: withStatus, Scope: 'primary' }, provider));
-    expect(provider.runViewCalls[0].ExtraFilter).toBe(`([Status] = 'Active')`);
-
-    await strategy.Lookup(context({ RelatedEntity: withStatus, Scope: 'all' }, provider));
-    expect(provider.runViewCalls[1].ExtraFilter).toBe('');
-  });
-
-  it('browses rather than searches when metadata marks the field as a dropdown', async () => {
+  it('applies the typed text on a field metadata marks as a dropdown, without the search API', async () => {
     const provider = fakeProvider(['1'], [{ ID: '1', Name: 'Alpha' }]);
     await new DefaultFKLookupStrategy().Lookup(
-      context({ Query: 'al', FieldInfo: fieldInfo({ RelatedEntityDisplayType: 'Dropdown' }) }, provider)
+      context({ Query: 'al', Options: HYBRID, FieldInfo: fieldInfo({ RelatedEntityDisplayType: 'Dropdown' }) }, provider)
     );
 
     expect(provider.SearchEntity).not.toHaveBeenCalled();
+    expect(provider.runViewCalls[0].ExtraFilter).toContain(`[Name] LIKE '%al%'`);
     expect(provider.runViewCalls[0].OrderBy).toBe('[Name]');
   });
 
   it('skips the search API for a composite-key entity, whose IDs are not SQL literals', async () => {
     const provider = fakeProvider(['a|b'], [{ ID: '1', Name: 'Summit' }]);
     await new DefaultFKLookupStrategy().Lookup(
-      context({ Query: 'sum', RelatedEntity: partyEntity({ compositeKey: true }) }, provider)
+      context({ Query: 'sum', Options: HYBRID, RelatedEntity: partyEntity({ compositeKey: true }) }, provider)
     );
 
     expect(provider.SearchEntity).not.toHaveBeenCalled();
     expect(provider.runViewCalls[0].ExtraFilter).toContain(`[Name] LIKE '%sum%'`);
   });
 
-  it('escapes LIKE wildcards on the fallback path so 50% is a literal', async () => {
+  it('escapes LIKE wildcards so 50% is a literal', async () => {
     const provider = fakeProvider([], [{ ID: '1', Name: '50% off' }]);
     await new DefaultFKLookupStrategy().Lookup(context({ Query: '50%' }, provider));
 
     expect(provider.runViewCalls[0].ExtraFilter).toContain(`[Name] LIKE '%50[%]%'`);
   });
 
-  it('honours the name field UserSearchPredicateAPI on the fallback path', async () => {
+  it('honours the searched field UserSearchPredicateAPI', async () => {
     const entity = partyEntity();
     const nameField = entity.Fields.find(f => f.Name === 'Name');
     if (nameField) nameField.UserSearchPredicateAPI = 'BeginsWith';
@@ -255,7 +239,7 @@ describe('DefaultFKLookupStrategy', () => {
       RunView: vi.fn(async () => ({ Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ErrorMessage: 'boom' })),
     } as unknown as IMetadataProvider;
 
-    const groups = await new DefaultFKLookupStrategy().Lookup(context({ Query: 'sum' }, provider));
+    const groups = await new DefaultFKLookupStrategy().Lookup(context({ Query: 'sum', Options: HYBRID }, provider));
     expect(groups[0].Rows).toEqual([]);
   });
 });
