@@ -1,4 +1,4 @@
-import { ClassFactory, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, computeContentHashAsync } from '@memberjunction/global';
+import { ClassFactory, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
@@ -3678,7 +3678,7 @@ export abstract class BaseEntity<T = unknown> {
             throw new Error(`ComputeContentHash: cannot compute content hash on empty basis for entity '${this.EntityInfo.Name}'`);
         }
 
-        return computeContentHashAsync(data);
+        return ComputeContentHashAsync(data);
     }
 
     /**

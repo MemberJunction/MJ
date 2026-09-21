@@ -299,7 +299,7 @@ export async function applyOutputMapping(opts: {
                         }
                         const relEntity = provider.EntityByName(relatedEntityName);
                         const pkFieldName = relEntity?.FirstPrimaryKey?.Name ?? 'ID'; // first-pk-ok: FK target PK resolution
-                        const createdVal = newObj.FirstPrimaryKey?.Value ?? (typeof newObj.Get === 'function' ? newObj.Get(pkFieldName) : undefined);
+                        const createdVal = newObj.FirstPrimaryKey?.Value ?? (typeof newObj.Get === 'function' ? newObj.Get(pkFieldName) : undefined); // first-pk-ok: FK target entity single-column PK resolution
                         const resolvedPk = typeof createdVal === 'string' || typeof createdVal === 'number'
                             ? createdVal
                             : newObj.PrimaryKey.ToCompactURLSegment();

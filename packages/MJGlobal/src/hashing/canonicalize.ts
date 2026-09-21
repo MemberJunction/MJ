@@ -19,8 +19,3 @@ export function Canonicalize(value: unknown): string {
     const body = keys.map(k => `${JSON.stringify(k)}:${Canonicalize(obj[k])}`).join(',');
     return `{${body}}`;
 }
-
-/**
- * @deprecated Use {@link Canonicalize} to follow MemberJunction PascalCase naming convention for exported functions.
- */
-export const canonicalize = Canonicalize;

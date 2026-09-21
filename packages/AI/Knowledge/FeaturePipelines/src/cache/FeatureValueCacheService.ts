@@ -4,7 +4,7 @@
  * @module @memberjunction/feature-pipelines
  */
 
-import { BaseSingleton, canonicalize, computeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
+import { BaseSingleton, Canonicalize, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import type { MJFeatureValueCacheEntity, MJFeatureValueEntity } from '@memberjunction/core-entities';
 
@@ -118,9 +118,9 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
                 }
             }
 
-            const canonical = canonicalize(keyObj);
+            const canonical = Canonicalize(keyObj);
             const keyJSON = canonical;
-            const keyHash = await computeContentHashAsync(keyObj);
+            const keyHash = await ComputeContentHashAsync(keyObj);
             const keyDisplay = displayParts.join(' | ') || keyHash.substring(0, 16);
 
             return { keyHash, keyJSON, keyDisplay };
@@ -128,9 +128,9 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
         // Whole rendered context (or whole record data)
         const basis = params.renderedContext ? { context: params.renderedContext } : params.recordData;
-        const canonical = canonicalize(basis);
+        const canonical = Canonicalize(basis);
         const keyJSON = canonical;
-        const keyHash = await computeContentHashAsync(basis);
+        const keyHash = await ComputeContentHashAsync(basis);
         const keyDisplay = params.renderedContext
             ? params.renderedContext.length > 80
                 ? `${params.renderedContext.substring(0, 77)}...`

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BaseEntity } from '../generic/baseEntity';
 import { EntityInfo } from '../generic/entityInfo';
-import { computeContentHashAsync } from '@memberjunction/global';
+import { ComputeContentHashAsync } from '@memberjunction/global';
 
 describe('BaseEntity.ComputeContentHash', () => {
     class MockEntity extends BaseEntity {}
@@ -52,7 +52,7 @@ describe('BaseEntity.ComputeContentHash', () => {
         entity.Set('__mj_UpdatedAt', new Date('2026-01-02T00:00:00.000Z'));
 
         const hash = await entity.ComputeContentHash();
-        const expected = await computeContentHashAsync({
+        const expected = await ComputeContentHashAsync({
             Name: 'Test Name',
             Score: 42,
         });
@@ -66,7 +66,7 @@ describe('BaseEntity.ComputeContentHash', () => {
         entity.Set('Score', 42);
 
         const hash = await entity.ComputeContentHash({ Fields: ['Name'] });
-        const expected = await computeContentHashAsync({
+        const expected = await ComputeContentHashAsync({
             Name: 'Test Name',
         });
 
@@ -82,7 +82,7 @@ describe('BaseEntity.ComputeContentHash', () => {
         entity.Set('__mj_UpdatedAt', d);
 
         const hash = await entity.ComputeContentHash({ ExcludeSystemFields: false });
-        const expected = await computeContentHashAsync({
+        const expected = await ComputeContentHashAsync({
             Name: 'Test Name',
             Score: 42,
             __mj_CreatedAt: d,

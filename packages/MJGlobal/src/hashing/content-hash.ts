@@ -26,8 +26,3 @@ export async function ComputeContentHashAsync(fields: Record<string, unknown>): 
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
-
-/**
- * @deprecated Use {@link ComputeContentHashAsync} to follow MemberJunction PascalCase naming convention for exported functions.
- */
-export const computeContentHashAsync = ComputeContentHashAsync;

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
-import { Canonicalize, ComputeContentHashAsync, canonicalize, computeContentHashAsync } from '../hashing';
+import { Canonicalize, ComputeContentHashAsync } from '../hashing';
 
 describe('Canonicalize and ComputeContentHashAsync', () => {
     it('canonicalizes object keys in sorted order recursively', () => {
@@ -8,8 +8,6 @@ describe('Canonicalize and ComputeContentHashAsync', () => {
         const obj2 = { c: { y: 25, z: 26 }, a: 1, b: 2 };
         expect(Canonicalize(obj1)).toBe(Canonicalize(obj2));
         expect(Canonicalize(obj1)).toBe('{"a":1,"b":2,"c":{"y":25,"z":26}}');
-        // Backwards compatibility alias
-        expect(canonicalize(obj1)).toBe(Canonicalize(obj1));
     });
 
     it('preserves array order and maps undefined in array to null', () => {
@@ -52,9 +50,5 @@ describe('Canonicalize and ComputeContentHashAsync', () => {
 
         const asyncHash = await ComputeContentHashAsync(payload);
         expect(asyncHash).toBe(expectedNodeHash);
-
-        // Backwards compatibility alias
-        const aliasHash = await computeContentHashAsync(payload);
-        expect(aliasHash).toBe(asyncHash);
     });
 });

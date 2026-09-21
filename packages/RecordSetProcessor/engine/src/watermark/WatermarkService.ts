@@ -5,7 +5,7 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { BaseSingleton, computeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
+import { BaseSingleton, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
 import { BaseEntity, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import type { MJRecordProcessEntity, MJRecordProcessWatermarkEntity } from '@memberjunction/core-entities';
 import type { IRecordProcessor, RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
@@ -186,7 +186,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
 
     /**
      * Computes the basis hash for a record. Delegates to processor.ComputeBasisHash if available,
-     * otherwise falls back to BaseEntity.ComputeContentHash() or computeContentHashAsync on record data.
+     * otherwise falls back to BaseEntity.ComputeContentHash() or ComputeContentHashAsync on record data.
      */
     public async computeRecordBasisHash(
         record: RecordRef,
@@ -212,7 +212,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
                     delete copy[ef];
                 }
             }
-            return computeContentHashAsync(copy);
+            return ComputeContentHashAsync(copy);
         }
 
         return undefined;
