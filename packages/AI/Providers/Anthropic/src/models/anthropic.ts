@@ -342,11 +342,44 @@ export class AnthropicLLM extends BaseLLM {
     /**
      * Format messages for Anthropic API with caching support.
      * Handles both text and multi-modal content (images).
+    /**
+     * Checks if a message represents a trailing volatile runtime-state or agent-specialization fragment.
+     */
+    protected isTrailingStateFragment(message?: ChatMessage): boolean {
+        if (!message) {
+            return false;
+        }
+        if ((message as any).metadata?.volatileState === true) {
+            return true;
+        }
+        if (typeof message.content === 'string') {
+            return /^<mj-(runtime-state|agent-specialization)>/.test(message.content.trimStart());
+        }
+        return false;
+    }
+
+    /**
+     * Format messages for Anthropic API with caching support
      * @param messages Messages to format
      * @param enableCaching Whether to enable caching
      * @returns Formatted messages
      */
     protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
+        // When the final message is a trailing runtime state fragment, place the ephemeral
+        // cache breakpoint on the last real history message instead, so the next iteration's
+        // prefix still ends at a cached boundary.
+        if (enableCaching && messages.length >= 2 && this.isTrailingStateFragment(messages[messages.length - 1])) {
+            const head = this.formatMessagesWithCaching(messages.slice(0, -1), true);
+            const tail = this.formatMessagesWithCaching(messages.slice(-1), false);
+            if (head[head.length - 1]?.role === 'user' && tail[0]?.role === 'user') {
+                head.push({
+                    role: 'assistant',
+                    content: [{ type: 'text', text: 'OK' }]
+                });
+            }
+            return [...head, ...tail];
+        }
+
         const result: any[] = [];
         // Compare ANTHROPIC roles, not MJ roles: `tool` and `user` both become `user` here, and it
         // is the wire role that has to alternate. For conversations without tool turns the two are

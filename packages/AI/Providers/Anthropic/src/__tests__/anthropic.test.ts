@@ -466,6 +466,66 @@ describe('AnthropicLLM', () => {
             expect(result[1].role).toBe('assistant');
             expect(result[1].content).toEqual([{ type: 'text', text: 'OK' }]);
         });
+
+        it('should place cache_control on penultimate message when trailing message is volatileState fragment', () => {
+            const messages = [
+                { role: 'user' as const, content: 'User instruction' },
+                { role: 'assistant' as const, content: 'Assistant response' },
+                { role: 'user' as const, content: '<mj-runtime-state>\nDate: 2026-09-21\n</mj-runtime-state>', metadata: { volatileState: true } }
+            ];
+            const result = callMethod(messages, true) as any[];
+            // Roles: user -> assistant -> user (no filler needed between assistant and user)
+            expect(result).toHaveLength(3);
+            // Penultimate message (assistant response) should have cache_control
+            expect(result[1].content).toEqual([
+                { type: 'text', text: 'Assistant response', cache_control: { type: 'ephemeral' } }
+            ]);
+            // Final message (volatile state) should NOT have cache_control
+            expect(result[2].content).toEqual([
+                { type: 'text', text: '<mj-runtime-state>\nDate: 2026-09-21\n</mj-runtime-state>' }
+            ]);
+        });
+
+        it('should preserve role alternation with OK filler when last real message and volatile fragment are both user turns', () => {
+            const messages = [
+                { role: 'user' as const, content: 'Initial user turn' },
+                { role: 'user' as const, content: '<mj-runtime-state>\nDate: 2026-09-21\n</mj-runtime-state>', metadata: { volatileState: true } }
+            ];
+            const result = callMethod(messages, true) as any[];
+            // user -> assistant OK -> user fragment
+            expect(result).toHaveLength(3);
+            expect(result[0].role).toBe('user');
+            expect(result[0].content).toEqual([
+                { type: 'text', text: 'Initial user turn', cache_control: { type: 'ephemeral' } }
+            ]);
+            expect(result[1].role).toBe('assistant');
+            expect(result[1].content).toEqual([{ type: 'text', text: 'OK' }]);
+            expect(result[2].role).toBe('user');
+            expect(result[2].content).toEqual([
+                { type: 'text', text: '<mj-runtime-state>\nDate: 2026-09-21\n</mj-runtime-state>' }
+            ]);
+        });
+
+        it('should recognize <mj-runtime-state> text prefix without explicit metadata flag', () => {
+            const messages = [
+                { role: 'user' as const, content: 'Initial user turn' },
+                { role: 'user' as const, content: '<mj-runtime-state>\nSome state\n</mj-runtime-state>' }
+            ];
+            const result = callMethod(messages, true) as any[];
+            expect(result).toHaveLength(3);
+            expect(result[0].content[0].cache_control).toEqual({ type: 'ephemeral' });
+            expect(result[2].content[0].cache_control).toBeUndefined();
+        });
+
+        it('should not add cache_control when enableCaching is false even with volatile state fragment', () => {
+            const messages = [
+                { role: 'user' as const, content: 'Initial user turn' },
+                { role: 'user' as const, content: '<mj-runtime-state>\nSome state\n</mj-runtime-state>', metadata: { volatileState: true } }
+            ];
+            const result = callMethod(messages, false) as any[];
+            expect(result[0].content[0].cache_control).toBeUndefined();
+            expect(result[result.length - 1].content[0].cache_control).toBeUndefined();
+        });
     });
 
     describe('assistantPrefill', () => {

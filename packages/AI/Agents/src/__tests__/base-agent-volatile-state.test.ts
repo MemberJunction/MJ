@@ -34,7 +34,10 @@ interface Internals {
     logStatus: (msg: string) => void;
     logError: (e: unknown) => void;
     buildVolatileStateMessage<P>(params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P, childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, systemPrompt?: MJAIPromptEntityExtended): Promise<VolatileMessage | null>;
-    assembleOutgoingMessages(history: ChatMessage[], fragment: VolatileMessage): ChatMessage[];
+    assembleOutgoingMessages(history: ChatMessage[], fragment: VolatileMessage, isAppendOnly?: boolean): ChatMessage[];
+    shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean;
+    _lastModelSelectionInfo?: any;
+    _lastVolatileStateMessage?: any;
 }
 
 const USER = { ID: 'u1', Name: 'Tester' } as unknown as UserInfo;
@@ -235,5 +238,83 @@ describe('BaseAgent.assembleOutgoingMessages', () => {
         const first = a.assembleOutgoingMessages(hist, fragment).slice(0, -1).map(m => String(m.content));
         const second = a.assembleOutgoingMessages(hist, fragment).slice(0, -1).map(m => String(m.content));
         expect(second).toEqual(first);
+    });
+
+    it('in append-only mode (OpenAI prompt caching): preserves prior volatile fragments unescaped', async () => {
+        const a = agentUnderTest();
+        const { params, promptParams } = makeInputs(TRAILING);
+        const priorFragment = (await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE))!;
+        const currentFragment = (await a.buildVolatileStateMessage(params, promptParams, { step: 2 }, CHILD, AGENT_TYPE))!;
+
+        const hist: ChatMessage[] = [
+            { role: 'user', content: 'Turn 1 user prompt' },
+            priorFragment,
+            { role: 'assistant', content: 'Turn 1 assistant reply' },
+            { role: 'user', content: 'Turn 2 tool results' },
+        ];
+
+        const out = a.assembleOutgoingMessages(hist, currentFragment, true);
+        expect(out).toHaveLength(5);
+        expect(out[0].content).toBe('Turn 1 user prompt');
+        expect(out[1]).toBe(priorFragment);
+        expect(String(out[1].content)).toContain(`<${RUNTIME_STATE_TAG}>`);
+        expect(out[2].content).toBe('Turn 1 assistant reply');
+        expect(out[3].content).toBe('Turn 2 tool results');
+        expect(out[4]).toBe(currentFragment);
+    });
+
+    it('in replace-in-place mode (default/Gemini/Cerebras): filters out prior volatile fragments to keep history lean', async () => {
+        const a = agentUnderTest();
+        const { params, promptParams } = makeInputs(TRAILING);
+        const priorFragment = (await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE))!;
+        const currentFragment = (await a.buildVolatileStateMessage(params, promptParams, { step: 2 }, CHILD, AGENT_TYPE))!;
+
+        const hist: ChatMessage[] = [
+            { role: 'user', content: 'Turn 1 user prompt' },
+            priorFragment,
+            { role: 'assistant', content: 'Turn 1 assistant reply' },
+            { role: 'user', content: 'Turn 2 tool results' },
+        ];
+
+        const out = a.assembleOutgoingMessages(hist, currentFragment, false);
+        // Prior fragment filtered out; only current fragment appended at end
+        expect(out).toHaveLength(4);
+        expect(out[0].content).toBe('Turn 1 user prompt');
+        expect(out[1].content).toBe('Turn 1 assistant reply');
+        expect(out[2].content).toBe('Turn 2 tool results');
+        expect(out[3]).toBe(currentFragment);
+    });
+});
+
+describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
+    it('returns true when trailingStateMode is explicitly appendOnly', () => {
+        const a = agentUnderTest();
+        const { promptParams } = makeInputs({ trailingStateMode: 'appendOnly' });
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+    });
+
+    it('returns false when trailingStateMode is explicitly replace', () => {
+        const a = agentUnderTest();
+        const { promptParams } = makeInputs({ trailingStateMode: 'replace' });
+        // Even if lastModelSelectionInfo was OpenAI, explicit replace wins
+        a._lastModelSelectionInfo = { vendorSelected: { Name: 'OpenAI', DriverClass: 'OpenAILLM' } };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+    });
+
+    it('auto-detects OpenAI from previous turn model selection info', () => {
+        const a = agentUnderTest();
+        const { promptParams } = makeInputs({});
+        a._lastModelSelectionInfo = { vendorSelected: { Name: 'OpenAI', DriverClass: 'OpenAILLM' } };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+    });
+
+    it('returns false for non-OpenAI vendors (e.g. Anthropic, Cerebras)', () => {
+        const a = agentUnderTest();
+        const { promptParams } = makeInputs({});
+        a._lastModelSelectionInfo = { vendorSelected: { Name: 'Anthropic', DriverClass: 'AnthropicLLM' } };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+
+        a._lastModelSelectionInfo = { vendorSelected: { Name: 'Cerebras', DriverClass: 'CerebrasLLM' } };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
     });
 });
