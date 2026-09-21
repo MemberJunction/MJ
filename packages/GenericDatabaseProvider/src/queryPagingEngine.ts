@@ -333,16 +333,7 @@ export class QueryPagingEngine {
      * so this abstains and the pre-existing behaviour stands — abstaining is always safe here,
      * because it is exactly what shipped before.
      */
-    private static readonly OUTER_LIMIT_OFFSET = /\s+LIMIT\s+(ALL|\d+)(?:\s+OFFSET\s+\d+)?\s*$/i;
-
-    /**
-     * How much of a statement's tail the end-anchored clause matchers above are run against.
-     *
-     * Generous next to what they match — `LIMIT 18446744073709551615 OFFSET 18446744073709551615`
-     * is under 60 characters — and it exists only so the match cost cannot grow with the size of
-     * the statement in front of it.
-     */
-    private static readonly OUTER_CLAUSE_TAIL = 512;
+    private static readonly OUTER_LIMIT_OFFSET = /^LIMIT\s+(ALL|\d+)(?:\s+OFFSET\s+\d+)?$/i;
 
     /**
      * Removes a statement-closing `LIMIT [OFFSET]` so a paging clause can be appended without
@@ -358,27 +349,53 @@ export class QueryPagingEngine {
      * `TOP` strip above and of `stripCountBody`'s `ClearOuterCap`.
      */
     static stripOuterLimitOffset(sql: string): { sql: string; limitRemoved: number | null } {
-        // MATCHED AGAINST A BOUNDED TAIL, not the whole statement. The pattern opens with `\s+`
-        // and ends at `$`, so running it over the full SQL lets the engine retry from every index
-        // inside a long whitespace run and give the run back one character at a time — quadratic
-        // in the length of that run, which is the ReDoS CodeQL flags here. The clause this matches
-        // closes the statement, so only the tail can ever contain it.
+        // NO LEADING `\s+`, AND ANCHORED AT BOTH ENDS. The previous pattern opened with `\s+` and
+        // closed with `\s*$`, so the engine could start a match at every index inside a run of
+        // whitespace and give the run back one character at a time — quadratic in that run, which
+        // is the ReDoS CodeQL flags. Bounding the INPUT is not enough: the analysis reasons about
+        // the pattern, not about how much text it is handed, so the ambiguity itself has to go.
         //
-        // Slicing cannot invent a match: the slice is a suffix of `sql`, and an end-anchored match
-        // on a suffix is a match on the whole string. It can only shorten the leading whitespace
-        // the match claims, which leaves a space at the end of the stripped SQL and changes
-        // nothing about its meaning. A clause longer than the window makes this abstain, which is
-        // the pre-existing behaviour and is documented above as always safe.
-        const tail = sql.length > QueryPagingEngine.OUTER_CLAUSE_TAIL
-            ? sql.slice(sql.length - QueryPagingEngine.OUTER_CLAUSE_TAIL)
-            : sql;
-        const match = tail.match(QueryPagingEngine.OUTER_LIMIT_OFFSET);
+        // The keyword is located by a linear backward scan instead, and the pattern then validates
+        // one fixed slice. `^…$` cannot be retried at another offset, so there is no position to
+        // backtrack across.
+        const trimmed = sql.trimEnd();
+        const keywordAt = QueryPagingEngine.lastIndexOfKeyword(trimmed, 'LIMIT');
+        if (keywordAt <= 0) return { sql, limitRemoved: null };
+
+        const match = trimmed.slice(keywordAt).match(QueryPagingEngine.OUTER_LIMIT_OFFSET);
         if (!match) return { sql, limitRemoved: null };
 
-        const strippedSQL = sql.substring(0, sql.length - match[0].length);
+        // The clause must be preceded by whitespace, and that whitespace goes with it — the old
+        // pattern consumed it as part of `match[0]`, so stripping less would leave a trailing
+        // space the previous behaviour did not. Walking the run costs O(run) ONCE, not per index.
+        let cut = keywordAt;
+        while (cut > 0 && /\s/.test(trimmed[cut - 1])) cut--;
+        if (cut === keywordAt) return { sql, limitRemoved: null };
+
         const limitToken = match[1];
         const limitRemoved = /^\d+$/.test(limitToken) ? Number(limitToken) : null;
-        return { sql: strippedSQL, limitRemoved };
+        return { sql: sql.substring(0, cut), limitRemoved };
+    }
+
+    /**
+     * Index of the last occurrence of an ASCII keyword, ignoring case — or -1.
+     *
+     * Hand-rolled rather than `haystack.toUpperCase().lastIndexOf(...)`: case mapping can change
+     * a string's LENGTH for some characters, which would slide every index the caller then slices
+     * on. Comparing in place keeps the index meaningful.
+     */
+    private static lastIndexOfKeyword(haystack: string, keyword: string): number {
+        const k = keyword.toUpperCase();
+        for (let i = haystack.length - k.length; i >= 0; i--) {
+            let hit = true;
+            for (let j = 0; j < k.length; j++) {
+                const c = haystack.charCodeAt(i + j);
+                const upper = c >= 97 && c <= 122 ? c - 32 : c;
+                if (upper !== k.charCodeAt(j)) { hit = false; break; }
+            }
+            if (hit) return i;
+        }
+        return -1;
     }
 
     /**
