@@ -1078,19 +1078,22 @@ describe('applyOutputMapping', () => {
             })).rejects.toThrow(/RunView provider is unavailable/);
         });
 
-        it('memoizes lookups in lookupCache across multiple calls', async () => {
+        it('memoizes lookups in lookupCache across multiple calls without stringifying numbers or downgrading miss policy', async () => {
             let runViewCallCount = 0;
-            const { provider } = fakeFKProvider({
+            const { provider, created } = fakeFKProvider({
                 runViewHandler: (params) => {
                     runViewCallCount++;
                     if (params.ExtraFilter?.includes('Director')) {
                         return [{ ID: 'dir-uuid', Name: 'Director' }];
                     }
+                    if (params.ExtraFilter?.includes('NumericLevel')) {
+                        return [{ ID: 42, Name: 'NumericLevel' }];
+                    }
                     return []; // miss for others
                 },
             });
 
-            const sharedCache = new Map<string, string | null>();
+            const sharedCache = new Map<string, string | number>();
 
             // First call for 'Director' -> hits RunView
             const out1 = await applyOutputMapping({
@@ -1102,6 +1105,7 @@ describe('applyOutputMapping', () => {
                 lookupCache: sharedCache,
             });
             expect(runViewCallCount).toBe(1);
+            expect(created[0].sets.SeniorityLevelID).toBe('dir-uuid');
 
             // Second call for 'Director' -> hits cache, RunView count unchanged
             const out2 = await applyOutputMapping({
@@ -1113,28 +1117,60 @@ describe('applyOutputMapping', () => {
                 lookupCache: sharedCache,
             });
             expect(runViewCallCount).toBe(1);
+            expect(created[1].sets.SeniorityLevelID).toBe('dir-uuid');
 
-            // Third call for a miss 'Unknown' -> hits RunView once
+            // Numeric ID lookup retains number type (not stringified)
             await applyOutputMapping({
                 outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
-                result: { seniority: 'Unknown' },
+                result: { seniority: 'NumericLevel' },
                 record: { EntityID: 'ENT-Person', RecordID: 'p3', Record: {} },
                 contextUser: USER,
                 provider,
                 lookupCache: sharedCache,
             });
             expect(runViewCallCount).toBe(2);
+            expect(created[2].sets.SeniorityLevelID).toBe(42);
 
-            // Fourth call for 'Unknown' -> hits cache for the null result, RunView count unchanged
+            // Second call for NumericLevel -> hits cache and still receives number 42
             await applyOutputMapping({
                 outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
-                result: { seniority: 'Unknown' },
+                result: { seniority: 'NumericLevel' },
                 record: { EntityID: 'ENT-Person', RecordID: 'p4', Record: {} },
                 contextUser: USER,
                 provider,
                 lookupCache: sharedCache,
             });
             expect(runViewCallCount).toBe(2);
+            expect(created[3].sets.SeniorityLevelID).toBe(42);
+
+            // Third call for a miss 'Unknown' with onLookupMiss='null' -> does NOT cache null
+            await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'null' } },
+                },
+                result: { seniority: 'Unknown' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p5', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            });
+            expect(runViewCallCount).toBe(3);
+            expect(created[4].sets.SeniorityLevelID).toBeNull();
+
+            // Subsequent call for 'Unknown' with onLookupMiss='fail' must NOT be downgraded to null; it must fail!
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'fail' } },
+                },
+                result: { seniority: 'Unknown' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p6', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            })).rejects.toThrow(/matched 0 rows \(OnLookupMiss=fail\)/);
+            expect(runViewCallCount).toBe(4);
         });
     });
 });

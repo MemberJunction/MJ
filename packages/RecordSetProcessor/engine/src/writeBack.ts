@@ -157,12 +157,12 @@ export async function applyOutputMapping(opts: {
     dryRun?: boolean;
     /** Optional run provenance information mapped via `$run.*`. */
     run?: RunProvenance;
-    /** Optional memoization cache mapping `${relatedEntityName}|${matchField}|${matchValue}` -> resolved PK or null. */
-    lookupCache?: Map<string, string | null>;
+    /** Optional memoization cache mapping `${relatedEntityName}|${matchField}|${matchValue}` -> resolved PK. Caches positive hits only to prevent downgrading onLookupMiss policies. */
+    lookupCache?: Map<string, string | number>;
 }): Promise<WriteBackResult> {
     const { outputMapping, result, record, contextUser, dryRun, run } = opts;
     const provider = opts.provider ?? Metadata.Provider;
-    const lookupCache = opts.lookupCache ?? new Map<string, string | null>();
+    const lookupCache = opts.lookupCache ?? new Map<string, string | number>();
     const sources: Record<string, unknown> = {
         $: result,
         record: record.Record ?? {},
@@ -248,7 +248,7 @@ export async function applyOutputMapping(opts: {
 
             const cacheKey = `${relatedEntityName}|${matchField}|${strVal}`;
             if (lookupCache.has(cacheKey)) {
-                resolved[field] = lookupCache.get(cacheKey) ?? null;
+                resolved[field] = lookupCache.get(cacheKey)!;
                 continue;
             }
 
@@ -272,16 +272,17 @@ export async function applyOutputMapping(opts: {
                 const relEntity = provider.EntityByName(relatedEntityName);
                 const pkFieldName = relEntity?.FirstPrimaryKey?.Name ?? 'ID'; // first-pk-ok: FK target PK resolution
                 const resolvedID = matchRow[pkFieldName] ?? matchRow.ID;
-                const strId = String(resolvedID);
                 resolved[field] = resolvedID;
-                lookupCache.set(cacheKey, strId);
+                if (typeof resolvedID === 'string' || typeof resolvedID === 'number') {
+                    lookupCache.set(cacheKey, resolvedID);
+                }
             } else if (!viewRes.Success) {
                 throw new Error(`applyOutputMapping: RunView failed for lookup on '${relatedEntityName}': ${viewRes.ErrorMessage ?? 'unknown error'}`);
             } else {
                 // Zero-row lookup miss
                 if (onLookupMiss === 'null') {
                     resolved[field] = null;
-                    lookupCache.set(cacheKey, null);
+                    // Do not cache null — keeps positive hits only and prevents downgrading policies (e.g. 'fail' or 'create') across records
                 } else if (onLookupMiss === 'fail') {
                     throw new Error(`applyOutputMapping: lookup for '${field}' on entity '${relatedEntityName}' where [${matchField}]='${strVal}' matched 0 rows (OnLookupMiss=fail)`);
                 } else if (onLookupMiss === 'create') {
@@ -303,7 +304,9 @@ export async function applyOutputMapping(opts: {
                             ? createdVal
                             : newObj.PrimaryKey.ToCompactURLSegment();
                         resolved[field] = resolvedPk;
-                        lookupCache.set(cacheKey, String(resolvedPk));
+                        if (typeof resolvedPk === 'string' || typeof resolvedPk === 'number') {
+                            lookupCache.set(cacheKey, resolvedPk);
+                        }
                     }
                 }
             }

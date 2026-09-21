@@ -31,7 +31,7 @@ export class WriteBackProcessor implements IRecordProcessor {
         private readonly run?: RunProvenance,
     ) {}
 
-    private readonly _lookupCache = new Map<string, string | null>();
+    private readonly _lookupCache = new Map<string, string | number>();
 
     public get OutputMapping(): OutputMappingConfig {
         return this.outputMapping;
