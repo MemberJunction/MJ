@@ -321,4 +321,55 @@ describe('EntitySubtypeResolver & Prospective IsA Resolution (§4.2, §4.4, §9)
             }
         });
     });
+
+    describe('DetachISAChild — releasing an unsaved subtype (the correction path)', () => {
+        // EnsureISAChild refuses a second subtype on a disjoint parent (covered above), which is
+        // correct for a record that already IS one — but it also blocks the ordinary correction on a
+        // record that has never been saved. These cover the release that makes the correction possible
+        // and, just as importantly, the two cases where releasing would be wrong.
+
+        it('releases an UNSAVED child so a different subtype can be chosen', async () => {
+            const product = createEntity(productEntityInfo);
+            const meeting = await product.EnsureISAChild('Meetings');
+            expect(product.ISAChild).toBe(meeting);
+
+            expect(product.DetachISAChild()).toBe(true);
+            expect(product.ISAChild).toBeNull();
+
+            // and now the correction actually goes through, which is the whole point
+            const publication = await product.EnsureISAChild('Publications');
+            expect(publication).not.toBeNull();
+            expect(publication!.EntityInfo.Name).toBe('Publications');
+            expect(product.ISAChild).toBe(publication);
+        });
+
+        it('reports false when there is nothing attached', () => {
+            const product = createEntity(productEntityInfo);
+            expect(product.DetachISAChild()).toBe(false);
+        });
+
+        it('REFUSES to detach a child that has been saved — that is a demotion, not a correction', async () => {
+            const product = createEntity(productEntityInfo);
+            const meeting = await product.EnsureISAChild('Meetings');
+            // Stand in for a child that came back from the database rather than one we just attached.
+            (meeting as unknown as { _everSaved: boolean })._everSaved = true;
+
+            expect(() => product.DetachISAChild()).toThrow(
+                /Cannot detach 'Meetings' from 'Products': that subtype record has been saved/,
+            );
+            // and it stays attached — a refused detach must not half-apply
+            expect(product.ISAChild).toBe(meeting);
+        });
+
+        it('refuses on an overlapping parent, where subtypes are a list rather than one child', async () => {
+            productEntityInfo.AllowMultipleSubtypes = true;
+            try {
+                const product = createEntity(productEntityInfo);
+                await product.EnsureISAChild('Meetings');
+                expect(() => product.DetachISAChild()).toThrow(/AllowMultipleSubtypes is true/);
+            } finally {
+                productEntityInfo.AllowMultipleSubtypes = false;
+            }
+        });
+    });
 });

@@ -1753,6 +1753,50 @@ export abstract class BaseEntity<T = unknown> {
         }
     }
 
+    /**
+     * Releases an IS-A subtype that was attached but never written, so a different subtype can be
+     * chosen in its place.
+     *
+     * This is the inverse of the *staging* half of {@link EnsureISAChild}, and it exists because
+     * that method deliberately refuses a second subtype on a disjoint parent: once a record has
+     * been told "you are a Dog", nothing can say "no, a Cat" — not even on a record that has never
+     * been saved, where nothing has happened yet that anyone could want to keep. Any UI that lets
+     * someone PICK a subtype therefore dead-ends on the first correction.
+     *
+     * What it deliberately will NOT do: if the attached child has been SAVED, this throws.
+     * Detaching a real row is a demotion — the subtype row still exists in the database, and
+     * dropping the in-memory link would leave the caller believing a record is no longer a Dog
+     * while the table still says it is. That is a genuine data operation with genuine data loss,
+     * and it deserves an explicit delete rather than a side effect of changing a dropdown.
+     *
+     * @returns true if a child was released, false if there was nothing attached.
+     * @throws if the attached child has been saved, or on an overlapping (AllowMultipleSubtypes)
+     *         parent, where subtypes are tracked as a list rather than a single attached child.
+     */
+    public DetachISAChild(): boolean {
+        if (this.EntityInfo.AllowMultipleSubtypes) {
+            throw new Error(
+                `DetachISAChild does not apply to '${this.EntityInfo.Name}': AllowMultipleSubtypes is true, ` +
+                `so subtypes are tracked as a list rather than a single attached child.`,
+            );
+        }
+        const child = this._childEntity;
+        if (!child) {
+            return false;
+        }
+        if (child.IsSaved) {
+            throw new Error(
+                `Cannot detach '${child.EntityInfo.Name}' from '${this.EntityInfo.Name}': that subtype record ` +
+                `has been saved. Delete the subtype record explicitly if the record genuinely is no longer one.`,
+            );
+        }
+        this._childEntity = null;
+        // Leave _childEntityDiscoveryDone alone. It records that we already asked the database which
+        // subtype this record has; detaching an in-memory child does not make that answer stale, and
+        // clearing it would buy a redundant discovery round trip on the next load.
+        return true;
+    }
+
     private mirrorSharedKeysToChild(childEntity: BaseEntity): void {
         const parentPks = this.EntityInfo.PrimaryKeys;
         if (!parentPks || parentPks.length === 0) return;
