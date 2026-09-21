@@ -430,6 +430,87 @@
   color: var(--mj-text-primary);
 }
 
+/* Population toggle ("All organizations" / "Customers"), sits left of the search-field pill
+   so the two never overlap. Same visual family as the pill. */
+.mj-fk-scope-toggle {
+  position: absolute;
+  right: 158px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-strong);
+  color: var(--mj-text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 1px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.35;
+  transition: border-color var(--mj-transition-base), color var(--mj-transition-base);
+}
+
+.mj-fk-scope-toggle:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-primary);
+}
+
+/* Group header inside the results grid — spans every column, never selectable. */
+.mj-fk-group-head {
+  padding-top: 8px;
+  font-size: var(--mj-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+  cursor: default;
+}
+
+/* Name plus its chips on one line, so the second line sits directly beneath the name. */
+.mj-fk-name-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mj-fk-chip {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: var(--mj-text-xs);
+  font-weight: 600;
+  color: var(--mj-text-muted);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-sm);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.mj-fk-chip--info {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-secondary);
+}
+
+.mj-fk-chip--warn {
+  border-color: var(--mj-status-warning);
+  color: var(--mj-text-secondary);
+}
+
+/* The disambiguating second line — city and state, a website, a count. */
+.mj-fk-secondary {
+  display: block;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .mj-fk-scope-pill-icon {
   font-size: 9px;
   opacity: 0.7;

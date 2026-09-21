@@ -5,8 +5,25 @@ import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
-import { FormatFKCell, FilterCachedFKRows } from './fk-search-utils';
+import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
+import {
+  FKLookupStrategy,
+  ResolveFKLookupStrategy,
+  type FKLookupChip,
+  type FKLookupContext,
+  type FKLookupGroup,
+  type FKLookupRow,
+  type FKLookupScope,
+  type FKLookupScopeLabels,
+} from './fk-lookup-strategy';
+import { DefaultFKLookupStrategy } from './default-fk-lookup-strategy';
+
+/**
+ * Rows a foreign-key lookup returns by default. Module scope because the `FKMaxRows` input's
+ * initializer runs before the component's own statics are available.
+ */
+const FK_DB_SEARCH_LIMIT = 20;
 
 /**
  * How a field's value should be rendered/edited beyond a plain input.
@@ -68,6 +85,18 @@ export interface FKSuggestion {
    * icon; null when neither exists.
    */
   Icon: string | null;
+  /**
+   * Which {@link FKLookupGroup} this row belongs to. Rows render under their group's header,
+   * in group order. `'results'` for the ungrouped default.
+   */
+  GroupKey: string;
+  /**
+   * Second line under the name, supplied by the lookup strategy to tell look-alikes apart —
+   * "Springfield, IL · northwind.example.org". Absent for the default strategy, which has nothing to add.
+   */
+  Secondary?: string;
+  /** Small markers beside the name, e.g. "4 orders". Supplied by the lookup strategy. */
+  Chips?: FKLookupChip[];
 }
 
 /**
@@ -657,6 +686,31 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Surface used for the inline create form: a modal dialog (default) or a slide-in. */
   @Input() FKCreatePresentation: 'dialog' | 'slide-in' = 'dialog';
 
+  /**
+   * Extra WHERE fragment applied to every lookup on this field, AND-ed with the related
+   * entity's `RelatedEntityFilter` metadata and the active-status scope. Use this for a
+   * scope only this instance of the form knows about; prefer the metadata column when the
+   * rule is true of the field everywhere it appears.
+   */
+  @Input() FKExtraFilter: string | null = null;
+
+  /**
+   * ORDER BY for the empty-query browse list, overriding the field's `RelatedEntityOrderBy`
+   * metadata. Defaults to the related entity's name field. Does not affect a typed query,
+   * which is ordered by relevance.
+   */
+  @Input() FKOrderBy: string | null = null;
+
+  /** Rows requested from a lookup. */
+  @Input() FKMaxRows = FK_DB_SEARCH_LIMIT;
+
+  /**
+   * Opaque options handed to the resolved {@link FKLookupStrategy} — e.g.
+   * `{ ScopeField: 'BillToOrganizationID' }` to tell a person picker which organization's
+   * people to offer first. Each strategy documents its own keys.
+   */
+  @Input() FKLookupOptions: Record<string, unknown> = {};
+
   /** Cleanup function for scroll/resize listeners */
   private _scrollCleanup: (() => void) | null = null;
 
@@ -809,11 +863,43 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Max rows shown on an empty-input focus-show (cached fast path only). */
   private static readonly FK_FOCUS_SHOW_LIMIT = 50;
 
-  /** Max rows returned from a DB search. */
-  private static readonly FK_DB_SEARCH_LIMIT = 20;
+  /** Group key for the user's recent picks, which the field prepends itself. */
+  private static readonly FK_RECENT_GROUP = '__recent';
+
+  /** Group key used whenever rows arrive ungrouped (the cached path, the default strategy). */
+  private static readonly FK_RESULTS_GROUP = 'results';
+
+  /** How many recent picks the dropdown offers before the strategy's own rows. */
+  private static readonly FK_RECENT_SHOWN = 5;
 
   /** Suggestions returned from the FK entity search */
   FKSuggestions: FKSuggestion[] = [];
+
+  /**
+   * Group headers in render order, from the last lookup. Rows are matched to a group by
+   * {@link FKSuggestion.GroupKey}; a null `Label` renders its rows with no header.
+   */
+  FKGroups: { Key: string; Label: string | null }[] = [];
+
+  /**
+   * Labels for the population toggle supplied by the resolved strategy — e.g. Customers vs
+   * All organizations. Null hides the toggle, which is the case for most fields.
+   */
+  FKScopeLabels: FKLookupScopeLabels | null = null;
+
+  /** Which population the dropdown is currently showing. */
+  FKScope: FKLookupScope = 'primary';
+
+  /** The resolved lookup strategy for this field, memoized until the field changes. */
+  private _fkStrategy: FKLookupStrategy | null = null;
+
+  /**
+   * Whether {@link _fkStrategy} came from a registration rather than being MJ's default. Tracked
+   * separately because a registered strategy may legitimately subclass `DefaultFKLookupStrategy`
+   * to reuse its querying — an `instanceof` test would call that one "the default" and let the
+   * cached path bypass it.
+   */
+  private _fkStrategyIsRegistered = false;
 
   /**
    * The currently-linked record, pinned as a sticky "Currently selected" section at the
@@ -945,13 +1031,73 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /**
+   * The lookup strategy for this field: a registration for `<HostEntity>.<FieldName>`, else one
+   * for the related entity, else MJ's own. Memoized — resolution walks the class factory and the
+   * answer cannot change while the field is bound to the same record and column.
+   */
+  private resolveStrategy(): FKLookupStrategy {
+    if (!this._fkStrategy) {
+      const registered = ResolveFKLookupStrategy(
+        this.Record?.EntityInfo?.Name ?? '',
+        this.FieldName,
+        this.FieldInfo?.RelatedEntity ?? ''
+      );
+      this._fkStrategyIsRegistered = registered !== null;
+      this._fkStrategy = registered ?? new DefaultFKLookupStrategy();
+    }
+    return this._fkStrategy;
+  }
+
+  /**
+   * True when an app registered a strategy for this field. The in-memory cached path answers a
+   * different question from the one such a strategy exists to answer, so it must not short-circuit
+   * past it — see {@link getCachedRecordsForRelatedEntity}.
+   */
+  private hasCustomStrategy(): boolean {
+    this.resolveStrategy();
+    return this._fkStrategyIsRegistered;
+  }
+
+  /** Everything the strategy needs for one lookup. Null when the field is not fully resolved. */
+  private buildLookupContext(plan: FKColumnPlan, query: string): FKLookupContext | null {
+    const relatedEntity = this.getRelatedEntityInfo();
+    if (!relatedEntity || !this.FieldInfo || !this.Record) return null;
+    const searchField = this.FKSearchField || plan.NameFieldName;
+    const fields = Array.from(new Set([
+      plan.PkFieldName, plan.NameFieldName, ...plan.ExtraFieldNames, searchField,
+      ...(plan.IconFieldName ? [plan.IconFieldName] : [])
+    ]));
+    return {
+      Record: this.Record,
+      FieldInfo: this.FieldInfo,
+      RelatedEntity: relatedEntity,
+      Provider: this.ProviderToUse,
+      Fields: fields,
+      PkField: plan.PkFieldName,
+      NameField: plan.NameFieldName,
+      Query: query,
+      Scope: this.FKScope,
+      MaxRows: this.FKMaxRows,
+      Options: {
+        ...this.FKLookupOptions,
+        ExtraFilter: this.FKExtraFilter ?? '',
+        OrderBy: this.FKOrderBy ?? '',
+      },
+    };
+  }
+
+  /**
    * Returns the LIVE cached array of records for the related entity IF a loaded
    * engine holds the full (unfiltered) set; otherwise null. Records are read-only —
    * never mutate. Wraps {@link BaseEngineRegistry.TryGetCachedRecords}.
+   *
+   * A registered strategy always wins: it exists precisely because "every row of the related
+   * entity, filtered by name" is the wrong answer for this field, and filtering a cache in memory
+   * would silently reinstate that answer.
    */
   private getCachedRecordsForRelatedEntity(): BaseEntity[] | null {
     const relatedName = this.FieldInfo?.RelatedEntity;
-    if (!relatedName) return null;
+    if (!relatedName || this.hasCustomStrategy()) return null;
     const registry = BaseEngineRegistry.Instance;
     const records = registry.TryGetCachedRecords<BaseEntity>(relatedName, { unfilteredOnly: true });
     // Treat an empty (or absent) cache as "no usable cache" so callers fall through
@@ -1179,12 +1325,14 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private buildSuggestions(
     rows: ReadonlyArray<{ get: (field: string) => unknown }>,
     plan: FKColumnPlan,
-    query: string
+    query: string,
+    groupKey: string = MjFormFieldComponent.FK_RESULTS_GROUP,
+    decoration: ReadonlyArray<FKLookupRow> = []
   ): FKSuggestion[] {
     const searchField = this.FKSearchField || plan.NameFieldName;
     // Only highlight the column actually being searched, and only when enabled.
     const nameQuery = (this.FKHighlightMatches && this.isSearchingNameField(plan)) ? query : '';
-    return rows.map(row => {
+    return rows.map((row, index) => {
       const name = this.formatCell(row.get(plan.NameFieldName), plan.NameFieldName);
       // Per-row icon from the entity's ExtendedType='Icon' field; else the
       // entity-level icon; else none.
@@ -1204,9 +1352,22 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
             HighlightedValue: HighlightSearchMatches(value, colQuery, 'mj-forms-search-highlight')
           };
         }),
-        Icon: (rowIcon || plan.EntityIcon) || null
+        Icon: (rowIcon || plan.EntityIcon) || null,
+        GroupKey: groupKey,
+        Secondary: decoration[index]?.Secondary,
+        Chips: decoration[index]?.Chips
       };
     });
+  }
+
+  /** Rows belonging to one group, in the dropdown's overall (sorted) order. */
+  FKSuggestionsInGroup(groupKey: string): FKSuggestion[] {
+    return this.FKSuggestions.filter(s => s.GroupKey === groupKey);
+  }
+
+  /** Index of a row within the flat, keyboard-navigable list. */
+  FKIndexOf(suggestion: FKSuggestion): number {
+    return this.FKSuggestions.indexOf(suggestion);
   }
 
   /** Apply a freshly-built suggestion list to the dropdown state + reposition + portal. */
@@ -1262,7 +1423,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       ExtraColumns: plan.ExtraFieldNames.map((fn, i) => ({
         FieldName: fn, Header: plan.ExtraHeaders[i], Value: '', HighlightedValue: ''
       })),
-      Icon: plan.EntityIcon ?? null
+      Icon: plan.EntityIcon ?? null,
+      // Rendered in its own pinned section above the grid, never inside a group.
+      GroupKey: MjFormFieldComponent.FK_RESULTS_GROUP
     };
   }
 
@@ -1518,6 +1681,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this._fkResizeUp = null;
   }
 
+  /**
+   * Flip between the strategy's narrow population and its wide one — "Customers" versus
+   * "All organizations" — and re-run the current lookup in the new scope.
+   */
+  OnFKScopeChange(event: MouseEvent): void {
+    event.preventDefault(); // keep focus on the input so the dropdown stays open
+    this.FKScope = this.FKScope === 'primary' ? 'all' : 'primary';
+    void this.searchRelatedEntity(this._fkQuery);
+  }
+
   /** Handle typing in the FK search input */
   OnFKInput(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -1602,6 +1775,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     );
 
     this.FKLoading = false;
+    // The cached path is only reached for the default strategy, so there is one ungrouped,
+    // unlabelled group and no scope toggle.
+    this.FKGroups = [{ Key: MjFormFieldComponent.FK_RESULTS_GROUP, Label: null }];
+    this.FKScopeLabels = null;
     this.applySuggestions(this.buildSuggestions(matches.map(accessor), plan, query), plan);
   }
 
@@ -1646,7 +1823,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         const active = this.FKSuggestions[this.FKActiveIndex];
         if (active) {
           event.preventDefault();
-          this.selectFKSuggestion(active);
+          void this.selectFKSuggestion(active);
         }
         break;
       }
@@ -1671,11 +1848,29 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Select an item from the FK dropdown (mouse) */
   OnFKSelectItem(suggestion: FKSuggestion, event: MouseEvent): void {
     event.preventDefault();
-    this.selectFKSuggestion(suggestion);
+    void this.selectFKSuggestion(suggestion);
   }
 
-  /** Shared selection logic for mouse-click and keyboard-Enter. */
-  private selectFKSuggestion(suggestion: FKSuggestion): void {
+  /**
+   * Shared selection logic for mouse-click and keyboard-Enter. The strategy gets to veto the
+   * pick first — that is how a field asks the user to confirm a consequential choice.
+   */
+  private async selectFKSuggestion(suggestion: FKSuggestion): Promise<void> {
+    const plan = this.buildColumnPlan();
+    const context = plan ? this.buildLookupContext(plan, this._fkQuery) : null;
+    if (plan && context) {
+      const row: FKLookupRow = {
+        Values: {
+          [plan.PkFieldName]: suggestion.PrimaryKeyValue,
+          [plan.NameFieldName]: suggestion.DisplayName,
+        },
+      };
+      if (!await this.resolveStrategy().BeforeSelect(context, row)) {
+        this.cdr.markForCheck();
+        return;
+      }
+    }
+
     this._fkInputText = suggestion.DisplayName;
     this.Value = suggestion.PrimaryKeyValue;
     this.FKIsMatched = true;
@@ -1686,7 +1881,17 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (nameFieldMap) {
       this.Record.Set(nameFieldMap, suggestion.DisplayName);
     }
+    this.rememberPick(suggestion.PrimaryKeyValue);
     this.cdr.markForCheck();
+  }
+
+  /** Record a pick so it leads the browse list next time this user opens this dropdown. */
+  private rememberPick(primaryKeyValue: unknown): void {
+    LinkedFieldOptionsStore.Instance.PushRecentPick(
+      this.Record?.EntityInfo?.Name ?? '',
+      this.FieldName,
+      String(primaryKeyValue ?? '')
+    );
   }
 
   // ---- Inline "create new related record" ----
@@ -1729,8 +1934,8 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.closeFKDropdown();
     this.cdr.markForCheck();
 
-    const newRecordValues: Record<string, unknown> = {};
-    if (query) newRecordValues[plan.NameFieldName] = query;
+    const context = this.buildLookupContext(plan, query);
+    const newRecordValues = context ? this.resolveStrategy().CreateDefaults(context) : {};
 
     this.Navigate.emit({
       Kind: 'create-related',
@@ -1752,6 +1957,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKIsMatched = true;
     const nameFieldMap = this.FieldInfo?.RelatedEntityNameFieldMap;
     if (nameFieldMap) this.Record.Set(nameFieldMap, name);
+    this.rememberPick(pk);
     this.closeFKDropdown();
     this.cdr.markForCheck();
   }
@@ -1810,38 +2016,63 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
     this.cdr.markForCheck();
 
-    // Build Fields: PK + name + extra DefaultInView columns + the searched field +
-    // the per-row icon field (when present), deduped via Set.
-    const searchField = this.FKSearchField || plan.NameFieldName;
-    const fields = Array.from(new Set([
-      plan.PkFieldName, plan.NameFieldName, ...plan.ExtraFieldNames, searchField,
-      ...(plan.IconFieldName ? [plan.IconFieldName] : [])
-    ]));
-    const escapedQuery = query.replace(/'/g, "''").trim();
+    const context = this.buildLookupContext(plan, query);
+    if (!context) { this.FKLoading = false; return; }
 
-    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const result = await rv.RunView<Record<string, unknown>>({
-      EntityName: fieldInfo.RelatedEntity,
-      // Empty query (focus / cleared field) → no filter → first N rows.
-      ExtraFilter: escapedQuery ? `[${searchField}] LIKE '%${escapedQuery}%'` : '',
-      MaxRows: MjFormFieldComponent.FK_DB_SEARCH_LIMIT,
-      ResultType: 'simple',
-      Fields: fields
-    });
+    const strategy = this.resolveStrategy();
+    this.FKScopeLabels = strategy.ScopeLabels(context);
+
+    // Recent picks only make sense on the browse list; once the user types, what they typed is
+    // the better signal than what they picked last week.
+    const [groups, recent] = await Promise.all([
+      strategy.Lookup(context),
+      query.trim() ? Promise.resolve<FKLookupRow[]>([]) : this.loadRecentPicks(context),
+    ]);
 
     // Ignore stale responses (a newer keystroke already fired).
     if (seq !== this._fkSearchSeq) return;
     this.FKLoading = false;
 
-    if (result.Success) {
-      const accessor = (r: Record<string, unknown>) => ({ get: (field: string) => r[field] });
-      this.applySuggestions(this.buildSuggestions(result.Results.map(accessor), plan, query), plan);
-    } else {
-      this.FKSuggestions = [];
-      this.FKNoMatches = true;
-      this.ShowFKDropdown = true;
-    }
+    const allGroups: FKLookupGroup[] = recent.length
+      ? [{ Key: MjFormFieldComponent.FK_RECENT_GROUP, Label: 'Recent', Rows: recent }, ...groups]
+      : groups;
+    this.FKGroups = allGroups.map(g => ({ Key: g.Key, Label: g.Label }));
+
+    const accessor = (r: FKLookupRow) => ({ get: (field: string) => r.Values[field] });
+    const suggestions = allGroups.flatMap(g =>
+      this.buildSuggestions(g.Rows.map(accessor), plan, query, g.Key, g.Rows)
+    );
+    this.applySuggestions(suggestions, plan);
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Hydrate the user's last picks for this field into rows. Run through the related entity's
+   * own view so a record that has since been deleted, or that the user may no longer read,
+   * simply stops appearing rather than surfacing as a broken row.
+   */
+  private async loadRecentPicks(context: FKLookupContext): Promise<FKLookupRow[]> {
+    const hostEntity = this.Record?.EntityInfo?.Name ?? '';
+    const ids = LinkedFieldOptionsStore.Instance
+      .RecentPicks(hostEntity, this.FieldName)
+      .slice(0, MjFormFieldComponent.FK_RECENT_SHOWN);
+    if (ids.length === 0 || context.RelatedEntity.PrimaryKeys.length !== 1) return [];
+
+    const result = await RunView.FromMetadataProvider(context.Provider).RunView<Record<string, unknown>>({
+      EntityName: context.RelatedEntity.Name,
+      ExtraFilter: `[${context.PkField}] IN (${QuoteSqlIdList(ids)})`,
+      ResultType: 'simple',
+      Fields: context.Fields,
+    });
+    if (!result.Success) return [];
+
+    // Re-impose the stored order: the view returns whatever order it likes, but "recent" is
+    // only useful if the most recent is first.
+    const byId = new Map(result.Results.map(r => [String(r[context.PkField]).toLowerCase(), r]));
+    return ids
+      .map(id => byId.get(id.toLowerCase()))
+      .filter((r): r is Record<string, unknown> => !!r)
+      .map(Values => ({ Values }));
   }
 
   // ============================================
@@ -2183,6 +2414,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         this._fkPrefKey = null; // force prefs reload for the new field
         this._portaledDropdownEl = null;
         this._fkColumnPlan = null;
+        this._fkStrategy = null; // a different field may resolve a different strategy
+        this._fkStrategyIsRegistered = false;
+        this.FKGroups = [];
+        this.FKScopeLabels = null;
+        this.FKScope = 'primary';
         this._resolvedFKName = undefined;
         this._resolvedFKValue = undefined;
         this._fkNameLoading = false;
