@@ -121,9 +121,7 @@ export interface LLMDerivedFeatureStep extends FeatureStepBase {
   /** Reference to the upstream Feature Pipeline that persisted these features. */
   FeaturePipelineRef: string;
   /** Explicit persisted column names populated by this Feature Pipeline. */
-  Columns?: string[];
-  /** Pinned prompt version hash of the upstream pipeline to enforce reproducibility. */
-  PromptVersionHash?: string;
+  Columns: string[];
 }
 
 /**

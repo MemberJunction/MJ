@@ -391,6 +391,69 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     const validIssues = validateSpec(validSpec, sampleEntity);
     expect(validIssues.some(i => i.Message.includes('prototype pollution'))).toBe(false);
   });
+
+  it('rejects an output whose target has an invalid or missing Mode (Round 29 finding)', () => {
+    interface MalformedTarget {
+      TargetType: string;
+      Field: string;
+    }
+    interface MalformedSpec {
+      Name: string;
+      PromptID: string;
+      Outputs: Array<{
+        Ref: string;
+        Name: string;
+        Target: MalformedTarget;
+      }>;
+    }
+
+    const malformedSpec: MalformedSpec = {
+      Name: 'Malformed Target Spec',
+      PromptID: 'prompt-1',
+      Outputs: [
+        {
+          Ref: '$.score',
+          Name: 'Score',
+          Target: {
+            TargetType: 'field',
+            Field: 'SentimentScore',
+          },
+        },
+      ],
+    };
+
+    const issues = validateSpec(malformedSpec as DataFeatureSpec, sampleEntity);
+    const modeIssue = issues.find(i => i.Path === 'Outputs[0].Target.Mode');
+    expect(modeIssue).toBeDefined();
+    expect(modeIssue?.Severity).toBe('error');
+    expect(modeIssue?.Message).toContain('invalid or missing target Mode');
+    expect(modeIssue?.FixRecommendation).toContain('Configure Target.Mode as "field", "child", or "tags"');
+  });
+
+  it('rejects child target missing required Map, ParentField, or EntityName', () => {
+    const spec: DataFeatureSpec = {
+      Name: 'Incomplete Child Spec',
+      PromptID: 'prompt-1',
+      Outputs: [
+        {
+          Ref: '$.items',
+          Name: 'Items',
+          Target: {
+            Mode: 'child',
+            EntityName: '',
+            ParentField: '',
+            Map: {},
+          },
+        },
+      ],
+    };
+
+    const issues = validateSpec(spec, sampleEntity);
+    expect(issues.some(i => i.Path === 'Outputs[0].Target.EntityName' && i.Severity === 'error')).toBe(true);
+    expect(issues.some(i => i.Path === 'Outputs[0].Target.ParentField' && i.Severity === 'error')).toBe(true);
+    expect(issues.some(i => i.Path === 'Outputs[0].Target.Map' && i.Severity === 'error')).toBe(true);
+  });
 });
+
 
 

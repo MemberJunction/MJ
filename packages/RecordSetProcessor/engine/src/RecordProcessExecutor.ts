@@ -223,7 +223,7 @@ export class RecordProcessExecutor {
             }
             if (spec?.ProcessorExtensionKey) {
                 const custom = MJGlobal.Instance.ClassFactory.CreateInstance<InferProcessor>(InferProcessor, spec.ProcessorExtensionKey, rp.PromptID, inputMapping, spec);
-                if (custom) {
+                if (custom && custom.constructor !== InferProcessor) {
                     base = custom;
                 } else {
                     throw new Error(`Record Process '${rp.Name}': ProcessorExtensionKey '${spec.ProcessorExtensionKey}' not found in ClassFactory`);

@@ -21,7 +21,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, RunView, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { MJRecordProcessEntity, MJAIPromptEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
 import {
     DataFeatureSpec,
@@ -451,9 +451,11 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                 this.availablePrompts = res.Results;
             } else {
                 this.availablePrompts = [];
+                LogError(`Failed to load AI Prompts: ${res.ErrorMessage || 'unknown error'}`);
             }
-        } catch {
+        } catch (error) {
             this.availablePrompts = [];
+            LogError('Error loading AI Prompts', undefined, error);
         }
     }
 
@@ -469,9 +471,11 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                 this.availableDocs = res.Results;
             } else {
                 this.availableDocs = [];
+                LogError(`Failed to load Entity Documents: ${res.ErrorMessage || 'unknown error'}`);
             }
-        } catch {
+        } catch (error) {
             this.availableDocs = [];
+            LogError('Error loading Entity Documents', undefined, error);
         }
     }
 
@@ -721,15 +725,13 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
      */
     private syncOutputMappingToRecord(): void {
         if (!this.Record) return;
-        const fields: Record<string, string> = {};
+        const fields: Record<string, string> = Object.create(null);
         for (const out of this.spec.Outputs) {
             if (out.Target.Mode === 'field' && out.Target.EntityFieldName) {
                 fields[out.Target.EntityFieldName] = out.Ref;
             }
         }
-        if (Object.keys(fields).length > 0) {
-            this.Record.OutputMapping = JSON.stringify({ fields });
-        }
+        this.Record.OutputMapping = JSON.stringify({ fields });
     }
 
     private recomputeValidation(): void {

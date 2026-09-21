@@ -219,6 +219,21 @@ export function validateSpec(
         continue;
       }
 
+      interface TargetWithMode {
+        Mode?: string;
+      }
+      const targetWithMode: TargetWithMode = out.Target;
+      const validModes: ReadonlyArray<string> = ['field', 'child', 'tags'];
+      if (!targetWithMode.Mode || !validModes.includes(targetWithMode.Mode)) {
+        issues.push({
+          Path: `${basePath}.Target.Mode`,
+          Message: `Output '${out.Name || i}' has an invalid or missing target Mode '${targetWithMode.Mode ?? ''}'. Expected one of: ${validModes.join(', ')}.`,
+          FixRecommendation: 'Configure Target.Mode as "field", "child", or "tags".',
+          Severity: 'error',
+        });
+        continue;
+      }
+
       if (out.Target.Mode === 'field') {
         const targetField = out.Target.EntityFieldName;
         if (!targetField || targetField.trim().length === 0) {
