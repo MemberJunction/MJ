@@ -30,6 +30,7 @@
     "@memberjunction/ai-core-plus": "6.1.0",
     "@memberjunction/templates": "6.1.0",
     "@memberjunction/tag-engine": "6.1.0",
+    "@memberjunction/entity-documents": "6.1.0",
     "@memberjunction/feature-pipelines": "6.1.0"
   },
   "devDependencies": {

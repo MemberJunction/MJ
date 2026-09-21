@@ -86023,28 +86023,6 @@ export class MJEntityDocumentTypeEntity extends BaseEntity<MJEntityDocumentTypeE
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Documents')
 export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityType> {
-
-  /**
-  * Embedded record: MJ: Templates
-  *
-  * 1:1 peer joined by this record's TemplateID. Loaded and saved with this
-  * MJ: Entity Documents record — see packages/MJCore/docs/embedded-records.md.
-  * Declared by EntityField.EmbeddedRecord on 'MJ: Entity Documents.TemplateID'; edit that row, not this file.
-  * Always present after GetEntityObject / NewRecord.
-  */
-  private readonly __emb_TemplateID = this.DeclareEmbeddedRecord<MJTemplateEntity>({
-      ForeignKeyField: 'TemplateID',
-        RelatedEntity: 'MJ: Templates',
-        OnClear: 'orphan',
-        LoadNested: 'inherit',
-  });
-  public get TemplateID_Object(): MJTemplateEntity {
-      return this.__emb_TemplateID.Value!;
-  }
-  public TemplateID_EnsureObject(): MJTemplateEntity {
-      return this.__emb_TemplateID.Ensure();
-  }
-
     /**
     * Loads the MJ: Entity Documents record from the database
     * @param ID: string - primary key value to load the MJ: Entity Documents record.

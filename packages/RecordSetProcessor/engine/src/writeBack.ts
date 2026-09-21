@@ -5,7 +5,7 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { BaseEntity, CompositeKey, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, IMetadataProvider, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, resolveMappingRef } from '@memberjunction/global';
 import { RecordRef } from '@memberjunction/record-set-processor-base';
 import { TagEngine, TaxonomyMode } from '@memberjunction/tag-engine';
@@ -192,23 +192,33 @@ export async function applyOutputMapping(opts: {
     }
 
     // 2) Create child records (single childRecord and/or childRecords with fan-out).
-    const childConfigs: ChildRecordMapping[] = [];
+    const childConfigs: Array<{ config: ChildRecordMapping; isLegacySingle: boolean }> = [];
     if (outputMapping.childRecord) {
-        childConfigs.push(outputMapping.childRecord);
+        childConfigs.push({ config: outputMapping.childRecord, isLegacySingle: true });
     }
     if (outputMapping.childRecords && Array.isArray(outputMapping.childRecords)) {
         for (const c of outputMapping.childRecords) {
-            childConfigs.push(c);
+            childConfigs.push({ config: c, isLegacySingle: false });
         }
     }
 
     if (childConfigs.length > 0) {
-        const childRecordsToCreate: Array<{ entity: string; data: Record<string, unknown> }> = [];
+        const childRecordsToCreate: Array<{ entity: string; data: Record<string, unknown>; isLegacySingle: boolean }> = [];
 
-        for (const childConfig of childConfigs) {
+        for (const { config: childConfig, isLegacySingle } of childConfigs) {
             if (childConfig.fanOutRef) {
                 const fanOutVal = resolveMappingRef(childConfig.fanOutRef, sources);
-                const items = Array.isArray(fanOutVal) ? fanOutVal : [];
+                let items: unknown[];
+                if (Array.isArray(fanOutVal)) {
+                    items = fanOutVal;
+                } else if (fanOutVal !== null && fanOutVal !== undefined && typeof fanOutVal === 'object') {
+                    items = [fanOutVal];
+                } else {
+                    items = [];
+                    if (fanOutVal !== null && fanOutVal !== undefined) {
+                        LogStatus(`applyOutputMapping: fanOutRef '${childConfig.fanOutRef}' resolved to non-array/non-object value of type '${typeof fanOutVal}'`);
+                    }
+                }
                 for (const item of items) {
                     const itemSources: Record<string, unknown> = {
                         $: item,
@@ -221,25 +231,27 @@ export async function applyOutputMapping(opts: {
                     for (const [field, ref] of Object.entries(childConfig.map)) {
                         childMap[field] = resolveMappingRef(ref, itemSources);
                     }
-                    childRecordsToCreate.push({ entity: childConfig.entity, data: childMap });
+                    childRecordsToCreate.push({ entity: childConfig.entity, data: childMap, isLegacySingle });
                 }
             } else {
                 const childMap: Record<string, unknown> = { [childConfig.parentField]: record.RecordID };
                 for (const [field, ref] of Object.entries(childConfig.map)) {
                     childMap[field] = resolveMappingRef(ref, sources);
                 }
-                childRecordsToCreate.push({ entity: childConfig.entity, data: childMap });
+                childRecordsToCreate.push({ entity: childConfig.entity, data: childMap, isLegacySingle });
             }
         }
 
         if (childRecordsToCreate.length > 0) {
             if (dryRun) {
                 out.previewChildren = childRecordsToCreate.map((c) => c.data);
-                if (outputMapping.childRecord && childRecordsToCreate.length > 0) {
-                    out.previewChild = childRecordsToCreate[0].data;
+                const singleChild = childRecordsToCreate.find((c) => c.isLegacySingle);
+                if (singleChild) {
+                    out.previewChild = singleChild.data;
                 }
             } else {
                 const createdIDs: string[] = [];
+                let singleChildID: string | undefined;
                 for (const item of childRecordsToCreate) {
                     const child = await provider.GetEntityObject<BaseEntity>(item.entity, contextUser);
                     child.NewRecord();
@@ -251,11 +263,16 @@ export async function applyOutputMapping(opts: {
                         throw new Error(`applyOutputMapping: failed creating '${item.entity}' child: ${child.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                     }
                     const childKey = child.PrimaryKey.ToCompactURLSegment();
-                    createdIDs.push(childKey.length > 0 ? childKey : 'created');
+                    if (childKey && childKey.length > 0) {
+                        createdIDs.push(childKey);
+                        if (item.isLegacySingle && !singleChildID) {
+                            singleChildID = childKey;
+                        }
+                    }
                 }
                 out.createdChildIDs = createdIDs;
-                if (outputMapping.childRecord && createdIDs.length > 0) {
-                    out.createdChildID = createdIDs[0];
+                if (singleChildID) {
+                    out.createdChildID = singleChildID;
                 }
             }
         }

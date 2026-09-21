@@ -41,6 +41,8 @@ export class WriteBackProcessor implements IRecordProcessor {
                 ...this.run,
                 ProcessRunID: context.processRunID ?? this.run?.ProcessRunID,
                 AIPromptRunID: result.AIPromptRunID ?? this.run?.AIPromptRunID,
+                PromptVersionHash: result.PromptVersionHash ?? this.run?.PromptVersionHash,
+                FeatureValueCacheID: result.FeatureValueCacheID ?? this.run?.FeatureValueCacheID,
                 ExecutedAt: this.run?.ExecutedAt ?? new Date().toISOString(),
             };
             const writeBack = await applyOutputMapping({

@@ -324,6 +324,15 @@ export function validateSpec(
             });
           }
         }
+
+        if (out.Constraint.OnViolation === 'coerce-to-other' && out.Constraint.Type !== 'enum') {
+          issues.push({
+            Path: `${basePath}.Constraint.OnViolation`,
+            Message: `Violation policy 'coerce-to-other' is only valid for 'enum' constraints, but output '${out.Name}' has constraint type '${out.Constraint.Type}'.`,
+            FixRecommendation: "Use 'fail' or 'null' for non-enum constraints, or change constraint type to 'enum'.",
+            Severity: 'error',
+          });
+        }
       }
     }
   }

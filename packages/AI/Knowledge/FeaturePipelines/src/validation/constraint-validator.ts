@@ -92,7 +92,7 @@ function applyPolicy(
   if (policy === 'coerce-to-other') {
     return {
       valid: true,
-      value: coercedValue ?? 'Other',
+      value: coercedValue ?? null,
       violationMessage,
       violationPolicyApplied: 'coerce-to-other',
       coerced: true,

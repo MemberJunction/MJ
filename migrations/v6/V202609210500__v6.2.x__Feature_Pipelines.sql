@@ -9,7 +9,6 @@
 --    to computed outputs and reasoning. Can be pipeline-scoped or prompt-scoped.
 -- 3. EntityDocument: Loosens VectorDatabaseID and AIModelID to NULLable for context-only
 --    documents that build prompt context without vector indexing.
--- 4. EntityField: Declares TemplateID on MJ: Entity Documents as an EmbeddedRecord.
 --
 -- Design plan: plans/feature-pipelines-build-plan.md (§5, D13–D21)
 -- =====================================================================================
@@ -44,8 +43,8 @@ CREATE TABLE [${flyway:defaultSchema}].[FeatureValueCache] (
     [LastHitAt]           DATETIMEOFFSET   NULL,
     [ComputedAt]          DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValueCache_ComputedAt] DEFAULT (sysdatetimeoffset()),
     [ExpiresAt]           DATETIMEOFFSET   NULL,
-    [__mj_CreatedAt]      DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValueCache___mj_CreatedAt] DEFAULT (sysdatetimeoffset()),
-    [__mj_UpdatedAt]      DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValueCache___mj_UpdatedAt] DEFAULT (sysdatetimeoffset()),
+    [__mj_CreatedAt]      DATETIMEOFFSET   NOT NULL,
+    [__mj_UpdatedAt]      DATETIMEOFFSET   NOT NULL,
 
     CONSTRAINT [PK_FeatureValueCache] PRIMARY KEY CLUSTERED ([ID]),
     CONSTRAINT [FK_FeatureValueCache_RecordProcess] FOREIGN KEY ([RecordProcessID])
@@ -89,8 +88,8 @@ CREATE TABLE [${flyway:defaultSchema}].[FeatureValue] (
     [AIPromptRunID]       UNIQUEIDENTIFIER NULL,
     [FeatureValueCacheID] UNIQUEIDENTIFIER NULL,
     [ComputedAt]          DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValue_ComputedAt] DEFAULT (sysdatetimeoffset()),
-    [__mj_CreatedAt]      DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValue___mj_CreatedAt] DEFAULT (sysdatetimeoffset()),
-    [__mj_UpdatedAt]      DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValue___mj_UpdatedAt] DEFAULT (sysdatetimeoffset()),
+    [__mj_CreatedAt]      DATETIMEOFFSET   NOT NULL,
+    [__mj_UpdatedAt]      DATETIMEOFFSET   NOT NULL,
 
     CONSTRAINT [PK_FeatureValue] PRIMARY KEY CLUSTERED ([ID]),
     CONSTRAINT [FK_FeatureValue_RecordProcess] FOREIGN KEY ([RecordProcessID])
@@ -116,21 +115,8 @@ CREATE NONCLUSTERED INDEX [IX_FeatureValue_RecordProcess_ComputedAt]
     ON [${flyway:defaultSchema}].[FeatureValue] ([RecordProcessID], [ComputedAt] DESC);
 GO
 
-CREATE NONCLUSTERED INDEX [IX_FeatureValue_FeatureValueCacheID]
-    ON [${flyway:defaultSchema}].[FeatureValue] ([FeatureValueCacheID])
-    WHERE [FeatureValueCacheID] IS NOT NULL;
-GO
-
 -- -------------------------------------------------------------------------------------
--- 4. EntityField EmbeddedRecord declaration for TemplateID on MJ: Entity Documents
--- -------------------------------------------------------------------------------------
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET [EmbeddedRecord] = '{"OnClear":"orphan","LoadNested":"inherit"}'
-WHERE [EntityID] = '22248F34-2837-EF11-86D4-6045BDEE16E6' AND [Name] = 'TemplateID';
-GO
-
--- -------------------------------------------------------------------------------------
--- 5. Extended Properties — FeatureValueCache
+-- 4. Extended Properties — FeatureValueCache
 -- -------------------------------------------------------------------------------------
 EXEC sp_addextendedproperty
     @name = N'MS_Description',

@@ -156,8 +156,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.EditDocID = doc.ID;
         this.EditDocName = doc.Name;
         this.EditDocEntityName = doc.Entity || '';
-        this.EditDocVectorDBID = doc.VectorDatabaseID;
-        this.EditDocAIModelID = doc.AIModelID;
+        this.EditDocVectorDBID = doc.VectorDatabaseID ?? '';
+        this.EditDocAIModelID = doc.AIModelID ?? '';
         this.EditDocVectorIndexID = doc.VectorIndexID || '';
         this.EditDocStatus = doc.Status;
         this.EditDocTemplate = '';

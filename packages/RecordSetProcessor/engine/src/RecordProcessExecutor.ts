@@ -30,7 +30,7 @@ import { InferProcessor } from './processors/InferProcessor';
 import { FieldRulesProcessor } from './processors/FieldRulesProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
 import { OutputMappingConfig, RunProvenance } from './writeBack';
-import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { validateSpec, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 /** Options for executing a Record Process. */
 export interface RunRecordProcessOptions {
@@ -176,7 +176,19 @@ export class RecordProcessExecutor {
             if (!rp.PromptID) {
                 throw new Error(`Record Process '${rp.Name}': WorkType=Infer requires PromptID`);
             }
-            const spec = rp.Configuration ? SafeJSONParse<DataFeatureSpec>(rp.Configuration) : undefined;
+            let spec: DataFeatureSpec | undefined;
+            if (rp.Configuration && rp.Configuration.trim().length > 0) {
+                try {
+                    spec = JSON.parse(rp.Configuration) as DataFeatureSpec;
+                } catch (e) {
+                    throw new Error(`Record Process '${rp.Name}': Configuration is invalid JSON: ${e instanceof Error ? e.message : String(e)}`);
+                }
+                const issues = validateSpec(spec);
+                const errors = issues.filter((i) => i.Severity === 'error');
+                if (errors.length > 0) {
+                    throw new Error(`Record Process '${rp.Name}': invalid DataFeatureSpec in Configuration: ${errors.map((err) => err.Message).join('; ')}`);
+                }
+            }
             base = new InferProcessor(rp.PromptID, inputMapping, spec);
         } else {
             // Not a built-in work type — consult the pluggable registry. This is the open seam that

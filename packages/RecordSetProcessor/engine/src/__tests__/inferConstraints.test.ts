@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams, type AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { DataFeatureSpec } from '@memberjunction/feature-pipelines';
 import { InferProcessor } from '../processors/InferProcessor';
@@ -260,5 +261,87 @@ describe('InferProcessor constraint enforcement', () => {
 
         expect(result.Status).toBe('Failed');
         expect(result.ErrorMessage).toContain('Numeric constraint rejected quoted string value');
+    });
+
+    it('populates PromptVersionHash on successful RecordResult', async () => {
+        const spec: DataFeatureSpec = {
+            Name: 'Provenance Test',
+            PromptID: 'PROMPT-1',
+            Outputs: [
+                {
+                    Ref: '$.res',
+                    Name: 'Res',
+                    Target: { Mode: 'field', EntityFieldName: 'Notes' },
+                },
+            ],
+        };
+        mockResult = { res: 'Done' };
+
+        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const result = await processor.ProcessRecord(record, mockContext);
+
+        expect(result.Status).toBe('Succeeded');
+        expect(result.PromptVersionHash).toBeDefined();
+        expect(typeof result.PromptVersionHash).toBe('string');
+        expect(result.PromptVersionHash!.length).toBe(64); // SHA-256 hex length
+    });
+
+    it('filters record fields when Context.Fields is specified', async () => {
+        const spec: DataFeatureSpec = {
+            Name: 'Field Filter Pipeline',
+            PromptID: 'PROMPT-1',
+            Context: { Fields: ['Title'] }, // Only Title, exclude RawComp
+            Outputs: [
+                {
+                    Ref: '$.res',
+                    Name: 'Res',
+                    Target: { Mode: 'field', EntityFieldName: 'Notes' },
+                },
+            ],
+        };
+        mockResult = { res: 'Done' };
+
+        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        await processor.ProcessRecord(record, mockContext);
+
+        const promptData = (executedParams as { data: Record<string, unknown> }).data;
+        const promptRecord = promptData.record as Record<string, unknown>;
+        expect(promptRecord.Title).toBe('VP of Sales');
+        expect(promptRecord.RawComp).toBeUndefined();
+    });
+
+    it('allows subclasses to override P1-6 lifecycle hooks', async () => {
+        let beforeExecuteCalled = false;
+        let afterExecuteCalled = false;
+
+        class CustomInferProcessor extends InferProcessor {
+            protected override async beforePromptExecute(params: AIPromptParams, rec: RecordRef, ctx: RecordProcessorContext): Promise<void> {
+                beforeExecuteCalled = true;
+            }
+            protected override async afterPromptExecute(res: AIPromptRunResult<unknown>, rec: RecordRef, ctx: RecordProcessorContext): Promise<unknown> {
+                afterExecuteCalled = true;
+                return { custom: 'value' };
+            }
+        }
+
+        const spec: DataFeatureSpec = {
+            Name: 'Hook Pipeline',
+            PromptID: 'PROMPT-1',
+            Outputs: [
+                {
+                    Ref: '$.custom',
+                    Name: 'Custom',
+                    Target: { Mode: 'field', EntityFieldName: 'Notes' },
+                },
+            ],
+        };
+
+        const processor = new CustomInferProcessor('PROMPT-1', undefined, spec);
+        const result = await processor.ProcessRecord(record, mockContext);
+
+        expect(result.Status).toBe('Succeeded');
+        expect(beforeExecuteCalled).toBe(true);
+        expect(afterExecuteCalled).toBe(true);
+        expect(result.ResultPayload).toEqual({ custom: 'value' });
     });
 });

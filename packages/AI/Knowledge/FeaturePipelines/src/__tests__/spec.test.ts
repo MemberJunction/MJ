@@ -8,30 +8,30 @@ import {
 } from '../spec/data-feature-spec.js';
 import { validateOutputValue } from '../validation/constraint-validator.js';
 
-describe('DataFeatureSpec — pure validator (P1-1)', () => {
-  const sampleEntity: EntityMetadataStub = {
-    Name: 'Contacts',
-    Fields: [
-      { Name: 'ID', TSType: 'string', IsVirtual: false },
-      { Name: 'CurrentJobTitle', TSType: 'string', IsVirtual: true }, // virtual column
-      {
-        Name: 'SeniorityLevel',
-        TSType: 'string',
-        IsVirtual: false,
-        EntityFieldValues: [
-          { Value: 'IC' },
-          { Value: 'Manager' },
-          { Value: 'Director' },
-          { Value: 'VP' },
-          { Value: 'C-Level' },
-        ],
-      },
-      { Name: 'SentimentScore', TSType: 'number', IsVirtual: false },
-      { Name: 'IsVIP', TSType: 'boolean', IsVirtual: false },
-      { Name: 'CompanyID', TSType: 'string', IsVirtual: false, RelatedEntity: 'Companies', RelatedEntityID: 'comp-uuid' },
-    ],
-  };
+const sampleEntity: EntityMetadataStub = {
+  Name: 'Contacts',
+  Fields: [
+    { Name: 'ID', TSType: 'string', IsVirtual: false },
+    { Name: 'CurrentJobTitle', TSType: 'string', IsVirtual: true }, // virtual column
+    {
+      Name: 'SeniorityLevel',
+      TSType: 'string',
+      IsVirtual: false,
+      EntityFieldValues: [
+        { Value: 'IC' },
+        { Value: 'Manager' },
+        { Value: 'Director' },
+        { Value: 'VP' },
+        { Value: 'C-Level' },
+      ],
+    },
+    { Name: 'SentimentScore', TSType: 'number', IsVirtual: false },
+    { Name: 'IsVIP', TSType: 'boolean', IsVirtual: false },
+    { Name: 'CompanyID', TSType: 'string', IsVirtual: false, RelatedEntity: 'Companies', RelatedEntityID: 'comp-uuid' },
+  ],
+};
 
+describe('DataFeatureSpec — pure validator (P1-1)', () => {
   it('rejects a spec with empty outputs', () => {
     const spec: DataFeatureSpec = {
       Name: 'Empty Pipeline',
@@ -313,4 +313,31 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     expect(validateOutputValue(0, intConstraint).valid).toBe(false);
     expect(validateOutputValue(11, intConstraint).valid).toBe(false);
   });
+
+  it('degrades coerce-to-other to null on non-enum constraint violations', () => {
+    const numConstraint = { Type: 'numeric' as const, Min: 0, Max: 100, OnViolation: 'coerce-to-other' as const };
+    const res = validateOutputValue(150, numConstraint);
+    expect(res.valid).toBe(true);
+    expect(res.value).toBeNull();
+    expect(res.coerced).toBe(true);
+    expect(res.violationPolicyApplied).toBe('coerce-to-other');
+  });
+
+  it('rejects coerce-to-other on non-enum constraints during spec validation', () => {
+    const spec: DataFeatureSpec = {
+      Name: 'Invalid Coerce Spec',
+      PromptID: 'prompt-1',
+      Outputs: [
+        {
+          Ref: '$.score',
+          Name: 'Score',
+          Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
+          Constraint: { Type: 'numeric', Min: 0, Max: 100, OnViolation: 'coerce-to-other' },
+        },
+      ],
+    };
+    const issues = validateSpec(spec, sampleEntity);
+    expect(issues.some(i => i.Path?.includes('Constraint.OnViolation') && i.Severity === 'error')).toBe(true);
+  });
 });
+
