@@ -1,4 +1,4 @@
-import { canonicalize } from './canonicalize';
+import { Canonicalize } from './canonicalize';
 
 /**
  * Calculates SHA-256 hash of a mapped-field record or arbitrary object asynchronously.
@@ -6,9 +6,9 @@ import { canonicalize } from './canonicalize';
  * and Node.js 15+.
  *
  * Produces hex digests byte-for-byte identical to Node.js `node:crypto`'s `createHash('sha256')`
- * over the canonical JSON produced by {@link canonicalize}.
+ * over the canonical JSON produced by {@link Canonicalize}.
  */
-export async function computeContentHashAsync(fields: Record<string, unknown>): Promise<string> {
+export async function ComputeContentHashAsync(fields: Record<string, unknown>): Promise<string> {
     // Check for crypto.subtle availability
     if (typeof crypto === 'undefined' || !crypto.subtle) {
         throw new Error(
@@ -18,7 +18,7 @@ export async function computeContentHashAsync(fields: Record<string, unknown>): 
         );
     }
 
-    const canonical = canonicalize(fields);
+    const canonical = Canonicalize(fields);
     const encoder = new TextEncoder();
     const data = encoder.encode(canonical);
 
@@ -26,3 +26,8 @@ export async function computeContentHashAsync(fields: Record<string, unknown>): 
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+/**
+ * @deprecated Use {@link ComputeContentHashAsync} to follow MemberJunction PascalCase naming convention for exported functions.
+ */
+export const computeContentHashAsync = ComputeContentHashAsync;

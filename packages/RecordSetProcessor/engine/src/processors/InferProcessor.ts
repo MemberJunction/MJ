@@ -13,7 +13,7 @@
 
 import { createHash } from 'node:crypto';
 import { LogError, RunQuery } from '@memberjunction/core';
-import { UUIDsEqual, canonicalize, computeContentHashAsync, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
+import { UUIDsEqual, Canonicalize, ComputeContentHashAsync, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -348,7 +348,7 @@ export class InferProcessor implements IRecordProcessor {
             name: o.Name,
             constraint: o.Constraint,
         }));
-        const canonical = canonicalize(constraints);
+        const canonical = Canonicalize(constraints);
         return createHash('sha256').update(canonical).digest('hex');
     }
 
@@ -414,7 +414,7 @@ export class InferProcessor implements IRecordProcessor {
         const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
         const promptVersionHash = prompt ? this.computePromptVersionHash(prompt as MJAIPromptEntityExtended, this.spec) : '';
         const promptData = await this.buildPromptData(record, context);
-        return computeContentHashAsync({
+        return ComputeContentHashAsync({
             promptData,
             promptVersionHash,
         });

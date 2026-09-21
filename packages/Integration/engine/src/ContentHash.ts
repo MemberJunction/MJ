@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { canonicalize } from '@memberjunction/global';
+import { Canonicalize } from '@memberjunction/global';
 
 /**
  * Name of the per-record content-hash mirror column. Written on every integration
@@ -35,7 +35,7 @@ export const CONTENT_HASH_COLUMN = '__mj_integration_ContentHash';
  * row; every other row's hash, and therefore its skip-write, is unaffected.
  */
 export function computeContentHash(fields: Record<string, unknown>): string {
-    const canonical = canonicalize(fields);
+    const canonical = Canonicalize(fields);
     return createHash('sha256').update(canonical).digest('hex');
 }
 

@@ -6,16 +6,21 @@
  * Lifted from @memberjunction/integration-engine to serve as the shared, pure,
  * dependency-free canonicalizer across Integration, BaseEntity, and Feature Pipelines.
  */
-export function canonicalize(value: unknown): string {
+export function Canonicalize(value: unknown): string {
     if (value === null) return 'null';
     if (value === undefined) return 'null'; // top-level undefined — shouldn't happen, but stay total
     if (typeof value !== 'object') return JSON.stringify(value);
     if (Array.isArray(value)) {
-        return `[${value.map(v => (v === undefined ? 'null' : canonicalize(v))).join(',')}]`;
+        return `[${value.map(v => (v === undefined ? 'null' : Canonicalize(v))).join(',')}]`;
     }
     if (value instanceof Date) return JSON.stringify(value.toISOString());
     const obj = value as Record<string, unknown>;
     const keys = Object.keys(obj).filter(k => obj[k] !== undefined).sort();
-    const body = keys.map(k => `${JSON.stringify(k)}:${canonicalize(obj[k])}`).join(',');
+    const body = keys.map(k => `${JSON.stringify(k)}:${Canonicalize(obj[k])}`).join(',');
     return `{${body}}`;
 }
+
+/**
+ * @deprecated Use {@link Canonicalize} to follow MemberJunction PascalCase naming convention for exported functions.
+ */
+export const canonicalize = Canonicalize;
