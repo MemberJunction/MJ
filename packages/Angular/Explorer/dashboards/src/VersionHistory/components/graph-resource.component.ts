@@ -16,6 +16,7 @@ interface VersionGraphPreferences {
 }
 interface EntityNode {
     Name: string;
+    DisplayName: string;
     ID: string;
     SchemaName: string;
     ReferencedByCount: number;
@@ -242,12 +243,13 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
 
             this.AllEntities = entities.map(e => ({
                 Name: e.Name,
+                DisplayName: e.DisplayNameOrName,
                 ID: e.ID,
                 SchemaName: e.SchemaName,
                 ReferencedByCount: this.countReferencedBy(e),
                 DependsOnCount: this.countDependsOn(e),
                 IsSelected: false
-            })).sort((a, b) => a.Name.localeCompare(b.Name));
+            })).sort((a, b) => a.DisplayName.localeCompare(b.DisplayName));
 
             // Extract unique schemas, sorted
             const schemaSet = new Set(this.AllEntities.map(e => e.SchemaName));
@@ -331,7 +333,7 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
 
         if (this.SearchText) {
             const search = this.SearchText.toLowerCase();
-            result = result.filter(e => e.Name.toLowerCase().includes(search));
+            result = result.filter(e => e.DisplayName.toLowerCase().includes(search) || e.Name.toLowerCase().includes(search));
         }
 
         this.FilteredEntities = result;

@@ -25,27 +25,15 @@
           (click)="setTier('all')">
           All <span class="pg-count-pill">({{ allRows.length | number }})</span>
         </button>
-        <button
-          type="button"
-          class="pg-tier-btn tier-high"
-          [class.active]="selectedTier === 'high'"
-          (click)="setTier('high')">
-          High <span class="pg-count-pill">({{ highCount | number }})</span>
-        </button>
-        <button
-          type="button"
-          class="pg-tier-btn tier-medium"
-          [class.active]="selectedTier === 'medium'"
-          (click)="setTier('medium')">
-          Medium <span class="pg-count-pill">({{ mediumCount | number }})</span>
-        </button>
-        <button
-          type="button"
-          class="pg-tier-btn tier-low"
-          [class.active]="selectedTier === 'low'"
-          (click)="setTier('low')">
-          Low <span class="pg-count-pill">({{ lowCount | number }})</span>
-        </button>
+        @for (b of visibleBands; track b.key) {
+          <button
+            type="button"
+            class="pg-tier-btn"
+            [class.active]="selectedTier === b.key"
+            (click)="setTier(b.key)">
+            {{ b.label }} <span class="pg-count-pill">({{ b.count | number }})</span>
+          </button>
+        }
 
         @if (selectedDecileIndex !== null) {
           <div class="pg-decile-pill">
@@ -105,7 +93,8 @@
           [gridOptions]="GridOptions"
           [rowData]="filteredRows"
           (gridReady)="onGridReady($event)"
-          (rowClicked)="onRowClicked($event)">
+          (rowClicked)="onRowClicked($event)"
+          (cellClicked)="onCellClicked($event)">
         </ag-grid-angular>
 
         <div class="pg-footer">
@@ -125,23 +114,22 @@
             <div class="pg-chart-card total">
               <span class="pg-chart-card-lbl"><i class="fa-solid fa-users ps-muted"></i> Scored Cohort</span>
               <span class="pg-chart-card-val">{{ allRows.length | number }}</span>
-              <span class="pg-chart-card-sub">{{ isRenewalModel ? 'Active membership periods' : 'Total records' }}</span>
+              <span class="pg-chart-card-sub">Total records</span>
             </div>
-            <div class="pg-chart-card tier-low" (click)="setTierAndGrid('low')">
-              <span class="pg-chart-card-lbl"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success)"></i> Low Churn Risk</span>
-              <span class="pg-chart-card-val" style="color:var(--mj-status-success)">{{ lowCount | number }}</span>
-              <span class="pg-chart-card-sub">{{ lowPct }}% of cohort (avg {{ lowAvg }}% risk)</span>
-            </div>
-            <div class="pg-chart-card tier-medium" (click)="setTierAndGrid('medium')">
-              <span class="pg-chart-card-lbl"><i class="fa-solid fa-triangle-exclamation" style="color:var(--mj-status-warning)"></i> Medium Risk</span>
-              <span class="pg-chart-card-val" style="color:var(--mj-status-warning)">{{ mediumCount | number }}</span>
-              <span class="pg-chart-card-sub">{{ mediumPct }}% of cohort (avg {{ mediumAvg }}% risk)</span>
-            </div>
-            <div class="pg-chart-card tier-high" (click)="setTierAndGrid('high')">
-              <span class="pg-chart-card-lbl"><i class="fa-solid fa-circle-exclamation" style="color:var(--mj-status-error)"></i> High Risk (Intervene)</span>
-              <span class="pg-chart-card-val" style="color:var(--mj-status-error)">{{ highCount | number }}</span>
-              <span class="pg-chart-card-sub">{{ highPct }}% of cohort (avg {{ highAvg }}% risk)</span>
-            </div>
+            @for (b of visibleBands; track b.key) {
+              <div class="pg-chart-card" [class]="'tier-' + b.key" (click)="setTierAndGrid(b.key)">
+                <span class="pg-chart-card-lbl">
+                  @if (b.icon) {
+                    <i class="fa-solid {{ b.icon }}" [style.color]="getBadgeColorVar(b.badgeColor)"></i>
+                  }
+                  {{ b.label }}
+                </span>
+                <span class="pg-chart-card-val" [style.color]="getBadgeColorVar(b.badgeColor)">
+                  {{ b.count | number }}
+                </span>
+                <span class="pg-chart-card-sub">{{ b.pct }}% of cohort (avg {{ b.avgScoreFormatted }} {{ outcomeConfig.ScoreLabel }})</span>
+              </div>
+            }
           </div>
 
           <!-- Score Distribution Histogram -->
@@ -149,10 +137,10 @@
             <div class="pg-chart-section-title">
               <div style="display:flex;align-items:center;gap:8px">
                 <i class="fa-solid fa-chart-simple ps-muted"></i>
-                <span>{{ isRenewalModel ? 'Renewal Probability Distribution' : 'Prediction Score Distribution' }} (10-Decile Bins)</span>
+                <span>{{ outcomeConfig.ScoreLabel }} Distribution (10 Bins)</span>
               </div>
               <div class="pg-chart-meta">
-                <span class="ps-small ps-muted">Cohort Mean: <strong>{{ meanScorePct }}%</strong></span>
+                <span class="ps-small ps-muted">Cohort Mean: <strong>{{ meanScoreFormatted }}</strong></span>
                 @if (selectedDecileIndex !== null) {
                   <button type="button" class="pg-clear-decile-btn" (click)="clearDecileFilter()">
                     <i class="fa-solid fa-xmark"></i> Clear Decile Filter
@@ -193,7 +181,7 @@
 
                     <!-- Tooltip card -->
                     <div class="pg-h-tooltip">
-                      <div class="pg-h-tt-head">{{ b.label }} {{ isRenewalModel ? 'Renewal Probability' : 'Score Range' }}</div>
+                      <div class="pg-h-tt-head">{{ b.label }} {{ outcomeConfig.ScoreLabel }}</div>
                       <div class="pg-h-tt-row">
                         <span class="pg-h-tt-val">{{ b.count | number }} records</span>
                         <span class="pg-h-tt-pct">({{ b.pctFormatted }} of cohort)</span>
@@ -233,6 +221,54 @@
               </div>
             </div>
           }
+
+          <!-- Segment Drilldown Grid Section — Only shown when a decile segment is selected -->
+          @if (selectedDecileIndex !== null) {
+            <div id="pg-drilldown-anchor" class="pg-chart-section pg-chart-drilldown-section">
+              <div class="pg-chart-section-title">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <i class="fa-solid fa-table-list ps-muted"></i>
+                  <span>
+                    Decile Drill-Down:
+                    <strong style="color:var(--mj-brand-primary)">{{ selectedDecileLabel }}</strong>
+                    {{ outcomeConfig.ScoreLabel }}
+                    @if (histogramBins[selectedDecileIndex]) {
+                      <span class="ps-badge" [style.color]="histogramBins[selectedDecileIndex].color" style="margin-left:6px">
+                        {{ histogramBins[selectedDecileIndex].riskLabel }}
+                      </span>
+                    }
+                  </span>
+                </div>
+                <div class="pg-chart-meta">
+                  <span class="ps-small ps-muted">
+                    Showing <strong>{{ filteredRows.length | number }}</strong> of {{ allRows.length | number }} records
+                  </span>
+                  <button type="button" class="pg-clear-decile-btn" (click)="clearDecileFilter()">
+                    <i class="fa-solid fa-xmark"></i> Show All Deciles
+                  </button>
+                </div>
+              </div>
+
+              <!-- Drill-Down AG Grid -->
+              <div class="pg-chart-grid-host">
+                <ag-grid-angular
+                  class="pg-grid pg-chart-ag-grid"
+                  [theme]="Theme"
+                  [columnDefs]="columnDefs"
+                  [defaultColDef]="defaultColDef"
+                  [gridOptions]="chartGridOptions"
+                  [rowData]="filteredRows"
+                  (gridReady)="onChartGridReady($event)"
+                  (rowClicked)="onRowClicked($event)"
+                  (cellClicked)="onCellClicked($event)">
+                </ag-grid-angular>
+              </div>
+
+              <div class="pg-drilldown-footer">
+                <span class="ps-muted">Click any row to inspect explainability drivers and score history in the slide-in drawer</span>
+              </div>
+            </div>
+          }
         </div>
       }
     }
@@ -244,7 +280,8 @@
       Mode="slide"
       Title="Record Prediction & Score History"
       [Resizable]="true"
-      [WidthPx]="640"
+      [WidthPx]="drawerWidthPx"
+      (WidthChanged)="onDrawerWidthChanged($event)"
       (Closed)="closeDetail()">
 
       <div class="pg-detail-body">
@@ -257,41 +294,55 @@
               <span class="ps-mono ps-small ps-muted">{{ selectedRow.recordId }}</span>
             </div>
           </div>
-          <button
-            mjButton
-            variant="primary"
-            size="sm"
-            (click)="drillThrough(selectedRow)">
-            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in Explorer
-          </button>
+          <div class="pg-detail-record-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button
+              mjButton
+              variant="primary"
+              size="sm"
+              (click)="drillThrough(selectedRow)"
+              title="Open record in Explorer">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Open {{ entityDisplayName || 'Record' }}
+            </button>
+            @if (subjectEntityName && subjectRecordId) {
+              <button
+                mjButton
+                variant="secondary"
+                size="sm"
+                (click)="openSubjectRecord()"
+                title="Open subject record (e.g. Person, Account) in Explorer">
+                <i class="fa-solid fa-user"></i> Open {{ subjectEntityName.replace('MJ_BizApps_Common: ', '').replace('MJ_BizApps_', '') }} ({{ subjectRecordName || 'Profile' }})
+              </button>
+            }
+          </div>
         </div>
 
         <!-- Prediction Summary Card -->
         <div class="pg-detail-pred-card">
-          <div class="pg-detail-score-circle" [class]="'risk-' + selectedRow.band">
-            {{ isRenewalModel ? selectedRow.scoreFormatted : selectedRow.riskPct + '%' }}
+          <div class="pg-detail-score-circle" [class]="'badge-' + (selectedRow.badgeColor || 'gray')">
+            {{ selectedRow.scoreFormatted }}
           </div>
           <div class="pg-detail-meta">
             <div class="pg-detail-meta-line">
-              <strong>Risk Level:</strong>
-              <span class="ps-badge" [class]="selectedRow.band === 'high' ? 'red' : selectedRow.band === 'medium' ? 'amber' : 'green'" style="margin-left:6px">
-                {{ selectedRow.band | uppercase }} RISK ({{ selectedRow.riskPct }}% Churn Risk)
+              <strong>{{ outcomeConfig.StatusLabel }}:</strong>
+              <span class="ps-badge" [class]="selectedRow.badgeColor || 'gray'" style="margin-left:6px">
+                @if (selectedRow.icon) {
+                  <i class="fa-solid {{ selectedRow.icon }}"></i>
+                }
+                {{ selectedRow.status || selectedRow.band }}
               </span>
             </div>
             @if (selectedRow.class) {
               <div class="pg-detail-meta-line">
                 <strong>Predicted Outcome:</strong>
-                <span class="ps-badge" [class]="selectedRow.class.toLowerCase() === 'renewed' ? 'green' : 'red'">
+                <span class="ps-badge" [class]="getOutcomeBadgeClass(selectedRow.class)">
                   {{ selectedRow.class }}
                 </span>
               </div>
             }
-            @if (isRenewalModel) {
-              <div class="pg-detail-meta-line">
-                <strong>Renewal Probability:</strong>
-                <span style="font-weight:700;color:var(--mj-text-primary)">{{ selectedRow.scoreFormatted }}</span>
-              </div>
-            }
+            <div class="pg-detail-meta-line">
+              <strong>{{ outcomeConfig.ScoreLabel }}:</strong>
+              <span style="font-weight:700;color:var(--mj-text-primary)">{{ selectedRow.scoreFormatted }}</span>
+            </div>
             <div class="pg-detail-meta-sub">
               Scored: {{ selectedRow.scoredAtDate ? (selectedRow.scoredAtDate | date:'medium') : '—' }}
             </div>
