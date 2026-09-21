@@ -132,6 +132,11 @@ describe('cacheInvalidationFilter', () => {
             GetUserPermisions: () => ({ CanRead: e.CanRead }),
           }));
         }
+        // The real one is case-insensitive and trims — the filter relies on that, so the mock does too.
+        EntityByName(name: string) {
+          const key = name.trim().toLowerCase();
+          return this.Entities.find((e) => e.Name.toLowerCase() === key);
+        }
       },
     }));
     return (await import('../generic/CacheInvalidationResolver.js')).cacheInvalidationFilter;

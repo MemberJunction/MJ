@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { IMetadataProvider, UserInfo, EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
@@ -455,7 +456,7 @@ export class PSPipelineWizardComponent implements OnInit {
 
   public get selectedEntity(): EntityInfo | null {
     if (!this.selectedEntityId || !this.provider) return null;
-    return this.provider.Entities.find((e) => e.ID === this.selectedEntityId) ?? null;
+    return this.provider.Entities.find((e) => UUIDsEqual(e.ID, this.selectedEntityId)) ?? null;
   }
 
   public get availableFields(): EntityFieldInfo[] {

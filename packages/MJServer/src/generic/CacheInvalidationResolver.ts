@@ -135,7 +135,9 @@ export function cacheInvalidationFilter(data: {
         return false;
     }
 
-    const entity = new Metadata().Entities.find((e) => e.Name === entityName);
+    // A pub/sub subscription filter has no per-request provider to thread: it runs on the server's
+    // own metadata, which is the one place the entity's permission rows can be answered from.
+    const entity = new Metadata().EntityByName(entityName); // global-provider-ok: subscription filter — server-wide metadata, no request-scoped provider exists here
     // DELIVER when the entity is unknown here, deliberately — the opposite of the choice above.
     // A name absent from metadata cannot be permission-checked, and withholding would silently
     // stop invalidating a legitimately cacheable entity, which is a correctness bug rather than a

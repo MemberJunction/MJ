@@ -453,10 +453,14 @@ def _extract_importance(estimator: Any, columns: List[str]) -> Dict[str, float]:
     if hasattr(estimator, "feature_importances_"):
         values = np.asarray(estimator.feature_importances_, dtype=float)
     elif hasattr(estimator, "coef_"):
-        coef = np.asarray(estimator.coef_, dtype=float)
-        values = np.abs(coef).sum(axis=0) if coef.ndim > 1 else np.abs(coef)
+        raw = np.asarray(estimator.coef_, dtype=float)
+        # Multi-class linear models produce (n_classes, n_features); sum magnitudes across classes
+        values = np.sum(np.abs(raw), axis=0) if raw.ndim > 1 else np.abs(raw)
     else:
         return {}
+    total = float(np.sum(np.abs(values)))
+    if total > 0:
+        values = values / total
     n = min(len(columns), len(values))
     return {columns[i]: float(values[i]) for i in range(n)}
 

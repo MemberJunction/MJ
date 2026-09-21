@@ -1,6 +1,12 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { RealtimeSessionTimelineGroup, RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
+import {
+  RealtimeSessionTimelineGroup,
+  RealtimeSessionTimelineMeta,
+  SessionCardIsSameDayRange,
+  SessionCardStatusChip,
+  SessionCardTitle
+} from '../../utils/realtime-session-timeline';
 
 /**
  * The ONE timeline element a realtime session collapses to in the standard conversation
@@ -37,50 +43,35 @@ export class RealtimeSessionTimelineCardComponent {
   /** Emitted with the `MJ: AI Agent Sessions.ID` when the user asks to open the session review. */
   @Output() OpenRequested = new EventEmitter<string>();
 
+  /*
+   * Title / chip / range derivations live in `@memberjunction/conversations-runtime` alongside the
+   * grouping pass, because the React Native thread renders the same card and must not re-decide
+   * what "Timed out" means. These getters are the Angular binding surface over them, nothing more.
+   */
+
   /** Card title: "Realtime session · <agent>" when the agent name is known, else the generic label. */
   public get Title(): string {
-    const agent = this.Meta?.AgentName?.trim();
-    return agent ? `Realtime session · ${agent}` : 'Realtime session';
+    return SessionCardTitle(this.Meta);
   }
 
   /** Whether the start and end fall on the same calendar day (drives the end-time format). */
   public get SameDayRange(): boolean {
-    const start = this.Group?.StartedAt;
-    const end = this.Group?.EndedAt;
-    if (!start || !end) {
-      return true;
-    }
-    return start.toDateString() === end.toDateString();
+    return SessionCardIsSameDayRange(this.Group);
   }
 
-  /**
-   * The status chip label, or null to hide the chip entirely:
-   *  - Closed sessions show the close reason (`Error` / `Explicit` / `Janitor` / `Shutdown`)
-   *    humanized, falling back to "Closed" for legacy rows without one;
-   *  - Active sessions show "Live"; Idle shows "Idle";
-   *  - no meta (lookup unavailable) → no chip.
-   */
+  /** The status chip label, or null to hide the chip entirely. */
   public get StatusChip(): string | null {
-    switch (this.Meta?.Status) {
-      case 'Closed':
-        return this.closeReasonLabel();
-      case 'Active':
-        return 'Live';
-      case 'Idle':
-        return 'Idle';
-      default:
-        return null;
-    }
+    return SessionCardStatusChip(this.Meta)?.Label ?? null;
   }
 
   /** Whether the chip represents an error close (drives the error chip styling). */
   public get IsErrorChip(): boolean {
-    return this.Meta?.Status === 'Closed' && this.Meta?.CloseReason === 'Error';
+    return SessionCardStatusChip(this.Meta)?.Tone === 'error';
   }
 
   /** Whether the chip represents a live session (drives the live chip styling). */
   public get IsLiveChip(): boolean {
-    return this.Meta?.Status === 'Active';
+    return SessionCardStatusChip(this.Meta)?.Tone === 'live';
   }
 
   /** Emits {@link OpenRequested} for the whole-card / Open-button click. */
@@ -92,19 +83,4 @@ export class RealtimeSessionTimelineCardComponent {
     }
   }
 
-  /** Human label for the session's close reason ("Closed" when the column is null/unknown). */
-  private closeReasonLabel(): string {
-    switch (this.Meta?.CloseReason) {
-      case 'Explicit':
-        return 'Ended';
-      case 'Error':
-        return 'Error';
-      case 'Janitor':
-        return 'Timed out';
-      case 'Shutdown':
-        return 'Server shutdown';
-      default:
-        return 'Closed';
-    }
-  }
 }

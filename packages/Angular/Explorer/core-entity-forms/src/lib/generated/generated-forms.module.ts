@@ -401,6 +401,7 @@ import { MJVersionLabelFormComponent } from "./Entities/MJVersionLabel/mjversion
 import { MJVersionLabelItemFormComponent } from "./Entities/MJVersionLabelItem/mjversionlabelitem.form.component";
 import { MJVersionLabelRestoreFormComponent } from "./Entities/MJVersionLabelRestore/mjversionlabelrestore.form.component";
 import { MJViewTypeFormComponent } from "./Entities/MJViewType/mjviewtype.form.component";
+import { MJWebSearchProviderFormComponent } from "./Entities/MJWebSearchProvider/mjwebsearchprovider.form.component";
 import { MJWorkspaceFormComponent } from "./Entities/MJWorkspace/mjworkspace.form.component";
 import { MJWorkspaceItemFormComponent } from "./Entities/MJWorkspaceItem/mjworkspaceitem.form.component";
 import { JoinGridModule } from "@memberjunction/ng-join-grid"   
@@ -822,7 +823,8 @@ declarations: [
     MJSchemaInfoFormComponent,
     MJSignatureProviderFormComponent,
     MJTaggedItemFormComponent,
-    MJUserFormComponent
+    MJUserFormComponent,
+    MJWebSearchProviderFormComponent
 ],
 imports: [
     CommonModule,

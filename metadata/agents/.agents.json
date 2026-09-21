@@ -20,8 +20,7 @@
               "Get Weather",
               "Census Data Lookup",
               "Get Stock Price",
-              "Google Custom Search",
-              "Perplexity Search"
+              "Web Search"
             ]
           }
         }
@@ -105,7 +104,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
             "Status": "Active"
           },
           "primaryKey": {
@@ -125,9 +124,8 @@
           "primaryKey": {
             "ID": "86C17097-6AE5-49AA-85BD-219475209C5F"
           },
-          "sync": {
-            "lastModified": "2026-08-20T22:30:09.133Z",
-            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
+          "deleteRecord": {
+            "delete": true
           }
         }
       ]
@@ -176,8 +174,7 @@
               "Get Weather",
               "Census Data Lookup",
               "Get Stock Price",
-              "Google Custom Search",
-              "Perplexity Search"
+              "Web Search"
             ]
           }
         }
@@ -261,7 +258,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
             "Status": "Active"
           },
           "primaryKey": {
@@ -281,9 +278,8 @@
           "primaryKey": {
             "ID": "EE1105BD-90BC-4809-9835-1FA7A09F3CFA"
           },
-          "sync": {
-            "lastModified": "2026-08-20T22:30:09.154Z",
-            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
+          "deleteRecord": {
+            "delete": true
           }
         }
       ]
@@ -316,8 +312,7 @@
               "Get Weather",
               "Census Data Lookup",
               "Get Stock Price",
-              "Google Custom Search",
-              "Perplexity Search"
+              "Web Search"
             ]
           }
         }
@@ -334,7 +329,7 @@
             "StartingStep": 0,
             "StepType": "ForEach",
             "LoopBodyType": "Action",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
             "Configuration": {
               "type": "ForEach",
               "collectionPath": "static:[1,2,3,4,5]",
@@ -344,10 +339,10 @@
               "continueOnError": true
             },
             "ActionInputMapping": {
-              "SearchTerms": "number fun fact"
+              "Query": "number fun fact"
             },
             "ActionOutputMapping": {
-              "Items": "loopResults[]"
+              "Results": "loopResults[]"
             },
             "Status": "Active",
             "PositionX": -1260,
@@ -419,12 +414,12 @@
             "Description": "Perform a web search as an alternative step in the flow. See why NVIDIA stock price is lower than $500.",
             "StartingStep": 0,
             "StepType": "Action",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
             "ActionInputMapping": {
-              "SearchTerms": "NVIDIA stock decline reasons"
+              "Query": "NVIDIA stock decline reasons"
             },
             "ActionOutputMapping": {
-              "SearchResults": "webSearchResults"
+              "Results": "webSearchResults"
             },
             "Status": "Active",
             "PositionX": -860,
@@ -583,7 +578,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
             "Status": "Active"
           },
           "primaryKey": {
@@ -603,9 +598,8 @@
           "primaryKey": {
             "ID": "990A4AE4-68EC-4512-ADE8-5870D24ABB03"
           },
-          "sync": {
-            "lastModified": "2026-08-20T22:30:09.186Z",
-            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
+          "deleteRecord": {
+            "delete": true
           }
         }
       ]
@@ -708,7 +702,7 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+                  "ActionID": "@lookup:MJ: Actions.Name=Web Search",
                   "Status": "Active"
                 },
                 "primaryKey": {
@@ -717,20 +711,6 @@
                 "sync": {
                   "lastModified": "2026-03-26T22:05:20.648Z",
                   "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
-                }
-              },
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "67C18238-9098-4739-B876-66752DC62A91"
-                },
-                "sync": {
-                  "lastModified": "2026-08-20T22:30:09.211Z",
-                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
                 }
               },
               {
@@ -801,6 +781,19 @@
                 "sync": {
                   "lastModified": "2026-02-13T21:09:23.008Z",
                   "checksum": "9ee685e96fa742d4f3ab1531f7c623b43253bdbe3531f5c99526c233eb58e37f"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "67C18238-9098-4739-B876-66752DC62A91"
+                },
+                "deleteRecord": {
+                  "delete": true
                 }
               }
             ]
@@ -879,7 +872,7 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+                  "ActionID": "@lookup:MJ: Actions.Name=Web Search",
                   "Status": "Active"
                 },
                 "primaryKey": {
@@ -888,20 +881,6 @@
                 "sync": {
                   "lastModified": "2026-03-26T22:05:20.822Z",
                   "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
-                }
-              },
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "4C091053-1930-4699-84DF-05EAFD4A1611"
-                },
-                "sync": {
-                  "lastModified": "2026-08-20T22:30:09.230Z",
-                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
                 }
               },
               {
@@ -916,6 +895,19 @@
                 "sync": {
                   "lastModified": "2026-02-13T21:09:23.012Z",
                   "checksum": "9ee685e96fa742d4f3ab1531f7c623b43253bdbe3531f5c99526c233eb58e37f"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4C091053-1930-4699-84DF-05EAFD4A1611"
+                },
+                "deleteRecord": {
+                  "delete": true
                 }
               }
             ]
@@ -1008,7 +1000,7 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+                  "ActionID": "@lookup:MJ: Actions.Name=Web Search",
                   "Status": "Active"
                 },
                 "primaryKey": {
@@ -1017,20 +1009,6 @@
                 "sync": {
                   "lastModified": "2026-03-26T22:05:20.827Z",
                   "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
-                }
-              },
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "778700FB-C6C6-44FA-B078-7ABB876DBEBE"
-                },
-                "sync": {
-                  "lastModified": "2026-08-20T22:30:09.247Z",
-                  "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
                 }
               },
               {
@@ -1045,6 +1023,19 @@
                 "sync": {
                   "lastModified": "2026-02-13T21:09:23.016Z",
                   "checksum": "5b96798e63e77127a22f66ece440a79615f077bb88aab125cf01fc8d154f0c3c"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "778700FB-C6C6-44FA-B078-7ABB876DBEBE"
+                },
+                "deleteRecord": {
+                  "delete": true
                 }
               }
             ]

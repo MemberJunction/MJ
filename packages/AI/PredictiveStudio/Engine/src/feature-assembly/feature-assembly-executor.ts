@@ -316,9 +316,9 @@ export class FeatureAssemblyExecutor {
     if (!res.Success) {
       return records; // re-read failed — let the guardrail throw with a precise, actionable message
     }
-    const byId = new Map(res.Rows.map((row) => [String(row[pkField] ?? ''), row]));
+    const byId = new Map(res.Rows.map((row) => [String(row[pkField] ?? '').toLowerCase(), row]));
     return records.map((r) => {
-      const fresh = byId.get(String(r[pkField] ?? ''));
+      const fresh = byId.get(String(r[pkField] ?? '').toLowerCase());
       if (!fresh) {
         return r;
       }
@@ -326,6 +326,12 @@ export class FeatureAssemblyExecutor {
       for (const col of missing) {
         if (col in fresh) {
           merged[col] = fresh[col];
+        } else {
+          const lowerCol = col.toLowerCase();
+          const matchedKey = Object.keys(fresh).find((k) => k.toLowerCase() === lowerCol);
+          if (matchedKey !== undefined) {
+            merged[col] = fresh[matchedKey];
+          }
         }
       }
       return merged;
@@ -612,7 +618,7 @@ export class FeatureAssemblyExecutor {
         if (Number.isNaN(date.getTime())) {
           continue;
         }
-        const key = String(fk);
+        const key = String(fk).toLowerCase();
         const list = bySource.get(key) ?? [];
         list.push({ Date: date, Row: row });
         bySource.set(key, list);
@@ -705,7 +711,7 @@ export class FeatureAssemblyExecutor {
   /** Compute an as-of aggregate for one record from the dated index. */
   private emitAsOfValue(emitter: Extract<ColumnEmitter, { kind: 'as-of' }>, recordId: string, asOfDate: Date | null, datedIndex: DatedIndex): number | null {
     const bySource = datedIndex.get(emitter.datedSource.EntityName);
-    const datedRows = bySource?.get(recordId) ?? [];
+    const datedRows = bySource?.get(recordId.toLowerCase()) ?? bySource?.get(recordId) ?? [];
     switch (emitter.datedFeature.Aggregate) {
       case 'days_since_last_activity':
         return daysSinceLastActivityAsOf(datedRows, asOfDate);
