@@ -288,12 +288,29 @@ export interface EntityConfig {
         extension?: string;
       }
     } | Array<{
-      /** Field name to externalize */
+      /** Field name to externalize, or a dotted path to a property inside a JSON field.
+       *
+       * A bare name externalizes the whole field: "TemplateText".
+       *
+       * A dotted path externalizes just that property and leaves an `@file:` reference in
+       * its place, so a column that mixes hand-authored config with a machine-generated
+       * artifact stays readable: "Configuration.ReplayScript". Push already resolves
+       * nested references, so the value round-trips with no push-side configuration.
+       *
+       * A property the record does not carry is skipped entirely — no file, no key — so
+       * records that never produced the artifact are left byte-identical. A whole-field
+       * config for the same field takes precedence over its dotted paths.
+       *
+       * NOTE: externalization is driven entirely by this config, not by what the metadata
+       * file already contains. Pulling a field (or sub-property) that currently holds an
+       * `@file:` reference *without* an entry here inlines the database value and orphans
+       * the file.
+       */
       field: string;
       /** Pattern for the output file. Supports placeholders:
        * - {Name}: Entity's name field value
        * - {ID}: Entity's ID
-       * - {FieldName}: The field being externalized
+       * - {FieldName}: The field being externalized (the leaf name, for a dotted path)
        * - Any other {FieldName} from the entity
        * Example: "@file:templates/{Name}.template.md"
        */

@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T067 - Prediction Trust Gate Workspace",
+    "Description": "Exercises the trust-gated workspace view (trust banner + at-risk list + action-bar lock) unique to Predictions \u2014 a code path with no analog in the generic form/grid stack.",
+    "InputDefinition": "{\n  \"goal\": \"In the Predictive Studio app (open it via the application switcher dropdown next to the logo, scroll if needed), on the 'Predictions' door, open one prediction card by clicking its 'Open' button. Pages can take 10-30s to load \u2014 wait, don't navigate away. Success is the prediction WORKSPACE rendering: a trust banner with a star/dot rating and a plain-language verdict, plus either a ranked 'at-risk' call list (Member + Likelihood %) OR a trust-locked action bar showing a lock message when the prediction isn't reliable enough to act on. If the catalog has no openable cards (only the capability intro or 'Improve this' blocked cards), confirming that intro/blocked state renders is also a pass.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Opening a prediction shows a workspace with a trust banner and verdict, OR the catalog shows only blocked/intro state (no openable cards)\",\n    \"When a workspace opens, either the ranked at-risk list renders or the action bar shows a trust-lock message \u2014 the trust verdict visibly gates the actions\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,predictive-studio",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "33BD7DFC-7909-4853-9AB4-1995E59DF0E3"
+  }
+}
