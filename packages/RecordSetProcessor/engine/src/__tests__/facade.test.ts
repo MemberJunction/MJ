@@ -3,9 +3,10 @@
  * and the output-mapping write-back applier. No database — providers/entities are faked.
  */
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { CompositeKey, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { MJRecordProcessEntity, MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
+import { TagEngine } from '@memberjunction/tag-engine';
 import {
     ArraySource,
     FilterSource,
@@ -184,10 +185,11 @@ class FakeEntity {
     public async Save(): Promise<boolean> { this.saved = true; return true; }
 }
 
-function fakeProvider(childKey?: CompositeKey): { provider: IMetadataProvider; created: FakeEntity[] } {
+function fakeProvider(childKey?: CompositeKey, primaryKeys: Array<{ Name: string }> = [{ Name: 'ID' }]): { provider: IMetadataProvider; created: FakeEntity[] } {
     const created: FakeEntity[] = [];
     const provider = {
-        EntityByID: () => ({ Name: 'Customer', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } }),
+        EntityByID: () => ({ Name: 'Customer', PrimaryKeys: primaryKeys, FirstPrimaryKey: primaryKeys[0] }),
+        EntityByName: (name: string) => ({ ID: 'ENT-' + name, Name: name, PrimaryKeys: [{ Name: 'ID' }] }),
         GetEntityObject: async () => { const e = new FakeEntity(childKey); created.push(e); return e; },
     } as unknown as IMetadataProvider;
     return { provider, created };
@@ -285,5 +287,270 @@ describe('applyOutputMapping', () => {
         expect(writeBack.dryRun).toBe(true);
         expect(writeBack.previewFields).toEqual({ Satisfaction: 'High' });
         expect(created.length).toBe(0);
+    });
+
+    it('updates fields on a composite-keyed record without throwing', async () => {
+        const compositeKey = CompositeKey.FromKeyValuePairs([
+            { FieldName: 'OrderID', Value: '100' },
+            { FieldName: 'LineNo', Value: 2 },
+        ]);
+        const { provider, created } = fakeProvider(compositeKey, [
+            { Name: 'OrderID' },
+            { Name: 'LineNo' },
+        ]);
+        const compositeRecord: RecordRef = {
+            EntityID: 'ENT-OrderDetail',
+            RecordID: 'OrderID|100||LineNo|2',
+            Record: {},
+        };
+        const out = await applyOutputMapping({
+            outputMapping: { fields: { Discount: '$.discount' } },
+            result: { discount: 0.15 },
+            record: compositeRecord,
+            contextUser: USER,
+            provider,
+        });
+        expect(out.updatedRecord).toBe(true);
+        expect(created[0].sets).toEqual({ Discount: 0.15 });
+        expect(created[0].saved).toBe(true);
+    });
+
+    it('maps $run provenance to fields and child records', async () => {
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                fields: {
+                    ProcessRunID: '$run.ProcessRunID',
+                    PromptVersion: '$run.PromptVersionHash',
+                },
+                childRecord: {
+                    entity: 'AuditLog',
+                    parentField: 'ParentID',
+                    map: {
+                        RunID: '$run.ProcessRunID',
+                        ExecutedAt: '$run.ExecutedAt',
+                    },
+                },
+            },
+            result: { dummy: 1 },
+            record,
+            contextUser: USER,
+            provider,
+            run: {
+                ProcessRunID: 'RUN-123',
+                PromptVersionHash: 'HASH-XYZ',
+                ExecutedAt: '2026-09-21T00:00:00.000Z',
+            },
+        });
+        expect(out.updatedRecord).toBe(true);
+        expect(created[0].sets).toEqual({
+            ProcessRunID: 'RUN-123',
+            PromptVersion: 'HASH-XYZ',
+        });
+        expect(created[1].sets).toEqual({
+            ParentID: 'c1',
+            RunID: 'RUN-123',
+            ExecutedAt: '2026-09-21T00:00:00.000Z',
+        });
+    });
+
+    it('supports childRecords with array fan-out', async () => {
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                childRecords: [
+                    {
+                        entity: 'OrderLine',
+                        parentField: 'OrderID',
+                        fanOutRef: '$.items',
+                        map: {
+                            Sku: '$.sku',
+                            Qty: '$.quantity',
+                            TotalScore: 'parent.overallScore',
+                            RunID: '$run.ProcessRunID',
+                        },
+                    },
+                ],
+            },
+            result: {
+                overallScore: 99,
+                items: [
+                    { sku: 'ITEM-1', quantity: 2 },
+                    { sku: 'ITEM-2', quantity: 5 },
+                ],
+            },
+            record,
+            contextUser: USER,
+            provider,
+            run: { ProcessRunID: 'RUN-456' },
+        });
+        expect(out.createdChildIDs?.length).toBe(2);
+        expect(created.length).toBe(2);
+        expect(created[0].sets).toEqual({
+            OrderID: 'c1',
+            Sku: 'ITEM-1',
+            Qty: 2,
+            TotalScore: 99,
+            RunID: 'RUN-456',
+        });
+        expect(created[1].sets).toEqual({
+            OrderID: 'c1',
+            Sku: 'ITEM-2',
+            Qty: 5,
+            TotalScore: 99,
+            RunID: 'RUN-456',
+        });
+    });
+
+    it('dry-run previews fan-out child records in previewChildren without saving', async () => {
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                childRecords: [
+                    {
+                        entity: 'OrderLine',
+                        parentField: 'OrderID',
+                        fanOutRef: '$.items',
+                        map: { Sku: '$.sku', Qty: '$.quantity' },
+                    },
+                ],
+            },
+            result: {
+                items: [
+                    { sku: 'ITEM-A', quantity: 1 },
+                    { sku: 'ITEM-B', quantity: 3 },
+                ],
+            },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+        expect(out.dryRun).toBe(true);
+        expect(out.createdChildIDs).toBeUndefined();
+        expect(created.length).toBe(0);
+        expect(out.previewChildren).toEqual([
+            { OrderID: 'c1', Sku: 'ITEM-A', Qty: 1 },
+            { OrderID: 'c1', Sku: 'ITEM-B', Qty: 3 },
+        ]);
+    });
+
+    it('previews tags in dry-run mode under constrained and auto-grow', async () => {
+        const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockImplementation(async (text, _w, _mode, rootID) => {
+            if (text === 'Existing Tag') {
+                return { ID: 'tag-1', Name: 'Existing Tag', ParentID: rootID } as unknown as MJTagEntity;
+            }
+            if (text === 'Deep Tag') {
+                return { ID: 'tag-deep', Name: 'Deep Tag', ParentID: 'tag-1' } as unknown as MJTagEntity;
+            }
+            return null;
+        });
+        const mockGetTagByID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockImplementation((id: string) => {
+            if (id === 'tag-1') return { ID: 'tag-1', Name: 'Existing Tag', ParentID: 'root-1' } as unknown as MJTagEntity;
+            if (id === 'tag-deep') return { ID: 'tag-deep', Name: 'Deep Tag', ParentID: 'tag-1' } as unknown as MJTagEntity;
+            if (id === 'root-1') return { ID: 'root-1', Name: 'Root', ParentID: null } as unknown as MJTagEntity;
+            return undefined;
+        });
+        const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                tags: [
+                    {
+                        ref: '$.tagNames',
+                        rootTagId: 'root-1',
+                        growth: 'auto-grow',
+                        maxDepth: 1,
+                    },
+                ],
+            },
+            result: { tagNames: ['Existing Tag', 'Deep Tag', 'Brand New Tag'] },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+
+        expect(out.dryRun).toBe(true);
+        expect(out.previewTags?.length).toBe(3);
+        // Existing Tag is matched at depth 1 (under root-1), so valid
+        expect(out.previewTags?.[0]).toEqual({
+            tagText: 'Existing Tag',
+            resolvedTagID: 'tag-1',
+            resolvedTagName: 'Existing Tag',
+            matched: true,
+            created: false,
+            rootTagID: 'root-1',
+            depth: 1,
+            error: undefined,
+        });
+        // Deep Tag is matched at depth 2 (under tag-1 -> root-1), so exceeds maxDepth 1
+        expect(out.previewTags?.[1].matched).toBe(true);
+        expect(out.previewTags?.[1].depth).toBe(2);
+        expect(out.previewTags?.[1].error).toMatch(/exceeds maxDepth/);
+        // Brand New Tag is not matched, so under auto-grow it would be created at depth 1
+        expect(out.previewTags?.[2]).toEqual({
+            tagText: 'Brand New Tag',
+            matched: false,
+            created: true,
+            rootTagID: 'root-1',
+            depth: 1,
+            error: undefined,
+        });
+        expect(created.length).toBe(0);
+
+        mockResolveTag.mockRestore();
+        mockGetTagByID.mockRestore();
+        mockConfig.mockRestore();
+    });
+
+    it('creates TaggedItem records for resolved tags in non-dry-run mode', async () => {
+        const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue({
+            ID: 'tag-resolved-1',
+            Name: 'Resolved Tag',
+            ParentID: 'root-1',
+        } as unknown as MJTagEntity);
+        const mockGetTagByID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockReturnValue({
+            ID: 'tag-resolved-1',
+            Name: 'Resolved Tag',
+            ParentID: 'root-1',
+        } as unknown as MJTagEntity);
+        const mockCreateTaggedItem = vi.spyOn(TagEngine.Instance, 'CreateTaggedItem').mockResolvedValue({
+            ID: 'tagged-item-1',
+            PrimaryKey: CompositeKey.FromKeyValuePair('ID', 'tagged-item-1'),
+        } as unknown as MJTaggedItemEntity);
+        const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+        const { provider } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                tags: [
+                    {
+                        ref: '$.tag',
+                        rootTagId: 'root-1',
+                        growth: 'constrained',
+                    },
+                ],
+            },
+            result: { tag: 'Resolved Tag' },
+            record,
+            contextUser: USER,
+            provider,
+        });
+
+        expect(mockCreateTaggedItem).toHaveBeenCalledWith(
+            'tag-resolved-1',
+            'ENT-1',
+            'c1',
+            1.0,
+            USER
+        );
+        expect(out.createdTaggedItemIDs).toEqual(['tagged-item-1']);
+
+        mockResolveTag.mockRestore();
+        mockGetTagByID.mockRestore();
+        mockCreateTaggedItem.mockRestore();
+        mockConfig.mockRestore();
     });
 });

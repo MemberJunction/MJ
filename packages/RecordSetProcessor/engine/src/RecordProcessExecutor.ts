@@ -29,7 +29,8 @@ import { AgentRecordProcessor } from './processors/AgentRecordProcessor';
 import { InferProcessor } from './processors/InferProcessor';
 import { FieldRulesProcessor } from './processors/FieldRulesProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
-import { OutputMappingConfig } from './writeBack';
+import { OutputMappingConfig, RunProvenance } from './writeBack';
+import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 /** Options for executing a Record Process. */
 export interface RunRecordProcessOptions {
@@ -175,7 +176,8 @@ export class RecordProcessExecutor {
             if (!rp.PromptID) {
                 throw new Error(`Record Process '${rp.Name}': WorkType=Infer requires PromptID`);
             }
-            base = new InferProcessor(rp.PromptID, inputMapping);
+            const spec = rp.Configuration ? SafeJSONParse<DataFeatureSpec>(rp.Configuration) : undefined;
+            base = new InferProcessor(rp.PromptID, inputMapping, spec);
         } else {
             // Not a built-in work type — consult the pluggable registry. This is the open seam that
             // lets external packages (e.g. Predictive Studio's 'ML Model' scoring) register a processor
@@ -184,8 +186,18 @@ export class RecordProcessExecutor {
         }
 
         const outputMapping = rp.OutputMapping ? SafeJSONParse<OutputMappingConfig>(rp.OutputMapping) : undefined;
-        if (outputMapping && (outputMapping.fields || outputMapping.childRecord)) {
-            return new WriteBackProcessor(base, outputMapping, dryRun);
+        if (
+            outputMapping &&
+            (outputMapping.fields ||
+                outputMapping.childRecord ||
+                (outputMapping.childRecords && outputMapping.childRecords.length > 0) ||
+                (outputMapping.tags && outputMapping.tags.length > 0))
+        ) {
+            const run: RunProvenance = {
+                RecordProcessID: rp.ID,
+                PromptID: rp.PromptID ?? undefined,
+            };
+            return new WriteBackProcessor(base, outputMapping, dryRun, run);
         }
         return base;
     }

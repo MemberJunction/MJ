@@ -10,13 +10,30 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Process Context Section -->
+    <!-- Pipeline Provenance Section -->
     <mj-collapsible-panel
-        SectionKey="processContext"
-        SectionName="Process Context"
-        Icon="fa fa-database"
+        SectionKey="pipelineProvenance"
+        SectionName="Pipeline Provenance"
+        Icon="fa fa-project-diagram"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RecordProcessID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ConstraintHash"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -26,6 +43,34 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ProcessRunDetailID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="FeatureValueCacheID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Record Context Section -->
+    <mj-collapsible-panel
+        SectionKey="recordContext"
+        SectionName="Record Context"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -43,44 +88,54 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ComputedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Execution Status Section -->
+    <!-- Feature Details Section -->
     <mj-collapsible-panel
-        SectionKey="executionStatus"
-        SectionName="Execution Status"
-        Icon="fa fa-clock"
+        SectionKey="featureDetails"
+        SectionName="Feature Details"
+        Icon="fa fa-tag"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="FeatureName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Feature Values Section -->
+    <mj-collapsible-panel
+        SectionKey="featureValues"
+        SectionName="Feature Values"
+        Icon="fa fa-calculator"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="select"
+            FieldName="ValueText"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="StartedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="CompletedAt"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DurationMs"
+            FieldName="ValueNumeric"
             Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -88,33 +143,23 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="AttemptCount"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Execution Results Section -->
-    <mj-collapsible-panel
-        SectionKey="executionResults"
-        SectionName="Execution Results"
-        Icon="fa fa-file-alt"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ResultPayload"
-            Type="code"
+            FieldName="ValueDate"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ErrorMessage"
+            FieldName="ValueBoolean"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ValueJSON"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -122,17 +167,33 @@
 
     </mj-collapsible-panel>
 
-    <!-- Tracing and Logs Section -->
+    <!-- AI Insights Section -->
     <mj-collapsible-panel
-        SectionKey="tracingAndLogs"
-        SectionName="Tracing and Logs"
-        Icon="fa fa-search"
+        SectionKey="aIInsights"
+        SectionName="AI Insights"
+        Icon="fa fa-robot"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ActionExecutionLogID"
+            FieldName="Reasoning"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Confidence"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -141,11 +202,18 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="AIAgentRunID"
+            FieldName="PromptVersionHash"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AIPromptRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -177,35 +245,6 @@
     </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
-
-    <!-- ========================================
-         RELATED ENTITY PANELS
-         ======================================== -->
-
-    <!-- Feature Values Section -->
-    <mj-collapsible-panel
-        SectionKey="mJFeatureValues"
-        SectionName="Feature Values"
-        Icon="fa fa-history"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJFeatureValues')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Values','ProcessRunDetailID')"
-                [NewRecordValues]="NewRecordValues('MJ: Feature Values','ProcessRunDetailID')"
-                [AllowLoad]="IsSectionExpanded('mJFeatureValues')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJFeatureValues', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>

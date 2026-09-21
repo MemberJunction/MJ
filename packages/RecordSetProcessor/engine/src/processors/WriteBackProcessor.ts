@@ -12,7 +12,7 @@ import {
     RecordRef,
     RecordResult,
 } from '@memberjunction/record-set-processor-base';
-import { OutputMappingConfig, applyOutputMapping } from '../writeBack';
+import { OutputMappingConfig, RunProvenance, applyOutputMapping } from '../writeBack';
 
 /** Wraps a processor and applies output-mapping write-back to each successful result. */
 export class WriteBackProcessor implements IRecordProcessor {
@@ -22,11 +22,13 @@ export class WriteBackProcessor implements IRecordProcessor {
      * @param dryRun - When true, the inner work still runs but the write-back only computes a
      *   preview (no entity is saved / no child is created), so a dry-run of any wrapped work type
      *   reports its effect without mutating data. Mirrors `FieldRulesProcessor`'s dry-run.
+     * @param run - Optional run provenance information stamped on write-back operations.
      */
     constructor(
         private readonly inner: IRecordProcessor,
         private readonly outputMapping: OutputMappingConfig,
         private readonly dryRun: boolean = false,
+        private readonly run?: RunProvenance,
     ) {}
 
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
@@ -35,6 +37,12 @@ export class WriteBackProcessor implements IRecordProcessor {
             return result;
         }
         try {
+            const runProvenance: RunProvenance = {
+                ...this.run,
+                ProcessRunID: context.processRunID ?? this.run?.ProcessRunID,
+                AIPromptRunID: result.AIPromptRunID ?? this.run?.AIPromptRunID,
+                ExecutedAt: this.run?.ExecutedAt ?? new Date().toISOString(),
+            };
             const writeBack = await applyOutputMapping({
                 outputMapping: this.outputMapping,
                 result: result.ResultPayload,
@@ -42,6 +50,7 @@ export class WriteBackProcessor implements IRecordProcessor {
                 contextUser: context.contextUser,
                 provider: context.provider,
                 dryRun: this.dryRun,
+                run: runProvenance,
             });
             return { ...result, ResultPayload: { output: result.ResultPayload, writeBack } };
         } catch (e) {
