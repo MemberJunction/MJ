@@ -1,6 +1,6 @@
 /**
  * MemberJunction Conversations - CSS Custom Properties
- * Based on slack-style-agent-chat-v22.html prototype
+ * Based on the slack-style-agent-chat-v22.html prototype (removed in #4312; see git history at 00c5a6f86e)
  * These variables ensure consistent styling across all components
  *
  * Color tokens now reference MJ design tokens from _tokens.scss

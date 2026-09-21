@@ -1,0 +1,46 @@
+{
+  "id": "webresearch-payload-write-findings-01",
+  "agent": "Web Research Agent",
+  "tags": [
+    "payload-change",
+    "regression-watch",
+    "prompt-mandated-action"
+  ],
+  "description": "Findings must land in the payload rather than only in prose — or, per the Web Research prompt's 'combine multiple searches for comprehensive coverage', another search is a legitimate next step after a single summarized result .",
+  "input": {
+    "payload": {
+      "sources": [],
+      "findings": []
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Research grid-scale battery costs and record what you find."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Summarize Content succeeded for 2 sources: costs fell 18% year over year; utility-scale deployments doubled."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "taskComplete"
+      },
+      {
+        "kind": "payloadChange"
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Web Search"
+          }
+        ],
+        "allowAdditionalActions": true
+      }
+    ]
+  }
+}

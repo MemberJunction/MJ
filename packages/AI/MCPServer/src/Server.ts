@@ -71,6 +71,7 @@ import { send401Response } from './auth/WWWAuthenticate.js';
 // OAuth Proxy imports
 import { createOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
+import { resolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
 
 
 /*******************************************************************************
@@ -1071,43 +1072,26 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         // Build OAuth proxy configuration
                         oauthProxyBaseUrl = getResourceIdentifier();
 
-                        // Detect Azure AD v2.0 endpoints from issuer
-                        // Azure AD issuer: https://login.microsoftonline.com/{tenant}/v2.0
+                        // Derive the upstream OAuth endpoints from the provider's issuer.
                         // Cast to access provider properties (IAuthProvider interface)
                         const provider = upstreamProvider as {
                             issuer: string;
                             audience: string;
                             name: string;
                             clientId?: string;
+                            domain?: string;
                         };
-                        const issuer = provider.issuer;
-                        const isAzureAD = issuer?.includes('microsoftonline.com') || issuer?.includes('sts.windows.net');
-
-                        let authorizationEndpoint: string;
-                        let tokenEndpoint: string;
-
-                        if (isAzureAD) {
-                            // Azure AD v2.0 endpoints
-                            const baseUrl = issuer.replace(/\/v2\.0\/?$/, '');
-                            authorizationEndpoint = `${baseUrl}/oauth2/v2.0/authorize`;
-                            tokenEndpoint = `${baseUrl}/oauth2/v2.0/token`;
-                        } else {
-                            // Generic OIDC - assume standard paths (Auth0, Okta, etc.)
-                            // Most providers use /.well-known/openid-configuration but we need direct endpoints
-                            // Strip trailing slash from issuer to avoid double slashes in URL
-                            const issuerBase = issuer.replace(/\/+$/, '');
-                            authorizationEndpoint = `${issuerBase}/authorize`;
-                            tokenEndpoint = `${issuerBase}/oauth/token`;
-                        }
+                        const { flavor, authorizationEndpoint, tokenEndpoint } = resolveUpstreamOAuthEndpoints(provider);
 
                         // Build scopes for upstream - use standard OIDC scopes only
                         // Note: We don't include api://.../.default because that would cause
                         // AADSTS90009 "app requesting token for itself" when using a single app registration.
                         // The OAuth proxy only needs to authenticate the user, not access an API resource.
                         const upstreamScopes: string[] = ['openid', 'profile', 'email'];
-                        if (!isAzureAD) {
-                            // For non-Azure providers, we might need additional scopes
-                            // (Azure AD doesn't need offline_access for refresh tokens in v2.0)
+                        if (flavor === 'generic') {
+                            // Auth0/Okta need offline_access to get a refresh token.
+                            // Azure AD v2.0 returns one without it, and Cognito has no such scope at
+                            // all - asking for it makes the hosted UI reject the request as invalid_scope.
                             upstreamScopes.push('offline_access');
                         }
 
@@ -3315,78 +3299,86 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
         // Initialize database connection to discover dynamic tools
         const poolConfig = buildPoolConfig();
         const pool = new sql.ConnectionPool(poolConfig);
+        // Without this handler, a dropped idle connection crashes the process with an
+        // uncaught pool-level error instead of letting the pool recover.
+        pool.on('error', (err) => {
+            console.error('[ConnectionPool] Pool-level connection error (stale connection evicted):', err.message);
+        });
         await pool.connect();
 
-        const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
-        await setupSQLServerClient(sqlConfig);
+        try {
+            const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
+            await setupSQLServerClient(sqlConfig);
 
-        // Register all tools (they won't actually be added to server, just tracked)
-        // We need to use a dummy filter that includes everything for listing
-        const listingFilterOptions = { ...filterOptions };
-        activeFilterOptions = {}; // Temporarily clear filters to get all tool names
+            // Register all tools (they won't actually be added to server, just tracked)
+            // We need to use a dummy filter that includes everything for listing
+            const listingFilterOptions = { ...filterOptions };
+            activeFilterOptions = {}; // Temporarily clear filters to get all tool names
 
-        // Add built-in tools
-        registeredToolNames.push("Get_Entity_List");
-        registeredToolNames.push("Get_Single_Entity");
+            // Add built-in tools
+            registeredToolNames.push("Get_Entity_List");
+            registeredToolNames.push("Get_Single_Entity");
 
-        // Add agent run diagnostic tools
-        registeredToolNames.push("List_Recent_Agent_Runs");
-        registeredToolNames.push("Get_Agent_Run_Summary");
-        registeredToolNames.push("Get_Agent_Run_Step_Detail");
-        registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
+            // Add agent run diagnostic tools
+            registeredToolNames.push("List_Recent_Agent_Runs");
+            registeredToolNames.push("Get_Agent_Run_Summary");
+            registeredToolNames.push("Get_Agent_Run_Step_Detail");
+            registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
 
-        // Use system user for tool discovery
-        const systemUser = UserCache.Instance.GetSystemUser();
-        if (!systemUser) {
-            throw new Error('System user not found in UserCache');
-        }
-
-        // Load tools to populate registeredToolNames
-        await loadEntityToolsForListing(systemUser);
-        await loadAgentToolsForListing(systemUser);
-
-        // Close database connection
-        await pool.close();
-
-        // Apply filters to the list if specified
-        let toolsToShow = registeredToolNames;
-        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
-            activeFilterOptions = listingFilterOptions;
-            toolsToShow = registeredToolNames.filter(name => shouldIncludeTool(name, listingFilterOptions));
-        }
-
-        // Sort tools alphabetically
-        toolsToShow.sort();
-
-        console.log("\n=== Available MCP Tools ===\n");
-
-        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
-            console.log(`Showing ${toolsToShow.length} of ${registeredToolNames.length} tools (filtered)\n`);
-        } else {
-            console.log(`Total tools: ${toolsToShow.length}\n`);
-        }
-
-        // Group tools by prefix for better readability
-        const toolGroups: Record<string, string[]> = {};
-        for (const tool of toolsToShow) {
-            const prefix = tool.split('_')[0];
-            if (!toolGroups[prefix]) {
-                toolGroups[prefix] = [];
+            // Use system user for tool discovery
+            const systemUser = UserCache.Instance.GetSystemUser();
+            if (!systemUser) {
+                throw new Error('System user not found in UserCache');
             }
-            toolGroups[prefix].push(tool);
-        }
 
-        // Print grouped tools
-        for (const [prefix, tools] of Object.entries(toolGroups).sort()) {
-            console.log(`--- ${prefix} ---`);
-            for (const tool of tools) {
-                console.log(`  ${tool}`);
+            // Load tools to populate registeredToolNames
+            await loadEntityToolsForListing(systemUser);
+            await loadAgentToolsForListing(systemUser);
+
+            // Apply filters to the list if specified
+            let toolsToShow = registeredToolNames;
+            if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+                activeFilterOptions = listingFilterOptions;
+                toolsToShow = registeredToolNames.filter(name => shouldIncludeTool(name, listingFilterOptions));
             }
-            console.log();
-        }
 
-        console.log("Use --include and --exclude to filter tools when starting the server.");
-        console.log("Example: npx @memberjunction/ai-mcp-server --include \"Get_Users_*,Run_Agent\"");
+            // Sort tools alphabetically
+            toolsToShow.sort();
+
+            console.log("\n=== Available MCP Tools ===\n");
+
+            if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+                console.log(`Showing ${toolsToShow.length} of ${registeredToolNames.length} tools (filtered)\n`);
+            } else {
+                console.log(`Total tools: ${toolsToShow.length}\n`);
+            }
+
+            // Group tools by prefix for better readability
+            const toolGroups: Record<string, string[]> = {};
+            for (const tool of toolsToShow) {
+                const prefix = tool.split('_')[0];
+                if (!toolGroups[prefix]) {
+                    toolGroups[prefix] = [];
+                }
+                toolGroups[prefix].push(tool);
+            }
+
+            // Print grouped tools
+            for (const [prefix, tools] of Object.entries(toolGroups).sort()) {
+                console.log(`--- ${prefix} ---`);
+                for (const tool of tools) {
+                    console.log(`  ${tool}`);
+                }
+                console.log();
+            }
+
+            console.log("Use --include and --exclude to filter tools when starting the server.");
+            console.log("Example: npx @memberjunction/ai-mcp-server --include \"Get_Users_*,Run_Agent\"");
+        } finally {
+            // Guarantee the pool is released even if tool discovery throws — otherwise a
+            // failed listing leaks the connection pool for the rest of the CLI process.
+            await pool.close().catch(() => {});
+        }
 
     } catch (error) {
         console.error("Failed to list tools:", error);

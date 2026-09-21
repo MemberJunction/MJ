@@ -36,11 +36,30 @@ vi.mock('@memberjunction/core', () => {
         static FromID(id: string) {
             return { id };
         }
+        static FromURLSegment(_entity: unknown, id: string) {
+            return { id };
+        }
+        /** Mirrors the real contract: a bare value for a single-column key, `F1|v1||F2|v2` otherwise. */
+        static FromEntityRecord(entity: { PrimaryKeys: Array<{ Name: string }> }, record: Record<string, unknown>) {
+            const pairs = entity.PrimaryKeys.map((pk) => ({ FieldName: pk.Name, Value: String(record[pk.Name] ?? '') }));
+            return {
+                ToCompactURLSegment: () =>
+                    pairs.length === 1 ? pairs[0].Value : pairs.map((p) => `${p.FieldName}|${p.Value}`).join('||'),
+            };
+        }
     }
     return { Metadata, RunView, RunQuery, CompositeKey };
 });
 
-import { loadEntities, entityCount, loadQueries, queryCount, loadDashboard, loadEntityRecords } from '@/data/services/explorer';
+import {
+    LoadEntities,
+    EntityCount,
+    LoadQueries,
+    QueryCount,
+    LoadDashboard,
+    LoadDashboards,
+    LoadEntityRecords,
+} from '@/data/services/explorer';
 
 beforeEach(() => {
     state.entities = [];
@@ -49,7 +68,7 @@ beforeEach(() => {
     state.runView = () => ({ Success: true, Results: [] });
 });
 
-describe('loadEntities', () => {
+describe('LoadEntities', () => {
     beforeEach(() => {
         state.entities = [
             { Name: 'Zebra', DisplayName: 'Zebra', SchemaName: 'app', Description: 'z', AllowUserSearchAPI: true },
@@ -60,22 +79,22 @@ describe('loadEntities', () => {
     });
 
     it('excludes non-searchable and internal entities, sorted by display name', () => {
-        const list = loadEntities();
+        const list = LoadEntities();
         expect(list.map((e) => e.name)).toEqual(['Apple', 'Zebra']);
     });
 
     it('falls back displayName to the entity name and normalizes description to null', () => {
-        const apple = loadEntities().find((e) => e.name === 'Apple');
+        const apple = LoadEntities().find((e) => e.name === 'Apple');
         expect(apple?.displayName).toBe('Apple');
         expect(apple?.description).toBeNull();
     });
 
-    it('entityCount counts all entities (unfiltered)', () => {
-        expect(entityCount()).toBe(4);
+    it('EntityCount counts all entities (unfiltered)', () => {
+        expect(EntityCount()).toBe(4);
     });
 });
 
-describe('loadQueries', () => {
+describe('LoadQueries', () => {
     beforeEach(() => {
         state.queries = [
             { ID: 'q1', Name: 'Beta', Description: null, Status: 'Approved', CategoryInfo: { Name: 'Cat' } },
@@ -85,22 +104,22 @@ describe('loadQueries', () => {
     });
 
     it('returns only Approved queries, sorted by name', () => {
-        const list = loadQueries();
+        const list = LoadQueries();
         expect(list.map((q) => q.name)).toEqual(['Alpha', 'Beta']);
     });
 
     it('resolves category name from CategoryInfo (or null)', () => {
-        const byName = new Map(loadQueries().map((q) => [q.name, q]));
+        const byName = new Map(LoadQueries().map((q) => [q.name, q]));
         expect(byName.get('Beta')?.category).toBe('Cat');
         expect(byName.get('Alpha')?.category).toBeNull();
     });
 
-    it('queryCount counts only Approved queries', () => {
-        expect(queryCount()).toBe(2);
+    it('QueryCount counts only Approved queries', () => {
+        expect(QueryCount()).toBe(2);
     });
 });
 
-describe('loadDashboard', () => {
+describe('LoadDashboard', () => {
     function dashboardEntity(uiConfig: string): unknown {
         return {
             ID: 'd1',
@@ -130,7 +149,7 @@ describe('loadDashboard', () => {
                 ? { Success: true, Results: [{ ID: 'pt1', Name: 'View' }, { ID: 'pt2', Name: 'Query' }] }
                 : { Success: true, Results: [] };
 
-        const dash = await loadDashboard('d1');
+        const dash = await LoadDashboard('d1');
         expect(dash?.parts).toHaveLength(2);
         expect(dash?.parts.map((p) => p.kind)).toEqual(['view', 'query']);
         // Title comes from the panel, else the resolved type name.
@@ -142,24 +161,24 @@ describe('loadDashboard', () => {
 
     it('returns empty parts for malformed UIConfigDetails JSON', async () => {
         state.dashboard = dashboardEntity('{ this is not json');
-        const dash = await loadDashboard('d1');
+        const dash = await LoadDashboard('d1');
         expect(dash?.parts).toEqual([]);
         expect(dash?.desktopOnlyCount).toBe(0);
     });
 
     it('returns empty parts for empty UIConfigDetails', async () => {
         state.dashboard = dashboardEntity('');
-        const dash = await loadDashboard('d1');
+        const dash = await LoadDashboard('d1');
         expect(dash?.parts).toEqual([]);
     });
 
     it('returns null when the dashboard fails to load', async () => {
         state.dashboard = { ID: 'd1', Name: 'x', Description: null, UIConfigDetails: '', Load: async () => false };
-        expect(await loadDashboard('d1')).toBeNull();
+        expect(await LoadDashboard('d1')).toBeNull();
     });
 });
 
-describe('loadEntityRecords — card subtitle rendering of normalized date cells', () => {
+describe('LoadEntityRecords — card subtitle rendering of normalized date cells', () => {
     // Simple-read date columns arrive as real Date objects (normalized by
     // @memberjunction/core). Subtitles must render them readably instead of
     // falling through to String(v), which prints the verbose Date.toString().
@@ -170,6 +189,7 @@ describe('loadEntityRecords — card subtitle rendering of normalized date cells
             { Name: 'Name', IsPrimaryKey: false, DefaultInView: true, Type: 'nvarchar' },
             { Name: 'OrderDate', IsPrimaryKey: false, DefaultInView: true, Type: 'datetime' },
         ],
+        PrimaryKeys: [{ Name: 'ID' }],
         FirstPrimaryKey: { Name: 'ID' },
         NameField: { Name: 'Name' },
     };
@@ -185,7 +205,7 @@ describe('loadEntityRecords — card subtitle rendering of normalized date cells
             Results: [{ ID: 'r1', Name: 'Order One', OrderDate: orderDate }],
         });
 
-        const load = await loadEntityRecords('Test Orders');
+        const load = await LoadEntityRecords('Test Orders');
 
         expect(load?.rows[0].subtitle).toBe(orderDate.toLocaleDateString());
         expect(load?.rows[0].subtitle).not.toContain('GMT');
@@ -197,7 +217,7 @@ describe('loadEntityRecords — card subtitle rendering of normalized date cells
             Results: [{ ID: 'r1', Name: 'Order One', OrderDate: '2026-08-01T00:00:00.000Z' }],
         });
 
-        const load = await loadEntityRecords('Test Orders');
+        const load = await LoadEntityRecords('Test Orders');
 
         expect(load?.rows[0].subtitle).toBe('2026-08-01T00:00:00.000Z');
     });
@@ -208,8 +228,30 @@ describe('loadEntityRecords — card subtitle rendering of normalized date cells
             Results: [{ ID: 'r1', Name: 'Order One', OrderDate: null }],
         });
 
-        const load = await loadEntityRecords('Test Orders');
+        const load = await LoadEntityRecords('Test Orders');
 
         expect(load?.rows[0].subtitle).toBe('');
+    });
+});
+
+describe('LoadDashboards', () => {
+    it('asks for the entity by its real, MJ-prefixed name', async () => {
+        // The unprefixed name does not resolve in metadata, and `RunView` reports that by returning
+        // `Success: false` rather than throwing — which this function turns into an empty list. The
+        // visible symptom was "Dashboards · 0 available" on a deployment that had dashboards, with
+        // nothing in the UI to suggest a failure had happened at all.
+        const asked: string[] = [];
+        state.runView = (p) => {
+            asked.push(p.EntityName);
+            return { Success: true, Results: [{ ID: 'd1', Name: 'Ops', Description: null }] };
+        };
+        const dashboards = await LoadDashboards();
+        expect(asked).toEqual(['MJ: Dashboards']);
+        expect(dashboards).toEqual([{ id: 'd1', name: 'Ops', description: null }]);
+    });
+
+    it('returns an empty list rather than throwing when the query fails', async () => {
+        state.runView = () => ({ Success: false, Results: [] });
+        expect(await LoadDashboards()).toEqual([]);
     });
 });

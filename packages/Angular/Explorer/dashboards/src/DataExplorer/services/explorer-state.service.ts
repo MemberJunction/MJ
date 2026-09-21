@@ -451,9 +451,9 @@ export class ExplorerStateService {
 
     // Add entity breadcrumb if selected
     if (state.selectedEntityName) {
-      const entityInfo = this.metadata.Entities.find(e => e.Name === state.selectedEntityName);
+      const entityInfo = this.metadata.Entities.find(e => e.Name.toLowerCase() === state.selectedEntityName?.toLowerCase());
       breadcrumbs.push({
-        label: state.selectedEntityName,
+        label: entityInfo?.DisplayNameOrName || state.selectedEntityName,
         type: 'entity',
         entityName: state.selectedEntityName,
         icon: entityInfo?.Icon ? this.formatEntityIcon(entityInfo.Icon) : 'fa-solid fa-table'
@@ -879,28 +879,11 @@ export class ExplorerStateService {
    */
   private buildCompositeKeyForRecord(entityName: string, recordId: string): CompositeKey | null {
     if (!recordId) return null;
-
-    // If recordId contains '|', it's in concatenated format
-    if (recordId.includes('|')) {
-      try {
-        const compositeKey = new CompositeKey();
-        compositeKey.LoadFromConcatenatedString(recordId);
-        if (compositeKey.KeyValuePairs.length > 0) return compositeKey;
-      } catch {
-        // Fall through to entity-based lookup
-      }
-    }
-
-    // Plain value — look up entity primary key field(s) to construct the key
     const entityInfo = this.metadata.Entities.find(e => e.Name === entityName);
-    if (!entityInfo) return null;
-
-    const pkField = entityInfo.FirstPrimaryKey;
-    if (!pkField) return null;
-
-    const compositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs = [{ FieldName: pkField.Name, Value: recordId }];
-    return compositeKey;
+    // A plain value can only be resolved against the entity's real key column(s)
+    if (!entityInfo && !recordId.includes(CompositeKey.DefaultValueDelimiter)) return null;
+    const compositeKey = CompositeKey.FromURLSegment(entityInfo, recordId);
+    return compositeKey.KeyValuePairs.length > 0 ? compositeKey : null;
   }
 
   /**

@@ -196,7 +196,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     /** The DrawerCategoryID as a CompositeKey for the tree dropdown binding */
     public get DrawerCategoryIDAsKey(): CompositeKey | null {
-        return this.DrawerCategoryID ? CompositeKey.FromID(this.DrawerCategoryID) : null;
+        return this.DrawerCategoryID ? CompositeKey.FromID(this.DrawerCategoryID) : null; // first-pk-ok: DrawerCategoryID is a Query Categories row id — a core entity keyed by ID
     }
 
     constructor(
@@ -1036,10 +1036,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
         // Look up the entity's actual primary key field name from metadata
         const entity = this.metadata.Entities.find(e => e.Name === event.entityName);
-        const pkField = entity?.FirstPrimaryKey;
-        const pkFieldName = pkField?.Name || 'ID';
-
-        const compositeKey = new CompositeKey([{ FieldName: pkFieldName, Value: event.recordId }]);
+        // Bare value or "F1|v1||F2|v2" segment — resolved against the entity's real key column(s)
+        const compositeKey = CompositeKey.FromURLSegment(entity, event.recordId);
         this.navigationService.OpenEntityRecord(event.entityName, compositeKey);
     }
 
@@ -1074,8 +1072,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public onOpenQueryRecord(event: { queryId: string; queryName: string }): void {
         // Open the Query entity record using navigation service
-        const compositeKey = CompositeKey.FromID(event.queryId);
-        this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
+        this.navigationService.OpenEntityRecord('MJ: Queries', CompositeKey.FromID(event.queryId));
     }
 
     public onCompositionTokenClick(event: CompositionTokenClickEvent): void {

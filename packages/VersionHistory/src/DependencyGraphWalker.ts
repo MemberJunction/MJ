@@ -641,7 +641,7 @@ export class DependencyGraphWalker {
         if (rel.EntityKeyField && rel.EntityKeyField.trim().length > 0) {
             return rel.EntityKeyField;
         }
-        return parentEntity.FirstPrimaryKey.Name;
+        return parentEntity.FirstPrimaryKey.Name; // first-pk-ok: FK target — a relationship without an explicit EntityKeyField joins on the parent's single key column by design
     }
 
     /**
@@ -656,7 +656,7 @@ export class DependencyGraphWalker {
         if (fkField.RelatedEntityFieldName && fkField.RelatedEntityFieldName.trim().length > 0) {
             return fkField.RelatedEntityFieldName;
         }
-        return targetEntity.FirstPrimaryKey.Name;
+        return targetEntity.FirstPrimaryKey.Name; // first-pk-ok: FK target — a foreign key column without RelatedEntityFieldName references the target's single key column by design
     }
 
     /** Check if a field name matches a system/infrastructure FK pattern. */

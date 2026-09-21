@@ -32,6 +32,13 @@ export interface IAuthProvider {
   clientId?: string;
 
   /**
+   * Provider domain, where the provider hosts its OAuth endpoints somewhere other than its
+   * issuer (optional, used by the OAuth proxy). Cognito is the case that needs it: its issuer
+   * is the user-pool URL, but /authorize and /token live on the hosted-UI domain.
+   */
+  domain?: string;
+
+  /**
    * Validates that the provider configuration is complete and valid
    */
   validateConfig(): boolean;

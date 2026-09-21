@@ -6,6 +6,7 @@ import { MJQueryResolver, MJQuery_, MJQueryField_, MJQueryParameter_, MJQueryEnt
 import { GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
 import { MJQueryEntityServer } from '@memberjunction/core-entities-server';
+import { EscapeSQLString } from '@memberjunction/global';
 
 /**
  * Minimal shape of a query row returned by RunView lookups (plain object, not entity instance).
@@ -493,7 +494,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             // now make sure there is NO existing query by the same name in the specified category
             const existingQueryResult = await provider.RunView({
                 EntityName: 'MJ: Queries',
-                ExtraFilter: `Name='${input.Name}' AND CategoryID='${finalCategoryID}'` 
+                ExtraFilter: `Name='${EscapeSQLString(input.Name)}' AND CategoryID='${EscapeSQLString(finalCategoryID)}'`
             }, context.userPayload.userRecord);
             if (existingQueryResult.Success && existingQueryResult.Results?.length > 0) {
                 // we have a match! Let's return an error
@@ -590,7 +591,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             }
 
             const provider = GetReadWriteProvider(context.providers);    
-            const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+            const key = CompositeKey.FromID(ID); // first-pk-ok: deletes from MJ: Queries (core entity keyed by ID) — see DeleteRecord below
             
             // Provide default options if none provided
             const deleteOptions = options || {

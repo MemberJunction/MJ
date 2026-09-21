@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suppression &amp; Safety Center</title>
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-soft: #eef2fb;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; }
+  .kpi .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 800; }
+  .kpi .delta { font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--mj-text-muted); }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+
+  /* Send-time confirmation panel */
+  .warn-panel { border: 1px solid color-mix(in srgb, var(--mj-status-warning) 40%, transparent); background: var(--mj-status-warning-bg); border-radius: 10px; margin-bottom: 22px; overflow: hidden; }
+  .warn-panel .wp-head { padding: 14px 18px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid color-mix(in srgb, var(--mj-status-warning) 25%, transparent); }
+  .warn-panel .wp-head i { color: var(--mj-status-warning); font-size: 18px; }
+  .warn-panel .wp-head b { font-size: 14px; }
+  .warn-panel .wp-head span { display: block; font-size: 12.5px; color: var(--mj-text-secondary); }
+  .wp-body { padding: 4px 18px 14px; }
+  .skip-row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid color-mix(in srgb, var(--mj-status-warning) 18%, transparent); }
+  .skip-row:last-child { border-bottom: none; }
+  .skip-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); display:flex;align-items:center;justify-content:center; font-size:11px; font-weight:700; color:var(--mj-text-muted); }
+  .skip-name { font-weight: 600; font-size: 13px; flex: 0 0 170px; }
+  .skip-reason { flex: 1; font-size: 12.5px; }
+  .reason-tag { display: inline-flex; align-items:center; gap:5px; padding: 2px 9px; border-radius: 999px; font-size: 10.5px; font-weight: 700; }
+  .reason-permanent { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+  .reason-temp { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent); }
+  .wp-actions { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-top: 1px solid color-mix(in srgb, var(--mj-status-warning) 25%, transparent); background: color-mix(in srgb, var(--mj-status-warning-bg) 60%, white); }
+  .wp-actions .count { font-size: 12.5px; color: var(--mj-text-secondary); }
+  .wp-actions .count b { color: var(--mj-status-warning); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); padding: 10px 18px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  td { padding: 11px 18px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 13px; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Constituent safety badge on a record form */
+  .form-preview { border: 1px dashed var(--mj-border-default); border-radius: 10px; padding: 16px; background: var(--mj-bg-surface-card); }
+  .form-preview .fp-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--mj-text-muted); font-weight: 700; margin-bottom: 10px; }
+  .record-header { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 8px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+  .record-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--mj-bg-surface-sunken); display:flex;align-items:center;justify-content:center; font-weight: 700; color: var(--mj-text-muted); }
+  .record-name { font-weight: 700; font-size: 15px; }
+  .record-sub { font-size: 12px; color: var(--mj-text-secondary); }
+  .safety-badge { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--mj-status-error-bg); color: var(--mj-status-error); border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, transparent); }
+
+  .audit-feed { padding: 4px 0; }
+  .audit-row { display: flex; gap: 12px; padding: 11px 18px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 12.5px; }
+  .audit-row:last-child { border-bottom: none; }
+  .audit-row i { color: var(--mj-text-muted); margin-top: 2px; }
+  .audit-row .who { font-weight: 600; }
+  .audit-row .when { color: var(--mj-text-muted); font-size: 11px; margin-left: auto; white-space: nowrap; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-cube"></i> MJ Explorer</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-users"></i> Members</div>
+    <div class="nav-item"><i class="fa-solid fa-heart-pulse"></i> Data Health</div>
+    <div class="nav-item"><i class="fa-solid fa-sitemap"></i> Federation &amp; Chapters</div>
+    <div class="nav-item active"><i class="fa-solid fa-shield-halved"></i> Suppression &amp; Safety</div>
+    <div class="nav-item"><i class="fa-solid fa-eye"></i> Data Access Sentinel</div>
+    <div class="nav-section">Configuration</div>
+    <div class="nav-item"><i class="fa-solid fa-table-list"></i> Entities</div>
+    <div class="nav-item"><i class="fa-solid fa-lock"></i> Permissions</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-shield-halved"></i> Suppression &amp; Safety Center</h1>
+        <div class="sub">Every send — human, workflow, or agent-initiated — checks this list first</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn"><i class="fa-solid fa-file-import"></i> Import external list</button>
+        <button class="btn btn-primary"><i class="fa-solid fa-plus"></i> Add suppression</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Active suppressions</div><div class="value">1,842</div><div class="delta">across all channels</div></div>
+        <div class="kpi"><div class="label">Blocked this month</div><div class="value">37</div><div class="delta">sends stopped before going out</div></div>
+        <div class="kpi"><div class="label">Overrides granted</div><div class="value">2</div><div class="delta">both justified &amp; logged</div></div>
+        <div class="kpi"><div class="label">Bounce auto-suppressed</div><div class="value">614</div><div class="delta">no manual list-scrubbing</div></div>
+      </div>
+
+      <!-- Send-time confirmation, the centerpiece scenario -->
+      <div class="warn-panel">
+        <div class="wp-head">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <div>
+            <b>Before you send: 3 of 612 recipients in "MA Chapter — Fall Renewal" are suppressed</b>
+            <span>These recipients will be skipped automatically. Review below, or override with a reason.</span>
+          </div>
+        </div>
+        <div class="wp-body">
+          <div class="skip-row">
+            <div class="skip-avatar">EH</div>
+            <div class="skip-name">Eleanor Hastings</div>
+            <div class="skip-reason"><span class="reason-tag reason-permanent">Deceased</span> — flagged 2026-06-02, source: family notification</div>
+          </div>
+          <div class="skip-row">
+            <div class="skip-avatar">RC</div>
+            <div class="skip-name">Robert Chen</div>
+            <div class="skip-reason"><span class="reason-tag reason-permanent">Requested No Contact</span> — flagged 2026-03-11 by member, all channels</div>
+          </div>
+          <div class="skip-row">
+            <div class="skip-avatar">JP</div>
+            <div class="skip-name">Jamie Park</div>
+            <div class="skip-reason"><span class="reason-tag reason-temp">Bounced — Hard</span> — auto-detected from SendGrid webhook, 2026-08-19</div>
+          </div>
+        </div>
+        <div class="wp-actions">
+          <div class="count">Sending to <b>609</b> of 612 — 3 will be skipped and logged</div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn" style="font-size:12px; padding:6px 12px;">Override 3 with justification</button>
+            <button class="btn btn-primary" style="font-size:12px; padding:6px 12px;">Send to 609</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Constituent safety badge in context -->
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-id-card"></i> Constituent Safety Badge — as seen on a record form</h2></div>
+        <div style="padding:18px;">
+          <div class="form-preview">
+            <div class="fp-label">Contact Record — Eleanor Hastings</div>
+            <div class="record-header">
+              <div class="record-avatar">EH</div>
+              <div>
+                <div class="record-name">Eleanor Hastings</div>
+                <div class="record-sub">Member since 2003 · Northeast Region · Massachusetts Chapter</div>
+              </div>
+              <div class="safety-badge"><i class="fa-solid fa-ban"></i> Deceased — do not contact</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-list-check"></i> Active Suppressions</h2><span style="font-size:11.5px;color:var(--mj-text-muted)">1,842 total · showing 5</span></div>
+        <table>
+          <thead><tr><th>Record</th><th>Reason</th><th>Source</th><th>Channels blocked</th><th>Since</th></tr></thead>
+          <tbody>
+            <tr><td>Eleanor Hastings</td><td><span class="reason-tag reason-permanent">Deceased</span></td><td>Manual (family notification)</td><td>All</td><td>2026-06-02</td></tr>
+            <tr><td>Robert Chen</td><td><span class="reason-tag reason-permanent">Requested No Contact</span></td><td>Manual (member request)</td><td>All</td><td>2026-03-11</td></tr>
+            <tr><td>Jamie Park</td><td><span class="reason-tag reason-temp">Bounced — Hard</span></td><td>Bounce webhook (SendGrid)</td><td>Email only</td><td>2026-08-19</td></tr>
+            <tr><td>Whitmore Legal Estate</td><td><span class="reason-tag reason-permanent">Litigation Hold</span></td><td>Manual (counsel)</td><td>All</td><td>2026-07-30</td></tr>
+            <tr><td>Sasha Ortiz</td><td><span class="reason-tag reason-temp">Relationship Ended</span></td><td>Manual (HR offboarding)</td><td>Email, SMS</td><td>2026-05-15</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-clock-rotate-left"></i> Override Audit Trail</h2></div>
+        <div class="audit-feed">
+          <div class="audit-row"><i class="fa-solid fa-user-check"></i><span><span class="who">Priya Nair</span> overrode the suppression on <b>Sasha Ortiz</b> — "confirmed with member directly, resuming email only for event logistics"</span><span class="when">2026-08-28 · 4:12 PM</span></div>
+          <div class="audit-row"><i class="fa-solid fa-user-check"></i><span><span class="who">Dev Patel</span> overrode the suppression on <b>Whitmore Legal Estate</b> — "counsel approved a single factual reply, no marketing content"</span><span class="when">2026-08-02 · 9:47 AM</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

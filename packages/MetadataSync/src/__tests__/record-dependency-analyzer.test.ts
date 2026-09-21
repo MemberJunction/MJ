@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { RecordDependencyAnalyzer } from '../lib/record-dependency-analyzer';
+import { RecordDependencyAnalyzer, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
 import type { RecordData } from '../lib/sync-engine';
 
 /**
@@ -46,6 +46,47 @@ describe('RecordDependencyAnalyzer.flattenFileRecords', () => {
     ];
     const flattened = analyzer.flattenFileRecords(records, 'MJ: Component Registries');
     expect(flattened).toHaveLength(2);
+  });
+
+  it('assigns the same graphId to a JSON root and its nested relatedEntities', () => {
+    const records: RecordData[] = [
+      {
+        fields: { Name: 'Issue Portal Magic Link' },
+        primaryKey: { ID: 'action-1' },
+        relatedEntities: {
+          'MJ: Action Params': [
+            { fields: { Name: 'SessionID', ActionID: '@parent:ID' }, primaryKey: { ID: 'param-1' } },
+            { fields: { Name: 'MagicLinkToken', ActionID: '@parent:ID' }, primaryKey: { ID: 'param-2' } },
+          ],
+        },
+      },
+      {
+        fields: { Name: 'Send Secure Message' },
+        primaryKey: { ID: 'action-2' },
+        relatedEntities: {
+          'MJ: Action Params': [
+            { fields: { Name: 'ThreadID', ActionID: '@parent:ID' }, primaryKey: { ID: 'param-3' } },
+          ],
+        },
+      },
+    ];
+    const flattened = analyzer.flattenFileRecords(records, 'MJ: Actions');
+    const actions = flattened.filter(r => r.entityName === 'MJ: Actions');
+    const params = flattened.filter(r => r.entityName === 'MJ: Action Params');
+    expect(actions).toHaveLength(2);
+    expect(params).toHaveLength(3);
+    expect(new Set(actions.map(a => a.graphId)).size).toBe(2);
+    const graphA = actions[0].graphId;
+    const graphB = actions[1].graphId;
+    expect(params.filter(p => p.graphId === graphA)).toHaveLength(2);
+    expect(params.filter(p => p.graphId === graphB)).toHaveLength(1);
+    const grouped = groupRecordsByGraphId(flattened);
+    expect(grouped.size).toBe(2);
+    expect(grouped.get(graphA)?.map(r => r.entityName)).toEqual([
+      'MJ: Actions',
+      'MJ: Action Params',
+      'MJ: Action Params',
+    ]);
   });
 
   it('throws when a non-delete record is missing fields', () => {

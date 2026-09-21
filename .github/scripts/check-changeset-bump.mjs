@@ -51,11 +51,37 @@ const LINE_BRANCH = /(?:^|\/)lts\/[^/]+$/;
 const DB_TRIGGERS = [
     { label: 'migration', pattern: /^migrations\/v[0-9]+\/.+\.sql$/ },
     { label: 'repeatable migration', pattern: /^migrations\/R__.+\.sql$/ },
-    { label: 'metadata', pattern: /^metadata\/.+/ },
+    // Authoring docs (CLAUDE.md / README.md) under metadata/ are read by people, never by
+    // `mj sync push`, so they become no migration. Other .md files there (prompt templates
+    // pulled in via @file:) DO ship, which is why only these two names are excluded.
+    { label: 'metadata', pattern: /^metadata\/(?!(?:.+\/)?(?:CLAUDE|README)\.md$).+/ },
 ];
 const CHANGESET_FILE = /^\.changeset\/(?!README\.md$)[^/]+\.md$/;
 /** Bump levels a changeset entry may declare, worst first. */
 const LEVELS = ['major', 'minor', 'patch'];
+
+/**
+ * Phrases that mean the changeset is describing its OWN earlier wording rather than the shipped
+ * behaviour. Changesets are concatenated into the published changelog verbatim, so an editorial
+ * trail ("this paragraph originally warned…") ships to readers who never saw the earlier draft.
+ *
+ * Deliberately narrow: each pattern requires a self-reference (`this paragraph`, `this changeset`,
+ * `as originally written`) rather than matching bare phrases like "no longer true", which is
+ * legitimate release-note language about the SOFTWARE. Anchoring on the self-reference is what
+ * keeps this from firing on honest prose. Added after review of PR #4275.
+ */
+const SELF_NARRATION = [
+    /\bthis (?:paragraph|changeset|note|entry|section) (?:originally|previously|earlier|at first)\b/i,
+    /\b(?:as|was) originally (?:written|worded|drafted|phrased)\b/i,
+    /\ban? (?:earlier|previous) (?:draft|version) of this\b/i,
+];
+
+/** The changeset body — everything after the closing front-matter fence. */
+function bodyOf(lines) {
+    const start = lines.indexOf('---');
+    const end = start === -1 ? -1 : lines.indexOf('---', start + 1);
+    return end === -1 ? '' : lines.slice(end + 1).join('\n');
+}
 
 /**
  * Runs git with two invariants this script depends on:
@@ -236,7 +262,7 @@ function bumpEntries(path) {
             entries.push({ pkg: match[1], level: match[2] });
         }
     }
-    return { entries, malformed: entries.length === 0 ? 'no package entries' : null };
+    return { entries, body: bodyOf(lines), malformed: entries.length === 0 ? 'no package entries' : null };
 }
 
 const { base, onLine } = parseArgs(process.argv.slice(2));
@@ -266,10 +292,18 @@ if (changesets.length === 0) {
 const parsed = changesets.map((path) => ({ path, ...bumpEntries(path) }));
 
 const violations = [];
-for (const { path, entries, malformed } of parsed) {
+for (const { path, entries, body, malformed } of parsed) {
     if (malformed) {
         violations.push({ path, reason: `could not read bump entries: ${malformed}` });
         continue;
+    }
+    const narration = SELF_NARRATION.find((pattern) => pattern.test(body ?? ''));
+    if (narration) {
+        violations.push({
+            path,
+            reason: 'describes its own earlier wording — changesets ship to the changelog verbatim, '
+                + 'so state what the software does now instead of how this note used to read',
+        });
     }
     for (const { pkg, level } of entries) {
         if (!LEVELS.includes(level)) {

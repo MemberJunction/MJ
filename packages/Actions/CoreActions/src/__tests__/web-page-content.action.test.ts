@@ -5,6 +5,10 @@
  * reassigned `response` on every attempt without draining the one it was replacing. Under
  * Node's native `fetch` (undici), each unconsumed response body pins a connection out of the
  * keep-alive pool until GC finalizes it.
+ *
+ * The 2026-09-05 audit (Round 13) found a THIRD, still-undrained branch in this same file: the
+ * content-too-large guard, which fires on an ordinary 2xx response (not just an error status) —
+ * a more routine trigger than the two Round 12 branches above.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
@@ -73,6 +77,26 @@ describe('WebPageContentAction — response body draining', () => {
         expect(result.ResultCode).toBe('FETCH_FAILED');
         // One drain: the top-level `!response.ok` branch. shouldRetry(404) is false, so
         // fetchWithRetry's own retry-branch drain never fires for this status.
+        expect(drainResponseBodyMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('drains the response body before returning CONTENT_TOO_LARGE on an ordinary 2xx response (Round 13)', async () => {
+        const headers = new Map<string, string>([
+            ['content-type', 'text/html'],
+            ['content-length', String(20 * 1024 * 1024)], // 20MB, over the 10MB MAX_CONTENT_SIZE
+        ]);
+        safeFetchMock.mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            headers: { get: (name: string) => headers.get(name) ?? null },
+        });
+        const action = new TestableWebPageContentAction();
+
+        const result = await action.RunForTest(paramsFor({ URL: 'https://example.com/huge-page' }));
+
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('CONTENT_TOO_LARGE');
         expect(drainResponseBodyMock).toHaveBeenCalledTimes(1);
     });
 

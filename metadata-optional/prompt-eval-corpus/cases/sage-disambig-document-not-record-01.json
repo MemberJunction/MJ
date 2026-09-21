@@ -1,0 +1,29 @@
+{
+  "id": "sage-disambig-document-not-record-01",
+  "agent": "Sage",
+  "tags": [
+    "disambiguation"
+  ],
+  "description": "The mirror: a narrative deliverable is a Document, not a Record. Both directions must hold or the model has a bias, not an understanding.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Draft a two-page onboarding guide for new hires and save it as a document."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Create Document"
+      }
+    ],
+    "allowAdditionalActions": true,
+    "forbiddenActions": [
+      "Create Record"
+    ]
+  }
+}

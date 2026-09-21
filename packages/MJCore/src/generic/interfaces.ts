@@ -705,6 +705,12 @@ export interface IMetadataProvider {
 
     get CurrentUser(): UserInfo
 
+    /**
+     * Refreshes CurrentUser and its role assignments from the server,
+     * updating cached metadata in place.
+     */
+    RefreshCurrentUser?(): Promise<UserInfo | null>;
+
     get Roles(): RoleInfo[]
 
     get RowLevelSecurityFilters(): RowLevelSecurityFilterInfo[]
@@ -842,6 +848,23 @@ export interface IMetadataProvider {
     GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
 
     /**
+     * Checks whether an entity record name is currently available in the in-memory LRU cache.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns True if the record name is cached in memory, false otherwise
+     */
+    HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean;
+
+    /**
+     * Retrieves an entity record name from the in-memory LRU cache if already cached.
+     * Returns undefined immediately when not cached and will NEVER initiate a database lookup.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns The cached display name, or undefined if not in cache
+     */
+    GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined;
+
+    /**
      * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
      * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
      * @param entityName - The name of the entity
@@ -858,9 +881,18 @@ export interface IMetadataProvider {
 
     Refresh(providerToUse?: IMetadataProvider): Promise<boolean>
 
-    RefreshIfNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
+    /**
+     * @param bypassMinCheckInterval - When true, skips the minimum-interval throttle between
+     * staleness checks. Event-driven callers pass true: they hold positive evidence that a
+     * metadata member entity was just written, and the throttle would otherwise answer "fresh"
+     * for any check arriving within the window of the previous one.
+     */
+    RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean>
 
-    CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
+    /**
+     * @param bypassMinCheckInterval - See {@link RefreshIfNeeded}.
+     */
+    CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean>
 
     get LocalStorageProvider(): ILocalStorageProvider
 

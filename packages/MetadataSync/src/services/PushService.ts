@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import chalk from 'chalk';
-import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
@@ -14,34 +14,52 @@ import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
-import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-dependency-analyzer';
+import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
+import { GraphProviderPool, GraphSettleOutcome, probeIndependentInstances } from '../lib/graph-provider-pool';
+import {
+  PushWriteMode,
+  resolveDirectoryMode,
+  graphBatchSizeFor,
+  isolatedModeWarning,
+  unusedBatchSizeWarning,
+} from '../lib/push-write-mode';
+import { CommittedWrite, PushAbortedError, describeCommitFailure, describeRollbackOutcome } from '../lib/push-outcome';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
 import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
+import { resolveCollectionRelationship } from '../lib/collection-resolver';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
-// Configuration for parallel processing.
-// The side-effect-as-data pattern (processFlattenedRecord returns mutations instead of
-// mutating shared state) makes parallel execution safe from a sync-engine perspective.
-// However, entity Save() overrides (e.g., MJActionEntityServer, MJAIPromptEntityServer)
-// may start transactions, do check-then-create patterns, or interact with shared singletons
-// that assume sequential execution. Default stays at 1 for safety; users can opt in to
-// higher values via --parallel-batch-size after verifying their entity subclasses are safe.
-const PARALLEL_BATCH_SIZE = 1;
+// Atomic pushes (the default) run one JSON-root graph at a time on the host provider, inside
+// the push transaction. Non-atomic pushes run sibling graphs in parallel on independent
+// provider instances; nested relatedEntities always share the root's provider.
+// See lib/push-write-mode.ts.
 
 export interface PushOptions {
   dir?: string;
   dryRun?: boolean;
   verbose?: boolean;
   noValidate?: boolean;
-  parallelBatchSize?: number; // Number of records to process in parallel (default: 10)
+  /**
+   * JSON-root graphs to run at once in a directory using isolated transactions (default: 10).
+   * Ignored, with a warning, when no directory in the push uses them.
+   */
+  parallelBatchSize?: number;
+  /**
+   * Force isolated transactions on or off for every entity directory in this push, overriding
+   * `push.isolatedTransactions` in every `.mj-sync.json`. Undefined: each directory decides.
+   * true: each JSON-root graph gets its own connection and commits as it saves (not rolled back).
+   * false: everything runs in the one push transaction, one graph at a time.
+   */
+  isolatedTransactions?: boolean;
   include?: string[]; // Only process these directories (whitelist, supports patterns)
   exclude?: string[]; // Skip these directories (blacklist, supports patterns)
   deleteDbOnly?: boolean; // Delete database-only records that reference records being deleted
   incremental?: boolean;  // Skip files whose checksum hasn't changed since last push
+  allowBulkDelete?: boolean; // Allow authoritative collection to exceed maxImpliedDeletePercent
 }
 
 /**
@@ -156,6 +174,70 @@ interface ProcessRecordResult {
   warnings?: string[];
 }
 
+/** Everything one push run needs, passed between the phase helpers. */
+interface PushRun {
+  entityDirs: string[];
+  deletionAudit: DeletionAudit | null;
+  options: PushOptions;
+  fileBackupManager: FileBackupManager;
+  callbacks?: PushCallbacks;
+  configDir: string;
+}
+
+/** One JSON file's graphs, run level by level. */
+interface FileGraphRun {
+  filePath: string;
+  entityDir: string;
+  entityConfig: EntityConfig;
+  options: PushOptions;
+  callbacks?: PushCallbacks;
+  batchContext: BatchContextIndex;
+  levels: FlattenedRecord[][];
+  /** Applies one record result to the directory counters. */
+  applyResult: (result: ProcessRecordResult) => void;
+  /** Record errors counted so far in this directory. */
+  errorCount: () => number;
+}
+
+type GraphRecordSuccess = {
+  success: true;
+  result: ProcessRecordResult;
+  record: FlattenedRecord;
+  graphId: string;
+  /** The graph's provider was at depth 0 after this save, so in isolated mode the write is committed. */
+  settled: boolean;
+};
+type GraphRecordFailure = { success: false; error: unknown; record: FlattenedRecord; graphId: string };
+type GraphRecordOutcome = GraphRecordSuccess | GraphRecordFailure;
+
+function emptyPushTotals(): EntityPushResult {
+  return { created: 0, updated: 0, unchanged: 0, deleted: 0, skipped: 0, deferred: 0, errors: 0 };
+}
+
+function addPushTotals(totals: EntityPushResult, result: EntityPushResult): void {
+  totals.created += result.created;
+  totals.updated += result.updated;
+  totals.unchanged += result.unchanged;
+  totals.deleted += result.deleted;
+  totals.skipped += result.skipped;
+  totals.deferred += result.deferred;
+  totals.errors += result.errors;
+}
+
+/** The status a committed write is reported with, or undefined when the result wrote nothing. */
+function committedStatusOf(result: ProcessRecordResult): CommittedWrite['status'] | undefined {
+  if (result.isDuplicate || result.isDeletedRecord) {
+    return undefined;
+  }
+  if (result.status === 'updated') {
+    return 'updated';
+  }
+  if (result.status === 'created' || result.status === 'deferred') {
+    return 'created';
+  }
+  return undefined;
+}
+
 export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
@@ -166,6 +248,23 @@ export class PushService {
   private deferredRecords: DeferredRecord[] = [];
   private stateManager: SyncStateManager | undefined;
   private syncMetadataEngine: SyncMetadataEngine;
+  private confirmedCollections: Set<string> = new Set<string>();
+  /** Write mode per entity directory, resolved once at the start of the push. */
+  private directoryModes: Map<string, PushWriteMode> = new Map();
+  /** The directory being processed right now, and how it writes. */
+  private writeMode: PushWriteMode = 'shared';
+  private graphBatchSize = 1;
+  /** Counts so far, so a failed push can still report what it did. */
+  private runningTotals: EntityPushResult = emptyPushTotals();
+  /** The SQL log for this run, when one is being written. */
+  private sqlLogFilePath: string | undefined;
+  /** Non-atomic mode: creates and updates that were committed outside the push transaction. */
+  private committedWrites: CommittedWrite[] = [];
+  /** Incremental state, applied only after the push commits. Keyed by path relative to the sync root. */
+  private pendingChecksums: Map<string, string> = new Map();
+  private pushedEntityDirs: string[] = [];
+  /** Errors whose record was already sent to onRecordError, so a caller does not report it twice. */
+  private reportedRecordErrors = new WeakSet<Error>();
 
   constructor(syncEngine: SyncEngine, contextUser: UserInfo, stateManager?: SyncStateManager) {
     this.syncEngine = syncEngine;
@@ -275,9 +374,15 @@ export class PushService {
       throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
     }
 
-    // Reset deferred tracking for this push operation
+    // Reset per-push tracking
     this.deferredFileWrites.clear();
     this.deferredRecords = [];
+    this.committedWrites = [];
+    this.pendingChecksums.clear();
+    this.pushedEntityDirs = [];
+    this.directoryModes.clear();
+    this.runningTotals = emptyPushTotals();
+    this.sqlLogFilePath = undefined;
     
     const fileBackupManager = new FileBackupManager();
     
@@ -293,7 +398,6 @@ export class PushService {
     if (this.syncConfig?.push?.autoCreateMissingRecords && !options.dryRun) {
       callbacks?.onWarn?.('\n🔧 WARNING: autoCreateMissingRecords is enabled - Missing records with primaryKey will be created\n');
     }
-    
     if (options.verbose) {
       callbacks?.onLog?.(`Original working directory: ${configManager.getOriginalCwd()}`);
       callbacks?.onLog?.(`Config directory (with dir option): ${configDir}`);
@@ -303,7 +407,8 @@ export class PushService {
     }
     
     const sqlLogger = new SQLLogger(this.syncConfig);
-    const transactionManager = new TransactionManager(sqlLogger);
+    // The push transaction lives on the same provider every atomic save runs on.
+    const transactionManager = new TransactionManager(sqlLogger, this.hostProvider());
     
     if (options.verbose) {
       callbacks?.onLog?.(`SQLLogger enabled status: ${sqlLogger.enabled}`);
@@ -313,57 +418,8 @@ export class PushService {
     let sqlLoggingSession: SqlLoggingSession | null = null;
     
     try {
-      // Initialize SQL logger if enabled and not dry-run
-      if (sqlLogger.enabled && !options.dryRun) {
-        const provider = Metadata.Provider as GenericDatabaseProvider; // global-provider-ok: metadata sync operates on the configured provider only
-        
-        if (options.verbose) {
-          callbacks?.onLog?.(`SQL logging enabled: ${sqlLogger.enabled}`);
-          callbacks?.onLog?.(`Provider type: ${provider?.constructor?.name || 'Unknown'}`);
-          callbacks?.onLog?.(`Has CreateSqlLogger: ${typeof provider?.CreateSqlLogger === 'function'}`);
-        }
-        
-        if (provider && typeof provider.CreateSqlLogger === 'function') {
-          // Generate filename with timestamp
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-          const filename = this.syncConfig?.sqlLogging?.formatAsMigration
-            ? `MetadataSync_Push_${timestamp}.sql`
-            : `push_${timestamp}.sql`;
+      sqlLoggingSession = await this.startSqlLogging(sqlLogger, options, configDir, callbacks);
 
-          // Use .sql-log-push directory in the config directory (where sync was initiated)
-          const outputDir = path.join(configDir, this.syncConfig?.sqlLogging?.outputDirectory || './sql-log-push');
-          const filepath = path.join(outputDir, filename);
-
-          // Ensure the directory exists
-          await fs.ensureDir(path.dirname(filepath));
-
-          // Create the SQL logging session
-          sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
-            formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
-            description: 'MetadataSync push operation',
-            statementTypes: "mutations",
-            prettyPrint: true,
-            // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
-            // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
-            filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
-            filterType: this.syncConfig?.sqlLogging?.filterType,
-            verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
-            // Without these the logger rewrites the CORE schema to ${flyway:defaultSchema}, which
-            // Skyway binds to the APP schema in an Open App — see MJ#3618. Undefined in MJ's own
-            // repo, where the single-schema default is already correct.
-            schemaPlaceholders: resolveSqlLoggingSchemaPlaceholders(this.syncConfig),
-          });
-          
-          if (options.verbose) {
-            callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
-          }
-        } else {
-          if (options.verbose) {
-            callbacks?.onWarn?.('SQL logging requested but provider does not support it');
-          }
-        }
-      }
-      
       // Find entity directories to process
       // Note: If options.dir is specified, configDir already points to that directory
       // So we don't need to pass it as specificDir
@@ -380,33 +436,10 @@ export class PushService {
         throw new Error('No entity directories found');
       }
 
-      // Preload entities and cache files.
-      // We pass the SyncEngine's provider explicitly rather than reaching for
-      // Metadata.Provider — `mj sync` is single-process so they resolve to the
-      // same instance today, but routing through SyncEngine keeps the wiring
-      // self-consistent and makes future provider plumbing trivial.
-      // Preload is internal plumbing — emit its progress only in verbose mode so a
-      // normal run jumps straight from validation to per-directory results.
-      if (options.verbose) {
-        callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
-      }
-      this.syncMetadataEngine.setEntityDirs(entityDirs);
-      await this.syncMetadataEngine.Config(true, this.contextUser, this.syncEngine.getProvider());
-      for (const warning of this.syncMetadataEngine.drainWarnings()) {
-        callbacks?.onWarn?.(`   ⚠️  ${warning}`);
-      }
-      if (options.verbose) {
-        const delegations = this.syncMetadataEngine.getDelegationSummary();
-        if (delegations.length > 0) {
-          const donorCount = new Set(delegations.map(d => d.engineClassName)).size;
-          callbacks?.onLog?.(`   ↪ Reused in-memory caches for ${delegations.length} ${delegations.length === 1 ? 'entity' : 'entities'} already loaded by ${donorCount} ${donorCount === 1 ? 'engine' : 'engines'}`);
-          for (const d of delegations.sort((a, b) => a.entityName.localeCompare(b.entityName))) {
-            callbacks?.onLog?.(`      • ${d.entityName} ← ${d.engineClassName}`);
-          }
-        }
-        callbacks?.onLog?.('✓ Preload completed successfully\n');
-      }
-      
+      await this.applyWritePlan(entityDirs, options, callbacks);
+
+      await this.preloadMetadata(entityDirs, options, callbacks);
+
       if (options.verbose) {
         callbacks?.onLog?.(`Found ${entityDirs.length} entity ${entityDirs.length === 1 ? 'directory' : 'directories'} to process`);
       }
@@ -418,15 +451,6 @@ export class PushService {
           callbacks?.onLog?.('📁 File backup manager initialized');
         }
       }
-      
-      // Process each entity directory
-      let totalCreated = 0;
-      let totalUpdated = 0;
-      let totalUnchanged = 0;
-      let totalDeleted = 0;
-      let totalSkipped = 0;
-      let totalDeferred = 0;
-      let totalErrors = 0;
       
       // PHASE 0: Audit all deletions across all entities (if any exist)
       let deletionAudit: DeletionAudit | null = null;
@@ -441,25 +465,7 @@ export class PushService {
       if (!options.dryRun && deletionAudit) {
         const shouldProceed = await this.promptForConfirmation(deletionAudit, callbacks);
         if (!shouldProceed) {
-          callbacks?.onLog?.('\n❌ Push operation cancelled by user.\n');
-
-          // Clean up SQL logging session and file if it was created
-          if (sqlLoggingSession) {
-            const sqlLogPath = sqlLoggingSession.filePath;
-            try {
-              await sqlLoggingSession.dispose();
-              // Delete the empty SQL log file since no operations occurred
-              if (await fs.pathExists(sqlLogPath)) {
-                await fs.remove(sqlLogPath);
-                if (options.verbose) {
-                  callbacks?.onLog?.(`🗑️  Removed empty SQL log file: ${sqlLogPath}`);
-                }
-              }
-            } catch (cleanupError) {
-              callbacks?.onWarn?.(`Failed to clean up SQL logging session: ${cleanupError}`);
-            }
-          }
-
+          await this.cancelPush(sqlLoggingSession, options, callbacks);
           return {
             created: 0,
             updated: 0,
@@ -474,140 +480,19 @@ export class PushService {
         }
       }
 
-      // Begin transaction if not in dry-run mode
+      // One host transaction wraps the whole push. In atomic mode (the default) Phase 1 saves run
+      // on the host too, one graph at a time. A directory using isolated transactions commits on
+      // independent instances as it goes (see lib/push-write-mode.ts).
       if (!options.dryRun) {
         await transactionManager.beginTransaction();
       }
 
-      try {
-        // PHASE 1: Process creates/updates for all entities
-        if (options.verbose) {
-          callbacks?.onLog?.('📝 Processing creates and updates...\n');
-        }
+      const totals = await this.runPushInTransaction(
+        { entityDirs, deletionAudit, options, fileBackupManager, callbacks, configDir },
+        transactionManager
+      );
 
-        for (const [dirIdx, entityDir] of entityDirs.entries()) {
-          // "X of N" position prefix — only when there's more than one directory, so a
-          // single-directory push stays uncluttered.
-          const progressPrefix = entityDirs.length > 1 ? `[${dirIdx + 1}/${entityDirs.length}] ` : '';
-
-          const entityConfig = await loadEntityConfig(entityDir);
-          if (!entityConfig) {
-            const warning = `Skipping ${entityDir} - no valid entity configuration`;
-            this.warnings.push(warning);
-            callbacks?.onWarn?.(warning);
-            totalSkipped++; // Count skipped directories
-            continue;
-          }
-
-          // Show folder with spinner at start. The folder header is redundant in a
-          // normal run (the per-directory result line below names the directory), so
-          // it's verbose-only; the live spinner still shows "[X/N] Processing <dir>…".
-          const dirName = path.relative(process.cwd(), entityDir) || '.';
-          if (options.verbose) {
-            callbacks?.onLog?.(`\n📁 ${dirName}:`);
-          }
-
-          // Use onProgress for animated spinner if available
-          if (callbacks?.onProgress) {
-            callbacks.onProgress(`${progressPrefix}Processing ${dirName}...`);
-          } else {
-            callbacks?.onLog?.(`   ⏳ Processing...`);
-          }
-          
-          if (options.verbose && callbacks?.onLog) {
-            callbacks.onLog(`Processing ${entityConfig.entity} in ${entityDir}`);
-          }
-          
-          const result = await this.processEntityDirectory(
-            entityDir,
-            entityConfig,
-            options,
-            fileBackupManager,
-            callbacks,
-            configDir
-          );
-          
-          // Per-directory result: one compact line (always), naming the directory and
-          // its changes — or "no changes" for a clean dir. The detailed per-status
-          // breakdown is verbose-only since the final summary box already aggregates it.
-          const dirTotal = result.created + result.updated + result.unchanged + result.deleted + result.skipped;
-          const { text: dirSummary, changed: dirChanged } = this.formatDirectorySummary(progressPrefix, dirName, result, dirTotal);
-          if (callbacks?.onProgress && callbacks?.onSuccess) {
-            callbacks.onSuccess(dirSummary, dirChanged);
-          } else {
-            callbacks?.onLog?.(`   ${dirSummary}`);
-          }
-
-          if (options.verbose && (dirTotal > 0 || result.errors > 0)) {
-            callbacks?.onLog?.(`   Total processed: ${dirTotal} records`);
-            if (result.created > 0) {
-              callbacks?.onLog?.(`   ✓ Created: ${result.created}`);
-            }
-            if (result.updated > 0) {
-              callbacks?.onLog?.(`   ✓ Updated: ${result.updated}`);
-            }
-            if (result.deleted > 0) {
-              callbacks?.onLog?.(`   ✓ Deleted: ${result.deleted}`);
-            }
-            if (result.deferred > 0) {
-              callbacks?.onLog?.(`   ⏳ Deferred: ${result.deferred}`);
-            }
-            if (result.unchanged > 0) {
-              callbacks?.onLog?.(`   - Unchanged: ${result.unchanged}`);
-            }
-            if (result.skipped > 0) {
-              callbacks?.onLog?.(`   - Skipped: ${result.skipped}`);
-            }
-            if (result.errors > 0) {
-              callbacks?.onLog?.(`   ✗ Errors: ${result.errors}`);
-            }
-          }
-
-          totalCreated += result.created;
-          totalUpdated += result.updated;
-          totalUnchanged += result.unchanged;
-          totalDeleted += result.deleted;
-          totalSkipped += result.skipped;
-          totalDeferred += result.deferred;
-          totalErrors += result.errors;
-        }
-
-        // PHASE 2: Process deletions in reverse dependency order (if any exist)
-        if (deletionAudit && totalErrors === 0) {
-          const deletionResult = await this.processDeletionsFromAudit(deletionAudit, options, callbacks);
-          totalDeleted += deletionResult.deleted;
-          totalErrors += deletionResult.errors;
-        }
-
-        // PHASE 2.5: Process deferred records (for circular dependencies)
-        if (this.deferredRecords.length > 0 && totalErrors === 0) {
-          const deferredResult = await this.processDeferredRecords(options, callbacks);
-          totalCreated += deferredResult.created;
-          totalUpdated += deferredResult.updated;
-          totalErrors += deferredResult.errors;
-        }
-
-        // Commit transaction if successful
-        if (!options.dryRun && totalErrors === 0) {
-          await transactionManager.commitTransaction();
-        }
-
-        // PHASE 3: Write deferred files with updated deletion timestamps
-        if (!options.dryRun && totalErrors === 0 && this.deferredFileWrites.size > 0) {
-          await this.writeDeferredFiles(options, callbacks);
-        }
-      } catch (error) {
-        // Rollback transaction on error.
-        if (!options.dryRun) {
-          callbacks?.onLog?.('\n⚠️  Rolling back database transaction due to error...');
-          await transactionManager.rollbackTransaction();
-          callbacks?.onLog?.('✓ Database transaction rolled back successfully\n');
-        }
-        throw error;
-      }
-      
-      // Commit file backups if successful and not in dry-run mode
-      if (!options.dryRun && totalErrors === 0) {
+      if (!options.dryRun) {
         await fileBackupManager.cleanup();
         if (options.verbose) {
           callbacks?.onLog?.('✅ File backups committed');
@@ -632,13 +517,7 @@ export class PushService {
       }
       
       return {
-        created: totalCreated,
-        updated: totalUpdated,
-        unchanged: totalUnchanged,
-        deleted: totalDeleted,
-        skipped: totalSkipped,
-        deferred: totalDeferred,
-        errors: totalErrors,
+        ...totals,
         warnings: this.warnings,
         sqlLogPath,
         changeLog: this.changeDetails
@@ -668,6 +547,442 @@ export class PushService {
     }
   }
   
+  /** Open the SQL logging session when the config asks for one and this is not a dry run. */
+  private async startSqlLogging(
+    sqlLogger: SQLLogger,
+    options: PushOptions,
+    configDir: string,
+    callbacks?: PushCallbacks
+  ): Promise<SqlLoggingSession | null> {
+    let sqlLoggingSession: SqlLoggingSession | null = null;
+    if (sqlLogger.enabled && !options.dryRun) {
+      const provider = Metadata.Provider as GenericDatabaseProvider; // global-provider-ok: metadata sync operates on the configured provider only
+      
+      if (options.verbose) {
+        callbacks?.onLog?.(`SQL logging enabled: ${sqlLogger.enabled}`);
+        callbacks?.onLog?.(`Provider type: ${provider?.constructor?.name || 'Unknown'}`);
+        callbacks?.onLog?.(`Has CreateSqlLogger: ${typeof provider?.CreateSqlLogger === 'function'}`);
+      }
+      
+      if (provider && typeof provider.CreateSqlLogger === 'function') {
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = this.syncConfig?.sqlLogging?.formatAsMigration
+          ? `MetadataSync_Push_${timestamp}.sql`
+          : `push_${timestamp}.sql`;
+
+        // Use .sql-log-push directory in the config directory (where sync was initiated)
+        const outputDir = path.join(configDir, this.syncConfig?.sqlLogging?.outputDirectory || './sql-log-push');
+        const filepath = path.join(outputDir, filename);
+
+        // Ensure the directory exists
+        await fs.ensureDir(path.dirname(filepath));
+
+        // Create the SQL logging session
+        this.sqlLogFilePath = filepath;
+        sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
+          formatAsMigration: this.syncConfig?.sqlLogging?.formatAsMigration || false,
+          description: 'MetadataSync push operation',
+          statementTypes: "mutations",
+          prettyPrint: true,
+          // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
+          // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
+          filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
+          filterType: this.syncConfig?.sqlLogging?.filterType,
+          verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
+          // Without these the logger rewrites the CORE schema to ${flyway:defaultSchema}, which
+          // Skyway binds to the APP schema in an Open App — see MJ#3618. Undefined in MJ's own
+          // repo, where the single-schema default is already correct.
+          schemaPlaceholders: resolveSqlLoggingSchemaPlaceholders(this.syncConfig),
+        });
+        
+        if (options.verbose) {
+          callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);
+        }
+      } else {
+        if (options.verbose) {
+          callbacks?.onWarn?.('SQL logging requested but provider does not support it');
+        }
+      }
+    }
+    return sqlLoggingSession;
+  }
+
+  /**
+   * Preload entity metadata and cache the files on disk.
+   *
+   * The SyncEngine's provider is passed explicitly rather than reaching for Metadata.Provider —
+   * `mj sync` is single-process so they resolve to the same instance today, but routing through
+   * SyncEngine keeps the wiring self-consistent.
+   */
+  private async preloadMetadata(entityDirs: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    // We pass the SyncEngine's provider explicitly rather than reaching for
+    // Metadata.Provider — `mj sync` is single-process so they resolve to the
+    // same instance today, but routing through SyncEngine keeps the wiring
+    // self-consistent and makes future provider plumbing trivial.
+    // Preload is internal plumbing — emit its progress only in verbose mode so a
+    // normal run jumps straight from validation to per-directory results.
+    if (options.verbose) {
+      callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
+    }
+    this.syncMetadataEngine.setEntityDirs(entityDirs);
+    await this.syncMetadataEngine.Config(true, this.contextUser, this.syncEngine.getProvider());
+    for (const warning of this.syncMetadataEngine.drainWarnings()) {
+      callbacks?.onWarn?.(`   ⚠️  ${warning}`);
+    }
+    if (options.verbose) {
+      const delegations = this.syncMetadataEngine.getDelegationSummary();
+      if (delegations.length > 0) {
+        const donorCount = new Set(delegations.map(d => d.engineClassName)).size;
+        callbacks?.onLog?.(`   ↪ Reused in-memory caches for ${delegations.length} ${delegations.length === 1 ? 'entity' : 'entities'} already loaded by ${donorCount} ${donorCount === 1 ? 'engine' : 'engines'}`);
+        for (const d of delegations.sort((a, b) => a.entityName.localeCompare(b.entityName))) {
+          callbacks?.onLog?.(`      • ${d.entityName} ← ${d.engineClassName}`);
+        }
+      }
+      callbacks?.onLog?.('✓ Preload completed successfully\n');
+    }
+  }
+
+  /** The user declined the deletion prompt: drop an empty SQL log and say nothing happened. */
+  private async cancelPush(
+    sqlLoggingSession: SqlLoggingSession | null,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): Promise<void> {
+        callbacks?.onLog?.('\n❌ Push operation cancelled by user.\n');
+
+        // Clean up SQL logging session and file if it was created
+        if (sqlLoggingSession) {
+          const sqlLogPath = sqlLoggingSession.filePath;
+          try {
+            await sqlLoggingSession.dispose();
+            // Delete the empty SQL log file since no operations occurred
+            if (await fs.pathExists(sqlLogPath)) {
+              await fs.remove(sqlLogPath);
+              if (options.verbose) {
+                callbacks?.onLog?.(`🗑️  Removed empty SQL log file: ${sqlLogPath}`);
+              }
+            }
+          } catch (cleanupError) {
+            callbacks?.onWarn?.(`Failed to clean up SQL logging session: ${cleanupError}`);
+          }
+        }
+  }
+
+  /**
+   * Decide, once and up front, how each entity directory writes: shared by default, isolated where
+   * the entity (or the root, or the CLI flag) asks for it. Deciding it here means a push can never
+   * discover mid-file that it must change topology, which is the mixed-provider deadlock.
+   */
+  private async applyWritePlan(entityDirs: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    const isolated: string[] = [];
+    for (const entityDir of entityDirs) {
+      const entityConfig = await loadEntityConfig(entityDir);
+      const resolved = resolveDirectoryMode({
+        isolatedFlag: options.isolatedTransactions,
+        entityIsolated: entityConfig?.push?.isolatedTransactions,
+        rootIsolated: this.syncConfig?.push?.isolatedTransactions,
+      });
+      this.directoryModes.set(entityDir, resolved.mode);
+      if (resolved.mode === 'isolated') {
+        isolated.push(path.relative(process.cwd(), entityDir) || entityDir);
+      }
+      if (options.verbose) {
+        callbacks?.onLog?.(`   ${path.relative(process.cwd(), entityDir) || entityDir}: ${resolved.mode} (from ${resolved.source})`);
+      }
+    }
+
+    if (isolated.length > 0) {
+      await this.confirmIsolatedTransactions(isolated, options, callbacks);
+    } else if (options.parallelBatchSize !== undefined && options.parallelBatchSize !== 1) {
+      this.addWarning(unusedBatchSizeWarning(options.parallelBatchSize), callbacks);
+    }
+  }
+
+  /**
+   * Isolation needs independent provider instances. Without them every directory runs shared,
+   * because the alternative — some graphs on the host, some on their own connection — is the
+   * deadlock the graph pool exists to prevent.
+   */
+  private async confirmIsolatedTransactions(isolated: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
+    const reason = await probeIndependentInstances(this.hostProvider());
+    if (reason) {
+      this.addWarning(
+        `Independent provider instances are not available (${reason}), so every directory runs in the shared ` +
+          `push transaction: one transaction, one graph at a time.`,
+        callbacks
+      );
+      for (const dir of this.directoryModes.keys()) {
+        this.directoryModes.set(dir, 'shared');
+      }
+      return;
+    }
+    if (!options.dryRun) {
+      this.addWarning(isolatedModeWarning(isolated, graphBatchSizeFor('isolated', options.parallelBatchSize)), callbacks);
+    }
+  }
+
+  /** Adopt one directory's mode for the work about to run in it. */
+  private useDirectoryMode(entityDir: string, options: PushOptions): void {
+    this.writeMode = this.directoryModes.get(entityDir) ?? 'shared';
+    this.graphBatchSize = graphBatchSizeFor(this.writeMode, options.parallelBatchSize);
+  }
+
+  private addWarning(message: string, callbacks?: PushCallbacks): void {
+    this.warnings.push(message);
+    callbacks?.onWarn?.(`⚠️  ${message}`);
+  }
+
+  /** The process-wide provider that owns the push transaction. */
+  private hostProvider(): DatabaseProviderBase {
+    return Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: mj sync is single-process; this provider owns the push transaction
+  }
+
+  /**
+   * Run every phase inside the push transaction, commit it, then do the post-commit work.
+   * Never returns or throws with the transaction still open.
+   */
+  private async runPushInTransaction(run: PushRun, transactionManager: TransactionManager): Promise<EntityPushResult> {
+    let committed = false;
+    try {
+      const totals = await this.runPushPhases(run);
+      if (!run.options.dryRun) {
+        await this.commitPushTransaction(transactionManager);
+        committed = true;
+        // PHASE 3: files that contained deletions, then the incremental state
+        await this.writeDeferredFiles(run.options, run.callbacks);
+        await this.persistIncrementalState(run.configDir);
+      }
+      return totals;
+    } catch (error) {
+      if (committed) {
+        throw await this.failAfterCommit(error, run);
+      }
+      throw await this.abortPush(error, transactionManager, run);
+    } finally {
+      await this.ensureTransactionClosed(transactionManager, run.callbacks);
+    }
+  }
+
+  /** Phases 1, 2 and 2.5. Any failure throws; counted errors only survive a dry run. */
+  private async runPushPhases(run: PushRun): Promise<EntityPushResult> {
+    const { options, callbacks } = run;
+    if (options.verbose) {
+      callbacks?.onLog?.('📝 Processing creates and updates...\n');
+    }
+    // PHASE 1: creates and updates
+    const totals = await this.processAllEntityDirectories(run);
+
+    // PHASE 2: deletions in reverse dependency order
+    if (run.deletionAudit && totals.errors === 0) {
+      const deletionResult = await this.processDeletionsFromAudit(run.deletionAudit, options, callbacks);
+      totals.deleted += deletionResult.deleted;
+      totals.errors += deletionResult.errors;
+    }
+
+    // PHASE 2.5: deferred records (circular dependencies)
+    if (this.deferredRecords.length > 0 && totals.errors === 0) {
+      const deferredResult = await this.processDeferredRecords(options, callbacks);
+      totals.created += deferredResult.created;
+      totals.updated += deferredResult.updated;
+      totals.errors += deferredResult.errors;
+    }
+
+    if (!options.dryRun && totals.errors > 0) {
+      throw new Error(`${totals.errors} record error${totals.errors === 1 ? '' : 's'} occurred; the push was not committed.`);
+    }
+    return totals;
+  }
+
+  private async commitPushTransaction(transactionManager: TransactionManager): Promise<void> {
+    try {
+      await transactionManager.commitTransaction();
+    } catch (error) {
+      throw new Error(describeCommitFailure(error, this.hostProvider()?.PlatformKey), { cause: error });
+    }
+  }
+
+  /** Roll back, say truthfully what is left in the database, and wrap the failure. */
+  private async abortPush(error: unknown, transactionManager: TransactionManager, run: PushRun): Promise<PushAbortedError> {
+    const { options, callbacks } = run;
+    let rolledBack = true;
+    if (!options.dryRun) {
+      callbacks?.onWarn?.('\n⚠️  Rolling back database transaction due to error...');
+      rolledBack = await transactionManager.rollbackTransaction();
+      await this.writeFilesWithCommittedRecords(run);
+      for (const line of describeRollbackOutcome(rolledBack, this.committedWrites, configManager.getOriginalCwd())) {
+        callbacks?.onWarn?.(line);
+      }
+    }
+    return new PushAbortedError({
+      modes: [...new Set(this.directoryModes.values())],
+      rolledBack,
+      committedWrites: [...this.committedWrites],
+      totals: { ...this.runningTotals },
+      sqlLogPath: this.sqlLogFilePath,
+      cause: error,
+    });
+  }
+
+  /**
+   * A file whose write was deferred to Phase 3 — it contains deletions — never reaches that phase
+   * when the push fails. In an isolated directory its creates are committed all the same, so write
+   * it now and keep it: otherwise the primary keys those rows were given exist only in the
+   * database, and the next push creates them a second time.
+   */
+  private async writeFilesWithCommittedRecords(run: PushRun): Promise<void> {
+    const committedFiles = new Set(this.committedWrites.map((w) => w.filePath));
+    for (const deferred of this.deferredFileWrites.values()) {
+      if (!committedFiles.has(deferred.filePath)) {
+        continue;
+      }
+      try {
+        const payload = deferred.isArray ? deferred.records : deferred.records[0];
+        await JsonWriteHelper.writeOrderedRecordData(deferred.filePath, payload);
+        this.syncMetadataEngine.invalidateCachedFile(deferred.filePath);
+        run.fileBackupManager.releaseBackup(deferred.filePath);
+        run.callbacks?.onWarn?.(
+          `   kept ${path.relative(configManager.getOriginalCwd(), deferred.filePath) || deferred.filePath}: ` +
+            `it holds records that are committed`
+        );
+      } catch (writeError) {
+        run.callbacks?.onWarn?.(
+          `Failed to write ${deferred.filePath} after a partial push: ${writeError instanceof Error ? writeError.message : String(writeError)}`
+        );
+      }
+    }
+  }
+
+  /**
+   * The database already committed, so the metadata files must keep what they were written with.
+   * Drop the file backups so the caller's error path does not restore stale files.
+   */
+  private async failAfterCommit(error: unknown, run: PushRun): Promise<unknown> {
+    await run.fileBackupManager.cleanup();
+    const message = error instanceof Error ? error.message : String(error);
+    run.callbacks?.onWarn?.(
+      `⚠️  The database changes were committed, but a step after the commit failed: ${message}. ` +
+        `Some metadata files or the incremental state may not match the database; run the push again to bring them in line.`
+    );
+    return error;
+  }
+
+  private async ensureTransactionClosed(transactionManager: TransactionManager, callbacks?: PushCallbacks): Promise<void> {
+    if (!transactionManager.isInTransaction) {
+      return;
+    }
+    const rolledBack = await transactionManager.rollbackTransaction();
+    callbacks?.onWarn?.(
+      rolledBack
+        ? '⚠️  The push transaction was still open when the push ended, so it was rolled back.'
+        : '❌ The push transaction was still open when the push ended, and rolling it back failed.'
+    );
+  }
+
+  /** Apply incremental checksums and push timestamps. Called only after the push commits. */
+  private async persistIncrementalState(syncRootDir: string): Promise<void> {
+    if (!this.stateManager) {
+      return;
+    }
+    for (const [relativePath, checksum] of this.pendingChecksums) {
+      this.stateManager.setFileChecksum(relativePath, checksum);
+    }
+    const pushedAt = new Date().toISOString();
+    for (const relativeEntityDir of this.pushedEntityDirs) {
+      this.stateManager.setLastPushTimestamp(relativeEntityDir, pushedAt);
+    }
+    await this.stateManager.pruneStaleChecksums(syncRootDir);
+    await this.stateManager.save();
+  }
+
+  /** PHASE 1 over every entity directory, in order. */
+  private async processAllEntityDirectories(run: PushRun): Promise<EntityPushResult> {
+    const { entityDirs, options, callbacks } = run;
+    const totals = emptyPushTotals();
+    for (const [dirIdx, entityDir] of entityDirs.entries()) {
+      // "X of N" position prefix — only when there's more than one directory.
+      const progressPrefix = entityDirs.length > 1 ? `[${dirIdx + 1}/${entityDirs.length}] ` : '';
+      const entityConfig = await loadEntityConfig(entityDir);
+      if (!entityConfig) {
+        const warning = `Skipping ${entityDir} - no valid entity configuration`;
+        this.warnings.push(warning);
+        callbacks?.onWarn?.(warning);
+        totals.skipped++;
+        continue;
+      }
+      const dirName = path.relative(process.cwd(), entityDir) || '.';
+      this.useDirectoryMode(entityDir, options);
+      this.announceDirectory(dirName, progressPrefix, entityConfig.entity, entityDir, options, callbacks);
+      const result = await this.processEntityDirectory(
+        entityDir, entityConfig, options, run.fileBackupManager, callbacks, run.configDir
+      );
+      this.reportDirectoryResult(progressPrefix, dirName, result, options, callbacks);
+      addPushTotals(totals, result);
+      addPushTotals(this.runningTotals, result);
+    }
+    return totals;
+  }
+
+  private announceDirectory(
+    dirName: string,
+    progressPrefix: string,
+    entityName: string,
+    entityDir: string,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): void {
+    // The folder header is verbose-only; the live spinner still shows "[X/N] Processing <dir>…".
+    if (options.verbose) {
+      callbacks?.onLog?.(`\n📁 ${dirName}:`);
+    }
+    if (callbacks?.onProgress) {
+      callbacks.onProgress(`${progressPrefix}Processing ${dirName}...`);
+    } else {
+      callbacks?.onLog?.(`   ⏳ Processing...`);
+    }
+    if (options.verbose) {
+      callbacks?.onLog?.(`Processing ${entityName} in ${entityDir}`);
+    }
+  }
+
+  /** One compact line per directory, plus the per-status breakdown in verbose mode. */
+  private reportDirectoryResult(
+    progressPrefix: string,
+    dirName: string,
+    result: EntityPushResult,
+    options: PushOptions,
+    callbacks?: PushCallbacks
+  ): void {
+    const dirTotal = result.created + result.updated + result.unchanged + result.deleted + result.skipped;
+    const { text: dirSummary, changed: dirChanged } = this.formatDirectorySummary(progressPrefix, dirName, result, dirTotal);
+    if (callbacks?.onProgress && callbacks?.onSuccess) {
+      callbacks.onSuccess(dirSummary, dirChanged);
+    } else {
+      callbacks?.onLog?.(`   ${dirSummary}`);
+    }
+    if (options.verbose && (dirTotal > 0 || result.errors > 0)) {
+      this.logDirectoryBreakdown(result, dirTotal, callbacks);
+    }
+  }
+
+  private logDirectoryBreakdown(result: EntityPushResult, dirTotal: number, callbacks?: PushCallbacks): void {
+    const lines: Array<[number, string]> = [
+      [result.created, `   ✓ Created: ${result.created}`],
+      [result.updated, `   ✓ Updated: ${result.updated}`],
+      [result.deleted, `   ✓ Deleted: ${result.deleted}`],
+      [result.deferred, `   ⏳ Deferred: ${result.deferred}`],
+      [result.unchanged, `   - Unchanged: ${result.unchanged}`],
+      [result.skipped, `   - Skipped: ${result.skipped}`],
+      [result.errors, `   ✗ Errors: ${result.errors}`],
+    ];
+    callbacks?.onLog?.(`   Total processed: ${dirTotal} records`);
+    for (const [count, line] of lines) {
+      if (count > 0) {
+        callbacks?.onLog?.(line);
+      }
+    }
+  }
+
   private async processEntityDirectory(
     entityDir: string,
     entityConfig: any,
@@ -774,146 +1089,53 @@ export class PushService {
           callbacks?.onLog?.(`   Analyzed ${analysisResult.sortedRecords.length} records (including nested)`);
         }
         
-        // Create batch context for in-memory entity resolution
-        // Note: While JavaScript is single-threaded, async operations can interleave.
-        // Map operations themselves are atomic, but we ensure records are added to
-        // the context AFTER successful save to maintain consistency.
+        // Records are added to the batch context only AFTER a successful save (applyProcessResult),
+        // so later lookups in this file see consistent state.
         const batchContext = new BatchContextIndex();
 
-        // Process records using dependency levels for parallel processing
-        if (analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0) {
-          // Use parallel processing with dependency levels
-          for (let levelIndex = 0; levelIndex < analysisResult.dependencyLevels.length; levelIndex++) {
-            const level = analysisResult.dependencyLevels[levelIndex];
-            
-            if (options.verbose && level.length > 1) {
-              callbacks?.onLog?.(`   Processing dependency level ${levelIndex} with ${level.length} records in parallel...`);
-            }
-            
-            // Process records in this level in parallel batches
-            const batchSize = options.parallelBatchSize || PARALLEL_BATCH_SIZE;
-            for (let i = 0; i < level.length; i += batchSize) {
-              const batch = level.slice(i, Math.min(i + batchSize, level.length));
-              
-              // Process batch in parallel
-              const batchResults = await Promise.all(
-                batch.map(async (flattenedRecord) => {
-                  try {
-                    const result = await this.processFlattenedRecord(
-                      flattenedRecord,
-                      entityDir,
-                      options,
-                      batchContext,
-                      callbacks,
-                      entityConfig
-                    );
-                    return { success: true, result };
-                  } catch (error) {
-                    // Return error instead of throwing to handle after Promise.all
-                    return { success: false, error, record: flattenedRecord };
-                  }
-                })
-              );
-              
-              // Apply side effects sequentially after Promise.all() resolves.
-              // This eliminates race conditions from concurrent writes to shared state.
-              for (const batchResult of batchResults) {
-                if (!batchResult.success) {
-                  // Fail fast on first error with detailed logging
-                  const err = batchResult.error as Error;
-                  const rec = batchResult.record as FlattenedRecord;
-
-                  // Log concise summary - detailed error was already logged by processFlattenedRecord
-                  callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
-                  callbacks?.onLog?.(`   ${err.message}\n`);
-
-                  // Throw concise error to trigger rollback
-                  throw err;
-                }
-
-                const result = batchResult.result!;
-
-                // Apply side effects from the result
-                if (result.batchContextEntry) {
-                  batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
-                }
-                if (result.deferredRecord) {
-                  this.deferredRecords.push(result.deferredRecord);
-                }
-                if (result.warnings) {
-                  this.warnings.push(...result.warnings);
-                }
-
-                // Update stats for successful results
-                // Don't count deletion records - they're counted in Phase 2
-                if (result.isDeletedRecord) {
-                  continue; // Skip entirely
-                } else if (result.isDuplicate) {
-                  skipped++; // Count duplicates as skipped
-                } else {
-                  if (result.status === 'created') created++;
-                  else if (result.status === 'updated') updated++;
-                  else if (result.status === 'unchanged') unchanged++;
-                  else if (result.status === 'deleted') deleted++;
-                  else if (result.status === 'skipped') skipped++;
-                  else if (result.status === 'error') errors++;
-                  else if (result.status === 'deferred') {
-                    created++; // Deferred records were saved (count as created)
-                    deferred++; // Also track separately for reporting
-                  }
-                }
-              }
-            }
+        const applyProcessResult = (result: ProcessRecordResult): void => {
+          if (result.batchContextEntry) {
+            batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
           }
-        } else {
-          // Fallback to sequential processing if no dependency levels available
-          for (const flattenedRecord of analysisResult.sortedRecords) {
-            try {
-              const result = await this.processFlattenedRecord(
-                flattenedRecord,
-                entityDir,
-                options,
-                batchContext,
-                callbacks,
-                entityConfig
-              );
-
-              // Apply side effects (already sequential, but consistent with parallel path)
-              if (result.batchContextEntry) {
-                batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
-              }
-              if (result.deferredRecord) {
-                this.deferredRecords.push(result.deferredRecord);
-              }
-              if (result.warnings) {
-                this.warnings.push(...result.warnings);
-              }
-
-              // Update stats
-              // Don't count deletion records - they're counted in Phase 2
-              if (!result.isDeletedRecord) {
-                if (result.isDuplicate) {
-                  skipped++; // Count duplicates as skipped
-                } else {
-                  if (result.status === 'created') created++;
-                  else if (result.status === 'updated') updated++;
-                  else if (result.status === 'unchanged') unchanged++;
-                  else if (result.status === 'deleted') deleted++;
-                  else if (result.status === 'skipped') skipped++;
-                  else if (result.status === 'error') errors++;
-                  else if (result.status === 'deferred') {
-                    created++; // Deferred records were saved (count as created)
-                    deferred++; // Also track separately for reporting
-                  }
-                }
-              }
-            } catch (recordError) {
-              const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
-              callbacks?.onError?.(errorMsg);
-              errors++;
-            }
+          if (result.deferredRecord) {
+            this.deferredRecords.push(result.deferredRecord);
           }
-        }
+          if (result.warnings) {
+            this.warnings.push(...result.warnings);
+          }
+          if (result.isDeletedRecord) return;
+          if (result.isDuplicate) {
+            skipped++;
+            return;
+          }
+          if (result.status === 'created') created++;
+          else if (result.status === 'updated') updated++;
+          else if (result.status === 'unchanged') unchanged++;
+          else if (result.status === 'deleted') deleted++;
+          else if (result.status === 'skipped') skipped++;
+          else if (result.status === 'error') errors++;
+          else if (result.status === 'deferred') {
+            created++;
+            deferred++;
+          }
+        };
+
+        const levels =
+          analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0
+            ? analysisResult.dependencyLevels
+            : [analysisResult.sortedRecords];
+
+        await this.runFileGraphs({
+          filePath,
+          entityDir,
+          entityConfig,
+          options,
+          callbacks,
+          batchContext,
+          levels,
+          applyResult: applyProcessResult,
+          errorCount: () => errors,
+        });
         
         // Check if this file has any deletion records (including nested relatedEntities)
         const hasDeletions = this.hasAnyDeletions(records);
@@ -939,15 +1161,20 @@ export class PushService {
             // Drop the cached snapshot — file on disk no longer matches it,
             // and any later reader within this push must see fresh contents.
             this.syncMetadataEngine.invalidateCachedFile(filePath);
+            // Non-atomic: this file's records are already committed, so a later failure must
+            // not restore the old file and lose their primary keys and sync blocks.
+            if (this.writeMode === 'isolated') {
+              fileBackupManager.releaseBackup(filePath);
+            }
           }
         }
 
-        // Update stored checksum after successful processing (reuse cached value if available)
+        // Remember the checksum; it is stored only after the push commits (persistIncrementalState).
         // Uses resolved content (after @include) so included-file changes are tracked.
         if (this.stateManager && syncRootDir) {
           const relativePath = path.relative(syncRootDir, filePath);
           const checksum = cachedChecksum ?? this.syncEngine.calculateChecksum(fileData);
-          this.stateManager.setFileChecksum(relativePath, checksum);
+          this.pendingChecksums.set(relativePath, checksum);
         }
       } catch (fileError) {
         // Error details already logged by lower-level handlers, just re-throw
@@ -955,25 +1182,188 @@ export class PushService {
       }
     }
 
-    // Persist push timestamp for this entity directory after all files processed
+    // The push timestamp for this directory is stored only after the push commits.
     if (this.stateManager && syncRootDir) {
-      const relativeEntityDir = path.relative(syncRootDir, entityDir);
-      this.stateManager.setLastPushTimestamp(relativeEntityDir, new Date().toISOString());
-      await this.stateManager.pruneStaleChecksums(syncRootDir);
-      await this.stateManager.save();
+      this.pushedEntityDirs.push(path.relative(syncRootDir, entityDir));
     }
 
     return { created, updated, unchanged, deleted, skipped, deferred, errors };
   }
 
-  private async processFlattenedRecord(
+  /**
+   * Run one file's JSON-root graphs, level by level. Atomic mode: one graph at a time on the host.
+   * Isolated mode: `graphBatchSize` graphs at once, each on its own independent instance.
+   * Fail-fast: the first failed record (thrown or `status: 'error'`) stops the file.
+   */
+  private async runFileGraphs(run: FileGraphRun): Promise<void> {
+    const pendingWrites = new Map<string, CommittedWrite[]>();
+    const pool = this.createGraphPool(pendingWrites, run.callbacks);
+    pool.noteLevels(run.levels);
+
+    let runError: unknown;
+    try {
+      for (let levelIndex = 0; levelIndex < run.levels.length; levelIndex++) {
+        await this.runGraphLevel(run, pool, pendingWrites, levelIndex);
+      }
+    } catch (e) {
+      pool.markFailed();
+      runError = e;
+    }
+    const settleError = await pool.releaseAll();
+    if (runError) throw runError;
+    if (settleError) throw settleError;
+  }
+
+  private createGraphPool(pendingWrites: Map<string, CommittedWrite[]>, callbacks?: PushCallbacks): GraphProviderPool {
+    return new GraphProviderPool(this.hostProvider(), {
+      mode: this.writeMode === 'isolated' ? 'independent' : 'host',
+      log: (msg) => callbacks?.onLog?.(msg),
+      onGraphSettled: (graphId, outcome) => this.recordGraphOutcome(pendingWrites, graphId, outcome),
+    });
+  }
+
+  /** Non-atomic mode: a graph whose instance committed leaves its writes in the database. */
+  private recordGraphOutcome(pendingWrites: Map<string, CommittedWrite[]>, graphId: string, outcome: GraphSettleOutcome): void {
+    const writes = pendingWrites.get(graphId);
+    pendingWrites.delete(graphId);
+    if (writes && outcome === 'committed') {
+      this.committedWrites.push(...writes);
+    }
+  }
+
+  private async runGraphLevel(
+    run: FileGraphRun,
+    pool: GraphProviderPool,
+    pendingWrites: Map<string, CommittedWrite[]>,
+    levelIndex: number
+  ): Promise<void> {
+    const byGraph = groupRecordsByGraphId(run.levels[levelIndex]);
+    const graphIds = Array.from(byGraph.keys());
+    const batchSize = this.graphBatchSize;
+    if (run.options.verbose && graphIds.length > 1) {
+      run.callbacks?.onLog?.(
+        `   Level ${levelIndex}: ${run.levels[levelIndex].length} records in ${graphIds.length} graphs (batch ${batchSize}, ${this.writeMode})`
+      );
+    }
+    for (let i = 0; i < graphIds.length; i += batchSize) {
+      const batchIds = graphIds.slice(i, i + batchSize);
+      const outcomes = await Promise.all(
+        batchIds.map((graphId) => this.runGraph(run, pool, graphId, byGraph.get(graphId) ?? []))
+      );
+      this.applyGraphOutcomes(run, pool, pendingWrites, outcomes.flat());
+      const drainError = await pool.drainBatch(batchIds, levelIndex);
+      if (drainError) throw drainError;
+    }
+  }
+
+  /** One graph's records, in order, on the graph's provider. Stops at the first thrown error. */
+  private async runGraph(
+    run: FileGraphRun,
+    pool: GraphProviderPool,
+    graphId: string,
+    records: FlattenedRecord[]
+  ): Promise<GraphRecordOutcome[]> {
+    const provider = await pool.obtain(graphId);
+    const outcomes: GraphRecordOutcome[] = [];
+    for (const record of records) {
+      try {
+        const result = await this.processFlattenedRecord(
+          record, run.entityDir, run.options, run.batchContext, run.callbacks, run.entityConfig, true,
+          provider as unknown as IMetadataProvider
+        );
+        // Read the depth NOW: a save that settled its own scope is already committed in isolated
+        // mode, and that is true whatever the rest of the graph goes on to do.
+        outcomes.push({ success: true, result, record, graphId, settled: provider.TransactionDepth === 0 });
+      } catch (error) {
+        pool.markFailed();
+        outcomes.push({ success: false, error, record, graphId });
+        break;
+      }
+    }
+    return outcomes;
+  }
+
+  /**
+   * Apply a batch's results. Successful writes are tracked first, so a failure still reports
+   * what isolated graphs committed. Then the first thrown error, or any counted record
+   * error outside a dry run, stops the push.
+   */
+  private applyGraphOutcomes(
+    run: FileGraphRun,
+    pool: GraphProviderPool,
+    pendingWrites: Map<string, CommittedWrite[]>,
+    outcomes: GraphRecordOutcome[]
+  ): void {
+    let firstFailure: GraphRecordFailure | undefined;
+    for (const outcome of outcomes) {
+      if (outcome.success === false) {
+        firstFailure ??= outcome;
+        continue;
+      }
+      run.applyResult(outcome.result);
+      if (outcome.result.status === 'error') {
+        // A non-throwing record error must not commit leftover graph depth.
+        pool.markFailed();
+      }
+      this.trackPendingWrite(pendingWrites, run.filePath, outcome);
+    }
+    if (firstFailure) {
+      this.throwRecordFailure(firstFailure, run.callbacks);
+    }
+    const errorCount = run.errorCount();
+    if (!run.options.dryRun && errorCount > 0) {
+      throw new Error(
+        `${errorCount} record${errorCount === 1 ? '' : 's'} in ${path.basename(run.filePath)} could not be pushed ` +
+          `(see the errors above). The push stops at the first failed record.`
+      );
+    }
+  }
+
+  private trackPendingWrite(pendingWrites: Map<string, CommittedWrite[]>, filePath: string, outcome: GraphRecordSuccess): void {
+    if (this.writeMode !== 'isolated') {
+      return; // shared: nothing commits before the push transaction does
+    }
+    const status = committedStatusOf(outcome.result);
+    if (!status) {
+      return;
+    }
+    const write: CommittedWrite = {
+      filePath,
+      entityName: outcome.record.entityName,
+      recordPath: outcome.record.path,
+      status,
+    };
+    if (outcome.settled) {
+      // Committed as it was saved. Reporting it now means a later rollback of the graph's leftover
+      // depth cannot make this write disappear from the report while its row is in the database.
+      this.committedWrites.push(write);
+      return;
+    }
+    const writes = pendingWrites.get(outcome.graphId) ?? [];
+    writes.push(write);
+    pendingWrites.set(outcome.graphId, writes);
+  }
+
+  private throwRecordFailure(failure: GraphRecordFailure, callbacks?: PushCallbacks): never {
+    const err = failure.error instanceof Error ? failure.error : new Error(String(failure.error));
+    const rec = failure.record;
+    callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
+    callbacks?.onLog?.(`   ${err.message}\n`);
+    if (err.stack) {
+      callbacks?.onLog?.(`   Stack: ${err.stack}\n`);
+    }
+    throw err;
+  }
+
+  protected async processFlattenedRecord(
     flattenedRecord: FlattenedRecord,
     entityDir: string,
     options: PushOptions,
     batchContext: BatchContext,
     callbacks?: PushCallbacks,
     entityConfig?: EntityConfig,
-    allowDefer: boolean = true
+    allowDefer: boolean = true,
+    recordProvider?: IMetadataProvider
   ): Promise<ProcessRecordResult> {
     const metadata = new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
     const { record, entityName, parentContext, id: recordId } = flattenedRecord;
@@ -1018,8 +1408,9 @@ export class PushService {
     if (options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
       // Use calculateChecksumWithFileContent so @file: reference changes are detected.
       // This reads local files (fast) rather than hitting the DB (slow). The stored
-      // checksum was also computed with file content, so the comparison is apples-to-apples.
-      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(record.fields, entityDir);
+      // checksum was also computed with file content and composition payloads, so the comparison is apples-to-apples.
+      const checksumPayload = this.buildRecordChecksumPayload(record);
+      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, entityDir);
       if (currentChecksum === record.sync.checksum) {
         // Lightweight stub — just enough for @parent:ID and @lookup resolution.
         // No DB call, no entity framework overhead.
@@ -1035,7 +1426,9 @@ export class PushService {
     }
 
     // Get or create entity instance
-    entity = await metadata.GetEntityObject(entityName, this.contextUser);
+    entity = recordProvider
+      ? await recordProvider.GetEntityObject(entityName, this.contextUser)
+      : await metadata.GetEntityObject(entityName, this.contextUser);
     if (!entity) {
       throw new Error(`Failed to create entity object for ${entityName}`);
     }
@@ -1070,7 +1463,8 @@ export class PushService {
             0,
             batchContext,
             resolutionCollector,
-            pkField
+            pkField,
+            recordProvider
           );
         } catch (pkError: unknown) {
           // Check if this is a deferrable lookup error
@@ -1088,11 +1482,14 @@ export class PushService {
     if (resolvedPrimaryKey && Object.keys(resolvedPrimaryKey).length > 0) {
       // First check if the record exists using the sync engine's loadEntity method
       // This avoids the "Error in BaseEntity.Load" message for missing records
-      const existingEntity = await this.syncEngine.loadEntity(entityName, resolvedPrimaryKey);
+      const existingEntity = await this.syncEngine.loadEntity(entityName, resolvedPrimaryKey, recordProvider);
       
       if (existingEntity) {
         // Record exists, use the loaded entity
         entity = existingEntity;
+        if (recordProvider) {
+          entity.BindProvider(recordProvider as unknown as IEntityDataProvider);
+        }
         exists = true;
       } else {
         // Record doesn't exist in database
@@ -1169,7 +1566,8 @@ export class PushService {
           0,
           batchContext, // Pass batch context for lookups
           resolutionCollector,
-          fieldName
+          fieldName,
+          recordProvider
         );
         const fieldInfo = entity.GetFieldByName(fieldName);
         const fieldType = (fieldInfo?.EntityFieldInfo?.Type || '').trim().toLowerCase();
@@ -1289,6 +1687,20 @@ export class PushService {
     // The deferred fields are not set, but other fields are. We'll queue for
     // re-processing after save succeeds.
 
+    // Apply first-class composition axes (embeds, collections, extension) onto entity before Save (§5)
+    await this.applyCompositionAxes(
+      entity,
+      record,
+      entityName,
+      entityDir,
+      batchContext,
+      resolutionCollector,
+      options,
+      callbacks,
+      entityConfig,
+      recordProvider
+    );
+
     // Check if the record is actually dirty before considering it changed
     let isDirty = entity.Dirty;
     
@@ -1298,9 +1710,10 @@ export class PushService {
       isDirty = true;
     }
     
-    // Also check if file content has changed (for @file references)
+    // Also check if file content or composition payload has changed
     if (!isDirty && !isNew && record.sync) {
-      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir);
+      const checksumPayload = this.buildRecordChecksumPayload(record, originalFields);
+      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, entityDir);
       if (currentChecksum !== record.sync.checksum) {
         isDirty = true;
         if (options.verbose) {
@@ -1366,6 +1779,17 @@ export class PushService {
         }
       }
     }
+
+    if (!isNew && !isDirty && !hasDeferrableLookupError) {
+      // Record already exists and nothing changed — skip save to avoid unnecessary DB writes and side-effects
+      const batchContextEntry = { key: lookupKey, entity };
+      return {
+        isDuplicate: false,
+        batchContextEntry,
+        warnings: localWarnings.length > 0 ? localWarnings : undefined,
+        status: 'unchanged',
+      };
+    }
     
     // Save the record with detailed error logging
     const recordName = entity.Get('Name');
@@ -1376,8 +1800,9 @@ export class PushService {
       // Skip embedding generation during sync — vectors can be computed later by the
       // API server. This avoids loading the ~50MB Xenova model in short-lived CLI processes.
       entity.SkipEmbeddings = true;
-      // Pass IgnoreDirtyState option when alwaysPush is enabled
-      const saveOptions = alwaysPush ? { IgnoreDirtyState: true } : undefined;
+      const saveOptions = new EntitySaveOptions();
+      if (alwaysPush) saveOptions.IgnoreDirtyState = true;
+      if (entityConfig?.push?.skipGeoCoding) saveOptions.SkipGeoCoding = true;
       saveResult = await entity.Save(saveOptions);
     } catch (saveError: any) {
       // Helper to log to both console and callbacks
@@ -1513,7 +1938,9 @@ export class PushService {
       });
 
       // Throw error to trigger rollback and stop processing
-      throw new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
+      const saveFailure = new Error(`Failed to save ${entityName} record at ${flattenedRecord.path}: ${errorMessage}`);
+      this.reportedRecordErrors.add(saveFailure);
+      throw saveFailure;
     }
     
     // Return batch context entry as a side effect instead of mutating directly.
@@ -1562,11 +1989,25 @@ export class PushService {
       }
     }
     
-    // Only update sync metadata if the record was actually dirty (changed)
-    if (isNew || isDirty) {
+    // Sync metadata handling:
+    // When push.writeSyncMetadata is explicitly false, do not create or update sync metadata blocks.
+    const shouldWriteSync = entityConfig?.push?.writeSyncMetadata !== false;
+    if (!shouldWriteSync) {
+      delete record.sync;
+    } else if (isNew || isDirty) {
+      const checksumPayload = this.buildRecordChecksumPayload(record, originalFields);
+      const checksum = await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, entityDir);
+      const existingChecksum = record.sync?.checksum;
+      const existingTimestamp = record.sync?.lastModified;
+
+      // Preserve existing lastModified if checksum has not changed (prevents hydration churn)
+      const lastModified = (existingChecksum && existingChecksum === checksum && existingTimestamp)
+        ? existingTimestamp
+        : new Date().toISOString();
+
       record.sync = {
-        lastModified: new Date().toISOString(),
-        checksum: await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir)
+        lastModified,
+        checksum
       };
       if (options.verbose) {
         callbacks?.onLog?.(`   ✓ Updated sync metadata (record was ${isNew ? 'new' : 'changed'})`);
@@ -1841,7 +2282,9 @@ export class PushService {
     }
 
     messages.push('');
-    messages.push('All operations will occur within a transaction and can be rolled back on error.');
+    for (const line of this.transactionBannerLines()) {
+      messages.push(line);
+    }
     messages.push('');
     messages.push('═'.repeat(80));
     messages.push('');
@@ -1867,6 +2310,20 @@ export class PushService {
    * Audit all deletions across all metadata files
    * This pre-processes all records to identify deletion dependencies and order
    */
+  /** What the deletion confirmation says about rollback. Must match the write mode. */
+  private transactionBannerLines(): string[] {
+    const isolated = [...this.directoryModes.entries()].filter(([, mode]) => mode === 'isolated');
+    if (isolated.length === 0) {
+      return ['All creates, updates and deletes run in one database transaction. If anything fails, nothing is saved.'];
+    }
+    const names = isolated.map(([dir]) => path.relative(process.cwd(), dir) || dir).join(', ');
+    return [
+      'Deletes and deferred records run in one database transaction and are rolled back on error.',
+      `These directories use isolated transactions, so each create and update in them is committed as soon as it is`,
+      `saved and is NOT rolled back: ${names}.`,
+    ];
+  }
+
   private async auditAllDeletions(
     entityDirs: string[],
     options: PushOptions,
@@ -1881,6 +2338,16 @@ export class PushService {
       const entityConfig = await loadEntityConfig(entityDir);
       if (!entityConfig) {
         continue;
+      }
+
+      // Check if any collection has authoritative mode (§8.1(a))
+      if (entityConfig.collections) {
+        for (const col of Object.values(entityConfig.collections)) {
+          if (col.mode === 'authoritative') {
+            hasAnyDeletions = true;
+            break;
+          }
+        }
       }
 
       const pattern = entityConfig.filePattern || '*.json';
@@ -2210,7 +2677,7 @@ export class PushService {
         }
 
       } catch (error) {
-        const err = error as Error;
+        const err = error instanceof Error ? error : new Error(String(error));
 
         callbacks?.onError?.(
           `   ✗ Failed to process deferred record: ${entityName} (${recordId})`
@@ -2221,8 +2688,20 @@ export class PushService {
         callbacks?.onError?.(
           `     Tip: Ensure all referenced records exist or remove the ?allowDefer flag`
         );
+        if (!this.reportedRecordErrors.has(err)) {
+          callbacks?.onRecordError?.({
+            entityName,
+            path: flattenedRecord.path,
+            primaryKey: recordId,
+            message: `Deferred record could not be resolved: ${err.message}`,
+          });
+        }
 
         errors++;
+        if (!options.dryRun) {
+          // Same as a thrown Phase 1 error: stop, and let push() roll the transaction back.
+          throw new Error(`Failed to process deferred record ${entityName} (${recordId}): ${err.message}`, { cause: err });
+        }
       }
     }
 
@@ -2370,5 +2849,427 @@ export class PushService {
     }
 
     return keyParts.join('|');
+  }
+
+  /**
+   * Builds the payload used for calculating record checksums, including composition axes (§5, §6)
+   */
+  private buildRecordChecksumPayload(
+    record: RecordData,
+    fieldsOverride?: Record<string, unknown>
+  ): Record<string, unknown> {
+    const fields = fieldsOverride ?? record.fields;
+    if (!record.collections && !record.embeds && !record.extension) {
+      return fields as Record<string, unknown>;
+    }
+    const payload: Record<string, unknown> = { fields };
+    if (record.collections) payload.collections = record.collections;
+    if (record.embeds) payload.embeds = record.embeds;
+    if (record.extension) payload.extension = record.extension;
+    return payload;
+  }
+
+  /**
+   * Applies first-class composition axes onto the entity before Save (§5):
+   * 1. embeds (peer first via {fkField}_EnsureObject() or companion.Ensure())
+   * 2. collections (owner.Collection.Create() or match by PK, apply fields, recursive composition)
+   * 3. extension (owner.EnsureISAChild(name?), set leaf fields, recursive composition)
+   */
+  protected async applyCompositionAxes(
+    entity: BaseEntity,
+    record: RecordData,
+    entityName: string,
+    entityDir: string,
+    batchContext: BatchContext,
+    resolutionCollector: SyncResolutionCollector,
+    options: PushOptions,
+    callbacks?: PushCallbacks,
+    entityConfig?: EntityConfig,
+    recordProvider?: IMetadataProvider,
+    depth: number = 0
+  ): Promise<void> {
+    // Static JSON parsed from disk is an acyclic finite tree, but a defensive depth guard
+    // (MAX_COMPOSITION_DEPTH = 10) prevents runaway recursion from accidental deep nesting or malformed fixtures.
+    const MAX_COMPOSITION_DEPTH = 10;
+    if (depth > MAX_COMPOSITION_DEPTH) {
+      throw new Error(
+        `Composition nesting depth exceeded maximum of ${MAX_COMPOSITION_DEPTH} on '${entityName}'. Check for accidental deep nesting or recursive composition structures.`
+      );
+    }
+    // 1. Embeds (peer first): for each embeds[fkField], {fkField}_EnsureObject(), recurse apply, do not Save the peer yet
+    if (record.embeds && typeof record.embeds === 'object') {
+      for (const [fkField, embedRecord] of Object.entries(record.embeds)) {
+        if (!embedRecord || typeof embedRecord !== 'object') continue;
+        let embeddedEntity: BaseEntity | null = null;
+        const ensureMethodName = `${fkField}_EnsureObject`;
+        const entityRecord = entity as unknown as Record<string, unknown>;
+
+        if (typeof entityRecord[ensureMethodName] === 'function') {
+          embeddedEntity = await (entityRecord[ensureMethodName] as () => Promise<BaseEntity>)();
+        } else if (typeof entity.GetCompanion === 'function') {
+          const companion = entity.GetCompanion(fkField);
+          if (companion && typeof (companion as unknown as { Ensure?: () => Promise<BaseEntity> }).Ensure === 'function') {
+            embeddedEntity = await (companion as unknown as { Ensure: () => Promise<BaseEntity> }).Ensure();
+          } else {
+            const altKey = fkField.endsWith('ID') ? fkField.substring(0, fkField.length - 2) : `${fkField}ID`;
+            const altEnsureName = `${altKey}_EnsureObject`;
+            if (typeof entityRecord[altEnsureName] === 'function') {
+              embeddedEntity = await (entityRecord[altEnsureName] as () => Promise<BaseEntity>)();
+            } else {
+              const altCompanion = entity.GetCompanion(altKey);
+              if (altCompanion && typeof (altCompanion as unknown as { Ensure: () => BaseEntity }).Ensure === 'function') {
+                embeddedEntity = (altCompanion as unknown as { Ensure: () => BaseEntity }).Ensure();
+              }
+            }
+          }
+        }
+
+        if (!embeddedEntity) {
+          throw new Error(
+            `Failed to resolve embedded companion for '${fkField}' on entity '${entityName}'. Ensure that DeclareEmbeddedRecord is called for '${fkField}'.`
+          );
+        }
+
+        // Apply embed fields, passing ownerRecord = entity for @owner: resolution
+        if (embedRecord.fields && typeof embedRecord.fields === 'object') {
+          for (const [fName, fVal] of Object.entries(embedRecord.fields)) {
+            const processedValue = await this.syncEngine.processFieldValue(
+              fVal,
+              entityDir,
+              null,
+              null,
+              0,
+              batchContext,
+              resolutionCollector,
+              fName,
+              recordProvider,
+              entity // ownerRecord
+            );
+            embeddedEntity.Set(fName, processedValue);
+          }
+        }
+
+        // Recursively apply nested composition on the embedded record
+        await this.applyCompositionAxes(
+          embeddedEntity,
+          embedRecord,
+          embeddedEntity.EntityInfo.Name,
+          entityDir,
+          batchContext,
+          resolutionCollector,
+          options,
+          callbacks,
+          entityConfig,
+          recordProvider,
+          depth + 1
+        );
+      }
+    }
+
+    // 2. Collections: owner.Lines.Create() (or load existing by PK into the collection), recurse apply on child entity
+    if (record.collections && typeof record.collections === 'object') {
+      for (const [colName, colItems] of Object.entries(record.collections)) {
+        if (!Array.isArray(colItems)) {
+          throw new Error(
+            `Collection "${colName}" in ${entityName} must be an array of records. ` +
+            `Per-record mode wrappers (e.g. {"mode": "authoritative", "items": [...]}) are forbidden; mode is directory-level only.`
+          );
+        }
+
+        // Get collection companion
+        let collectionCompanion = typeof entity.GetCompanion === 'function' ? entity.GetCompanion(colName) : undefined;
+        if (!collectionCompanion && typeof entity.GetCompanion === 'function') {
+          // Try case-insensitive lookup across companions
+          const companions = (entity as unknown as { Companions?: Array<{ Name: string }> }).Companions;
+          if (companions) {
+            const found = companions.find((c) => c.Name.toLowerCase() === colName.toLowerCase());
+            if (found) {
+              collectionCompanion = entity.GetCompanion(found.Name);
+            }
+          }
+        }
+
+        // Also check if property exists on entity directly
+        if (!collectionCompanion) {
+          const propVal = (entity as unknown as Record<string, unknown>)[colName];
+          if (propVal && typeof (propVal as unknown as { Create?: () => Promise<BaseEntity> }).Create === 'function') {
+            collectionCompanion = propVal as unknown as typeof collectionCompanion;
+          }
+        }
+
+        // Dynamically register collection companion if entity supports DeclareRelatedRecords
+        if (!collectionCompanion && typeof (entity as unknown as { DeclareRelatedRecords?: unknown }).DeclareRelatedRecords === 'function') {
+          const entityInfo = entity.EntityInfo ?? new Metadata().EntityByName(entityName);
+          const resolved = resolveCollectionRelationship(entityInfo, colName);
+          if (resolved) {
+            const colOpts: {
+              Name: string;
+              RelatedEntity: string;
+              RelatedEntityJoinField: string;
+              Load?: string;
+              OnRemove?: string;
+              OrderBy?: string;
+            } = {
+              Name: resolved.collectionName,
+              RelatedEntity: resolved.relatedEntity,
+              RelatedEntityJoinField: resolved.joinField,
+              Load: resolved.load,
+              OnRemove: resolved.onRemove,
+              ...(resolved.orderBy ? { OrderBy: resolved.orderBy } : {}),
+            };
+            const declareFn = (entity as unknown as { DeclareRelatedRecords: (options: unknown) => unknown }).DeclareRelatedRecords.bind(entity);
+            collectionCompanion = declareFn(colOpts) as typeof collectionCompanion;
+          }
+        }
+
+        if (!collectionCompanion) {
+          throw new Error(
+            `Collection '${colName}' not found on entity '${entityName}'. Ensure DeclareRelatedRecords is registered for '${colName}'.`
+          );
+        }
+
+        const col = collectionCompanion as unknown as {
+          Name: string;
+          LoadMode: string;
+          IsLoaded: boolean;
+          Items: BaseEntity[];
+          Load: () => Promise<void>;
+          Create: () => Promise<BaseEntity>;
+          Remove: (item: BaseEntity | number) => void;
+        };
+
+        // Rider 4: Load: 'never' fails loud under both modes
+        if (col.LoadMode === 'never') {
+          throw new Error(
+            `RelatedRecordCollection '${colName}' on '${entityName}' is declared Load: 'never'. Collections synced via metadata sync cannot have Load: 'never' because both upsert and authoritative modes require loading existing records.`
+          );
+        }
+
+        // Load collection if not loaded and entity is not new
+        if (!entity.IsSaved && !col.IsLoaded) {
+          // new record, nothing in DB yet
+        } else if (!col.IsLoaded) {
+          await col.Load();
+        }
+
+        const loadedItems = col.Items ?? [];
+        const matchedItemSet = new Set<BaseEntity>();
+        const colConfig = entityConfig?.collections?.[colName];
+        const mode = colConfig?.mode ?? 'upsert';
+
+        for (const itemData of colItems) {
+          if (!itemData || typeof itemData !== 'object') continue;
+
+          let targetChild: BaseEntity | null = null;
+
+          // Match by primaryKey if available
+          if (itemData.primaryKey && Object.keys(itemData.primaryKey).length > 0 && loadedItems.length > 0) {
+            targetChild = loadedItems.find((child) => {
+              for (const [pkK, pkV] of Object.entries(itemData.primaryKey!)) {
+                if (String(child.Get(pkK)) !== String(pkV)) {
+                  return false;
+                }
+              }
+              return true;
+            }) ?? null;
+          }
+
+          if (itemData.deleteRecord?.delete === true) {
+            // Explicit delete in both modes (§8.1(a) rider 1)
+            if (targetChild) {
+              col.Remove(targetChild);
+              matchedItemSet.add(targetChild);
+            }
+            continue;
+          }
+
+          if (!targetChild) {
+            targetChild = await col.Create();
+            if (itemData.primaryKey) {
+              for (const [pkK, pkV] of Object.entries(itemData.primaryKey)) {
+                targetChild.Set(pkK, pkV);
+              }
+            }
+          } else {
+            matchedItemSet.add(targetChild);
+          }
+
+          // Apply fields with ownerRecord = entity for @owner:Field resolution
+          if (itemData.fields && typeof itemData.fields === 'object') {
+            for (const [fName, fVal] of Object.entries(itemData.fields)) {
+              const processedValue = await this.syncEngine.processFieldValue(
+                fVal,
+                entityDir,
+                null,
+                null,
+                0,
+                batchContext,
+                resolutionCollector,
+                fName,
+                recordProvider,
+                entity // ownerRecord
+              );
+              targetChild.Set(fName, processedValue);
+            }
+          }
+
+          // Recursively apply nested composition on the collection item
+          await this.applyCompositionAxes(
+            targetChild,
+            itemData,
+            targetChild.EntityInfo.Name,
+            entityDir,
+            batchContext,
+            resolutionCollector,
+            options,
+            callbacks,
+            entityConfig,
+            recordProvider,
+            depth + 1
+          );
+        }
+
+        // Handle authoritative mode deletions (§8.1(a))
+        if (mode === 'authoritative' && loadedItems.length > 0) {
+          const unmentionedItems = loadedItems.filter((item) => !matchedItemSet.has(item));
+          if (unmentionedItems.length > 0) {
+            const deletePercent = (unmentionedItems.length / loadedItems.length) * 100;
+            const maxAllowed = colConfig?.maxImpliedDeletePercent ?? 20;
+
+            // Bulk rail (§8.1(a) rider 3)
+            if (deletePercent > maxAllowed && !options.allowBulkDelete) {
+              throw new Error(
+                `Authoritative sync for collection '${colName}' on '${entityName}' would delete ${unmentionedItems.length}/${loadedItems.length} (${deletePercent.toFixed(1)}%) records, exceeding the threshold of ${maxAllowed}%. Pass --allow-bulk-delete to override.`
+              );
+            }
+
+            // Rider 2: Authoritative-implied deletes route through confirmation
+            // Confirmation prompt names the collection and the row count
+            if (!options.dryRun && callbacks?.onConfirm) {
+              const confirmKey = `${entityName}.${colName}`;
+              if (!this.confirmedCollections.has(confirmKey)) {
+                const confirmMsg = `Authoritative collection '${colName}' on '${entityName}' will delete unmentioned records (initial batch: ${unmentionedItems.length} record${unmentionedItems.length > 1 ? 's' : ''}). Authorize authoritative deletions for collection '${colName}' on '${entityName}'? (yes/no)`;
+                const confirmed = await callbacks.onConfirm(confirmMsg);
+                if (!confirmed) {
+                  throw new Error(
+                    `Authoritative delete of ${unmentionedItems.length} record(s) in collection '${colName}' on '${entityName}' cancelled by user.`
+                  );
+                }
+                this.confirmedCollections.add(confirmKey);
+              }
+            }
+
+            if (options.dryRun) {
+              callbacks?.onLog?.(
+                `🗑️  [DRY RUN] Authoritative collection '${colName}' on '${entityName}': would delete ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}`
+              );
+            } else {
+              callbacks?.onLog?.(
+                `🗑️  Authoritative collection '${colName}' on '${entityName}': deleting ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}`
+              );
+
+              for (const itemToDelete of unmentionedItems) {
+                col.Remove(itemToDelete);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Extension: const child = await owner.EnsureISAChild(name?), then Set leaf fields on child.
+    if (record.extension && typeof record.extension === 'object') {
+      const extObj = record.extension as Record<string, unknown>;
+
+      if ('fields' in extObj && typeof extObj.fields === 'object' && extObj.fields !== null) {
+        // Shorthand form: { entity?: string, fields: { ... } }
+        const subName = typeof extObj.entity === 'string' ? extObj.entity : undefined;
+        const child = await entity.EnsureISAChild(subName);
+        if (!child) {
+          throw new Error(
+            `EnsureISAChild returned null for extension on '${entityName}'${subName ? ` (${subName})` : ''}. ` +
+            `Ensure that an EntitySubtypeResolver or Entity.SubtypeSelector is configured, or specify 'entity' in extension.`
+          );
+        }
+
+        for (const [fName, fVal] of Object.entries(extObj.fields as Record<string, unknown>)) {
+          const processedValue = await this.syncEngine.processFieldValue(
+            fVal,
+            entityDir,
+            null,
+            null,
+            0,
+            batchContext,
+            resolutionCollector,
+            fName,
+            recordProvider,
+            entity // ownerRecord
+          );
+          child.Set(fName, processedValue);
+        }
+
+        // Recursively apply nested composition on the child extension
+        await this.applyCompositionAxes(
+          child,
+          extObj as unknown as RecordData,
+          child.EntityInfo.Name,
+          entityDir,
+          batchContext,
+          resolutionCollector,
+          options,
+          callbacks,
+          entityConfig,
+          recordProvider,
+          depth + 1
+        );
+      } else {
+        // Map form: { [SubtypeName]: { fields: { ... } } }
+        for (const [subKey, subVal] of Object.entries(extObj)) {
+          if (subKey === '$schema' || subKey === 'sync' || subKey === '__mj_sync_notes') continue;
+          if (!subVal || typeof subVal !== 'object') continue;
+
+          const child = await entity.EnsureISAChild(subKey);
+          if (!child) {
+            throw new Error(
+              `EnsureISAChild returned null for extension subtype '${subKey}' on '${entityName}'.`
+            );
+          }
+
+          const subRecord = subVal as Record<string, unknown>;
+          if (subRecord.fields && typeof subRecord.fields === 'object') {
+            for (const [fName, fVal] of Object.entries(subRecord.fields as Record<string, unknown>)) {
+              const processedValue = await this.syncEngine.processFieldValue(
+                fVal,
+                entityDir,
+                null,
+                null,
+                0,
+                batchContext,
+                resolutionCollector,
+                fName,
+                recordProvider,
+                entity // ownerRecord
+              );
+              child.Set(fName, processedValue);
+            }
+          }
+
+          // Recursively apply nested composition on the child extension
+          await this.applyCompositionAxes(
+            child,
+            subRecord as unknown as RecordData,
+            child.EntityInfo.Name,
+            entityDir,
+            batchContext,
+            resolutionCollector,
+            options,
+            callbacks,
+            entityConfig,
+            recordProvider,
+            depth + 1
+          );
+        }
+      }
+    }
   }
 }

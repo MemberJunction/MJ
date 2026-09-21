@@ -901,8 +901,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public OpenActiveScopeFullForm(): void {
         const scope = this.ActiveScope;
         if (!scope?.ID) return;
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: scope.ID }]);
-        this.navigationService.OpenEntityRecord('MJ: Search Scopes', pkey);
+        this.navigationService.OpenEntityRecord('MJ: Search Scopes', CompositeKey.FromID(scope.ID));
     }
 
     public async SaveActiveScope(): Promise<void> {

@@ -472,10 +472,11 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             }
 
             // ──────────────────────────────────────────────────────────
-            // Dedup → content-item exclusion → permission safety net → score threshold → enrich
+            // Dedup → content-item promotion/exclusion → merge promoted entities → permission safety net → score threshold → enrich
             // ──────────────────────────────────────────────────────────
             let results = this._fusion.Deduplicate(fusedResults);
             results = await this._enricher.ExcludeEntitySourcedContentItems(results, contextUser);
+            results = this._fusion.Deduplicate(results);
 
             const beforePermCount = results.length;
             results = await this.filterByPermissions(results, contextUser);
@@ -494,9 +495,10 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             // Trim to caller's requested topK (we overfetched earlier)
             if (results.length > topK) results = results.slice(0, topK);
 
-            if (!isPreview) {
-                await this._enricher.Enrich(results, contextUser);
-            }
+            // Always run enrichment (entity icons, entity display names, record names) on the final topK results,
+            // including preview searches (where topK <= 8, resolving names in a single fast batched query).
+            this._enricher.Provider = this.ProviderToUse;
+            await this._enricher.Enrich(results, contextUser);
 
             LogStatus(`SearchEngine: Search complete in ${Date.now() - startTime}ms - ${results.length} result(s)${resolvedScopes.length ? ` across ${resolvedScopes.length} scope(s)` : ''}`);
 
@@ -1308,7 +1310,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     ): Promise<{
         scopeID: string;
         fused: SearchResultItem[];
-        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number };
+        sourceCounts: { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number };
         /**
          * What this scope decided — dimension provenance and per-lane outcomes.
          *
@@ -1871,8 +1873,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     /**
      * Count results contributed by each source before fusion.
      */
-    private countSources(lists: LabeledResultList[]): { Vector: number; FullText: number; Entity: number; Storage: number } {
-        const counts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
+    private countSources(lists: LabeledResultList[]): { Vector: number; FullText: number; Entity: number; Storage: number; Tag?: number } {
+        const counts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0, Tag: 0 };
         for (const list of lists) {
             switch (list.Source) {
                 case 'vector':
@@ -1886,6 +1888,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     break;
                 case 'storage':
                     counts.Storage += list.Results.length;
+                    break;
+                case 'tag':
+                    counts.Tag += list.Results.length;
                     break;
             }
         }
@@ -2050,7 +2055,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         contextUser: UserInfo,
         permitted: SearchResultItem[]
     ): Promise<void> {
-        const pkField = entity.FirstPrimaryKey;
+        const pkField = entity.FirstPrimaryKey; // first-pk-ok: presence check; Name is only used under the PrimaryKeys.length === 1 branch
         if (!pkField) {
             // Cannot verify without a primary key — exclude results
             LogError(`SearchEngine: Entity "${entity.Name}" has no primary key, cannot verify result ownership`);

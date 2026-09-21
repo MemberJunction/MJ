@@ -20,6 +20,9 @@ vi.mock('@memberjunction/network-utils', async () => {
     return {
         ...actual,
         DrainResponseBody: (...args: unknown[]) => drainResponseBodyMock(...args),
+        // The production code now routes URL downloads through the SSRF-guarded SafeFetch;
+        // forward to the per-test globalThis.fetch stub so no DNS resolution happens in tests.
+        SafeFetch: (url: string, init?: RequestInit) => globalThis.fetch(url, init),
     };
 });
 

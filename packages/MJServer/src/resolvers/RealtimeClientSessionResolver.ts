@@ -49,6 +49,7 @@ import {
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     RealtimeAllowedAgent,
+    RealtimeDirectActionsConfig,
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
     resolveRecordingStorageAccountID,
     storeRealtimeRecording,
@@ -56,7 +57,7 @@ import {
     deleteRealtimeRecordingSegments,
 } from '@memberjunction/ai-agents';
 import { AgentExecutionProgressCallback, MJAIAgentEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
-import { RealtimeToolDefinition } from '@memberjunction/ai';
+import { ChatMessage, RealtimeToolDefinition } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -135,6 +136,11 @@ const MAX_PRIOR_TRANSCRIPT_CHARS = 8_000;
 /** Maximum prior-session chain legs walked when hydrating a resumed session's transcript. */
 const MAX_PRIOR_TRANSCRIPT_LEGS = 5;
 
+/** Maximum TEXT-conversation turns hydrated into a voice session's companion prompt (newest kept). */
+const MAX_CONVERSATION_HISTORY_TURNS = 30;
+/** Maximum TEXT-conversation CHARS hydrated into a voice session's companion prompt (oldest dropped). */
+const MAX_CONVERSATION_HISTORY_CHARS = 8_000;
+
 /**
  * Authoritative shape persisted in `AIAgentSession.Config_` for a client-direct voice session.
  * The target agent id is stored here at start and read back on every relay — the browser never
@@ -181,6 +187,11 @@ interface RealtimeSessionConfig {
      * model-named colleague against it without re-resolving the cascade. Absent ⇒ single-target behavior.
      */
     allowedAgents?: RealtimeAllowedAgent[];
+    /**
+     * The session's effective direct actions configuration (derived from the full config cascade at start).
+     * Persisted so each relayed direct action call enforces against the exact same config used for projection.
+     */
+    directActions?: RealtimeDirectActionsConfig;
     /**
      * Per-session override for the agent's media kit — a `MJ: Collections` id that takes precedence
      * over the agent's `DefaultMediaCollectionID` when the server-side `MediaChannelServer` resolves
@@ -480,10 +491,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // Best-effort model-context hydration: the PRIOR session chain's transcript (ownership-
         // checked, capped) is framed into the system prompt so the model REMEMBERS the last leg.
         // Strictly tolerant — any problem yields no hydration, never a failed start.
-        const priorTranscript = await this.loadPriorTranscript(lastSessionId, contextUser, provider);
+        const prior = await this.loadPriorTranscript(lastSessionId, contextUser, provider);
+        // ...and the TEXT conversation the call is being started from, so a voice session opened
+        // mid-thread knows what was already typed. The legs above are excluded: they are already
+        // framed as the resumed transcript, and injecting the same turns twice puts two accounts of
+        // the same exchange in one prompt.
+        const conversationMessages = await this.loadConversationHistory(
+            conversationId, prior?.LegIDs ?? [], contextUser, provider,
+        );
         const result = await this.prepareClientSessionOrClose(
-            session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, priorTranscript,
-            configOverridesJson, maxSessionSeconds, applicationId, this.parseAppContext(appContextJson),
+            session, coAgentID, effectiveTargetId, contextUser, provider, preferredModelId, clientTools, prior?.Text,
+            configOverridesJson, maxSessionSeconds, applicationId, this.parseAppContext(appContextJson), conversationMessages,
         );
         // Best-effort restore of the PRIOR session's persisted channel states (e.g. the whiteboard
         // board). Strictly tolerant — any problem yields a null field, never a failed start.
@@ -525,6 +543,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                     'under the system user (scoped-anonymous caller).',
             );
         }
+        LogStatus(
+            `ExecuteRealtimeSessionTool: dispatching relayed tool '${toolName}' (callId: ${callId}) for session ${agentSessionId}...`,
+        );
+        const startTime = Date.now();
         const { ResultJson, PausedRunID, Artifacts } = await this.clientSessionService.ExecuteRelayedTool(
             {
                 AgentSessionID: agentSessionId,
@@ -532,6 +554,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // Multi-target (Move 4): the session's persisted allowed-agent union — a model-named
                 // colleague in the call is validated against this; absent ⇒ single-target behavior.
                 AllowedAgents: await this.filterAllowedAgentsByCanRun(config.allowedAgents, contextUser),
+                DirectActions: config.directActions,
                 // Attribution follows the VISITOR even when `runUser` is elevated: the delegated run
                 // row and its context-memory scope must stay the person's, not the system user's.
                 AttributionUserID: contextUser.ID,
@@ -545,6 +568,23 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             runUser,
             provider,
         );
+        const durationMs = Date.now() - startTime;
+        LogStatus(
+            `ExecuteRealtimeSessionTool: completed relayed tool '${toolName}' (callId: ${callId}) in ${durationMs}ms`,
+        );
+
+        if (toolName !== 'invoke-target-agent') {
+            await this.persistDirectActionTurn(
+                session,
+                callId,
+                toolName,
+                argsJson,
+                ResultJson,
+                durationMs,
+                contextUser,
+                provider,
+            );
+        }
 
         // Roll the paused-run id forward in the session config: clear the one we just consumed, and
         // store a new one only if the (resumed or fresh) run paused again awaiting feedback.
@@ -832,8 +872,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
     /**
      * Relays a co-agent CHANNEL tool-call (browser_ / Whiteboard_ etc.) onto the session's co-agent
-     * AIPromptRun.Messages — run-only observability so the run captures what the co-agent DID, not just
-     * what it said. Deliberately NOT a ConversationDetail turn (the chat thread stays speech-only).
+     * AIPromptRun.Messages and records the tool execution facts as a hidden ConversationDetail turn.
+     * HiddenToUser=true ensures chat components stay speech-only while allowing session review to
+     * reconstruct action cards dynamically on load (Option 1).
      * Ownership-gated; best-effort (a missing prompt run / save failure simply returns false).
      *
      * @returns `true` when the tool turn was recorded on the run.
@@ -848,6 +889,20 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
+
+        // Persist the tool turn facts into a hidden ConversationDetail turn so session review
+        // can reconstruct the tool card dynamically on load (Option 1). Best-effort.
+        await this.persistDirectActionTurn(
+            session,
+            undefined,
+            toolName,
+            argsJson,
+            resultJson,
+            undefined,
+            contextUser,
+            provider,
+        );
+
         const promptRunID = this.readPromptRunID(session);
         if (!promptRunID) {
             return false;
@@ -1641,6 +1696,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * @param priorTranscript Optional capped, role-tagged transcript of the PRIOR session chain
      *   (from {@link loadPriorTranscript}) — the service frames it into the system prompt so a
      *   resumed session remembers the previous leg(s).
+     * @param conversationMessages Optional capped history of the TEXT conversation this session is
+     *   starting from (from {@link loadConversationHistory}) — framed as "Conversation so far".
      */
     private async prepareClientSessionOrClose(
         session: MJAIAgentSessionEntity,
@@ -1655,6 +1712,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         maxSessionSeconds?: number,
         applicationId?: string,
         appContext?: AppContextSnapshot,
+        conversationMessages?: ChatMessage[],
     ): Promise<StartRealtimeClientSessionResult> {
         const prep = await this.clientSessionService.PrepareClientSession(
             {
@@ -1665,10 +1723,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // Server-authoritative voice duration cap (widget guests) — bounds the driver session
                 // where supported; the janitor enforces the session deadline regardless.
                 MaxSessionSeconds: maxSessionSeconds,
-                // MVP: conversation history is not yet hydrated into ChatMessage[]; the co-agent
-                // companion prompt runs without prior turns. A later phase loads the session's
-                // Conversation into ChatMessage[] for richer context.
-                ConversationMessages: [],
+                // The TEXT conversation this call was started from, so the co-agent opens knowing
+                // what the user already typed rather than asking them to say it again. Hydrated by
+                // `loadConversationHistory`; empty when there is no conversation or the read failed.
+                ConversationMessages: conversationMessages ?? [],
                 UserID: contextUser.ID,
                 PreferredModelID: preferredModelId,
                 // Client-declared, CLIENT-EXECUTED UI tools (see the mutation's SECURITY NOTE) —
@@ -1701,6 +1759,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         await this.persistObservabilityRunIDs(
             session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID, prep.CoAgentRunStepID,
             applicationId, prep.EffectiveConfig?.realtime?.allowedAgents,
+            prep.EffectiveConfig?.realtime?.directActions,
         );
 
         const cfg = prep.ClientConfig;
@@ -1734,6 +1793,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         coAgentRunStepID?: string,
         applicationID?: string,
         allowedAgents?: RealtimeAllowedAgent[],
+        directActions?: RealtimeDirectActionsConfig,
     ): Promise<void> {
         // Preserve any server-authoritative voice deadline stamped at session start (this rebuilds the
         // full config, so read the existing value forward rather than dropping it).
@@ -1746,6 +1806,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             maxSessionDeadlineIso: existing?.maxSessionDeadlineIso,
             applicationID,
             allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
+            directActions,
         };
         session.Config_ = JSON.stringify(config);
         const saved = await session.Save();
@@ -1959,7 +2020,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         lastSessionId: string | undefined,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-    ): Promise<string | undefined> {
+    ): Promise<{ Text: string; LegIDs: string[] } | undefined> {
         if (!lastSessionId) {
             return undefined;
         }
@@ -1970,13 +2031,111 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             }
             const turns = await this.loadChainTranscriptTurns(legIDs, contextUser, provider);
             const lines = this.capTranscriptLines(turns);
-            return lines.length > 0 ? lines.join('\n') : undefined;
+            // The leg ids travel with the text because the CONVERSATION history hydrated alongside
+            // this would otherwise re-inject the same turns: a voice turn is persisted as an
+            // ordinary Conversation Detail, so these legs are part of the conversation too.
+            return lines.length > 0 ? { Text: lines.join('\n'), LegIDs: legIDs } : undefined;
         } catch (error) {
             LogError(
                 `StartRealtimeClientSession: prior-transcript hydration failed for session ${lastSessionId}: ${(error as Error).message}`,
             );
             return undefined;
         }
+    }
+
+    /**
+     * Loads the conversation this voice session is starting from, as `ChatMessage[]` for the
+     * co-agent's companion prompt.
+     *
+     * This is the half of the context flow that was missing. Voice turns have always been
+     * persisted as `MJ: Conversation Details`, so anything SAID reaches a later text turn — but
+     * nothing TYPED reached a voice session, which opened with no idea what the thread was about.
+     * The symptom is not an error; it is the agent asking the user to repeat something they just
+     * wrote, which is exactly when voice is least forgivable.
+     *
+     * Caps mirror the resume path (newest {@link MAX_CONVERSATION_HISTORY_TURNS} turns, then a
+     * {@link MAX_CONVERSATION_HISTORY_CHARS} budget with the oldest dropped first) so the freshest
+     * context always survives.
+     *
+     * Session-stamped rows are KEPT unless `coveredSessionIDs` names them: a call the user had last
+     * week is part of this conversation and the model should know it. Only the legs already framed
+     * as the resumed transcript are removed, so the prompt never carries two accounts of one
+     * exchange.
+     *
+     * Strictly tolerant — no conversation, a failed read, or any throw yields `[]`, never a failed
+     * session start. The call still works; it just starts cold.
+     *
+     * @param conversationId The conversation the session is bound to, when there is one.
+     * @param coveredSessionIDs Session ids already framed via `PriorTranscript`.
+     * @param contextUser The calling user (RunView scope — the read is row-level-secured).
+     * @param provider The request-scoped metadata provider.
+     * @returns The capped history, oldest first.
+     */
+    private async loadConversationHistory(
+        conversationId: string | undefined,
+        coveredSessionIDs: string[],
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<ChatMessage[]> {
+        if (!conversationId) {
+            return [];
+        }
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const result = await rv.RunView<{
+                Role: string;
+                Message: string | null;
+                HiddenToUser: boolean;
+                AgentSessionID: string | null;
+            }>(
+                {
+                    EntityName: CONVERSATION_DETAIL_ENTITY,
+                    ExtraFilter: `ConversationID='${conversationId.replace(/'/g, "''")}'`,
+                    Fields: ['ID', 'Role', 'Message', 'HiddenToUser', 'AgentSessionID', '__mj_CreatedAt'],
+                    OrderBy: '__mj_CreatedAt ASC',
+                    ResultType: 'simple',
+                },
+                contextUser,
+            );
+            if (!result.Success) {
+                LogError(`StartRealtimeClientSession: conversation-history query failed: ${result.ErrorMessage}`);
+                return [];
+            }
+            const covered = new Set(coveredSessionIDs.map((id) => id.trim().toLowerCase()));
+            const turns = (result.Results ?? []).filter(
+                (row) =>
+                    !row.HiddenToUser &&
+                    (row.Role === 'User' || row.Role === 'AI') &&
+                    typeof row.Message === 'string' &&
+                    row.Message.trim().length > 0 &&
+                    !covered.has((row.AgentSessionID ?? '').trim().toLowerCase()),
+            );
+            return this.capConversationHistory(turns);
+        } catch (error) {
+            LogError(
+                `StartRealtimeClientSession: conversation-history hydration failed for conversation ${conversationId}: ${(error as Error).message}`,
+            );
+            return [];
+        }
+    }
+
+    /**
+     * Applies the history caps and maps to `ChatMessage[]`: the newest
+     * {@link MAX_CONVERSATION_HISTORY_TURNS} turns, then a total budget of
+     * {@link MAX_CONVERSATION_HISTORY_CHARS} characters with the oldest dropped first.
+     */
+    private capConversationHistory(turns: Array<{ Role: string; Message: string | null }>): ChatMessage[] {
+        const newest = turns.slice(-MAX_CONVERSATION_HISTORY_TURNS);
+        const messages: ChatMessage[] = newest.map((t) => ({
+            role: t.Role === 'AI' ? 'assistant' : 'user',
+            content: (t.Message ?? '').trim(),
+        }));
+        let total = messages.reduce((sum, m) => sum + String(m.content).length + 1, 0);
+        while (messages.length > 0 && total > MAX_CONVERSATION_HISTORY_CHARS) {
+            const dropped = messages.shift() as ChatMessage;
+            total -= String(dropped.content).length + 1;
+        }
+        return messages;
     }
 
     /**
@@ -2476,6 +2635,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                             typeof parsed.maxSessionDeadlineIso === 'string' ? parsed.maxSessionDeadlineIso : undefined,
                         applicationID: typeof parsed.applicationID === 'string' ? parsed.applicationID : undefined,
                         allowedAgents: Array.isArray(parsed.allowedAgents) ? parsed.allowedAgents : undefined,
+                        directActions:
+                            parsed.directActions && typeof parsed.directActions === 'object' && typeof parsed.directActions.enabled === 'boolean'
+                                ? (parsed.directActions as RealtimeDirectActionsConfig)
+                                : undefined,
                     };
                 }
             } catch {
@@ -2685,5 +2848,81 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      */
     private mapTranscriptRole(role: string): 'AI' | 'Error' | 'User' {
         return role.trim().toLowerCase() === 'user' ? 'User' : 'AI';
+    }
+
+    /**
+     * Persists a direct action or channel tool execution as a hidden ConversationDetail turn.
+     * Stored as stable facts (Role: 'AI', HiddenToUser: true, ExternalID: callId, CompletionTime: durationMs,
+     * Message: JSON-serialized tool facts) so that session review can reconstruct the action card dynamically
+     * on load (Option 1) without polluting user-facing speech chat bubbles.
+     */
+    private async persistDirectActionTurn(
+        session: MJAIAgentSessionEntity,
+        callId: string | undefined,
+        toolName: string,
+        argsJson: string | undefined | null,
+        resultJson: string | undefined | null,
+        durationMs: number | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        if (!session.ConversationID) {
+            return false;
+        }
+        try {
+            const writeUser = ResolveScopedAnonymousRunUser(contextUser);
+            const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+                CONVERSATION_DETAIL_ENTITY,
+                writeUser,
+            );
+            detail.NewRecord();
+            detail.ConversationID = session.ConversationID;
+            detail.Role = 'AI';
+            detail.HiddenToUser = true;
+            detail.AgentSessionID = session.ID;
+            detail.UserID = contextUser.ID;
+            if (callId) {
+                detail.ExternalID = callId;
+            }
+            if (typeof durationMs === 'number' && durationMs >= 0) {
+                detail.CompletionTime = durationMs;
+            }
+
+            let success = true;
+            if (resultJson) {
+                try {
+                    const parsed = JSON.parse(resultJson) as { success?: boolean; error?: string };
+                    if (parsed.success === false) {
+                        success = false;
+                    }
+                } catch {
+                    // Plain-text output treated as success
+                }
+            }
+            detail.Status = success ? 'Complete' : 'Error';
+
+            const factPayload = {
+                type: 'realtime_tool_execution',
+                callId: callId ?? null,
+                toolName,
+                argsJson: argsJson ?? null,
+                resultJson: resultJson ?? null,
+                success,
+                durationMs: durationMs ?? 0,
+            };
+            detail.Message = JSON.stringify(factPayload);
+
+            const saved = await detail.Save();
+            if (!saved) {
+                LogError(
+                    `RealtimeClientSessionResolver.persistDirectActionTurn save failed: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+            }
+            return saved;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`RealtimeClientSessionResolver.persistDirectActionTurn unexpected error: ${message}`);
+            return false;
+        }
     }
 }

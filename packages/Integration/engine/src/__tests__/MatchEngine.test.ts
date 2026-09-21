@@ -20,7 +20,7 @@ vi.mock('@memberjunction/core', async () => {
     // engine narrows with `instanceof` before touching Dialect, so a plain object would silently
     // take the no-dialect path and the platform-specific behaviour would never be exercised.
     const provider = Object.create(actual.DatabaseProviderBase.prototype) as Record<string, unknown>;
-    const entities = [{ Name: 'Contacts', FirstPrimaryKey: { Name: 'ID' } }];
+    const entities = [{ Name: 'Contacts', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } }];
     // defineProperty, not assignment: PlatformKey and Entities are getter-only on the prototype.
     Object.defineProperty(provider, 'PlatformKey', { get: () => mockPlatform });
     Object.defineProperty(provider, 'Entities', { get: () => entities });
@@ -48,7 +48,7 @@ vi.mock('@memberjunction/core', async () => {
             get Entities() {
                 return [{
                     Name: 'Contacts',
-                    FirstPrimaryKey: { Name: 'ID' },
+                    PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' },
                 }];
             }
             EntityByName(name: string) {

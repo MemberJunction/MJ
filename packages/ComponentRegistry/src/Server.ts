@@ -165,6 +165,14 @@ export class ComponentRegistryAPIServer {
 
     // Create the main connection pool using the same config pattern as MJServer
     this.pool = new sql.ConnectionPool(createMSSQLConfig());
+
+    // Handle connection-level errors from dead/stale connections in the pool.
+    // Without this handler, when the DB drops idle TCP connections, an unhandled
+    // 'error' event crashes the process instead of letting the pool recover.
+    this.pool.on('error', (err) => {
+      LogError(`[ConnectionPool] Pool-level connection error (stale connection evicted): ${err.message}`);
+    });
+
     await this.pool.connect();
     
     // Get cache refresh interval from config (default to 0 if not set)
@@ -196,6 +204,9 @@ export class ComponentRegistryAPIServer {
         password: dbReadOnlyPassword,
       };
       this.readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
+      this.readOnlyPool.on('error', (err) => {
+        LogError(`[ConnectionPool] Read-only pool-level connection error (stale connection evicted): ${err.message}`);
+      });
       await this.readOnlyPool.connect();
       
       // Add read-only pool to data sources
