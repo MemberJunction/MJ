@@ -97,6 +97,26 @@ describe('EntityDocumentTemplateParserBase', () => {
       expect(result).toBe(`prefix ${val} suffix`);
     }
   });
+
+  it('anchors function call parsing to prevent false function matches on property paths (CodeQL 510)', async () => {
+    const parser = new TestParser();
+    // Record with a property name that has parentheses or trailing text
+    const record = {
+      ID: '1',
+      'foo(bar)baz': 'non-function-value',
+      SimpleField: 'hello',
+    };
+
+    const result = await parser.Parse(
+      'Value: ${foo(bar)baz}',
+      ENTITY_ID,
+      record,
+      {} as UserInfo
+    );
+    // Because foo(bar)baz has trailing "baz", it should not be treated as a function call,
+    // but resolved as a property lookup
+    expect(result).toBe('Value: non-function-value');
+  });
 });
 
 describe('EntityDocumentTemplateParser — Relationship & Nested Rendering (C1 fix)', () => {

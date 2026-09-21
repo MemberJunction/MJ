@@ -119,7 +119,7 @@ export abstract class EntityDocumentTemplateParserBase {
     entityRecord: Record<string, unknown>,
     ContextUser: UserInfo
   ): Promise<string> {
-    const funcMatch = argument.match(/(\w+)\(([^)]*)\)/);
+    const funcMatch = argument.match(/^\s*(\w+)\(([^)]*)\)\s*$/);
     if (funcMatch) {
       const [, funcName, paramsString] = funcMatch;
       const params = paramsString.split(',').map((param) => {
