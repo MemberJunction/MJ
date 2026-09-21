@@ -96,10 +96,12 @@ GO
 -- the committed artifact and the clean run disagree, and the gate fails. This seeds the row the
 -- other validators have (pattern: V202609112345), so the clean run reproduces the committed code.
 -- Idempotent. Source must equal SQL Server's normalised definition of the CHECK, which is how
--- CodeGen decides the stored code is current (manage-metadata.ts, loadGeneratedCode).
+-- CodeGen decides the stored code is current (manage-metadata.ts, loadGeneratedCode). The link is
+-- the one vwEntityFieldsWithCheckConstraints joins on for a column-level CHECK: LinkedEntityID is
+-- the 'MJ: Entity Fields' ENTITY (DF238F34…), LinkedRecordPrimaryKey the NativeToolCallCount field.
 -- ============================================================================
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = '99273DAD-560E-4ABC-8332-C97AB58B7463' AND [LinkedRecordPrimaryKey] = '6C2142C1-E36C-4C94-AD23-78237FD6397A'
+      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'DF238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '6C2142C1-E36C-4C94-AD23-78237FD6397A'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
@@ -112,7 +114,7 @@ VALUES ('bb8c2540-cafb-4bc5-972e-fbb03b9f4f54', (SELECT [ID] FROM [${flyway:defa
 			ValidationErrorType.Failure
 		));
 	}
-}', 'The native tool call count must be greater than or equal to zero, if it is specified.', 'ValidateNativeToolCallCountGreaterThanOrEqualToZero', '99273DAD-560E-4ABC-8332-C97AB58B7463', '6C2142C1-E36C-4C94-AD23-78237FD6397A')
+}', 'The native tool call count must be greater than or equal to zero, if it is specified.', 'ValidateNativeToolCallCountGreaterThanOrEqualToZero', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '6C2142C1-E36C-4C94-AD23-78237FD6397A')
    END;
 GO
 
