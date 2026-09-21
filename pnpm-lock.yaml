@@ -1529,6 +1529,25 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/AI/Providers/Betty:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.1.0
+        version: link:../../Core
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../../../MJGlobal
+      '@memberjunction/network-utils':
+        specifier: 6.1.0
+        version: link:../../../NetworkUtils
+      env-var:
+        specifier: ^7.5.0
+        version: 7.5.0
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/AI/Providers/BettyBot:
     dependencies:
       '@memberjunction/ai':
@@ -13981,6 +14000,9 @@ importers:
       '@memberjunction/ai-bedrock':
         specifier: 6.1.0
         version: link:../AI/Providers/Bedrock
+      '@memberjunction/ai-betty':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Betty
       '@memberjunction/ai-betty-bot':
         specifier: 6.1.0
         version: link:../AI/Providers/BettyBot
@@ -14342,6 +14364,9 @@ importers:
       '@memberjunction/ai-bedrock':
         specifier: 6.1.0
         version: link:../AI/Providers/Bedrock
+      '@memberjunction/ai-betty':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Betty
       '@memberjunction/ai-betty-bot':
         specifier: 6.1.0
         version: link:../AI/Providers/BettyBot
