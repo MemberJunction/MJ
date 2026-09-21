@@ -8,11 +8,25 @@
  * ERR_MODULE_NOT_FOUND naming a bundle chunk rather than the missing package.
  *
  * The monorepo hides this dependency two ways that a host repo does NOT inherit:
- *   1. This repo's root package.json declares "@angular/compiler" itself, so npm's
- *      hoisting satisfies MJExplorer's peer even though MJExplorer's own manifest never
- *      declared it.
- *   2. The joined dev workspace's .npmrc sets `auto-install-peers=true`, so npm silently
- *      installs the peer locally even from a clean clone.
+ *   1. This repo's root package.json declares "@angular/compiler" itself, which puts it in the
+ *      REPO-ROOT node_modules. That directory is an ancestor of packages/MJExplorer/**, so Node's
+ *      upward module resolution finds it from MJExplorer's own source even though MJExplorer's
+ *      manifest never declared it. (Verified by walking the chain: .../MJExplorer/src/node_modules
+ *      miss, .../MJExplorer/node_modules miss, .../packages/node_modules miss, MJ/node_modules HIT.)
+ *   2. pnpm satisfies each dependent's peer INSIDE that dependent's own virtual-store directory,
+ *      and that is what hides the exact import which fails in a host. `compiler-cli`'s internal
+ *      `import '@angular/compiler'` resolves from its realpath in the store, where pnpm has placed
+ *      a `compiler` symlink in a directory whose name encodes the peer:
+ *          .pnpm/@angular+compiler-cli@<v>_@angular+compiler@<v>_typescript@<v>/node_modules/
+ *      The same holds for `platform-browser-dynamic`. pnpm only installs those peers at all
+ *      because the joined dev workspace turns peer auto-install on — `auto-install-peers` is a
+ *      PNPM key (npm has no such config; npm 7+ auto-installs peers unconditionally). That switch
+ *      has already moved once, from the workspace `.npmrc` to `pnpm-workspace.yaml`
+ *      (`PEER_INSTALL_SETTINGS`, packages/MJCLI/src/lib/dev-workspace/build.ts), so this comment
+ *      names the BEHAVIOUR rather than the file that currently carries it.
+ *
+ * A host repo produced by `mj install` inherits neither: its flat npm node_modules has no root
+ * declaration for this package, and npm has no per-dependent virtual store to put a peer in.
  * Worse, packages/MJInstaller/src/phases/DependencyPhase.ts retries `npm install` with
  * `--legacy-peer-deps` whenever npm reports an ERESOLVE conflict — and that flag disables
  * npm's automatic peer installation outright. A host repo that hits any ERESOLVE during
@@ -60,6 +74,34 @@ export function unionDeclaredDeps(manifest) {
 }
 
 /**
+ * Names declared in BOTH sections with different specs.
+ *
+ * The union above answers "is it declared?", which is section-agnostic and correct. It cannot
+ * answer "which spec gets installed?": a union has to pick one value per key, and object spread
+ * keeps the LAST — devDependencies — while npm and pnpm both install from `dependencies` and warn
+ * about nothing (measured: pnpm 11.21.0 resolved `dependencies:'^21.2.22'` beside
+ * `devDependencies:'21.2.22'` to version **21.2.23**, floating the caret past the pin the gate was
+ * reading). So `dependencies: '^21.2.22'` beside `devDependencies: '21.2.22'` would install from the
+ * caret range while every assertion below inspected the pin, and this gate would report OK on
+ * exactly the range it exists to forbid.
+ *
+ * Rather than teaching the gate one package manager's precedence rule, reject the ambiguity: if a
+ * name is declared twice with conflicting specs, no reader can tell what ships either. Identical
+ * specs in both sections stay legal — redundant, but unambiguous.
+ */
+function conflictingDeclarations(manifest, names) {
+    const conflicts = [];
+    for (const name of names) {
+        const inDependencies = manifest.dependencies?.[name];
+        const inDevDependencies = manifest.devDependencies?.[name];
+        if (inDependencies !== undefined && inDevDependencies !== undefined && inDependencies !== inDevDependencies) {
+            conflicts.push({ name, inDependencies, inDevDependencies });
+        }
+    }
+    return conflicts;
+}
+
+/**
  * Evaluate the three assertions against an already-parsed manifest object. Pure function —
  * no filesystem, no process — so it is directly self-testable against in-memory fixtures.
  * Returns { ok, errors }; errors is empty iff ok.
@@ -69,13 +111,27 @@ export function evaluateManifest(manifest) {
     const compiler = declared[PEER_NAME];
     const errors = [];
 
+    for (const { name, inDependencies, inDevDependencies } of conflictingDeclarations(manifest, [
+        PEER_NAME,
+        RUNTIME_PEER_OF,
+        BUILD_PEER_OF,
+    ])) {
+        errors.push(
+            `${name} is declared twice with conflicting specs: dependencies '${inDependencies}' vs ` +
+                `devDependencies '${inDevDependencies}'.\n` +
+                `    npm and pnpm both install the 'dependencies' spec and warn about nothing, so the\n` +
+                `    other one is silently discarded — while the checks below read the 'devDependencies'\n` +
+                `    one. Declare it once, or declare the same spec in both.`
+        );
+    }
+
     if (compiler === undefined) {
         errors.push(
             `${PEER_NAME} is not declared in dependencies or devDependencies.\n` +
                 `    It is a non-optional peer of ${RUNTIME_PEER_OF} (a runtime dependency — src/main.ts\n` +
                 `    bootstraps via platformBrowserDynamic()) AND of ${BUILD_PEER_OF} (build-time).\n` +
                 `    A host repo produced by 'mj install' has neither this monorepo's root\n` +
-                `    package.json declaration nor its dev-workspace auto-install-peers=true .npmrc to\n` +
+                `    package.json declaration nor the joined dev workspace's pnpm peer auto-install to\n` +
                 `    fall back on. Worse, DependencyPhase.ts retries 'npm install' with\n` +
                 `    --legacy-peer-deps on any ERESOLVE conflict, which disables npm's automatic peer\n` +
                 `    installation outright — so the host's Angular build dies with\n` +
@@ -121,8 +177,18 @@ const PASSING_MANIFEST = {
     },
 };
 
+/**
+ * [label, expectedOk, manifest, expectedMarker]
+ *
+ * `expectedMarker` is a substring of the error the fixture is NAMED after, and it is what makes the
+ * label true. Asserting `ok` alone lets any rule stand in for any other: the caret fixture also
+ * skews from both peers, and the missing-compiler fixture falls through to
+ * EXACT_PIN_RE.test(undefined) — so deleting either the pin rule or the missing-declaration branch
+ * left every fixture green. Mutation-tested: with the marker, both mutants die.
+ * `null` on a passing fixture means "expect no errors at all".
+ */
 export const SELF_TEST_FIXTURES = [
-    ['passes when compiler is declared, exact-pinned, and matches both peers', true, PASSING_MANIFEST],
+    ['passes when compiler is declared, exact-pinned, and matches both peers', true, PASSING_MANIFEST, null],
     [
         'passes when compiler is declared in dependencies instead of devDependencies (F3: union, not section)',
         true,
@@ -130,11 +196,13 @@ export const SELF_TEST_FIXTURES = [
             dependencies: { '@angular/compiler': '21.2.22', '@angular/platform-browser-dynamic': '21.2.22' },
             devDependencies: { '@angular/compiler-cli': '21.2.22' },
         },
+        null,
     ],
     [
         'passes when compiler is declared and exact-pinned but neither peer is present to compare against',
         true,
         { dependencies: {}, devDependencies: { '@angular/compiler': '21.2.22' } },
+        null,
     ],
     [
         'passes when only @angular/compiler-cli is declared and matches (platform-browser-dynamic absent)',
@@ -143,8 +211,9 @@ export const SELF_TEST_FIXTURES = [
             dependencies: {},
             devDependencies: { '@angular/compiler': '21.2.22', '@angular/compiler-cli': '21.2.22' },
         },
+        null,
     ],
-    ['fails when @angular/compiler is missing entirely', false, { dependencies: {}, devDependencies: {} }],
+    ['fails when @angular/compiler is missing entirely', false, { dependencies: {}, devDependencies: {} }, 'is not declared'],
     [
         'fails on a caret range',
         false,
@@ -152,6 +221,7 @@ export const SELF_TEST_FIXTURES = [
             dependencies: { '@angular/platform-browser-dynamic': '21.2.22' },
             devDependencies: { '@angular/compiler': '^21.2.22', '@angular/compiler-cli': '21.2.22' },
         },
+        'not an exact pin',
     ],
     [
         'fails on a tilde range',
@@ -160,6 +230,7 @@ export const SELF_TEST_FIXTURES = [
             dependencies: {},
             devDependencies: { '@angular/compiler': '~21.2.22', '@angular/compiler-cli': '21.2.22' },
         },
+        'not an exact pin',
     ],
     [
         'fails when skewed from @angular/platform-browser-dynamic',
@@ -168,6 +239,16 @@ export const SELF_TEST_FIXTURES = [
             dependencies: { '@angular/platform-browser-dynamic': '21.2.21' },
             devDependencies: { '@angular/compiler': '21.2.22', '@angular/compiler-cli': '21.2.22' },
         },
+        'does not match @angular/platform-browser-dynamic',
+    ],
+    [
+        'fails when declared in BOTH sections with conflicting specs (npm installs the dependencies spec)',
+        false,
+        {
+            dependencies: { '@angular/compiler': '^21.2.22', '@angular/platform-browser-dynamic': '21.2.22' },
+            devDependencies: { '@angular/compiler': '21.2.22', '@angular/compiler-cli': '21.2.22' },
+        },
+        'declared twice with conflicting specs',
     ],
     [
         'fails when skewed from @angular/compiler-cli',
@@ -176,15 +257,24 @@ export const SELF_TEST_FIXTURES = [
             dependencies: { '@angular/platform-browser-dynamic': '21.2.22' },
             devDependencies: { '@angular/compiler': '21.2.22', '@angular/compiler-cli': '21.2.23' },
         },
+        'does not match @angular/compiler-cli',
     ],
 ];
 
 export function runSelfTest() {
     let failed = 0;
-    for (const [name, expectedOk, manifest] of SELF_TEST_FIXTURES) {
-        const { ok } = evaluateManifest(manifest);
+    for (const [name, expectedOk, manifest, expectedMarker] of SELF_TEST_FIXTURES) {
+        const { ok, errors } = evaluateManifest(manifest);
         if (ok !== expectedOk) {
             console.error(`❌ FAIL ${name}: expected ok=${expectedOk}, got ok=${ok}`);
+            failed++;
+        } else if (expectedMarker !== null && !errors.some((e) => e.includes(expectedMarker))) {
+            // The verdict was right for the wrong reason — the rule this fixture is named after
+            // did not fire, and some other rule covered for it.
+            console.error(
+                `❌ FAIL ${name}: verdict ok=${ok} is correct, but no error contains ` +
+                    `'${expectedMarker}'. Reported instead: ${JSON.stringify(errors.map((e) => e.split('\n')[0]))}`
+            );
             failed++;
         } else {
             console.log(`✅ PASS ${name}`);
