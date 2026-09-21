@@ -49,6 +49,8 @@ export type SaveCallBinding =
           callArgsSQL: string;
           /** Back-compat inline single-line `@CodeName=N'value', ...` form. */
           simpleParamsSQL: string;
+          /** The per-save variable suffix (`_<hash>`), so wrappers can reference `@<CodeName><suffix>` variables. */
+          suffix: string;
       }
     /**
      * PostgreSQL positional-arg shape: typed `$N` placeholders bound via

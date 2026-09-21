@@ -42,7 +42,13 @@ import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../servi
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import type { ExportBranding } from '../../services/export.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
-import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
+import {
+  CollectRealtimeSessionIDs,
+  MapRealtimeSessionMeta,
+  REALTIME_SESSION_META_FIELDS,
+  RealtimeSessionMetaRow,
+  RealtimeSessionTimelineMeta
+} from '../../utils/realtime-session-timeline';
 import {
   ResolveDateJumpTarget,
   CombineDateJumpOutcome,
@@ -2134,48 +2140,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     conversationId?: string,
     loadToken?: number
   ): Promise<Map<string, RealtimeSessionTimelineMeta> | null> {
-    const sessionIds: string[] = [];
-    const seen = new Set<string>();
-    for (const detail of details) {
-      const raw = detail.AgentSessionID?.trim() ?? '';
-      if (raw.length === 0) {
-        continue;
-      }
-      const key = NormalizeUUID(raw);
-      if (!seen.has(key)) {
-        seen.add(key);
-        sessionIds.push(raw);
-      }
-    }
+    // Collecting the ids and mapping the rows both live in the runtime, so the React Native thread
+    // keys its map the same way (NormalizeUUID) and parses ClosedAt the same way. The query itself
+    // stays here — it is the one part that is genuinely host-specific.
+    const sessionIds = CollectRealtimeSessionIDs(details);
 
-    const metaMap = new Map<string, RealtimeSessionTimelineMeta>();
+    let metaMap = new Map<string, RealtimeSessionTimelineMeta>();
     if (sessionIds.length > 0) {
       try {
         const idList = sessionIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const result = await rv.RunView<{
-          ID: string;
-          Agent: string | null;
-          Status: 'Active' | 'Closed' | 'Idle';
-          CloseReason: string | null;
-          ClosedAt: string | Date | null;
-        }>({
+        const result = await rv.RunView<RealtimeSessionMetaRow>({
           EntityName: 'MJ: AI Agent Sessions',
           ExtraFilter: `ID IN (${idList})`,
-          Fields: ['ID', 'Agent', 'Status', 'CloseReason', 'ClosedAt'],
+          Fields: [...REALTIME_SESSION_META_FIELDS],
           ResultType: 'simple'
         });
         if (result.Success) {
-          for (const row of result.Results ?? []) {
-            const closedAt = row.ClosedAt ? new Date(row.ClosedAt) : null;
-            metaMap.set(NormalizeUUID(row.ID), {
-              SessionID: row.ID,
-              AgentName: row.Agent ?? null,
-              Status: row.Status ?? null,
-              CloseReason: row.CloseReason ?? null,
-              ClosedAt: closedAt && !isNaN(closedAt.getTime()) ? closedAt : null
-            });
-          }
+          metaMap = MapRealtimeSessionMeta(result.Results);
         }
       } catch (error) {
         console.warn('Failed to load realtime session meta — session cards render without status chips:', error);

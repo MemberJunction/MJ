@@ -1631,12 +1631,13 @@ export class RunAIAgentResolver extends ResolverBase {
         if (!artifactVersion.FileID) return null;
 
         try {
-            // Use the attachment service's downloadFileContent which uses GetObject directly
+            // The attachment service returns base64 rather than a Buffer — `Buffer` is Node-only,
+            // and removing it from that signature is what let the service stop depending on the
+            // storage SDKs and become usable from browser and React Native hosts.
             const attachmentService = GetAttachmentService();
-            const buffer = await attachmentService.DownloadFileContent(artifactVersion.FileID, contextUser, provider);
-            if (!buffer) return null;
+            const base64 = await attachmentService.DownloadFileContent(artifactVersion.FileID, contextUser, provider);
+            if (!base64) return null;
 
-            const base64 = buffer.toString('base64');
             const mimeType = artifactVersion.MimeType || 'application/octet-stream';
             return `data:${mimeType};base64,${base64}`;
         } catch (err) {

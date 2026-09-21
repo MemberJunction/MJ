@@ -1,5 +1,6 @@
 import { BaseModel } from "./baseModel";
 import type { RealtimeReasoningPlane } from "./modelConfiguration";
+import type { RealtimeTrackDescriptor, RealtimeTrackUsageBasis } from "./realtimeTracks";
 
 /**
  * A JSON-serializable value. Used to type open configuration bags and JSON-schema
@@ -237,9 +238,12 @@ export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'firstMessage',
     'disableAutoResponse',
     'turnDetection',
+    'reasoning',
     'endpoint',
     'sampleRate',
     'proxyBaseUrl',
+    'tooling',
+    'toolBehavior',
 ] as const;
 
 /** A selectable provider-native voice — `ID` is sent to the provider, `Name` is the human label. */
@@ -344,9 +348,15 @@ export interface RealtimeSessionCapabilities {
     EmitsResponseComplete?: boolean;
 
     /**
-     * The units this provider uses to measure and bill usage: tokens, seconds, or both.
+     * The units this provider uses to measure and bill usage.
+     *
+     * A LIST rather than an enum because a provider can meter in more than one basis at once —
+     * GPT-Live reports voice seconds and delegated reasoning tokens from different places, so an
+     * exclusive enum would force us to drop one. Shares
+     * {@link import('./realtimeTracks').RealtimeTrackUsageBasis} with the media plane so cost has one
+     * vocabulary; `'frames'` and `'bytes'` exist for non-audio tracks.
      */
-    UsageBases?: readonly ('tokens' | 'seconds')[];
+    UsageBases?: readonly RealtimeTrackUsageBasis[];
 
     /**
      * Whether this driver provides speech-to-text transcript events for user audio input.
@@ -357,6 +367,30 @@ export interface RealtimeSessionCapabilities {
      * Whether this driver provides text transcript events for model audio output.
      */
     ProvidesOutputTranscription?: boolean;
+
+    /**
+     * Whether this driver surfaces model-authored summaries of the model's own reasoning
+     * (Gemini `thinkingConfig.includeThoughts`).
+     *
+     * Sibling of {@link ProvidesInputTranscription} / {@link ProvidesOutputTranscription}: it
+     * declares a transcript STREAM the driver can produce. Thought summaries are narration, not
+     * spoken response — a host rendering them as assistant speech would attribute the model's
+     * scratch reasoning to it as an answer.
+     */
+    ProvidesThoughtSummaries?: boolean;
+
+    /**
+     * Whether this driver correctly handles a session whose reasoning outlives its turn — i.e.
+     * where a turn-terminal frame does NOT mean the server is idle, and further tool calls or
+     * audio may still arrive.
+     *
+     * This is a statement about the DRIVER, not the model: a driver that keys "work finished" off
+     * the turn-terminal frame must declare `false`, because on such a model it would flush deferred
+     * work early and report itself not-busy while the server is still going. Which signal a given
+     * model actually uses is model metadata
+     * (`ModelConfiguration.Realtime.IdleSignal`), not a driver capability.
+     */
+    SupportsAsynchronousReasoning?: boolean;
 
     /**
      * Whether the provider supports receiving multiple parallel tool calls and batched results (gpt-live-1.md §4.2).
@@ -376,6 +410,28 @@ export interface RealtimeSessionCapabilities {
      * Maximum number of concurrent delegations supported by the provider, or undefined if unbounded.
      */
     MaxConcurrentDelegations?: number;
+
+    /**
+     * Media tracks this model can RECEIVE (user -> model).
+     *
+     * Absent or empty is read as "inbound audio only", which is every model MJ spoke to before
+     * Gemini 3.8 Live — so an existing driver that declares nothing keeps working unchanged.
+     *
+     * This is the supply side of track negotiation: the caller requests
+     * (`ModelConfiguration.Realtime.RequestedTracks`), this declares, and
+     * {@link import('./realtimeTracks').ResolveRequestedTracks} intersects them. A requested track
+     * absent here resolves to `'unsupported'` rather than being dropped, so a host can fall back
+     * deliberately instead of wondering why no samples arrive.
+     */
+    SupportedInboundTracks?: readonly RealtimeTrackDescriptor[];
+
+    /**
+     * Media tracks this model can EMIT (model -> user). Absent or empty is read as "outbound audio
+     * only". Non-audio outbound tracks (avatar video, haptics) are admitted by the contract because
+     * direction is a property of a track rather than part of its type; no provider in play emits one
+     * yet.
+     */
+    SupportedOutboundTracks?: readonly RealtimeTrackDescriptor[];
 }
 
 /** Parameters for {@link IRealtimeSession.Reconfigure} — a live turn-taking change. */
@@ -708,6 +764,14 @@ export interface RealtimeSessionParams {
      * Used for auditing, rate limiting, and proxy ticket attribution.
      */
     UserID?: string;
+
+    /**
+     * Optional boolean indicating that the SystemPrompt already provides its own tool framing
+     * (e.g. from BuildRealtimeAgentFraming in co-agent sessions). When true, drivers MUST NOT
+     * append their own standalone delegation policy. When false or omitted, drivers may fall back
+     * to heuristic substring sniffing or default policy compilation.
+     */
+    HasToolFraming?: boolean;
 }
 
 /**
@@ -739,6 +803,18 @@ export interface RealtimeTranscript {
      * instead of a stack of growing duplicates. Absent/false: a normal, append-worthy final.
      */
     ReplacesPrevious?: boolean;
+
+    /**
+     * `'normal'` for a regular conversation turn; `'narration'` for an ephemeral
+     * spoken-progress update or model-authored reasoning thought. Absent/undefined defaults to `'normal'`.
+     */
+    Kind?: 'normal' | 'narration';
+
+    /**
+     * `true` when this transcript represents model-authored reasoning / thoughts rather than
+     * spoken audio.
+     */
+    IsThought?: boolean;
 }
 
 /**
@@ -833,10 +909,26 @@ export interface RealtimeUsageModalityDetail {
     TextTokens?: number;
     /** Audio-modality tokens. */
     AudioTokens?: number;
-    /** Image-modality tokens (input only on current providers). */
+    /**
+     * Image-modality tokens (input only on current providers).
+     * Authoritative financial billing basis reported by inference providers (e.g. Gemini Live reports
+     * inbound video frames under promptTokensDetails.IMAGE).
+     */
     ImageTokens?: number;
     /** Tokens served from the provider's prompt cache (billed at the cached rate). */
     CachedTokens?: number;
+    /**
+     * Cumulative inbound video frames processed on video tracks (usage basis 'frames').
+     * Client-side telemetry signal providing fine-grained frame counting and rate attribution.
+     * Comparing VideoFrames against ImageTokens enables operational drift detection for dropped frames.
+     */
+    VideoFrames?: number;
+    /**
+     * Cumulative inbound or outbound video duration in seconds (usage basis 'seconds').
+     * Represents the wall-clock span between first and last sent frames (span-not-sum) for stream telemetry.
+     * Provider-reported ImageTokens remains the authoritative financial billing basis.
+     */
+    VideoSeconds?: number;
 }
 
 /**
@@ -865,4 +957,65 @@ export interface RealtimeToolDefinition {
      * provider's native function-parameter schema.
      */
     ParametersSchema: JSONObject;
+}
+
+/**
+ * Normalized representation of a realtime tool execution scheduling hint.
+ *
+ * Directs how the model should schedule its generation following a tool result:
+ * - `'silent'`: Execute without model speaking response.
+ * - `'whenIdle'`: Deliver tool output to model when conversational turn goes idle.
+ * - `'interrupt'`: Immediately interrupt active generation to deliver tool output.
+ */
+export type RealtimeToolSchedulingHint = 'silent' | 'whenIdle' | 'interrupt';
+
+/**
+ * Extracts and normalizes scheduling hints (`__mj_scheduling` or legacy `scheduling`)
+ * from a tool's parsed return dictionary.
+ *
+ * Strips both keys from `parsed` in-place so neither key leaks into the model's response payload.
+ * Validates the value case-insensitively, accepting:
+ * - 'SILENT' -> 'silent'
+ * - 'WHEN_IDLE' -> 'whenIdle'
+ * - 'INTERRUPT' | 'INTERRUPTED' -> 'interrupt'
+ *
+ * Warns on unrecognized values with `loggerTag` and returns `undefined`.
+ *
+ * @param parsed The tool output dictionary (mutated in-place to strip scheduling keys).
+ * @param toolName The name of the tool being executed, for logging context.
+ * @param loggerTag Optional logging tag prefix (defaults to 'Realtime').
+ * @returns The normalized scheduling hint, or `undefined` if absent or unrecognized.
+ */
+export function ExtractToolSchedulingHint(
+    parsed: Record<string, unknown>,
+    toolName: string,
+    loggerTag: string = 'Realtime'
+): RealtimeToolSchedulingHint | undefined {
+    const raw = parsed['__mj_scheduling'] ?? parsed['scheduling'];
+    if ('__mj_scheduling' in parsed) {
+        delete parsed['__mj_scheduling'];
+    }
+    if ('scheduling' in parsed) {
+        delete parsed['scheduling'];
+    }
+
+    if (typeof raw !== 'string') {
+        return undefined;
+    }
+
+    const schedStr = raw.trim().toUpperCase();
+    if (schedStr.length === 0) {
+        return undefined;
+    }
+
+    if (schedStr === 'SILENT') {
+        return 'silent';
+    } else if (schedStr === 'WHEN_IDLE') {
+        return 'whenIdle';
+    } else if (schedStr === 'INTERRUPT' || schedStr === 'INTERRUPTED') {
+        return 'interrupt';
+    } else {
+        console.warn(`[${loggerTag}] Unrecognized function scheduling value "${raw}" for tool "${toolName}".`);
+        return undefined;
+    }
 }
