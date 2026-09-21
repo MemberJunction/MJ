@@ -2947,7 +2947,10 @@ export class ComputerUseEngine {
      */
     private createLLMInstance(modelConfig: ModelConfig): BaseLLM {
         const driverClass = modelConfig.DriverClass ?? this.vendorToDriverClass(modelConfig.Vendor);
-        const apiKey = GetAIAPIKey(driverClass);
+        // The run's runtime keys first, then the platform's, per driver class — the one funnel both the
+        // controller and the judge LLM pass through, so a run on a customer's credential drives the
+        // browser on that credential too rather than only its prompts.
+        const apiKey = GetAIAPIKey(driverClass, this.getActiveParams()?.APIKeys);
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
             BaseLLM,
             driverClass,
