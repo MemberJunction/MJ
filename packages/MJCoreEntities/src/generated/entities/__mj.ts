@@ -18547,7 +18547,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
-    VectorDatabase: z.string().describe(`
+    VectorDatabase: z.string().nullable().describe(`
         * * Field Name: VectorDatabase
         * * Display Name: Vector Database Name
         * * SQL Data Type: nvarchar(100)`),
@@ -18555,7 +18555,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Field Name: Template
         * * Display Name: Template Name
         * * SQL Data Type: nvarchar(255)`),
-    AIModel: z.string().describe(`
+    AIModel: z.string().nullable().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model Name
         * * SQL Data Type: nvarchar(50)`),
@@ -20845,6 +20845,10 @@ export const MJFeatureValueSchema = z.object({
         * * Field Name: ProcessRunDetail
         * * Display Name: Process Run Detail
         * * SQL Data Type: nvarchar(450)`),
+    FeatureValueCache: z.string().nullable().describe(`
+        * * Field Name: FeatureValueCache
+        * * Display Name: Feature Value Cache
+        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJFeatureValueEntityType = z.infer<typeof MJFeatureValueSchema>;
@@ -86023,6 +86027,28 @@ export class MJEntityDocumentTypeEntity extends BaseEntity<MJEntityDocumentTypeE
  */
 @RegisterClass(BaseEntity, 'MJ: Entity Documents')
 export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityType> {
+
+  /**
+  * Embedded record: MJ: Templates
+  *
+  * 1:1 peer joined by this record's TemplateID. Loaded and saved with this
+  * MJ: Entity Documents record — see packages/MJCore/docs/embedded-records.md.
+  * Declared by EntityField.EmbeddedRecord on 'MJ: Entity Documents.TemplateID'; edit that row, not this file.
+  * Always present after GetEntityObject / NewRecord.
+  */
+  private readonly __emb_TemplateID = this.DeclareEmbeddedRecord<MJTemplateEntity>({
+      ForeignKeyField: 'TemplateID',
+        RelatedEntity: 'MJ: Templates',
+        OnClear: 'orphan',
+        LoadNested: 'inherit',
+  });
+  public get TemplateID_Object(): MJTemplateEntity {
+      return this.__emb_TemplateID.Value!;
+  }
+  public TemplateID_EnsureObject(): MJTemplateEntity {
+      return this.__emb_TemplateID.Ensure();
+  }
+
     /**
     * Loads the MJ: Entity Documents record from the database
     * @param ID: string - primary key value to load the MJ: Entity Documents record.
@@ -86405,7 +86431,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Display Name: Vector Database Name
     * * SQL Data Type: nvarchar(100)
     */
-    get VectorDatabase(): string {
+    get VectorDatabase(): string | null {
         return this.Get('VectorDatabase');
     }
 
@@ -86423,7 +86449,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Display Name: AI Model Name
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {
+    get AIModel(): string | null {
         return this.Get('AIModel');
     }
 
@@ -92445,6 +92471,15 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     */
     get ProcessRunDetail(): string | null {
         return this.Get('ProcessRunDetail');
+    }
+
+    /**
+    * * Field Name: FeatureValueCache
+    * * Display Name: Feature Value Cache
+    * * SQL Data Type: nvarchar(500)
+    */
+    get FeatureValueCache(): string | null {
+        return this.Get('FeatureValueCache');
     }
 }
 

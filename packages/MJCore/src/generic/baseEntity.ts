@@ -1,10 +1,10 @@
-import { ClassFactory, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { ClassFactory, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, computeContentHashAsync } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
 import { BaseEngineRegistry } from './baseEngineRegistry';
 import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
-import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
+import { ComputeContentHashOptions, EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
@@ -3632,6 +3632,53 @@ export abstract class BaseEntity<T = unknown> {
      */
     public GetChangesSinceLastSave(): Partial<T> {
         return this.GetAll(false, true);
+    }
+
+    /**
+     * Computes a deterministic SHA-256 content hash of the entity's field values using
+     * the canonicalizer and Web Crypto API from `@memberjunction/global`.
+     *
+     * By default, hashes all loaded non-system fields (excluding `__mj_*` columns).
+     * The result is byte-for-byte identical across client and server tiers.
+     *
+     * @param options Optional configuration specifying subset of fields and/or whether to exclude system fields.
+     */
+    public async ComputeContentHash(options?: ComputeContentHashOptions): Promise<string> {
+        const excludeSystem = options?.ExcludeSystemFields ?? true;
+        const requestedFields = options?.Fields ? new Set(options.Fields) : null;
+
+        const data: Record<string, unknown> = {};
+
+        // Collect all loaded fields from this entity
+        for (const field of this.Fields) {
+            if (field.NotLoaded) continue;
+            const name = field.Name;
+            if (excludeSystem && name.startsWith('__mj_')) continue;
+            if (requestedFields && !requestedFields.has(name)) continue;
+
+            const val = field.Value;
+            if (val !== undefined) {
+                data[name] = val;
+            }
+        }
+
+        // Merge IS-A parent entity fields if present (matching GetAll behavior)
+        if (this._parentEntity) {
+            for (const field of this._parentEntity.Fields) {
+                if (field.NotLoaded) continue;
+                const name = field.Name;
+                if (excludeSystem && name.startsWith('__mj_')) continue;
+                if (requestedFields && !requestedFields.has(name)) continue;
+
+                // Parent entity is authoritative for its fields
+                const val = field.Value;
+                if (val !== undefined) {
+                    data[name] = val;
+                }
+            }
+        }
+
+        return computeContentHashAsync(data);
     }
 
     /**

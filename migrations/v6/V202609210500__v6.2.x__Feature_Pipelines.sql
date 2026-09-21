@@ -4230,7 +4230,8 @@ SELECT
     MJRecordProcess_RecordProcessID.[Name] AS [RecordProcess],
     MJEntity_EntityID.[Name] AS [Entity],
     MJAIPrompt_PromptID.[Name] AS [Prompt],
-    MJProcessRunDetail_ProcessRunDetailID.[RecordID] AS [ProcessRunDetail]
+    MJProcessRunDetail_ProcessRunDetailID.[RecordID] AS [ProcessRunDetail],
+    MJFeatureValueCache_FeatureValueCacheID.[KeyDisplay] AS [FeatureValueCache]
 FROM
     [${flyway:defaultSchema}].[FeatureValue] AS f
 INNER JOIN
@@ -4249,6 +4250,10 @@ LEFT OUTER JOIN
     [${flyway:defaultSchema}].[ProcessRunDetail] AS MJProcessRunDetail_ProcessRunDetailID
   ON
     [f].[ProcessRunDetailID] = MJProcessRunDetail_ProcessRunDetailID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[FeatureValueCache] AS MJFeatureValueCache_FeatureValueCacheID
+  ON
+    [f].[FeatureValueCacheID] = MJFeatureValueCache_FeatureValueCacheID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwFeatureValues] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
@@ -6055,6 +6060,69 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e19389d0-97a5-4e9e-8d26-7fa0c3ea2b1b' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'FeatureValueCache')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e19389d0-97a5-4e9e-8d26-7fa0c3ea2b1b',
+            '3BED585D-B150-4899-AB06-8A19624EA9BE', -- Entity: MJ: Feature Values
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE'),
+            'FeatureValueCache',
+            'Feature Value Cache',
+            NULL,
+            'nvarchar',
+            1000,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
       IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '58ee5f88-ec28-4234-85f0-ad6e52220670' OR (EntityID = 'E1BAC2AB-DAD6-40D7-9ADE-C5FE2B405A79' AND Name = 'RecordProcess')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
@@ -6625,6 +6693,14 @@ SET
    DisplayName = 'Feature Value Cache'
 WHERE 
    ID = '83E95083-AE41-428B-82BD-787E1262EC89';
+
+-- UPDATE Entity Field Category Info MJ: Feature Values.FeatureValueCache 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Pipeline Provenance',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'E19389D0-97A5-4E9E-8D26-7FA0C3EA2B1B';
 
 -- UPDATE Entity Field Category Info MJ: Feature Values.ComputedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]

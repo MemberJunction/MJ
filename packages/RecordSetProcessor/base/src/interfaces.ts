@@ -58,6 +58,10 @@ export interface RecordProcessorContext {
     provider: IMetadataProvider;
     /** ID of the current process run, when one is being tracked. */
     processRunID?: string;
+    /** ID of the originating Record Process definition, when applicable. */
+    recordProcessID?: string;
+    /** Target entity ID, when applicable. */
+    entityID?: string;
 }
 
 /**
@@ -73,6 +77,17 @@ export interface IRecordProcessor {
      * @returns The record's outcome (Succeeded / Failed / Skipped) plus any payload / trace links.
      */
     ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult>;
+
+    /**
+     * Optional batch execution seam (P1-7c). Enables two-phase distinct-key execution:
+     * deduplicating across the batch before execution, executing once per distinct key,
+     * and fanning results back to all matching records.
+     *
+     * @param records - The batch of records to process.
+     * @param context - The execution context.
+     * @returns Map of RecordID -> RecordResult.
+     */
+    ProcessBatch?(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>>;
 }
 
 /** Opaque handle returned by a tracker's `BeginRun`, threaded back through the other tracker calls. */
@@ -182,7 +197,16 @@ export interface RecordSetProcessOptions {
     configuration?: unknown;
     /** True when this is a dry-run (compute-only) pass — recorded on the run header so history can distinguish previews from real applies. */
     dryRun?: boolean;
+    /** Whether to skip unchanged records (default false). */
+    skipUnchanged?: boolean;
+    /** How unchanged records are detected: Checksum, UpdatedAt, or None (default 'Checksum'). */
+    watermarkStrategy?: WatermarkStrategyValue;
+    /** Timestamp of the last run, used for 'UpdatedAt' strategy. */
+    lastRunAt?: Date | null;
 }
+
+/** Strategy used to detect unchanged records when skipUnchanged is enabled. */
+export type WatermarkStrategyValue = 'Checksum' | 'UpdatedAt' | 'None';
 
 // Re-export the progress/summary value types most consumers need alongside the seams.
 export type { ProgressInfo, ProcessRunSummary };

@@ -53056,6 +53056,10 @@ export class MJFeatureValue_ {
     @MaxLength(450)
     ProcessRunDetail?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    FeatureValueCache?: string;
+        
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
         

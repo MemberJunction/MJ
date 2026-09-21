@@ -13,7 +13,7 @@
 
 import { createHash } from 'node:crypto';
 import { LogError, RunQuery } from '@memberjunction/core';
-import { UUIDsEqual, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
+import { UUIDsEqual, canonicalize, computeContentHashAsync, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -26,6 +26,8 @@ import {
 import {
     DataFeatureSpec,
     DataFeatureOutput,
+    FeatureValueCacheService,
+    type CacheKeyResult,
     renderConstraintBlock,
     validateOutputValue,
     type ViolationPolicy,
@@ -46,11 +48,65 @@ export class InferProcessor implements IRecordProcessor {
         protected readonly spec?: DataFeatureSpec,
     ) {}
 
-    public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
+    public async ProcessRecord(
+        record: RecordRef,
+        context: RecordProcessorContext,
+        options?: { skipLookup?: boolean; keyInfo?: CacheKeyResult }
+    ): Promise<RecordResult> {
         await AIEngine.Instance.Config(false, context.contextUser);
         const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
         if (!prompt) {
             return { Status: 'Failed', ErrorMessage: `AI Prompt '${this.promptID}' not found` };
+        }
+
+        const isCacheable = this.spec?.Caching?.Cacheable === true;
+        const promptVersionHash = this.computePromptVersionHash(prompt as MJAIPromptEntityExtended, this.spec);
+        const constraintHash = this.computeConstraintHash(this.spec);
+        let keyInfo: CacheKeyResult | undefined;
+
+        // P1-7c Dedup Cache lookup
+        if (isCacheable) {
+            keyInfo =
+                options?.keyInfo ??
+                (await FeatureValueCacheService.Instance.computeCacheKey({
+                    keyFields: this.spec?.Caching?.KeyFields,
+                    recordData: this.recordToPlain(record),
+                }));
+
+            if (!options?.skipLookup) {
+                const cached = await FeatureValueCacheService.Instance.Lookup({
+                    recordProcessID: context.recordProcessID,
+                    scope: this.spec?.Caching?.Scope,
+                    promptID: prompt.ID,
+                    promptVersionHash,
+                    constraintHash,
+                    keyHash: keyInfo.keyHash,
+                    contextUser: context.contextUser,
+                    provider: context.provider,
+                });
+
+                if (cached) {
+                    const cachedPayload = JSON.parse(cached.OutputsJSON);
+                    await this.recordFeatureValuesHistory({
+                        record,
+                        context,
+                        payload: cachedPayload,
+                        reasoning: cached.Reasoning,
+                        promptID: prompt.ID,
+                        promptVersionHash,
+                        constraintHash,
+                        aiPromptRunID: cached.AIPromptRunID,
+                        featureValueCacheID: cached.ID,
+                    });
+                    return {
+                        Status: 'Succeeded',
+                        ResultPayload: cachedPayload,
+                        AIPromptRunID: cached.AIPromptRunID ?? undefined,
+                        PromptVersionHash: promptVersionHash,
+                        FeatureValueCacheID: cached.ID,
+                    };
+                }
+            }
         }
 
         // P1-6 Hook: beforeBuildContext
@@ -96,14 +152,169 @@ export class InferProcessor implements IRecordProcessor {
             };
         }
 
-        const promptVersionHash = this.computePromptVersionHash(prompt as MJAIPromptEntityExtended, this.spec);
+        let featureValueCacheID: string | undefined;
+        const reasoning = typeof rawResult === 'object' && rawResult !== null ? (rawResult as Record<string, unknown>).reasoning as string | undefined : undefined;
+
+        // P1-7c Dedup Cache store
+        if (isCacheable && keyInfo) {
+            try {
+                const stored = await FeatureValueCacheService.Instance.Store({
+                    recordProcessID: context.recordProcessID,
+                    scope: this.spec?.Caching?.Scope,
+                    promptID: prompt.ID,
+                    promptVersionHash,
+                    constraintHash,
+                    keyHash: keyInfo.keyHash,
+                    keyDisplay: keyInfo.keyDisplay,
+                    keyJSON: keyInfo.keyJSON,
+                    outputsJSON: JSON.stringify(validationOutcome.payload),
+                    reasoning: reasoning ?? null,
+                    aiPromptRunID: aiPromptRunID ?? null,
+                    ttlSeconds: this.spec?.Caching?.TTLSeconds,
+                    contextUser: context.contextUser,
+                    provider: context.provider,
+                });
+                featureValueCacheID = stored.ID;
+            } catch (e) {
+                LogError(`InferProcessor: failed storing cache entry: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+
+        // P1-7c History tracking in MJ: Feature Values
+        await this.recordFeatureValuesHistory({
+            record,
+            context,
+            payload: validationOutcome.payload,
+            reasoning,
+            promptID: prompt.ID,
+            promptVersionHash,
+            constraintHash,
+            aiPromptRunID,
+            featureValueCacheID,
+        });
 
         return {
             Status: 'Succeeded',
             ResultPayload: validationOutcome.payload,
             AIPromptRunID: aiPromptRunID,
             PromptVersionHash: promptVersionHash,
+            FeatureValueCacheID: featureValueCacheID,
         };
+    }
+
+    /**
+     * Two-phase batch execution (P1-7c). Resolves distinct keys across the batch first,
+     * checks the dedup cache in one batch query, executes LLM prompts ONCE per distinct key,
+     * and fans results back across all matching rows.
+     */
+    public async ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {
+        const results = new Map<string, RecordResult>();
+        if (!this.spec?.Caching?.Cacheable || records.length === 0) {
+            for (const r of records) {
+                results.set(r.RecordID, await this.ProcessRecord(r, context));
+            }
+            return results;
+        }
+
+        await AIEngine.Instance.Config(false, context.contextUser);
+        const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
+        if (!prompt) {
+            for (const r of records) {
+                results.set(r.RecordID, { Status: 'Failed', ErrorMessage: `AI Prompt '${this.promptID}' not found` });
+            }
+            return results;
+        }
+
+        const promptVersionHash = this.computePromptVersionHash(prompt as MJAIPromptEntityExtended, this.spec);
+        const constraintHash = this.computeConstraintHash(this.spec);
+
+        // Phase 1: Compute distinct cache keys across the batch
+        const keyGroupMap = new Map<string, { keyInfo: CacheKeyResult; records: RecordRef[] }>();
+        for (const record of records) {
+            const recordData = this.recordToPlain(record);
+            const keyInfo = await FeatureValueCacheService.Instance.computeCacheKey({
+                keyFields: this.spec.Caching.KeyFields,
+                recordData,
+            });
+            let group = keyGroupMap.get(keyInfo.keyHash);
+            if (!group) {
+                group = { keyInfo, records: [] };
+                keyGroupMap.set(keyInfo.keyHash, group);
+            }
+            group.records.push(record);
+        }
+
+        // Phase 2: Batch lookup existing cache entries for all distinct keys
+        const distinctKeyHashes = Array.from(keyGroupMap.keys());
+        const cacheMap = await FeatureValueCacheService.Instance.BatchLookup({
+            recordProcessID: context.recordProcessID,
+            scope: this.spec.Caching.Scope,
+            promptID: prompt.ID,
+            promptVersionHash,
+            constraintHash,
+            keyHashes: distinctKeyHashes,
+            contextUser: context.contextUser,
+            provider: context.provider,
+        });
+
+        // Phase 3: Fan out hits; execute misses ONCE per distinct key and fan out
+        for (const [keyHash, group] of keyGroupMap.entries()) {
+            const cached = cacheMap.get(keyHash);
+            if (cached) {
+                // CACHE HIT: fan out immediately to all matching records without calling LLM!
+                const cachedPayload = JSON.parse(cached.OutputsJSON);
+                for (const rec of group.records) {
+                    await this.recordFeatureValuesHistory({
+                        record: rec,
+                        context,
+                        payload: cachedPayload,
+                        reasoning: cached.Reasoning,
+                        promptID: prompt.ID,
+                        promptVersionHash,
+                        constraintHash,
+                        aiPromptRunID: cached.AIPromptRunID,
+                        featureValueCacheID: cached.ID,
+                    });
+                    results.set(rec.RecordID, {
+                        Status: 'Succeeded',
+                        ResultPayload: cachedPayload,
+                        AIPromptRunID: cached.AIPromptRunID ?? undefined,
+                        PromptVersionHash: promptVersionHash,
+                        FeatureValueCacheID: cached.ID,
+                    });
+                }
+            } else {
+                // CACHE MISS: Execute prompt ONCE for the distinct key (using the first record in the group)
+                const sampleRecord = group.records[0];
+                const singleResult = await this.ProcessRecord(sampleRecord, context, {
+                    skipLookup: true,
+                    keyInfo: group.keyInfo,
+                });
+
+                // Fan out result to all records in this group
+                for (const rec of group.records) {
+                    if (rec.RecordID === sampleRecord.RecordID) {
+                        results.set(rec.RecordID, singleResult);
+                    } else {
+                        if (singleResult.Status === 'Succeeded') {
+                            await this.recordFeatureValuesHistory({
+                                record: rec,
+                                context,
+                                payload: singleResult.ResultPayload,
+                                promptID: prompt.ID,
+                                promptVersionHash,
+                                constraintHash,
+                                aiPromptRunID: singleResult.AIPromptRunID,
+                                featureValueCacheID: singleResult.FeatureValueCacheID,
+                            });
+                        }
+                        results.set(rec.RecordID, { ...singleResult });
+                    }
+                }
+            }
+        }
+
+        return results;
     }
 
     /** Computes a deterministic SHA-256 hash representing the prompt version and constraint instructions. */
@@ -113,6 +324,87 @@ export class InferProcessor implements IRecordProcessor {
         const constraintBlock = spec?.Outputs ? renderConstraintBlock(spec.Outputs) : '';
         const hashBasis = `${prompt.ID}::${promptText}::${outputsStr}::${constraintBlock}`;
         return createHash('sha256').update(hashBasis).digest('hex');
+    }
+
+    /** Computes a deterministic SHA-256 hash representing the output constraints. */
+    protected computeConstraintHash(spec?: DataFeatureSpec): string {
+        if (!spec?.Outputs || spec.Outputs.length === 0) {
+            return 'no-constraints';
+        }
+        const constraints = spec.Outputs.map((o) => ({
+            name: o.Name,
+            constraint: o.Constraint,
+        }));
+        const canonical = canonicalize(constraints);
+        return createHash('sha256').update(canonical).digest('hex');
+    }
+
+    /**
+     * Records historical audit rows in MJ: Feature Values for all outputs on a record.
+     */
+    protected async recordFeatureValuesHistory(params: {
+        record: RecordRef;
+        context: RecordProcessorContext;
+        payload: unknown;
+        reasoning?: string | null;
+        confidence?: number | null;
+        promptID?: string | null;
+        promptVersionHash?: string | null;
+        constraintHash?: string | null;
+        aiPromptRunID?: string | null;
+        featureValueCacheID?: string | null;
+    }): Promise<void> {
+        if (!this.spec?.Outputs || this.spec.Outputs.length === 0 || !params.context.recordProcessID || !params.context.entityID) {
+            return;
+        }
+
+        const outputsList: Array<{ featureName: string; value: unknown; reasoning?: string | null; confidence?: number | null }> = [];
+        const rawPayload = params.payload;
+        const sources = { $: rawPayload };
+
+        for (const output of this.spec.Outputs) {
+            const val = resolveMappingRef(output.Ref, sources);
+            outputsList.push({
+                featureName: output.Name,
+                value: val !== undefined ? val : null,
+                reasoning: params.reasoning,
+                confidence: params.confidence,
+            });
+        }
+
+        try {
+            await FeatureValueCacheService.Instance.RecordFeatureValues({
+                recordProcessID: params.context.recordProcessID,
+                entityID: params.context.entityID,
+                recordID: params.record.RecordID,
+                outputs: outputsList,
+                promptID: params.promptID,
+                promptVersionHash: params.promptVersionHash,
+                constraintHash: params.constraintHash,
+                processRunID: params.context.processRunID,
+                aiPromptRunID: params.aiPromptRunID,
+                featureValueCacheID: params.featureValueCacheID,
+                contextUser: params.context.contextUser,
+                provider: params.context.provider,
+            });
+        } catch (e) {
+            LogError(`InferProcessor: failed to record FeatureValues history for record '${params.record.RecordID}': ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /**
+     * Computes the watermark basis hash for Checksum strategy:
+     * SHA-256 over canonical { promptData, promptVersionHash }.
+     */
+    public async ComputeBasisHash(record: RecordRef, context: RecordProcessorContext): Promise<string> {
+        await AIEngine.Instance.Config(false, context.contextUser);
+        const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
+        const promptVersionHash = prompt ? this.computePromptVersionHash(prompt as MJAIPromptEntityExtended, this.spec) : '';
+        const promptData = await this.buildPromptData(record, context);
+        return computeContentHashAsync({
+            promptData,
+            promptVersionHash,
+        });
     }
 
     // -------------------------------------------------------------------------------------------------

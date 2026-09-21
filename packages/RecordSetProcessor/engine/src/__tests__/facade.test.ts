@@ -88,6 +88,82 @@ describe('RecordProcessExecutor.buildProcessor', () => {
     it('throws when Infer work is missing its PromptID', () => {
         expect(() => exec.buildProcessor(rp({ WorkType: 'Infer' }))).toThrow(/PromptID/);
     });
+    it('validates materialization targets when building InferProcessor with DataFeatureSpec', () => {
+        const testEntity = {
+            ID: 'ENT-1',
+            Name: 'Widgets',
+            Fields: [
+                { Name: 'ID', TSType: 'string', IsPrimaryKey: true, IsVirtual: false },
+                { Name: 'Score', Type: 'decimal', Precision: 5, Scale: 4, TSType: 'number', IsVirtual: false },
+            ],
+        };
+        const testProvider = {
+            EntityByID: (id: string) => (id === 'ENT-1' ? testEntity : undefined),
+            EntityByName: (name: string) => (name.toLowerCase() === 'widgets' ? testEntity : undefined),
+        } as unknown as IMetadataProvider;
+
+        // Valid spec with Min: 0, Max: 1
+        const validSpec = {
+            Name: 'Valid Pipeline',
+            Description: 'Valid',
+            PromptID: 'P1',
+            Context: { Fields: ['Name'] },
+            Outputs: [
+                {
+                    Ref: '$.score',
+                    Name: 'Score',
+                    Target: { Mode: 'field', EntityFieldName: 'Score' },
+                    Constraint: { Type: 'numeric', Min: 0, Max: 1, OnViolation: 'fail' },
+                },
+            ],
+            Caching: { Cacheable: false },
+        };
+        const proc = exec.buildProcessor(
+            rp({ WorkType: 'Infer', PromptID: 'P1', EntityID: 'ENT-1', Configuration: JSON.stringify(validSpec) }),
+            false,
+            testProvider
+        );
+        expect(proc).toBeInstanceOf(InferProcessor);
+
+        // Invalid spec with Max: 100 on decimal(5,4)
+        const invalidSpec = {
+            ...validSpec,
+            Outputs: [
+                {
+                    Ref: '$.score',
+                    Name: 'Score',
+                    Target: { Mode: 'field', EntityFieldName: 'Score' },
+                    Constraint: { Type: 'numeric', Min: 0, Max: 100, OnViolation: 'fail' },
+                },
+            ],
+        };
+        expect(() =>
+            exec.buildProcessor(
+                rp({ WorkType: 'Infer', PromptID: 'P1', EntityID: 'ENT-1', Configuration: JSON.stringify(invalidSpec) }),
+                false,
+                testProvider
+            )
+        ).toThrow(/invalid materialization targets.*arithmetic overflow/);
+
+        // Invalid spec targeting nonexistent field
+        const badFieldSpec = {
+            ...validSpec,
+            Outputs: [
+                {
+                    Ref: '$.score',
+                    Name: 'Score',
+                    Target: { Mode: 'field', EntityFieldName: 'NoSuchField' },
+                },
+            ],
+        };
+        expect(() =>
+            exec.buildProcessor(
+                rp({ WorkType: 'Infer', PromptID: 'P1', EntityID: 'ENT-1', Configuration: JSON.stringify(badFieldSpec) }),
+                false,
+                testProvider
+            )
+        ).toThrow(/invalid materialization targets.*does not exist/);
+    });
     it('wraps an Infer processor with WriteBackProcessor when OutputMapping is set', () => {
         const proc = exec.buildProcessor(rp({
             WorkType: 'Infer', PromptID: 'P1',

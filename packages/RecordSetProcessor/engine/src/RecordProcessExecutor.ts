@@ -5,7 +5,7 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
@@ -30,7 +30,7 @@ import { InferProcessor } from './processors/InferProcessor';
 import { FieldRulesProcessor } from './processors/FieldRulesProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
 import { OutputMappingConfig, RunProvenance } from './writeBack';
-import { validateSpec, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { validateSpec, validateMaterializationTargets, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 /** Options for executing a Record Process. */
 export interface RunRecordProcessOptions {
@@ -54,6 +54,8 @@ export interface RunRecordProcessOptions {
     dryRun?: boolean;
     /** FK to the owning `ScheduledJobRun` when launched by the scheduler (links the Process Run back). */
     scheduledJobRunID?: string;
+    /** Optional timestamp of the previous run, used for 'UpdatedAt' watermark strategy. */
+    lastRunAt?: Date | null;
     /** Progress callback. */
     onProgress?: (progress: ProgressInfo) => void;
 }
@@ -74,9 +76,27 @@ export class RecordProcessExecutor {
     /** Runs an already-loaded Record Process. */
     public async Run(rp: MJRecordProcessEntity, options: RunRecordProcessOptions): Promise<ProcessRunResult> {
         const provider = options.provider ?? Metadata.Provider;
+        let lastRunAt = options.lastRunAt;
+        if (!lastRunAt && rp.SkipUnchanged && rp.WatermarkStrategy === 'UpdatedAt') {
+            try {
+                const rv = new RunView();
+                const lastRunRes = await rv.RunView<{ StartedAt?: Date }>({
+                    EntityName: 'MJ: Process Runs',
+                    ExtraFilter: `RecordProcessID = '${rp.ID}' AND Status = 'Completed'`,
+                    OrderBy: 'StartedAt DESC',
+                    MaxRows: 1,
+                }, options.contextUser);
+                if (lastRunRes.Success && lastRunRes.Results && lastRunRes.Results.length > 0) {
+                    lastRunAt = lastRunRes.Results[0].StartedAt ?? null;
+                }
+            } catch {
+                // Non-fatal fallback: proceed without skipping if history cannot be queried
+            }
+        }
+
         return RecordSetProcessor.Instance.Process({
             source: this.buildSource(rp, provider, options.singleRecordID, options.scope),
-            processor: this.buildProcessor(rp, options.dryRun),
+            processor: this.buildProcessor(rp, options.dryRun, provider),
             contextUser: options.contextUser,
             provider,
             dryRun: options.dryRun,
@@ -86,6 +106,9 @@ export class RecordProcessExecutor {
             triggeredBy: options.triggeredBy ?? 'OnDemand',
             batchSize: rp.BatchSize ?? undefined,
             maxConcurrency: rp.MaxConcurrency ?? undefined,
+            skipUnchanged: rp.SkipUnchanged,
+            watermarkStrategy: rp.WatermarkStrategy ?? 'Checksum',
+            lastRunAt,
             onProgress: options.onProgress,
             configuration: { recordProcessName: rp.Name, workType: rp.WorkType, scopeType: rp.ScopeType },
         });
@@ -150,7 +173,7 @@ export class RecordProcessExecutor {
      * dry-run the inner work runs but the mapping only previews (nothing is saved), so EVERY work type's
      * dry-run is side-effect-free, not just FieldRules.
      */
-    public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
+    public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean, provider?: IMetadataProvider): IRecordProcessor {
         if (rp.WorkType === 'FieldRules') {
             const ruleSet = rp.Configuration ? SafeJSONParse<FieldRuleSet>(rp.Configuration) : undefined;
             if (!ruleSet || !Array.isArray(ruleSet.Rules)) {
@@ -187,6 +210,15 @@ export class RecordProcessExecutor {
                 const errors = issues.filter((i) => i.Severity === 'error');
                 if (errors.length > 0) {
                     throw new Error(`Record Process '${rp.Name}': invalid DataFeatureSpec in Configuration: ${errors.map((err) => err.Message).join('; ')}`);
+                }
+
+                const targetProvider = provider ?? (Metadata.Provider ? Metadata.Provider : undefined);
+                if (targetProvider && rp.EntityID) {
+                    const materializationIssues = validateMaterializationTargets(spec, targetProvider, rp.EntityID);
+                    const matErrors = materializationIssues.filter((i) => i.Severity === 'error');
+                    if (matErrors.length > 0) {
+                        throw new Error(`Record Process '${rp.Name}': invalid materialization targets: ${matErrors.map((err) => `${err.Field ? `[${err.Field}] ` : ''}${err.Message} Fix: ${err.FixRecommendation}`).join('; ')}`);
+                    }
                 }
             }
             base = new InferProcessor(rp.PromptID, inputMapping, spec);

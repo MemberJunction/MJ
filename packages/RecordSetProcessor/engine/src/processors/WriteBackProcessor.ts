@@ -61,4 +61,66 @@ export class WriteBackProcessor implements IRecordProcessor {
             return { ...result, Status: 'Failed', ErrorMessage: `Write-back failed: ${message}` };
         }
     }
+
+    /**
+     * Delegates basis hash computation to the inner processor if supported.
+     */
+    public async ComputeBasisHash(record: RecordRef, context: RecordProcessorContext): Promise<string | undefined> {
+        if ('ComputeBasisHash' in this.inner && typeof (this.inner as { ComputeBasisHash?: unknown }).ComputeBasisHash === 'function') {
+            return (this.inner as { ComputeBasisHash: (r: RecordRef, ctx: RecordProcessorContext) => Promise<string | undefined> }).ComputeBasisHash(record, context);
+        }
+        return undefined;
+    }
+
+    /**
+     * Delegates batch processing to the inner processor when supported, and applies
+     * output mapping write-back to each successful result.
+     */
+    public async ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {
+        if ('ProcessBatch' in this.inner && typeof (this.inner as { ProcessBatch?: unknown }).ProcessBatch === 'function') {
+            const innerResults = await (this.inner as { ProcessBatch: (recs: RecordRef[], ctx: RecordProcessorContext) => Promise<Map<string, RecordResult>> }).ProcessBatch(records, context);
+            const outResults = new Map<string, RecordResult>();
+
+            for (const record of records) {
+                const res = innerResults.get(record.RecordID);
+                if (!res || res.Status !== 'Succeeded') {
+                    outResults.set(record.RecordID, res ?? { Status: 'Failed', ErrorMessage: 'No result returned from batch processor' });
+                    continue;
+                }
+
+                try {
+                    const runProvenance: RunProvenance = {
+                        ...this.run,
+                        ProcessRunID: context.processRunID ?? this.run?.ProcessRunID,
+                        AIPromptRunID: res.AIPromptRunID ?? this.run?.AIPromptRunID,
+                        PromptVersionHash: res.PromptVersionHash ?? this.run?.PromptVersionHash,
+                        FeatureValueCacheID: res.FeatureValueCacheID ?? this.run?.FeatureValueCacheID,
+                        ExecutedAt: this.run?.ExecutedAt ?? new Date().toISOString(),
+                    };
+                    const writeBack = await applyOutputMapping({
+                        outputMapping: this.outputMapping,
+                        result: res.ResultPayload,
+                        record,
+                        contextUser: context.contextUser,
+                        provider: context.provider,
+                        dryRun: this.dryRun,
+                        run: runProvenance,
+                    });
+                    outResults.set(record.RecordID, { ...res, ResultPayload: { output: res.ResultPayload, writeBack } });
+                } catch (e) {
+                    const message = e instanceof Error ? e.message : String(e);
+                    LogError(`WriteBackProcessor: write-back failed for record '${record.RecordID}': ${message}`);
+                    outResults.set(record.RecordID, { ...res, Status: 'Failed', ErrorMessage: `Write-back failed: ${message}` });
+                }
+            }
+            return outResults;
+        }
+
+        // Fall back to processing each record
+        const results = new Map<string, RecordResult>();
+        for (const record of records) {
+            results.set(record.RecordID, await this.ProcessRecord(record, context));
+        }
+        return results;
+    }
 }
