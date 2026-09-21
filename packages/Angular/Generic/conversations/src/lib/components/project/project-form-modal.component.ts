@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJDialogRef } from '@memberjunction/ng-ui-components';
+import { DialogService } from '../../services/dialog.service';
 import { MJProjectEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata } from '@memberjunction/core';
 
@@ -110,20 +111,31 @@ const DEFAULT_PROJECT_ICONS = [
             rows="2"></textarea>
         </div>
 
-        <!-- Visibility -->
+        <!-- Visibility. TWO NAMED OPTIONS, not a checkbox: with a checkbox the unchecked
+             meaning lives only in the helper text, so the shared state is never actually
+             named. A fieldset/legend also gives the group a real accessible name, which a
+             bare <label>Visibility</label> did not, and the hint is a sibling of the
+             options rather than inside one — inside, a screen reader read the whole hint
+             as part of the option's name. -->
         <div class="form-field">
-          <label>Visibility</label>
-          <label class="visibility-option">
-            <input type="checkbox" [(ngModel)]="formData.isPersonal" />
-            <span class="visibility-text">
-              <strong>Only me</strong>
-              <small>
-                {{ formData.isPersonal
-                    ? 'This folder is visible only to you.'
-                    : 'Everyone in this environment can see this folder and its name.' }}
-              </small>
-            </span>
-          </label>
+          <fieldset class="visibility-set" aria-describedby="projectVisibilityHint">
+            <legend>Visibility</legend>
+            <label class="visibility-choice">
+              <input type="radio" name="projectVisibility" [value]="true"
+                     [(ngModel)]="formData.isPersonal" />
+              <span>Only me</span>
+            </label>
+            <label class="visibility-choice">
+              <input type="radio" name="projectVisibility" [value]="false"
+                     [(ngModel)]="formData.isPersonal" />
+              <span>Everyone</span>
+            </label>
+            <p class="visibility-hint" id="projectVisibilityHint">
+              {{ formData.isPersonal
+                  ? 'Only you can see this folder.'
+                  : 'Everyone can see this folder and its name. They will not see the conversations you keep in it.' }}
+            </p>
+          </fieldset>
         </div>
 
         <!-- Color Picker -->
@@ -246,26 +258,41 @@ const DEFAULT_PROJECT_ICONS = [
     }
 
     /* Color Picker */
-    .visibility-option {
+    .visibility-set {
+      border: none;
+      margin: 0;
+      padding: 0;
       display: flex;
-      align-items: flex-start;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    /* The legend carries the group's name, so it matches the other field labels. */
+    .visibility-set legend {
+      padding: 0;
+      margin-bottom: 0.15rem;
+    }
+
+    /* Scoped as .form-field .visibility-choice (0,2,1) so it deliberately outranks the
+       .form-field label rule (0,1,1) this sits inside — at equal specificity that rule
+       won on source order and rendered the option text bold.
+       (No backticks in here: this block is a template literal.) */
+    .form-field .visibility-choice {
+      display: flex;
+      align-items: center;
       gap: 0.5rem;
       cursor: pointer;
       font-weight: 400;
+      margin: 0;
     }
 
-    .visibility-option input {
-      margin-top: 0.15rem;
+    .visibility-choice input {
       flex: 0 0 auto;
+      margin: 0;
     }
 
-    .visibility-text {
-      display: flex;
-      flex-direction: column;
-      gap: 0.1rem;
-    }
-
-    .visibility-text small {
+    .visibility-hint {
+      margin: 0.15rem 0 0;
       color: var(--mj-text-muted);
     }
 
@@ -424,7 +451,7 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     return /^#[0-9a-fA-F]{6}$/.test(hex) ? `${hex}24` : hex;
   }
 
-  constructor(private cdr: ChangeDetectorRef) {
+  constructor(private cdr: ChangeDetectorRef, private dialogService: DialogService) {
   super();}
 
   ngOnInit(): void {
@@ -477,6 +504,27 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
       project.Description = this.formData.description.trim() || null;
       project.Color = this.formData.color;
       project.Icon = this.formData.icon;
+
+      // Taking a SHARED folder private removes it from everyone else's sidebar, and any
+      // subfolders under it surface as top-level folders for them. That is a big enough
+      // effect on other people to be worth confirming; going the other way (private ->
+      // shared) only ever adds, so it is not gated.
+      const wasShared = this.isEditMode && !this.project?.OwnerUserID;
+      if (wasShared && this.formData.isPersonal) {
+        const confirmed = await this.dialogService.confirm({
+          title: 'Make this folder private?',
+          message:
+            'This folder is shared. Making it private removes it from everyone else\'s '
+            + 'sidebar, and any folders inside it will show up as top-level folders for them. '
+            + 'Their conversations are not affected.',
+          okText: 'Make private',
+          cancelText: 'Cancel',
+          dangerous: true,
+        });
+        if (!confirmed) {
+          return;
+        }
+      }
 
       // Settable on edit too: "share this with the team" and "take it back" are both
       // things people expect to do to their own folder. Null means shared, which is

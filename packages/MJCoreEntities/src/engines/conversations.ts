@@ -491,6 +491,32 @@ function mergeArtifactJSON(
  * const cached = ConversationEngine.Instance.GetCachedDetails('conv-id');
  * ```
  */
+/**
+ * The row filter that decides which folders a user may see: SHARED ones (no owner)
+ * plus their OWN.
+ *
+ * Exported and used by every list read of 'MJ: Projects', because the rule being in
+ * one place is the point. It first shipped inline in LoadProjects, and review caught
+ * ProjectSelectorComponent running its own RunView with no ownership clause at all —
+ * so personal folder names were still listed in the chat area's Assign Project modal,
+ * which is precisely the exposure OwnerUserID exists to close. Gating one reader never
+ * gates the others; a second copy of a predicate is a second place to forget it.
+ *
+ * NOT for the Explorer entity-admin surfaces (the Projects record view and its
+ * hierarchy panel). Those are the raw entity browser, where an admin sees every row of
+ * every entity, and narrowing them here would be inconsistent with how MJ treats
+ * entity administration generally.
+ *
+ * A missing user gets SHARED ONLY, never every personal folder in the environment:
+ * without an identity there is nobody to be the owner of, and widening on absent input
+ * is how a personal folder reaches a stranger's list.
+ */
+export function BuildProjectVisibilityFilter(userId: string | null | undefined): string {
+    return userId && String(userId).trim().length > 0
+        ? `(OwnerUserID IS NULL OR OwnerUserID='${String(userId).trim()}')`
+        : `OwnerUserID IS NULL`;
+}
+
 export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only
@@ -787,13 +813,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return;
         }
 
-        // Shared folders, plus this user's own. A missing/instanceless user gets SHARED
-        // ONLY — never every personal folder in the environment: without an identity there
-        // is no one to be the owner of, and widening on absent input is how a personal
-        // folder ends up in a stranger's sidebar.
-        const ownership = userId
-            ? `(OwnerUserID IS NULL OR OwnerUserID='${userId}')`
-            : `OwnerUserID IS NULL`;
+        // Shared folders, plus this user's own. One definition, shared with every other
+        // list read of this entity — see BuildProjectVisibilityFilter.
+        const ownership = BuildProjectVisibilityFilter(userId);
 
         const rv = new RunView();
         const result = await rv.RunView<MJProjectEntity>(
