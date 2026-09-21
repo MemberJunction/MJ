@@ -25673,5 +25673,56 @@
       "lastModified": "2026-09-16T01:46:08.293Z",
       "checksum": "83bc5757be51e2f182f05d5808eec3f18d478d1f706ab1ed7f94ab3a32ccf9ab"
     }
+  },
+  {
+    "fields": {
+      "Name": "Betty",
+      "Description": "The MJ-native, organization-scoped assistant, reached through the Betty Public API v1. Answers are grounded in the organization's own content and come back with citations, which the driver surfaces as additional choices. Distinct from the Betty Bot model, which is a different service on a different wire protocol.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "PowerRank": 0,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MemberJunction",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "BettyLLM",
+            "APIName": "betty",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D8F9E8B2-3D1D-46DF-93F1-0CF8C10EA78B"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MemberJunction",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "E5F772B2-8FBF-4932-8CB4-855AFB3B2A3B"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F5F57DC2-8FE4-47F6-B23E-D37B88B172EE"
+    }
   }
 ]
