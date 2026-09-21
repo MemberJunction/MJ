@@ -17,8 +17,7 @@
       "MaxNotesToInject": 10,
       "NoteInjectionStrategy": "Relevant",
       "PayloadSelfWritePaths": [
-        "Approved",
-        "Leaderboard"
+        "*"
       ]
     },
     "relatedEntities": {
@@ -261,6 +260,72 @@
                   "lastModified": "2026-07-01T17:33:47.660Z",
                   "checksum": "213cb6ccb60ecb5130a3051d2a45af5efbb9635d897b081298d0347f6cd1ee1f"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "ENTITY_RELATIONSHIPS",
+                  "Description": "Entity Relationships graph — foreign keys, parent-child links, and cross-entity paths. Used to discover 1-hop and 2-hop connected entities for rich multi-entity feature engineering.",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Entity Relationships",
+                  "ExtraFilter": null,
+                  "OrderBy": "Entity ASC, RelatedEntity ASC",
+                  "FieldsToRetrieve": [
+                    "Entity",
+                    "RelatedEntity",
+                    "Type",
+                    "EntityKeyField",
+                    "RelatedEntityJoinField",
+                    "JoinView",
+                    "DisplayName"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 3,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "B93C449E-60EE-4D2A-A81E-454316F926AA"
+                },
+                "sync": {
+                  "lastModified": "2026-09-19T13:45:00.000Z",
+                  "checksum": "c449eb9360ee4d2aa81e454316f926aa11223344556677889900aabbccddeeff"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "ALL_ENTITIES",
+                  "Description": "All entities across the MemberJunction schema to understand tables, views, and system metadata for cross-entity exploration.",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Entities",
+                  "ExtraFilter": null,
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "Name",
+                    "Description",
+                    "SchemaName",
+                    "BaseTable",
+                    "BaseView"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 4,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "7D41E7A0-0E0C-44FE-B39C-8E298637731E"
+                },
+                "sync": {
+                  "lastModified": "2026-09-19T13:45:00.000Z",
+                  "checksum": "41e7a07d0e0c44feb39c8e298637731e11223344556677889900aabbccddeeff"
+                }
               }
             ],
             "MJ: AI Agent Prompts": [
@@ -357,8 +422,7 @@
               "*"
             ],
             "PayloadUpstreamPaths": [
-              "BuildResult",
-              "BuildResult.*"
+              "*"
             ]
           },
           "primaryKey": {

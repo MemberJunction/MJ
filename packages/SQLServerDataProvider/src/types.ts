@@ -28,6 +28,12 @@ export interface ExecuteSQLOptions {
    * Should be a sql.Transaction or sql.ConnectionPool instance.
    */
   connectionSource?: sql.ConnectionPool | sql.Transaction;
+  /**
+   * Run on the pool even while an ambient transaction is open. For reads that are not part of any
+   * caller's unit of work — the metadata dataset a background refresh loads — so they never land on
+   * the transaction's connection beside its COMMIT. A pool read sees committed data only (#4514).
+   */
+  ignoreAmbientTransaction?: boolean;
 }
 
 /**

@@ -1841,7 +1841,7 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
         MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, DynamicDriverModel, 'OpenAIRealtime', 10);
         MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, DynamicDriverModel, 'OpenAILiveRealtime', 10);
         MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, StaticDriverModel, 'ElevenLabsRealtime', 10);
-        MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, StaticDriverModel, 'GeminiRealtime', 10);
+        MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, DynamicDriverModel, 'GeminiRealtime', 10);
     });
 
     const mockEmailAction = {
@@ -1942,7 +1942,7 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
         }
     } as unknown as MJActionEntityExtended;
 
-    it('returns ONLY invoke-target-agent against ElevenLabs and Gemini even when directActions is enabled', () => {
+    it('returns empty direct actions against fixed-tool drivers like ElevenLabs even when directActions is enabled', () => {
         const service = new TestableService();
         service.TargetActions = [mockEmailAction, mockTaskAction];
 
@@ -1957,12 +1957,9 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
 
         const elevenTools = service.buildDirectActionTools('target-1', cfg, 'ElevenLabsRealtime');
         expect(elevenTools).toHaveLength(0);
-
-        const geminiTools = service.buildDirectActionTools('target-1', cfg, 'GeminiRealtime');
-        expect(geminiTools).toHaveLength(0);
     });
 
-    it('returns direct action tools against OpenAIRealtime and OpenAILiveRealtime when enabled', () => {
+    it('returns direct action tools against OpenAIRealtime, OpenAILiveRealtime, and GeminiRealtime when enabled', () => {
         const service = new TestableService();
         service.TargetActions = [mockEmailAction, mockTaskAction];
 
@@ -1991,6 +1988,10 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
         const liveTools = service.buildDirectActionTools('target-1', cfg, 'OpenAILiveRealtime');
         expect(liveTools).toHaveLength(1);
         expect(liveTools[0].Name).toBe('SendEmail');
+
+        const geminiTools = service.buildDirectActionTools('target-1', cfg, 'GeminiRealtime');
+        expect(geminiTools).toHaveLength(1);
+        expect(geminiTools[0].Name).toBe('SendEmail');
     });
 
     it('supports wildcard ["*"] to project all active actions assigned to the agent', () => {

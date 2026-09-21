@@ -46,6 +46,8 @@ function field(
 
 const ID_FIELD = field('ID', { allowsNull: false, unrestrictable: true, type: 'uniqueidentifier' });
 const SYSTEM_FIELD = field('__mj_CreatedAt', { allowsNull: false, unrestrictable: true, type: 'datetimeoffset' });
+/** Nullable __mj_ field (such as spatial coordinates like __mj_Latitude or nullable system fields) */
+const NULLABLE_SYSTEM_FIELD = field('__mj_Latitude', { allowsNull: true, unrestrictable: true, type: 'decimal' });
 /** NOT NULL in the database, but restrictable — the case that used to break. */
 const NAME_FIELD = field('Name', { allowsNull: false });
 /** Already nullable — should be unchanged by any of this. */
@@ -64,7 +66,7 @@ const ENTITY = {
     AllowCreateAPI: false,
     AllowUpdateAPI: false,
     AllowDeleteAPI: false,
-    Fields: [ID_FIELD, NAME_FIELD, INDUSTRY_FIELD, SYSTEM_FIELD],
+    Fields: [ID_FIELD, NAME_FIELD, INDUSTRY_FIELD, SYSTEM_FIELD, NULLABLE_SYSTEM_FIELD],
     FirstPrimaryKey: ID_FIELD,
     PrimaryKeys: [ID_FIELD],
     RelatedEntities: [],
@@ -103,9 +105,15 @@ describe('GraphQL codegen: output-type nullability follows FLS strippability, no
         expect(decl).toMatch(/ID:/);
     });
 
-    it('keeps __mj_ system columns non-nullable', () => {
+    it('keeps __mj_ system columns non-nullable when they do not allow null', () => {
         const decl = declarationFor(generate(), '_mj__CreatedAt');
         expect(decl).not.toContain('nullable: true');
+    });
+
+    it('marks nullable __mj_ columns (such as geocoding or optional system fields) as nullable', () => {
+        const decl = declarationFor(generate(), '_mj__Latitude');
+        expect(decl).toContain('nullable: true');
+        expect(decl).toMatch(/_mj__Latitude\?:/);
     });
 
     it('leaves an already-nullable column nullable', () => {

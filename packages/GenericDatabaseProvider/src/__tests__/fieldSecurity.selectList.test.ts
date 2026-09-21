@@ -336,7 +336,7 @@ describe('createViewUserSearchSQL — field security', () => {
         expect(sql).toContain('[Name]');
     });
 
-    it('returns empty search SQL when every searchable field is denied', () => {
+    it('returns (1=0) when every searchable field is denied so no rows leak', () => {
         // Deny read on Name, Salary, AND Notes for the intern (Allow rows for HR only).
         const init = employeeEntityInit();
         const fields = init['Fields'] as Array<Record<string, unknown>>;
@@ -349,7 +349,7 @@ describe('createViewUserSearchSQL — field security', () => {
         const entity = new EntityInfo(init);
         provider.seedEntities([entity]);
 
-        expect(provider.searchSQL(entity, 'secret', intern())).toBe('');
+        expect(provider.searchSQL(entity, 'secret', intern())).toBe('(1=0)');
     });
 
     it('keeps the FTS path when no denied field is FTS-indexed', () => {
