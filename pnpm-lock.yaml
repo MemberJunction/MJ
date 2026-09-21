@@ -975,6 +975,28 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/AI/Knowledge/FeaturePipelines:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0
+        version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0
+        version: link:../../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../../../MJGlobal
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/AI/Knowledge/Pipeline:
     dependencies:
       '@memberjunction/ai':
@@ -13534,6 +13556,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0
         version: link:../../MJCoreEntities
+      '@memberjunction/feature-pipelines':
+        specifier: 6.1.0
+        version: link:../../AI/Knowledge/FeaturePipelines
       '@memberjunction/field-rules-transforms':
         specifier: 6.1.0
         version: link:../../FieldRulesTransforms
@@ -13543,6 +13568,9 @@ importers:
       '@memberjunction/record-set-processor-base':
         specifier: 6.1.0
         version: link:../base
+      '@memberjunction/tag-engine':
+        specifier: 6.1.0
+        version: link:../../AI/Knowledge/TagEngine
       '@memberjunction/templates':
         specifier: 6.1.0
         version: link:../../Templates/engine
