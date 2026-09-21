@@ -1,0 +1,26 @@
+{
+  "id": "webresearch-first-search-01",
+  "agent": "Web Research Agent",
+  "description": "A specific, well-scoped question. Searching is right; clarifying here would be a stall.",
+  "tags": [
+    "first-step-action"
+  ],
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Find recent authoritative sources on quantum computing commercialization milestones in 2025."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Web Search"
+      }
+    ],
+    "allowAdditionalActions": true
+  }
+}

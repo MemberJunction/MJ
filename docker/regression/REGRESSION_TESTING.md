@@ -449,10 +449,17 @@ All variables go in `docker/.env.test` (gitignored). See `.env.test.example` for
 | `AUTH0_DOMAIN` | Yes | Auth0 tenant domain (e.g., `dev-xxxxx.us.auth0.com`) |
 | `AUTH0_CLIENTID` | Yes | Auth0 SPA application client ID |
 | `AUTH0_CLIENT_SECRET` | Yes | Auth0 application client secret |
-| `TEST_UID` | Yes | Test user email (must exist in Auth0, email verified, no MFA) |
-| `TEST_PWD` | Yes | Test user password in Auth0 |
+| `TEST_UID` | Yes | Test user email (must exist in Auth0, email verified, no MFA). The entrypoint maps this onto `MJ_TEST_VAR_authUsername`, which is what the tests bind as `{{authUsername}}` |
+| `TEST_PWD` | Yes | Test user password in Auth0. Mapped onto `MJ_TEST_VAR_authPassword` the same way |
 | `AI_VENDOR_API_KEY__GeminiLLM` | Yes* | Google Gemini API key — the **primary** Computer Use model |
 | `AI_VENDOR_API_KEY__AnthropicLLM` | Yes* | Anthropic API key — failover / alternate model |
+
+> **Credentials reach the tests as variables.** Every test binds `{{authUsername}}` /
+> `{{authPassword}}` rather than literal credentials, and those resolve from
+> `MJ_TEST_VAR_authUsername` / `MJ_TEST_VAR_authPassword`. `test-runner-entrypoint.sh`
+> derives them from `TEST_UID` / `TEST_PWD` when you have not set them directly, so
+> setting either pair works. Set neither and the run stops at the first test naming the
+> unresolved variable — it no longer submits a blank login.
 
 \* At least one AI vendor key is required. Variable names match the root `.env` convention (`AI_VENDOR_API_KEY__<Vendor>LLM`).
 
@@ -516,13 +523,19 @@ docker/regression/
                 ├── step_02.png
                 └── steps.json       # Step metadata (reasoning, actions, url)
 
-metadata/tests/regression/
+metadata-optional/regression-test/
 ├── README.md                     # Test author guide (anatomy, conventions, tuning)
-├── .mj-sync.json                 # Sync config
-└── .T01-login-smoke.json         # 25 test definition files (synced to DB at runtime)
+├── .mj-sync.json                 # Root config (directoryOrder: tests → test-suites)
+├── tests/
+│   ├── .mj-sync.json             # Sync config
+│   └── regression/
+│       └── .T001-login-smoke.json  # 155 test definition files (synced to DB at runtime)
+└── test-suites/
+    ├── .mj-sync.json             # Sync config
+    └── .regression-suite.json    # Suite + ordered TestSuiteTest mappings
 
-metadata/test-suites/
-└── .regression-suite.json        # Suite + ordered TestSuiteTest mappings
+metadata/tests/regression/
+(the old T01–T25 are pruned by a migration, not by metadata — see migrations/v6/)
 ```
 
 ### How the entrypoints + scripts fit together
@@ -558,13 +571,13 @@ Each test uses the **ComputerUseTestDriver** which:
 
 ### Test Definition Structure
 
-Tests are defined as metadata JSON files in `metadata/tests/regression/` with three sections:
+Tests are defined as metadata JSON files in `metadata-optional/regression-test/tests/regression/` with three sections:
 
 - **InputDefinition**: Goal description, start URL, auth credentials, allowed domains
 - **Configuration**: LLM prompts, oracles, step limits, viewport size, judge frequency
 - **ExpectedOutcomes**: URL patterns, confidence thresholds, validation criteria
 
-See `metadata/tests/regression/.T01-login-smoke.json` for a working example.
+See `metadata-optional/regression-test/tests/regression/.T001-login-smoke.json` for a working example.
 
 ### Oracles
 
@@ -580,10 +593,10 @@ The weighted oracle scores combine into a final test score (0.0 to 1.0). A test 
 
 ### Adding New Tests
 
-See [`metadata/tests/regression/README.md`](../../metadata/tests/regression/README.md) for the full test-author guide. Quick summary:
+See [`metadata-optional/regression-test/README.md`](../../metadata-optional/regression-test/README.md) for the full test-author guide. Quick summary:
 
-1. Create a new `.json` file in `metadata/tests/regression/` following the T01 pattern
-2. Add a `relatedEntities` entry in `metadata/test-suites/.regression-suite.json` linking the test
+1. Create a new `.json` file in `metadata-optional/regression-test/tests/regression/` following the T001 pattern
+2. Add a `relatedEntities` entry in `metadata-optional/regression-test/test-suites/.regression-suite.json` linking the test
 3. The test runner automatically syncs metadata on each run — no rebuild needed
 4. Metadata files are bind-mounted from the host, so edits are picked up immediately
 
@@ -599,7 +612,7 @@ docker compose -f docker/regression/docker-compose.test.yml exec test-runner \
   npx mj test run --name "T26 - My New Test" --dry-run
 
 # (b) Against your local dev DB — push the metadata first, then validate
-npx mj sync push --dir=metadata --include=tests,test-suites
+npx mj sync push --dir=metadata-optional/regression-test
 npx mj test run --name "T26 - My New Test" --dry-run
 
 # (c) Against the regression DB from your host (after `mj test regression up`)
@@ -791,7 +804,7 @@ A thin bash orchestrator. Each non-trivial step is a standalone script under
 [`scripts/`](scripts/):
 
 1. **socat proxy** (`localhost:4200 → mjexplorer:4200`): Required for Auth0 secure context
-2. **Application + test metadata**: `mj sync push` pushes `metadata/applications`, `metadata/tests`, and `metadata/test-suites` (and `test-metadata/{tags,users}` for Docker-only test data)
+2. **Application + test metadata**: `mj sync push` pushes `metadata/applications`, `metadata/tests`, and `metadata/test-suites`, then `metadata-optional/regression-test` for the regression tests + suite (and `test-metadata/{tags,users,conversations}` for Docker-only test data)
 3. **Test user safety-net** ([`scripts/setup-test-user.cjs`](scripts/setup-test-user.cjs)): direct SQL upsert for the user, UI + Integration roles, all active applications, every entity within those applications, and example data (5 members in the "VIP Members" list, 3 events in "Spring Events", 5+3 favorites). Required because `mj sync push` may fail on a fresh DB (System user bootstrap chicken-and-egg) and `autoCreateNewUsers` only assigns the UI role on first login.
 4. **Pre-flight diagnostics** ([`scripts/preflight-checks.cjs`](scripts/preflight-checks.cjs)): probes MJAPI healthcheck, GraphQL via nginx, the socat TCP proxy, the static index.html, Auth0 OIDC discovery, WebSocket upgrade, and a memory snapshot. Writes `preflight.json` into the run folder.
 5. **Per-run folder**: Creates `test-results/run-{TIMESTAMP}/` so this run's artifacts don't overwrite previous runs.
@@ -834,7 +847,7 @@ Building all 196+ monorepo packages in parallel exceeds Docker Desktop's default
 
 ### Why metadata is bind-mounted (not baked in)
 
-The `metadata/` directory is mounted from the host into the test-runner at runtime (`../metadata:/app/metadata`). This means test definition changes take effect immediately without rebuilding the image. The entrypoint runs `mj sync push` on every startup to ensure the database reflects the latest metadata.
+The `metadata/` and `metadata-optional/` directories are mounted from the host into the test-runner at runtime (`../../metadata:/app/metadata`, `../../metadata-optional:/app/metadata-optional`). This means test definition changes take effect immediately without rebuilding the image. The entrypoint runs `mj sync push` on every startup to ensure the database reflects the latest metadata.
 
 ### Why the bootstrap uses `--import`
 
@@ -892,7 +905,7 @@ Every service is now profile-gated (Phase 4). Plain `docker compose up` (no `--p
 ### Test suite not found
 
 Test metadata must be synced to the database. The entrypoint handles this automatically. If it fails, check:
-- The `metadata/` volume mount is working (`../metadata:/app/metadata`)
+- The `metadata/` and `metadata-optional/` volume mounts are working (`../../metadata:/app/metadata`, `../../metadata-optional:/app/metadata-optional`)
 - The test file name starts with `.` (mj-sync uses the `filePattern` from `.mj-sync.json`)
 - Run `docker compose --profile full logs test-runner` and look for "Syncing test metadata" output
 

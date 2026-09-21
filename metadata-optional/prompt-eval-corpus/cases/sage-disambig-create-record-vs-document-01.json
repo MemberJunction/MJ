@@ -1,0 +1,29 @@
+{
+  "id": "sage-disambig-create-record-vs-document-01",
+  "agent": "Sage",
+  "tags": [
+    "disambiguation"
+  ],
+  "description": "Create Record and Create Document are one word apart and do entirely different things. A structured data row is a Record.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Add a new customer row for Contoso Ltd with status Active."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Create Record"
+      }
+    ],
+    "allowAdditionalActions": false,
+    "forbiddenActions": [
+      "Create Document"
+    ]
+  }
+}

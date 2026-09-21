@@ -10,11 +10,11 @@ import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeActivityRailComponent } from './realtime-activity-rail.component';
 import { RealtimeChannelPaneComponent } from './channels/realtime-channel-pane.component';
 import { ChannelOnboardingPanelComponent } from './channels/channel-onboarding-panel.component';
-import { ChannelOnboardingDetails } from './channels/base-realtime-channel-client';
+import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
   RealtimeSurfaceTabsModel, RealtimeSurfaceTab, RealtimeChannelTabRegistration
 } from './realtime-surface-tabs.model';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 
 /**
  * User-settings key (NOT localStorage — see `UserInfoEngine`) under which the per-user "which

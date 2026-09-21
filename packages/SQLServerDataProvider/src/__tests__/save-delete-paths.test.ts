@@ -80,6 +80,10 @@ class SaveDeleteTestProvider extends SQLServerDataProvider {
     // no-op — AI engine not under test
   }
 
+  /** Exposes the save SQL pair (executed fullSQL, logged simpleSQL) for the replay-guard tests. */
+  public async SaveSQLForTest(entity: BaseEntity, isNew: boolean, user: UserInfo) {
+    return this.GenerateSaveSQL(entity, isNew, user, new EntitySaveOptions());
+  }
 }
 
 function makeProvider(): SaveDeleteTestProvider {
@@ -256,6 +260,93 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     await expect(provider.Save(entity, TEST_USER, new EntitySaveOptions())).rejects.toThrow(
       /Error creating new record, no rows returned/,
     );
+  });
+});
+
+describe('SQLServerDataProvider replay form of a create (Metadata_Sync recordings, #4503)', () => {
+  beforeEach(() => {
+    mssqlState.Reset();
+  });
+
+  it('CREATE: the logged simpleSQL is guarded on the PK and falls back to spUpdate; the executed fullSQL is the plain create', async () => {
+    const provider = makeProvider();
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('ID', '82DFF26B-2ABB-4A69-8718-1FE550B60816');
+    entity.Set('Name', 'Azure Blob Storage');
+    entity.Set('IsActive', true);
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, true, TEST_USER);
+    const sfx = extractSuffix(fullSQL, 'ID');
+
+    expect(fullSQL).toContain('EXEC [dbo].spCreateWidget ');
+    expect(fullSQL).not.toContain('IF NOT EXISTS');
+    expect(fullSQL).not.toContain('spUpdateWidget');
+
+    expect(simpleSQL).toContain(`IF NOT EXISTS (SELECT 1 FROM [dbo].[Widget] WHERE [ID] = @ID${sfx})`);
+    expect(simpleSQL).toContain(`EXEC [dbo].spCreateWidget @ID=@ID${sfx}`);
+    expect(simpleSQL).toContain(`EXEC [dbo].spUpdateWidget @ID=@ID${sfx}`);
+    // Both branches consume the same DECLARE/SET block, declared once
+    expect(simpleSQL!.match(/DECLARE /g)).toHaveLength(1);
+    expect(simpleSQL!.match(/SET @ID/g)).toHaveLength(1);
+    // The update branch reuses the create's argument list verbatim
+    const createArgs = simpleSQL!.split('spCreateWidget ')[1].split('\nEND')[0];
+    const updateArgs = simpleSQL!.split('spUpdateWidget ')[1].split('\nEND')[0];
+    expect(updateArgs).toBe(createArgs);
+  });
+
+  it('CREATE on an entity with no generated update proc: guarded create, no ELSE branch', async () => {
+    const provider = makeProvider();
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo({ updateProc: false }), TEST_USER);
+    entity.Set('ID', 'A0000000-0000-0000-0000-00000000000A');
+    entity.Set('Name', 'No update proc');
+    entity.Set('IsActive', true);
+
+    const { simpleSQL } = await provider.SaveSQLForTest(entity, true, TEST_USER);
+
+    expect(simpleSQL).toContain('IF NOT EXISTS (SELECT 1 FROM [dbo].[Widget]');
+    expect(simpleSQL).toContain('EXEC [dbo].spCreateWidget');
+    expect(simpleSQL).not.toContain('ELSE');
+    expect(simpleSQL).not.toContain('spUpdateWidget');
+  });
+
+  it('UPDATE: the logged simpleSQL is the plain spUpdate call, no guard', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Renamed');
+
+    const { fullSQL, simpleSQL } = await provider.SaveSQLForTest(entity, false, TEST_USER);
+
+    expect(simpleSQL).toBe(fullSQL);
+    expect(simpleSQL).toContain('spUpdateWidget');
+    expect(simpleSQL).not.toContain('IF NOT EXISTS');
+  });
+
+  it('CREATE without TrackRecordChanges: the guarded form still reaches the SQL logger as the fallback', async () => {
+    const provider = makeProvider();
+    const entity = makeNewWidgetEntity(makeWidgetEntityInfo({ trackRecordChanges: false }), TEST_USER);
+    entity.Set('Name', 'Plain');
+    entity.Set('IsActive', true);
+    mssqlState.QueueResult({ rows: [{ ...savedWidgetRow(), Name: 'Plain' }] });
+    const logged: Array<{ query: string; fallback?: string }> = [];
+    // Same argument order as executeSQLCore's context.logSqlStatement call
+    (provider as unknown as { _logSqlStatement: unknown })._logSqlStatement = async (
+      query: string,
+      _params: unknown,
+      _description: string | undefined,
+      _ignoreLogging: boolean | undefined,
+      _isMutation: boolean | undefined,
+      fallback?: string,
+    ) => {
+      logged.push({ query, fallback });
+    };
+
+    await provider.Save(entity, TEST_USER, new EntitySaveOptions());
+
+    const save = logged.find((l) => l.query.includes('spCreateWidget'));
+    expect(save).toBeDefined();
+    expect(save!.query).not.toContain('IF NOT EXISTS');
+    expect(save!.fallback).toContain('IF NOT EXISTS (SELECT 1 FROM [dbo].[Widget]');
+    expect(save!.fallback).toContain('spUpdateWidget');
   });
 });
 

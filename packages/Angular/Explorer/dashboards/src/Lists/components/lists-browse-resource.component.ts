@@ -602,7 +602,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
               <div
                 class="dropdown-item"
                 (mousedown)="selectEntity(entity); $event.preventDefault()">
-                {{entity.Name}}
+                {{entity.DisplayName}}
               </div>
             }
             @if (filteredEntitiesList.length === 0) {
@@ -1780,8 +1780,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   categories: MJListCategoryEntity[] = [];
   categoryTree: CategoryNode[] = [];
   flatCategories: Array<{ ID: string; displayName: string }> = [];
-  availableEntities: Array<{ ID: string; Name: string }> = [];
-  filteredEntitiesList: Array<{ ID: string; Name: string }> = [];
+  availableEntities: Array<{ ID: string; Name: string; DisplayName: string }> = [];
+  filteredEntitiesList: Array<{ ID: string; Name: string; DisplayName: string }> = [];
 
   entityOptions: Array<{ name: string; value: string }> = [{ name: 'All Entities', value: 'all' }];
   ownerOptions: Array<{ name: string; value: string }> = [
@@ -2208,8 +2208,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       // Build available entities for dropdown
       this.availableEntities = entities
         .filter(e => e.IncludeInAPI)
-        .map(e => ({ ID: e.ID, Name: e.Name }))
-        .sort((a, b) => a.Name.localeCompare(b.Name));
+        .map(e => ({ ID: e.ID, Name: e.Name, DisplayName: e.DisplayNameOrName }))
+        .sort((a, b) => a.DisplayName.localeCompare(b.DisplayName));
       this.filteredEntitiesList = [...this.availableEntities];
 
       // Build list items
@@ -2845,15 +2845,16 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     }
   }
 
-  selectEntity(entity: { ID: string; Name: string }) {
+  selectEntity(entity: { ID: string; Name: string; DisplayName: string }) {
     this.selectedEntityId = entity.ID;
-    this.entitySearchTerm = entity.Name;
+    this.entitySearchTerm = entity.DisplayName;
     this.showEntityDropdown = false;
   }
 
   filterEntities(term: string) {
     const lowerTerm = term.toLowerCase();
     this.filteredEntitiesList = this.availableEntities.filter(e =>
+      e.DisplayName.toLowerCase().includes(lowerTerm) ||
       e.Name.toLowerCase().includes(lowerTerm)
     );
     // Ensure dropdown is visible while typing
