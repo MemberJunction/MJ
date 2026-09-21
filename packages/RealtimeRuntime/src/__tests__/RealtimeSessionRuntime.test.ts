@@ -121,6 +121,33 @@ describe('RealtimeSessionRuntime', () => {
         });
     });
 
+    describe('speaker (output) mute', () => {
+        it('is a pure local toggle that needs no client, no microphone and no session', () => {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            expect(runtime.IsOutputMuted).toBe(false);
+            expect(runtime.ToggleOutputMute()).toBe(true);
+            expect(runtime.IsOutputMuted).toBe(true);
+            expect(runtime.ToggleOutputMute()).toBe(false);
+            expect(runtime.IsOutputMuted).toBe(false);
+        });
+
+        it('SetOutputMuted is idempotent and drives the state explicitly', () => {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            runtime.SetOutputMuted(true);
+            runtime.SetOutputMuted(true);
+            expect(runtime.IsOutputMuted).toBe(true);
+            runtime.SetOutputMuted(false);
+            expect(runtime.IsOutputMuted).toBe(false);
+        });
+
+        it('does not touch the microphone (speaker mute is not mic mute)', () => {
+            const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+            runtime.SetOutputMuted(true);
+            // With no live stream the mic toggle still reports "not muted" — the two are independent.
+            expect(runtime.ToggleMute()).toBe(false);
+        });
+    });
+
     describe('client tool registry', () => {
         it('registers and unregisters a handler by prefix without a live session', () => {
             const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
@@ -177,6 +204,7 @@ describe('session lifecycle, driven end to end with fakes', () => {
         public RequestSpokenUpdate(): void {}
         public SendToolResult(): void {}
         public SetMuted(): void {}
+        protected applyOutputMute(): void {}
         public async Disconnect(): Promise<void> {
             FakeRealtimeClient.DisconnectCalls++;
         }

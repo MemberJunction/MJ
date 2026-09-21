@@ -206,6 +206,7 @@ export class FakePeerConnection implements IRealtimePeerConnection {
 /** Fake hidden `<audio>` sink. */
 export class FakeAudioSink implements IRealtimeAudioSink {
     public srcObject: MediaProvider | null = null;
+    public muted = false;
     public Removed = false;
     public remove(): void {
         this.Removed = true;
@@ -298,6 +299,13 @@ export class FakeGeminiPlayback implements IGeminiAudioPlayback {
     public Close(): void {
         this.Closed = true;
         this.IsPlaying = false;
+    }
+    /** Records the speaker-mute requests the driver made (obligation #10). */
+    public IsMuted = false;
+    public MuteCalls: boolean[] = [];
+    public SetMuted(muted: boolean): void {
+        this.IsMuted = muted;
+        this.MuteCalls.push(muted);
     }
 }
 

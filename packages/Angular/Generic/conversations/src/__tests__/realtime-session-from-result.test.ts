@@ -55,6 +55,9 @@ class FakeRealtimeDriver extends BaseRealtimeClient {
   public override SetMuted(_muted: boolean): void {
     /* not under test */
   }
+  protected override applyOutputMute(_muted: boolean): void {
+    /* not under test */
+  }
   public override async Disconnect(): Promise<void> {
     this.Disconnected = true;
   }

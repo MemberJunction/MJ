@@ -60,9 +60,10 @@ All inputs are optional and default to the historical behaviour, so existing cal
 | `(ChromeChanged)` | `'orb' \| 'console'` | The *effective* chrome flipped. |
 | `(ConnectionStateChanged)` | `RealtimeUiConnectionState` | Connection lifecycle changed. |
 | `(MuteChanged)` | `boolean` | Mic mute toggled. |
+| `(OutputMuteChanged)` | `boolean` | **Speaker** mute toggled — the agent's voice silenced locally. The call is untouched: the agent keeps listening/speaking/calling tools and is never told (great for demos where you don't want it to interrupt). |
 | `(DensityChanged)` | `RealtimeUxDensity` | Density changed. |
 | `(SurfacePanelResized)` | `number` (px) | User resized the surface panel. |
-| `(ControlInvoked)` | `RealtimeControlId` | **Any** control was used — a generic hook (`'mute'\|'captions'\|'type'\|'end'\|'minimize'\|'surface'\|'gear'\|'reveal-text'\|'pure-audio'`). Lets a host react to controls it doesn't even render. |
+| `(ControlInvoked)` | `RealtimeControlId` | **Any** control was used — a generic hook (`'mute'\|'speaker'\|'captions'\|'type'\|'end'\|'minimize'\|'surface'\|'gear'\|'reveal-text'\|'pure-audio'`). Lets a host react to controls it doesn't even render. |
 | `(NavigateRequest)` | `RealtimeNavigateRequest` | A dev link was followed. |
 | `(StartLiveRequested)` | `RealtimeStartLiveRequest` | "Start live" pressed in review. |
 | `(ReviewClosed)` | `void` | Review closed. |
@@ -79,6 +80,7 @@ Grab the component via `@ViewChild` and call:
 this.voice.SetChrome('console');     // force a chrome at runtime
 this.voice.RevealText();             // open the transcript programmatically
 this.voice.SetMuted(true);           // mute the mic
+this.voice.SetOutputMuted(true);     // mute the SPEAKER — agent keeps going, you just don't hear it
 this.voice.SetCaptions(true);        // turn captions on
 this.voice.SetDensity('pro');
 this.voice.OpenSurfacePanel();       // / CollapseSurfacePanel()
@@ -91,6 +93,7 @@ this.voice.EndSession();             // tear down
 | `SetChrome(mode)` | Override `[Chrome]` at runtime. |
 | `RevealText()` | Reveal the transcript (raises disclosure, emits `TextRevealed`). |
 | `SetMuted(b)` / `ToggleMute()` | Mic mute. |
+| `SetOutputMuted(b)` / `ToggleOutputMute()` | Speaker mute — silences the agent's voice locally; nothing is sent to the provider, so the agent is never interrupted. `OutputMuted` *(getter)* reads it. |
 | `SetCaptions(b)` / `ToggleCaptions()` | Captions on/off. |
 | `SetDensity(d)` | Set UX density. |
 | `OpenSurfacePanel(channelId?)` / `CollapseSurfacePanel()` | Show/hide the surface panel. |

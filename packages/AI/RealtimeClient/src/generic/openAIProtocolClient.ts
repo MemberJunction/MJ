@@ -968,6 +968,8 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
         const sampleRate = this.resolveSampleRate(config);
         this.playback = this.createPlayback(sampleRate);
+        // A speaker mute requested before the playout engine existed sticks (obligation #10).
+        this.playback.SetMuted(this.outputMuted);
         this.micCapture = await this.createMicCapture(micStream, sampleRate, (base64Pcm16) => this.sendMicChunk(base64Pcm16));
         // Audio-activity capability (base obligation #9): agent side taps the playout engine's
         // master gain; user side meters the mic stream. Null-safe — test fakes / no-WebAudio
@@ -1143,5 +1145,14 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
     /** Creation seam for the playout engine. Production returns the shared {@link RealtimePcmPlayback}. */
     protected createPlayback(sampleRate: number): IRealtimePcmPlayback {
         return new RealtimePcmPlayback(sampleRate);
+    }
+
+    /**
+     * Speaker mute (obligation #10): silences the local playout engine's output stage. Audio
+     * keeps being enqueued and scheduled, so {@link IsAudioPlaying} and the output meter stay
+     * honest — only the speaker goes quiet. No frame is sent to the provider.
+     */
+    protected applyOutputMute(muted: boolean): void {
+        this.playback?.SetMuted(muted);
     }
 }

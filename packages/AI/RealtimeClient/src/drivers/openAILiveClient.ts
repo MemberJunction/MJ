@@ -329,6 +329,17 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     /**
+     * Speaker mute (obligation #10): flips the hidden `<audio>` sink's `muted` flag. The remote
+     * track keeps flowing and the playback-drain / meter logic keeps working off the stream —
+     * only the speaker goes quiet. Nothing is sent to OpenAI.
+     */
+    protected applyOutputMute(muted: boolean): void {
+        if (this.remoteAudioEl) {
+            this.remoteAudioEl.muted = muted;
+        }
+    }
+
+    /**
      * Returns the agent's remote audio MediaStream if available.
      */
     public override GetRemoteMediaStream(): MediaStream | null {
@@ -441,6 +452,8 @@ export class OpenAILiveClient extends BaseRealtimeClient {
 
     private attachRemoteAudio(pc: IRealtimePeerConnection): void {
         this.remoteAudioEl = this.createAudioSink();
+        // A speaker mute requested before the sink existed sticks (obligation #10).
+        this.remoteAudioEl.muted = this.outputMuted;
         pc.ontrack = (e: RTCTrackEvent) => {
             if (this.remoteAudioEl && e.streams[0]) {
                 this.remoteAudioEl.srcObject = e.streams[0];

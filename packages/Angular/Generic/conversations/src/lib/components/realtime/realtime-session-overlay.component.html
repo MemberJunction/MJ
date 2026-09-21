@@ -103,11 +103,13 @@
           (OpenChanged)="OnComposerOpenChanged($event)"
           [CaptionsOn]="ShowCaptions"
           [IsMuted]="Muted"
+          [IsOutputMuted]="OutputMuted"
           [ShowDetails]="ShowDetailsControl"
           [DetailsOn]="DetailsPeek"
           (CaptionsToggled)="OnCaptionsToggled($event)"
           (DetailsToggled)="OnDetailsToggled()"
           (MuteChanged)="OnComposerMuteChanged($event)"
+          (OutputMuteChanged)="OnComposerOutputMuteChanged($event)"
           (EndRequested)="OnEndCall()">
         </mj-realtime-composer>
       }
@@ -162,6 +164,15 @@
                 [title]="FocusPillMuted ? 'Unmute' : 'Mute'"
                 [attr.aria-label]="FocusPillMuted ? 'Unmute microphone' : 'Mute microphone'">
           <i class="fa-solid" [class.fa-microphone]="!FocusPillMuted" [class.fa-microphone-slash]="FocusPillMuted" aria-hidden="true"></i>
+        </button>
+        <!-- Speaker: silence the agent's voice locally; the call continues untouched. -->
+        <button type="button" class="board-focus-pill__btn board-focus-pill__btn--speaker"
+                [class.board-focus-pill__btn--active]="OutputMuted"
+                (click)="OnFocusPillOutputMute()"
+                [title]="OutputMuted ? 'Unmute speaker' : 'Mute speaker (the agent keeps going, you just won\'t hear it)'"
+                [attr.aria-label]="OutputMuted ? 'Unmute speaker' : 'Mute speaker'"
+                [attr.aria-pressed]="OutputMuted">
+          <i class="fa-solid" [class.fa-volume-high]="!OutputMuted" [class.fa-volume-xmark]="OutputMuted" aria-hidden="true"></i>
         </button>
         <button type="button" class="board-focus-pill__btn"
                 (click)="OnFocusPillExit()"

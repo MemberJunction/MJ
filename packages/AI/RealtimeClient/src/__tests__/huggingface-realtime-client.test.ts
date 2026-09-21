@@ -75,6 +75,13 @@ class FakePlayback implements IRealtimePcmPlayback {
         this.Closed = true;
         this.IsPlaying = false;
     }
+    /** Records the speaker-mute requests the driver made (obligation #10). */
+    public IsMuted = false;
+    public MuteCalls: boolean[] = [];
+    public SetMuted(muted: boolean): void {
+        this.IsMuted = muted;
+        this.MuteCalls.push(muted);
+    }
 }
 
 /** Fake mic capture handle. */
@@ -335,6 +342,24 @@ describe('HuggingFaceRealtimeClient (extended edge coverage)', () => {
             await connect(client);
             client.Emit({ type: 'response.audio.delta', delta: Buffer.from([3]).toString('base64') });
             expect(client.Playback.Enqueued).toHaveLength(1);
+        });
+
+        it('SetOutputMuted silences only the local playout engine; nothing reaches HuggingFace', async () => {
+            const track = await connect(client);
+            const framesBefore = client.Fake.Sent.length;
+            client.SetOutputMuted(true);
+            expect(client.IsOutputMuted).toBe(true);
+            expect(client.Playback.IsMuted).toBe(true);
+            expect(track.enabled).toBe(true); // speaker mute is not mic mute
+            expect(client.Fake.Sent.length).toBe(framesBefore);
+            client.SetOutputMuted(false);
+            expect(client.Playback.IsMuted).toBe(false);
+        });
+
+        it('SetOutputMuted before Connect is applied once the playout engine exists', async () => {
+            client.SetOutputMuted(true);
+            await connect(client);
+            expect(client.Playback.MuteCalls).toEqual([true]);
         });
 
         it('toggles mic tracks via SetMuted (stream stays up, silence flows)', async () => {

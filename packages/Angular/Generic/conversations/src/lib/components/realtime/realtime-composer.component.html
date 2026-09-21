@@ -45,6 +45,15 @@
       <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
     </button>
 
+    <!-- Speaker: silence the agent's voice locally. The call continues untouched. -->
+    <button type="button" class="lean-ctrl lean-ctrl--more lean-ctrl--speaker" [class.lean-ctrl--muted]="IsOutputMuted"
+            (click)="ToggleOutputMute()"
+            [title]="OutputMuteTitle"
+            [attr.aria-label]="IsOutputMuted ? 'Unmute speaker' : 'Mute speaker'"
+            [attr.aria-pressed]="IsOutputMuted">
+      <i class="fa-solid" [ngClass]="IsOutputMuted ? 'fa-volume-xmark' : 'fa-volume-high'" aria-hidden="true"></i>
+    </button>
+
     <button type="button" class="lean-ctrl lean-ctrl--lg lean-ctrl--end" (click)="EndRequested.emit()"
             title="End call" aria-label="End call">
       <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
@@ -63,6 +72,18 @@
         <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
       </button>
       <span class="ctrl-label">{{ IsMuted ? 'Unmute' : 'Mute' }}</span>
+    </div>
+
+    <!-- Speaker: silence the agent's voice locally. The call continues untouched. -->
+    <div class="ctrl-group">
+      <button type="button" class="ctrl ctrl--speaker" [class.ctrl--muted]="IsOutputMuted"
+              (click)="ToggleOutputMute()"
+              [title]="OutputMuteTitle"
+              [attr.aria-label]="IsOutputMuted ? 'Unmute speaker' : 'Mute speaker'"
+              [attr.aria-pressed]="IsOutputMuted">
+        <i class="fa-solid" [ngClass]="IsOutputMuted ? 'fa-volume-xmark' : 'fa-volume-high'" aria-hidden="true"></i>
+      </button>
+      <span class="ctrl-label">Speaker</span>
     </div>
 
     <div class="ctrl-group">
@@ -112,6 +133,14 @@
               [title]="IsMuted ? 'Unmute microphone' : 'Mute microphone'"
               [attr.aria-pressed]="IsMuted">
         <i class="fa-solid" [ngClass]="IsMuted ? 'fa-microphone-slash' : 'fa-microphone'" aria-hidden="true"></i>
+      </button>
+      <!-- Speaker: silence the agent's voice locally. The call continues untouched. -->
+      <button type="button" class="mini mini--speaker" [class.mini--muted]="IsOutputMuted"
+              (click)="ToggleOutputMute()"
+              [title]="OutputMuteTitle"
+              [attr.aria-label]="IsOutputMuted ? 'Unmute speaker' : 'Mute speaker'"
+              [attr.aria-pressed]="IsOutputMuted">
+        <i class="fa-solid" [ngClass]="IsOutputMuted ? 'fa-volume-xmark' : 'fa-volume-high'" aria-hidden="true"></i>
       </button>
       <button type="button" class="mini" [class.mini--on]="CaptionsOn"
               (click)="ToggleCaptions()"

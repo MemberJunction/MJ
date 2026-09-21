@@ -1012,6 +1012,8 @@ export class RealtimeSessionRuntime {
       const client = this.createRealtimeClient(session.Provider);
       this.client = client;
       this.wireClientHandlers(client);
+      // The speaker mute is per-session: a new call always comes up audible (mirrors the mic).
+      this.outputMuted = false;
 
       // Everything past here awaits on hardware and the network, during which the host may end the
       // session. Each await is followed by a staleness check so an abandoned start releases what it
@@ -1180,6 +1182,36 @@ export class RealtimeSessionRuntime {
     const muted = tracks[0].enabled; // currently enabled → becomes muted
     this.client?.SetMuted(muted);
     return muted;
+  }
+
+  // ── Speaker (output) mute ──────────────────────────────────────────────────
+  //
+  // The demo-call control: silence what the LISTENER hears without touching the call. The
+  // agent keeps listening, speaking and calling tools; nothing is sent to the provider, so
+  // muting never interrupts it. Per-session, like the mic mute — a fresh start comes up audible.
+
+  /** Whether the agent's voice is currently silenced locally (the speaker mute). */
+  private outputMuted = false;
+
+  /** `true` while the speaker is muted via {@link SetOutputMuted} / {@link ToggleOutputMute}. */
+  public get IsOutputMuted(): boolean {
+    return this.outputMuted;
+  }
+
+  /**
+   * Set the speaker mute to an explicit state. Purely local: the model's turn, the transcript,
+   * tool calls and the "agent is speaking" visuals all continue — only the sound stops. Safe to
+   * call before a client exists (the state is applied to the client when the session starts).
+   */
+  public SetOutputMuted(muted: boolean): void {
+    this.outputMuted = muted;
+    this.client?.SetOutputMuted(muted);
+  }
+
+  /** Toggle the speaker mute. Returns the new muted state. */
+  public ToggleOutputMute(): boolean {
+    this.SetOutputMuted(!this.outputMuted);
+    return this.outputMuted;
   }
 
   // ── Client-executed UI tools ───────────────────────────────────────────────
