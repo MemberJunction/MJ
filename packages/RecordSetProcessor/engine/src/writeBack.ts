@@ -163,8 +163,16 @@ export async function applyOutputMapping(opts: {
     const { outputMapping, result, record, contextUser, dryRun, run } = opts;
     const provider = opts.provider ?? Metadata.Provider;
     const lookupCache = opts.lookupCache ?? new Map<string, string | number>();
+    let payload = result;
+    if (typeof payload === 'string') {
+        try {
+            payload = JSON.parse(payload);
+        } catch {
+            // leave as string if not JSON
+        }
+    }
     const sources: Record<string, unknown> = {
-        $: result,
+        $: payload,
         record: record.Record ?? {},
         $run: run ?? {},
     };
@@ -365,7 +373,7 @@ export async function applyOutputMapping(opts: {
                     const itemSources: Record<string, unknown> = {
                         $: item,
                         item,
-                        parent: result,
+                        parent: payload,
                         record: record.Record ?? {},
                         $run: run ?? {},
                     };

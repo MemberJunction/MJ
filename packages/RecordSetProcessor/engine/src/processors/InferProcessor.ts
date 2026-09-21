@@ -12,8 +12,8 @@
  */
 
 import { createHash } from 'node:crypto';
-import { LogError, RunQuery } from '@memberjunction/core';
-import { UUIDsEqual, Canonicalize, ComputeContentHashAsync, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
+import { LogError, Metadata, RunQuery, RunView } from '@memberjunction/core';
+import { UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -53,6 +53,7 @@ export class InferProcessor implements IRecordProcessor {
         context: RecordProcessorContext,
         options?: { skipLookup?: boolean; keyInfo?: CacheKeyResult }
     ): Promise<RecordResult> {
+        await this.ensureRecordsLoaded([record], context);
         await AIEngine.Instance.Config(false, context.contextUser);
         const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
         if (!prompt) {
@@ -86,7 +87,14 @@ export class InferProcessor implements IRecordProcessor {
                 });
 
                 if (cached) {
-                    const cachedPayload = JSON.parse(cached.OutputsJSON);
+                    let cachedPayload = JSON.parse(cached.OutputsJSON);
+                    if (typeof cachedPayload === 'string') {
+                        try {
+                            cachedPayload = JSON.parse(cachedPayload);
+                        } catch {
+                            // keep as string
+                        }
+                    }
                     await this.recordFeatureValuesHistory({
                         record,
                         context,
@@ -147,7 +155,14 @@ export class InferProcessor implements IRecordProcessor {
         }
 
         // P1-6 Hook: afterPromptExecute
-        const rawResult = await this.afterPromptExecute(result, record, context);
+        let rawResult = await this.afterPromptExecute(result, record, context);
+        if (typeof rawResult === 'string') {
+            try {
+                rawResult = JSON.parse(rawResult);
+            } catch {
+                // leave as raw string if not JSON
+            }
+        }
 
         // Layer 2: Validate outputs against constraints and apply OnViolation policy
         const validationOutcome = await this.validateOutputs(
@@ -221,6 +236,7 @@ export class InferProcessor implements IRecordProcessor {
      * and fans results back across all matching rows.
      */
     public async ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {
+        await this.ensureRecordsLoaded(records, context);
         const results = new Map<string, RecordResult>();
         if (!this.spec?.Caching?.Cacheable || records.length === 0) {
             for (const r of records) {
@@ -275,7 +291,14 @@ export class InferProcessor implements IRecordProcessor {
             const cached = cacheMap.get(keyHash);
             if (cached) {
                 // CACHE HIT: fan out immediately to all matching records without calling LLM!
-                const cachedPayload = JSON.parse(cached.OutputsJSON);
+                let cachedPayload = JSON.parse(cached.OutputsJSON);
+                if (typeof cachedPayload === 'string') {
+                    try {
+                        cachedPayload = JSON.parse(cachedPayload);
+                    } catch {
+                        // keep as string
+                    }
+                }
                 for (const rec of group.records) {
                     await this.recordFeatureValuesHistory({
                         record: rec,
@@ -410,6 +433,7 @@ export class InferProcessor implements IRecordProcessor {
      * SHA-256 over canonical { promptData, promptVersionHash }.
      */
     public async ComputeBasisHash(record: RecordRef, context: RecordProcessorContext): Promise<string> {
+        await this.ensureRecordsLoaded([record], context);
         await AIEngine.Instance.Config(false, context.contextUser);
         const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
         const promptVersionHash = prompt ? this.computePromptVersionHash(prompt as MJAIPromptEntityExtended, this.spec) : '';
@@ -634,6 +658,88 @@ export class InferProcessor implements IRecordProcessor {
             return r as Record<string, unknown>;
         }
         return { RecordID: record.RecordID, EntityID: record.EntityID };
+    }
+
+    /**
+     * Ensures that every record in the batch has its full field data loaded on `record.Record`.
+     * If records only have primary keys (as yielded by source pagination), batch-fetches the
+     * full records via RunView in a single query per entity.
+     */
+    protected async ensureRecordsLoaded(records: RecordRef[], context: RecordProcessorContext): Promise<void> {
+        const requiredFields: string[] = [];
+        if (this.spec?.Context?.Fields) {
+            requiredFields.push(...this.spec.Context.Fields);
+        }
+        if (this.spec?.Caching?.KeyFields) {
+            requiredFields.push(...this.spec.Caching.KeyFields);
+        }
+
+        const needsLoading = records.filter((r) => {
+            if (!r.Record || typeof r.Record !== 'object') return true;
+            if (typeof (r.Record as { GetAll?: unknown }).GetAll === 'function') return false;
+            const rec = r.Record as Record<string, unknown>;
+            // If explicit fields are required, check if any is missing
+            if (requiredFields.length > 0) {
+                const recKeysLower = new Set(Object.keys(rec).map((k) => k.toLowerCase()));
+                const missing = requiredFields.some((f) => !recKeysLower.has(f.toLowerCase()));
+                if (missing) return true;
+                return false;
+            }
+            // If no explicit fields, check if record only contains primary/identity keys
+            const nonPkKeys = Object.keys(rec).filter((k) => {
+                const lower = k.toLowerCase();
+                return lower !== 'id' && lower !== 'recordid' && lower !== 'entityid';
+            });
+            return nonPkKeys.length === 0;
+        });
+
+        if (needsLoading.length === 0) return;
+
+        const provider = (context.provider && typeof context.provider.EntityByID === 'function')
+            ? context.provider
+            : (typeof Metadata.Provider?.EntityByID === 'function' ? Metadata.Provider : undefined);
+        if (!provider) return;
+
+        const byEntity = new Map<string, RecordRef[]>();
+        for (const r of needsLoading) {
+            const list = byEntity.get(r.EntityID) ?? [];
+            list.push(r);
+            byEntity.set(r.EntityID, list);
+        }
+
+        for (const [entityID, entityRecords] of byEntity) {
+            const entity = provider.EntityByID(entityID);
+            if (!entity) continue;
+
+            const pk = entity.FirstPrimaryKey?.Name ?? 'ID'; // first-pk-ok: batch lookup by PK for entity records
+            const chunkSize = 500;
+            for (let i = 0; i < entityRecords.length; i += chunkSize) {
+                const chunk = entityRecords.slice(i, i + chunkSize);
+                const ids = chunk.map((r) => `'${EscapeSQLString(r.RecordID)}'`).join(',');
+                const rv = new RunView();
+                const result = await rv.RunView({
+                    EntityName: entity.Name,
+                    ExtraFilter: `${pk} IN (${ids})`,
+                    ResultType: 'simple',
+                    MaxRows: chunk.length,
+                    BypassCache: true,
+                }, context.contextUser);
+
+                if (result.Success && result.Results) {
+                    const rowMap = new Map<string, Record<string, unknown>>();
+                    for (const row of result.Results as Record<string, unknown>[]) {
+                        const idVal = String(row[pk]);
+                        rowMap.set(idVal, row);
+                    }
+                    for (const r of chunk) {
+                        const row = rowMap.get(r.RecordID);
+                        if (row) {
+                            r.Record = row;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

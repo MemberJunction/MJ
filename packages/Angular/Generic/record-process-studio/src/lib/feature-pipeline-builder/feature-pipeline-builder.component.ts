@@ -331,7 +331,7 @@ export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'Enti
         .mono { font-family: monospace; font-size: 12.5px; }
         .muted { color: var(--mj-text-muted); font-weight: 400; }
         .rpe-static-text { font-size: 13px; color: var(--mj-text-muted); padding: 7px 0; }
-        .fpb-code-preview { background: var(--mj-bg-surface-sunken, #1e1e1e); color: var(--mj-text-inverse, #dcdcdc); padding: 12px; border-radius: 6px; font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow-y: auto; margin: 0; }
+        .fpb-code-preview { background: var(--mj-bg-surface-sunken, #0f172a); color: var(--mj-text-code, var(--mj-text-primary, #e2e8f0)); border: 1px solid var(--mj-border-subtle, #334155); padding: 12px; border-radius: 6px; font-size: 12px; font-family: var(--mj-font-mono, monospace); white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow-y: auto; margin: 0; }
         .fpb-empty-outputs { display: flex; align-items: center; gap: 10px; padding: 20px; border: 1px dashed var(--mj-border-subtle); border-radius: 8px; color: var(--mj-text-muted); font-size: 13px; }
         .fpb-outputs-list { display: flex; flex-direction: column; gap: 16px; }
         .fpb-output-card { border: 1px solid var(--mj-border-subtle); border-radius: 8px; padding: 14px 16px; background: var(--mj-bg-surface); }
