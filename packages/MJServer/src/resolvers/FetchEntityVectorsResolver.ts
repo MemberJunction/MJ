@@ -5,7 +5,7 @@ import { MJEntityDocumentEntity, MJVectorIndexEntity, MJVectorDatabaseEntity } f
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 
 /* ───── GraphQL types ───── */
 
@@ -144,7 +144,7 @@ export class FetchEntityVectorsResolver extends ResolverBase {
         const rv = new RunView();
         const result = await rv.RunView<MJEntityDocumentEntity>({
             EntityName: 'MJ: Entity Documents',
-            ExtraFilter: `ID='${entityDocumentID}'`,
+            ExtraFilter: `ID='${EscapeSQLString(entityDocumentID)}'`,
             ResultType: 'entity_object',
         }, contextUser);
 

@@ -577,7 +577,7 @@ flowchart TD
     B -->|Found| C[Return ID immediately]
     B -->|Not found| D{Has ?allowDefer?}
     D -->|Yes| E[Skip this field, continue processing]
-    D -->|No| F[Fatal error - rollback transaction]
+    D -->|No| F[Push fails - transaction rolled back]
     E --> G[Save record without deferred field]
     G --> H[Queue record for re-processing]
     H --> I[Phase 2.5: Re-process entire record]
@@ -642,7 +642,7 @@ This means: "Look up the category, create if missing, and if the lookup still fa
 
 **Important notes:**
 - Deferred records are processed before the final commit (Phase 2.5)
-- If any deferred record fails on retry, the entire push transaction is rolled back
+- If any deferred record fails on retry, the push stops and its transaction is rolled back. In an atomic push (the default) that undoes everything. In a directory using isolated transactions, creates and updates from Phase 1 were already committed and stay, including the deferred record's first save without the deferred field
 - Use sparingly -- only for genuine circular dependencies
 - The record must have a primaryKey defined in the metadata file
 
@@ -1044,7 +1044,7 @@ mj sync push
 mj sync push --dir="ai-prompts"
 mj sync push -v
 mj sync push --dry-run
-mj sync push --parallel-batch-size=20
+mj sync push --isolated-transactions --parallel-batch-size=20   # parallel, NOT rolled back on failure
 
 # Directory filtering
 mj sync push --exclude="actions"
@@ -1134,7 +1134,8 @@ The tool uses the existing `mj.config.cjs` for database configuration and a hier
     "validateBeforePush": true,
     "requireConfirmation": true,
     "autoCreateMissingRecords": false,
-    "alwaysPush": false
+    "alwaysPush": false,
+    "isolatedTransactions": false
   },
   "sqlLogging": {
     "enabled": true,
@@ -1233,6 +1234,25 @@ Use cases:
 ```
 
 **Note**: This flag should be used judiciously as it causes database writes for all records. Enable temporarily when needed, then disable for normal operations.
+
+#### isolatedTransactions
+
+Whether each JSON-root graph gets its own connection and transaction. Defaults to `false`, and can be set **per entity directory** as well as at the root.
+
+- `false`: all-or-nothing. Every create, update and delete runs in one database transaction, one graph at a time. If anything fails, nothing is saved and the metadata files are restored.
+- `true`: sibling graphs run in parallel (`--parallel-batch-size`) on their own connections, and each create and update is committed as soon as it is saved. A failure does **not** roll those back.
+
+An entity's own `.mj-sync.json` overrides the root, and the CLI flags `--isolated-transactions` and `--no-isolated-transactions` override both, in either direction. See [Atomic and Isolated Pushes](#atomic-and-isolated-pushes).
+
+```json
+// root .mj-sync.json — the default for this tree
+{ "push": { "isolatedTransactions": false } }
+
+// orders/.mj-sync.json — this entity opts in
+{ "entity": "MJ_BizApps_Orders: Orders", "push": { "isolatedTransactions": true } }
+```
+
+Choose it for throughput on entities whose partial writes are acceptable. Nested transaction scopes inside a save work either way: on the shared connection they become savepoints.
 
 ### Directory Processing Order
 
@@ -1370,7 +1390,7 @@ The pull command supports smart update capabilities with extensive configuration
 
 `push.skipGeoCoding` maps to `EntitySaveOptions.SkipGeoCoding` for this entity only. Use it on display-only geo entities (People/Organizations whose coords are virtual `PrimaryAddressLatitude`). Do **not** use a global CLI `--skip-geocode` as the only control. Addresses with native lat/lng already set do not call the provider even without this flag.
 
-Parallel `--parallel-batch-size` defaults to **10**. Isolation is **per JSON-root graph**, not per flattened row: an Action and its nested Action Params share one `CreateIndependentInstance()` (shared pool, own transaction stack), the same pattern MJAPI uses per request. Durable AfterCreate actions without a queue submitter fire after that instance's transaction depth is 0 — they must not nest in the caller's `EntityTransactionScope`.
+A push is atomic by default, so every save runs inside the push transaction. Durable After* entity actions without a queue submitter wait until the push transaction ends before they run. In a directory using isolated transactions each graph runs on its own `CreateIndependentInstance()`, and those actions run once that instance's own save commits. See [Atomic and Isolated Pushes](#atomic-and-isolated-pushes).
 
 ### Pull Configuration Options
 
@@ -1532,38 +1552,81 @@ When `recursive: true` is set:
 3. Circular reference protection prevents infinite loops by tracking processed record IDs
 4. All recursive levels use the same `lookupFields`, `externalizeFields`, etc.
 
-## Parallel Processing
+## Atomic and Isolated Pushes
 
-MetadataSync supports parallel processing of records during push operations for improved performance with large datasets.
+A push is **all-or-nothing by default**. One database transaction covers every create, update and delete, and graphs run one at a time inside it.
 
-Records are automatically grouped into dependency levels:
+An entity directory can opt out with `push.isolatedTransactions: true`, which gives each of its JSON-root graphs its own connection and transaction so siblings run in parallel. That buys throughput and costs atomicity: those creates and updates commit as they are saved and are not rolled back with the push.
+
+| | Shared (default) | Isolated (`isolatedTransactions: true`) |
+|---|---|---|
+| Creates and updates | Host connection, inside the push transaction | One connection per JSON-root graph |
+| Graphs at once | 1 | `--parallel-batch-size` (default 10) |
+| A failure anywhere | Rolls back **everything** that directory wrote, with every other shared directory; metadata files are restored | Rolls back deletes and deferred records only. Creates and updates that already ran **stay committed** |
+| After a failure the push says | `rolled back successfully. Nothing from this push was saved.` | Which files and records are still in the database |
+
+The setting resolves per entity directory: the CLI flag wins, then that directory's `.mj-sync.json`, then the root's, then shared.
+
+```bash
+# Default: all-or-nothing
+mj sync push
+
+# One run with isolation forced on or off, whatever the files say
+mj sync push --isolated-transactions
+mj sync push --no-isolated-transactions
+mj sync push --isolated-transactions --parallel-batch-size=20
+```
+
+**A mixed push is not all-or-nothing as a whole.** It is all-or-nothing for the shared directories, and best effort for the isolated ones. A failure names the files and records that stayed.
+
+**Order isolated directories first** in `directoryOrder` when they touch rows the shared directories also write. The push transaction holds its locks until the end, so an isolated directory running after a shared one can block against the push's own transaction.
+
+### How a push runs
+
+```mermaid
+flowchart TD
+    B[Begin push transaction] --> P1[Phase 1: creates and updates]
+    P1 --> P2[Phase 2: deletes, reverse dependency order]
+    P2 --> P25[Phase 2.5: deferred records]
+    P25 --> C{Commit}
+    C -->|OK| P3[Phase 3: write files with deletions, save incremental state]
+    C -->|Rejected| RB
+    P1 -->|Any record error| RB[Roll back, restore files, report what is left]
+    P2 -->|Any delete error| RB
+    P25 -->|Any deferred error| RB
+
+    style RB fill:#b8762f,stroke:#8a5722,color:#fff
+    style P3 fill:#2d8659,stroke:#1a5c3a,color:#fff
+```
+
+- **Every record error stops the push.** That includes a record that fails without throwing, such as a missing primary key with `autoCreateMissingRecords=false`. A dry run keeps counting errors instead, since it writes nothing.
+- **Incremental state** (`--incremental`) is saved only after the commit, so a failed push never marks its files as pushed.
+- **PostgreSQL checks deferred foreign keys at COMMIT.** A delete that breaks a foreign key therefore fails when the push commits, and the error cannot be tied to one record.
+- **On PostgreSQL, any statement that fails inside the push transaction aborts it,** including a read. A healthy database does not hit this. A database whose views are missing columns that the metadata expects fails the whole atomic push at the first such read.
+
+### Trade-offs of the shared default
+
+- **Speed.** Creates and updates are roughly 30–50% slower than an isolated one. A push with no changes is not slower.
+- **Locks.** The transaction holds its locks until the push commits. With read committed snapshot off, other sessions that read the touched tables wait for the push, and that includes MJAPI.
+- **Deadlocks with other sessions.** An atomic push cannot deadlock against itself: everything runs on one connection. It can still deadlock against another session, such as MJAPI or a data import. The whole push then fails and must be re-run.
+
+### Graphs and providers
+
+Records are grouped into dependency levels:
 - **Level 0**: Records with no dependencies
 - **Level 1**: Records that depend only on Level 0 records
 - **Level 2**: Records that depend on Level 0 or Level 1 records
 
-Records are grouped into **JSON-root graphs** (an Action and its nested Action Params share one graph). Each graph gets one `CreateIndependentInstance()`. After each parallel batch the pool releases a graph when it will not appear at a later level, **or** when `TransactionDepth` is already 0 (`Save()` settled, so a fresh instance at the next level is safe). Graphs with leftover depth stay live until their last level. Peak live independent instances is therefore bounded by `--parallel-batch-size`, plus any still-open leftover-depth graphs — not "always equal to the file's root count", and not "always equal to the batch size" if leftover depth is holding graphs across levels.
+Records are also grouped into **JSON-root graphs**: an Action and its nested Action Params share one graph. Every DB read and write for a graph uses the graph's provider: `GetEntityObject`, `Save`, `Load`, `RunView`, lookups and RecordGeoCode. That is an **ORM** invariant (`BaseEntity.BindProvider`). Mixing the host connection with a graph instance in one tree is a deadlock, because the child FK waits on an uncommitted parent on another pooled connection.
 
-Every DB read and write for a graph — `GetEntityObject`, `Save`, `Load`, `RunView`, lookups, RecordGeoCode — must use that same provider. That is an **ORM** invariant (`BaseEntity.BindProvider`); mixing the host connection with a graph instance in one tree is a deadlock: the child FK waits on an uncommitted parent on another pooled connection. `BaseEntity.Save()` still opens and settles its own `EntityTransactionScope` per record; leftover depth (a subclass `BeginTransaction`, a nested entity action) is committed at drain on success and rolled back on failure. If the **first** `CreateIndependentInstance` in a file fails, **all** graphs in that file use the host (inside the push transaction). If it fails *after* independent instances already exist, the file is aborted — never a mix.
+In a **shared** directory every graph's provider is the host, and graphs run one at a time. The pool refuses to hand the host to a second graph while another graph holds it.
 
-The first thrown record error **fails the file** (fail-fast). A record that returns `status: 'error'` without throwing (e.g. missing primaryKey with `autoCreateMissingRecords=false`) also prevents that graph's leftover depth from being committed.
-
-**Sibling graphs** at the same dependency level run in parallel. The default `--parallel-batch-size` is **10**, not 1. Defaulting to 1 was a wrong workaround for mixed-provider hangs; pass `1` only when you want to serialize graphs for debugging. `--parallel-batch-size 1` does **not** mean one global provider — it only serializes graphs.
-
-Releasing settled graphs between levels bounds peak live instances at the batch size. The cost is more `CreateIndependentInstance` calls (one per graph per level when `Save()` settles, so L×N instead of N, each doing a `Config()` / metadata round trip). That is the chosen tradeoff for a CLI. If a large push is slow, this is the first place to look.
-
-```bash
-# Default processing (batch size 10, isolated providers)
-mj sync push
-
-# Process 20 records in parallel
-mj sync push --parallel-batch-size=20
-
-# Maximum parallelism (50 records)
-mj sync push --parallel-batch-size=50
-
-# Serialize graphs for debugging — not the default
-mj sync push --parallel-batch-size=1
-```
+In an **isolated** directory each graph gets one `CreateIndependentInstance()`.
+- After each parallel batch the pool releases a graph when it will not appear at a later level, **or** when `TransactionDepth` is already 0. In the second case `Save()` has settled, so a fresh instance at the next level is safe.
+- Graphs with leftover depth stay live until their last level. Peak live independent instances is therefore bounded by `--parallel-batch-size`, plus any still-open leftover-depth graphs.
+- Leftover depth, such as a subclass `BeginTransaction` or a nested entity action, is committed at drain on success and rolled back on failure.
+- The push checks once, before any graph runs, that independent instances are available. If they are not, every directory runs shared and the push says so. If `CreateIndependentInstance` fails later, the file is aborted; a graph never falls back to the host.
+- Releasing settled graphs between levels costs more `CreateIndependentInstance` calls: one per graph per level when `Save()` settles, so L×N instead of N. If a large isolated push is slow, look here first.
 
 ## Validation System
 

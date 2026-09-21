@@ -131,12 +131,6 @@ const loadNgFileStorageFileStorageModule = {
   load: () => import('@memberjunction/ng-file-storage/file-storage.module').then(() => {})
 };
 
-// --- @memberjunction/ng-react → . (1 entries) ---
-const loadNgReact = {
-  chunkId: '@memberjunction/ng-react',
-  load: () => import('@memberjunction/ng-react').then(() => {})
-};
-
 /**
  * Complete mapping of compound keys (BaseClassName::Key) to their chunk descriptor.
  * Covers all @RegisterClass decorated classes in lazy-loaded packages.
@@ -297,9 +291,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   // @memberjunction/ng-file-storage → ./file-storage.module
   'BaseResourceComponent::FileBrowserResource': loadNgFileStorageFileStorageModule,
 
-  // @memberjunction/ng-react → .
-  'RuntimeUtilities::RuntimeUtilities': loadNgReact,
-
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 118;
+export const LAZY_FEATURE_CONFIG_COUNT = 117;

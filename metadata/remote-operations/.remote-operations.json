@@ -816,5 +816,28 @@
       "lastModified": "2026-09-03T17:21:12.659Z",
       "checksum": "b294b54f1ae52cd124495dea88232bfa2aab0bf7f11731a69d40b5dcf1eb82ab"
     }
+  },
+  {
+    "fields": {
+      "Name": "Web Search",
+      "OperationKey": "WebSearch.Query",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Web Search",
+      "Description": "Run a web search through the configured external provider set. The administrator's WebSearchProvider records decide which vendor serves the request and in what failover order; a caller may pin one explicitly, in which case the call fails rather than substituting another. Implemented by WebSearchQueryServerOperation in @memberjunction/web-search-engine.",
+      "InputTypeName": "WebSearchQueryInput",
+      "InputTypeDefinition": "@file:types/web-search-query.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "WebSearchQueryOutput",
+      "OutputTypeDefinition": "@file:types/web-search-query.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "websearch:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A8A57690-3DDA-4C4E-919D-C9CED645E016"
+    }
   }
 ]

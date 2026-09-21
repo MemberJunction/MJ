@@ -20,7 +20,8 @@
   "license": "BUSL-1.1",
   "devDependencies": {
     "@angular/compiler": "21.2.22",
-    "@angular/compiler-cli": "21.2.22"
+    "@angular/compiler-cli": "21.2.22",
+    "@memberjunction/ng-test-utils": "6.1.0"
   },
   "peerDependencies": {
     "@angular/common": "^21.2.22",
