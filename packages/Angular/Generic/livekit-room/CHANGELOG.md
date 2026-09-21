@@ -1,5 +1,55 @@
 # @memberjunction/ng-livekit-room
 
+## 6.1.0
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- Updated dependencies [4273317]
+- Updated dependencies [394d276]
+- Updated dependencies [b915983]
+- Updated dependencies [b895f92]
+- Updated dependencies [4c1de04]
+- Updated dependencies [c09c818]
+- Updated dependencies [d26e202]
+- Updated dependencies [394d276]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [cf2484c]
+- Updated dependencies [394d276]
+- Updated dependencies [ce3d526]
+- Updated dependencies [ba71cd4]
+  - @memberjunction/ng-whiteboard@6.1.0
+  - @memberjunction/ng-ui-components@6.1.0
+  - @memberjunction/livekit-room-core@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [cf2484c]
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/ng-whiteboard@6.1.0-edge.7
+  - @memberjunction/livekit-room-core@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

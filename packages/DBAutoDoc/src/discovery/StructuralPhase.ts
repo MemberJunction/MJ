@@ -19,6 +19,7 @@ import {
     collectFKEdgesFromState,
     TransitiveBridgeFinding,
 } from './TransitiveBridgeDetector.js';
+import { BridgeViewProvider } from './BridgeViewSQLGenerator.js';
 
 export interface StructuralPhaseResult {
     bridges: TransitiveBridgeFinding[];
@@ -45,6 +46,12 @@ export interface StructuralPhaseOptions {
     maxFrontier?: number;
     maxPathsPerPair?: number;
     maxTotalPaths?: number;
+    /**
+     * Platform of the analyzed database; the bridge-view SQL this phase emits is written in
+     * its dialect. Carried in the options rather than as a third positional parameter so the
+     * bounds above and the dialect stay one argument.
+     */
+    provider?: BridgeViewProvider;
 }
 
 const EMPTY = (skipReason: 'disabled' | 'no-clusters' | 'no-edges'): StructuralPhaseResult => ({
@@ -85,6 +92,7 @@ export function runStructuralPhase(
     const bridges = detectTransitiveBridges(clusters, edges, state, {
         walkBounds,
         onTruncated: (reasons) => { truncationReasons = reasons; },
+        ...(opts.provider ? { provider: opts.provider } : {}),
     });
     return {
         bridges,

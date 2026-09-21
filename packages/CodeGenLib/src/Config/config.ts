@@ -66,6 +66,16 @@ const commandInfoSchema = z.object({
   args: z.string().array(),
   /** Optional timeout in milliseconds */
   timeout: z.number().nullish(),
+  /**
+   * Marks a long-running service that never exits on its own (e.g. `npm start`).
+   *
+   * For these, reaching `timeout` without having crashed IS the pass — the command
+   * is a boot check and the timeout is the observation window. Exiting before the
+   * timeout is still a failure, because a service that comes down on its own
+   * crashed. Requires a positive `timeout`; without one the process would never be
+   * killed and CodeGen would wait forever.
+   */
+  isDaemon: z.boolean().nullish(),
   /** When to run the command (e.g., 'before', 'after') */
   when: z.string(),
 });
@@ -627,7 +637,7 @@ const configInfoSchema = z.object({
     { workingDirectory: '../GeneratedEntities', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../GeneratedActions', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../MJServer', command: 'npm', args: ['run', 'build'], when: 'after' },
-    { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, when: 'after' },
+    { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, isDaemon: true, when: 'after' },
   ]),
   /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
   additionalSchemaInfo: z.string().optional(),

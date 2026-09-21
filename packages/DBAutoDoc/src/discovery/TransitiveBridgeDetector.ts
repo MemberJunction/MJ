@@ -22,7 +22,7 @@
  */
 
 import { walkBridgePaths, FKEdge, FKGraphWalkerOptions } from './FKGraphWalker.js';
-import { generateBridgeView, GeneratedBridgeView } from './BridgeViewSQLGenerator.js';
+import { generateBridgeView, GeneratedBridgeView, BridgeViewProvider } from './BridgeViewSQLGenerator.js';
 import { OrganicKeyCluster, memberColumns } from '../types/organic-keys.js';
 import { DatabaseDocumentation, ForeignKeyReference } from '../types/state.js';
 
@@ -60,6 +60,8 @@ export interface TransitiveBridgeDetectorOptions {
     walkBounds?: Pick<FKGraphWalkerOptions, 'maxFrontier' | 'maxPathsPerPair' | 'maxTotalPaths'>;
     /** Called once when a walk bound truncated the search, so the caller can report it. */
     onTruncated?: (reasons: string[]) => void;
+    /** Platform the generated bridge-view SQL is written for. Default `'sqlserver'`. */
+    provider?: BridgeViewProvider;
 }
 
 const DEFAULTS: Required<Omit<TransitiveBridgeDetectorOptions, 'walkBounds' | 'onTruncated'>> = {
@@ -67,6 +69,7 @@ const DEFAULTS: Required<Omit<TransitiveBridgeDetectorOptions, 'walkBounds' | 'o
     minSoftFKConfidence: 0.6,
     minPathConfidence: 0.7,
     keepShortestOnly: true,
+    provider: 'sqlserver',
 };
 
 /**
@@ -84,7 +87,9 @@ export function detectTransitiveBridges(
     state: DatabaseDocumentation,
     opts: TransitiveBridgeDetectorOptions = {},
 ): TransitiveBridgeFinding[] {
-    const o = { ...DEFAULTS, ...opts };
+    // `?? DEFAULTS.provider`: runStructuralPhase passes `{ provider }` with an optional provider,
+    // and a spread of an explicit `undefined` would overwrite the default.
+    const o = { ...DEFAULTS, ...opts, provider: opts.provider ?? DEFAULTS.provider };
 
     // ─── 1. Build the hub set from existing organic-key clusters ────────────
     // Each hub is a (schema, table) carrying one or more organic-key match field(s).
@@ -158,7 +163,7 @@ export function detectTransitiveBridges(
         const hubMatch = hubsByLookupKey.get(`${path.hubSchema}.${path.hubTable}.${path.hubKeyField}`);
         if (!hubMatch) continue;
 
-        const view = generateBridgeView(path, spokePK);
+        const view = generateBridgeView(path, spokePK, { provider: o.provider });
         findings.push({
             hubSchema: hubMatch.schema,
             hubTable: hubMatch.table,

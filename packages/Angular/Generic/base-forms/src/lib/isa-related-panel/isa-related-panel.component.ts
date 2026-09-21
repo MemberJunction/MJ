@@ -93,6 +93,24 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['Record']) {
       this.DiscoverRelatedItems();
+      return;
+    }
+
+    // Leaving edit mode is the OTHER moment this answer can change, and until now nothing
+    // re-asked. A save can ATTACH a subtype that did not exist when this panel last looked —
+    // IS-A writes parent and child in one transaction — and the form deliberately keeps the
+    // SAME record object across that save (EntityFormHostComponent's PrimaryKey setter skips
+    // the reload when the incoming key is just the now-saved PK), so `changes['Record']` never
+    // fires; and `FormRecordRefreshCoordinator.Notify()` is reached only from the Refresh
+    // button. The result was a panel that stayed empty on a record that plainly had a subtype
+    // until the user pressed Refresh.
+    //
+    // Re-discovering here is close to free on the common path: for a disjoint hierarchy
+    // DiscoverISADescendants walks the in-memory ISAChild chain and issues no query at all.
+    // An overlapping parent (AllowMultipleSubtypes) does load its child entities, so that
+    // configuration pays one extra discovery per edit session.
+    if (changes['EditMode'] && changes['EditMode'].previousValue === true && !this.EditMode) {
+      this.DiscoverRelatedItems();
     }
   }
 

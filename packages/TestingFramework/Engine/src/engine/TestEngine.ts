@@ -1326,6 +1326,17 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             resolvedVariables
         };
 
+        // Tiering telemetry, when the driver reports it. Without this the fields
+        // exist on TestRunResult and are never populated, so reporting cannot
+        // segment tier mix or replay share and the drift signal survives only
+        // inside TestRun.ActualOutputData.
+        if (driverResult.tier !== undefined) {
+            result.tier = driverResult.tier;
+        }
+        if (driverResult.replay !== undefined) {
+            result.replay = driverResult.replay;
+        }
+
         // Add sequence if this is a repeated test iteration
         if (sequence && sequence > 1) {
             result.sequence = sequence;

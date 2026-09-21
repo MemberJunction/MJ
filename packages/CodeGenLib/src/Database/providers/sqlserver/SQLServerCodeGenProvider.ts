@@ -197,6 +197,21 @@ AS
 SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
     }
 
+    /**
+     * SQL Server create-or-replace for a config-declared view. `CREATE OR ALTER VIEW`
+     * (SQL Server 2016 SP1+) replaces the definition in place whatever its column shape, so
+     * a changed body needs no drop and existing grants survive.
+     *
+     * Returns a single GO-free batch (executed via `ds.query`); the caller adds the file
+     * batch separator. `CREATE OR ALTER VIEW` must be the sole statement in its batch.
+     */
+    override generateCreateOrReplaceViewSQL(schema: string, viewName: string, selectSQL: string): string {
+        const esc = (n: string) => n.replace(/\]/g, ']]');
+        return `CREATE OR ALTER VIEW [${esc(schema)}].[${esc(viewName)}]
+AS
+${this.trimStatementTerminator(selectSQL)}`;
+    }
+
     /** SQL Server synthetic surrogate key: an auto-incrementing IDENTITY column. */
     getMaterializedSurrogateColumnType(): string {
         return 'int IDENTITY(1,1)';

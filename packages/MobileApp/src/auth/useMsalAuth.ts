@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useAuthRequest } from 'expo-auth-session';
 import { ResponseType } from 'expo-auth-session';
 import { Env } from '@/config/env';
-import { getDiscovery, getRedirectUri, exchangeCodeForTokens, type MJAuthTokens } from '@/auth/msal';
+import { GetDiscovery, GetRedirectUri, ExchangeCodeForTokens, type MJAuthTokens } from '@/auth/msal';
 
 /**
  * React hook wrapping the MSAL/Azure AD OAuth flow.
@@ -23,12 +23,12 @@ import { getDiscovery, getRedirectUri, exchangeCodeForTokens, type MJAuthTokens 
  *  - `ready`: `true` once the underlying auth request has initialized.
  */
 export function useMsalAuth() {
-    const discovery = getDiscovery();
+    const discovery = GetDiscovery();
     const [request, , promptAsync] = useAuthRequest(
         {
             clientId: Env.msalClientId,
             scopes: [...Env.msalScopes],
-            redirectUri: getRedirectUri(),
+            redirectUri: GetRedirectUri(),
             responseType: ResponseType.Code,
             usePKCE: true,
         },
@@ -48,7 +48,7 @@ export function useMsalAuth() {
         if (!code) throw new Error('No auth code returned by the provider.');
         const verifier = request.codeVerifier;
         if (!verifier) throw new Error('PKCE code verifier missing — auth request not configured correctly.');
-        return exchangeCodeForTokens(code, verifier);
+        return ExchangeCodeForTokens(code, verifier);
     }, [request, promptAsync]);
 
     return { signIn, ready: !!request };
