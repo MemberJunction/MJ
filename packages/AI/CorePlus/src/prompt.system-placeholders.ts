@@ -42,7 +42,7 @@ function resolvePromptSQLPlatform(params: AIPromptParams): DatabasePlatform {
         return ResolvePlatformKey(params.provider);
     }
     try {
-        return ResolvePlatformKey(Metadata.Provider);
+        return ResolvePlatformKey(Metadata.Provider); // global-provider-ok: deliberate last resort — `params.provider` is preferred immediately above and is the only correct source on a multi-tenant server; this branch serves single-tenant hosts and CLI/worker renders that never set one, and throwing here would fail a prompt render rather than pick a dialect
     } catch {
         return DEFAULT_DATABASE_PLATFORM;
     }
