@@ -1,16 +1,18 @@
 import { ChangeDetectorRef, Component, Input, OnDestroy, OnInit, ViewEncapsulation, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
+import { AngularSplitModule } from 'angular-split';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
+import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PSProcessRunRow, primaryAuc } from '../predictive-studio.view-models';
+import { PSProcessRunRow, primaryAuc, primaryModelScore, formatMetricValue } from '../predictive-studio.view-models';
 import { humanizeCron, StatusVariant } from '../production-distribution';
 import { PSOperateDialogComponent } from './ps-operate-dialog.component';
+import { PSPredictionsGridComponent } from './ps-predictions-grid.component';
 
 /** A model's deployment state, derived purely from cached bindings + Record Processes. */
 type DeployState = 'bound' | 'scheduled' | 'idle';
@@ -68,7 +70,7 @@ interface RunDetailVM {
 @Component({
   standalone: true,
   selector: 'ps-production',
-  imports: [CommonModule, SharedGenericModule, MJButtonDirective, PSOperateDialogComponent],
+  imports: [CommonModule, AngularSplitModule, SharedGenericModule, MJButtonDirective, PSOperateDialogComponent, PSPredictionsGridComponent],
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.css', './ps-production.component.css'],
   template: `
@@ -84,137 +86,207 @@ interface RunDetailVM {
         </div>
       } @else {
         <!-- KPI strip -->
-        <div class="prod-kpis" data-testid="ps-production-kpis">
-          <div class="ps-kpi"><div class="label">Published</div><div class="val">{{ models.length }}</div></div>
-          <div class="ps-kpi"><div class="label">Scheduled</div><div class="val">{{ scheduledModelCount }}</div></div>
-          <div class="ps-kpi"><div class="label">Bound (write-back)</div><div class="val">{{ boundModelCount }}</div></div>
-          <div class="ps-kpi"><div class="label">Idle</div><div class="val">{{ idleModelCount }}</div></div>
-        </div>
-
-        <div class="prod-layout">
-          <!-- master list -->
-          <div class="ps-card mlist" data-testid="ps-production-list">
-            <div class="ps-card-head"><h3>Published models</h3><span class="ps-badge gray">{{ models.length }}</span></div>
-            <div class="ps-card-body" style="padding:8px">
-              @for (m of models; track m.modelId) {
-                <div class="mrow" data-testid="ps-production-row" [class.sel]="m.modelId === selectedModelId" (click)="select(m.modelId)">
-                  <div class="ico" [class]="'st-' + m.deployState"><i [class]="deployIcon(m.deployState)"></i></div>
-                  <div style="flex:1;min-width:0">
-                    <div class="nm">{{ m.label }}</div>
-                    <div class="ln2 ps-muted ps-small">v{{ m.version }} · {{ m.algorithm }}</div>
-                  </div>
-                  <div class="meta">
-                    <span class="ps-badge" [class]="deployBadge(m.deployState)">{{ deployLabel(m.deployState) }}</span>
-                    <div class="ps-mono ps-small ps-muted">{{ m.holdoutMetric }}</div>
-                  </div>
-                </div>
-              }
-            </div>
+        @if (!isRunFocused) {
+          <div class="prod-kpis" data-testid="ps-production-kpis">
+            <div class="ps-kpi"><div class="label">Published</div><div class="val">{{ models.length }}</div></div>
+            <div class="ps-kpi"><div class="label">Scheduled</div><div class="val">{{ scheduledModelCount }}</div></div>
+            <div class="ps-kpi"><div class="label">Bound (write-back)</div><div class="val">{{ boundModelCount }}</div></div>
+            <div class="ps-kpi"><div class="label">Idle</div><div class="val">{{ idleModelCount }}</div></div>
           </div>
+        }
 
-          <!-- detail -->
-          <div class="ps-col detail" data-testid="ps-production-detail">
-            <div class="ps-card">
-              <div class="ps-card-body dh">
-                <div class="big-ico" [class]="'st-' + selected.deployState"><i [class]="deployIcon(selected.deployState)"></i></div>
-                <div style="flex:1">
-                  <h2 data-testid="ps-production-detail-name">{{ selected.label }} <span class="ps-tag ps-mono">v{{ selected.version }}</span></h2>
-                  <div class="ps-muted ps-small sub">{{ selected.algorithm }} · {{ selected.problemType }} · holdout {{ selected.holdoutMetric }}</div>
-                </div>
-                <span class="ps-badge" [class]="deployBadge(selected.deployState)">{{ deployLabel(selected.deployState) }}</span>
-                <button mjButton variant="primary" size="sm" data-testid="ps-production-operate" (click)="operateOpen = true">
-                  <i class="fa-solid fa-rocket"></i> Operate
-                </button>
-              </div>
+        <div class="prod-layout" [class.list-collapsed]="isListCollapsed">
+          @if (isListCollapsed) {
+            <div class="prod-collapsed-strip" data-testid="ps-production-collapsed-rail">
+              <button class="prod-rail-collapse" type="button" (click)="toggleList()" aria-label="Expand models list" title="Expand list">
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
+              <div class="prod-collapsed-strip-label"><i class="fa-solid fa-satellite-dish"></i></div>
             </div>
+          }
 
-            <!-- deployment status -->
-            <div class="ps-card">
-              <div class="ps-card-head"><h3>Deployment</h3>
-                <span class="ps-muted ps-small">{{ selected.processCount }} process{{ selected.processCount === 1 ? '' : 'es' }} · {{ selected.bindingCount }} binding{{ selected.bindingCount === 1 ? '' : 's' }}</span>
-              </div>
-              <div class="ps-card-body">
-                @if (selected.deployState === 'idle') {
-                  <div class="ps-callout info">
-                    <i class="fa-solid fa-circle-info"></i>
-                    <div class="ps-small">This model is published but <strong>not operating</strong> yet — nothing scores with it. Click <strong>Operate</strong> above to run it now, schedule it to run regularly, or write predictions back to a column.</div>
+          <as-split direction="horizontal" class="prod-splitter" unit="percent" [gutterSize]="6" (dragEnd)="onSplitDragEnd($event.sizes)">
+            @if (!isListCollapsed) {
+              <as-split-area [size]="listSizePct" [minSize]="18" [maxSize]="50">
+                <!-- master list -->
+                <div class="ps-card mlist" data-testid="ps-production-list">
+                  <div class="ps-card-head">
+                    <h3>Published models</h3>
+                    <div style="display:flex;gap:6px;align-items:center">
+                      <span class="ps-badge gray">{{ models.length }}</span>
+                      <button class="prod-collapse-btn" type="button" (click)="toggleList()" title="Collapse list" aria-label="Collapse list">
+                        <i class="fa-solid fa-chevron-left"></i>
+                      </button>
+                    </div>
                   </div>
-                } @else {
-                  @if (selectedBindings.length > 0) {
-                    <div class="ps-section-title">Scoring bindings</div>
-                    @for (b of selectedBindings; track b.id) {
-                      <div class="bind-row">
-                        <i class="fa-solid fa-arrow-right-to-bracket ps-muted"></i>
-                        <div style="flex:1">
-                          <div class="ps-small"><strong>{{ b.targetEntity }}</strong>.{{ b.targetColumn }}</div>
-                          <div class="ps-muted ps-small">{{ b.mode }}{{ b.schedulePhrase ? ' · ' + b.schedulePhrase : '' }}</div>
+                  <div class="ps-card-body" style="padding:8px">
+                    @for (m of models; track m.modelId) {
+                      <div class="mrow" data-testid="ps-production-row" [class.sel]="m.modelId === selectedModelId" (click)="select(m.modelId)">
+                        <div class="ico" [class]="'st-' + m.deployState"><i [class]="deployIcon(m.deployState)"></i></div>
+                        <div style="flex:1;min-width:0">
+                          <div class="nm">{{ m.label }}</div>
+                          <div class="ln2 ps-muted ps-small">v{{ m.version }} · {{ m.algorithm }}</div>
                         </div>
-                        <span class="ps-badge" [class]="modeBadge(b.mode)">{{ b.mode }}</span>
+                        <div class="meta">
+                          <span class="ps-badge" [class]="deployBadge(m.deployState)">{{ deployLabel(m.deployState) }}</span>
+                          <div class="ps-mono ps-small ps-muted">{{ m.holdoutMetric }}</div>
+                        </div>
                       </div>
                     }
-                  } @else {
-                    <div class="ps-small ps-muted">Scheduled to run, writing generic output to the process run history (no write-back column).</div>
-                  }
-                  @if (selected.lastScoredAt) {
-                    <div class="ps-divider"></div>
-                    <div class="ps-row" style="justify-content:space-between"><span class="ps-muted ps-small">Last scored</span><span class="ps-small">{{ selected.lastScoredAt | date:'medium' }}{{ selected.lastRowCount != null ? ' · ' + selected.lastRowCount + ' rows' : '' }}</span></div>
-                  }
-                }
-              </div>
-            </div>
+                  </div>
+                </div>
+              </as-split-area>
+            }
 
-            <!-- past runs (on demand) -->
-            <div class="ps-card">
-              <div class="ps-card-head"><h3>Run history</h3><span class="ps-muted ps-small">last 90 days · newest first</span></div>
-              <div class="ps-card-body">
-                @if (selectedRunId) {
-                  <!-- run drill-in: per-record predictions from Process Run Details -->
-                  <button class="run-back" data-testid="ps-production-run-back" (click)="closeRun()">
-                    <i class="fa-solid fa-arrow-left"></i> All runs
-                  </button>
-                  @if (loadingDetails) {
-                    <mj-loading text="Loading predictions..." size="small"></mj-loading>
-                  } @else if (runDetails.length === 0) {
-                    <div class="ps-small ps-muted">No per-record predictions recorded for this run.</div>
+            <as-split-area [size]="isListCollapsed ? 100 : detailSizePct" [minSize]="50">
+              <!-- detail -->
+              <div class="ps-col detail" [class.focused-run]="selectedRunId && isRunFocused" data-testid="ps-production-detail">
+                <!-- 1. MODEL HEADER CARD -->
+                <div class="ps-card prod-header-card" [class.collapsed]="isHeaderCollapsed">
+                  @if (!isHeaderCollapsed) {
+                    <div class="ps-card-body dh">
+                      <div class="big-ico" [class]="'st-' + selected.deployState"><i [class]="deployIcon(selected.deployState)"></i></div>
+                      <div style="flex:1;min-width:0">
+                        <h2 data-testid="ps-production-detail-name">{{ selected.label }} <span class="ps-tag ps-mono">v{{ selected.version }}</span></h2>
+                        <div class="ps-muted ps-small sub">{{ selected.algorithm }} · {{ selected.problemType }} · holdout {{ selected.holdoutMetric }}</div>
+                      </div>
+                      <span class="ps-badge" [class]="deployBadge(selected.deployState)">{{ deployLabel(selected.deployState) }}</span>
+                      <button mjButton variant="primary" size="sm" data-testid="ps-production-operate" (click)="operateOpen = true">
+                        <i class="fa-solid fa-rocket"></i> Operate
+                      </button>
+                      <button class="ps-card-collapse-btn" type="button" (click)="toggleHeaderCollapse()" title="Collapse model header" aria-label="Collapse model header">
+                        <i class="fa-solid fa-chevron-up"></i>
+                      </button>
+                    </div>
                   } @else {
-                    <table class="runs-table" data-testid="ps-production-run-detail">
-                      <thead><tr><th>Record</th><th>Status</th><th>Prediction</th><th>Scored</th></tr></thead>
-                      <tbody>
-                        @for (d of runDetails; track d.recordId) {
-                          <tr>
-                            <td class="ps-mono ps-small">{{ d.recordId }}</td>
-                            <td><span class="ps-badge" [class]="runBadge(d.status)">{{ d.status }}</span></td>
-                            <td class="ps-mono">{{ d.score }}@if (d.class) { <span class="ps-muted"> · {{ d.class }}</span> }</td>
-                            <td class="ps-small ps-muted">{{ d.scoredAt ? (d.scoredAt | date:'short') : '—' }}</td>
-                          </tr>
-                        }
-                      </tbody>
-                    </table>
+                    <div class="ps-card-body dh-compact" (click)="toggleHeaderCollapse()">
+                      <div class="mini-ico" [class]="'st-' + selected.deployState"><i [class]="deployIcon(selected.deployState)"></i></div>
+                      <div class="compact-info">
+                        <strong>{{ selected.label }}</strong>
+                        <span class="ps-tag ps-mono ps-small">v{{ selected.version }}</span>
+                        <span class="ps-muted ps-small">· {{ selected.algorithm }}</span>
+                      </div>
+                      <span class="ps-badge" [class]="deployBadge(selected.deployState)">{{ deployLabel(selected.deployState) }}</span>
+                      <button mjButton variant="primary" size="sm" data-testid="ps-production-operate-compact" (click)="$event.stopPropagation(); operateOpen = true">
+                        <i class="fa-solid fa-rocket"></i> Operate
+                      </button>
+                      <button class="ps-card-collapse-btn" type="button" (click)="$event.stopPropagation(); toggleHeaderCollapse()" title="Expand model header" aria-label="Expand model header">
+                        <i class="fa-solid fa-chevron-down"></i>
+                      </button>
+                    </div>
                   }
-                } @else if (loadingRuns) {
-                  <mj-loading text="Loading runs..." size="small"></mj-loading>
-                } @else if (runs.length === 0) {
-                  <div class="ps-small ps-muted">No runs recorded yet. Each time this model runs as a Record Process, its predictions are saved to the process run history — even without a scoring binding.</div>
-                } @else {
-                  <table class="runs-table">
-                    <thead><tr><th>When</th><th>Status</th><th>Scored</th><th>Process</th><th></th></tr></thead>
-                    <tbody>
-                      @for (r of runs; track r.ID) {
-                        <tr data-testid="ps-production-run" class="run-row" (click)="openRun(r.ID)">
-                          <td>{{ (r.StartTime || r.CreatedAt) | date:'short' }}</td>
-                          <td><span class="ps-badge" [class]="runBadge(r.Status)">{{ r.Status }}</span></td>
-                          <td class="ps-mono">{{ r.SuccessCount }}<span class="ps-muted">/{{ r.TotalItemCount ?? 0 }}</span></td>
-                          <td class="ps-small ps-muted">{{ r.ProcessName || '—' }}</td>
-                          <td class="run-right">@if (r.DryRun) { <span class="ps-tag amber">dry run</span> }<i class="fa-solid fa-chevron-right ps-muted"></i></td>
-                        </tr>
+                </div>
+
+                <!-- 2. DEPLOYMENT STATUS CARD -->
+                <div class="ps-card prod-deployment-card" [class.collapsed]="isDeploymentCollapsed">
+                  <div class="ps-card-head clickable" (click)="toggleDeploymentCollapse()">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <i class="fa-solid fa-network-wired" style="color:var(--mj-brand-primary)"></i>
+                      <h3>Deployment</h3>
+                      <span class="ps-muted ps-small">{{ selected.processCount }} process{{ selected.processCount === 1 ? '' : 'es' }} · {{ selected.bindingCount }} binding{{ selected.bindingCount === 1 ? '' : 's' }}</span>
+                      @if (isDeploymentCollapsed && selectedBindings.length > 0) {
+                        <span class="ps-badge gray ps-small">{{ selectedBindings[0].targetEntity }}.{{ selectedBindings[0].targetColumn }}</span>
                       }
-                    </tbody>
-                  </table>
-                }
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <button class="ps-card-collapse-btn" type="button" (click)="$event.stopPropagation(); toggleDeploymentCollapse()" [title]="isDeploymentCollapsed ? 'Expand deployment' : 'Collapse deployment'" [attr.aria-label]="isDeploymentCollapsed ? 'Expand deployment' : 'Collapse deployment'">
+                        <i class="fa-solid" [class.fa-chevron-up]="!isDeploymentCollapsed" [class.fa-chevron-down]="isDeploymentCollapsed"></i>
+                      </button>
+                    </div>
+                  </div>
+                  @if (!isDeploymentCollapsed) {
+                    <div class="ps-card-body">
+                      @if (selected.deployState === 'idle') {
+                        <div class="ps-callout info">
+                          <i class="fa-solid fa-circle-info"></i>
+                          <div class="ps-small">This model is published but <strong>not operating</strong> yet — nothing scores with it. Click <strong>Operate</strong> above to run it now, schedule it to run regularly, or write predictions back to a column.</div>
+                        </div>
+                      } @else {
+                        @if (selectedBindings.length > 0) {
+                          <div class="ps-section-title">Scoring bindings</div>
+                          @for (b of selectedBindings; track b.id) {
+                            <div class="bind-row">
+                              <i class="fa-solid fa-arrow-right-to-bracket ps-muted"></i>
+                              <div style="flex:1">
+                                <div class="ps-small"><strong>{{ b.targetEntity }}</strong>.{{ b.targetColumn }}</div>
+                                <div class="ps-muted ps-small">{{ b.mode }}{{ b.schedulePhrase ? ' · ' + b.schedulePhrase : '' }}</div>
+                              </div>
+                              <span class="ps-badge" [class]="modeBadge(b.mode)">{{ b.mode }}</span>
+                            </div>
+                          }
+                        } @else {
+                          <div class="ps-small ps-muted">Scheduled to run, writing generic output to the process run history (no write-back column).</div>
+                        }
+                        @if (selected.lastScoredAt) {
+                          <div class="ps-divider"></div>
+                          <div class="ps-row" style="justify-content:space-between"><span class="ps-muted ps-small">Last scored</span><span class="ps-small">{{ selected.lastScoredAt | date:'medium' }}{{ selected.lastRowCount != null ? ' · ' + selected.lastRowCount + ' rows' : '' }}</span></div>
+                        }
+                      }
+                    </div>
+                  }
+                </div>
+
+                <!-- 3. RUN HISTORY CARD -->
+                <div class="ps-card run-card" [class.drilldown-active]="selectedRunId" [class.focus-fill]="selectedRunId && isRunFocused">
+                  <div class="ps-card-head">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-status-info)"></i>
+                      <h3>Run history</h3>
+                      <span class="ps-muted ps-small">last 90 days · newest first</span>
+                    </div>
+                    @if (selectedRunId) {
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <button class="ps-focus-toggle-btn" type="button" (click)="toggleRunFocus()" [class.active]="isRunFocused" [title]="isRunFocused ? 'Exit focus (expand header & deployment)' : 'Focus mode (collapse header & deployment)'">
+                          <i class="fa-solid" [class.fa-compress]="isRunFocused" [class.fa-expand]="!isRunFocused"></i>
+                          <span>{{ isRunFocused ? 'Exit Focus' : 'Focus' }}</span>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                  <div class="ps-card-body run-card-body">
+                    @if (selectedRunId) {
+                      <!-- run drill-in: unified predictions grid with virtual scrolling, name resolution, charts & history -->
+                      <div class="run-drill-nav">
+                        <button class="run-back" data-testid="ps-production-run-back" (click)="closeRun()">
+                          <i class="fa-solid fa-arrow-left"></i> All runs
+                        </button>
+                        <span class="ps-tag ps-mono ps-small">Run: {{ selectedRunId }}</span>
+                      </div>
+                      <ps-predictions-grid
+                        data-testid="ps-production-run-grid"
+                        [modelId]="selected.modelId"
+                        [runId]="selectedRunId"
+                        [entityName]="selectedTargetEntityName"
+                        [problemType]="selected.problemType"
+                        [title]="selected.label + ' — Run Predictions'"
+                        [height]="runGridHeight">
+                      </ps-predictions-grid>
+                    } @else if (loadingRuns) {
+                      <mj-loading text="Loading runs..." size="small"></mj-loading>
+                    } @else if (runs.length === 0) {
+                      <div class="ps-small ps-muted">No runs recorded yet. Each time this model runs as a Record Process, its predictions are saved to the process run history — even without a scoring binding.</div>
+                    } @else {
+                      <table class="runs-table">
+                        <thead><tr><th>When</th><th>Status</th><th>Scored</th><th>Process</th><th></th></tr></thead>
+                        <tbody>
+                          @for (r of runs; track r.ID) {
+                            <tr data-testid="ps-production-run" class="run-row" (click)="openRun(r.ID)">
+                              <td>{{ (r.StartTime || r.CreatedAt) | date:'short' }}</td>
+                              <td><span class="ps-badge" [class]="runBadge(r.Status)">{{ r.Status }}</span></td>
+                              <td class="ps-mono">{{ r.SuccessCount }}<span class="ps-muted">/{{ r.TotalItemCount ?? 0 }}</span></td>
+                              <td class="ps-small ps-muted">{{ r.ProcessName || '—' }}</td>
+                              <td class="run-right">@if (r.DryRun) { <span class="ps-tag amber">dry run</span> }<i class="fa-solid fa-chevron-right ps-muted"></i></td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    }
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
+            </as-split-area>
+          </as-split>
+    </div>
 
         <ps-operate-dialog
           [Visible]="operateOpen"
@@ -240,14 +312,28 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   public selectedBindings: BindingVM[] = [];
   public runs: PSProcessRunRow[] = [];
   public loadingRuns = false;
+  public loadingDetails = false;
   /** Whether the "Operate this model" dialog is open for the selected model. */
   public operateOpen = false;
   /** The run whose per-record predictions are drilled into (null = the run list). */
   public selectedRunId: string | null = null;
   public runDetails: RunDetailVM[] = [];
-  public loadingDetails = false;
+  public listSizePct = 30;
+  public detailSizePct = 70;
+  public isListCollapsed = false;
+  public isHeaderCollapsed = false;
+  public isDeploymentCollapsed = false;
+  public isRunFocused = false;
+
+  public get runGridHeight(): string {
+    if (this.isRunFocused || (this.isHeaderCollapsed && this.isDeploymentCollapsed)) {
+      return '740px';
+    }
+    return '520px';
+  }
 
   ngOnInit(): void {
+    this.loadLayoutPrefs();
     // Reactive: rebuild the published-model list on any MJ: ML Models change (save/delete/remote-invalidate).
     this.modelsSub = this.engine
       .ObserveProperty<MJMLModelEntity>('_Models')
@@ -259,6 +345,90 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
 
   ngOnDestroy(): void {
     this.modelsSub?.unsubscribe();
+  }
+
+  // ---- layout splitter resizing & persistence ----
+
+  public toggleHeaderCollapse(): void {
+    this.isHeaderCollapsed = !this.isHeaderCollapsed;
+    this.updateFocusState();
+    this.saveLayoutPrefs();
+    this.cdr.detectChanges();
+  }
+
+  public toggleDeploymentCollapse(): void {
+    this.isDeploymentCollapsed = !this.isDeploymentCollapsed;
+    this.updateFocusState();
+    this.saveLayoutPrefs();
+    this.cdr.detectChanges();
+  }
+
+  public toggleRunFocus(): void {
+    this.isRunFocused = !this.isRunFocused;
+    if (this.isRunFocused) {
+      this.isHeaderCollapsed = true;
+      this.isDeploymentCollapsed = true;
+    } else {
+      this.isHeaderCollapsed = false;
+      this.isDeploymentCollapsed = false;
+    }
+    this.saveLayoutPrefs();
+    this.cdr.detectChanges();
+  }
+
+  private updateFocusState(): void {
+    this.isRunFocused = this.isHeaderCollapsed && this.isDeploymentCollapsed;
+  }
+
+  private loadLayoutPrefs(): void {
+    const raw = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.production.layout');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.listSizePct === 'number' && parsed.listSizePct >= 15 && parsed.listSizePct <= 60) {
+          this.listSizePct = parsed.listSizePct;
+          this.detailSizePct = 100 - parsed.listSizePct;
+        }
+        if (typeof parsed.isListCollapsed === 'boolean') {
+          this.isListCollapsed = parsed.isListCollapsed;
+        }
+        if (typeof parsed.isHeaderCollapsed === 'boolean') {
+          this.isHeaderCollapsed = parsed.isHeaderCollapsed;
+        }
+        if (typeof parsed.isDeploymentCollapsed === 'boolean') {
+          this.isDeploymentCollapsed = parsed.isDeploymentCollapsed;
+        }
+        if (typeof parsed.isRunFocused === 'boolean') {
+          this.isRunFocused = parsed.isRunFocused;
+        }
+      } catch {}
+    }
+  }
+
+  public onSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number' && typeof sizes[1] === 'number') {
+      this.listSizePct = Math.round(sizes[0]);
+      this.detailSizePct = Math.round(sizes[1]);
+      this.saveLayoutPrefs();
+    }
+  }
+
+  public toggleList(): void {
+    this.isListCollapsed = !this.isListCollapsed;
+    this.saveLayoutPrefs();
+    this.cdr.detectChanges();
+  }
+
+  private saveLayoutPrefs(): void {
+    const prefs = {
+      listSizePct: this.listSizePct,
+      detailSizePct: this.detailSizePct,
+      isListCollapsed: this.isListCollapsed,
+      isHeaderCollapsed: this.isHeaderCollapsed,
+      isDeploymentCollapsed: this.isDeploymentCollapsed,
+      isRunFocused: this.isRunFocused,
+    };
+    UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.production.layout', JSON.stringify(prefs));
   }
 
   // ---- KPIs ----
@@ -301,14 +471,15 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       null,
     );
     const lastRowCount = bindings.find((b) => b.LastRowCount != null)?.LastRowCount ?? null;
-    const auc = primaryAuc(m);
+    const score = primaryModelScore(m);
+    const holdoutMetric = score != null ? formatMetricValue(score.key, score.value) : '—';
     return {
       modelId: m.ID,
       label: this.engine.ModelDisplayName(m),
       algorithm: this.engine.AlgorithmName(m.AlgorithmID),
       problemType: m.ProblemType ?? '—',
       version: m.Version,
-      holdoutMetric: auc != null ? auc.toFixed(3) : '—',
+      holdoutMetric,
       deployState: bindings.length > 0 ? 'bound' : scheduledCount > 0 ? 'scheduled' : 'idle',
       bindingCount: bindings.length,
       processCount: processes.length,
@@ -342,6 +513,21 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
       if (entity) return entity.Name;
     }
     return '—';
+  }
+
+  public get selectedTargetEntityName(): string | null {
+    if (this.selectedBindings.length > 0 && this.selectedBindings[0].targetEntity !== '—') {
+      return this.selectedBindings[0].targetEntity;
+    }
+    const model = this.engine?.PublishedModels?.find((m) => UUIDsEqual(m.ID, this.selected.modelId));
+    if (model?.PipelineID) {
+      const pipeline = this.engine?.Pipelines?.find((p) => UUIDsEqual(p.ID, model.PipelineID));
+      if (pipeline?.TargetEntityID) {
+        const ent = this.ProviderToUse.Entities.find((e) => UUIDsEqual(e.ID, pipeline.TargetEntityID));
+        if (ent) return ent.Name;
+      }
+    }
+    return null;
   }
 
   // ---- selection + on-demand run history ----

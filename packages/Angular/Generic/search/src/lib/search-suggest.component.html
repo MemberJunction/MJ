@@ -48,7 +48,7 @@
                     >
                         <i class="fa-solid fa-file-lines suggest-item-icon"></i>
                         <span class="suggest-item-text">{{ record.RecordName }}</span>
-                        <span class="suggest-item-meta">{{ record.EntityName }}</span>
+                        <span class="suggest-item-meta">{{ record.EntityDisplayName || record.EntityName }}</span>
                     </div>
                 }
             </div>
@@ -70,7 +70,7 @@
                             </div>
                             <div class="suggest-result-body">
                                 <div class="suggest-result-title">{{ result.RecordName || result.Title }}</div>
-                                <div class="suggest-result-entity">{{ result.EntityName }}</div>
+                                <div class="suggest-result-entity">{{ result.EntityDisplayName || result.EntityName }}</div>
                             </div>
                             <span class="suggest-result-score" [class]="'suggest-result-score ' + GetScoreClass(result.Score)">{{ FormatScore(result.Score) }}</span>
                         </div>

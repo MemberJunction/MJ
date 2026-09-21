@@ -132,9 +132,13 @@ const USE_CASE_ICONS: Record<string, string> = {
                   [class.on]="detailId === card.algo.ID" (click)="toggleDetail(card.algo.ID)">
                   <i class="fa-solid fa-circle-info"></i> Details
                 </button>
+                <button mjButton variant="secondary" size="sm" data-testid="ps-catalog-create-pipeline"
+                  (click)="onCreatePipeline(card.algo)">
+                  <i class="fa-solid fa-plus"></i> Pipeline
+                </button>
                 <button mjButton variant="primary" size="sm" data-testid="ps-catalog-use"
                   (click)="useAlgorithm(card.algo)">
-                  <i class="fa-solid fa-diagram-project"></i> Use
+                  <i class="fa-solid fa-robot"></i> Agent
                 </button>
               </div>
               @if (detailId === card.algo.ID) {
@@ -154,9 +158,12 @@ const USE_CASE_ICONS: Record<string, string> = {
                   } @else {
                     <div class="ps-small ps-muted" style="margin-top:6px">Sensible defaults are applied at training time.</div>
                   }
-                  <div class="adetail-foot">
+                  <div class="adetail-foot" style="display: flex; gap: 8px;">
+                    <button mjButton variant="secondary" size="sm" (click)="onCreatePipeline(card.algo)">
+                      <i class="fa-solid fa-plus"></i> Create Pipeline with this algorithm
+                    </button>
                     <button mjButton variant="primary" size="sm" (click)="useAlgorithm(card.algo)">
-                      <i class="fa-solid fa-diagram-project"></i> Use this algorithm
+                      <i class="fa-solid fa-robot"></i> Ask Agent
                     </button>
                   </div>
                 </div>
@@ -173,6 +180,12 @@ export class PSCatalogComponent implements OnInit {
 
   /** Emitted with a starter prompt to open + seed the Model Development Agent chat. */
   @Output() askAgent = new EventEmitter<string>();
+  /** Emitted when the user chooses to build a new training pipeline with this algorithm. */
+  @Output() createPipeline = new EventEmitter<MJMLAlgorithmEntity>();
+
+  public onCreatePipeline(algo: MJMLAlgorithmEntity): void {
+    this.createPipeline.emit(algo);
+  }
 
   public selectedUseCaseIds: string[] = [];
   public cards: AlgoCardVM[] = [];

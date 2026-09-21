@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { ChannelOnboardingDetails } from './base-realtime-channel-client';
+import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 
 /**
  * The FIRST-RUN INTRO overlay for an interactive channel — a generic, channel-agnostic card
