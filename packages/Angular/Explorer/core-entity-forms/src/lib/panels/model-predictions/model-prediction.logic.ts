@@ -8,6 +8,15 @@
  * generic `ProblemType` / `FeatureImportance` JSON.
  */
 
+import {
+    OutcomeBand,
+    OutcomeConfig,
+    formatPredictionScore,
+    resolveOutcomeConfig,
+    resolveOutcomeStyle,
+    resolveScoreBand,
+} from '@memberjunction/predictive-studio-core';
+
 /**
  * The neutral tercile a numeric prediction falls into. No moral direction is
  * implied — `low`/`mid`/`high` describe position on the value axis only.
@@ -183,6 +192,14 @@ export interface PredictionHistoryItem {
     isProbability: boolean;
     /** Neutral band: 'low' | 'mid' | 'high' */
     band: PredictionBand | null;
+    /** Resolved semantic status band from outcomeConfig */
+    statusBand: OutcomeBand | null;
+    /** Human-readable status label (e.g. "Low Risk", "High") */
+    statusLabel: string | null;
+    /** Semantic badge color ('green' | 'amber' | 'red' | 'blue' | 'gray') */
+    badgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray';
+    /** Icon class if specified in band/style */
+    badgeIcon: string | null;
     /** Execution status: 'Succeeded' | 'Failed' | 'Pending' | 'Skipped' */
     status: string;
     /** When processing completed */
@@ -221,6 +238,8 @@ export interface HistoryModelMetadata {
     Version?: number;
     ProblemType?: string;
     TargetVariable?: string;
+    Lineage?: string | null;
+    outcomeConfig?: OutcomeConfig | null;
 }
 
 /**
@@ -322,6 +341,34 @@ export function parseHistoryItem(
     const completedAt = detail.CompletedAt ? (detail.CompletedAt instanceof Date ? detail.CompletedAt : new Date(detail.CompletedAt)) : null;
     const drivers = parsePayloadDrivers(payloadSection?.['drivers']);
 
+    const rawOutcomeConfig = (payloadSection?.['outcomeConfig'] ?? modelMeta?.outcomeConfig) as OutcomeConfig | undefined;
+    const outcomeConfig = rawOutcomeConfig
+        ? resolveOutcomeConfig({ outcomeConfig: rawOutcomeConfig })
+        : resolveOutcomeConfig({
+            Lineage: modelMeta?.Lineage ?? null,
+            TargetVariable: targetVar || modelMeta?.TargetVariable || null,
+            ProblemType: probTypeStr || modelMeta?.ProblemType || null,
+        });
+
+    let statusBand: OutcomeBand | null = null;
+    let badgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray' = 'gray';
+    let badgeIcon: string | null = null;
+    let statusLabel: string | null = null;
+
+    if (numericScore != null) {
+        statusBand = resolveScoreBand(numericScore, outcomeConfig);
+        if (statusBand) {
+            badgeColor = statusBand.BadgeColor;
+            badgeIcon = statusBand.Icon ?? null;
+            statusLabel = statusBand.Label;
+        }
+    } else if (predictedClass) {
+        const style = resolveOutcomeStyle(predictedClass, outcomeConfig);
+        badgeColor = style.BadgeColor;
+        badgeIcon = style.Icon ?? null;
+        statusLabel = style.DisplayLabel ?? predictedClass;
+    }
+
     return {
         id: detail.ID,
         processRunId: detail.ProcessRunID,
@@ -335,6 +382,10 @@ export function parseHistoryItem(
         displayValue,
         isProbability: kind === 'probability',
         band: kind === 'probability' && numericScore != null ? bandFor(numericScore) : null,
+        statusBand,
+        statusLabel,
+        badgeColor,
+        badgeIcon,
         status: detail.Status || 'Succeeded',
         completedAt,
         formattedTime: formatHistoryTimestamp(completedAt),

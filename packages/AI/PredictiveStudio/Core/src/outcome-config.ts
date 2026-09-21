@@ -314,7 +314,7 @@ export function resolveOutcomeConfig(modelLike?: {
  * Closes small sentinel gaps between consecutive sorted bands defensively
  * (e.g. [0, 0.3999) and [0.4, 0.6999) -> [0, 0.4) and [0.4, 0.7)).
  */
-function closeSentinelBandGaps(bands: OutcomeBand[]): OutcomeBand[] {
+export function closeSentinelBandGaps(bands: OutcomeBand[]): OutcomeBand[] {
   if (!bands || bands.length <= 1) return bands;
   const indices = bands.map((_, i) => i).sort((a, b) => bands[a].Min - bands[b].Min);
   const result = bands.map((b) => ({ ...b }));
@@ -326,8 +326,8 @@ function closeSentinelBandGaps(bands: OutcomeBand[]): OutcomeBand[] {
     const next = result[nextIdx];
     if (cur.Max < next.Min) {
       const gap = next.Min - cur.Max;
-      // Close small gaps (<= 0.01 for probabilities or <= 1 for large monetary thresholds)
-      if (gap <= 0.01 || (next.Min >= 10 && gap <= 1)) {
+      // Close small gaps (<= 0.05 for probabilities or <= 1 for large monetary thresholds)
+      if (gap <= 0.05 || (next.Min >= 10 && gap <= 1)) {
         cur.Max = next.Min;
       }
     }
@@ -338,7 +338,7 @@ function closeSentinelBandGaps(bands: OutcomeBand[]): OutcomeBand[] {
 /**
  * Normalizes an incoming OutcomeConfig to ensure sensible defaults for any omitted properties.
  */
-function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
+export function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
   const polarity = cfg.Polarity;
   const defaultBands =
     polarity === 'positive'
@@ -378,8 +378,9 @@ function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
 export function resolveScoreBand(score: number, config?: OutcomeConfig | null): OutcomeBand | null {
   if (typeof score !== 'number' || !Number.isFinite(score)) return null;
   if (!config) return null;
-  const bands = config.Bands ?? (config.Polarity === 'positive' ? DEFAULT_POSITIVE_BANDS : config.Polarity === 'adverse' ? DEFAULT_ADVERSE_BANDS : DEFAULT_NEUTRAL_BANDS);
-  if (!bands || bands.length === 0) return null;
+  const rawBands = config.Bands ?? (config.Polarity === 'positive' ? DEFAULT_POSITIVE_BANDS : config.Polarity === 'adverse' ? DEFAULT_ADVERSE_BANDS : DEFAULT_NEUTRAL_BANDS);
+  if (!rawBands || rawBands.length === 0) return null;
+  const bands = closeSentinelBandGaps(rawBands);
 
   // Check normalized [0, 1] bounds without silent clamping
   const isNormalizedProbability = bands.every(b => b.Min >= 0 && b.Max <= 1);

@@ -945,7 +945,7 @@
   background: var(--mj-brand-primary);
 }
 
-/* Node Category Accents */
+/* Node Category Accents — fallback hex values are the intended definitions; hosts may override them externally without a :root block here */
 .ps-pipelines .ps-node.src { border-left-color: var(--ps-node-src, #0284c7); }
 .ps-pipelines .ps-node.src .nh i.tile { background: var(--ps-node-src, #0284c7); }
 

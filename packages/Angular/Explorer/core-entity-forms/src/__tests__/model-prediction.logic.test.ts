@@ -249,9 +249,57 @@ describe('model-prediction.logic', () => {
             expect(item.displayValue).toBe('Renewing');
             expect(item.isProbability).toBe(true);
             expect(item.band).toBe('high');
+            expect(item.statusBand?.Label).toBe('High');
+            expect(item.statusBand?.BadgeColor).toBe('green');
+            expect(item.badgeColor).toBe('green');
             expect(item.drivers).toHaveLength(1);
             expect(item.drivers[0].name).toBe('AutoRenew');
             expect(item.rawPayload).not.toBeNull();
+        });
+
+        it('resolves adverse polarity for risk/churn models', () => {
+            const raw = {
+                ID: 'PRD-004',
+                ProcessRunID: 'PR-998',
+                Status: 'Succeeded',
+                CompletedAt: '2026-09-20T00:05:00Z',
+                ResultPayload: JSON.stringify({
+                    output: {
+                        target: 'ChurnRisk',
+                        problemType: 'classification',
+                        score: 0.85,
+                    },
+                }),
+                ErrorMessage: null,
+            };
+
+            const item = parseHistoryItem(raw);
+            expect(item.isProbability).toBe(true);
+            expect(item.statusBand?.Label).toBe('High Risk');
+            expect(item.statusBand?.BadgeColor).toBe('red');
+            expect(item.badgeColor).toBe('red');
+        });
+
+        it('resolves categorical outcome styles for class labels', () => {
+            const raw = {
+                ID: 'PRD-005',
+                ProcessRunID: 'PR-997',
+                Status: 'Succeeded',
+                CompletedAt: '2026-09-20T00:06:00Z',
+                ResultPayload: JSON.stringify({
+                    output: {
+                        target: 'PaymentStatus',
+                        problemType: 'classification',
+                        class: 'Late',
+                    },
+                }),
+                ErrorMessage: null,
+            };
+
+            const item = parseHistoryItem(raw);
+            expect(item.predictedClass).toBe('Late');
+            expect(item.badgeColor).toBe('red');
+            expect(item.statusLabel).toBe('Late');
         });
 
         it('parses regression models correctly', () => {

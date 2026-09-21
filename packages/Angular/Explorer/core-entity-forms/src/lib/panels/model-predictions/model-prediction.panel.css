@@ -51,7 +51,58 @@
 
 /* ---- Primary value ---- */
 .mpp-value-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     margin: 2px 0 10px;
+}
+
+/* ---- Status Badge ---- */
+.mpp-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: var(--mj-radius-full, 9999px);
+    line-height: 1.3;
+}
+
+.mpp-badge-sm {
+    padding: 1px 6px;
+    font-size: 0.7rem;
+}
+
+.mpp-badge-green {
+    background: color-mix(in srgb, var(--mj-status-success, #16a34a) 15%, transparent);
+    color: var(--mj-status-success, #16a34a);
+}
+
+.mpp-badge-red {
+    background: color-mix(in srgb, var(--mj-status-danger, #dc2626) 15%, transparent);
+    color: var(--mj-status-danger, #dc2626);
+}
+
+.mpp-badge-amber {
+    background: color-mix(in srgb, var(--mj-status-warning, #d97706) 15%, transparent);
+    color: var(--mj-status-warning, #d97706);
+}
+
+.mpp-badge-blue {
+    background: color-mix(in srgb, var(--mj-status-info, #2563eb) 15%, transparent);
+    color: var(--mj-status-info, #2563eb);
+}
+
+.mpp-badge-gray {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+}
+
+.mpp-pred-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .mpp-value {
@@ -96,6 +147,23 @@
 }
 .mpp-band-high {
     background: var(--mj-brand-primary);
+}
+
+/* Outcome polarity gauge fill colors */
+.mpp-gauge-fill.mpp-color-green {
+    background: var(--mj-status-success, #16a34a);
+}
+.mpp-gauge-fill.mpp-color-red {
+    background: var(--mj-status-danger, #dc2626);
+}
+.mpp-gauge-fill.mpp-color-amber {
+    background: var(--mj-status-warning, #d97706);
+}
+.mpp-gauge-fill.mpp-color-blue {
+    background: var(--mj-status-info, #2563eb);
+}
+.mpp-gauge-fill.mpp-color-gray {
+    background: var(--mj-text-muted);
 }
 
 .mpp-gauge-scale {

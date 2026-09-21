@@ -44,17 +44,26 @@
               <span class="mpp-value" [class.mpp-value-muted]="card.displayValue === '—'">
                 {{ card.displayValue }}
               </span>
+              @if (card.statusLabel) {
+                <span class="mpp-status-badge" [class]="'mpp-badge-' + card.badgeColor">
+                  @if (card.badgeIcon) {
+                    <i [class]="'fa-solid ' + card.badgeIcon"></i>
+                  }
+                  <span>{{ card.statusLabel }}</span>
+                </span>
+              }
             </div>
 
-            <!-- Probability gauge — neutral 3-band tercile. No moral direction. -->
+            <!-- Probability gauge — semantic color matching outcome polarity -->
             @if (card.isProbability) {
               <div class="mpp-gauge" role="img"
-                   [attr.aria-label]="card.label + ' ' + card.displayValue + ', ' + card.band + ' band'">
+                   [attr.aria-label]="card.label + ' ' + card.displayValue + (card.statusLabel ? ', ' + card.statusLabel : '')">
                 <div class="mpp-gauge-track">
                   <div class="mpp-gauge-fill"
                        [class.mpp-band-low]="card.band === 'low'"
                        [class.mpp-band-mid]="card.band === 'mid'"
                        [class.mpp-band-high]="card.band === 'high'"
+                       [class]="'mpp-color-' + card.badgeColor"
                        [style.width.%]="card.gaugePct"></div>
                 </div>
                 <div class="mpp-gauge-scale">
@@ -155,10 +164,20 @@
                         <div class="mpp-history-model-prov">{{ item.provenance }}</div>
                       </td>
                       <td class="mpp-col-pred">
-                        <span class="mpp-history-pred-val">{{ item.displayValue }}</span>
-                        @if (item.predictedClass && item.numericValue != null && item.isProbability) {
-                          <span class="mpp-history-pred-sub">({{ (item.numericValue * 100) | number:'1.0-1' }}%)</span>
-                        }
+                        <div class="mpp-pred-cell">
+                          <span class="mpp-history-pred-val">{{ item.displayValue }}</span>
+                          @if (item.predictedClass && item.numericValue != null && item.isProbability) {
+                            <span class="mpp-history-pred-sub">({{ (item.numericValue * 100) | number:'1.0-1' }}%)</span>
+                          }
+                          @if (item.statusLabel) {
+                            <span class="mpp-status-badge mpp-badge-sm" [class]="'mpp-badge-' + item.badgeColor">
+                              @if (item.badgeIcon) {
+                                <i [class]="'fa-solid ' + item.badgeIcon"></i>
+                              }
+                              <span>{{ item.statusLabel }}</span>
+                            </span>
+                          }
+                        </div>
                       </td>
                       <td class="mpp-col-status">
                         <span class="mpp-status-pill" [class]="'mpp-status-' + item.status.toLowerCase()">

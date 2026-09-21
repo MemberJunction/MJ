@@ -4,6 +4,12 @@ import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { CompositeKey, LogError, Metadata, RunView } from '@memberjunction/core';
 import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import {
+    OutcomeBand,
+    resolveOutcomeConfig,
+    resolveOutcomeStyle,
+    resolveScoreBand,
+} from '@memberjunction/predictive-studio-core';
+import {
     ModelHistorySummary,
     PredictionBand,
     PredictionDriver,
@@ -44,6 +50,14 @@ export interface PredictionCard {
     gaugePct: number;
     /** Neutral band for the gauge segment styling (only meaningful when isProbability). */
     band: PredictionBand | null;
+    /** Resolved semantic status band from outcomeConfig */
+    statusBand: OutcomeBand | null;
+    /** Human-readable status label (e.g. "Low Risk", "High") */
+    statusLabel: string | null;
+    /** Semantic badge color: 'green' | 'amber' | 'red' | 'blue' | 'gray' */
+    badgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray';
+    /** FontAwesome icon class (e.g. 'fa-circle-check', 'fa-triangle-exclamation') */
+    badgeIcon: string | null;
     /** Top feature-importance drivers, or empty when unavailable. */
     drivers: PredictionDriver[];
     /** Provenance: "Pipeline Name v3". */
@@ -388,6 +402,31 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
         const numeric = toNumber(rawValue);
         const kind = valueKind(model.ProblemType, numeric);
 
+        const outcomeConfig = resolveOutcomeConfig({
+            Lineage: model.Lineage,
+            TargetVariable: model.TargetVariable,
+            ProblemType: model.ProblemType,
+        });
+
+        let statusBand: OutcomeBand | null = null;
+        let badgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray' = 'gray';
+        let badgeIcon: string | null = null;
+        let statusLabel: string | null = null;
+
+        if (numeric != null) {
+            statusBand = resolveScoreBand(numeric, outcomeConfig);
+            if (statusBand) {
+                badgeColor = statusBand.BadgeColor;
+                badgeIcon = statusBand.Icon ?? null;
+                statusLabel = statusBand.Label;
+            }
+        } else if (kind === 'class' && typeof rawValue === 'string') {
+            const style = resolveOutcomeStyle(rawValue, outcomeConfig);
+            badgeColor = style.BadgeColor;
+            badgeIcon = style.Icon ?? null;
+            statusLabel = style.DisplayLabel ?? rawValue;
+        }
+
         return {
             bindingId: binding.ID,
             modelId: model.ID,
@@ -398,6 +437,10 @@ export class ModelPredictionPanel extends BaseFormPanel implements OnInit {
             displayValue: formatValue(rawValue, numeric, kind),
             gaugePct: kind === 'probability' && numeric != null ? gaugePct(numeric) : 0,
             band: kind === 'probability' && numeric != null ? bandFor(numeric) : null,
+            statusBand,
+            statusLabel,
+            badgeColor,
+            badgeIcon,
             drivers: parseDrivers(model.FeatureImportance),
             provenance: `${model.Pipeline} v${model.Version}`,
             lastScored: formatLastScored(binding.LastScoredAt),
