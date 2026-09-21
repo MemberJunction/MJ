@@ -34,6 +34,7 @@ import {
     decideSchemaLimitViolations,
     IntegrationConnectorCreationPipeline,
     IntegrationActionGenerator,
+    DescribePersistCounts,
     BuildCatalogWriter, WithCatalogScope } from "@memberjunction/integration-engine";
 import type {
     IntegrationActionVerb,
@@ -59,7 +60,7 @@ import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, decideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
-import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
+import { CollectInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
 import { decidePauseWrite, decideSchedulesToPause, decideSchedulesToResume, describeCancelOutcome, describeCancelScope, describePauseOutcome, readPausedSchedules, writePausedSchedules } from "../integration/ConnectionPause.js";
 import type { CancelScope, ScheduleJobState } from "../integration/ConnectionPause.js";
 import { ReadResourcePressure, EvaluatePressure } from "@memberjunction/integration-engine";
@@ -1856,7 +1857,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             return {
                 Success: result.Success,
                 Message: result.Success
-                    ? `Refresh complete: ${result.PersistResult?.ObjectsCreated ?? 0} created, ${result.PersistResult?.ObjectsUpdated ?? 0} updated, ${result.UnresolvedObjects.length} IOs still PK-less (deferred to additionalSchemaInfo authoring)`
+                    // Objects AND fields. A PRESUPPOSED connector creates no objects on any run, so
+                    // the object counts alone report a refresh that reshaped hundreds of fields as
+                    // "0 created, 0 updated" — see DescribePersistCounts.
+                    ? `Refresh complete: ${DescribePersistCounts(result.PersistResult)}, ${result.UnresolvedObjects.length} IOs still PK-less (deferred to additionalSchemaInfo authoring)`
                     : `Refresh failed: ${result.FailureMessage ?? 'unknown error'}`,
                 RunID: result.RunID,
                 ObjectsCreated: result.PersistResult?.ObjectsCreated,
@@ -2806,15 +2810,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         for (const io of ios) ioByID.set(io.ID, io.Name);
 
         const result: SourceSchemaInfo = { Objects: [] };
-        const fieldsByObjectName: Record<string, Array<{ Name: string; Status: string | null }>> = {};
         for (const io of ios) {
             if (filter && !filter.has(io.Name.toLowerCase())) continue;
             // Active fields only — an inactive (source-absent / deactivated) field is not materialized.
             const allFields = engine.GetIntegrationObjectFields(io.ID);
             const iofs = allFields.filter(iof => iof.Status === 'Active');
-            // Remember what this object declared, active or not — the caller's warning collector
-            // turns the difference into the one message that explains a column that never appeared.
-            if (warningsOut) fieldsByObjectName[io.Name] = allFields.map(f => ({ Name: f.Name, Status: f.Status }));
 
             const fields = iofs.map(iof => {
                 const targetIOName = iof.RelatedIntegrationObjectID
@@ -2857,17 +2857,49 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
 
         // Declared-but-inactive rows this rebuild left out. The caller decides what to do with the
-        // strings (the apply path puts them on its Warnings); computing them costs nothing when no
-        // collector was passed, since the field lists above are only gathered then.
-        if (warningsOut) {
-            warningsOut.push(...ComputeInactiveRowWarnings({
-                RequestedNames: requestedNames ?? null,
-                AllObjects: engine.GetIntegrationObjectsByIntegrationID(integrationID)
-                    .map(io => ({ Name: io.Name, Status: io.Status })),
-                FieldsByObjectName: fieldsByObjectName,
-            }));
-        }
+        // strings (the apply path puts them on its Warnings); nothing is computed when no collector
+        // was passed.
+        if (warningsOut) warningsOut.push(...this.collectInactiveRowWarnings(integrationID, requestedNames));
         return result;
+    }
+
+    /**
+     * Brings the integration catalog caches to committed state, then re-configures the engine from it.
+     *
+     * Both halves are needed and the ORDER is the point. `mj sync push` writes IO/IOF rows through
+     * stored procedures, which fire no `BaseEntity` change events, so nothing invalidates the RunView
+     * cache and `Config(true)` re-queries straight back into the stale entries. The per-connection
+     * catalog entities are guarded individually because a workspace without that migration has not
+     * registered them, and a missing entity must not fail an apply.
+     *
+     * One method so the single apply and the batch apply cannot drift apart on it again.
+     */
+    private async refreshIntegrationCatalogCaches(user: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Objects');
+        await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Object Fields');
+        for (const perConnection of ['MJ: Company Integration Objects', 'MJ: Company Integration Object Fields']) {
+            try { await LocalCacheManager.Instance.InvalidateEntityCaches(perConnection); } catch { /* not registered here */ }
+        }
+        await IntegrationEngine.Instance.Config(true, user, provider);
+    }
+
+    /**
+     * The declared-but-inactive-row warnings for an apply, computed from the catalog rather than from
+     * whichever schema object the apply happens to be holding.
+     *
+     * Separate from {@link buildSourceSchemaFromPersistedRows} because the two are independent
+     * questions, and conflating them cost the batch path its warnings entirely: the batch builds its
+     * source schema once and hands it down as `prefetchedSourceSchema`, which skips the rebuild — and
+     * with it skipped the only place these warnings were ever collected. The warnings come from the
+     * IO/IOF rows' `Status`, which is knowable whenever the integration and the requested names are,
+     * so it never needed to ride along with a rebuild.
+     *
+     * `requestedNames` empty/undefined means "everything active", which deliberately does NOT report
+     * deactivated objects (a large catalog carries hundreds and announcing them on every apply is
+     * noise) — see ComputeInactiveRowWarnings.
+     */
+    private collectInactiveRowWarnings(integrationID: string, requestedNames?: string[]): string[] {
+        return CollectInactiveRowWarnings(IntegrationEngineBase.Instance, integrationID, requestedNames);
     }
 
     private async runSchemaRefreshPipeline(
@@ -4122,9 +4154,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const { connector, companyIntegration } = await this.resolveConnector(input.CompanyIntegrationID, user, provider);
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
 
-            // Step 1b: Ensure IntegrationEngine cache is populated so the persisted
-            // IO/IOF rows are available for reconstruction below.
-            await IntegrationEngine.Instance.Config(false, user);
+            // Step 1b: Ensure IntegrationEngine cache holds the CURRENT IO/IOF rows, because the
+            // reconstruction below is entirely made of them.
+            //
+            // This used to be `Config(false)` — "configure if not already configured" — so an apply
+            // in a process that had configured the engine at boot rebuilt its source schema from a
+            // snapshot of arbitrary age, and an apply that followed an `mj sync push` (whose stored
+            // procedures fire no BaseEntity change events, so no cache is invalidated) rebuilt it
+            // from rows that no longer existed. The BATCH mutation has always invalidated and forced;
+            // the single one is not entitled to a cheaper answer to the same question.
+            await this.refreshIntegrationCatalogCaches(user);
 
             // Step 2: Reconstruct SourceSchemaInfo from the persisted IO/IOF rows
             // (already freshened by the Phase 0 v5.39.x MJCompanyIntegrationEntityServer
@@ -4136,8 +4175,21 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 // is a direct-API caller bypassing the wizard).  Do a one-time live
                 // introspect + persist + action-generation so the apply still proceeds.
                 LogError(`[IntegrationApplyAll] Persisted IO cache empty for ${companyIntegration.Integration}; falling back to live introspect.`);
+                // FILTERED, by the same decision the batch mutation uses. This fallback described the
+                // vendor's ENTIRE surface and then threw all but the selected objects away — about 70
+                // seconds of describes on a large Salesforce account, for a selection of two or three.
+                // The gate is deliberately the batch's own `shouldUseFilteredIntrospection` rather than
+                // a new rule: a connector with dozens of objects is fine describing them all, and
+                // narrowing the describe for one that ISN'T on the filtered flow would change which
+                // objects a legacy apply persists.
+                const filteredNames = this.shouldUseFilteredIntrospection(connector, input.SourceObjects)
+                    ? (await this.resolveSelectionPlan(input.SourceObjects, user)).map(p => p.Name)
+                    : [];
                 sourceSchema = await (connector.IntrospectSchema.bind(connector) as
-                    (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
+                    (ci: unknown, u: unknown, opts?: { ObjectNames?: string[] }) => Promise<SourceSchemaInfo>)(
+                        companyIntegration, user,
+                        filteredNames.length > 0 ? { ObjectNames: filteredNames } : undefined,
+                    );
                 try {
                     const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
                         IntegrationID: companyIntegration.IntegrationID,
@@ -4342,7 +4394,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     SyncRunID: syncRunID ?? undefined,
                     ScheduledJobID: scheduledJobID,
                     GitCommitSuccess: batchResult.Results[0]?.GitCommitSuccess,
-                    APIRestarted: false,
+                    // READ, not assumed — the same field the batch mutation returns. The pipeline sets
+                    // it only when the restart step actually succeeded, and `skipRestart` is a request,
+                    // not a record of what happened.
+                    APIRestarted: batchResult.Results[0]?.APIRestarted ?? false,
                     Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
                 };
             }
@@ -4354,7 +4409,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Message: `Applied ${objects.length} object(s) — entity maps will be created after restart`,
                 Steps: pipelineSteps,
                 GitCommitSuccess: batchResult.Results[0]?.GitCommitSuccess,
-                APIRestarted: true,
+                // Reaching this line means pm2 has NOT killed us yet — which is also exactly what a
+                // FAILED restart looks like. Hardcoding `true` here reported a restart that never
+                // happened, and the comment above conceded the guess; RunPipelineBatch sets
+                // APIRestarted only when restartMJAPI() returned ok, so read it.
+                APIRestarted: batchResult.Results[0]?.APIRestarted ?? false,
                 Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
             };
         } catch (e) {
@@ -4723,6 +4782,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const inactiveWarnings: string[] = [];
         if (prefetchedSourceSchema) {
             sourceSchema = prefetchedSourceSchema;
+            // A prefetched schema skips the rebuild, and the rebuild used to be the only place these
+            // warnings were collected — so the BATCH apply (the one caller that prefetches) lost them
+            // twice over: once at its own rebuild, which passed no collector, and again here. They do
+            // not depend on the rebuild: they are the catalog's own Status rows, which are exactly as
+            // readable on this branch as on the other one.
+            inactiveWarnings.push(...this.collectInactiveRowWarnings(
+                companyIntegration.IntegrationID, objects.map(o => o.SourceObjectName),
+            ));
         } else {
             const requestedNamesForReuse = objects.map(o => o.SourceObjectName);
             sourceSchema = this.buildSourceSchemaFromPersistedRows(
@@ -6329,20 +6396,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const validatedPlatform = this.validatePlatform(platform);
 
-            // Bust RunView caches for integration metadata BEFORE Config(true).
-            // mj sync push writes records via stored procedures which do NOT fire
-            // BaseEntity change events, so the RunView cache is never auto-invalidated.
-            // Explicitly clearing these entries ensures Config(true) re-queries the DB.
-            await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Objects');
-            await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Object Fields');
-            // The per-connection catalog too. Absent on a workspace without the migration, hence the guard.
-            for (const perConnection of ['MJ: Company Integration Objects', 'MJ: Company Integration Object Fields']) {
-                try { await LocalCacheManager.Instance.InvalidateEntityCaches(perConnection); } catch { /* not registered here */ }
-            }
-
-            // Force-refresh integration metadata cache so IntrospectSchema
-            // picks up any IntegrationObject/Field changes made via mj sync push
-            await IntegrationEngine.Instance.Config(true, user);
+            await this.refreshIntegrationCatalogCaches(user);
 
             // Phase 1: Build schema for each connector in parallel
             const buildResults = await Promise.allSettled(
@@ -7219,6 +7273,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // ── Phase 5 — build schema (SchemaBuilder CREATEs new tables, ALTERs changed ones) ──
             const builder = new SchemaBuilder();
             const schemaOutput = builder.BuildSchema(schemaInput);
+
+            // Declared rows this evolution leaves out (deactivated objects/fields). This path calls
+            // SchemaBuilder directly rather than through buildSchemaForConnector, so it never carried
+            // them — an operator whose selected table came back without a column had nothing to read.
+            // Unshifted onto schemaOutput.Warnings, which is what every return below surfaces.
+            const inactiveWarnings = this.collectInactiveRowWarnings(companyIntegration.IntegrationID, normalizedNames);
+            if (inactiveWarnings.length > 0) schemaOutput.Warnings.unshift(...inactiveWarnings);
 
             if (schemaOutput.Errors.length > 0) {
                 return {

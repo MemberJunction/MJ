@@ -132,7 +132,9 @@ export { CUSTOM_OVERFLOW_COLUMN, computeUnmappedFields, hasUnmappedFields, foldC
 export { SYNC_DIRECTIVE_CONFIG_KEY, ReadFieldSyncDirective, WriteFieldSyncDirective, ComputeExcludedSourceNames, StripExcludedFields } from './SyncDirectives.js';
 export type { FieldSyncDirective, FieldWithConfiguration } from './SyncDirectives.js';
 export { FindUnbindableFieldMaps, DescribeUnbindableFieldMaps } from './FieldMapValidation.js';
-export type { ValidatableFieldMap, UnbindableFieldMap } from './FieldMapValidation.js';
+export type { ValidatableFieldMap, UnbindableFieldMap, UnbindableFieldMapOutcome } from './FieldMapValidation.js';
+export { DescribePersistCounts } from './SchemaPersistCounts.js';
+export type { PersistCountsLike } from './SchemaPersistCounts.js';
 export type { CustomKeyAccumulator } from './CustomOverflow.js';
 export type { HasExternalID, BatchIdentityResult } from './BatchIdentity.js';
 export { planPromotions, planColumnReclamations, inferColumnTypeFromSamples, inferColumnTypeFromStats, buildOverflowStats, sanitizeColumnName } from './CustomColumnPromotion.js';

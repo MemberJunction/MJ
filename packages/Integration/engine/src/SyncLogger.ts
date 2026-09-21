@@ -104,6 +104,25 @@ const VERBOSE_RECORD_EVENTS: ReadonlySet<SyncLogEvent> = new Set<SyncLogEvent>([
 const VERBOSE_RECORD_LOGS_ENABLED = process.env.MJ_INTEGRATION_VERBOSE_RECORD_LOGS === 'true';
 
 /**
+ * How many times one warning CODE is reported verbatim in a run before the rest are rolled up.
+ *
+ * A warning is a per-object, per-batch or per-map condition, and one root cause reaches many of
+ * them: a credential that stopped working, a connector that ignores the batch size, a layer whose
+ * parents were never fetched. Live that produced a 90-warning cascade from a single cause, which
+ * buries every OTHER warning in the run — the cascade is not more information than its first few
+ * instances, it is the same information 90 times.
+ *
+ * Five rather than one: the first instances are where the operator sees WHICH objects are affected,
+ * and a rollup that says "90 of these" without naming any is a different kind of useless.
+ */
+const WARNING_VERBATIM_LIMIT = 5;
+/** How many distinct stages a rollup names before it summarises the remainder as a count. */
+const WARNING_ROLLUP_STAGE_SAMPLE = 10;
+
+/** Per-run tally for one warning code: how often it fired and where. */
+type WarningTally = { count: number; stages: string[]; firstMessage: string };
+
+/**
  * Light wrapper that prepends an ISO timestamp + the per-run context to every
  * line.  Writes to console.log (or console.error for fail events) so the line
  * lands in whatever stream the wrapper script is teeing to disk.
@@ -111,6 +130,8 @@ const VERBOSE_RECORD_LOGS_ENABLED = process.env.MJ_INTEGRATION_VERBOSE_RECORD_LO
 export class SyncLogger {
     private readonly ctx: SyncLoggerContext;
     private emitter?: IntegrationProgressEmitter;
+    /** Warning tallies for this run, keyed by warning code — see {@link WARNING_VERBATIM_LIMIT}. */
+    private readonly warningTallies = new Map<string, WarningTally>();
 
     constructor(ctx: SyncLoggerContext) {
         this.ctx = ctx;
@@ -155,9 +176,62 @@ export class SyncLogger {
      * available (the silent-empty). Forwarded to the durable artifact as a SyncWarning so the
      * condition is visible over GraphQL instead of a swallowed console.warn, WITHOUT affecting
      * run success. Goes to console.warn so it's also greppable in the tee'd log.
+     *
+     * ROLLED UP BY CODE. The first {@link WARNING_VERBATIM_LIMIT} occurrences of a code are emitted
+     * as they happen, carrying `occurrence`; after that the code is counted and
+     * {@link flushWarningRollups} emits ONE summary at the end of the run. Nothing is lost — the
+     * count and the affected stages survive — and one root cause can no longer bury every other
+     * warning the run raised.
      */
     public warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
-        this.emit('sync.warning', { stage, code, message, warningData: data });
+        const tally = this.warningTallies.get(code) ?? { count: 0, stages: [], firstMessage: message };
+        tally.count++;
+        if (!tally.stages.includes(stage)) tally.stages.push(stage);
+        this.warningTallies.set(code, tally);
+        if (tally.count > WARNING_VERBATIM_LIMIT) return;   // counted above; reported by the rollup
+        this.emit('sync.warning', { stage, code, message, warningData: data, occurrence: tally.count });
+    }
+
+    /**
+     * Emits one rollup warning per code that fired more often than {@link WARNING_VERBATIM_LIMIT},
+     * and clears the tallies. Called by the engine at the END of a run — on the success path and the
+     * failure path alike — BEFORE the terminal run event, so the rollup lands inside the run's own
+     * artifact stream rather than after its terminal write.
+     *
+     * A code at or under the limit produces nothing: every one of its occurrences was already
+     * reported verbatim, and a rollup saying "3 of 3" is noise.
+     *
+     * @returns the number of rollup warnings emitted (0 when no code exceeded the limit).
+     */
+    public flushWarningRollups(): number {
+        let emitted = 0;
+        for (const [code, tally] of this.warningTallies) {
+            const suppressed = tally.count - WARNING_VERBATIM_LIMIT;
+            if (suppressed <= 0) continue;
+            const sample = tally.stages.slice(0, WARNING_ROLLUP_STAGE_SAMPLE).join(', ');
+            const more = tally.stages.length > WARNING_ROLLUP_STAGE_SAMPLE
+                ? `, and ${tally.stages.length - WARNING_ROLLUP_STAGE_SAMPLE} more`
+                : '';
+            this.emit('sync.warning', {
+                stage: 'run',
+                code,
+                message:
+                    `${code} fired ${tally.count} time(s) this run across ${tally.stages.length} object(s) ` +
+                    `(${sample}${more}). The first ${WARNING_VERBATIM_LIMIT} are reported individually above; ` +
+                    `the remaining ${suppressed} were rolled up into this one line because a repeat of the same ` +
+                    `code is the same finding, and a cascade of them hides every other warning in the run.`,
+                warningData: {
+                    rollup: true,
+                    occurrences: tally.count,
+                    reportedVerbatim: WARNING_VERBATIM_LIMIT,
+                    rolledUp: suppressed,
+                    stages: tally.stages,
+                },
+            });
+            emitted++;
+        }
+        this.warningTallies.clear();
+        return emitted;
     }
 
     public emit(event: SyncLogEvent, data: Record<string, unknown> = {}): void {

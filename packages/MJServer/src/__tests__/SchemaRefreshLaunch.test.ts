@@ -14,6 +14,8 @@ function summary(over: Partial<SchemaRefreshSummaryLike> = {}): SchemaRefreshSum
         Succeeded: true,
         ObjectsCreated: 12,
         ObjectsUpdated: 3,
+        FieldsCreated: 69,
+        FieldsUpdated: 487,
         UnresolvedObjects: ['Widgets'],
         ...over,
     };
@@ -25,6 +27,8 @@ describe('BuildCreateConnectionMessage', () => {
             InProgress: true,
             ObjectsCreated: 0,
             ObjectsUpdated: 0,
+            FieldsCreated: 0,
+            FieldsUpdated: 0,
             UnresolvedObjects: [],
         }));
 
@@ -33,13 +37,14 @@ describe('BuildCreateConnectionMessage', () => {
         // The placeholder zeros must not surface as results.
         expect(msg).not.toMatch(/\d+ created/);
         expect(msg).not.toMatch(/\d+ updated/);
+        expect(msg).not.toMatch(/\d+ fields/);
         expect(msg).not.toMatch(/PK-unresolved/);
     });
 
     it('reports real counts once the refresh has completed inline', () => {
         const msg = BuildCreateConnectionMessage(true, summary());
 
-        expect(msg).toContain('12 created');
+        expect(msg).toContain('12 objects created');
         expect(msg).toContain('3 updated');
         expect(msg).toContain('1 PK-unresolved');
         expect(msg).not.toMatch(/running/i);
@@ -74,6 +79,8 @@ describe('failed-refresh reporting', () => {
         FailureMessage: 'ConnectionTest failed: No HubSpot credentials found',
         ObjectsCreated: 0,
         ObjectsUpdated: 0,
+        FieldsCreated: 0,
+        FieldsUpdated: 0,
         UnresolvedObjects: [],
     });
 
@@ -99,9 +106,24 @@ describe('failed-refresh reporting', () => {
 
     it('still reports counts for a refresh that genuinely succeeded (update)', () => {
         const msg = BuildUpdateConnectionMessage(summary());
-        expect(msg).toContain('12 created');
+        expect(msg).toContain('12 objects created');
         expect(msg).toContain('3 updated');
         expect(msg).not.toMatch(/FAILED/);
+    });
+
+    it('names the FIELD counts, so a refresh that only changed fields does not read as a no-op', () => {
+        // A PRESUPPOSED connector creates no objects on any run. A live PheedLoop refresh that created
+        // 69 fields and updated 487 reported "0 created, 0 updated" — literally true of objects, and
+        // read by every operator as "the refresh did nothing".
+        const fieldsOnly = summary({ ObjectsCreated: 0, ObjectsUpdated: 0, UnresolvedObjects: [] });
+        for (const msg of [
+            BuildCreateConnectionMessage(true, fieldsOnly),
+            BuildUpdateConnectionMessage(fieldsOnly),
+        ]) {
+            expect(msg).toContain('69 fields created');
+            expect(msg).toContain('487 updated');
+            expect(msg).toContain('0 objects created');
+        }
     });
 });
 
