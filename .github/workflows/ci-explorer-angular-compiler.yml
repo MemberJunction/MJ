@@ -20,6 +20,16 @@ on:
       - '.github/scripts/check-explorer-angular-compiler.mjs'
       - '.github/workflows/ci-explorer-angular-compiler.yml'
 
+# Pin the token instead of inheriting it. Measured on run 35645025903: this job is already
+# granted only `Contents/Metadata/Packages: read`, so nothing is being dropped today — the
+# point is that those scopes come from a REPO-LEVEL default that can be widened without
+# touching this file, and the job would silently gain write access it never uses. It runs
+# checkout + setup-node + two `node` scripts and writes nothing.
+# Matches the house shape (ci-scripts.yml:37, check-release-notes-pr.yml, new-package-gate.yml,
+# integration.yml — `contents: read` is the repo's most common block, 9 of 18).
+permissions:
+  contents: read
+
 jobs:
   check-explorer-angular-compiler:
     name: packages/MJExplorer/package.json must declare @angular/compiler
