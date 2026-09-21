@@ -212,6 +212,19 @@ describe('BettyEndpoint', () => {
         expect(BettyEndpoint('https://h/betty/v1', '/messages')).toBe('https://h/betty/v1/messages');
     });
 
+    it('collapses runs of slashes on both sides', () => {
+        expect(BettyEndpoint('https://h/betty/v1///', '///messages')).toBe('https://h/betty/v1/messages');
+    });
+
+    it('stays linear on a long run of slashes (no ReDoS)', () => {
+        // CodeQL flagged the previous /\/+$/ and /^\/+/ as polynomial backtracking.
+        // Index scanning cannot backtrack; this would hang on the regex version.
+        const many = '/'.repeat(100_000);
+        const start = Date.now();
+        expect(BettyEndpoint(`https://h${many}`, `${many}messages`)).toBe('https://h/messages');
+        expect(Date.now() - start).toBeLessThan(1_000);
+    });
+
     it('keeps the version segment — the trap new URL() falls into', () => {
         // new URL('messages', 'https://h/betty/v1') resolves to https://h/betty/messages.
         expect(BettyEndpoint('https://h/betty/v1', 'messages')).not.toContain('/betty/messages');

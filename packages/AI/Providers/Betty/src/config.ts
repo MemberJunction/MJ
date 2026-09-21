@@ -19,13 +19,36 @@ export function GetBettyBaseURL(): string {
 /** Name of the variable above, so error messages and docs cannot drift from the lookup. */
 export const BETTY_BASE_URL_VAR = 'BETTY_API_BASE_URL';
 
+const SLASH = '/'.charCodeAt(0);
+
+/** Index of the first character that is not a slash. */
+function firstNonSlash(value: string): number {
+    let i = 0;
+    while (i < value.length && value.charCodeAt(i) === SLASH) i++;
+    return i;
+}
+
+/** Length of `value` with any trailing slashes removed. */
+function lengthWithoutTrailingSlashes(value: string): number {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === SLASH) end--;
+    return end;
+}
+
 /**
  * Join the configured root with a path, tolerating a trailing slash either way.
  *
  * `new URL(path, base)` is not used: it treats the base's last segment as a directory only when the
  * base ends in `/`, so `.../betty/v1` + `messages` would silently resolve to `.../betty/messages`
  * and 404 against a correct deployment.
+ *
+ * Trimmed by index rather than by `/\/+$/` and `/^\/+/`. Those are anchored, unbounded repetitions
+ * over a value that arrives from configuration, which CodeQL flags as polynomial backtracking
+ * (ReDoS) — a base of many slashes would take time quadratic in its length. Scanning from each end
+ * is linear and cannot backtrack at all.
  */
 export function BettyEndpoint(base: string, path: string): string {
-    return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
+    const root = base.slice(0, lengthWithoutTrailingSlashes(base));
+    const tail = path.slice(firstNonSlash(path));
+    return `${root}/${tail}`;
 }
