@@ -198,6 +198,20 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       }
       this.viewTypeConfigById.clear();
       this.InternalSortState = null;
+      // The canonical grid state, when WE captured it from the renderer. It was the other entity's
+      // column list, and `resolveCanonicalGridState()` prefers this field over the new entity's own
+      // saved view — so leaving it set applies the old entity's columnSettings to the new one and
+      // only the fields common to both survive. That is the same "no/too-few columns" symptom the
+      // lines above already guard against; this field was simply missed when the canonical store
+      // was introduced (MemberJunction/MJ#4244). Clearing it lets the new entity's saved view, or
+      // its metadata, supply the columns.
+      //
+      // A host-supplied `[GridState]` is deliberately NOT cleared: it is the host's instruction
+      // about the view it is binding, and a host that rebinds the entity rebinds that too.
+      if (this._gridStateFromRenderer) {
+        this._gridState = null;
+        this._gridStateFromRenderer = false;
+      }
       // Throw out the cached plug-in instances — they belong to the previous entity. The next
       // selection rebuilds them fresh for the new entity (correct columns / date fields / geo).
       this.clearDynamicRendererCache();
@@ -441,6 +455,18 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   private _gridState: ViewGridState | null = null;
 
   /**
+   * True when {@link _gridState} was CAPTURED FROM THE RENDERER (the user resized, reordered or
+   * hid a column and the grid handed its state back), rather than supplied by the host through
+   * {@link GridState}.
+   *
+   * The distinction decides one thing only: whether an entity change may throw the state away.
+   * A captured state describes the entity that was on screen when it was captured, so it is
+   * meaningless — and actively harmful — against a different entity. A host-supplied one is the
+   * host's instruction about the view it is binding, and is never discarded on our own initiative.
+   */
+  private _gridStateFromRenderer: boolean = false;
+
+  /**
    * Canonical grid state for the current view — the single, framework-wide source of truth for a
    * view's columns (visibility / order / width / formatting), sort, filter and aggregates. It is
    * the `UserView.GridState` column, also read by `MJUserViewEntity.Columns`, the GraphQL data
@@ -455,6 +481,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   set GridState(value: ViewGridState | null) {
     const previous = this._gridState;
     this._gridState = value;
+    // Host-supplied, so it is no longer ours to discard on an entity change.
+    this._gridStateFromRenderer = false;
     if (this._initialized && value !== previous) {
       this.refreshCanonicalGridStateRenderer();
     }
@@ -2163,6 +2191,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       const newGridState = config['gridState'] as ViewGridState | undefined;
       if (newGridState) {
         this._gridState = newGridState;
+        // Captured from the renderer, so it belongs to the CURRENT entity and must not outlive it.
+        this._gridStateFromRenderer = true;
       }
       if (this.AutoSaveView && this.persistenceTarget() === 'record') {
         void this.persistCanonicalGridState(newGridState);
