@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/actions
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+- Updated dependencies [283f83d]
+- Updated dependencies [842e28b]
+- Updated dependencies [6e2f000]
+- Updated dependencies [b9178ed]
+  - @memberjunction/ai@6.1.2
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/actions-base@6.1.2
+  - @memberjunction/action-runtime@6.1.2
+  - @memberjunction/doc-utils@6.1.2
+  - @memberjunction/code-execution@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/actions-base@6.1.1
+  - @memberjunction/code-execution@6.1.1
+  - @memberjunction/action-runtime@6.1.1
+  - @memberjunction/doc-utils@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/ai@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Minor Changes

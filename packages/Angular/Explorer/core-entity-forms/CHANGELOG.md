@@ -1,5 +1,99 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+- Updated dependencies [283f83d]
+- Updated dependencies [842e28b]
+- Updated dependencies [6e2f000]
+- Updated dependencies [b9178ed]
+  - @memberjunction/ai@6.1.2
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/ai-engine-base@6.1.2
+  - @memberjunction/ai-core-plus@6.1.2
+  - @memberjunction/ng-ai-test-harness@6.1.2
+  - @memberjunction/actions-base@6.1.2
+  - @memberjunction/ng-base-application@6.1.2
+  - @memberjunction/ng-shared@6.1.2
+  - @memberjunction/ng-testing@6.1.2
+  - @memberjunction/ng-action-gallery@6.1.2
+  - @memberjunction/ng-actions@6.1.2
+  - @memberjunction/ng-agents@6.1.2
+  - @memberjunction/ng-base-forms@6.1.2
+  - @memberjunction/ng-base-types@6.1.2
+  - @memberjunction/ng-code-editor@6.1.2
+  - @memberjunction/ng-entity-viewer@6.1.2
+  - @memberjunction/ng-flow-editor@6.1.2
+  - @memberjunction/ng-hierarchy-tree@6.1.2
+  - @memberjunction/ng-join-grid@6.1.2
+  - @memberjunction/ng-list-management@6.1.2
+  - @memberjunction/ng-notifications@6.1.2
+  - @memberjunction/ng-record-process-studio@6.1.2
+  - @memberjunction/ng-resource-permissions@6.1.2
+  - @memberjunction/ng-search@6.1.2
+  - @memberjunction/ng-shared-generic@6.1.2
+  - @memberjunction/ng-task-graph-editor@6.1.2
+  - @memberjunction/ng-trees@6.1.2
+  - @memberjunction/ng-versions@6.1.2
+  - @memberjunction/graphql-dataprovider@6.1.2
+  - @memberjunction/templates-base-types@6.1.2
+  - @memberjunction/ng-link-directives@6.1.2
+  - @memberjunction/ng-entity-relationship-diagram@6.1.2
+  - @memberjunction/ng-timeline@6.1.2
+  - @memberjunction/ng-deep-diff@6.1.2
+  - @memberjunction/ng-markdown@6.1.2
+  - @memberjunction/ng-tabstrip@6.1.2
+  - @memberjunction/ng-ui-components@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ai-engine-base@6.1.1
+  - @memberjunction/ai-core-plus@6.1.1
+  - @memberjunction/actions-base@6.1.1
+  - @memberjunction/ng-base-application@6.1.1
+  - @memberjunction/ng-link-directives@6.1.1
+  - @memberjunction/ng-shared@6.1.1
+  - @memberjunction/ng-testing@6.1.1
+  - @memberjunction/ng-action-gallery@6.1.1
+  - @memberjunction/ng-actions@6.1.1
+  - @memberjunction/ng-agents@6.1.1
+  - @memberjunction/ng-ai-test-harness@6.1.1
+  - @memberjunction/ng-base-forms@6.1.1
+  - @memberjunction/ng-base-types@6.1.1
+  - @memberjunction/ng-code-editor@6.1.1
+  - @memberjunction/ng-deep-diff@6.1.1
+  - @memberjunction/ng-entity-relationship-diagram@6.1.1
+  - @memberjunction/ng-entity-viewer@6.1.1
+  - @memberjunction/ng-flow-editor@6.1.1
+  - @memberjunction/ng-hierarchy-tree@6.1.1
+  - @memberjunction/ng-join-grid@6.1.1
+  - @memberjunction/ng-list-management@6.1.1
+  - @memberjunction/ng-notifications@6.1.1
+  - @memberjunction/ng-record-process-studio@6.1.1
+  - @memberjunction/ng-resource-permissions@6.1.1
+  - @memberjunction/ng-search@6.1.1
+  - @memberjunction/ng-shared-generic@6.1.1
+  - @memberjunction/ng-task-graph-editor@6.1.1
+  - @memberjunction/ng-timeline@6.1.1
+  - @memberjunction/ng-trees@6.1.1
+  - @memberjunction/ng-versions@6.1.1
+  - @memberjunction/graphql-dataprovider@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/templates-base-types@6.1.1
+  - @memberjunction/ng-tabstrip@6.1.1
+  - @memberjunction/ng-markdown@6.1.1
+  - @memberjunction/ng-ui-components@6.1.1
+  - @memberjunction/ai@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Minor Changes

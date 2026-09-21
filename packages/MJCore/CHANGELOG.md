@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/core
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/global@6.1.2
+- @memberjunction/sql-dialect@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- f219477: Fix the 5.51.2 → 6.1.0 upgrade failing in the Phase-0 retirement migration on databases where Reports were used (#4483), and harden `spDeleteEntityWithCoreDependencies` so a blocked entity delete fails loudly instead of leaving metadata half-pruned (#3546).
+  - @memberjunction/global@6.1.1
+  - @memberjunction/sql-dialect@6.1.1
+
 ## 6.1.0
 
 ### Minor Changes

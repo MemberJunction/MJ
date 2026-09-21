@@ -1,5 +1,41 @@
 # @memberjunction/ng-query-viewer
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/ng-base-types@6.1.2
+  - @memberjunction/ng-code-editor@6.1.2
+  - @memberjunction/ng-notifications@6.1.2
+  - @memberjunction/ng-shared-generic@6.1.2
+  - @memberjunction/ng-export-service@6.1.2
+  - @memberjunction/ng-markdown@6.1.2
+  - @memberjunction/ng-pagination@6.1.2
+  - @memberjunction/ng-ui-components@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/export-engine@6.1.2
+  - @memberjunction/global@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ng-base-types@6.1.1
+  - @memberjunction/ng-code-editor@6.1.1
+  - @memberjunction/ng-notifications@6.1.1
+  - @memberjunction/ng-shared-generic@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/ng-export-service@6.1.1
+  - @memberjunction/ng-markdown@6.1.1
+  - @memberjunction/ng-ui-components@6.1.1
+  - @memberjunction/ng-pagination@6.1.1
+  - @memberjunction/export-engine@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

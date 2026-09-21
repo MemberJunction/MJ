@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/ng-shared@6.1.2
+- @memberjunction/ng-base-types@6.1.2
+- @memberjunction/core@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ng-shared@6.1.1
+  - @memberjunction/ng-base-types@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

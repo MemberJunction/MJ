@@ -1,5 +1,24 @@
 # @memberjunction/remote-browser-cdp
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/computer-use@6.1.2
+- @memberjunction/remote-browser-base@6.1.2
+- @memberjunction/core@6.1.2
+- @memberjunction/global@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/computer-use@6.1.1
+  - @memberjunction/remote-browser-base@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

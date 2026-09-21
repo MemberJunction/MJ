@@ -22,3 +22,4 @@ export * from './generic/baseRealtimeChannelServer';
 export * from './generic/errorTypes';
 export * from './generic/errorAnalyzer';
 export * from './generic/realtimeToolBatchBarrier';
+export * from './generic/realtimeTracks';

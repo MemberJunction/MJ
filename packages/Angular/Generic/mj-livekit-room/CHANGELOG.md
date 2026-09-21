@@ -1,5 +1,30 @@
 # @memberjunction/ng-mj-livekit-room
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@6.1.2
+- @memberjunction/graphql-dataprovider@6.1.2
+- @memberjunction/ng-media-player@6.1.2
+- @memberjunction/ng-livekit-room@6.1.2
+- @memberjunction/livekit-room-core@6.1.2
+- @memberjunction/core@6.1.2
+- @memberjunction/global@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ng-base-types@6.1.1
+  - @memberjunction/ng-media-player@6.1.1
+  - @memberjunction/graphql-dataprovider@6.1.1
+  - @memberjunction/ng-livekit-room@6.1.1
+  - @memberjunction/livekit-room-core@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

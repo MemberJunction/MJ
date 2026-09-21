@@ -1,5 +1,31 @@
 # @memberjunction/database-designer-actions
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/actions@6.1.2
+  - @memberjunction/database-designer-core@6.1.2
+  - @memberjunction/actions-base@6.1.2
+  - @memberjunction/schema-engine@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/database-designer-core@6.1.1
+  - @memberjunction/actions-base@6.1.1
+  - @memberjunction/actions@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/schema-engine@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

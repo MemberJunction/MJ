@@ -1,5 +1,51 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/actions-base@6.1.2
+  - @memberjunction/ng-base-types@6.1.2
+  - @memberjunction/ng-entity-action-ux@6.1.2
+  - @memberjunction/ng-list-management@6.1.2
+  - @memberjunction/ng-map-view@6.1.2
+  - @memberjunction/ng-notifications@6.1.2
+  - @memberjunction/ng-record-changes@6.1.2
+  - @memberjunction/ng-shared-generic@6.1.2
+  - @memberjunction/ng-timeline@6.1.2
+  - @memberjunction/ng-export-service@6.1.2
+  - @memberjunction/ng-filter-builder@6.1.2
+  - @memberjunction/ng-pagination@6.1.2
+  - @memberjunction/ng-ui-components@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/export-engine@6.1.2
+  - @memberjunction/global@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/actions-base@6.1.1
+  - @memberjunction/ng-base-types@6.1.1
+  - @memberjunction/ng-entity-action-ux@6.1.1
+  - @memberjunction/ng-filter-builder@6.1.1
+  - @memberjunction/ng-list-management@6.1.1
+  - @memberjunction/ng-map-view@6.1.1
+  - @memberjunction/ng-notifications@6.1.1
+  - @memberjunction/ng-record-changes@6.1.1
+  - @memberjunction/ng-shared-generic@6.1.1
+  - @memberjunction/ng-timeline@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/ng-export-service@6.1.1
+  - @memberjunction/ng-ui-components@6.1.1
+  - @memberjunction/ng-pagination@6.1.1
+  - @memberjunction/export-engine@6.1.1
+  - @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Minor Changes

@@ -1,5 +1,17 @@
 # @memberjunction/integration-progress-artifacts
 
+## 6.1.2
+
+### Patch Changes
+
+- @memberjunction/global@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- @memberjunction/global@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes

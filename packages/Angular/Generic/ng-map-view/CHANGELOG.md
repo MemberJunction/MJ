@@ -1,5 +1,27 @@
 # @memberjunction/ng-map-view
 
+## 6.1.2
+
+### Patch Changes
+
+- Updated dependencies [e1a8894]
+  - @memberjunction/core-entities@6.1.2
+  - @memberjunction/ng-shared-generic@6.1.2
+  - @memberjunction/core@6.1.2
+  - @memberjunction/global@6.1.2
+  - @memberjunction/geo-maps@6.1.2
+
+## 6.1.1
+
+### Patch Changes
+
+- Updated dependencies [f219477]
+  - @memberjunction/core@6.1.1
+  - @memberjunction/ng-shared-generic@6.1.1
+  - @memberjunction/core-entities@6.1.1
+  - @memberjunction/global@6.1.1
+  - @memberjunction/geo-maps@6.1.1
+
 ## 6.1.0
 
 ### Patch Changes
