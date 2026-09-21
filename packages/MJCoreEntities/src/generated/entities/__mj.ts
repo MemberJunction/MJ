@@ -40997,16 +40997,16 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * @public
     * @method
     */
-    	public ValidateNativeToolCallCountGreaterThanOrEqualToZero(result: ValidationResult) {
-    		if (this.NativeToolCallCount != null && this.NativeToolCallCount < 0) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"NativeToolCallCount",
-    				"The native tool call count must be 0 or greater.",
-    				this.NativeToolCallCount,
-    				ValidationErrorType.Failure
-    			));
-    		}
+    public ValidateNativeToolCallCountGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.NativeToolCallCount != null && this.NativeToolCallCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"NativeToolCallCount",
+    			"The native tool call count must be 0 or greater.",
+    			this.NativeToolCallCount,
+    			ValidationErrorType.Failure
+    		));
     	}
+    }
 
     /**
     * This rule ensures that the step number must be greater than zero.
