@@ -34,7 +34,7 @@ import {
     type SpecValidationIssue,
     type EntityMetadataStub,
 } from '@memberjunction/feature-pipelines';
-import { SafeJSONParse } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 
 export type PromptOption = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'Description'>;
@@ -432,7 +432,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         }
 
         if (this.Record?.PromptID) {
-            this.selectedPrompt = this.availablePrompts.find((p) => p.ID === this.Record?.PromptID) ?? null;
+            this.selectedPrompt = this.availablePrompts.find((p) => UUIDsEqual(p.ID, this.Record?.PromptID)) ?? null;
         }
 
         this.recomputeValidation();
@@ -522,7 +522,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             this.Record.PromptID = promptID;
         }
         this.spec.PromptID = promptID;
-        this.selectedPrompt = this.availablePrompts.find((p) => p.ID === promptID) ?? null;
+        this.selectedPrompt = this.availablePrompts.find((p) => UUIDsEqual(p.ID, promptID)) ?? null;
         this.emitChanges();
     }
 
