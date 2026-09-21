@@ -92,12 +92,47 @@ export function computeFieldsList(
         fields.add(entityInfo.NameField.Name);
     }
 
-    // Include visible fields from gridState or DefaultInView
+    // Include visible fields from gridState or DefaultInView.
+    //
+    // Resolved against the entity, exactly as the host branch above is, and for the same reason:
+    // this list goes on the wire, and `GraphQLDataProvider.getViewRunTimeFieldList()` passes it
+    // straight through into a selection set where field names are case SENSITIVE. An unresolvable
+    // name does not produce one odd column, it fails the WHOLE view with zero rows. (That provider
+    // already drops view-definition fields an entity no longer has, "rather than letting the whole
+    // view blow up" — this branch was the one route that bypassed that care.) A saved state can
+    // name a field this entity does not have in two ways: it belongs to a DIFFERENT entity, or the
+    // schema dropped the field since it was saved.
+    //
+    // Nothing MJ produces internally can be invalid here — `buildCurrentGridState()` resolves every
+    // captured `colId` against entity metadata and skips what does not resolve, which is also why
+    // the row-number and filler columns never appear — so only an externally supplied `[GridState]`
+    // reaches this with a foreign name.
+    const gridStateFields: string[] = [];
     if (gridState?.columnSettings?.length) {
         for (const col of gridState.columnSettings) {
-            if (!col.hidden) {
-                fields.add(col.Name);
+            if (col.hidden) {
+                continue;
             }
+            const field = entityInfo.Fields.find(f => f.Name.toLowerCase() === col.Name.toLowerCase());
+            if (field) {
+                // The entity's spelling, so the fetched key matches the key the rendered column
+                // addresses the row by. The Set is case-sensitive, so two spellings would not
+                // collapse into one entry.
+                gridStateFields.push(field.Name);
+            }
+        }
+    }
+
+    // Falling through when the state contributed NOTHING is what keeps the fetch in step with what
+    // is rendered. `buildAgColumnDefs()` applies the same floor (MemberJunction/MJ#4244): a state
+    // matching no field of this entity is treated as absent and the grid renders DefaultInView
+    // columns instead. Without the matching floor here those columns would be rendered but never
+    // SELECTed, so every cell would come back empty — a stale-state problem wearing the costume of
+    // missing data. A PARTIAL match is left alone, because dropping to DefaultInView there would
+    // silently re-add columns the user had removed.
+    if (gridStateFields.length > 0) {
+        for (const name of gridStateFields) {
+            fields.add(name);
         }
     } else {
         // First try to use DefaultInView fields
