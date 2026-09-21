@@ -255,6 +255,13 @@ class FakeEntity {
     public saved = false;
     public readonly LatestResult = { CompleteMessage: '' };
     constructor(public readonly PrimaryKey: CompositeKey = CompositeKey.FromKeyValuePair('ID', 'child-1')) {}
+    public get FirstPrimaryKey(): { Value: unknown } | undefined {
+        const val = this.PrimaryKey?.KeyValuePairs?.[0]?.Value;
+        return val !== undefined ? { Value: val } : undefined;
+    }
+    public Get(field: string): unknown {
+        return this.sets[field] ?? (field === 'ID' ? this.PrimaryKey?.KeyValuePairs?.[0]?.Value : undefined);
+    }
     public async InnerLoad(): Promise<boolean> { return true; }
     public NewRecord(): boolean { return true; }
     public Set(field: string, value: unknown): void { this.sets[field] = value; }
@@ -927,6 +934,207 @@ describe('applyOutputMapping', () => {
 
             expect(out.updatedRecord).toBe(true);
             expect(created[0].sets.SeniorityLevelID).toBe('auto-derived-guid');
+        });
+
+        it('escapes single quotes in model output using EscapeSQLString', async () => {
+            let capturedFilter = '';
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: (params) => {
+                    capturedFilter = params.ExtraFilter ?? '';
+                    return [{ ID: 'level-vp-id', Name: "Vice President of O'Connor Division" }];
+                },
+            });
+
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: {
+                        SeniorityLevelID: {
+                            relatedEntity: 'Seniority Levels',
+                            matchField: 'Name',
+                        },
+                    },
+                },
+                result: { seniority: "Vice President of O'Connor Division" },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(capturedFilter).toBe("[Name] = 'Vice President of O''Connor Division'");
+            expect(out.updatedRecord).toBe(true);
+            expect(created[0].sets.SeniorityLevelID).toBe('level-vp-id');
+        });
+
+        it('rejects unsafe matchField identifiers with special characters or SQL injection', async () => {
+            const { provider } = fakeFKProvider();
+
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: {
+                        SeniorityLevelID: {
+                            relatedEntity: 'Seniority Levels',
+                            matchField: 'Name; DROP TABLE Users--',
+                        },
+                    },
+                },
+                result: { seniority: 'Director' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            })).rejects.toThrow(/invalid matchField identifier 'Name; DROP TABLE Users--'/);
+        });
+
+        it('handles empty or whitespace-only value by setting null (or throwing when onLookupMiss=fail)', async () => {
+            let runViewCalled = false;
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: () => {
+                    runViewCalled = true;
+                    return [];
+                },
+            });
+
+            // Default onLookupMiss = null
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'null' } },
+                },
+                result: { seniority: '   ' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(runViewCalled).toBe(false);
+            expect(out.updatedRecord).toBe(true);
+            expect(created[0].sets.SeniorityLevelID).toBeNull();
+
+            // onLookupMiss = fail throws
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'fail' } },
+                },
+                result: { seniority: '' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            })).rejects.toThrow(/value resolved to an empty string/);
+        });
+
+        it('handles non-string/number values by setting null (or throwing when onLookupMiss=fail)', async () => {
+            let runViewCalled = false;
+            const { provider, created } = fakeFKProvider({
+                runViewHandler: () => {
+                    runViewCalled = true;
+                    return [];
+                },
+            });
+
+            // Default onLookupMiss = null
+            const out = await applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'null' } },
+                },
+                result: { seniority: { invalid: 'object' } },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            });
+
+            expect(runViewCalled).toBe(false);
+            expect(out.updatedRecord).toBe(true);
+            expect(created[0].sets.SeniorityLevelID).toBeNull();
+
+            // onLookupMiss = fail throws
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                    fieldLookups: { SeniorityLevelID: { onLookupMiss: 'fail' } },
+                },
+                result: { seniority: true },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            })).rejects.toThrow(/value is not a string or number/);
+        });
+
+        it('throws descriptive error when RunView provider is unavailable', async () => {
+            const { provider } = fakeFKProvider();
+            // Remove RunView capability from provider
+            (provider as Record<string, unknown>).RunView = undefined;
+
+            await expect(applyOutputMapping({
+                outputMapping: {
+                    fields: { SeniorityLevelID: '$.seniority' },
+                },
+                result: { seniority: 'Director' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+            })).rejects.toThrow(/RunView provider is unavailable/);
+        });
+
+        it('memoizes lookups in lookupCache across multiple calls', async () => {
+            let runViewCallCount = 0;
+            const { provider } = fakeFKProvider({
+                runViewHandler: (params) => {
+                    runViewCallCount++;
+                    if (params.ExtraFilter?.includes('Director')) {
+                        return [{ ID: 'dir-uuid', Name: 'Director' }];
+                    }
+                    return []; // miss for others
+                },
+            });
+
+            const sharedCache = new Map<string, string | null>();
+
+            // First call for 'Director' -> hits RunView
+            const out1 = await applyOutputMapping({
+                outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
+                result: { seniority: 'Director' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p1', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            });
+            expect(runViewCallCount).toBe(1);
+
+            // Second call for 'Director' -> hits cache, RunView count unchanged
+            const out2 = await applyOutputMapping({
+                outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
+                result: { seniority: 'Director' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p2', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            });
+            expect(runViewCallCount).toBe(1);
+
+            // Third call for a miss 'Unknown' -> hits RunView once
+            await applyOutputMapping({
+                outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
+                result: { seniority: 'Unknown' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p3', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            });
+            expect(runViewCallCount).toBe(2);
+
+            // Fourth call for 'Unknown' -> hits cache for the null result, RunView count unchanged
+            await applyOutputMapping({
+                outputMapping: { fields: { SeniorityLevelID: '$.seniority' } },
+                result: { seniority: 'Unknown' },
+                record: { EntityID: 'ENT-Person', RecordID: 'p4', Record: {} },
+                contextUser: USER,
+                provider,
+                lookupCache: sharedCache,
+            });
+            expect(runViewCallCount).toBe(2);
         });
     });
 });

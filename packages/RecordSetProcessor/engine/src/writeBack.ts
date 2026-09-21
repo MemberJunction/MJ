@@ -6,7 +6,7 @@
  */
 
 import { BaseEntity, CompositeKey, IMetadataProvider, LogStatus, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
-import { UUIDsEqual, resolveMappingRef } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual, resolveMappingRef } from '@memberjunction/global';
 import { RecordRef } from '@memberjunction/record-set-processor-base';
 import { TagEngine, TaxonomyMode } from '@memberjunction/tag-engine';
 import type { MJTagEntity } from '@memberjunction/core-entities';
@@ -28,7 +28,7 @@ export interface FieldLookupConfig {
     relatedEntity?: string;
     /** Column on the related entity to match against (default 'Name'). */
     matchField?: string;
-    /** Policy when lookup yields no matching record: 'null' (write null), 'fail' (throw error), 'create' (create new record and use its ID). Default 'null'. */
+    /** Policy when lookup yields no matching record: 'null' (write null), 'fail' (throw error), 'create' (create new record and use its ID). Default 'null'. Note: 'create' creates a new record setting only matchField, intended for lookup/type tables where other columns are nullable or have defaults. */
     onLookupMiss?: 'null' | 'fail' | 'create';
 }
 
@@ -157,9 +157,12 @@ export async function applyOutputMapping(opts: {
     dryRun?: boolean;
     /** Optional run provenance information mapped via `$run.*`. */
     run?: RunProvenance;
+    /** Optional memoization cache mapping `${relatedEntityName}|${matchField}|${matchValue}` -> resolved PK or null. */
+    lookupCache?: Map<string, string | null>;
 }): Promise<WriteBackResult> {
     const { outputMapping, result, record, contextUser, dryRun, run } = opts;
     const provider = opts.provider ?? Metadata.Provider;
+    const lookupCache = opts.lookupCache ?? new Map<string, string | null>();
     const sources: Record<string, unknown> = {
         $: result,
         record: record.Record ?? {},
@@ -184,7 +187,7 @@ export async function applyOutputMapping(opts: {
 
         // Resolve foreign-key fields where the mapped value is a match string (e.g. 'Director') instead of an ID
         for (const [field, val] of Object.entries(resolved)) {
-            if (val === null || val === undefined || val === '') {
+            if (val === null || val === undefined) {
                 continue;
             }
             const fieldInfo = entity.Fields?.find((f) => f.Name.toLowerCase() === field.toLowerCase());
@@ -201,6 +204,8 @@ export async function applyOutputMapping(opts: {
                 continue;
             }
 
+            const onLookupMiss = lookupConfig?.onLookupMiss || 'null';
+
             let matchValue: unknown = val;
             if (Array.isArray(matchValue) && matchValue.length > 0) {
                 matchValue = matchValue[0];
@@ -209,10 +214,18 @@ export async function applyOutputMapping(opts: {
                 matchValue = (matchValue as { Name: unknown }).Name;
             }
             if (typeof matchValue !== 'string' && typeof matchValue !== 'number') {
+                if (onLookupMiss === 'fail') {
+                    throw new Error(`applyOutputMapping: cannot resolve foreign key for field '${field}': value is not a string or number (${typeof matchValue})`);
+                }
+                resolved[field] = null;
                 continue;
             }
             const strVal = String(matchValue).trim();
             if (strVal.length === 0) {
+                if (onLookupMiss === 'fail') {
+                    throw new Error(`applyOutputMapping: cannot resolve foreign key for field '${field}': value resolved to an empty string`);
+                }
+                resolved[field] = null;
                 continue;
             }
 
@@ -221,7 +234,7 @@ export async function applyOutputMapping(opts: {
                 (fieldInfo?.RelatedEntityID ? provider.EntityByID(fieldInfo.RelatedEntityID)?.Name : undefined);
 
             if (!relatedEntityName) {
-                if (lookupConfig?.onLookupMiss === 'fail') {
+                if (onLookupMiss === 'fail') {
                     throw new Error(`applyOutputMapping: cannot resolve foreign key for field '${field}': related entity unknown in metadata`);
                 }
                 resolved[field] = null;
@@ -229,17 +242,25 @@ export async function applyOutputMapping(opts: {
             }
 
             const matchField = lookupConfig?.matchField || 'Name';
-            const onLookupMiss = lookupConfig?.onLookupMiss || 'null';
+            if (!/^[a-zA-Z0-9_]+$/.test(matchField)) {
+                throw new Error(`applyOutputMapping: invalid matchField identifier '${matchField}' for entity '${relatedEntityName}'`);
+            }
+
+            const cacheKey = `${relatedEntityName}|${matchField}|${strVal}`;
+            if (lookupCache.has(cacheKey)) {
+                resolved[field] = lookupCache.get(cacheKey) ?? null;
+                continue;
+            }
 
             const rv = provider && typeof (provider as unknown as { RunView?: unknown }).RunView === 'function'
                 ? RunView.FromMetadataProvider(provider)
                 : (RunView.Provider ? new RunView() : undefined);
 
             if (!rv) {
-                continue;
+                throw new Error(`applyOutputMapping: cannot resolve foreign key for field '${field}': RunView provider is unavailable`);
             }
 
-            const escapedVal = strVal.replace(/'/g, "''");
+            const escapedVal = EscapeSQLString(strVal);
             const viewRes = await rv.RunView<{ ID?: string; [k: string]: unknown }>({
                 EntityName: relatedEntityName,
                 ExtraFilter: `[${matchField}] = '${escapedVal}'`,
@@ -251,13 +272,16 @@ export async function applyOutputMapping(opts: {
                 const relEntity = provider.EntityByName(relatedEntityName);
                 const pkFieldName = relEntity?.FirstPrimaryKey?.Name ?? 'ID'; // first-pk-ok: FK target PK resolution
                 const resolvedID = matchRow[pkFieldName] ?? matchRow.ID;
+                const strId = String(resolvedID);
                 resolved[field] = resolvedID;
+                lookupCache.set(cacheKey, strId);
             } else if (!viewRes.Success) {
                 throw new Error(`applyOutputMapping: RunView failed for lookup on '${relatedEntityName}': ${viewRes.ErrorMessage ?? 'unknown error'}`);
             } else {
                 // Zero-row lookup miss
                 if (onLookupMiss === 'null') {
                     resolved[field] = null;
+                    lookupCache.set(cacheKey, null);
                 } else if (onLookupMiss === 'fail') {
                     throw new Error(`applyOutputMapping: lookup for '${field}' on entity '${relatedEntityName}' where [${matchField}]='${strVal}' matched 0 rows (OnLookupMiss=fail)`);
                 } else if (onLookupMiss === 'create') {
@@ -272,7 +296,14 @@ export async function applyOutputMapping(opts: {
                         if (!created) {
                             throw new Error(`applyOutputMapping: failed creating new record in '${relatedEntityName}' with ${matchField}='${strVal}': ${newObj.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                         }
-                        resolved[field] = newObj.PrimaryKey.ToCompactURLSegment();
+                        const relEntity = provider.EntityByName(relatedEntityName);
+                        const pkFieldName = relEntity?.FirstPrimaryKey?.Name ?? 'ID'; // first-pk-ok: FK target PK resolution
+                        const createdVal = newObj.FirstPrimaryKey?.Value ?? (typeof newObj.Get === 'function' ? newObj.Get(pkFieldName) : undefined);
+                        const resolvedPk = typeof createdVal === 'string' || typeof createdVal === 'number'
+                            ? createdVal
+                            : newObj.PrimaryKey.ToCompactURLSegment();
+                        resolved[field] = resolvedPk;
+                        lookupCache.set(cacheKey, String(resolvedPk));
                     }
                 }
             }

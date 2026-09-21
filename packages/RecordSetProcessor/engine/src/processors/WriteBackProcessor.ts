@@ -31,6 +31,8 @@ export class WriteBackProcessor implements IRecordProcessor {
         private readonly run?: RunProvenance,
     ) {}
 
+    private readonly _lookupCache = new Map<string, string | null>();
+
     public get OutputMapping(): OutputMappingConfig {
         return this.outputMapping;
     }
@@ -69,6 +71,7 @@ export class WriteBackProcessor implements IRecordProcessor {
                 provider: context.provider,
                 dryRun: this.dryRun,
                 run: runProvenance,
+                lookupCache: this._lookupCache,
             });
             return { ...result, ResultPayload: { output: result.ResultPayload, writeBack } };
         } catch (e) {
@@ -129,6 +132,7 @@ export class WriteBackProcessor implements IRecordProcessor {
                         provider: context.provider,
                         dryRun: this.dryRun,
                         run: runProvenance,
+                        lookupCache: this._lookupCache,
                     });
                     outResults.set(record.RecordID, { ...res, ResultPayload: { output: res.ResultPayload, writeBack } });
                 } catch (e) {
