@@ -5394,6 +5394,9 @@ importers:
       '@angular/compiler-cli':
         specifier: 21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.1.0
+        version: link:../../Generic/test-utils
 
   packages/Angular/Explorer/simple-record-list:
     dependencies:

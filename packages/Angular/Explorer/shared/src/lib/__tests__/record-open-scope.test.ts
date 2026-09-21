@@ -18,21 +18,17 @@ import { SetRecordOpenStyle } from '../record-open-style';
 import { Metadata } from '@memberjunction/core';
 import type { CompositeKey } from '@memberjunction/core';
 import type { TabRequest } from '@memberjunction/ng-base-application';
-const fakeMetadataProvider = (entities: { Name: string; DisplayName?: string }[]) => ({
-  Entities: entities,
-  EntityByName: (n: string) => entities.find(e => e.Name.trim().toLowerCase() === n?.trim().toLowerCase()),
-});
+import { fakeMetadataProvider } from '@memberjunction/ng-test-utils';
 
-vi.mock('@angular/core', () => ({
-  Directive: () => (target: Function) => target,
-  Injectable: () => (target: Function) => target,
-  OnInit: class {},
-  OnDestroy: class {},
-  inject: vi.fn(),
-  Input: () => () => {},
-  Output: () => () => {},
-  EventEmitter: class { emit() {} },
-}));
+vi.mock(import('@angular/core'), async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    Directive: () => (target: Function) => target,
+    Injectable: () => (target: Function) => target,
+    inject: vi.fn(),
+  };
+});
 vi.mock('@angular/router', () => ({}));
 vi.mock('@memberjunction/ng-base-types', () => ({ BaseAngularComponent: class {} }));
 vi.mock('@memberjunction/core', () => ({

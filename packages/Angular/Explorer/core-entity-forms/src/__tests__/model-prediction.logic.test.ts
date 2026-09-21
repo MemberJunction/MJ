@@ -14,6 +14,7 @@ import {
     toNumber,
     valueKind,
     MAX_DRIVERS,
+    type PredictionHistoryItem,
 } from '../lib/panels/model-predictions/model-prediction.logic';
 
 describe('model-prediction.logic', () => {
@@ -346,28 +347,34 @@ describe('model-prediction.logic', () => {
     });
 
     describe('filterHistoryByModel and getDistinctModelsFromHistory', () => {
-        const item1 = {
+        const makeHistoryItem = (overrides: Partial<PredictionHistoryItem> = {}): PredictionHistoryItem => ({
             id: '1',
             processRunId: 'pr1',
             modelId: 'M1',
             modelName: 'Model 1',
             provenance: 'M1 v1',
             target: 'T1',
-            problemType: 'classification' as const,
+            problemType: 'classification',
             numericValue: 0.9,
             predictedClass: null,
             displayValue: '90%',
             isProbability: true,
-            band: 'high' as const,
+            band: 'high',
+            statusBand: null,
+            statusLabel: null,
+            badgeColor: 'gray',
+            badgeIcon: null,
             status: 'Succeeded',
             completedAt: null,
             formattedTime: 'Today',
             drivers: [],
             errorMessage: null,
             rawPayload: null,
-        };
-        const item2 = { ...item1, id: '2', modelId: 'M2', modelName: 'Model 2' };
-        const item3 = { ...item1, id: '3', modelId: 'M1', modelName: 'Model 1' };
+            ...overrides,
+        });
+        const item1 = makeHistoryItem();
+        const item2 = makeHistoryItem({ id: '2', modelId: 'M2', modelName: 'Model 2' });
+        const item3 = makeHistoryItem({ id: '3', modelId: 'M1', modelName: 'Model 1' });
         const items = [item1, item2, item3];
 
         it('filterHistoryByModel returns all when null or "ALL"', () => {

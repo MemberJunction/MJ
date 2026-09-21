@@ -326,8 +326,8 @@ export function closeSentinelBandGaps(bands: OutcomeBand[]): OutcomeBand[] {
     const next = result[nextIdx];
     if (cur.Max < next.Min) {
       const gap = next.Min - cur.Max;
-      // Close small gaps (<= 0.05 for probabilities or <= 1 for large monetary thresholds)
-      if (gap <= 0.05 || (next.Min >= 10 && gap <= 1)) {
+      // Close small gaps (<= 0.01 for probabilities or <= 1 for large monetary thresholds)
+      if (gap <= 0.01 || (next.Min >= 10 && gap <= 1)) {
         cur.Max = next.Min;
       }
     }
