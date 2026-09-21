@@ -3,7 +3,8 @@ import { describe, it, expect } from 'vitest';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, capture, fakeMetadataProvider } from '@memberjunction/ng-test-utils';
-import type { PredictiveStudioEngine, Pipeline } from '../engine/predictive-studio.engine';
+import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { PSPipelinesComponent } from './ps-pipelines.component';
 
 try {
@@ -34,9 +35,9 @@ const makePipeline = (over: Record<string, unknown> = {}) =>
     AsOfStrategy: JSON.stringify({ Mode: 'none' }),
     ValidationStrategy: JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 }),
     ...over,
-  }) as unknown as Pipeline;
+  }) as unknown as MJMLTrainingPipelineEntity;
 
-const makeEngine = (pipelines: unknown[]) =>
+const makeEngine = (pipelines: MJMLTrainingPipelineEntity[]) =>
   ({
     Pipelines: pipelines,
     Algorithms: [{ ID: 'a1', Name: 'XGBoost' }],
@@ -44,7 +45,7 @@ const makeEngine = (pipelines: unknown[]) =>
     Models: [],
   } as unknown as PredictiveStudioEngine);
 
-const render = (pipelines: unknown[], viewMode: 'stages' | 'dag' = 'stages') =>
+const render = (pipelines: MJMLTrainingPipelineEntity[], viewMode: 'stages' | 'dag' = 'stages') =>
   renderComponentFixture(PSPipelinesComponent, { inputs: { engine: makeEngine(pipelines), viewMode } });
 
 describe('PSPipelinesComponent (DOM)', () => {
