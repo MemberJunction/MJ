@@ -48,6 +48,7 @@
     "@memberjunction/ai-assemblyai": "6.1.0",
     "@memberjunction/ai-azure": "6.1.0",
     "@memberjunction/ai-bedrock": "6.1.0",
+    "@memberjunction/ai-betty": "6.1.0",
     "@memberjunction/ai-betty-bot": "6.1.0",
     "@memberjunction/ai-blackforestlabs": "6.1.0",
     "@memberjunction/ai-cerebras": "6.1.0",
