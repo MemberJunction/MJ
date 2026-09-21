@@ -519,7 +519,7 @@ export class InferProcessor implements IRecordProcessor {
     }
 
     /** Lifecycle hook called before write-back is executed on this record. */
-    protected async beforeWriteBack(
+    public async beforeWriteBack(
         mapping: OutputMappingConfig | undefined,
         result: unknown,
         record: RecordRef,

@@ -6,7 +6,7 @@
  */
 
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { EscapeSQLString, SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
+import { MJGlobal, EscapeSQLString, SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
     ArraySource,
@@ -221,7 +221,16 @@ export class RecordProcessExecutor {
                     }
                 }
             }
-            base = new InferProcessor(rp.PromptID, inputMapping, spec);
+            if (spec?.ProcessorExtensionKey) {
+                const custom = MJGlobal.Instance.ClassFactory.CreateInstance<InferProcessor>(InferProcessor, spec.ProcessorExtensionKey, rp.PromptID, inputMapping, spec);
+                if (custom) {
+                    base = custom;
+                } else {
+                    throw new Error(`Record Process '${rp.Name}': ProcessorExtensionKey '${spec.ProcessorExtensionKey}' not found in ClassFactory`);
+                }
+            } else {
+                base = new InferProcessor(rp.PromptID, inputMapping, spec);
+            }
         } else {
             // Not a built-in work type — consult the pluggable registry. This is the open seam that
             // lets external packages (e.g. Predictive Studio's 'ML Model' scoring) register a processor

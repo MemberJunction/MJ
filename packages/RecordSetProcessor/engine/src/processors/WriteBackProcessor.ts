@@ -53,6 +53,14 @@ export class WriteBackProcessor implements IRecordProcessor {
                 FeatureValueCacheID: result.FeatureValueCacheID ?? this.run?.FeatureValueCacheID,
                 ExecutedAt: this.run?.ExecutedAt ?? new Date().toISOString(),
             };
+            if ('beforeWriteBack' in this.inner && typeof (this.inner as { beforeWriteBack?: unknown }).beforeWriteBack === 'function') {
+                await (this.inner as { beforeWriteBack: (m: OutputMappingConfig | undefined, res: unknown, rec: RecordRef, ctx: RecordProcessorContext) => Promise<void> }).beforeWriteBack(
+                    this.outputMapping,
+                    result.ResultPayload,
+                    record,
+                    context
+                );
+            }
             const writeBack = await applyOutputMapping({
                 outputMapping: this.outputMapping,
                 result: result.ResultPayload,
@@ -105,6 +113,14 @@ export class WriteBackProcessor implements IRecordProcessor {
                         FeatureValueCacheID: res.FeatureValueCacheID ?? this.run?.FeatureValueCacheID,
                         ExecutedAt: this.run?.ExecutedAt ?? new Date().toISOString(),
                     };
+                    if ('beforeWriteBack' in this.inner && typeof (this.inner as { beforeWriteBack?: unknown }).beforeWriteBack === 'function') {
+                        await (this.inner as { beforeWriteBack: (m: OutputMappingConfig | undefined, res: unknown, rec: RecordRef, ctx: RecordProcessorContext) => Promise<void> }).beforeWriteBack(
+                            this.outputMapping,
+                            res.ResultPayload,
+                            record,
+                            context
+                        );
+                    }
                     const writeBack = await applyOutputMapping({
                         outputMapping: this.outputMapping,
                         result: res.ResultPayload,
