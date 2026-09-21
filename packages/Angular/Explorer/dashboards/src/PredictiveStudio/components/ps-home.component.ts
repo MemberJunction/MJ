@@ -99,11 +99,11 @@ import {
           <div class="ps-card-body">
             @if (activity.length > 0) {
               <div class="feed">
-                @for (item of activity; track item.Title + item.When) {
+                @for (item of activity; track item.title + item.When) {
                   <div class="fitem">
-                    <div class="ev" [class]="item.Kind"><i [class]="item.Icon"></i></div>
+                    <div class="ev" [class]="item.Kind"><i [class]="item.icon"></i></div>
                     <div>
-                      <div class="ftitle">{{ item.Title }}</div>
+                      <div class="ftitle">{{ item.title }}</div>
                       <div class="ps-muted ps-small">{{ item.Detail }}</div>
                       <div class="when">{{ item.When }}</div>
                     </div>

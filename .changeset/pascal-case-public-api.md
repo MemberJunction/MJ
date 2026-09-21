@@ -51,6 +51,7 @@
 "@memberjunction/communication-types": patch
 "@memberjunction/component-registry-client-sdk": patch
 "@memberjunction/component-registry-server": patch
+"@memberjunction/computer-use": patch
 "@memberjunction/computer-use-engine": patch
 "@memberjunction/config": patch
 "@memberjunction/content-autotagging": patch
@@ -165,6 +166,7 @@
 "@memberjunction/react-linter": patch
 "@memberjunction/react-runtime": patch
 "@memberjunction/react-test-harness": patch
+"@memberjunction/realtime-runtime": patch
 "@memberjunction/realtime-widget": patch
 "@memberjunction/record-set-processor": patch
 "@memberjunction/record-set-processor-base": patch
@@ -193,6 +195,7 @@
 "@memberjunction/theme-engine": patch
 "@memberjunction/unit-testing": patch
 "@memberjunction/version-history": patch
+"@memberjunction/web-search-engine": patch
 ---
 
 Rename public class members and exported functions to PascalCase, per MJ's naming convention,

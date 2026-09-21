@@ -119,7 +119,7 @@ function deriveName(goal: string, customName?: string): string {
  * @param experimentIndex optional index of the specific experiment from ProposedExperiments to configure.
  * @returns the resolved {@link PipelineConfig}.
  */
-export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentIndex?: number): PipelineConfig {
+export function ModelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentIndex?: number): PipelineConfig {
   const target = spec.TargetDefinition;
   if (!target?.EntityName?.trim()) {
     throw new Error('ModelingPlanSpec.TargetDefinition.EntityName is required to build a pipeline.');
@@ -155,4 +155,9 @@ export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentI
     leakageGuard: buildLeakageGuard(spec),
     validation: buildValidation(spec),
   };
+}
+
+/** @deprecated Use {@link ModelingPlanToPipelineConfig}. */
+export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentIndex?: number): PipelineConfig {
+  return ModelingPlanToPipelineConfig(spec, experimentIndex);
 }

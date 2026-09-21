@@ -38,9 +38,9 @@ describe.skipIf(!hasToken())('integration: queries', () => {
         const result = await runQuery(queries[0].id, undefined, undefined, 25);
         // runQuery never throws; it reports status on the object.
         expect(result).toBeTruthy();
-        expect(typeof result.Success).toBe('boolean');
+        expect(typeof result.success).toBe('boolean');
 
-        if (result.Success) {
+        if (result.success) {
             expect(Array.isArray(result.Columns)).toBe(true);
             expect(Array.isArray(result.Rows)).toBe(true);
             expect(result.RowCount).toBeGreaterThanOrEqual(0);
@@ -51,7 +51,7 @@ describe.skipIf(!hasToken())('integration: queries', () => {
             }
         } else {
             // A failure must carry an error message (e.g. required parameters).
-            expect(result.ErrorMessage).toBeTruthy();
+            expect(result.errorMessage).toBeTruthy();
         }
     });
 });

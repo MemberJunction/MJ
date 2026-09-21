@@ -198,7 +198,7 @@ export function DataArtifactView({ Content }: MobileArtifactRendererProps) {
                         {/* Same highlighter fenced code uses, so SQL here reads as SQL there. */}
                         <Text style={styles.sqlText}>
                             {HighlightCode(sql, 'sql').map((run, i) => (
-                                <Text key={i} style={{ color: run.color }}>{run.text}</Text>
+                                <Text key={i} style={{ color: run.Color }}>{run.Text}</Text>
                             ))}
                         </Text>
                     </ScrollView>

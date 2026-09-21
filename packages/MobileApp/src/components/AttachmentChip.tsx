@@ -17,18 +17,18 @@ export type AttachmentChipProps = {
 
 /** Preview chip for a pending attachment. See {@link AttachmentChipProps}. */
 export function AttachmentChip({ Attachment: attachment, OnRemove: onRemove }: AttachmentChipProps) {
-    const isImage = attachment.Kind === 'image';
+    const isImage = attachment.kind === 'image';
     return (
         <View style={styles.chip}>
             {isImage ? (
-                <Image source={{ uri: attachment.Uri }} style={styles.thumb} />
+                <Image source={{ uri: attachment.uri }} style={styles.thumb} />
             ) : (
                 <View style={styles.docIcon}>
                     <Icons.FileText size={16} color={Colors.brand} strokeWidth={2} />
                 </View>
             )}
             <Text style={styles.name} numberOfLines={1}>
-                {attachment.Name}
+                {attachment.name}
             </Text>
             <Pressable hitSlop={8} style={styles.remove} onPress={onRemove}>
                 <Icons.X size={14} color={Colors.ink2} strokeWidth={2.4} />

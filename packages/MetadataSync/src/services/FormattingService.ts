@@ -244,18 +244,18 @@ export class FormattingService {
         }
 
         // Group by operation + entity name, accumulating counts.
-        const groups = new Map<string, { operation: RecordChangeDetail['operation']; entityName: string; count: number }>();
+        const groups = new Map<string, { operation: RecordChangeDetail['Operation']; entityName: string; count: number }>();
         for (const c of changes) {
-            const key = `${c.operation}|${c.entityName}`;
+            const key = `${c.Operation}|${c.entityName}`;
             const existing = groups.get(key);
             if (existing) {
                 existing.count++;
             } else {
-                groups.set(key, { operation: c.operation, entityName: c.entityName, count: 1 });
+                groups.set(key, { operation: c.Operation, entityName: c.entityName, count: 1 });
             }
         }
 
-        const opOrder: Record<RecordChangeDetail['operation'], number> = { created: 0, updated: 1, deleted: 2 };
+        const opOrder: Record<RecordChangeDetail['Operation'], number> = { created: 0, updated: 1, deleted: 2 };
         const sorted = [...groups.values()].sort(
             (a, b) => opOrder[a.operation] - opOrder[b.operation] || a.entityName.localeCompare(b.entityName)
         );
@@ -295,7 +295,7 @@ export class FormattingService {
         lines.push('');
 
         for (const c of changes) {
-            lines.push(`[${c.operation.toUpperCase()}] ${c.entityName}  (${c.primaryKey})`);
+            lines.push(`[${c.Operation.toUpperCase()}] ${c.entityName}  (${c.primaryKey})`);
             for (const f of c.fields) {
                 lines.push(`    ${f.field}: ${f.oldValue} -> ${f.newValue}`);
             }

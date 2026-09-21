@@ -60,7 +60,7 @@ describe.skipIf(!hasToken())('integration: explorer', () => {
         const name = readableAgentsEntityName();
         const load = await LoadEntityRecords(name, undefined, 10);
         expect(load).not.toBeNull();
-        expect(load!.Entity.Name).toBe(name);
+        expect(load!.entity.Name).toBe(name);
         expect(load!.Rows.length).toBeGreaterThan(0);
 
         const first = load!.Rows[0];
@@ -78,10 +78,10 @@ describe.skipIf(!hasToken())('integration: explorer', () => {
 
         const detail = await LoadRecordDetail(name, someId!);
         expect(detail).not.toBeNull();
-        expect(detail!.Entity.Name).toBe(name);
-        expect(detail!.Fields.length).toBeGreaterThan(0);
+        expect(detail!.entity.Name).toBe(name);
+        expect(detail!.fields.length).toBeGreaterThan(0);
         // Every field row has a key + label.
-        for (const f of detail!.Fields) {
+        for (const f of detail!.fields) {
             expect(f.key).toBeTruthy();
             expect(f.label).toBeTruthy();
         }

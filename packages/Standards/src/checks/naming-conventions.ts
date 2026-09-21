@@ -81,6 +81,19 @@ function loadTypeScript(): Promise<TypeScriptApi | null> {
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'] as const;
 
 /**
+ * The parse mode for a file, by extension.
+ *
+ * A `.tsx` file parsed as plain TS does not fail — it silently misparses. `<Rect x={3} y={3} />`
+ * becomes a chain of comparison and type-assertion expressions, and the attribute names surface as
+ * declarations the check then reports: `exported const "y" is neither PascalCase nor
+ * SCREAMING_SNAKE_CASE`, at a line holding no declaration at all. Every such finding is a false
+ * positive, and no marker can silence one, because there is nothing there to mark.
+ */
+function scriptKindFor(ts: TypeScriptApi, file: string): TSApi.ScriptKind {
+    return file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
+}
+
+/**
  * Directories never descended into.
  *
  * `generated` and `.claude` are the two that actually matter here. Committed CodeGen output is
@@ -1027,7 +1040,7 @@ export const NamingConventionsCheck: StandardCheck = {
             } catch {
                 continue;
             }
-            const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+            const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKindFor(ts, file));
             sources.set(file, source);
             parsed.push({ File: file, Source: source, Lines: text.split('\n') });
         }
@@ -1036,7 +1049,7 @@ export const NamingConventionsCheck: StandardCheck = {
             const cached = sources.get(file);
             if (cached) return cached;
             try {
-                const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+                const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, scriptKindFor(ts, file));
                 sources.set(file, source);
                 return source;
             } catch {

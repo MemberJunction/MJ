@@ -133,12 +133,12 @@ describe('primaryAuc', () => {
 describe('metricsToDisplay', () => {
   it('orders canonically, excludes AUC by default, only present keys', () => {
     const display = MetricsToDisplay(ParseMetrics('{"F1":0.75,"Precision":0.8,"AUC":0.9}'));
-    expect(display.map((d) => d.Key)).toEqual(['Precision', 'F1']);
-    expect(display.find((d) => d.Key === 'Precision')?.Value).toBe('0.80');
+    expect(display.map((d) => d.key)).toEqual(['Precision', 'F1']);
+    expect(display.find((d) => d.key === 'Precision')?.value).toBe('0.80');
   });
   it('can include AUC when asked', () => {
     const display = MetricsToDisplay(ParseMetrics('{"AUC":0.9}'), { excludeAuc: false });
-    expect(display.map((d) => d.Key)).toEqual(['AUC']);
+    expect(display.map((d) => d.key)).toEqual(['AUC']);
   });
   it('returns [] for empty metrics', () => {
     expect(MetricsToDisplay({})).toEqual([]);
@@ -327,7 +327,7 @@ describe('deriveModelEvents', () => {
     ];
     const events = DeriveModelEvents(sources);
     expect(events.length).toBe(2); // Draft excluded
-    expect(events[0].Name).toBe('B'); // most recent first
+    expect(events[0].name).toBe('B'); // most recent first
     expect(events[0].Kind).toBe('archive');
     expect(events[1].Kind).toBe('promote');
   });
@@ -347,7 +347,7 @@ describe('buildActivityFeed', () => {
     expect(feed.length).toBe(3);
     expect(feed[0].Kind).toBe('run'); // 11:30 most recent
     expect(feed.find((f) => f.Kind === 'warn')).toBeTruthy(); // failed run
-    expect(feed.find((f) => f.Kind === 'promote')?.Title).toContain('promoted to Published');
+    expect(feed.find((f) => f.Kind === 'promote')?.title).toContain('promoted to Published');
   });
 
   it('respects the limit and handles empty', () => {
@@ -422,8 +422,8 @@ describe('buildCompareMetricRows', () => {
       iteration({ ID: 'b', Status: 'Completed', Score: 0.8, ComputeCost: 3 }),
     ]);
     const rows = BuildCompareMetricRows(cols);
-    const auc = rows.find((r) => r.Label === 'Holdout score')!;
-    const cost = rows.find((r) => r.Label === 'Compute cost')!;
+    const auc = rows.find((r) => r.label === 'Holdout score')!;
+    const cost = rows.find((r) => r.label === 'Compute cost')!;
     expect(auc.Values).toEqual(['0.860', '0.800']);
     expect(auc.BestIndex).toBe(0); // higher AUC
     expect(cost.BestIndex).toBe(1); // lower cost
@@ -432,8 +432,8 @@ describe('buildCompareMetricRows', () => {
   it('formats missing values as — and yields no best index', () => {
     const cols = DeriveCompareColumns([iteration({ ID: 'a', Status: 'Completed', Score: 0.8, ComputeCost: null })]);
     const rows = BuildCompareMetricRows(cols);
-    expect(rows.find((r) => r.Label === 'Compute cost')!.Values).toEqual(['—']);
-    expect(rows.find((r) => r.Label === 'Compute cost')!.BestIndex).toBe(-1);
+    expect(rows.find((r) => r.label === 'Compute cost')!.Values).toEqual(['—']);
+    expect(rows.find((r) => r.label === 'Compute cost')!.BestIndex).toBe(-1);
   });
 
   it('returns [] for empty columns', () => {

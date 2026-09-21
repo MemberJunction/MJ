@@ -46,10 +46,10 @@ function message(over: Partial<DetailShape> = {}, agentName: string | null = nul
 
 function load(messages: ConversationMessage[], sessionMeta = new Map<string, RealtimeSessionTimelineMeta>()): ConversationDetailLoad {
     return {
-        conversation: { ID: 'C-1', Name: 'Chat' } as unknown as ConversationDetailLoad['conversation'],
-        messages,
-        artifacts: [],
-        sessionMeta,
+        Conversation: { ID: 'C-1', Name: 'Chat' } as unknown as ConversationDetailLoad['Conversation'],
+        Messages: messages,
+        Artifacts: [],
+        SessionMeta: sessionMeta,
     };
 }
 
@@ -71,7 +71,7 @@ describe('BuildThreadTimeline', () => {
         expect(items.map((i) => i.kind)).toEqual(['message', 'session', 'message']);
         const session = items[1];
         if (session.kind !== 'session') throw new Error('expected a session item');
-        expect(session.group.TurnCount).toBe(3);
+        expect(session.Group.TurnCount).toBe(3);
     });
 
     it('expands to exactly the turns it counted', () => {
@@ -86,8 +86,8 @@ describe('BuildThreadTimeline', () => {
         ]));
         const session = items[0];
         if (session.kind !== 'session') throw new Error('expected a session item');
-        expect(session.turns).toHaveLength(session.group.TurnCount);
-        expect(session.turns).toHaveLength(2);
+        expect(session.Turns).toHaveLength(session.Group.TurnCount);
+        expect(session.Turns).toHaveLength(2);
     });
 
     it('matches session meta whatever case the database returned the id in', () => {
@@ -100,7 +100,7 @@ describe('BuildThreadTimeline', () => {
         const items = BuildThreadTimeline(load([message({ Message: 'spoken', AgentSessionID: S })], meta));
         const session = items[0];
         if (session.kind !== 'session') throw new Error('expected a session item');
-        expect(session.meta?.AgentName).toBe('Sage');
+        expect(session.Meta?.AgentName).toBe('Sage');
     });
 
     it('keeps two different sessions as two separate elements', () => {

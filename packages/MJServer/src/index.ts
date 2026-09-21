@@ -32,7 +32,7 @@ import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
 import { default as jwt } from 'jsonwebtoken';
-import { contextFunction, createUnifiedAuthMiddleware, getUserPayload } from './context.js';
+import { contextFunction, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
@@ -99,8 +99,13 @@ export { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
  * CodeGenLib). This wrapper keeps the public `getDbType()` symbol that
  * MJServer consumers (and the broader stack) already import.
  */
-export function getDbType(): DatabasePlatform {
+export function GetDbType(): DatabasePlatform {
     return resolveDbPlatformFromEnv() ?? 'sqlserver';
+}
+
+/** @deprecated Use {@link GetDbType}. */
+export function getDbType(): DatabasePlatform {
+  return GetDbType();
 }
 
 export { MaxLength } from 'class-validator';
@@ -263,7 +268,10 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const createApp = (): Application => express();
+export const CreateApp = (): Application => express();
+
+/** @deprecated Use {@link CreateApp}. */
+export const createApp = CreateApp;
 
 /**
  * Resolves the MJServer package version for the startup summary header.
@@ -294,7 +302,7 @@ function resolveServerVersion(): string | undefined {
 // there is no ordering hazard in binding this early.
 GetAttachmentService().BlobStore = new MJStorageBlobStore();
 
-export const serve = async (resolverPaths: Array<string>, app: Application = createApp(), options?: MJServerOptions): Promise<void> => {
+export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
   const t0 = performance.now();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
@@ -321,7 +329,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   }
 
 const setupComplete$ = new ReplaySubject(1);
-  const dbType = getDbType();
+  const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
 
   if (dbType === 'postgresql') {
@@ -1378,7 +1386,7 @@ const setupComplete$ = new ReplaySubject(1);
   startupLog.LogIf('verbose', `[Auth] Public provider catalog registered at ${AUTH_CATALOG_MOUNT_PATH}/providers`);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
-  app.use(createUnifiedAuthMiddleware(dataSources));
+  app.use(CreateUnifiedAuthMiddleware(dataSources));
 
   // ─── Post-auth middleware from BaseServerMiddleware plugins ─────
   // Middleware here has access to the authenticated user via req.userPayload.
@@ -1676,6 +1684,9 @@ const setupComplete$ = new ReplaySubject(1);
     // This is critical for server stability when downstream dependencies fail
   });
 };
+
+/** @deprecated Use {@link Serve}. */
+export const serve = Serve;
 
 /**
  * Age at which an unprocessed `MJ: RSU Pending Works` row is reported as stranded.

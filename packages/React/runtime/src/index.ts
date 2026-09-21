@@ -116,16 +116,16 @@ export {
 } from './utilities/core-libraries';
 
 export {
-  generateComponentHierarchyHash
+  GenerateComponentHierarchyHash, generateComponentHierarchyHash
 } from './utilities/component-hash';
 
 export {
   RuntimeUtilities,
-  createRuntimeUtilities
+  CreateRuntimeUtilities, createRuntimeUtilities
 } from './utilities/runtime-utilities';
 
 export {
-  resolveEntityRecordKey,
+  ResolveEntityRecordKey, resolveEntityRecordKey,
   EntityRecordKeyInput
 } from './utilities/entity-record-key';
 

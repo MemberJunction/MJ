@@ -224,6 +224,22 @@ describe('built-in exemptions', () => {
         expect((await run()).Violations).toEqual([]);
     });
 
+    it('parses a .tsx file as TSX, so JSX attributes are not read as declarations', async () => {
+        // Parsed as plain TS, `<Rect x={3} y={3} width={7} />` misparses into comparison and
+        // type-assertion expressions and the ATTRIBUTE names surface as exported consts — a
+        // finding on a line that declares nothing, which no marker can silence.
+        writePackage('a', {
+            // Two SIBLING elements are what tips it: the `/><` sequence parses as comparison
+            // operators, and the comma-expression that results reads as a declaration list.
+            'icon.tsx':
+                'export const Icons = {\n' +
+                '    Grid: (p: IconProps) => (<D {...p}><Rect x={3} y={3} width={7} height={7} rx={1.5} />' +
+                '<Rect x={14} y={3} width={7} height={7} rx={1.5} /></D>),\n' +
+                '};',
+        });
+        expect((await run()).Violations).toEqual([]);
+    });
+
     it('exempts a computed or Symbol-keyed member, whose name is not a style choice', async () => {
         writePackage('a', { 'a.ts': 'export class A {\n    public [Symbol.iterator]() { return null; }\n}' });
         expect((await run()).Violations).toEqual([]);

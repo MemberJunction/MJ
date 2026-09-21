@@ -34,8 +34,8 @@ export default function RecordEditScreen() {
         const result = await save();
         if (result.success) {
             router.back();
-        } else if (result.error) {
-            setSaveError(result.error);
+        } else if (result.Error) {
+            setSaveError(result.Error);
         }
     };
 

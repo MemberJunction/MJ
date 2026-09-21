@@ -137,13 +137,18 @@ export class FileBackupManager {
    * @param filePath - Absolute path of a file previously passed to {@link backupFile}
    * @returns true when a backup was tracked for this file
    */
-  releaseBackup(filePath: string): boolean {
+  ReleaseBackup(filePath: string): boolean {
     const index = this.backups.findIndex(b => b.originalPath === filePath);
     if (index < 0) {
       return false;
     }
     this.backups.splice(index, 1);
     return true;
+  }
+
+  /** @deprecated Use {@link ReleaseBackup}. */
+  releaseBackup(filePath: string): boolean {
+    return this.ReleaseBackup(filePath);
   }
 
   /**

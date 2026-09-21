@@ -18,7 +18,7 @@ const TYPED_JSON_COMPANION_SUFFIX = 'Object';
  * `BusinessObject` property on an entity with no `Business` field is a genuine
  * computed property and is kept.
  */
-export function isTypedJsonCompanion(propertyName: string, entityFieldNames: readonly string[]): boolean {
+export function IsTypedJsonCompanion(propertyName: string, entityFieldNames: readonly string[]): boolean {
     if (!propertyName.toLowerCase().endsWith(TYPED_JSON_COMPANION_SUFFIX.toLowerCase())) {
         return false;
     }
@@ -27,6 +27,11 @@ export function isTypedJsonCompanion(propertyName: string, entityFieldNames: rea
         return false;
     }
     return entityFieldNames.some(f => f.toLowerCase() === base);
+}
+
+/** @deprecated Use {@link IsTypedJsonCompanion}. */
+export function isTypedJsonCompanion(propertyName: string, entityFieldNames: readonly string[]): boolean {
+  return IsTypedJsonCompanion(propertyName, entityFieldNames);
 }
 
 /**
@@ -101,7 +106,7 @@ export class EntityPropertyExtractor {
         // Skip CodeGen's typed accessor for a JSON column — it duplicates the
         // real field and would keep inline the very value externalization just
         // moved out to a file.
-        if (isTypedJsonCompanion(propertyName, entityFieldNames)) {
+        if (IsTypedJsonCompanion(propertyName, entityFieldNames)) {
           continue;
         }
         

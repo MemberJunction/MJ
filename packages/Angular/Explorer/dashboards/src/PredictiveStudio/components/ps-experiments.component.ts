@@ -320,47 +320,113 @@ export class PSExperimentsComponent implements OnInit {
     this.Busy = value;
   }
 
-  public showNewExperimentModal = false;
-  public showArtifactModal = false;
-  public activeArtifactId: string | null = null;
-  public artifactLoading = false;
+  public ShowNewExperimentModal = false;
 
-  public get sessions(): MJExperimentSessionEntity[] {
+  /** @deprecated Use {@link ShowNewExperimentModal}. */
+  public get showNewExperimentModal() {
+    return this.ShowNewExperimentModal;
+  }
+  /** @deprecated Use {@link ShowNewExperimentModal}. */
+  public set showNewExperimentModal(value) {
+    this.ShowNewExperimentModal = value;
+  }
+  public ShowArtifactModal = false;
+
+  /** @deprecated Use {@link ShowArtifactModal}. */
+  public get showArtifactModal() {
+    return this.ShowArtifactModal;
+  }
+  /** @deprecated Use {@link ShowArtifactModal}. */
+  public set showArtifactModal(value) {
+    this.ShowArtifactModal = value;
+  }
+  public ActiveArtifactId: string | null = null;
+
+  /** @deprecated Use {@link ActiveArtifactId}. */
+  public get activeArtifactId(): string | null {
+    return this.ActiveArtifactId;
+  }
+  /** @deprecated Use {@link ActiveArtifactId}. */
+  public set activeArtifactId(value: string | null) {
+    this.ActiveArtifactId = value;
+  }
+  public ArtifactLoading = false;
+
+  /** @deprecated Use {@link ArtifactLoading}. */
+  public get artifactLoading() {
+    return this.ArtifactLoading;
+  }
+  /** @deprecated Use {@link ArtifactLoading}. */
+  public set artifactLoading(value) {
+    this.ArtifactLoading = value;
+  }
+
+  public get Sessions(): MJExperimentSessionEntity[] {
     return this.engine?.Sessions ?? [];
   }
 
-  public selectSession(id: string): void {
+  /** @deprecated Use {@link Sessions}. */
+  public get sessions(): MJExperimentSessionEntity[] {
+    return this.Sessions;
+  }
+
+  public SelectSession(id: string): void {
     this.sessionId = id;
     this.rebuild();
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link SelectSession}. */
+  public selectSession(id: string): void {
+    return this.SelectSession(id);
+  }
+
+  public OpenNewExperimentModal(): void {
+    this.ShowNewExperimentModal = true;
+  }
+
+  /** @deprecated Use {@link OpenNewExperimentModal}. */
   public openNewExperimentModal(): void {
-    this.showNewExperimentModal = true;
+    return this.OpenNewExperimentModal();
   }
 
+  public CloseNewExperimentModal(): void {
+    this.ShowNewExperimentModal = false;
+  }
+
+  /** @deprecated Use {@link CloseNewExperimentModal}. */
   public closeNewExperimentModal(): void {
-    this.showNewExperimentModal = false;
+    return this.CloseNewExperimentModal();
   }
 
-  public async onExperimentStarted(newSessionId: string): Promise<void> {
-    this.closeNewExperimentModal();
+  public async OnExperimentStarted(newSessionId: string): Promise<void> {
+    this.CloseNewExperimentModal();
     await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
     this.sessionId = newSessionId;
     this.rebuild();
     this.cdr.detectChanges();
   }
 
-  public closeArtifactModal(): void {
-    this.showArtifactModal = false;
-    this.activeArtifactId = null;
+  /** @deprecated Use {@link OnExperimentStarted}. */
+  public async onExperimentStarted(newSessionId: string): Promise<void> {
+    return this.OnExperimentStarted(newSessionId);
   }
 
-  public async viewResultsArtifact(): Promise<void> {
-    const s = this.session;
-    if (!s || this.artifactLoading) return;
+  public CloseArtifactModal(): void {
+    this.ShowArtifactModal = false;
+    this.ActiveArtifactId = null;
+  }
 
-    this.artifactLoading = true;
+  /** @deprecated Use {@link CloseArtifactModal}. */
+  public closeArtifactModal(): void {
+    return this.CloseArtifactModal();
+  }
+
+  public async ViewResultsArtifact(): Promise<void> {
+    const s = this.session;
+    if (!s || this.ArtifactLoading) return;
+
+    this.ArtifactLoading = true;
     try {
       const p = this.provider ?? Metadata.Provider;
       const rv = new RunView();
@@ -371,8 +437,8 @@ export class PSExperimentsComponent implements OnInit {
       }, this.currentUser ?? undefined);
 
       if (res.Success && res.Results && res.Results.length > 0) {
-        this.activeArtifactId = res.Results[0].ID;
-        this.showArtifactModal = true;
+        this.ActiveArtifactId = res.Results[0].ID;
+        this.ShowArtifactModal = true;
         return;
       }
 
@@ -422,14 +488,19 @@ export class PSExperimentsComponent implements OnInit {
       ver.Content = JSON.stringify(payload);
       await ver.Save();
 
-      this.activeArtifactId = art.ID;
-      this.showArtifactModal = true;
+      this.ActiveArtifactId = art.ID;
+      this.ShowArtifactModal = true;
     } catch (e) {
       this.notifications.CreateSimpleNotification(`Error: ${e instanceof Error ? e.message : String(e)}`, 'error', 5000);
     } finally {
-      this.artifactLoading = false;
+      this.ArtifactLoading = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link ViewResultsArtifact}. */
+  public async viewResultsArtifact(): Promise<void> {
+    return this.ViewResultsArtifact();
   }
 
   private parsePlanSpec(raw: string | null): ModelingPlanSpec | null {

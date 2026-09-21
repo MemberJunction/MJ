@@ -1,6 +1,5 @@
 import fs from 'fs-extra';
 import path from 'path';
-import { BaseEntity } from '@memberjunction/core';
 import { METADATA_KEYWORDS, ExtractKeywordValue, CreateKeywordReference } from '../constants/metadata-keywords';
 
 /**
@@ -46,7 +45,7 @@ export class FieldExternalizer {
     fieldName: string,
     fieldValue: any,
     pattern: string,
-    recordData: BaseEntity,
+    recordData: Record<string, unknown>,
     targetDir: string,
     existingFileReference?: string,
     mergeStrategy: string = 'merge',
