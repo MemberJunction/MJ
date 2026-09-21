@@ -77,4 +77,36 @@ describe('modelingPlanToPipelineConfig', () => {
     expect(() => modelingPlanToPipelineConfig(baseSpec({ TargetDefinition: { EntityName: '', TargetVariable: 'Status', ProblemType: 'classification', SuccessMetric: 'AUC' } }))).toThrow(/EntityName/);
     expect(() => modelingPlanToPipelineConfig(baseSpec({ ProposedExperiments: [] }))).toThrow(/ProposedExperiment/);
   });
+
+  it('emits structured warnings for llm-derived and embedding candidate features instead of dropping them silently', () => {
+    const spec = baseSpec({
+      CandidateFeatures: [
+        { Name: 'AutoRenew', SourceRef: 'Memberships', Kind: 'numeric', Why: 'renewal intent' },
+        { Name: 'JobTitleNormalized', SourceRef: 'Memberships', Kind: 'llm-derived', Why: 'job function from LLM' },
+        { Name: 'ProfileEmbedding', SourceRef: 'Memberships', Kind: 'embedding', Why: 'dense representation' },
+      ],
+      ProposedExperiments: [
+        { Label: 'All', AlgorithmName: 'random_forest', FeatureSet: [], Rationale: 'test warnings', Priority: 1 },
+      ],
+    });
+    const cfg = modelingPlanToPipelineConfig(spec);
+    expect(cfg.warnings).toHaveLength(2);
+    expect(cfg.warnings).toEqual([
+      {
+        FeatureName: 'JobTitleNormalized',
+        Kind: 'llm-derived',
+        Reason: expect.stringMatching(/upstream Feature Pipeline/),
+      },
+      {
+        FeatureName: 'ProfileEmbedding',
+        Kind: 'embedding',
+        Reason: expect.stringMatching(/dedicated vector embedding step/),
+      },
+    ]);
+  });
+
+  it('produces empty warnings array when all features are numeric or categorical', () => {
+    const cfg = modelingPlanToPipelineConfig(baseSpec());
+    expect(cfg.warnings).toEqual([]);
+  });
 });

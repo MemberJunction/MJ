@@ -15,7 +15,7 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
-import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@memberjunction/predictive-studio-core';
+import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { modelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
@@ -72,6 +72,8 @@ export interface BuildPredictionResult {
   pipeline?: MJMLTrainingPipelineEntity;
   /** Leaderboard iterations produced during the tournament. */
   leaderboard?: MLLeaderboardEntryPayload[];
+  /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
+  warnings?: FeatureStepWarning[];
 }
 
 /** Extract a representative score for tournament comparison (R² for regression, AUC/accuracy for classification). */
@@ -164,6 +166,7 @@ export class PredictiveStudioPipelineBuilder {
           heldReason,
           errorMessage: null,
           leaderboard: [singleRow],
+          warnings: config.warnings.length > 0 ? config.warnings : undefined,
         };
       }
 
@@ -179,11 +182,15 @@ export class PredictiveStudioPipelineBuilder {
         featureSetName: string;
       }
       const trained: TrainedCandidate[] = [];
+      const tournamentWarnings: FeatureStepWarning[] = [];
 
       for (let i = 0; i < candidatesToRun.length; i++) {
         const exp = candidatesToRun[i];
         try {
           const config = modelingPlanToPipelineConfig(spec, i);
+          if (config.warnings.length > 0) {
+            tournamentWarnings.push(...config.warnings);
+          }
           const pipeline = await this.createPipeline(config, provider, user);
           const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
           const model = trainResult.model;
@@ -240,6 +247,7 @@ export class PredictiveStudioPipelineBuilder {
         heldReason,
         errorMessage: null,
         leaderboard,
+        warnings: tournamentWarnings.length > 0 ? tournamentWarnings : undefined,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);

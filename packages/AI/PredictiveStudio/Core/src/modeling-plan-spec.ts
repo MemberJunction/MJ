@@ -85,3 +85,13 @@ export interface ModelingPlanSpec {
   /** Execution-phase leaderboard — one entry per Experiment Session Iteration. */
   Leaderboard?: Array<{ IterationID: string; Metric: number; ModelID?: string }>;
 }
+
+/** Structured warning emitted when a candidate feature cannot be mapped to a training pipeline step. */
+export interface FeatureStepWarning {
+  /** The name of the candidate feature that was dropped or could not be mapped. */
+  FeatureName: string;
+  /** The kind of feature ('numeric' | 'categorical' | 'embedding' | 'llm-derived' | string). */
+  Kind: string;
+  /** Explanatory reason why the feature was dropped or requires upstream handling. */
+  Reason: string;
+}

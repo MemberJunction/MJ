@@ -21,6 +21,7 @@ import {
   type LeakageGuard,
   type ValidationStrategy,
   type ProblemType,
+  type FeatureStepWarning,
 } from '@memberjunction/predictive-studio-core';
 
 /** The resolved, ready-to-persist configuration for one `MJ: ML Training Pipelines` row. */
@@ -41,6 +42,8 @@ export interface PipelineConfig {
   sourceBindings: SourceBinding[];
   /** The assembled FeatureStep DAG. */
   featureSteps: FeatureStepGraph;
+  /** Structured warnings emitted during plan translation (e.g. dropped candidate features). */
+  warnings: FeatureStepWarning[];
   /** Point-in-time assembly strategy. */
   asOf: AsOfStrategy;
   /** Leakage protection (deny-list + dominance threshold). */
@@ -57,15 +60,38 @@ function chooseExperiment(spec: ModelingPlanSpec): ModelingPlanSpec['ProposedExp
   return [...experiments].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))[0];
 }
 
-/** Build the FeatureStep DAG from the selected candidate features (select raw cols; one-hot categoricals). */
-function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): FeatureStepGraph {
+/** Build the FeatureStep DAG from the selected candidate features (select raw cols; one-hot categoricals) and collect structured warnings for unmapped features. */
+function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { steps: FeatureStepGraph; warnings: FeatureStepWarning[] } {
   const all = spec.CandidateFeatures ?? [];
   // Honor the chosen experiment's FeatureSet when present; otherwise use every candidate feature.
   const selected = featureSet.length > 0 ? all.filter((f) => featureSet.includes(f.Name)) : all;
 
-  // Raw passthrough columns: numeric + categorical features (embedding/llm-derived are handled by
-  // their own step kinds and aren't simple row columns).
-  const rawColumns = selected.filter((f) => f.Kind === 'numeric' || f.Kind === 'categorical').map((f) => f.Name);
+  const warnings: FeatureStepWarning[] = [];
+  const rawColumns: string[] = [];
+
+  for (const f of selected) {
+    if (f.Kind === 'numeric' || f.Kind === 'categorical') {
+      rawColumns.push(f.Name);
+    } else if (f.Kind === 'llm-derived') {
+      warnings.push({
+        FeatureName: f.Name,
+        Kind: f.Kind,
+        Reason: `Candidate feature "${f.Name}" (llm-derived) was dropped from training pipeline steps. LLM-derived features require an upstream Feature Pipeline to persist values before training.`,
+      });
+    } else if (f.Kind === 'embedding') {
+      warnings.push({
+        FeatureName: f.Name,
+        Kind: f.Kind,
+        Reason: `Candidate feature "${f.Name}" (embedding) was dropped from training pipeline steps. Embedding features require a dedicated vector embedding step.`,
+      });
+    } else {
+      warnings.push({
+        FeatureName: f.Name,
+        Kind: f.Kind,
+        Reason: `Candidate feature "${f.Name}" with kind "${f.Kind}" cannot be automatically mapped to a pipeline step.`,
+      });
+    }
+  }
 
   const steps: FeatureStep[] = [];
   if (rawColumns.length > 0) {
@@ -75,7 +101,7 @@ function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): Featur
   for (const f of selected.filter((f) => f.Kind === 'categorical')) {
     steps.push({ Id: `onehot-${f.Name}`, Kind: 'onehot', Column: f.Name });
   }
-  return { Steps: steps };
+  return { steps: { Steps: steps }, warnings };
 }
 
 /** Source bindings from the plan's candidate sources (drop the agent's `Why` rationale). */
@@ -142,6 +168,8 @@ export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentI
       ? `${baseName} (${experiment.AlgorithmName})`
       : baseName;
 
+  const { steps: featureSteps, warnings } = buildFeatureSteps(spec, experiment.FeatureSet ?? []);
+
   return {
     name,
     description: spec.Goal?.trim() || 'Created by the Predictive Studio Agent.',
@@ -150,7 +178,8 @@ export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentI
     problemType: target.ProblemType,
     algorithmName: experiment.AlgorithmName.trim(),
     sourceBindings: buildSourceBindings(spec),
-    featureSteps: buildFeatureSteps(spec, experiment.FeatureSet ?? []),
+    featureSteps,
+    warnings,
     asOf: target.AsOfStrategy ?? { Mode: 'none' },
     leakageGuard: buildLeakageGuard(spec),
     validation: buildValidation(spec),

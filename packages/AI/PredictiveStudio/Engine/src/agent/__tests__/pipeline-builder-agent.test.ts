@@ -40,6 +40,20 @@ describe('buildOutcomeMessage', () => {
     expect(buildOutcomeMessage(summarizeBuildResult(held))).toMatch(/holding it back/i);
     expect(buildOutcomeMessage(summarizeBuildResult(failed))).toMatch(/couldn't build/i);
   });
+
+  it('projects a result with warnings and surfaces them in the message', () => {
+    const withWarnings: BuildPredictionResult = {
+      ...published,
+      warnings: [
+        { FeatureName: 'JobTitleNorm', Kind: 'llm-derived', Reason: 'Requires upstream Feature Pipeline' },
+      ],
+    };
+    const summary = summarizeBuildResult(withWarnings);
+    expect(summary.warnings).toHaveLength(1);
+    expect(summary.warnings?.[0].FeatureName).toBe('JobTitleNorm');
+    expect(buildOutcomeMessage(summary)).toContain('Note: 1 candidate feature(s) could not be mapped to pipeline steps');
+    expect(buildOutcomeMessage(summary)).toContain('JobTitleNorm: Requires upstream Feature Pipeline');
+  });
 });
 
 describe('parseFeatureImportance', () => {
