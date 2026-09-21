@@ -29,6 +29,7 @@ function cloneConfig(config: ServerExtensionConfig): ServerExtensionConfig {
         Enabled: config.Enabled,
         DriverClass: config.DriverClass,
         RootPath: config.RootPath,
+        Phase: config.Phase,
         Settings: { ...(config.Settings ?? {}) },
     };
 }
@@ -86,6 +87,14 @@ export function normalizeServerExtensionConfigs(
             }
             enabled = rec.Enabled;
         }
+        let phase: ServerExtensionConfig['Phase'] = undefined;
+        if (rec.Phase !== undefined) {
+            if (rec.Phase === 'pre-auth' || rec.Phase === 'post-auth') {
+                phase = rec.Phase;
+            } else {
+                invalid(options, `serverExtensions[${i}] ('${driverClass}') Phase must be 'pre-auth' or 'post-auth'${source}`);
+            }
+        }
         const settings =
             rec.Settings != null && typeof rec.Settings === 'object' && !Array.isArray(rec.Settings)
                 ? { ...(rec.Settings as Record<string, unknown>) }
@@ -97,6 +106,7 @@ export function normalizeServerExtensionConfigs(
             Enabled: enabled,
             DriverClass: driverClass,
             RootPath: rootPath,
+            Phase: phase,
             Settings: settings,
         });
     }
@@ -187,6 +197,7 @@ export function mergeServerExtensionConfigs(
             Enabled: entry.Enabled ?? existing.Enabled,
             DriverClass: key,
             RootPath: hostRoot || existing.RootPath,
+            Phase: entry.Phase ?? existing.Phase,
             Settings: { ...(existing.Settings ?? {}), ...(entry.Settings ?? {}) },
         });
     }
@@ -335,5 +346,6 @@ export function prepareServerExtensionConfigs(
  */
 export function describeServerExtensionMount(config: ServerExtensionConfig): string {
     const state = config.Enabled ? 'enabled' : 'disabled';
-    return `${config.DriverClass} at ${config.RootPath} (${state}, PRE-AUTH; host mj.config.cjs serverExtensions[] can set Enabled: false to suppress)`;
+    const phase = (config.Phase ?? 'pre-auth').toUpperCase();
+    return `${config.DriverClass} at ${config.RootPath} (${state}, ${phase}; host mj.config.cjs serverExtensions[] can set Enabled: false to suppress)`;
 }

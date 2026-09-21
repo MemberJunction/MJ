@@ -93,6 +93,7 @@ const COMMON_IGNORE: readonly string[] = [
   '.angular/**',
   'internal_only/**',
   'package-lock.json',
+  'pnpm-lock.yaml',
   '.env',
   'mj.config.js',
   '*.output.txt',

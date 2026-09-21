@@ -351,6 +351,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
             });
 
             if (!response.ok) {
+                await response.body?.cancel().catch(() => { /* nothing to drain */ });
                 throw new Error(`BFL API error checking result: ${response.status}`);
             }
 
@@ -376,6 +377,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         const response = await fetch(url);
 
         if (!response.ok) {
+            await response.body?.cancel().catch(() => { /* nothing to drain */ });
             throw new Error(`Failed to download image: ${response.status}`);
         }
 

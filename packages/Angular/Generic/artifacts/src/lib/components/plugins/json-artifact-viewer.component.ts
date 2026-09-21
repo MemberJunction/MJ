@@ -35,11 +35,15 @@ import { createJsonSnapshot } from '../../snapshot-helpers';
       <!-- Display content: priority order = displayHtml > displayMarkdown > JSON editor -->
       <div class="display-content">
         @if (displayHtml && htmlBlobUrl) {
-          <!-- Sandboxed iframe for rich HTML using blob URL -->
+          <!-- Sandboxed iframe for rich HTML using blob URL.
+               SECURITY: never add allow-same-origin here — a blob: URL inherits the app origin,
+               so allow-same-origin + allow-scripts on LLM-produced HTML is in-origin XSS
+               (script in the artifact could read the app's storage/cookies and DOM).
+               Same pattern as whiteboard-srcdoc.pipe.ts. -->
           <iframe
             #htmlFrame
             [src]="htmlBlobUrl"
-            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals"
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals"
             class="html-iframe"
             (load)="onIframeLoad()">
           </iframe>
@@ -112,6 +116,10 @@ import { createJsonSnapshot } from '../../snapshot-helpers';
       border: none;
       background: var(--mj-bg-surface);
       display: block;
+      /* The frame is cross-origin (sandbox without allow-same-origin), so script-driven
+         auto-resize is unavailable — fill the container instead. */
+      flex: 1;
+      min-height: 0;
     }
 
     .markdown-content {
@@ -276,11 +284,27 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     }
   }
 
+  /**
+   * Returns the iframe's document when accessible, or null.
+   * With allow-same-origin removed from the sandbox (see template), the frame is
+   * cross-origin to the app: contentDocument returns null or the access throws a
+   * SecurityError depending on the browser. Both outcomes are tolerated — the
+   * style/resize enhancements below are optional niceties, not requirements.
+   */
+  private getIframeDocument(): Document | null {
+    try {
+      const iframe = this.htmlFrame?.nativeElement;
+      if (!iframe) return null;
+      return iframe.contentDocument || iframe.contentWindow?.document || null;
+    } catch {
+      return null;
+    }
+  }
+
   onIframeLoad(): void {
     // Inject base styles if HTML doesn't have them
     if (this.htmlFrame) {
-      const iframe = this.htmlFrame.nativeElement;
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      const iframeDoc = this.getIframeDocument();
 
       if (iframeDoc) {
         // Check if HTML already has styles
@@ -338,7 +362,9 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   private resizeIframeToContent(): void {
     if (this.htmlFrame) {
       const iframe = this.htmlFrame.nativeElement;
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+      // Cross-origin (sandboxed) frames yield no document — the CSS flex sizing on
+      // .html-iframe is the fallback in that case.
+      const iframeDoc = this.getIframeDocument();
 
       if (iframeDoc && iframeDoc.body) {
         // Get the actual content height
@@ -369,11 +395,18 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   printHtml(): void {
     if (this.htmlFrame) {
-      const iframe = this.htmlFrame.nativeElement;
-      const iframeWindow = iframe.contentWindow;
-      if (iframeWindow) {
-        iframeWindow.focus();
-        iframeWindow.print();
+      try {
+        const iframe = this.htmlFrame.nativeElement;
+        const iframeWindow = iframe.contentWindow;
+        if (iframeWindow) {
+          iframeWindow.focus();
+          iframeWindow.print();
+        }
+      } catch {
+        // The sandboxed frame is cross-origin, so scripting into it can throw a
+        // SecurityError in some browsers. Fall back to printing the host page,
+        // which includes the rendered iframe content.
+        window.print();
       }
     }
   }

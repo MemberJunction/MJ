@@ -14,10 +14,12 @@ Before running the installer, make sure you have the following ready:
    node --version
    ```
 
-3. **npm** — Comes with Node.js. Verify with:
+3. **pnpm 10 or above** — The installer's default package manager (matching the era-6 platform manifest). Enable it with corepack (ships with Node.js) and verify:
    ```
-   npm --version
+   corepack enable pnpm
+   pnpm --version
    ```
+   To install with npm instead, set `"PackageManager": "npm"` in your install config (or `MJ_INSTALL_PACKAGE_MANAGER=npm`). There is no silent fallback — if the configured package manager is missing, preflight fails with instructions.
 
 4. **At least 2 GB of free disk space** — The installer checks this automatically.
 
@@ -54,7 +56,7 @@ The installer runs through 9 phases automatically. Here's what happens at each s
 3. **Configure** — Prompts you for database credentials, ports, and authentication settings, then generates configuration files (`.env`, `mj.config.cjs`, and Explorer environment files)
 4. **Database** — Generates SQL setup scripts for creating your database, logins, users, and permissions. **You must run these scripts manually** (see [Running the Database Scripts](#running-the-database-scripts) below)
 5. **Platform Compatibility** — Patches npm scripts for your operating system (e.g., adds `cross-env` on Windows)
-6. **Dependencies** — Runs `npm install` and `npm run build` to install and compile all packages
+6. **Dependencies** — Runs the configured package manager's `install` and `run build` (pnpm by default) to install and compile all packages
 7. **Migrate** — Runs database migrations to create the `__mj` schema with all MemberJunction tables, views, stored procedures, and seed data
 8. **CodeGen** — Generates TypeScript entity classes, SQL stored procedures, Angular forms, and class registration manifests for your specific database
 9. **Smoke Test** — Starts MJAPI and MJExplorer to verify they launch correctly, then shuts them down
@@ -223,6 +225,7 @@ Create an `install.config.json` to save your settings for reuse:
   "APIPassword": "YourStrongPassword2!",
   "APIPort": 4000,
   "ExplorerPort": 4201,
+  "PackageManager": "pnpm",
   "AuthProvider": "entra",
   "AuthProviderValues": {
     "TenantID": "your-tenant-id",
@@ -248,6 +251,7 @@ You can also provide configuration via environment variables (useful for CI/CD):
 | `MJ_INSTALL_API_PORT` | GraphQL API port |
 | `MJ_INSTALL_EXPLORER_PORT` | Explorer UI port |
 | `MJ_INSTALL_AUTH_PROVIDER` | Auth provider (`entra`, `auth0`, `none`) |
+| `MJ_INSTALL_PACKAGE_MANAGER` | Package manager (`pnpm` default, `npm`) |
 | `MJ_INSTALL_ENTRA_TENANT_ID` | Entra Tenant ID |
 | `MJ_INSTALL_ENTRA_CLIENT_ID` | Entra Client ID |
 | `MJ_INSTALL_AUTH0_DOMAIN` | Auth0 Domain |
@@ -381,7 +385,11 @@ This usually means the MSAL token cache in your browser has expired. Open your b
 
 ### npm install fails with ERESOLVE errors
 
-The installer automatically retries with `--legacy-peer-deps`. If it still fails, check that you're using Node.js 22 or above (24 recommended).
+Applies only when `PackageManager` is set to `npm`: the installer automatically retries with `--legacy-peer-deps`. If it still fails, check that you're using Node.js 22 or above (24 recommended). pnpm (the default) reports peer conflicts as warnings and needs no retry.
+
+### Preflight fails with "pnpm not found on PATH"
+
+The installer defaults to pnpm. Enable it with `corepack enable pnpm` (corepack ships with Node.js) or install it from [pnpm.io](https://pnpm.io/installation) — or set `"PackageManager": "npm"` in your install config to use npm instead.
 
 ### Build fails for generated packages
 

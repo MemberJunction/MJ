@@ -108,6 +108,7 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_REST_API_INCLUDE_ENTITIES` | Comma-separated entity include list | (optional) |
 | `MJ_REST_API_EXCLUDE_ENTITIES` | Comma-separated entity exclude list | (optional) |
 | `MJ_TELEMETRY_ENABLED` | Enable server telemetry | `true` |
+| `MJ_REALTIME_ENABLED` | Enable WebRTC SDP broker router (`/realtime/sdp-exchange`) | `true` |
 | `METADATA_CACHE_REFRESH_INTERVAL` | Metadata refresh interval (ms) | `180000` |
 | `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
 
@@ -125,8 +126,12 @@ module.exports = {
   userHandling: {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
-    newUserRoles: ['UI', 'Developer'],
-    contextUserForNewUserCreation: 'admin@example.com',
+    // 'UI' is the end-user role. Do NOT add 'Developer' or 'Integration' here: on the baseline
+    // seed both hold unfiltered update on MJ: Users, so an auto-provisioned user could set their
+    // own Type to 'Owner' (issue #4260).
+    newUserRoles: ['UI'],
+    // Matched against User.Name first, then User.Email. Defaults to 'System', the seeded system user.
+    contextUserForNewUserCreation: 'System',
     CreateUserApplicationRecords: true,
   },
 
@@ -175,6 +180,12 @@ module.exports = {
   telemetry: {
     enabled: true,
     level: 'standard',  // 'minimal' | 'standard' | 'verbose' | 'debug'
+  },
+
+  // Realtime WebRTC SDP broker router (/realtime/sdp-exchange)
+  // Enabled by default; can be disabled via MJ_REALTIME_ENABLED=false or realtime.enabled: false
+  realtime: {
+    enabled: true,
   },
 
   // Debugging — see "Debugging GraphQL requests" below
@@ -244,6 +255,38 @@ export class MyInput {
   @Field(() => String) Description: string;
 }
 ```
+
+### Realtime WebRTC Broker Configuration
+
+MemberJunction provides a built-in WebRTC SDP broker router mounted at `/realtime/sdp-exchange`. This endpoint enables browser clients to negotiate full-duplex audio and data channels with realtime models (such as Gemini Live 3.8 and OpenAI Realtime) via proxy sessions.
+
+#### Why Realtime is Enabled by Default
+
+`realtime.enabled` defaults to `true`. This decision was made because:
+1. **Safe by Design**: The broker endpoint is protected by single-use ticket redemption via `RealtimeProxyRegistry`. Inbound requests cannot initiate or hijack sessions without an ephemeral ticket issued through an authenticated GraphQL session (`StartRealtimeClientSession`).
+2. **Zero-Friction Realtime UX**: Voice co-agents, live audio, and collaborative whiteboards work out of the box without requiring operators to discover and configure esoteric flags.
+
+#### Disabling Realtime
+
+Operators running an API server strictly as a headless GraphQL/REST backend without realtime media requirements can disable the broker route in either of two ways:
+
+1. **Environment Variable**:
+   ```bash
+   MJ_REALTIME_ENABLED=false
+   ```
+2. **`mj.config.cjs`**:
+   ```javascript
+   module.exports = {
+     // ...
+     realtime: {
+       enabled: false,
+     },
+   };
+   ```
+
+When disabled, the `/realtime/sdp-exchange` Express route is not mounted, and incoming requests to that path return standard 404 responses.
+
+
 
 ## Usage
 
@@ -880,14 +923,23 @@ Validated JWT tokens are cached using an LRU cache, avoiding repeated cryptograp
 
 ## Server Extensions
 
-MJServer supports a plugin architecture that enables auto-discovery and lifecycle management of extension modules. Extensions register Express routes, handle their own authentication, and participate in health checks and graceful shutdown — all without modifying MJServer source code.
+MJServer supports a plugin architecture that enables auto-discovery and lifecycle management of extension modules. Extensions register Express routes, WebSocket endpoints, or background workers, publish services, and participate in health checks and graceful shutdown — all without modifying MJServer source code.
+
+> **Important**: Server extensions are the **only sanctioned mechanism** for mounting custom HTTP endpoints and external service adapters into MJServer. Do not hardcode new `app.use()` or `app.post()` mounts directly inside `serve()`.
+
+For full architecture details, refer to the **[Server Extensions Guide](../../guides/SERVER_EXTENSIONS_GUIDE.md)**.
 
 ### How It Works
 
-1. Extensions implement `BaseServerExtension` from `@memberjunction/server-extensions-core`
-2. Extensions register via `@RegisterClass(BaseServerExtension, 'DriverClassName')`
-3. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass` and is also where host-only extensions (Slack, Teams) live.
-4. MJServer's `ServerExtensionLoader` discovers and initializes all enabled extensions at startup
+1. Extensions implement `BaseServerExtension` from `@memberjunction/server-extensions-core` and register via `@RegisterClass(BaseServerExtension, 'DriverClassName')`.
+2. Extensions declare their lifecycle phase (`'pre-auth'` or `'post-auth'`) via `DefaultPhase`:
+   - **`pre-auth`**: Mounted before MJ authentication middleware. Ideal for external webhooks that carry provider signatures (Slack HMAC, Teams Bot Framework JWT, Twilio signatures).
+   - **`post-auth`**: Mounted after MJ authentication and context middleware (`mwPostAuth`). Guaranteed to run under authenticated `req.user` context.
+3. Extensions can declare services in their `Initialize()` return (`Service: myService`). These are auto-registered into `ServerExtensionServiceRegistry`.
+4. After all extensions across both phases are mounted, `ServerExtensionLoader` awaits `OnAllExtensionsMounted(context)` across all extensions for cross-extension service wiring.
+5. Core integrations (Twilio, Vonage, RingCentral, Teams meetings) register their management services directly into `loader.Services` under `'TwilioTelephonyService'`, `'VonageTelephonyService'`, `'RingCentralTelephonyService'`, and `'TeamsMeetingsService'`.
+6. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass`.
+7. Core routes (`/graphql`, `/health`, `/auth`, `/media`, `/schema`, `/mcp`) are protected by a reserved roots registry; extensions attempting to claim a reserved root fail closed during bootstrap.
 
 ### Configuration
 
@@ -896,21 +948,27 @@ MJServer supports a plugin architecture that enables auto-discovery and lifecycl
 module.exports = {
     serverExtensions: [
         {
+            Name: 'SlackIntegration',
             Enabled: true,
             DriverClass: 'SlackMessagingExtension',
             RootPath: '/webhook/slack',
+            Phase: 'pre-auth',
             Settings: {
-                AgentID: 'your-agent-guid',
+                DefaultAgentName: 'Sage',
+                ContextUserEmail: 'bot@company.com',
                 BotToken: process.env.SLACK_BOT_TOKEN,
                 SigningSecret: process.env.SLACK_SIGNING_SECRET,
             }
         },
         {
+            Name: 'TeamsIntegration',
             Enabled: true,
             DriverClass: 'TeamsMessagingExtension',
             RootPath: '/webhook/teams',
+            Phase: 'pre-auth',
             Settings: {
-                AgentID: 'your-agent-guid',
+                DefaultAgentName: 'Sage',
+                ContextUserEmail: 'bot@company.com',
                 MicrosoftAppId: process.env.MICROSOFT_APP_ID,
                 MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
             }
@@ -932,12 +990,12 @@ Returns `200` when all extensions are healthy, `503` when any extension reports 
 ### Available Extensions
 
 | Package | Extensions | Description |
-|---------|-----------|-------------|
+|---|---|---|
 | [`@memberjunction/messaging-adapters`](../MessagingAdapters/) | `SlackMessagingExtension`, `TeamsMessagingExtension` | Slack & Teams integration for MJ AI agents |
 
 ### Creating Custom Extensions
 
-See [`@memberjunction/server-extensions-core`](../ServerExtensionsCore/) for documentation on building custom extensions.
+See [`@memberjunction/server-extensions-core`](../ServerExtensionsCore/) and the **[Server Extensions Guide](../../guides/SERVER_EXTENSIONS_GUIDE.md)** for complete documentation on building custom extensions.
 
 ## Graceful Shutdown
 

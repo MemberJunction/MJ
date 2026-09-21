@@ -1,7 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RegisterClass } from '@memberjunction/global';
-import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, CompositeKey } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -260,12 +260,9 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    */
   public OnEntityLinkClick(event: QueryEntityLinkClickEvent): void {
     const md = this.ProviderToUse;
-    const entity = md.Entities.find(e => e.Name === event.entityName);
-    const pkFieldName = entity?.FirstPrimaryKey?.Name ?? 'ID';
-
-    const compositeKey = new CompositeKey([
-      new KeyValuePair(pkFieldName, event.recordId)
-    ]);
+    // recordId may be a bare value or a "F1|v1||F2|v2" segment; FromURLSegment reads both against
+    // the entity's real primary key(s) instead of assuming a single column.
+    const compositeKey = CompositeKey.FromURLSegment(md.EntityByName(event.entityName), event.recordId);
     this.openEntityRecord.emit({
       entityName: event.entityName,
       compositeKey

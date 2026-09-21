@@ -72,7 +72,7 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
      * Get the queryId as a CompositeKey for the tree dropdown
      */
     public get QueryIdAsKey(): CompositeKey | null {
-        return this.queryId ? CompositeKey.FromID(this.queryId) : null;
+        return this.queryId ? CompositeKey.FromID(this.queryId) : null; // first-pk-ok: queryId is an MJ: Queries record (QueryLeafConfig) — core entity keyed by ID
     }
 
     public initFromConfig(config: PanelConfig | null): void {

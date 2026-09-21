@@ -41,7 +41,7 @@ export type Auth0Tokens = {
  * The OAuth redirect URI for the native flow, built from the app's `mjmobile`
  * scheme. Must match the "Allowed Callback URLs" entry in Auth0 (`mjmobile://auth`).
  */
-export function getAuth0RedirectUri(): string {
+export function GetAuth0RedirectUri(): string {
     return makeRedirectUri({ scheme: 'mjmobile', path: 'auth' });
 }
 
@@ -49,7 +49,7 @@ export function getAuth0RedirectUri(): string {
  * Build the OIDC discovery document (authorize/token/logout endpoints) for the
  * configured Auth0 tenant (`Env.auth0Domain`).
  */
-export function getAuth0Discovery(): DiscoveryDocument {
+export function GetAuth0Discovery(): DiscoveryDocument {
     const domain = Env.auth0Domain;
     return {
         authorizationEndpoint: `https://${domain}/authorize`,
@@ -98,23 +98,23 @@ function bundleFromResponse(resp: TokenResponse): Auth0Tokens {
  * @returns The exchanged (and persisted) {@link Auth0Tokens}.
  * @throws If the token endpoint rejects the exchange.
  */
-export async function exchangeAuth0Code(code: string, codeVerifier: string): Promise<Auth0Tokens> {
+export async function ExchangeAuth0Code(code: string, codeVerifier: string): Promise<Auth0Tokens> {
     const resp = await exchangeCodeAsync(
         {
             clientId: Env.auth0ClientId,
             code,
-            redirectUri: getAuth0RedirectUri(),
+            redirectUri: GetAuth0RedirectUri(),
             extraParams: { code_verifier: codeVerifier },
         },
-        getAuth0Discovery(),
+        GetAuth0Discovery(),
     );
     const tokens = bundleFromResponse(resp);
-    await persistAuth0Tokens(tokens);
+    await PersistAuth0Tokens(tokens);
     return tokens;
 }
 
 /** Persist the token bundle to expo-secure-store (keychain on iOS). */
-export async function persistAuth0Tokens(tokens: Auth0Tokens): Promise<void> {
+export async function PersistAuth0Tokens(tokens: Auth0Tokens): Promise<void> {
     await SecureStore.setItemAsync(STORE_KEY, JSON.stringify(tokens));
 }
 
@@ -122,7 +122,7 @@ export async function persistAuth0Tokens(tokens: Auth0Tokens): Promise<void> {
  * Load the persisted token bundle from secure-store.
  * @returns The stored {@link Auth0Tokens}, or `null` if absent/unreadable.
  */
-export async function loadAuth0Tokens(): Promise<Auth0Tokens | null> {
+export async function LoadAuth0Tokens(): Promise<Auth0Tokens | null> {
     try {
         const raw = await SecureStore.getItemAsync(STORE_KEY);
         return raw ? JSON.parse(raw) as Auth0Tokens : null;
@@ -132,7 +132,7 @@ export async function loadAuth0Tokens(): Promise<Auth0Tokens | null> {
 }
 
 /** Delete the persisted token bundle from secure-store (best-effort; swallows errors). */
-export async function clearAuth0Tokens(): Promise<void> {
+export async function ClearAuth0Tokens(): Promise<void> {
     await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined);
 }
 
@@ -142,8 +142,8 @@ export async function clearAuth0Tokens(): Promise<void> {
  * @returns The refreshed (and persisted) {@link Auth0Tokens}.
  * @throws If no refresh token is stored, or the refresh is rejected.
  */
-export async function refreshAuth0Tokens(): Promise<Auth0Tokens> {
-    const current = await loadAuth0Tokens();
+export async function RefreshAuth0Tokens(): Promise<Auth0Tokens> {
+    const current = await LoadAuth0Tokens();
     if (!current?.refreshToken) {
         throw new Error('No Auth0 refresh token — re-authentication required.');
     }
@@ -153,10 +153,10 @@ export async function refreshAuth0Tokens(): Promise<Auth0Tokens> {
             refreshToken: current.refreshToken,
             scopes: [...Env.auth0Scopes],
         },
-        getAuth0Discovery(),
+        GetAuth0Discovery(),
     );
     const tokens = bundleFromResponse(resp);
-    await persistAuth0Tokens(tokens);
+    await PersistAuth0Tokens(tokens);
     return tokens;
 }
 
@@ -167,12 +167,12 @@ export async function refreshAuth0Tokens(): Promise<Auth0Tokens> {
  * @returns A usable idToken string.
  * @throws If no tokens are stored, or a required refresh fails.
  */
-export async function getValidAuth0IdToken(): Promise<string> {
-    const current = await loadAuth0Tokens();
+export async function GetValidAuth0IdToken(): Promise<string> {
+    const current = await LoadAuth0Tokens();
     if (!current) throw new Error('No Auth0 tokens stored.');
     const nowMs = Date.now();
     if (!current.expiresAt || current.expiresAt - nowMs < 60_000) {
-        const refreshed = await refreshAuth0Tokens();
+        const refreshed = await RefreshAuth0Tokens();
         return refreshed.idToken;
     }
     return current.idToken;
@@ -185,7 +185,7 @@ export async function getValidAuth0IdToken(): Promise<string> {
  * @param tokens The bundle to test (or `null`).
  * @returns `true` when the caller should refresh / re-authenticate.
  */
-export function isAuth0Expired(tokens: Auth0Tokens | null): boolean {
+export function IsAuth0Expired(tokens: Auth0Tokens | null): boolean {
     if (!tokens) return true;
     if (!tokens.expiresAt) return false;
     return tokens.expiresAt - Date.now() < 60_000;

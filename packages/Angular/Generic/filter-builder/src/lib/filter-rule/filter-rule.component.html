@@ -12,15 +12,39 @@
       <i class="fa-solid fa-chevron-down dropdown-arrow"></i>
     </button>
     @if (fieldDropdownOpen) {
-      <div class="dropdown-menu" [ngStyle]="dropdownMenuStyle">
-        @for (field of fields; track field.name; let i = $index) {
-          <div
-            class="dropdown-item"
-            [class.selected]="field.name === filter.field"
-            [class.highlighted]="i === fieldHighlightIndex"
-            (click)="selectField(field.name)">
-            {{ field.displayName }}
+      <div class="dropdown-menu" [class.multi-source]="isMultiSource" [ngStyle]="dropdownMenuStyle">
+        @if (isMultiSource) {
+          <div class="source-pane">
+            @for (src of sources; track src.key) {
+              <button
+                type="button"
+                class="source-item"
+                [class.selected]="src.key === activeSourceKey"
+                (click)="selectSource(src.key); $event.stopPropagation()">
+                {{ src.label }}
+              </button>
+            }
           </div>
+          <div class="field-pane">
+            @for (field of fieldsForSource(activeSourceKey); track field.name) {
+              <div
+                class="dropdown-item"
+                [class.selected]="field.name === filter.field"
+                (click)="selectField(field.name)">
+                {{ field.displayName }}
+              </div>
+            }
+          </div>
+        } @else {
+          @for (field of fields; track field.name; let i = $index) {
+            <div
+              class="dropdown-item"
+              [class.selected]="field.name === filter.field"
+              [class.highlighted]="i === fieldHighlightIndex"
+              (click)="selectField(field.name)">
+              {{ field.displayName }}
+            </div>
+          }
         }
         @if (fields.length === 0) {
           <div class="dropdown-empty">No fields available</div>

@@ -2,12 +2,14 @@ import fs from 'fs-extra';
 import path from 'path';
 import { RunView, EntityInfo, UserInfo, BaseEntity } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
+import { findExistingRecordFiles } from '../lib/existing-record-files';
 import { loadEntityConfig, EntityConfig } from '../config';
 import { configManager } from '../lib/config-manager';
 import { FileWriteBatch } from '../lib/file-write-batch';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordProcessor } from '../lib/RecordProcessor';
 import { SyncStateManager } from '../lib/sync-state-manager';
+import { createPrimaryKeyLookup, extractPrimaryKeyValues } from '../lib/record-primary-key';
 
 /** Validates that a string is a well-formed ISO 8601 timestamp. */
 function isValidISOTimestamp(value: string): boolean {
@@ -273,11 +275,7 @@ export class PullService {
       // Process records in parallel for multi-file mode
       const recordPromises = records.map(async (record, index) => {
         try {
-          // Build primary key
-          const primaryKey: Record<string, any> = {};
-          for (const pk of entityInfo.PrimaryKeys) {
-            primaryKey[pk.Name] = (record as any)[pk.Name];
-          }
+          const primaryKey = extractPrimaryKeyValues(record, entityInfo);
 
           // Process record for multi-file
           const recordData = await this.recordProcessor.processRecord(
@@ -563,7 +561,11 @@ export class PullService {
     
     // Find existing files
     const filePattern = entityConfig.pull?.filePattern || entityConfig.filePattern || '*.json';
-    const existingFiles = await this.findExistingFiles(targetDir, filePattern);
+    const existingFiles = await findExistingRecordFiles(
+      targetDir,
+      filePattern,
+      entityConfig.ignoreDirectories ?? []
+    );
     
     if (options.verbose) {
       callbacks?.onLog?.(`Found ${existingFiles.length} existing files matching pattern '${filePattern}'`);
@@ -582,14 +584,10 @@ export class PullService {
     const existingRecordsToUpdate: Array<{ record: BaseEntity; primaryKey: Record<string, any>; filePath: string }> = [];
     
     for (const record of records) {
-      // Build primary key
-      const primaryKey: Record<string, any> = {};
-      for (const pk of entityInfo.PrimaryKeys) {
-        primaryKey[pk.Name] = (record as any)[pk.Name];
-      }
-      
+      const primaryKey = extractPrimaryKeyValues(record, entityInfo);
+
       // Create lookup key
-      const lookupKey = this.createPrimaryKeyLookup(primaryKey);
+      const lookupKey = createPrimaryKeyLookup(primaryKey);
       const existingFileInfo = existingRecordsMap.get(lookupKey);
       
       if (existingFileInfo) {
@@ -639,7 +637,7 @@ export class PullService {
           if (Array.isArray(existingData)) {
             // Find the matching record in the array
             const matchingRecord = existingData.find(r => 
-              this.createPrimaryKeyLookup(r.primaryKey || {}) === this.createPrimaryKeyLookup(primaryKey)
+              createPrimaryKeyLookup(r.primaryKey) === createPrimaryKeyLookup(primaryKey)
             );
             existingRecordData = matchingRecord || existingData[0]; // Fallback to first if not found
           } else {
@@ -672,7 +670,7 @@ export class PullService {
           // Queue updated data for batched write
           if (Array.isArray(existingData)) {
             // Queue array update - batch will handle merging
-            const primaryKeyLookup = this.createPrimaryKeyLookup(primaryKey);
+            const primaryKeyLookup = createPrimaryKeyLookup(primaryKey);
             this.fileWriteBatch.queueArrayUpdate(filePath, mergedData, primaryKeyLookup);
           } else {
             // Queue single record update
@@ -732,7 +730,7 @@ export class PullService {
             
             // Use queueArrayUpdate to append the new record without overwriting existing updates
             // For new records, we can use a special lookup key since they don't exist yet
-            const newRecordLookup = this.createPrimaryKeyLookup(primaryKey);
+            const newRecordLookup = createPrimaryKeyLookup(primaryKey);
             this.fileWriteBatch.queueArrayUpdate(filePath, recordData, newRecordLookup);
             
             return { success: true, index };
@@ -839,7 +837,7 @@ export class PullService {
     }
 
     // Extract all parent primary key values using the entity's actual PK field name
-    const pkFieldName = entityInfo.PrimaryKeys[0].Name;
+    const pkFieldName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: parent ids feed the related entity's foreignKey IN (...) filter; FK targets are single-column by design
     const allParentIds: string[] = [];
     for (const record of records) {
       const id = record.Get(pkFieldName);
@@ -882,6 +880,33 @@ export class PullService {
 
     return batchedRelatedData.size > 0 ? batchedRelatedData : undefined;
   }
+  
+  private async loadExistingRecords(
+    files: string[], 
+    _entityInfo: EntityInfo
+  ): Promise<Map<string, { filePath: string; recordData: RecordData }>> {
+    const recordsMap = new Map<string, { filePath: string; recordData: RecordData }>();
+    
+    for (const filePath of files) {
+      try {
+        const fileData = await fs.readJson(filePath);
+        const records = Array.isArray(fileData) ? fileData : [fileData];
+        
+        for (const record of records) {
+          if (record.primaryKey) {
+            const lookupKey = createPrimaryKeyLookup(record.primaryKey);
+            recordsMap.set(lookupKey, { filePath, recordData: record });
+          }
+        }
+      } catch (error) {
+        // Skip files that can't be parsed
+      }
+    }
+    
+    return recordsMap;
+  }
+  
+  
 
   private async findEntityDirectories(entityName: string): Promise<string[]> {
     const dirs: string[] = [];
@@ -929,70 +954,7 @@ export class PullService {
     // Multiple keys or numeric - create composite name, prefixed with dot
     return '.' + keys.map(k => String(k).replace(/[^a-zA-Z0-9\-_]/g, '').toLowerCase()).join('-') + '.json';
   }
-  
-  private async findExistingFiles(dir: string, pattern: string): Promise<string[]> {
-    const files: string[] = [];
 
-    try {
-      const entries = await fs.readdir(dir, { withFileTypes: true });
-
-      for (const entry of entries) {
-        if (entry.isFile()) {
-          const fileName = entry.name;
-
-          // Normalize pattern by removing leading **/ (glob recursion prefix)
-          const normalizedPattern = pattern.startsWith('**/') ? pattern.substring(3) : pattern;
-
-          // Simple pattern matching
-          if (normalizedPattern === '*.json' && fileName.endsWith('.json')) {
-            files.push(path.join(dir, fileName));
-          } else if (normalizedPattern === '.*.json' && fileName.startsWith('.') && fileName.endsWith('.json')) {
-            files.push(path.join(dir, fileName));
-          } else if (normalizedPattern === fileName) {
-            files.push(path.join(dir, fileName));
-          }
-        }
-      }
-    } catch (error) {
-      // Directory might not exist yet
-      if ((error as any).code !== 'ENOENT') {
-        throw error;
-      }
-    }
-
-    return files;
-  }
-  
-  private async loadExistingRecords(
-    files: string[], 
-    _entityInfo: EntityInfo
-  ): Promise<Map<string, { filePath: string; recordData: RecordData }>> {
-    const recordsMap = new Map<string, { filePath: string; recordData: RecordData }>();
-    
-    for (const filePath of files) {
-      try {
-        const fileData = await fs.readJson(filePath);
-        const records = Array.isArray(fileData) ? fileData : [fileData];
-        
-        for (const record of records) {
-          if (record.primaryKey) {
-            const lookupKey = this.createPrimaryKeyLookup(record.primaryKey);
-            recordsMap.set(lookupKey, { filePath, recordData: record });
-          }
-        }
-      } catch (error) {
-        // Skip files that can't be parsed
-      }
-    }
-    
-    return recordsMap;
-  }
-  
-  private createPrimaryKeyLookup(primaryKey: Record<string, any>): string {
-    const keys = Object.keys(primaryKey).sort();
-    return keys.map(k => `${k}:${primaryKey[k]}`).join('|');
-  }
-  
   private async mergeRecords(
     existing: RecordData,
     newData: RecordData,

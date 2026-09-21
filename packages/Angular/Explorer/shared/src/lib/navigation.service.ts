@@ -1,8 +1,8 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
-import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext } from './record-open-style';
-import { CompositeKey } from '@memberjunction/core';
+import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
+import { CompositeKey, Metadata, IsNewEntityRecordUrlId } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { map, distinctUntilChanged } from 'rxjs/operators';
@@ -494,11 +494,24 @@ export class NavigationService implements OnDestroy {
       }
     }
 
-    let forceNew = tabsMode || this.shouldForceNewTab(options);
+    // Records style no longer forces a new tab unconditionally: a plain click
+    // consumes the records region's temporary tab (preview-tab behavior), and
+    // only shift — or an explicit forceNewTab, which is what finally makes
+    // single-record's "Open in New Tab" do something — adds a second tab.
+    // The region scoping below is what keeps a nav click from ever consuming
+    // a record, which is the protection the old unconditional force provided.
+    let forceNew = this.shouldForceNewTab(options);
+
+    const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves entity and cached record names using global metadata cache
+    const entityInfo = md?.EntityByName(entityName);
+    const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
+    const compositeKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(entityInfo, recordId) : new CompositeKey();
+    const cachedRecordName = md ? md.GetCachedRecordNameOnlyIfCached(entityName, compositeKey) : undefined;
+    const initialTitle = cachedRecordName || friendlyEntityName;
 
     const request: TabRequest = {
       ApplicationId: appId,
-      Title: `${entityName} - ${recordId}`,
+      Title: initialTitle,
       Configuration: {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
@@ -507,10 +520,12 @@ export class NavigationService implements OnDestroy {
       },
       ResourceRecordId: recordId,
       IsPinned: options?.pinTab || false,
-      // Records style: opening a record must not pin the nav tab (see
-      // TabRequest.PreservePinState) — a pinned nav tab forces the main tab
-      // bar visible on every nav page.
-      PreservePinState: tabsMode
+      // Records style: this open belongs to the RECORDS temp-tab pool, so both
+      // consumption and the pin cascade stay inside the region and the nav
+      // tab's temp status is untouched (a pinned nav tab would force the main
+      // tab bar visible on every nav page). Classic style keeps the single
+      // 'main' pool.
+      TempScope: tabsMode ? 'records' : 'main'
     };
 
     // Handle transition from single-resource mode
@@ -521,6 +536,20 @@ export class NavigationService implements OnDestroy {
       tabId = this.workspaceManager.OpenTabForced(request, appColor);
     } else {
       tabId = this.workspaceManager.OpenTab(request, appColor);
+    }
+
+    // If the friendly record name was not already in the LRU cache, fire-and-forget
+    // an async lookup so the tab title upgrades smoothly once resolved without stalling tab open.
+    if (!cachedRecordName && typeof md?.GetEntityRecordName === 'function') {
+      md.GetEntityRecordName(entityName, compositeKey)
+        .then(resolvedName => {
+          if (resolvedName && typeof this.workspaceManager?.GetTab === 'function' && this.workspaceManager.GetTab(tabId)) {
+            this.workspaceManager.UpdateTabTitle?.(tabId, resolvedName);
+          }
+        })
+        .catch(() => {
+          // Non-fatal cache warm / tab retitle miss; initialTitle remains
+        });
     }
 
     if (tabsMode) {
@@ -577,6 +606,9 @@ export class NavigationService implements OnDestroy {
       sourceQueryParams: undefined,
       sourceRecordEntity: undefined,
       sourceRecordId: undefined,
+      // Clear the ancestor chain too — this is an explicit re-capture, and a
+      // surviving chain would hand the crumb an origin from a previous open.
+      sourceParentOrigin: undefined,
       ...this.resolveSourceContext(options)
     });
   }
@@ -601,6 +633,15 @@ export class NavigationService implements OnDestroy {
       if (src.sourceLabel) context['sourceLabel'] = src.sourceLabel;
       if (src.sourceQueryParams && Object.keys(src.sourceQueryParams).length > 0) {
         context['sourceQueryParams'] = src.sourceQueryParams;
+      }
+      if (src.sourceRecordEntity) context['sourceRecordEntity'] = src.sourceRecordEntity;
+      if (src.sourceRecordId) context['sourceRecordId'] = src.sourceRecordId;
+      // An explicit origin can carry an ancestor chain (ReturnToRecordSource
+      // replays one). Dropping it here would re-lose the entry point on the
+      // very navigation that exists to restore it.
+      const chained = TruncateRecordOriginChain(src.sourceParentOrigin);
+      if (chained) {
+        context['sourceParentOrigin'] = chained;
       }
       return context;
     }
@@ -635,9 +676,24 @@ export class NavigationService implements OnDestroy {
       const parentRecordId = activeTab.resourceRecordId || activeTab.configuration?.['recordId'];
       if (typeof parentEntity === 'string' && typeof parentRecordId === 'string' && parentRecordId) {
         context['sourceTabId'] = activeTab.id;
-        context['sourceLabel'] = activeTab.title;
+        const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves parent entity and cached record names using global metadata cache
+        const parentEntityInfo = md?.EntityByName(parentEntity);
+        const parentKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(parentEntityInfo, parentRecordId) : new CompositeKey();
+        const cachedParentName = md ? md.GetCachedRecordNameOnlyIfCached(parentEntity, parentKey) : undefined;
+        const fallbackParentLabel = parentEntityInfo?.DisplayName || parentEntityInfo?.Name || parentEntity;
+        const sourceLabel = cachedParentName || (activeTab.title && !activeTab.title.includes(parentRecordId) ? activeTab.title : fallbackParentLabel);
+        context['sourceLabel'] = sourceLabel;
         context['sourceRecordEntity'] = parentEntity;
         context['sourceRecordId'] = parentRecordId;
+        // Carry the parent's OWN origin forward. Preview-tab replacement
+        // consumes the parent's tab, so returning to it later re-opens rather
+        // than reactivates — and a re-open would recapture the CHILD as the
+        // origin. Keeping the chain is what lets the return restore the real
+        // entry point instead of pointing the two records at each other.
+        const parentOrigin = TruncateRecordOriginChain(GetRecordSourceContext(activeTab.configuration));
+        if (parentOrigin) {
+          context['sourceParentOrigin'] = parentOrigin;
+        }
       }
       return context;
     }
@@ -723,7 +779,14 @@ export class NavigationService implements OnDestroy {
       }
       const parentKey = new CompositeKey();
       parentKey.SimpleLoadFromURLSegment(origin.sourceRecordId);
-      this.OpenEntityRecord(origin.sourceRecordEntity, parentKey);
+      // RESTORE the parent's origin; do not let the re-open capture a fresh
+      // one. Standing on the child at this moment, a capture would make the
+      // child the parent's origin — the two records would point at each other
+      // and the real entry point would be unreachable. 'none' when we have no
+      // chain: a missing crumb beats a circular one.
+      this.OpenEntityRecord(origin.sourceRecordEntity, parentKey, {
+        recordSource: origin.sourceParentOrigin ?? 'none'
+      });
       return;
     }
     if (!origin.sourceAppId) {
@@ -993,11 +1056,18 @@ export class NavigationService implements OnDestroy {
     const appId = tabsMode && activeApp ? activeApp.ID : this.getDefaultApplicationId();
     const appColor = tabsMode && activeApp ? activeApp.GetColor() : this.getDefaultAppColor();
 
+    // A NEW record keeps forcing its own tab under the records style: it is
+    // unsaved work from the moment it opens, so it must never land on top of
+    // a record the user is reading.
     let forceNew = tabsMode || this.shouldForceNewTab(options);
+
+    const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves entity name for new record tab using global metadata cache
+    const entityInfo = md?.EntityByName(entityName);
+    const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
 
     const request: TabRequest = {
       ApplicationId: appId,
-      Title: `New ${entityName}`,
+      Title: `New ${friendlyEntityName}`,
       Configuration: {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
@@ -1007,8 +1077,12 @@ export class NavigationService implements OnDestroy {
         ...this.resolveSourceContext(options)
       },
       ResourceRecordId: '',  // Empty for new records
-      IsPinned: options?.pinTab || false,
-      PreservePinState: tabsMode
+      // Pinned under the records style so the region's preview replacement can
+      // never consume it: an unsaved new record is exactly the tab that must
+      // not vanish when the user clicks the next row in a grid. (VS Code holds
+      // the same line — an untitled buffer is never a preview tab.)
+      IsPinned: options?.pinTab || tabsMode,
+      TempScope: tabsMode ? 'records' : 'main'
     };
 
     // Handle transition from single-resource mode

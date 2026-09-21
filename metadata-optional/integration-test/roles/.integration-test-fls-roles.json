@@ -1,0 +1,54 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test: FLS Reader",
+      "Description": "Integration-test-only role for Field-Level Security coverage. Grants READ ONLY on 'MJ: Employees' and nothing else, so a user whose only role is this one gets the snapshot default Allow/No Access/No Access on every restrictable Employee field. The fls-enforcement bundle tightens specific rows on this role at runtime (Deny on Email, row deleted for BCMID) and restores them in teardown. Safe to delete; assign only to the seeded it-fls-* test accounts."
+    },
+    "primaryKey": {
+      "ID": "89202D2A-9797-4646-81B1-D9ED1BAC1EE8"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.317Z",
+      "checksum": "a70d543334f69789b68e6c27854a1dd2cf547148b60ca5a4ec178dec2fe74562"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test: FLS Writer",
+      "Description": "Integration-test-only role for Field-Level Security coverage. Grants read+create+update+delete on 'MJ: Employees', so the snapshot writes Allow/Allow/Allow on every restrictable field — the 'unrestricted user' contrast leg of the fls-enforcement bundle, and the Allow contributor for the multi-role aggregation checks (Deny-beats-Allow, No-Access neutrality, cross-role read clamp). Safe to delete; assign only to the seeded it-fls-* test accounts."
+    },
+    "primaryKey": {
+      "ID": "DAF9073C-753E-4AE5-A08E-4D4094788623"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.330Z",
+      "checksum": "aa254d7a416a5f11e9d9a6bbbbc263d6402ac194bb6976901a27b2874a91d2f5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test: FLS Denier",
+      "Description": "Integration-test-only role for Field-Level Security coverage. Grants READ ONLY on 'MJ: Employees'; the fls-enforcement bundle rewrites specific permission rows on this role at runtime (Deny on Title for Deny-beats-Allow and the cross-role read-required clamp; Allow/Deny/Deny on Phone for update-denial and create suppression) and restores them in teardown. Safe to delete; assign only to the seeded it-fls-multi test account."
+    },
+    "primaryKey": {
+      "ID": "C16A130F-4626-4C83-9C24-F478B8C3ED75"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.342Z",
+      "checksum": "e588e9ba4274da9b875870e01dc03f238bb50a971642bd87a7505b98393fa76b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test: FLS Neutral",
+      "Description": "Integration-test-only role for Field-Level Security coverage. Grants READ ONLY on 'MJ: Employees'; the fls-enforcement bundle sets this role's rows to No Access at runtime to prove No Access is neutral in the cross-role aggregation (a user also holding an Allow role keeps access). Safe to delete; assign only to the seeded it-fls-multi test account."
+    },
+    "primaryKey": {
+      "ID": "748C3D6D-976F-4B96-A1C9-B6AF2DF7E5B0"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.353Z",
+      "checksum": "ac29b011553fb44ad071492e6101901662b8ad4d51545a2f22cdcc3d3b47f538"
+    }
+  }
+]

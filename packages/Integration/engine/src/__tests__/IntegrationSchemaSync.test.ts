@@ -20,7 +20,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { decideBooleanOverlay, decidePKPromotion, decideAbsentDeactivations, decideSchemaLimitViolations, decideLengthOverlay, decideSemanticOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
+import { decideTypeOverlay, decideNullabilityOverlay, decideBooleanOverlay, decidePKPromotion, decideAbsentDeactivations, decideSchemaLimitViolations, decideLengthOverlay, decideSemanticOverlay, type AbsentDeactivationInput } from '../IntegrationSchemaSync';
 
 describe('decideLengthOverlay (U2 — width overlay grows, never shrinks)', () => {
     it('GROWS a persisted width when the rediscovered sample is wider', () => {
@@ -418,5 +418,74 @@ describe('the persist call site passes the CONNECTOR\'s authority, not a constan
     it('gates object and field deactivation on the same claim', () => {
         // If these ever diverge again, one level retires on evidence the other rejects.
         expect(source).toMatch(/FieldsAreAuthoritative \?\? SourceSchema\.IsAuthoritative === true/);
+    });
+});
+
+describe('decideTypeOverlay — silence keeps the declaration (§ no fabrication)', () => {
+    // MapSourceType answers EVERY input, including '' and undefined, because its fallback has to
+    // produce something for a genuinely unknown column. That made it unable to distinguish "the
+    // source says text" from "the source said nothing" — and the caller used its answer either way,
+    // so a describe with no type opinion rewrote a curated datetimeoffset to nvarchar. Types are
+    // hard constraints (real DDL), so a wrong one is a migration, not a cosmetic drift.
+
+    it('a SILENT source leaves a declared type alone', () => {
+        for (const silent of ['', '   ', undefined, null]) {
+            const out = decideTypeOverlay('datetimeoffset', silent);
+            expect(out.value).toBe('datetimeoffset');
+            expect(out.winner).toBe('Declared');
+        }
+    });
+
+    it('a source that STATES a type wins over the declaration', () => {
+        const out = decideTypeOverlay('nvarchar', 'datetime');
+        expect(out.value).toBe('datetimeoffset');
+        expect(out.winner).toBe('Discovered');
+    });
+
+    it('agreement is credited to the declaration, not the describe', () => {
+        expect(decideTypeOverlay('bit', 'boolean')).toEqual({ value: 'bit', winner: 'Declared' });
+    });
+
+    it('an UNDECLARED field still takes the mapped value, fallback included', () => {
+        // Nothing curated to protect, and something has to be written.
+        expect(decideTypeOverlay(null, 'string').value).toBe('nvarchar');
+        expect(decideTypeOverlay('', undefined).value).toBe('nvarchar');
+    });
+
+    it('does not silently downgrade a declared large-text column', () => {
+        // The nvarchar(MAX) → nvarchar direction is the one that drops records at sync time.
+        expect(decideTypeOverlay('nvarchar(MAX)', undefined).value).toBe('nvarchar(MAX)');
+        expect(decideTypeOverlay('nvarchar(MAX)', '').value).toBe('nvarchar(MAX)');
+    });
+});
+
+describe('decideNullabilityOverlay — both-silent keeps the declaration', () => {
+    // `AllowsNull ?? !IsRequired` computed TRUE when the source stated neither, because !undefined
+    // is true. A describe with no opinion on either attribute unconditionally overwrote a declared
+    // AllowsNull:false — a required column silently became optional, and the DDL followed.
+
+    it('keeps a declared NOT NULL when the source states neither attribute', () => {
+        const out = decideNullabilityOverlay(false, undefined, undefined);
+        expect(out.value).toBe(false);
+        expect(out.winner).toBe('Declared');
+    });
+
+    it('an explicit AllowsNull from the source wins', () => {
+        expect(decideNullabilityOverlay(false, true, undefined)).toEqual({ value: true, winner: 'Discovered' });
+        expect(decideNullabilityOverlay(true, false, undefined)).toEqual({ value: false, winner: 'Discovered' });
+    });
+
+    it('IsRequired still derives nullability — that is a statement, just an indirect one', () => {
+        expect(decideNullabilityOverlay(true, undefined, true)).toEqual({ value: false, winner: 'Discovered' });
+        expect(decideNullabilityOverlay(false, undefined, false)).toEqual({ value: true, winner: 'Discovered' });
+    });
+
+    it('agreement is credited to the declaration', () => {
+        expect(decideNullabilityOverlay(false, false, undefined).winner).toBe('Declared');
+    });
+
+    it('defaults to permissive only when there is no declaration to keep', () => {
+        expect(decideNullabilityOverlay(null, undefined, undefined)).toEqual({ value: true, winner: 'Declared' });
+        expect(decideNullabilityOverlay(undefined, undefined, undefined).value).toBe(true);
     });
 });

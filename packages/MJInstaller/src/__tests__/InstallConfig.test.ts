@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,44 +15,25 @@ import {
 /* ================================================================== */
 
 describe('InstallConfigDefaults', () => {
-  it('should set DatabaseHost to "localhost"', () => {
-    expect(InstallConfigDefaults.DatabaseHost).toBe('localhost');
-  });
-
-  it('should set DatabasePort to 1433', () => {
-    expect(InstallConfigDefaults.DatabasePort).toBe(1433);
-  });
-
-  it('should set DatabaseTrustCert to false', () => {
-    expect(InstallConfigDefaults.DatabaseTrustCert).toBe(false);
-  });
-
-  it('should set APIPort to 4000', () => {
-    expect(InstallConfigDefaults.APIPort).toBe(4000);
-  });
-
-  it('should set ExplorerPort to 4200', () => {
-    expect(InstallConfigDefaults.ExplorerPort).toBe(4200);
-  });
-
   it('should set AuthProvider to "none"', () => {
     expect(InstallConfigDefaults.AuthProvider).toBe('none');
   });
 
-  it('should have exactly 7 keys', () => {
+  it('should set InstallMode to "distribution"', () => {
+    expect(InstallConfigDefaults.InstallMode).toBe('distribution');
+  });
+
+  it('should set PackageManager to "pnpm"', () => {
+    expect(InstallConfigDefaults.PackageManager).toBe('pnpm');
+  });
+
+  it('should have exactly 3 keys', () => {
+    // Only fields a phase BEFORE `configure` reads belong here. A field whose
+    // only default is a prompt fallback makes ConfigurePhase's `??` guard
+    // permanently non-nullish, so its prompt can never fire — see #4562.
     const keys = Object.keys(InstallConfigDefaults);
-    expect(keys).toHaveLength(7);
-    expect(keys).toEqual(
-      expect.arrayContaining([
-        'DatabaseHost',
-        'DatabasePort',
-        'DatabaseTrustCert',
-        'APIPort',
-        'ExplorerPort',
-        'AuthProvider',
-        'InstallMode',
-      ])
-    );
+    expect(keys).toHaveLength(3);
+    expect(keys).toEqual(expect.arrayContaining(['AuthProvider', 'InstallMode', 'PackageManager']));
   });
 });
 
@@ -591,5 +572,63 @@ describe('mergeConfigs', () => {
 
     const result = mergeConfigs(base, overlay);
     expect(result.AuthProviderValues).toEqual({ Domain: 'auth0.com' });
+  });
+});
+
+/* ------------------------------------------------------------------- */
+/*  PackageManager field                                               */
+/* ------------------------------------------------------------------- */
+
+describe('PackageManager config field', () => {
+  it('defaults to pnpm', () => {
+    expect(InstallConfigDefaults.PackageManager).toBe('pnpm');
+  });
+
+  describe('via environment variable', () => {
+    let saved: string | undefined;
+
+    beforeEach(() => {
+      saved = process.env.MJ_INSTALL_PACKAGE_MANAGER;
+      delete process.env.MJ_INSTALL_PACKAGE_MANAGER;
+    });
+
+    afterEach(() => {
+      if (saved !== undefined) {
+        process.env.MJ_INSTALL_PACKAGE_MANAGER = saved;
+      } else {
+        delete process.env.MJ_INSTALL_PACKAGE_MANAGER;
+      }
+    });
+
+    it('reads MJ_INSTALL_PACKAGE_MANAGER', () => {
+      process.env.MJ_INSTALL_PACKAGE_MANAGER = 'npm';
+      const config = resolveFromEnvironment();
+      expect(config.PackageManager).toBe('npm');
+    });
+
+    it('omits the field when the env var is unset', () => {
+      const config = resolveFromEnvironment();
+      expect(config.PackageManager).toBeUndefined();
+    });
+  });
+
+  describe('via config file', () => {
+    let tempDir: string;
+
+    beforeEach(async () => {
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-config-pm-test-'));
+    });
+
+    afterEach(async () => {
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    });
+
+    it('accepts the canonical PackageManager key', async () => {
+      const filePath = path.join(tempDir, 'config.json');
+      await fs.writeFile(filePath, JSON.stringify({ PackageManager: 'npm', DatabaseHost: 'x' }));
+
+      const config = await loadConfigFile(filePath);
+      expect(config.PackageManager).toBe('npm');
+    });
   });
 });

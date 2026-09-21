@@ -2845,7 +2845,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 if (IsObjectUnavailable(fetchErr)) {
                     // Not a failure to retry: the vendor is telling us this account does not serve
                     // this object. Warn once and end the map cleanly — no retry ladder, no
-                    // FETCH_INCOMPLETE, and the watermark left exactly as it was.
+                    // FETCH_INCOMPLETE.
                     //
                     // Deliberately NOT remembered between runs. Persisting it would buy one probe
                     // per object per run, and the object count in any real system is small enough
@@ -2853,8 +2853,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     // both bring: a remembered skip is wrong from the moment the account changes,
                     // and every scheme for noticing that is another thing to get right. Re-asking
                     // every run is self-healing by construction and has no configuration.
+                    //
+                    // But the map fetched NOTHING, so it is NOT a clean fetch, and every consequence
+                    // of "we saw the complete set" must be withheld. Breaking out with the flag still
+                    // true fell through to the clean-fetch branch and:
+                    //   - minted a wall-clock Timestamp watermark for an object that returned zero
+                    //     records. When the account later enables the object, the next incremental
+                    //     filters `modified > <that stamp>` and permanently misses every record that
+                    //     already existed — destroying the self-healing described above. (An
+                    //     incremental over an EXISTING watermark merely rewrote the same value; the
+                    //     damage lands on a full sync and on the first encounter, where no watermark
+                    //     row exists yet and one is created at "now".)
+                    //   - ran orphan detection. An empty fetch is not evidence that MJ's rows are gone.
+                    //   - overwrote the partition rollup snapshot with an empty map, forcing a full
+                    //     re-diff next run.
+                    fetchCompletedCleanly = false;
                     logger?.warning(
-                        'sync',
+                        entityMap.ExternalObjectName ?? entityMap.ID,
                         'OBJECT_UNAVAILABLE',
                         `"${entityMap.ExternalObjectName}" is not available to this account; skipping it until the source starts serving it: ${errMsg}`,
                         { externalObjectName: entityMap.ExternalObjectName },
@@ -3566,12 +3581,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Load current field values for each changed record
         const md = this.ProviderToUse;
         const entityInfo = md.EntityByName(entityMap.Entity);
-        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
+        if (!entityInfo) {
+            throw new Error(`Cannot push ${entityMap.Entity}: entity not found in metadata.`);
+        }
+        // The normalized RecordID is the '|'-joined value(s) of EVERY key column — the shape the record
+        // map stores — so it is parsed against all of the entity's PrimaryKeys. Pinning it to the first
+        // key column (or a made-up `ID`) handed a composite key to one column as "v1|v2" and failed the load.
+        const pkFields = entityInfo.PrimaryKeys;
         for (const [recordID, change] of latestByRecord) {
             if (change.Type === 'Delete') continue; // No fields to load for deletes
             try {
                 const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
-                const loaded = await entity.InnerLoad(new CompositeKey([{ FieldName: pkFieldName, Value: recordID }]));
+                const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(recordID, pkFields));
                 if (loaded) {
                     change.Fields = entity.GetAll();
                 }
@@ -3640,11 +3661,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const md = this.ProviderToUse;
         const entityInfo = md.EntityByName(entityMap.Entity);
-        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
+        if (!entityInfo) {
+            throw new Error(`Cannot push ${entityMap.Entity}: entity not found in metadata.`);
+        }
+        const pkFields = entityInfo.PrimaryKeys;
 
         const now = new Date().toISOString();
         return allResult.Results.map(record => {
-            const recordID = String(record[pkFieldName] ?? '');
+            // '|'-joined across EVERY key column — the shape EntityRecordID is stored in — so the
+            // existingMaps lookup (Create vs Update) matches a composite key, not just its first column.
+            const recordID = this.ComposeEntityRecordID(record, pkFields);
             return {
                 RecordID: recordID,
                 Type: existingMaps.has(recordID) ? 'Update' : 'Create',
@@ -3939,7 +3965,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
             const entityInfo = md.EntityByName(entityMap.Entity);
-            const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+            const pkFields = entityInfo?.PrimaryKeys ?? [];
             const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(mjRecordID, pkFields));
             if (!loaded) return;
             const fields = entity.Fields ?? [];
@@ -4038,7 +4064,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const md = this.ProviderToUse;
         const entityInfo = md.EntityByName(entityMap.Entity);
-        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const pkFields = entityInfo?.PrimaryKeys ?? [];
 
         for (const orphan of orphans) {
             try {
@@ -4966,7 +4992,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
         this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
-        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const pkFields = entityInfo?.PrimaryKeys ?? [];
 
         // Upsert-safe: if the record's mapped fields carry a PK (soft-PK dest tables key on the external
         // ID), check whether that row already exists before deciding INSERT vs UPDATE. A null mappedPK
@@ -5011,9 +5037,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Only ever used to skip work when absence is PROVEN: the prefetch must have covered every
         // record in the batch, and this key must be missing from it. Anything less falls through to
         // the load, because a wrong "absent" turns an update into a duplicate insert.
-        const provablyAbsent = mappedPK != null
-            && precheck?.CoversWholeBatch === true
-            && !precheck.Present.has(pkFields.map(f => String(mappedPK[f.Name] ?? '')).join('|'));
+        const provablyAbsent = this.isProvablyAbsent(mappedPK, precheck);
 
         const existed = mappedPK != null && !provablyAbsent
             ? await entity.InnerLoad(this.BuildEntityPrimaryKey(mappedPK, pkFields))
@@ -5046,7 +5070,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // re-establish the possibly-cleared record map and SKIP the write — leaving __mj_UpdatedAt
             // and the integration LastSynced columns untouched, exactly like the content-hash skip path.
             this.SetEntityFields(entity, record.MappedFields);
-            if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo)) {
+            if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo, record)) {
                 await this.QueueRecordMap(
                     recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
                     entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
@@ -5076,6 +5100,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // incremental sync. SaveRecordMap is an upsert keyed on (CompanyIntegration, Entity, ExternalID),
         // so this also re-establishes a map that was previously cleared.
         const entityRecordID = entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|');
+        // The prefetch's absence proof is only true until this process inserts the row. A mid-batch
+        // flush (MJ_INTEGRATION_BATCH_FLUSH_AT) COMMITS part of a batch; if a later record then fails,
+        // the per-record fallback re-applies the whole batch against the SAME precheck — and the
+        // committed rows' keys, honestly absent at prefetch time, would still "prove" absent and
+        // insert again. Recording the key the moment we create keeps the proof truthful for any
+        // replay in this run. Deliberately unconditional on commit outcome: if the group later rolls
+        // back, an over-included key merely costs that record one existence load on retry — while an
+        // under-included key costs a duplicate row. Only ever err toward the load.
+        if (!existed && mappedPK != null && precheck) {
+            precheck.Present.add(mappedPK);
+        }
         await this.QueueRecordMap(
             recordMaps,
             companyIntegration.ID,
@@ -5107,6 +5142,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             values.push(s);
         }
         return values.join('|');
+    }
+
+    /**
+     * True ONLY when the batch prefetch PROVED this record's row does not exist: the prefetch covered
+     * every record in the batch AND this key is missing from the rows it found. Anything less is
+     * "unknown", and unknown must load — a wrong "absent" turns an update into a duplicate INSERT.
+     *
+     * `mappedPK` must be the '|'-joined key {@link extractMappedPrimaryKey} returns — the SAME shape
+     * {@link PrefetchContentHashes} keys `Present` with (`pkNames.map(n => row[n] ?? '').join('|')`).
+     * The first version of this check re-derived a key by indexing that string with PK field names,
+     * which evaluates to `''` for every record — so "provably absent" was unconditionally true and
+     * every upsert of an existing row became a blind duplicate INSERT. Kept as its own method so the
+     * decision is testable against the real extractor's output rather than a re-implementation.
+     */
+    private isProvablyAbsent(
+        mappedPK: string | null,
+        precheck: { Present: Set<string>; CoversWholeBatch: boolean } | undefined
+    ): boolean {
+        return mappedPK != null
+            && precheck?.CoversWholeBatch === true
+            && !precheck.Present.has(mappedPK);
     }
 
     /**
@@ -5174,7 +5230,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
         this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
-        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const pkFields = entityInfo?.PrimaryKeys ?? [];
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             // Matched-ID row vanished — fall back to upsert by PK (insert; or update/skip if PK exists)
@@ -5199,7 +5255,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Uses MJ's built-in dirty tracking (zero custom comparison logic). Critical for
         // connectors without server-side date filtering (e.g., YM) where every sync re-fetches
         // all records. Without this, 50k+ records get re-written every run.
-        if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo)) {
+        if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo, record)) {
             result.RecordsSkipped++;
             // Re-establish the record map even when the write is skipped — see the content-hash skip
             // above for the full rationale (a key-field/PK match can land here with no map row, and
@@ -5284,7 +5340,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 everyRecordCovered = false;
                 continue;
             }
-            wanted.add(pkFields.map(f => String(mappedPK[f.Name] ?? '')).join('|'));
+            // Already the '|'-joined key in pkFields order — add it as-is (see extractMappedPrimaryKey).
+            wanted.add(mappedPK);
         }
         const ids = Array.from(wanted);
         if (ids.length === 0) return undefined;
@@ -5306,6 +5363,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 Fields: [...pkNames, CONTENT_HASH_COLUMN],
                 ExtraFilter: extraFilter,
                 ResultType: 'simple',
+                // A plain RunView is NOT unbounded — it falls back to the entity's UserViewMaxRows
+                // (default 1000). This result is what `CoversWholeBatch` absence proofs are judged
+                // against, and coverage is computed from the REQUEST side, never reconciled with
+                // res.Results.length: a silently truncated response would mark every existing row
+                // beyond the cap "provably absent" and re-INSERT it as a duplicate on every sync.
+                // Today the apply batch (500) sits under the default cap, so nothing fires — but a
+                // 2x margin defended by nothing is not a guard. Same reasoning as baseEngine's own
+                // IgnoreMaxRows use, and this file documents the identical trap on the push side.
+                IgnoreMaxRows: true,
             }, contextUser);
             if (!res.Success) return undefined;
             const Hashes = new Map<string, string>();
@@ -5368,7 +5434,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
         this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
-        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const pkFields = entityInfo?.PrimaryKeys ?? [];
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.MJEntityName} ${record.MatchedMJRecordID} — record not found in MJ DB (may have been deleted already)`);
@@ -5414,8 +5480,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         pkFields: Array<{ Name: string }>
     ): CompositeKey {
         const key = new CompositeKey();
-        if (pkFields.length <= 1) {
-            key.KeyValuePairs.push({ FieldName: pkFields[0]?.Name ?? 'ID', Value: recordID });
+        if (pkFields.length === 0) {
+            // Never invent an `ID` column: MJ keys can have any name, and a load against a made-up
+            // field fails with "Primary key ID not found in entity ..." — surface the real cause instead.
+            throw new Error(`Cannot build a primary key for record '${recordID}': the entity has no primary key fields in metadata.`);
+        }
+        if (pkFields.length === 1) {
+            key.KeyValuePairs.push({ FieldName: pkFields[0].Name, Value: recordID });
         } else {
             const parts = recordID.split('|');
             for (let i = 0; i < pkFields.length; i++) {
@@ -5423,6 +5494,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
         }
         return key;
+    }
+
+    /**
+     * The exact inverse of {@link BuildEntityPrimaryKey}: the '|'-joined value(s) of a data row's
+     * primary-key column(s), in PK-field order — the shape CompanyIntegrationRecordMap.EntityRecordID
+     * and a normalized RecordChange.RecordID carry. A single-column key is just its value.
+     */
+    private ComposeEntityRecordID(row: Record<string, unknown>, pkFields: Array<{ Name: string }>): string {
+        return pkFields.map(pk => serializeKeyValue(row[pk.Name])).join('|');
     }
 
     /**
@@ -5626,13 +5706,35 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private needsSyncStateRepair(
         entity: { Get(fieldName: string): unknown },
-        entityInfo: { Fields: Array<{ Name: string }> } | undefined
+        entityInfo: { Fields: Array<{ Name: string }> } | undefined,
+        record?: MappedRecord
     ): boolean {
         if (!entityInfo) return false;
         const has = (name: string) => entityInfo.Fields.some(f => f.Name === name);
         if (has('__mj_integration_IsTombstoned') && entity.Get('__mj_integration_IsTombstoned') === true) return true;
         if (has('__mj_integration_SyncMessage') && entity.Get('__mj_integration_SyncMessage') != null) return true;
         if (has('__mj_integration_SyncStatus') && entity.Get('__mj_integration_SyncStatus') !== 'Active') return true;
+        // A STALE CONTENT HASH is repair-worthy for the same reason: skipping the write freezes it.
+        //
+        // The case that produces one is a source that stops sending a column. The mapper OMITS an
+        // absent key rather than mapping it to null (a missing value is not a null value), so the
+        // recomputed hash differs — but SetEntityFields never touches that column either, so the
+        // entity is NOT dirty and the skip above fires. The stored hash is therefore never refreshed
+        // and the mismatch is permanent: that row loses the content-hash fast path FOREVER, paying a
+        // full load and field-by-field compare on every sync until some other field happens to
+        // change. One repair write here re-converges it, and every later sync skips it cheaply.
+        //
+        // Deliberately NOT treated as "the column is gone" — absence in the data is not evidence of
+        // absence in the schema (§ the same rule the field-level deactivation follows). The value is
+        // left exactly as it is; only the hash is brought back in line with what we are actually
+        // mapping.
+        if (record && has(CONTENT_HASH_COLUMN)) {
+            const storedHash = entity.Get(CONTENT_HASH_COLUMN);
+            if (typeof storedHash === 'string' && storedHash.length > 0
+                && storedHash !== computeContentHash(record.MappedFields ?? {})) {
+                return true;
+            }
+        }
         return false;
     }
 
@@ -6126,7 +6228,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const d = provider.Dialect;
             const runTable = `${d.QuoteIdentifier(runInfo.SchemaName)}.${d.QuoteIdentifier(runInfo.BaseTable)}`;
             const detailTable = `${d.QuoteIdentifier(detailInfo.SchemaName)}.${d.QuoteIdentifier(detailInfo.BaseTable)}`;
-            const runPk = d.QuoteIdentifier(runInfo.PrimaryKeys[0].Name);
+            const runPk = d.QuoteIdentifier(runInfo.FirstPrimaryKey.Name); // first-pk-ok: runInfo is MJ: Company Integration Runs (core entity, single ID key), the FK target of Run Details.CompanyIntegrationRunID
             const ciCol = d.QuoteIdentifier('CompanyIntegrationID');
             const startedCol = d.QuoteIdentifier('StartedAt');
             const detailFk = d.QuoteIdentifier('CompanyIntegrationRunID');

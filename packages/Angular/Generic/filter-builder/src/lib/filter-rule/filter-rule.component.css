@@ -36,6 +36,45 @@ mj-filter-rule .custom-dropdown.field-dropdown {
   min-width: 180px;
 }
 
+mj-filter-rule .dropdown-menu.multi-source {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  min-width: 380px;
+  padding: 0;
+}
+
+mj-filter-rule .source-pane {
+  border-right: 1px solid var(--mj-border-default, #223254);
+  padding: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+mj-filter-rule .source-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--mj-text-secondary, #94a3b8);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+mj-filter-rule .source-item.selected {
+  background: color-mix(in srgb, var(--mj-brand-primary, #3b82f6) 16%, transparent);
+  color: var(--mj-text-primary, #f8fafc);
+  font-weight: 650;
+}
+
+mj-filter-rule .field-pane {
+  padding: 6px;
+  max-height: 240px;
+  overflow: auto;
+}
+
 mj-filter-rule .custom-dropdown.operator-dropdown {
   min-width: 160px;
 }

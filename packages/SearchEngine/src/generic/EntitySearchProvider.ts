@@ -8,7 +8,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
@@ -291,7 +291,15 @@ export class EntitySearchProvider extends BaseSearchProvider {
         const totalSearchableFields = Math.max(searchFields.length, 1);
 
         return records.map((record) => {
-            const recordID = String(record.ID ?? '');
+            // Build the key from the entity's actual primary-key column(s) and emit it in compact
+            // CompositeKey form: the bare value for a single-column key (whatever it is called),
+            // "F1|v1||F2|v2" for a composite one. Reading `record.ID` yielded '' for any entity whose
+            // key isn't named ID, and SearchFusion drops empty RecordIDs — so this lane silently
+            // contributed nothing for those entities. RunView always returns the PK columns, even
+            // with an explicit Fields list, so the values are guaranteed present on the row.
+            const recordID = entityInfo
+                ? CompositeKey.FromEntityRecord(entityInfo, record).ToCompactURLSegment()
+                : String(record.ID ?? '');
             const title = this.extractTitle(record, entityInfo);
             const snippet = this.extractSnippet(record, entityInfo);
 
@@ -308,6 +316,11 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 }
             }
 
+            // If zero searchable fields matched the query in memory, do not assign a baseline score — drop the record.
+            if (matchedFields === 0) {
+                return null;
+            }
+
             // Score: base from field match ratio, boost for name field matches
             // Range: ~0.15 (weak match in one field) to ~0.95 (name field + multiple fields)
             const fieldRatio = matchedFields / totalSearchableFields;
@@ -315,21 +328,25 @@ export class EntitySearchProvider extends BaseSearchProvider {
             const nameBoost = nameFieldMatch ? 0.35 : 0;  // +0.35 for name field match
             const score = Math.min(baseScore + nameBoost, 0.95);
 
-            return {
+            const entityDisplayName = entityInfo?.DisplayName || entityName;
+            const resultItem: SearchResultItem = {
                 ID: recordID,
                 EntityName: entityName,
+                EntityDisplayName: entityDisplayName,
                 RecordID: recordID,
                 SourceType: 'entity',
-                ResultType: 'entity-record' as SearchResultType,
+                ResultType: 'entity-record',
                 Title: title,
                 Snippet: snippet,
                 Score: Math.round(score * 100) / 100, // Round to 2 decimal places
                 ScoreBreakdown: { Entity: Math.round(score * 100) / 100 },
                 Tags: [],
                 EntityIcon: entityInfo?.Icon ?? undefined,
+                RecordName: title !== 'Record' ? title : undefined,
                 MatchedAt: new Date()
             };
-        });
+            return resultItem;
+        }).filter((item): item is SearchResultItem => item != null);
     }
 
     /**

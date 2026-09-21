@@ -587,15 +587,7 @@ export class ListSetOperationsService {
    * IDs that round-trip cleanly against MJ List Details.
    */
   private serializeRecordId(entityInfo: EntityInfo, row: Record<string, unknown>): string {
-    if (entityInfo.PrimaryKeys.length === 1) {
-      return normalizeRecordId(String(row[entityInfo.PrimaryKeys[0].Name]));
-    }
-    const ck = new CompositeKey();
-    ck.KeyValuePairs = entityInfo.PrimaryKeys.map((pk) => ({
-      FieldName: pk.Name,
-      Value: row[pk.Name] as string | number | Date | null | undefined,
-    }));
-    return normalizeRecordId(ck.ToConcatenatedString());
+    return normalizeRecordId(CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment());
   }
 
   /**

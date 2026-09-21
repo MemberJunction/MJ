@@ -223,6 +223,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   private documentClickHandler: ((e: Event) => void) | null = null;
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
     this.dataService.Provider = this.ProviderToUse;
     this.documentClickHandler = (e: Event) => this.onDocumentClick(e);
     document.addEventListener('click', this.documentClickHandler);
@@ -231,6 +232,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     if (this.documentClickHandler) {
       document.removeEventListener('click', this.documentClickHandler);
     }
@@ -988,7 +990,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   get AddMapEntityIDAsKey(): CompositeKey | null {
-    return this.AddMapEntityID ? CompositeKey.FromID(this.AddMapEntityID) : null;
+    return this.AddMapEntityID ? CompositeKey.FromID(this.AddMapEntityID) : null; // first-pk-ok: AddMapEntityID is an Entities row id — a core entity keyed by ID
   }
 
   OnEntityTreeSelection(node: TreeNode | TreeNode[] | null): void {

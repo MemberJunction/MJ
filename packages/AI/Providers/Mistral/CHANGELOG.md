@@ -1,5 +1,90 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 6.1.0
+
+### Patch Changes
+
+- f5ec13b: Move the shared LLM conformance suite out of the runtime `@memberjunction/ai` package, and gate silent skip-growth in the integration registry (review fixes for #3542).
+
+  **Conformance suite relocated to `@memberjunction/unit-testing`.** The shared BaseLLM
+  streaming/ChatResult conformance suite and its OpenAI-compatible seam mock previously lived in
+  `@memberjunction/ai/src/test-support/` and were consumed through a deep `@memberjunction/ai/dist/test-support/*.js`
+  import — reaching past the package's public API into its build output, which resolved only because
+  `@memberjunction/ai` has no `exports` map, and which shipped test code plus an optional `vitest`
+  peer dependency inside the runtime package. Both files (and the suite's own reference regression
+  test) now live in `@memberjunction/unit-testing`, are exported from its index
+  (`RunLLMConformanceSuite`, `CreateOpenAICompatibleSeamMock`, and their types), and the eight
+  provider conformance suites import them from `@memberjunction/unit-testing`. `@memberjunction/ai`
+  no longer ships `dist/test-support/*` and no longer declares the optional `vitest` peer. No runtime
+  behavior changes; test-only wiring.
+
+  **Skip-growth is now gated, not just reported.** `check-registry.test.ts` gained a snapshot of the
+  exact set of checks that self-skip out of the deterministic lane (every `RequiresMutation` and
+  `RequiresLiveModel` check across all bundles). A change that makes a check newly self-skip — or
+  silently un-gates one — now fails the unit tests with a paste-ready diff, instead of only shrinking
+  the CI step-summary. Also corrected a stale `task-graph-execution` count (26 → 27) in the
+  all-bundle coverage-loss guard that had drifted after a `next` merge added TX27.
+
+- 394d276: Declare axios as a direct dependency. axios-retry peers on axios ("0.x || 1.x") and ai-mistral used it without declaring it, which fails strict peer resolution in consuming workspaces and is a phantom dependency under any non-hoisted layout.
+- Updated dependencies [834f8d7]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [ada8784]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [080f4cd]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [23c2521]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [1bd9674]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/ai@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [61b5612]
+- Updated dependencies [076fa5d]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [197fdf8]
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [ada8784]
+- Updated dependencies [23c2521]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+
 ## 6.1.0-edge.4
 
 ### Patch Changes
