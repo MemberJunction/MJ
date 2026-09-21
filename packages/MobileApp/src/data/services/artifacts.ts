@@ -13,8 +13,8 @@ import type {
     MJConversationArtifactVersionEntity,
 } from '@memberjunction/core-entities';
 import type { ComponentSpec } from '@memberjunction/react-runtime';
-import { parseChartSpec, type ChartSpec } from '@/components/charts/chart-spec';
-import { toInteractiveSpec } from '@/data/services/interactive-components';
+import { ParseChartSpec, type ChartSpec } from '@/components/charts/chart-spec';
+import { ToInteractiveSpec } from '@/data/services/interactive-components';
 
 /** The renderer the UI should use for an artifact's content, chosen by {@link classify}. */
 export type ArtifactRenderKind = 'json-table' | 'json' | 'markdown' | 'code' | 'html' | 'chart' | 'interactive' | 'text';
@@ -29,6 +29,14 @@ export type LoadedArtifact = {
     versionCount: number;
     /** Raw version content. */
     content: string;
+    /**
+     * The version's MIME type, when the record carries one.
+     *
+     * Always null for `MJ: Conversation Artifact Versions`, which has no such column — the type
+     * name is its only classifier. Kept on the shape because a registered renderer matches on
+     * EITHER, and the newer `MJ: Artifact Versions` model does record a MIME type.
+     */
+    contentType: string | null;
     /** How the UI should render `content`. */
     kind: ArtifactRenderKind;
     /** When kind is json-table, parsed rows. */
@@ -84,12 +92,12 @@ function classify(typeName: string, content: string): Classification {
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
         try {
             const parsed: unknown = JSON.parse(trimmed);
-            const chart = parseChartSpec(parsed);
+            const chart = ParseChartSpec(parsed);
             if (chart) return { kind: 'chart', chart, json: parsed };
             // Interactive react-runtime component specs carry both a `name` and a
             // `code` body — charts (chartType/data) and plain data JSON never do,
             // so this branch can't reclassify them.
-            const spec = toInteractiveSpec(parsed, typeName);
+            const spec = ToInteractiveSpec(parsed, typeName);
             if (spec) return { kind: 'interactive', spec };
             if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0] !== null) {
                 return { kind: 'json-table', rows: parsed as Record<string, unknown>[] };
@@ -120,7 +128,7 @@ function classify(typeName: string, content: string): Classification {
  * @param contextUser Optional acting user (server-side scoping); defaults to `Metadata.CurrentUser`.
  * @returns A {@link LoadedArtifact}, or `null` if the artifact can't be loaded.
  */
-export async function loadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
+export async function LoadArtifact(artifactId: string, contextUser?: UserInfo): Promise<LoadedArtifact | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
@@ -150,6 +158,11 @@ export async function loadArtifact(artifactId: string, contextUser?: UserInfo): 
         name: artifact.Name,
         description: artifact.Description,
         typeName: artifact.ArtifactType ?? 'Artifact',
+        // Always null for this entity: `MJ: Conversation Artifact Versions` has no content-type
+        // column — the type name is the only classifier it carries. Kept on the shape because a
+        // registered renderer matches on EITHER, and the newer `MJ: Artifact Versions` model does
+        // record a MIME type.
+        contentType: null,
         version: latest?.Version ?? 1,
         versionCount: versions.length,
         content,
@@ -219,7 +232,7 @@ function quotedIdList(ids: string[]): string {
  * @param conversationId The conversation whose artifacts to load.
  * @param contextUser    Optional acting user (server-side scoping).
  */
-export async function loadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
+export async function LoadConversationArtifacts(conversationId: string, contextUser?: UserInfo): Promise<ArtifactSummary[]> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     const rv = new RunView();
