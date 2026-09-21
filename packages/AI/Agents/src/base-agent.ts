@@ -4182,7 +4182,7 @@ export class BaseAgent {
         // (and, when the child prompt is volatile, the specialization) leaves the system prompt and rides as
         // the FINAL message of THIS request. Appended to a COPY: the fragment is per-call and must never
         // enter the persisted history — the history has to stay a byte-stable, cacheable prefix.
-        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType);
+        const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType, systemPrompt);
         if (volatileStateMessage) {
             promptParams.conversationMessages = this.assembleOutgoingMessages(params.conversationMessages, volatileStateMessage);
         }
@@ -4224,13 +4224,28 @@ export class BaseAgent {
         promptParams: AIPromptParams,
         payload: P,
         childPrompt: MJAIPromptEntityExtended | undefined,
-        agentType: MJAIAgentTypeEntity
+        agentType: MJAIAgentTypeEntity,
+        systemPrompt?: MJAIPromptEntityExtended
     ): Promise<AgentChatMessage | null> {
         const data = promptParams.data ?? {};
         const agentTypePromptParams = data.__agentTypePromptParams as Record<string, unknown> | undefined;
         if (ResolveVolatileStatePlacement(agentTypePromptParams) !== 'trailingMessage') {
             return null;
         }
+
+        // Guard: if the system prompt template still embeds volatile state blocks (e.g. on an environment
+        // where TemplateContent has not yet synced the new template), suppress the trailing fragment so
+        // the model never receives duplicate state.
+        const effectiveSystemPrompt = systemPrompt ?? (promptParams.prompt as MJAIPromptEntityExtended | undefined);
+        if (await this.systemPromptTemplateContainsVolatileState(effectiveSystemPrompt, params.contextUser)) {
+            this.logStatus(
+                '⚠️ System prompt template still contains volatile blocks (database template unsynced); skipping trailing runtime-state fragment to avoid duplicate state.',
+                true,
+                params
+            );
+            return null;
+        }
+
         const includeDateTime = agentTypePromptParams?.includeDateTimeInPrompt !== false;
         const includeScratchpad = agentTypePromptParams?.includeScratchpadDocs !== false;
         const includePayload = agentTypePromptParams?.includePayloadInPrompt !== false;
@@ -4286,22 +4301,58 @@ export class BaseAgent {
     }
 
     /**
-     * The child prompt's raw template text (placeholders intact), from the cached template engine.
-     * Null when the prompt has no template or the lookup fails — which fails CLOSED: with no text to
-     * inspect, {@link ResolveSpecializationPlacement} keeps the specialization in the system prompt.
+     * Inspects the system prompt's unrendered template text for volatile state blocks
+     * (`## Current Date/Time`, `## Scratchpad State`, `## Current State`, or temporal/payload placeholders).
+     *
+     * Returns true when the template still embeds volatile state — which indicates an unsynced
+     * database still running the legacy Arm A template. Under this condition, trailing state
+     * emission is suppressed to prevent the model from receiving duplicate state.
      */
-    protected async loadChildPromptTemplateText(childPrompt: MJAIPromptEntityExtended, contextUser: UserInfo): Promise<string | null> {
-        if (!childPrompt.TemplateID) {
+    protected async systemPromptTemplateContainsVolatileState(
+        systemPrompt: MJAIPromptEntityExtended | undefined,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        const templateText = await this.loadPromptTemplateText(systemPrompt, contextUser);
+        if (!templateText) {
+            return false;
+        }
+        return (
+            templateText.includes('## Current Date/Time') ||
+            templateText.includes('## Scratchpad State') ||
+            templateText.includes('## Current State') ||
+            templateText.includes('_CURRENT_DATE') ||
+            templateText.includes('_CURRENT_PAYLOAD')
+        );
+    }
+
+    /**
+     * Raw template text (placeholders intact) for an AI prompt from the cached template engine.
+     * Null when the prompt has no template or the lookup fails.
+     */
+    protected async loadPromptTemplateText(
+        prompt: MJAIPromptEntityExtended | undefined,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        if (!prompt?.TemplateID) {
             return null;
         }
         try {
             await TemplateEngineServer.Instance.Config(false, contextUser);
-            const template = TemplateEngineServer.Instance.FindTemplate(childPrompt.TemplateID);
+            const template = TemplateEngineServer.Instance.FindTemplate(prompt.TemplateID);
             return template?.GetHighestPriorityContent()?.TemplateText ?? null;
         } catch (e) {
             this.logError(e instanceof Error ? e : String(e), { category: 'VolatileStatePlacement', severity: 'warning' });
             return null;
         }
+    }
+
+    /**
+     * The child prompt's raw template text (placeholders intact), from the cached template engine.
+     * Null when the prompt has no template or the lookup fails — which fails CLOSED: with no text to
+     * inspect, {@link ResolveSpecializationPlacement} keeps the specialization in the system prompt.
+     */
+    protected async loadChildPromptTemplateText(childPrompt: MJAIPromptEntityExtended, contextUser: UserInfo): Promise<string | null> {
+        return this.loadPromptTemplateText(childPrompt, contextUser);
     }
 
     /**

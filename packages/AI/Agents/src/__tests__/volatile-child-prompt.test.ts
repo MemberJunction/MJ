@@ -77,8 +77,13 @@ describe('ResolveSpecializationPlacementParam', () => {
 
 describe('ResolveSpecializationPlacement', () => {
     it('never relocates under systemPrompt runtime-state placement, whatever else is set', () => {
-        expect(ResolveSpecializationPlacement(undefined, DATED)).toBe('systemPrompt');
+        expect(ResolveSpecializationPlacement({ volatileStatePlacement: 'systemPrompt' }, DATED)).toBe('systemPrompt');
         expect(ResolveSpecializationPlacement({ volatileStatePlacement: 'systemPrompt', specializationPlacement: 'trailingMessage' }, DATED)).toBe('systemPrompt');
+    });
+
+    it('defaults to relocating volatile child prompts under default trailing placement', () => {
+        expect(ResolveSpecializationPlacement(undefined, DATED)).toBe('trailingMessage');
+        expect(ResolveSpecializationPlacement(undefined, STATIC)).toBe('systemPrompt');
     });
 
     it('never relocates when there is no child prompt', () => {

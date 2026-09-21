@@ -33,7 +33,7 @@ interface Internals {
     _promptRunner: { RenderChildPromptTemplates: (children: unknown[], params: AIPromptParams) => Promise<{ renderedTemplates: Record<string, string> }> };
     logStatus: (msg: string) => void;
     logError: (e: unknown) => void;
-    buildVolatileStateMessage<P>(params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P, childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity): Promise<VolatileMessage | null>;
+    buildVolatileStateMessage<P>(params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P, childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, systemPrompt?: MJAIPromptEntityExtended): Promise<VolatileMessage | null>;
     assembleOutgoingMessages(history: ChatMessage[], fragment: VolatileMessage): ChatMessage[];
 }
 
@@ -70,14 +70,50 @@ const TRAILING = { volatileStatePlacement: 'trailingMessage' };
 describe('BaseAgent.buildVolatileStateMessage', () => {
     beforeEach(() => { templates.byId.clear(); templates.byId.set('tmpl-sage', '# Sage\n\n## Role\n- Your name is Sage'); });
 
-    it('returns null under the default placement and leaves everything untouched', async () => {
+    it('returns null under explicit systemPrompt placement and leaves everything untouched', async () => {
         const a = agentUnderTest();
-        const { params, promptParams, data, conversationMessages } = makeInputs({});
+        const { params, promptParams, data, conversationMessages } = makeInputs({ volatileStatePlacement: 'systemPrompt' });
         const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE);
         expect(msg).toBeNull();
         expect(conversationMessages).toHaveLength(2);
         expect(data._SPECIALIZATION_RELOCATED).toBeUndefined();
         expect(a._promptRunner.RenderChildPromptTemplates).not.toHaveBeenCalled();
+    });
+
+    it('defaults to trailing placement when no placement is specified', async () => {
+        const a = agentUnderTest();
+        const { params, promptParams } = makeInputs({});
+        const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE);
+        expect(msg).not.toBeNull();
+        expect(msg!.role).toBe('user');
+        expect(msg!.metadata?.volatileState).toBe(true);
+        expect(String(msg!.content).startsWith(`<${RUNTIME_STATE_TAG}>`)).toBe(true);
+    });
+
+    it('template sync guard: suppresses trailing fragment if system prompt template still contains volatile blocks (unsynced DB)', async () => {
+        templates.byId.set('tmpl-parent-legacy', '# System Prompt\n\n## Current Date/Time\n- **Date**: {{ _CURRENT_DATE }}');
+        const legacySystemPrompt = { ID: 'parent-1', Name: 'Legacy System Prompt', TemplateID: 'tmpl-parent-legacy' } as unknown as MJAIPromptEntityExtended;
+
+        const a = agentUnderTest();
+        const { params, promptParams } = makeInputs(TRAILING);
+        const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, legacySystemPrompt);
+        expect(msg).toBeNull();
+        expect(a.logStatus).toHaveBeenCalledWith(
+            expect.stringContaining('database template unsynced'),
+            true,
+            params
+        );
+    });
+
+    it('template sync guard: emits trailing fragment when system prompt template has synced (no volatile blocks)', async () => {
+        templates.byId.set('tmpl-parent-synced', '# System Prompt\n\n## Runtime State\nPointer to trailing message.');
+        const syncedSystemPrompt = { ID: 'parent-1', Name: 'Synced System Prompt', TemplateID: 'tmpl-parent-synced' } as unknown as MJAIPromptEntityExtended;
+
+        const a = agentUnderTest();
+        const { params, promptParams } = makeInputs(TRAILING);
+        const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, syncedSystemPrompt);
+        expect(msg).not.toBeNull();
+        expect(msg!.metadata?.volatileState).toBe(true);
     });
 
     it('trailing placement: a user message with the three state blocks, history untouched, specialization left in place for a static child prompt', async () => {

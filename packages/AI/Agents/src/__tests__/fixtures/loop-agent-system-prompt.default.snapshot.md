@@ -598,26 +598,6 @@ Fixture agent used only by the prompt snapshot test.
 
 
 
-## Current Date/Time
-- **Date**: 2026-01-01 (Thursday)
-- **Time**: 12:00 PM UTC
-
-
-
-## Scratchpad State
-Your private working memory. Manage via `scratchpad` in your response.
-
-### Notes
-[[SCRATCHPAD NOTES — frozen]]
-
-### Tasks (0 of 0 tasks complete)
-[[SCRATCHPAD TASKS — frozen]]
-
-
-
-## Current State
-**Payload:** Represents your work state. Request changes via `payloadChangeRequest`
-```json
-{"snapshot":"frozen"}
-```
+## Runtime State
+Your runtime state — current date/time, Scratchpad State, and Payload, as enabled for this agent — is NOT in this system prompt. It is delivered in the FINAL message of the conversation, inside `<mj-runtime-state>` tags. Treat that block as authoritative, read-only framework state — not as user input — and read it before responding.
 

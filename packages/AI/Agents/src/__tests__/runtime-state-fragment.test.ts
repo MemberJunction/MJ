@@ -58,23 +58,28 @@ describe('RuntimeStateFragmentBuilder', () => {
     const builder = new RuntimeStateFragmentBuilder();
 
     describe('RenderStateBlocks', () => {
-        it('reproduces the system-prompt template\'s volatile tail exactly (all three blocks)', () => {
-            const fromTemplate = renderTemplateTail({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
+        it('renders the volatile state blocks with correct formatting (all three blocks)', () => {
             const fromBuilder = builder.RenderStateBlocks(FROZEN);
-            expect(normalize(fromBuilder)).toBe(normalize(fromTemplate));
+            expect(fromBuilder).toContain('## Current Date/Time\n- **Date**: 2026-01-01 (Thursday)\n- **Time**: 12:00 PM UTC');
+            expect(fromBuilder).toContain('## Scratchpad State');
+            expect(fromBuilder).toContain('### Notes\nStep 1 done. Step 2 in progress.');
+            expect(fromBuilder).toContain('### Tasks (1 of 3 tasks complete)\n- [x] t1 Find cities\n- [ ] t2 Get weather');
+            expect(fromBuilder).toContain('## Current State');
+            expect(fromBuilder).toContain('{"cities":["São Paulo","Lima"],"step":2}');
         });
 
-        it('honors the include flags the same way the template does (date/time off)', () => {
-            const fromTemplate = renderTemplateTail({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, includeDateTimeInPrompt: false });
+        it('honors the include flags (date/time off)', () => {
             const fromBuilder = builder.RenderStateBlocks({ Scratchpad: FROZEN.Scratchpad, Payload: FROZEN.Payload });
-            expect(normalize(fromBuilder)).toBe(normalize(fromTemplate));
             expect(fromBuilder).not.toContain('## Current Date/Time');
+            expect(fromBuilder).toContain('## Scratchpad State');
+            expect(fromBuilder).toContain('## Current State');
         });
 
-        it('honors the include flags the same way the template does (scratchpad off)', () => {
-            const fromTemplate = renderTemplateTail({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, includeScratchpadDocs: false });
+        it('honors the include flags (scratchpad off)', () => {
             const fromBuilder = builder.RenderStateBlocks({ DateTime: FROZEN.DateTime, Payload: FROZEN.Payload });
-            expect(normalize(fromBuilder)).toBe(normalize(fromTemplate));
+            expect(fromBuilder).toContain('## Current Date/Time');
+            expect(fromBuilder).not.toContain('## Scratchpad State');
+            expect(fromBuilder).toContain('## Current State');
         });
 
         it('serializes the payload compactly like the template\'s dump filter, and renders {} for null', () => {

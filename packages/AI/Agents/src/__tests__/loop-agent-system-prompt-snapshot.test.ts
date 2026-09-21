@@ -92,40 +92,26 @@ describe('Loop Agent Type system prompt — rendered snapshot', () => {
         await expect(rendered).toMatchFileSnapshot(FIXTURE_PATH);
     });
 
-    it('renders the three volatile blocks at the tail under default placement', () => {
+    it('omits volatile blocks from the system prompt by default and renders the static pointer', () => {
         const rendered = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
-        const dateAt = rendered.indexOf('## Current Date/Time');
-        const scratchAt = rendered.indexOf('## Scratchpad State');
-        const payloadAt = rendered.indexOf('## Current State');
-        expect(dateAt).toBeGreaterThan(0);
-        expect(scratchAt).toBeGreaterThan(dateAt);
-        expect(payloadAt).toBeGreaterThan(scratchAt);
-        // Nothing but the payload block follows the payload header — it is the last section.
-        expect(rendered.slice(payloadAt)).not.toMatch(/\n## /);
-    });
-
-    it('trailingMessage placement OMITS the three volatile blocks and adds the static pointer instead', () => {
-        const trailing = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, volatileStatePlacement: 'trailingMessage' });
-        expect(trailing).not.toContain('## Current Date/Time');
-        expect(trailing).not.toContain('## Scratchpad State');
-        expect(trailing).not.toContain('## Current State');
-        expect(trailing).not.toContain('2026-01-01');                 // no frozen date leaks in
-        expect(trailing).not.toContain('SCRATCHPAD NOTES — frozen');
-        expect(trailing).toContain('## Runtime State');
-        expect(trailing).toContain(`\`<${RUNTIME_STATE_TAG}>\``);
+        expect(rendered).not.toContain('## Current Date/Time');
+        expect(rendered).not.toContain('## Scratchpad State');
+        expect(rendered).not.toContain('## Current State');
+        expect(rendered).not.toContain('2026-01-01');                 // no frozen date leaks in
+        expect(rendered).not.toContain('SCRATCHPAD NOTES — frozen');
+        expect(rendered).toContain('## Runtime State');
+        expect(rendered).toContain(`\`<${RUNTIME_STATE_TAG}>\``);
         // The pointer is the LAST section — nothing volatile may follow it.
-        expect(trailing.trimEnd().endsWith('and read it before responding.')).toBe(true);
+        expect(rendered.trimEnd().endsWith('and read it before responding.')).toBe(true);
         // Specialization stays in the system prompt unless relocation is flagged.
-        expect(trailing).toContain('[[CHILD PROMPT — frozen for snapshot]]');
-        expect(trailing).not.toContain(AGENT_SPECIALIZATION_TAG);
+        expect(rendered).toContain('[[CHILD PROMPT — frozen for snapshot]]');
+        expect(rendered).not.toContain(AGENT_SPECIALIZATION_TAG);
     });
 
-    it('trailingMessage placement is otherwise byte-identical to the default up to the volatile tail', () => {
+    it('trailingMessage placement is identical to the default', () => {
         const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
         const trailing = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, volatileStatePlacement: 'trailingMessage' });
-        const cut = def.indexOf('## Current Date/Time');
-        expect(cut).toBeGreaterThan(0);
-        expect(trailing.slice(0, cut)).toBe(def.slice(0, cut));
+        expect(trailing).toBe(def);
     });
 
     it('relocating the specialization swaps the child prompt for a stub and extends the pointer', () => {
@@ -136,18 +122,7 @@ describe('Loop Agent Type system prompt — rendered snapshot', () => {
         expect(relocated).toContain('immediately before the runtime state');
     });
 
-    it('the relocation flag is ignored under default placement', () => {
-        const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
-        const flagged = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS }, { _SPECIALIZATION_RELOCATED: true });
-        // Under default placement the stub still swaps in (the flag is orthogonal to placement)…
-        expect(flagged).not.toContain('[[CHILD PROMPT — frozen for snapshot]]');
-        // …but the volatile blocks stay and no pointer appears.
-        expect(flagged).toContain('## Current Date/Time');
-        expect(flagged).not.toContain('## Runtime State');
-        expect(def).toContain('[[CHILD PROMPT — frozen for snapshot]]');
-    });
-
-    it('the pointer is omitted when no block would be sent (all three flags off, nothing relocated)', () => {
+    it('the pointer is omitted when state is disabled and nothing is relocated', () => {
         const none = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, volatileStatePlacement: 'trailingMessage', includeDateTimeInPrompt: false, includeScratchpadDocs: false, includePayloadInPrompt: false });
         expect(none).not.toContain('## Runtime State');
         expect(none).not.toContain('## Current Date/Time');

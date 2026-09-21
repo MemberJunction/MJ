@@ -196,8 +196,8 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
  * Measured on Sage, 2026-09-14: cache reads plateaued at ~21.5K tokens while uncached input grew
  * to 73K per call. Moving the volatile tail after the history lets the history cache incrementally.
  *
- * The value is read through {@link ResolveVolatileStatePlacement}, which fails closed: anything
- * other than the exact string `'trailingMessage'` resolves to `'systemPrompt'`.
+ * The value is read through {@link ResolveVolatileStatePlacement}, which defaults to
+ * `'trailingMessage'`. Specifying `'systemPrompt'` explicitly falls back to the legacy layout.
  */
 export type VolatileStatePlacement = 'systemPrompt' | 'trailingMessage';
 
@@ -225,9 +225,9 @@ export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage
 /**
  * Normalizes the `volatileStatePlacement` prompt param to a {@link VolatileStatePlacement}.
  *
- * Fails closed: only the exact string `'trailingMessage'` selects the new placement; `undefined`,
- * `null`, a typo, or any other value resolves to `'systemPrompt'` (current behavior). Use this at
- * every read site so the template gate and the runtime wiring can never disagree.
+ * Defaults to `'trailingMessage'` so the loop agent's volatile per-iteration state is placed
+ * in the trailing message across all agents. Only an explicit value of `'systemPrompt'` reverts
+ * to the legacy system-prompt placement.
  *
  * @param promptParams The merged `__agentTypePromptParams` object (schema defaults + agent config
  *   + runtime overrides), or nothing.
@@ -235,7 +235,7 @@ export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage
 export function ResolveVolatileStatePlacement(
     promptParams: Record<string, unknown> | null | undefined
 ): VolatileStatePlacement {
-    return promptParams?.volatileStatePlacement === 'trailingMessage' ? 'trailingMessage' : 'systemPrompt';
+    return promptParams?.volatileStatePlacement === 'systemPrompt' ? 'systemPrompt' : 'trailingMessage';
 }
 
 export interface LoopAgentTypePromptParams {
@@ -335,13 +335,13 @@ export interface LoopAgentTypePromptParams {
 
     /**
      * Where the volatile per-iteration state (date/time, Scratchpad State, Payload) is placed in the
-     * request. `'systemPrompt'` keeps it at the tail of the system prompt (current behavior);
-     * `'trailingMessage'` moves it after the message history as a tagged `user`-role message so the
-     * history becomes prompt-cacheable across iterations. See {@link VolatileStatePlacement}.
+     * request. `'trailingMessage'` moves it after the message history as a tagged `user`-role message so
+     * the history becomes prompt-cacheable across iterations (default behavior). `'systemPrompt'` keeps
+     * it at the tail of the system prompt (legacy behavior). See {@link VolatileStatePlacement}.
      *
      * Only affects blocks that are enabled: a block turned off by `includeDateTimeInPrompt`,
      * `includeScratchpadDocs`, or `includePayloadInPrompt` is omitted in either placement.
-     * @default 'systemPrompt'
+     * @default 'trailingMessage'
      */
     volatileStatePlacement?: VolatileStatePlacement;
 
@@ -443,7 +443,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includePayloadInPrompt: true,
     includeDateTimeInPrompt: true,
     includeScratchpadDocs: true,
-    volatileStatePlacement: 'systemPrompt',
+    volatileStatePlacement: 'trailingMessage',
     specializationPlacement: 'auto',
     scratchpadMaxTasks: 50,
     includeArtifactToolsDocs: true,
