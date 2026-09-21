@@ -117,6 +117,8 @@
   <mj-dialog [Visible]="ShowEditor" Title="Feature Pipeline" [Width]="900" (Close)="OnEditorCancelled()">
     <mj-record-process-editor
       [RecordProcessID]="EditingPipelineID"
+      DefaultWorkType="Infer"
+      DefaultCategoryID="DF605624-5E5F-4508-A691-9E573FF3F3C3"
       (Saved)="OnEditorSaved($event)"
       (Cancelled)="OnEditorCancelled()">
     </mj-record-process-editor>
