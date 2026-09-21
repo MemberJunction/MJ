@@ -375,13 +375,26 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return this.FieldInfo?.AllowsNull === false;
   }
 
-  /** Whether this is a required field that is currently empty (for validation styling) */
+  /**
+   * Whether this is a required field that is currently empty (for validation styling).
+   *
+   * "Empty" means null/undefined ONLY — an empty string is a VALUE, not absence (MJ #4359).
+   * `IsRequired` here is derived from `AllowsNull === false`, i.e. the column's nullability, and a
+   * NOT NULL string column accepts `''` in both SQL Server and `EntityField.Validate()`. Counting
+   * `''` as empty therefore painted a field red that would save perfectly well — the form and the
+   * save disagreed about the same value, and the section indicators inherited the disagreement.
+   *
+   * Requiring actual text is a separate, deliberate constraint (an `IsRequired`-style flag of the
+   * kind `ActionParam` / `TemplateParam` carry, or a CHECK constraint), not something to infer from
+   * nullability. Until such a flag exists for entity fields, this getter mirrors what the save will
+   * actually refuse.
+   */
   get IsRequiredEmpty(): boolean {
     // Defer to the validation system when it has active errors for this field
     if (this.ShowErrors) return false;
     if (!this.IsRequired || !this.EditMode) return false;
     const val = this.Value;
-    return val === null || val === undefined || val === '';
+    return val === null || val === undefined;
   }
 
   // ---- INLINE VALIDATION ----
