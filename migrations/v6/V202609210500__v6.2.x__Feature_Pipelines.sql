@@ -43,6 +43,8 @@ CREATE TABLE [${flyway:defaultSchema}].[FeatureValueCache] (
     [LastHitAt]           DATETIMEOFFSET   NULL,
     [ComputedAt]          DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValueCache_ComputedAt] DEFAULT (sysdatetimeoffset()),
     [ExpiresAt]           DATETIMEOFFSET   NULL,
+    [__mj_CreatedAt]      DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValueCache___mj_CreatedAt] DEFAULT (GETUTCDATE()),
+    [__mj_UpdatedAt]      DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValueCache___mj_UpdatedAt] DEFAULT (GETUTCDATE()),
 
     CONSTRAINT [PK_FeatureValueCache] PRIMARY KEY CLUSTERED ([ID]),
     CONSTRAINT [FK_FeatureValueCache_RecordProcess] FOREIGN KEY ([RecordProcessID])
@@ -86,6 +88,8 @@ CREATE TABLE [${flyway:defaultSchema}].[FeatureValue] (
     [AIPromptRunID]       UNIQUEIDENTIFIER NULL,
     [FeatureValueCacheID] UNIQUEIDENTIFIER NULL,
     [ComputedAt]          DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValue_ComputedAt] DEFAULT (sysdatetimeoffset()),
+    [__mj_CreatedAt]      DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValue___mj_CreatedAt] DEFAULT (GETUTCDATE()),
+    [__mj_UpdatedAt]      DATETIMEOFFSET   NOT NULL CONSTRAINT [DF_FeatureValue___mj_UpdatedAt] DEFAULT (GETUTCDATE()),
 
     CONSTRAINT [PK_FeatureValue] PRIMARY KEY CLUSTERED ([ID]),
     CONSTRAINT [FK_FeatureValue_RecordProcess] FOREIGN KEY ([RecordProcessID])
