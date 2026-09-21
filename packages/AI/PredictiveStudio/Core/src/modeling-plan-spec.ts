@@ -44,6 +44,8 @@ export interface LeaderboardEntry {
  * before execution. Defined verbatim per plan §9.2.
  */
 export interface ModelingPlanSpec {
+  /** Optional display name for the plan/prediction. */
+  Name?: string;
   /** Business objective, refined from the user's initial goal. */
   Goal: string;
   /** Precise definition of what is being predicted. */
@@ -62,7 +64,7 @@ export interface ModelingPlanSpec {
   /** Candidate feed-in sources proposed by the Data Scout, each with rationale. */
   CandidateSources: Array<{ Kind: 'Entity' | 'Query' | 'ExternalEntity' | 'VectorSet' | 'FeaturePipeline'; Ref: string; Why: string }>;
   /** Candidate features proposed by the Data Scout, each with rationale. */
-  CandidateFeatures: Array<{ Name: string; SourceRef: string; Kind: 'numeric' | 'categorical' | 'embedding' | 'llm-derived'; Why: string }>;
+  CandidateFeatures: Array<{ Name: string; SourceRef: string; Kind: CandidateFeatureKind; Why: string }>;
   /** Leakage risks identified by the Data Scout and the chosen action per field. */
   LeakageNotes: Array<{ Field: string; Risk: string; Action: 'exclude' | 'allow' }>;
   /** Ranked experiments proposed by the Experiment Designer (feature combos × algorithms × hyperparameters). */
@@ -82,4 +84,17 @@ export interface ModelingPlanSpec {
   Approved?: boolean;
   /** Execution-phase leaderboard — one entry per Experiment Session Iteration. */
   Leaderboard?: Array<{ IterationID: string; Metric: number; ModelID?: string }>;
+}
+
+/** The allowed kinds for candidate features proposed by the Data Scout. */
+export type CandidateFeatureKind = 'numeric' | 'categorical' | 'embedding' | 'llm-derived';
+
+/** Structured warning emitted when a candidate feature cannot be mapped to a training pipeline step. */
+export interface FeatureStepWarning {
+  /** The name of the candidate feature that was dropped or could not be mapped. */
+  FeatureName: string;
+  /** The kind of feature ('numeric' | 'categorical' | 'embedding' | 'llm-derived'). */
+  Kind: CandidateFeatureKind | (string & {});
+  /** Explanatory reason why the feature was dropped or requires upstream handling. */
+  Reason: string;
 }

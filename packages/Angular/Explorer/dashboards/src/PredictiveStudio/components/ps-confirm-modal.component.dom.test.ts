@@ -1,6 +1,15 @@
+import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
+import { getTestBed } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, text, typeInto, capture } from '@memberjunction/ng-test-utils';
 import { PSConfirmModalComponent } from './ps-confirm-modal.component';
+
+try {
+  getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+} catch {
+  // already initialized
+}
 
 /**
  * DOM coverage for <ps-confirm-modal> — a standalone (self-importing) confirm modal with an optional

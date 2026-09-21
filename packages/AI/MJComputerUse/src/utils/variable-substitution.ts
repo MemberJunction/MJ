@@ -57,8 +57,15 @@ export function buildVariableValuesFromContext(
     const values: Record<string, unknown> = {};
 
     // Layer 1: env vars (lowest priority) — JSON-parse when value looks structured.
+    //
+    // An EMPTY value counts as unset. docker-compose declares each variable as
+    // `"${MJ_TEST_VAR_x:-}"`, so inside the container the key always exists — as ""
+    // when the host never supplied one. Treating that as a value substituted the
+    // empty string into every `{{authUsername}}`/`{{authPassword}}`, and the suite
+    // submitted blank credentials to the identity provider instead of failing with
+    // "variable not provided". A variable nobody set must look unset here.
     for (const [key, value] of Object.entries(env)) {
-        if (key.startsWith(ENV_PREFIX) && value !== undefined) {
+        if (key.startsWith(ENV_PREFIX) && value !== undefined && value.trim() !== '') {
             values[key.slice(ENV_PREFIX.length)] = maybeParseJsonScalar(value);
         }
     }
@@ -72,6 +79,37 @@ export function buildVariableValuesFromContext(
     }
 
     return values;
+}
+
+/**
+ * Every unresolved `{{var}}` in a test's auth bindings, labelled by where it sits.
+ *
+ * The auth block is the one place an unresolved placeholder cannot be seen in the
+ * run: a blank or literal `{{authPassword}}` is typed into the password field and
+ * the run fails at the identity provider looking like a credential problem, not a
+ * configuration one. `startUrl` and `goal` fail loudly on their own; this does not.
+ */
+export function findUnresolvedAuthPlaceholders(auth: unknown): string[] {
+    const bindings = (auth as { bindings?: unknown })?.bindings;
+    if (!Array.isArray(bindings)) {
+        return [];
+    }
+    const out: string[] = [];
+    bindings.forEach((binding, i) => {
+        const method = (binding as { method?: Record<string, unknown> })?.method;
+        if (!method) {
+            return;
+        }
+        for (const [field, value] of Object.entries(method)) {
+            if (typeof value !== 'string') {
+                continue;
+            }
+            for (const key of findUnresolvedPlaceholders(value)) {
+                out.push(`auth.bindings[${i}].${field}:{{${key}}}`);
+            }
+        }
+    });
+    return out;
 }
 
 /**
@@ -145,4 +183,22 @@ export function substituteVariables<T>(obj: T, values: Record<string, unknown>):
     };
 
     return walk(obj) as T;
+}
+
+/**
+ * Return the distinct `{{key}}` placeholder names still present in a string
+ * after substitution. A non-empty result means variables the string
+ * referenced were never provided — the caller can fail fast with the missing
+ * keys instead of letting the literal `{{key}}` flow into a URL/goal and
+ * surface later as a mysterious navigation error.
+ */
+export function findUnresolvedPlaceholders(value: string | undefined): string[] {
+    if (!value) {
+        return [];
+    }
+    const keys = new Set<string>();
+    for (const match of value.matchAll(EMBEDDED)) {
+        keys.add(match[1]);
+    }
+    return [...keys];
 }

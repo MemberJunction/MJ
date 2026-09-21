@@ -39,6 +39,7 @@
     "@memberjunction/core-entities": "6.1.0",
     "@memberjunction/global": "6.1.0",
     "@memberjunction/graphql-dataprovider": "6.1.0",
+    "@memberjunction/predictive-studio-core": "6.1.0",
     "@memberjunction/ng-action-gallery": "6.1.0",
     "@memberjunction/ng-actions": "6.1.0",
     "@memberjunction/ng-agents": "6.1.0",

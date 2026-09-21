@@ -35,6 +35,7 @@ import type {
   LeakageGuard,
   ProblemType,
   FeatureStepGraph,
+  OutcomeConfig,
 } from '@memberjunction/predictive-studio-core';
 
 import type { DatedSourceSpec } from '../feature-assembly';
@@ -115,6 +116,8 @@ export interface LoadedModel {
   asOf: AsOfStrategy;
   /** Leakage guard frozen on the model's pipeline (assembly input). */
   leakageGuard: LeakageGuard;
+  /** Metadata-driven outcome and band configuration frozen on the model or resolved from defaults. */
+  outcomeConfig: OutcomeConfig;
 }
 
 /**
