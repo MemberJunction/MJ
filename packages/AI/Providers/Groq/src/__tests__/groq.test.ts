@@ -31,6 +31,13 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 // Mock @memberjunction/ai
+// Imported by PATH rather than through the package barrel: the barrel pulls in the whole AI
+// surface (and @memberjunction/global, which is mocked here), while this module depends only
+// on chat.types. The helpers are pure functions, so the real ones are what the driver should
+// be tested against — a mocked copy would be the second implementation the shared module exists to prevent.
+import * as actualToolMapping from '../../../../Core/src/generic/openAICompatibleTools';
+import { toClassicChatMessageRole as actualToClassicChatMessageRole } from '../../../../Core/src/generic/chat.types';
+
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
         protected _apiKey: string;
@@ -120,6 +127,16 @@ vi.mock('@memberjunction/ai', () => {
         model: string = '';
     }
     return {
+        // The OpenAI-shaped tool mapping is pure functions over plain data, and it lives in
+        // @memberjunction/ai precisely so there is ONE implementation. Re-mocking it here would
+        // recreate the drift the shared module exists to prevent, so use the real thing.
+        buildOpenAICompatibleTools: actualToolMapping.buildOpenAICompatibleTools,
+        buildOpenAICompatibleToolChoice: actualToolMapping.buildOpenAICompatibleToolChoice,
+        buildOpenAICompatibleToolCalls: actualToolMapping.buildOpenAICompatibleToolCalls,
+        buildOpenAICompatibleToolResults: actualToolMapping.buildOpenAICompatibleToolResults,
+        extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
+        // Narrows a `tool` role to the classic trio; the driver relies on it, so use the real one.
+        toClassicChatMessageRole: actualToClassicChatMessageRole,
         BaseLLM,
         ModelUsage,
         ChatResult,

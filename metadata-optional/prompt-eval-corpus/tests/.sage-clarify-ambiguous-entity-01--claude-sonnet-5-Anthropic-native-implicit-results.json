@@ -1,0 +1,72 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "sage-clarify-ambiguous-entity-01 [claude-sonnet-5 · Anthropic · native-implicit-results]",
+    "Description": "'The report' is unresolvable without knowing which one. Asking is right; guessing an action is the over-eager failure a 26-action catalog invites.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Can you update the report?"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "sage-clarify-ambiguous-entity-01",
+      "expect": {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        },
+        "forbiddenActions": [
+          "Update Record",
+          "Create Record",
+          "Modify Document Section",
+          "Create Document"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Sage",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            },
+            "forbiddenActions": [
+              "Update Record",
+              "Create Record",
+              "Modify Document Section",
+              "Create Document"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "EDA5676B-8761-4CF0-A488-61D0978961D2"
+  }
+}

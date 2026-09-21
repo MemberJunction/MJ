@@ -1,5 +1,481 @@
 # @memberjunction/ai-mcp-server
 
+## 6.1.0
+
+### Minor Changes
+
+- ac96bb6: Empty turbo's global hash, and make every in-repo `mj` invocation resolve.
+
+  `hashOfInternalDependencies` — a hash over every non-gitignored file in the root manifest's
+  workspace-dependency closure — is an input to _every_ task hash in the repo. The root
+  `package.json` declared three `workspace:*` devDependencies (`cli`,
+  `integration-test-suite`, `server-bootstrap-lite`) whose combined closure was 154 of 310
+  packages, so editing any file in any of them invalidated all 310, builds and tests alike.
+  Task-level `inputs` cannot reach this; it is upstream of them. Removing the three drops a
+  one-file edit from 310/310 to 37/310 (`AI/Agents`) and 8/310 (Explorer dashboards).
+
+  Removing them also removes the workspace-root `node_modules/.bin/mj` that a number of things
+  quietly resolved through. Every consumer is repaired:
+  - The 15 root scripts, plus `check:ui-layers`, `check:standards` and `test:integration`, now
+    call `node packages/MJCLI/bin/run.js` directly.
+  - `mj.config.cjs`'s `checkModules` used a bare specifier that only worked via the symlink the
+    devDependency created. `check-module-loader.ts` _collects_ load failures rather than
+    throwing, so this would have silently degraded `mj test` to "Unknown integration check
+    bundle". Now an absolute `__dirname`-based path, asserted by `sibling-parity.test.ts`.
+  - Seven `prebuild`/`postbuild` hooks across `ng-bootstrap`, `ng-bootstrap-lite`,
+    `ng-explorer-core`, `server-bootstrap` and `server-bootstrap-lite` ran bare `mj codegen
+manifest` behind `|| echo 'Warning: …'`, so a lost CLI exits 0 and the build proceeds
+    against a stale class-registration manifest — a new `@RegisterClass` class never reaches it
+    and tree-shaking then drops it from bundled apps. Each now calls the workspace entry point
+    by path. Deliberately not a `@memberjunction/cli` devDependency: `ng-explorer-core` has six
+    dependents and `ng-bootstrap` two, so a devDep there would take a CLI edit from 6/310 to
+    12/310 invalidated packages, and `cli` itself depends on `server-bootstrap-lite`, where it
+    would be a build-graph cycle. A path call adds no graph edge.
+  - `a2aserver`, `ai-mcp-server` and `mj_codegen_api` ran bare `mj` in a fallback-less
+    `prestart`, exiting 127 where no global CLI existed and silently resolving a version-skewed
+    one where it did. Each now declares `@memberjunction/cli` — leaf packages only, so
+    `hashOfInternalDependencies` stays `""`.
+  - `pg-migrations.yml` invoked `npx mj` at four sites. With no root bin `npx` falls through to
+    the npm registry, where the package named `mj` is unrelated mongodb-js tooling — in a job
+    holding database credentials, in a workflow that does not trigger on `package.json`, so it
+    would have stayed silent until the next release-time PG run.
+
+  A new `check-mj-cli-resolution.mjs` gate in the `guards` job permits only the two forms that
+  actually resolve, so this cannot regress silently again.
+
+  `@memberjunction/testing-cli` carries a comment-only change to `check-module-loader.ts`
+  documenting why MJ's own root config cannot use a bare specifier while an adopter's can.
+
+  ***
+
+  **On the level:** this is `minor` to satisfy `check:changeset`, not because anything touches
+  the database. The branch adds no migration and edits no declarative metadata. The only file
+  it changes under `metadata/` is `metadata/CLAUDE.md` — an instruction document, part of the
+  repo-wide `npx mj` → `pnpm mj` rewrite — and the gate's trigger is `/^metadata\/.+/`, which
+  matches any path under that directory including Markdown. The rule's own justification for
+  metadata-⇒-minor is that "metadata counts as a migration because it becomes one" via the
+  release-time `mj sync push`; a `CLAUDE.md` never becomes one. Under permanent pre mode a
+  stray `minor` moves no version, so the cost is meaning rather than digits — hence this note,
+  so the next reader does not take it as precedent. Narrowing that pattern to exclude
+  Markdown belongs in its own PR against the gate.
+
+### Patch Changes
+
+- 4d33bc5: Security hardening from the first full CodeQL scan of the security-critical packages. None of these changes alter behavior for well-formed requests.
+
+  **`@memberjunction/server`**
+  - The Teams meetings Graph webhook rejects a `validationToken` that is not bounded-length printable ASCII with 400 before echoing anything, and sets `X-Content-Type-Options: nosniff` on the echo. Graph's real token is a short ASCII sentence plus a request id and is unaffected.
+
+  **`@memberjunction/ai-mcp-server`**
+  - **Open redirect closed** in the OAuth proxy's `/oauth/authorize`. Errors raised before the client was known and the `redirect_uri` registered for it (missing or unknown `client_id`, unregistered `redirect_uri`, unsupported `response_type`) were redirected to the caller-supplied `redirect_uri`, so any URL could be used as a bounce. Those errors now render the proxy's error page; errors after validation still redirect per RFC 6749.
+  - **Rate limiting** on every OAuth proxy route (authorize, callback, token, registration, login, consent, metadata), per client IP, 60 requests per minute by default and configurable through `OAuthProxyConfig.rateLimit`. Same `express-rate-limit` pattern as the server's magic-link and provider-catalog routers.
+  - Log lines that include caller-supplied values (`client_id`, upstream `error` / `error_description`) quote them so a newline in a parameter cannot forge a log entry.
+  - The OAuth proxy reads query-string parameters, and the form fields of the token and consent endpoints, through a helper that keeps only plain strings. A repeated parameter (`?code=a&code=b`, `code_verifier[]=…`), which Express parses to an array, is now treated as missing and takes each handler's existing error path instead of reaching string operations or the PKCE hash as an array (which previously produced a 500).
+  - The upstream token-exchange error log no longer prints the last eight characters of the authorization code or the first eight of the PKCE verifier. The remaining lines (status, endpoint, redirect URI, client id, verifier presence, provider error) are what diagnosing a failed exchange needs.
+
+- 41b0d28: Load Open App server packages in every MJ process, not only MJAPI (#4199).
+
+  `mj sync push` (and `mj app …`, `mj test`, the MCP/A2A servers, the integration-test bootstrap)
+  never imported an installed app's server package, so `Metadata.GetEntityObject` handed back a
+  generic `BaseEntity` for the app's entities and every custom `Save()`, validation rule and
+  lifecycle hook was silently skipped — while MJ core's own server subclasses, loaded through the
+  lite manifest, did run. New `@memberjunction/dynamic-packages` extracts the loader (and the
+  host-anchored import) out of `server-bootstrap` into a package with no MJ runtime dependencies,
+  and each host is now one `LoadDynamicPackages({ processId })` call. ServerBootstrap consumes it
+  with two deliberate behaviour changes: it no longer attempts to import the Angular forms package
+  into Node, and when an `mj-app.json` sits beside its `mj.config.cjs` (an Open App repo running its
+  own dev host) it now loads that app's server packages and resolver paths too.
+
+  `dynamicPackages.server[]` stays the single list `mj app install` writes; when both it and an
+  `mj-app.json` name a package, the config entry decides `Enabled` and scoping while the manifest's
+  on-disk location remains the resolution fallback. Entries gain optional
+  `Processes` / `ExcludeProcesses` (process IDs or prefixes: `cli`, `cli:sync`, `cli:sync:push`,
+  `mjapi`, `mcp`, …) and the section gains an optional `policy` map, so a package can be scoped to
+  just `mj sync` or switched off for `mj migrate`. `MJ_DYNAMIC_PACKAGES=none` and the global CLI
+  flag `--no-app-packages` (declared in `--help`) disable loading for one run — for app packages AND the
+  host's own generated packages; MJ core's classes still load from the manifest. The `mj` prerun hook
+  publishes its process id through `MJ_DYNAMIC_PACKAGES_PROCESS` so the nested `ai-cli` /
+  `testing-cli` bootstraps apply the same scoping and policy. A package already loaded in the process
+  is handed back from cache without re-running its startup export. New guide:
+  `guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`. `mj sync push` now warns, once per entity,
+  when it is about to write with a `BaseEntity` because no subclass is registered.
+
+- c679e8d: Fix the MCP OAuth proxy against Amazon Cognito: use the hosted-UI domain for the upstream endpoints.
+
+  The proxy derived its upstream `/authorize` and `/token` URLs with an Azure AD branch and an Auth0-shaped fallback, so a Cognito provider got `https://cognito-idp.<region>.amazonaws.com/<poolId>/authorize` — the user-pool API host, which answers HTTP 400. Cognito serves OAuth only on the hosted-UI domain (`https://<domain>.auth.<region>.amazoncognito.com/oauth2/authorize` and `/oauth2/token`); the issuer stays on `cognito-idp` and is still what validates tokens. The same fallback also appended `offline_access`, which Cognito rejects as `invalid_scope`.
+
+  Endpoint derivation now lives in `resolveUpstreamOAuthEndpoints()` (`@memberjunction/ai-mcp-server/auth/UpstreamEndpoints`) with an explicit Cognito branch. Azure AD and generic-OIDC (Auth0/Okta) URLs are unchanged and pinned by tests. The hosted-UI domain comes from the provider's existing optional `domain` field, which `CognitoProvider.ConfigFromEnvironment` now populates from `COGNITO_DOMAIN` — the same variable and host-only form MJExplorer already reads. `BaseAuthProvider` exposes `domain` alongside `clientId` for the proxy to read. A Cognito upstream configured without a domain now throws a message naming what to set, instead of silently building a URL that 400s.
+
+  The provider is also classified from the issuer's **hostname** rather than by substring-matching the whole issuer URL, which is how the Azure AD check worked before. An issuer is caller-supplied configuration, and the flavor decides which host a user's browser is sent to for login, so `https://evil.example/?microsoftonline.com` must not classify as Azure AD. Matching is exact-or-subdomain, so `notmicrosoftonline.com` does not match either. Legitimate issuers — including provider subdomains such as `login.partner.microsoftonline.com` — classify exactly as before.
+
+  Token validation is untouched: `domain` is optional and unused outside the OAuth proxy, so an existing Cognito deployment that never sets `COGNITO_DOMAIN` behaves exactly as before.
+
+- 8b78695: Regenerate the class-registration manifests so every one of them is on the chunked format.
+
+  The chunked manifest format (`CLASS_REGISTRATIONS_0`, `CLASS_REGISTRATIONS_1`, …) was introduced to keep
+  TypeScript from hitting TS2590 on a single union that had grown too large. Only `server-bootstrap` and
+  `server-bootstrap-lite` were regenerated at the time, so the remaining manifests stayed on the old
+  single-array shape and the `Build` job's manifest gate has been failing on `next` ever since.
+
+  This regenerates all of them from a fully-built workspace. Alongside the format change the sweep picks up
+  registrations that had drifted out: `MJAIUsageTypeEntity` and the `LinearPriceUnitType` /
+  `PerImagePriceUnitType` / `TimePerHourPriceUnitType` / `TimePerMinutePriceUnitType` pricing unit types in the
+  Angular bootstraps, and `MJEntityPermissionEntityServer` / `MJTenantFilterMiddleware` / `RateLimitMiddleware`
+  from `@memberjunction/server` in the server bootstrap.
+
+  Generated output only; no hand edits, no runtime behaviour change.
+
+  One thing worth knowing for anyone regenerating these in future: **the manifest generator is sensitive to
+  build state.** `resolveSubpathExportsDetailed()` resolves a package's lazy-loading subpaths by reading the
+  `.d.ts` each `exports` entry points at, and it `continue`s past any that is missing. Run `mj codegen manifest`
+  against a workspace whose `dist/` folders are absent and the subpaths silently resolve to nothing — the
+  package falls through to the whole-package branch and `lazy-feature-config.ts` collapses its twelve
+  per-dashboard chunks into one eager import, with no warning. Build the workspace first.
+
+- 9a29da4: Retire the Workflows app; make the Flow agent form first-class.
+
+  The Workflows app owned no storage — a workflow's WHAT is a Flow agent and there is no `Workflow` table — so it was a second list of rows the AI app already listed, fronted by a canvas that duplicated the Flow agent editor and had no Save path at all. Removed, and replaced by making the agent record answer what the app was implicitly about.
+
+  **`@memberjunction/ng-core-entity-forms`** — the AI Agents form is now tabbed: the agent type's designer (any type declaring a `UIFormSectionKey`), Details (the existing accordion set, unchanged), and Invocations. The designer pane is hidden with CSS rather than removed from the DOM, so unsaved canvas edits and canvas viewport state survive a tab switch. The default tab is the first that exists, so a Flow agent opens on its diagram.
+
+  **`@memberjunction/ng-agents`** — new `<mj-agent-invocations>`: a read-only index of every automated pathway that invokes an agent (Scheduled Jobs, User Routines, Entity Action bindings, Record Processes, sub-agent steps and relationships, `ExposeAsAction`). Answers "what runs this when I'm not looking?", which no surface could previously answer from the agent's side.
+
+  **`@memberjunction/ai-core-plus`** — `AgentSpec.Status` and `AgentStep.StepType` now derive from their entity fields instead of restating them. Both had drifted: `Status` declared `'Inactive'`, which `AIAgent.Status` has never accepted, so any caller setting it wrote a value the CHECK constraint rejects; `StepType` omitted `ForEach` and `While`, making loops executable but unauthorable. `AgentStep` gains `LoopBodyType` and `Configuration`, and the action mapping fields now admit the object form that callers already pass.
+
+  **`@memberjunction/ai-agent-manager`** — `AgentSpecSync` round-trips loop fields; new pure `ValidateLoopStep` catches a loop that saves cleanly and then iterates zero times; the Architect's status validator accepts `Disabled` rather than the invalid `Inactive`, and `WorkflowAgentWriter` maps Draft/Paused workflows to `Disabled`.
+
+  **`@memberjunction/ai-mcp-server`** — the `List_Agents` status filter no longer offers `Inactive`, which could never match a row.
+
+  **`@memberjunction/ng-dashboards`** — the Workflows dashboard, its module, its resource component and its `ng-task-graph-editor` dependency are removed. `mj-task-graph-editor` itself is unchanged and keeps its read-only consumers.
+
+  The `Workflow.Draft` / `Workflow.Save` / `Workflow.Validate` Remote Operations are deliberately kept — they are the agent- and MCP-facing contract and matter more now that creation is conversational.
+
+  A migration removes the Workflows Application row from existing databases (idempotent; a no-op on a clean install). The Architect prompt template change requires `mj sync push` to take effect.
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- Updated dependencies [394d276]
+- Updated dependencies [634aa8c]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [e4a6fa3]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [79483bf]
+- Updated dependencies [4586215]
+- Updated dependencies [22ec804]
+- Updated dependencies [197fdf8]
+- Updated dependencies [4d33bc5]
+- Updated dependencies [f6a4341]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [8206993]
+- Updated dependencies [2003cd3]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [b08d696]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [199eb2b]
+- Updated dependencies [1940a4d]
+- Updated dependencies [489aecd]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [41b0d28]
+- Updated dependencies [fd0a019]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [78e2667]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [ada8784]
+- Updated dependencies [8ec1515]
+- Updated dependencies [eb962a1]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [b832d75]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [806e7f2]
+- Updated dependencies [55d6299]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [2875f6f]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [c679e8d]
+- Updated dependencies [a723521]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [394d276]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [7857d8e]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d0eab88]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [d0568e6]
+- Updated dependencies [23c2521]
+- Updated dependencies [44fca09]
+- Updated dependencies [2741d46]
+- Updated dependencies [be99b35]
+- Updated dependencies [048c5ce]
+- Updated dependencies [0acf96e]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [ebbc4e7]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [a77afac]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [2e2879e]
+- Updated dependencies [80fcb61]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [c3557f8]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [b46330e]
+- Updated dependencies [92af88b]
+- Updated dependencies [8b78695]
+- Updated dependencies [cdd25c0]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0d1f748]
+- Updated dependencies [6a06c80]
+- Updated dependencies [e1ebab9]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [9a29da4]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [512bb53]
+- Updated dependencies [6d130a5]
+- Updated dependencies [3014248]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [de343b5]
+- Updated dependencies [ac7a79a]
+- Updated dependencies [5fc861f]
+- Updated dependencies [a09bfb5]
+- Updated dependencies [c11f8c6]
+- Updated dependencies [1748491]
+- Updated dependencies [1100077]
+- Updated dependencies [45ca475]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [35ace7c]
+- Updated dependencies [0db6105]
+- Updated dependencies [d7feeae]
+- Updated dependencies [7fefca2]
+- Updated dependencies [cda0187]
+- Updated dependencies [f2f1491]
+- Updated dependencies [19ca0b4]
+- Updated dependencies [a1a8989]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [ca3657d]
+- Updated dependencies [2262b40]
+- Updated dependencies [394d276]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [6d4182d]
+- Updated dependencies [ac96bb6]
+- Updated dependencies [d8adda1]
+- Updated dependencies [88f8898]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [6cd337d]
+- Updated dependencies [394d276]
+- Updated dependencies [1c0d586]
+  - @memberjunction/actions@6.1.0
+  - @memberjunction/ai-core-plus@6.1.0
+  - @memberjunction/ai-agents@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/aiengine@6.1.0
+  - @memberjunction/ai@6.1.0
+  - @memberjunction/server@6.1.0
+  - @memberjunction/server-bootstrap-lite@6.1.0
+  - @memberjunction/api-keys@6.1.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0
+  - @memberjunction/generic-database-provider@6.1.0
+  - @memberjunction/ai-prompts@6.1.0
+  - @memberjunction/dynamic-packages@6.1.0
+  - @memberjunction/actions-base@6.1.0
+  - @memberjunction/auth-providers@6.1.0
+  - @memberjunction/credentials@6.1.0
+  - @memberjunction/ai-agent-manager@6.1.0
+  - @memberjunction/encryption@6.1.0
+  - @memberjunction/ai-provider-bundle@6.1.0
+  - @memberjunction/config@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [44fca09]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [45ca475]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [35ace7c]
+- Updated dependencies [88f8898]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/aiengine@6.1.0-edge.7
+  - @memberjunction/ai-agents@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/server@6.1.0-edge.7
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/generic-database-provider@6.1.0-edge.7
+  - @memberjunction/ai-prompts@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/ai-agent-manager@6.1.0-edge.7
+  - @memberjunction/api-keys@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/actions@6.1.0-edge.7
+  - @memberjunction/credentials@6.1.0-edge.7
+  - @memberjunction/encryption@6.1.0-edge.7
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.7
+  - @memberjunction/auth-providers@6.1.0-edge.7
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.7
+  - @memberjunction/config@6.1.0-edge.7
+  - @memberjunction/dynamic-packages@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Minor Changes

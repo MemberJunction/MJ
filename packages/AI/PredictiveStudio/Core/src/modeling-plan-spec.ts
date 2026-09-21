@@ -44,6 +44,8 @@ export interface LeaderboardEntry {
  * before execution. Defined verbatim per plan §9.2.
  */
 export interface ModelingPlanSpec {
+  /** Optional display name for the plan/prediction. */
+  Name?: string;
   /** Business objective, refined from the user's initial goal. */
   Goal: string;
   /** Precise definition of what is being predicted. */
