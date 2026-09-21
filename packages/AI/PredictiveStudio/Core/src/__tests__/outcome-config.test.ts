@@ -92,6 +92,26 @@ describe('resolveOutcomeConfig', () => {
     expect(resolved.Bands![0].Label).toBe('High');
     expect(resolved.Bands![0].BadgeColor).toBe('gray');
   });
+
+  it('defensively closes small sentinel band gaps in user-supplied configuration', () => {
+    const custom: OutcomeConfig = {
+      Polarity: 'adverse',
+      Bands: [
+        { Key: 'low', Label: 'Low', Min: 0, Max: 0.3999, BadgeColor: 'green' },
+        { Key: 'medium', Label: 'Medium', Min: 0.4, Max: 0.6999, BadgeColor: 'amber' },
+        { Key: 'high', Label: 'High', Min: 0.7, Max: 1.0, BadgeColor: 'red' },
+      ],
+    };
+
+    const resolved = resolveOutcomeConfig({ outcomeConfig: custom });
+    expect(resolved.Bands![0].Max).toBe(0.4);
+    expect(resolved.Bands![1].Max).toBe(0.7);
+    expect(resolved.Bands![2].Max).toBe(1.0);
+
+    // Score in previous gap (0.39995) should resolve cleanly to low band
+    const match = resolveScoreBand(0.39995, resolved);
+    expect(match?.Key).toBe('low');
+  });
 });
 
 describe('resolveScoreBand', () => {

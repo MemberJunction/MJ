@@ -134,9 +134,12 @@ export class RecordOriginCrumbComponent {
       if (this.asyncResolvedLabel) {
         return this.asyncResolvedLabel;
       }
-      const entity = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === this.Origin?.sourceRecordEntity?.toLowerCase());
+      const md = Metadata.Provider; // global-provider-ok: shell breadcrumb component displays navigation history using global metadata cache
+      const entity = typeof md?.EntityByName === 'function'
+        ? md.EntityByName(this.Origin.sourceRecordEntity)
+        : md?.Entities?.find(e => e.Name.toLowerCase() === this.Origin?.sourceRecordEntity?.toLowerCase());
       const key = CompositeKey.FromURLSegment(entity, this.Origin.sourceRecordId);
-      const cached = Metadata.Provider ? Metadata.Provider.GetCachedRecordNameOnlyIfCached(this.Origin.sourceRecordEntity, key) : undefined;
+      const cached = md ? md.GetCachedRecordNameOnlyIfCached(this.Origin.sourceRecordEntity, key) : undefined;
       if (cached) {
         return cached;
       }
@@ -150,17 +153,20 @@ export class RecordOriginCrumbComponent {
   }
 
   private resolveAsyncLabel(): void {
-    if (this.Origin?.sourceRecordEntity && this.Origin?.sourceRecordId && Metadata.Provider) {
-      const entity = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === this.Origin?.sourceRecordEntity?.toLowerCase());
+    const md = Metadata.Provider; // global-provider-ok: shell breadcrumb component asynchronously resolves record name using global metadata provider
+    if (this.Origin?.sourceRecordEntity && this.Origin?.sourceRecordId && md) {
+      const entity = typeof md.EntityByName === 'function'
+        ? md.EntityByName(this.Origin.sourceRecordEntity)
+        : md.Entities?.find(e => e.Name.toLowerCase() === this.Origin?.sourceRecordEntity?.toLowerCase());
       const key = CompositeKey.FromURLSegment(entity, this.Origin.sourceRecordId);
-      const cached = Metadata.Provider.GetCachedRecordNameOnlyIfCached(this.Origin.sourceRecordEntity, key);
+      const cached = md.GetCachedRecordNameOnlyIfCached(this.Origin.sourceRecordEntity, key);
       if (cached) {
         this.asyncResolvedLabel = cached;
         return;
       }
       const entityName = this.Origin.sourceRecordEntity;
-      if (typeof Metadata.Provider?.GetEntityRecordName === 'function') {
-        Metadata.Provider.GetEntityRecordName(entityName, key).then(name => {
+      if (typeof md.GetEntityRecordName === 'function') {
+        md.GetEntityRecordName(entityName, key).then(name => {
           if (name && this.Origin?.sourceRecordEntity === entityName) {
             this.asyncResolvedLabel = name;
             this.cdr.markForCheck();

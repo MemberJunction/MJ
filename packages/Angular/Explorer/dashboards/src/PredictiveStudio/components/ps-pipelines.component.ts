@@ -955,7 +955,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   public openModelRecord(modelId: string): void {
     if (!modelId) return;
     try {
-      const p = this.provider || Metadata.Provider;
+      const p = this.provider ?? new Metadata();
       if (!p) return;
       const entity = p.EntityByName('MJ: ML Models');
       if (!entity) return;
@@ -972,7 +972,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       return;
     }
     try {
-      const p = this.provider || Metadata.Provider;
+      const p = this.provider ?? new Metadata();
       if (!p) return;
       const runs = this.engine?.TrainingRuns ?? [];
       const match = modelId
@@ -1293,10 +1293,10 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   }
 
   private sourceNode(sb: SourceBinding, i: number): DagNode {
-    const md = this.provider || Metadata.Provider;
+    const md = this.provider ?? new Metadata();
     let title = sb.Alias;
     if (!title && sb.Kind === 'Entity') {
-      const entity = md?.Entities?.find((e) => e.Name.toLowerCase() === sb.Ref.toLowerCase());
+      const entity = md?.EntityByName(sb.Ref);
       title = entity?.DisplayName || entity?.Name;
     }
     title = title || sb.Ref || 'source';

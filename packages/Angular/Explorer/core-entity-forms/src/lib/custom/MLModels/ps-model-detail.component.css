@@ -90,8 +90,8 @@
   border-radius: 12px;
   display: grid;
   place-items: center;
-  background: #2050c8;
-  color: #fff;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   font-size: 20px;
   flex: 0 0 auto;
 }
@@ -148,7 +148,7 @@
 .ps-model-detail .ps-step.done .pip {
   background: var(--mj-status-success, #15803d);
   border-color: var(--mj-status-success, #15803d);
-  color: #fff;
+  color: var(--mj-text-inverse);
 }
 .ps-model-detail .ps-stepper .ln {
   flex: 1;
@@ -259,12 +259,12 @@
 }
 .ps-model-detail .ps-callout.success {
   background: var(--mj-status-success-bg, #f0fdf4);
-  border-color: rgba(22, 163, 74, 0.25);
+  border-color: color-mix(in srgb, var(--mj-status-success) 25%, transparent);
   color: var(--mj-status-success-text, #15803d);
 }
 .ps-model-detail .ps-callout.warn {
   background: var(--mj-status-warning-bg, #fffbeb);
-  border-color: rgba(217, 130, 19, 0.25);
+  border-color: color-mix(in srgb, var(--mj-status-warning) 25%, transparent);
   color: var(--mj-status-warning-text, #b45309);
 }
 
@@ -302,7 +302,7 @@
   display: grid;
   place-items: center;
   background: var(--mj-brand-primary);
-  color: #fff;
+  color: var(--mj-text-inverse);
   font-size: 15px;
 }
 .ps-model-detail .ps-modal-head.warn .ico {

@@ -311,6 +311,31 @@ export function resolveOutcomeConfig(modelLike?: {
 }
 
 /**
+ * Closes small sentinel gaps between consecutive sorted bands defensively
+ * (e.g. [0, 0.3999) and [0.4, 0.6999) -> [0, 0.4) and [0.4, 0.7)).
+ */
+function closeSentinelBandGaps(bands: OutcomeBand[]): OutcomeBand[] {
+  if (!bands || bands.length <= 1) return bands;
+  const indices = bands.map((_, i) => i).sort((a, b) => bands[a].Min - bands[b].Min);
+  const result = bands.map((b) => ({ ...b }));
+
+  for (let i = 0; i < indices.length - 1; i++) {
+    const curIdx = indices[i];
+    const nextIdx = indices[i + 1];
+    const cur = result[curIdx];
+    const next = result[nextIdx];
+    if (cur.Max < next.Min) {
+      const gap = next.Min - cur.Max;
+      // Close small gaps (<= 0.01 for probabilities or <= 1 for large monetary thresholds)
+      if (gap <= 0.01 || (next.Min >= 10 && gap <= 1)) {
+        cur.Max = next.Min;
+      }
+    }
+  }
+  return result;
+}
+
+/**
  * Normalizes an incoming OutcomeConfig to ensure sensible defaults for any omitted properties.
  */
 function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
@@ -321,6 +346,7 @@ function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
       : polarity === 'adverse'
         ? DEFAULT_ADVERSE_BANDS
         : DEFAULT_NEUTRAL_BANDS;
+  const rawBands = cfg.Bands && cfg.Bands.length > 0 ? cfg.Bands : [...defaultBands];
   return {
     ScoreLabel:
       cfg.ScoreLabel ??
@@ -338,7 +364,7 @@ function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
           : 'Prediction Tier'),
     Polarity: polarity,
     Format: cfg.Format,
-    Bands: cfg.Bands && cfg.Bands.length > 0 ? cfg.Bands : [...defaultBands],
+    Bands: closeSentinelBandGaps(rawBands),
     OutcomeStyles: cfg.OutcomeStyles ?? {},
   };
 }

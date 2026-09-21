@@ -502,10 +502,12 @@ export class NavigationService implements OnDestroy {
     // a record, which is the protection the old unconditional force provided.
     let forceNew = this.shouldForceNewTab(options);
 
-    const entityInfo = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves entity and cached record names using global metadata cache
+    const entityInfo = typeof md?.EntityByName === 'function'
+      ? md.EntityByName(entityName)
+      : md?.Entities?.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
     const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
     const compositeKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(entityInfo, recordId) : new CompositeKey();
-    const md = Metadata.Provider;
     const cachedRecordName = md ? md.GetCachedRecordNameOnlyIfCached(entityName, compositeKey) : undefined;
     const initialTitle = cachedRecordName || friendlyEntityName;
 
@@ -676,9 +678,11 @@ export class NavigationService implements OnDestroy {
       const parentRecordId = activeTab.resourceRecordId || activeTab.configuration?.['recordId'];
       if (typeof parentEntity === 'string' && typeof parentRecordId === 'string' && parentRecordId) {
         context['sourceTabId'] = activeTab.id;
-        const parentEntityInfo = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === parentEntity.toLowerCase());
+        const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves parent entity and cached record names using global metadata cache
+        const parentEntityInfo = typeof md?.EntityByName === 'function'
+          ? md.EntityByName(parentEntity)
+          : md?.Entities?.find(e => e.Name.toLowerCase() === parentEntity.toLowerCase());
         const parentKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(parentEntityInfo, parentRecordId) : new CompositeKey();
-        const md = Metadata.Provider;
         const cachedParentName = md ? md.GetCachedRecordNameOnlyIfCached(parentEntity, parentKey) : undefined;
         const fallbackParentLabel = parentEntityInfo?.DisplayName || parentEntityInfo?.Name || parentEntity;
         const sourceLabel = cachedParentName || (activeTab.title && !activeTab.title.includes(parentRecordId) ? activeTab.title : fallbackParentLabel);
@@ -1061,7 +1065,10 @@ export class NavigationService implements OnDestroy {
     // a record the user is reading.
     let forceNew = tabsMode || this.shouldForceNewTab(options);
 
-    const entityInfo = Metadata.Provider?.Entities?.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves entity name for new record tab using global metadata cache
+    const entityInfo = typeof md?.EntityByName === 'function'
+      ? md.EntityByName(entityName)
+      : md?.Entities?.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
     const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
 
     const request: TabRequest = {
