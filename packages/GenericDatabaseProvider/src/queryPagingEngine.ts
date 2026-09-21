@@ -336,6 +336,15 @@ export class QueryPagingEngine {
     private static readonly OUTER_LIMIT_OFFSET = /\s+LIMIT\s+(ALL|\d+)(?:\s+OFFSET\s+\d+)?\s*$/i;
 
     /**
+     * How much of a statement's tail the end-anchored clause matchers above are run against.
+     *
+     * Generous next to what they match — `LIMIT 18446744073709551615 OFFSET 18446744073709551615`
+     * is under 60 characters — and it exists only so the match cost cannot grow with the size of
+     * the statement in front of it.
+     */
+    private static readonly OUTER_CLAUSE_TAIL = 512;
+
+    /**
      * Removes a statement-closing `LIMIT [OFFSET]` so a paging clause can be appended without
      * colliding with it.
      *
@@ -349,7 +358,21 @@ export class QueryPagingEngine {
      * `TOP` strip above and of `stripCountBody`'s `ClearOuterCap`.
      */
     static stripOuterLimitOffset(sql: string): { sql: string; limitRemoved: number | null } {
-        const match = sql.match(QueryPagingEngine.OUTER_LIMIT_OFFSET);
+        // MATCHED AGAINST A BOUNDED TAIL, not the whole statement. The pattern opens with `\s+`
+        // and ends at `$`, so running it over the full SQL lets the engine retry from every index
+        // inside a long whitespace run and give the run back one character at a time — quadratic
+        // in the length of that run, which is the ReDoS CodeQL flags here. The clause this matches
+        // closes the statement, so only the tail can ever contain it.
+        //
+        // Slicing cannot invent a match: the slice is a suffix of `sql`, and an end-anchored match
+        // on a suffix is a match on the whole string. It can only shorten the leading whitespace
+        // the match claims, which leaves a space at the end of the stripped SQL and changes
+        // nothing about its meaning. A clause longer than the window makes this abstain, which is
+        // the pre-existing behaviour and is documented above as always safe.
+        const tail = sql.length > QueryPagingEngine.OUTER_CLAUSE_TAIL
+            ? sql.slice(sql.length - QueryPagingEngine.OUTER_CLAUSE_TAIL)
+            : sql;
+        const match = tail.match(QueryPagingEngine.OUTER_LIMIT_OFFSET);
         if (!match) return { sql, limitRemoved: null };
 
         const strippedSQL = sql.substring(0, sql.length - match[0].length);
