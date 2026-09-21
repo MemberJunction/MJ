@@ -65,19 +65,20 @@ function makeInputs(agentTypePromptParams: Record<string, unknown>, withChild = 
     return { params, promptParams, data, conversationMessages };
 }
 
-const TRAILING = { volatileStatePlacement: 'trailingMessage' };
+const TRAILING = {};
 
 describe('BaseAgent.buildVolatileStateMessage', () => {
     beforeEach(() => { templates.byId.clear(); templates.byId.set('tmpl-sage', '# Sage\n\n## Role\n- Your name is Sage'); });
 
-    it('returns null under explicit systemPrompt placement and leaves everything untouched', async () => {
+    it('a stale volatileStatePlacement key in agent config is ignored: the fragment is still emitted', async () => {
+        // Placement is framework behaviour. Agents configured under the earlier opt-in design may still
+        // carry this key; it must never switch the runtime state off, since the template no longer renders it.
         const a = agentUnderTest();
-        const { params, promptParams, data, conversationMessages } = makeInputs({ volatileStatePlacement: 'systemPrompt' });
+        const { params, promptParams } = makeInputs({ volatileStatePlacement: 'systemPrompt' });
         const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE);
-        expect(msg).toBeNull();
-        expect(conversationMessages).toHaveLength(2);
-        expect(data._SPECIALIZATION_RELOCATED).toBeUndefined();
-        expect(a._promptRunner.RenderChildPromptTemplates).not.toHaveBeenCalled();
+        expect(msg).not.toBeNull();
+        expect(msg!.metadata?.volatileState).toBe(true);
+        expect(String(msg!.content)).toContain('## Current Date/Time');
     });
 
     it('defaults to trailing placement when no placement is specified', async () => {

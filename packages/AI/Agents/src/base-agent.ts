@@ -115,7 +115,6 @@ import {
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage } from './runtime-state-fragment';
-import { ResolveVolatileStatePlacement } from './agent-types/loop-agent-prompt-params';
 import { ResolveSpecializationPlacement } from './volatile-child-prompt';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
@@ -4178,10 +4177,10 @@ export class BaseAgent {
             );
         }
 
-        // Prompt-cache layout. Under `volatileStatePlacement: 'trailingMessage'` the per-iteration state
-        // (and, when the child prompt is volatile, the specialization) leaves the system prompt and rides as
-        // the FINAL message of THIS request. Appended to a COPY: the fragment is per-call and must never
-        // enter the persisted history — the history has to stay a byte-stable, cacheable prefix.
+        // Prompt-cache layout. The per-iteration state (and, when the child prompt is volatile, the
+        // specialization) never lives in the system prompt; it rides as the FINAL message of THIS request.
+        // Appended to a COPY: the fragment is per-call and must never enter the persisted history — the
+        // history has to stay a byte-stable, cacheable prefix.
         const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType, systemPrompt);
         if (volatileStateMessage) {
             promptParams.conversationMessages = this.assembleOutgoingMessages(params.conversationMessages, volatileStateMessage);
@@ -4206,10 +4205,11 @@ export class BaseAgent {
     }
 
     /**
-     * Builds the framework-authored `user` message that carries the loop agent's volatile state when
-     * `volatileStatePlacement` is `'trailingMessage'`; returns null under the default placement or when
-     * every block is turned off. The blocks mirror the system-prompt template's own sections (see
-     * {@link RuntimeStateFragmentBuilder}), and each honors the same include flag the template does.
+     * Builds the framework-authored `user` message that carries the loop agent's volatile state as the
+     * final message of the request; returns null only when every block is turned off, or when the
+     * system prompt template in this database has not yet synced and still embeds the state itself
+     * (see the guard below). The blocks mirror the sections the template used to render (see
+     * {@link RuntimeStateFragmentBuilder}), and each honors the same include flag the template did.
      *
      * Why this exists: provider prompt caching is a prefix match over tools → system → messages, so
      * state that changes every iteration INSIDE the system prompt invalidates the entire history each
@@ -4229,9 +4229,6 @@ export class BaseAgent {
     ): Promise<AgentChatMessage | null> {
         const data = promptParams.data ?? {};
         const agentTypePromptParams = data.__agentTypePromptParams as Record<string, unknown> | undefined;
-        if (ResolveVolatileStatePlacement(agentTypePromptParams) !== 'trailingMessage') {
-            return null;
-        }
 
         // Guard: if the system prompt template still embeds volatile state blocks (e.g. on an environment
         // where TemplateContent has not yet synced the new template), suppress the trailing fragment so
@@ -4341,7 +4338,7 @@ export class BaseAgent {
             const template = TemplateEngineServer.Instance.FindTemplate(prompt.TemplateID);
             return template?.GetHighestPriorityContent()?.TemplateText ?? null;
         } catch (e) {
-            this.logError(e instanceof Error ? e : String(e), { category: 'VolatileStatePlacement', severity: 'warning' });
+            this.logError(e instanceof Error ? e : String(e), { category: 'RuntimeStateFragment', severity: 'warning' });
             return null;
         }
     }
@@ -4371,7 +4368,7 @@ export class BaseAgent {
                 const value = await placeholder.getValue(promptParams);
                 return value == null ? null : String(value);
             } catch (e) {
-                this.logError(e instanceof Error ? e : String(e), { category: 'VolatileStatePlacement', severity: 'warning', metadata: { placeholder: name } });
+                this.logError(e instanceof Error ? e : String(e), { category: 'RuntimeStateFragment', severity: 'warning', metadata: { placeholder: name } });
                 return null;
             }
         };

@@ -11,7 +11,7 @@ import {
 const STATIC = '# Sage\n\n## Role\n- Your name is Sage\n- You operate like a skilled concierge.';
 const DATED = `${STATIC}\n\nCurrent date/time: {{ _CURRENT_DATE_AND_TIME }}`;
 const PAYLOADED = `${STATIC}\n\n## Working state\n{{ _CURRENT_PAYLOAD | dump }}`;
-const TRAILING: Record<string, unknown> = { volatileStatePlacement: 'trailingMessage' };
+const TRAILING: Record<string, unknown> = {};
 
 describe('VOLATILE_PLACEHOLDER_NAMES', () => {
     it('covers every Date & Time system placeholder except the stable timezone', () => {
@@ -76,9 +76,10 @@ describe('ResolveSpecializationPlacementParam', () => {
 });
 
 describe('ResolveSpecializationPlacement', () => {
-    it('never relocates under systemPrompt runtime-state placement, whatever else is set', () => {
-        expect(ResolveSpecializationPlacement({ volatileStatePlacement: 'systemPrompt' }, DATED)).toBe('systemPrompt');
-        expect(ResolveSpecializationPlacement({ volatileStatePlacement: 'systemPrompt', specializationPlacement: 'trailingMessage' }, DATED)).toBe('systemPrompt');
+    it('ignores a stale volatileStatePlacement key: placement is decided by the child prompt and specializationPlacement alone', () => {
+        expect(ResolveSpecializationPlacement({ volatileStatePlacement: 'systemPrompt' }, DATED)).toBe('trailingMessage');
+        expect(ResolveSpecializationPlacement({ volatileStatePlacement: 'systemPrompt', specializationPlacement: 'trailingMessage' }, STATIC)).toBe('trailingMessage');
+        expect(ResolveSpecializationPlacement({ volatileStatePlacement: 'systemPrompt', specializationPlacement: 'systemPrompt' }, DATED)).toBe('systemPrompt');
     });
 
     it('defaults to relocating volatile child prompts under default trailing placement', () => {

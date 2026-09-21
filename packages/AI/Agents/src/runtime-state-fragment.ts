@@ -1,10 +1,9 @@
 /**
  * @fileoverview Renders the loop agent's volatile per-iteration state as a trailing message fragment.
  *
- * Under `volatileStatePlacement: 'trailingMessage'` (see {@link VolatileStatePlacement}), the three
- * blocks that change on almost every iteration — current date/time, Scratchpad State, and the
- * Payload — are omitted from the system prompt and delivered instead as the FINAL message of the
- * request, wrapped in `<mj-runtime-state>` tags. When the agent's child prompt (its specialization)
+ * The three blocks that change on almost every iteration — current date/time, Scratchpad State, and
+ * the Payload — are never rendered in the system prompt; they are delivered as the FINAL message of
+ * the request, wrapped in `<mj-runtime-state>` tags. When the agent's child prompt (its specialization)
  * is itself volatile, it rides in the same message inside `<mj-agent-specialization>` tags.
  *
  * Why: provider prompt caching is a prefix match over `tools → system → messages`. Anything that

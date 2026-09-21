@@ -108,14 +108,14 @@ describe('Loop Agent Type system prompt — rendered snapshot', () => {
         expect(rendered).not.toContain(AGENT_SPECIALIZATION_TAG);
     });
 
-    it('trailingMessage placement is identical to the default', () => {
+    it('a stale volatileStatePlacement key in the params does not change the rendering', () => {
         const def = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS });
-        const trailing = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, volatileStatePlacement: 'trailingMessage' });
-        expect(trailing).toBe(def);
+        const stale = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, volatileStatePlacement: 'systemPrompt' } as Record<string, unknown>);
+        expect(stale).toBe(def);
     });
 
     it('relocating the specialization swaps the child prompt for a stub and extends the pointer', () => {
-        const relocated = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, volatileStatePlacement: 'trailingMessage' }, { _SPECIALIZATION_RELOCATED: true });
+        const relocated = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS }, { _SPECIALIZATION_RELOCATED: true });
         expect(relocated).not.toContain('[[CHILD PROMPT — frozen for snapshot]]');
         expect(relocated).toContain('## Specialization');
         expect(relocated).toContain(`\`<${AGENT_SPECIALIZATION_TAG}>\``);
@@ -123,11 +123,11 @@ describe('Loop Agent Type system prompt — rendered snapshot', () => {
     });
 
     it('the pointer is omitted when state is disabled and nothing is relocated', () => {
-        const none = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, volatileStatePlacement: 'trailingMessage', includeDateTimeInPrompt: false, includeScratchpadDocs: false, includePayloadInPrompt: false });
+        const none = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, includeDateTimeInPrompt: false, includeScratchpadDocs: false, includePayloadInPrompt: false });
         expect(none).not.toContain('## Runtime State');
         expect(none).not.toContain('## Current Date/Time');
         // …but relocating the specialization alone is enough to bring the pointer back.
-        const specOnly = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, volatileStatePlacement: 'trailingMessage', includeDateTimeInPrompt: false, includeScratchpadDocs: false, includePayloadInPrompt: false }, { _SPECIALIZATION_RELOCATED: true });
+        const specOnly = renderSystemPrompt({ ...DEFAULT_LOOP_AGENT_PROMPT_PARAMS, includeDateTimeInPrompt: false, includeScratchpadDocs: false, includePayloadInPrompt: false }, { _SPECIALIZATION_RELOCATED: true });
         expect(specOnly).toContain('## Runtime State');
     });
 

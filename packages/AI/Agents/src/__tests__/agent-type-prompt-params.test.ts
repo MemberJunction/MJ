@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { LoopAgentTypePromptParams, DEFAULT_LOOP_AGENT_PROMPT_PARAMS, ResponseTypeInclusionRules, DEFAULT_RESPONSE_TYPE_INCLUSION_RULES, ResolveVolatileStatePlacement, VolatileStatePlacement } from '../agent-types/loop-agent-prompt-params';
+import { LoopAgentTypePromptParams, DEFAULT_LOOP_AGENT_PROMPT_PARAMS, ResponseTypeInclusionRules, DEFAULT_RESPONSE_TYPE_INCLUSION_RULES } from '../agent-types/loop-agent-prompt-params';
 
 // ============================================================================
 // Test Helpers - Standalone implementations of the methods for testing
@@ -374,7 +374,6 @@ describe('DEFAULT_LOOP_AGENT_PROMPT_PARAMS', () => {
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeVariableRefsDocs).toBe(schemaDefaults.includeVariableRefsDocs);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includePayloadInPrompt).toBe(schemaDefaults.includePayloadInPrompt);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeDateTimeInPrompt).toBe(schemaDefaults.includeDateTimeInPrompt);
-        expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.volatileStatePlacement).toBe('trailingMessage');
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.specializationPlacement).toBe(schemaDefaults.specializationPlacement);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.maxSubAgentsInPrompt).toBe(schemaDefaults.maxSubAgentsInPrompt);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.maxActionsInPrompt).toBe(schemaDefaults.maxActionsInPrompt);
@@ -382,48 +381,16 @@ describe('DEFAULT_LOOP_AGENT_PROMPT_PARAMS', () => {
 });
 
 // ============================================================================
-// Tests for volatileStatePlacement (prompt-cache tail decoupling)
+// Runtime-state placement is framework behaviour, not a prompt param
 // ============================================================================
 
-describe('volatileStatePlacement', () => {
-    it('defaults to trailingMessage in the constant', () => {
-        expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.volatileStatePlacement).toBe('trailingMessage');
+describe('runtime-state placement is not configurable', () => {
+    it('the defaults carry no volatileStatePlacement key', () => {
+        expect('volatileStatePlacement' in DEFAULT_LOOP_AGENT_PROMPT_PARAMS).toBe(false);
     });
 
-    it('resolves to trailingMessage when the param is absent', () => {
-        expect(ResolveVolatileStatePlacement(undefined)).toBe('trailingMessage');
-        expect(ResolveVolatileStatePlacement(null)).toBe('trailingMessage');
-        expect(ResolveVolatileStatePlacement({})).toBe('trailingMessage');
-        expect(ResolveVolatileStatePlacement({ includeScratchpadDocs: true })).toBe('trailingMessage');
-    });
-
-    it('resolves to trailingMessage for trailingMessage', () => {
-        expect(ResolveVolatileStatePlacement({ volatileStatePlacement: 'trailingMessage' })).toBe('trailingMessage');
-    });
-
-    it('resolves to systemPrompt only for explicit systemPrompt', () => {
-        expect(ResolveVolatileStatePlacement({ volatileStatePlacement: 'systemPrompt' })).toBe('systemPrompt');
-    });
-
-    it('defaults to trailingMessage on any other value (typos, wrong case, wrong type)', () => {
-        const garbage: unknown[] = ['TrailingMessage', 'trailing', 'tail', 'systemprompt', true, 1, ['trailingMessage'], { value: 'trailingMessage' }];
-        for (const value of garbage) {
-            expect(ResolveVolatileStatePlacement({ volatileStatePlacement: value })).toBe('trailingMessage');
-        }
-    });
-
-    it('agent config can opt for systemPrompt, and a runtime override still wins', () => {
-        const agentConfig: LoopAgentTypePromptParams = { volatileStatePlacement: 'systemPrompt' };
-        expect(ResolveVolatileStatePlacement(agentConfig)).toBe('systemPrompt');
-
-        const runtimeOverride: LoopAgentTypePromptParams = { volatileStatePlacement: 'trailingMessage' };
-        const merged = { ...agentConfig, ...runtimeOverride };
-        expect(ResolveVolatileStatePlacement(merged)).toBe('trailingMessage');
-    });
-
-    it('the type admits exactly the two placements', () => {
-        const placements: VolatileStatePlacement[] = ['systemPrompt', 'trailingMessage'];
-        expect(placements).toHaveLength(2);
+    it('the Loop type schema exposes no volatileStatePlacement property', () => {
+        expect('volatileStatePlacement' in JSON.parse(LOOP_AGENT_TYPE_SCHEMA).properties).toBe(false);
     });
 });
 

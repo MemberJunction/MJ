@@ -16,11 +16,10 @@
  * @module @memberjunction/ai-agents
  */
 import { DEFAULT_SYSTEM_PLACEHOLDERS } from '@memberjunction/ai-core-plus';
-import {
-    ResolveVolatileStatePlacement,
-    SpecializationPlacement,
-    VolatileStatePlacement,
-} from './agent-types/loop-agent-prompt-params';
+import { SpecializationPlacement } from './agent-types/loop-agent-prompt-params';
+
+/** Where the specialization ends up for a run: one of the two concrete placements (never `'auto'`). */
+export type ResolvedSpecializationPlacement = Exclude<SpecializationPlacement, 'auto'>;
 
 /**
  * Temporal system placeholders that are stable for a run and therefore NOT volatile.
@@ -80,10 +79,9 @@ export function ResolveSpecializationPlacementParam(
 /**
  * Decides where the specialization goes for this run.
  *
- * Relocation is only possible under `'trailingMessage'` runtime-state placement — there is no
- * trailing message to ride in otherwise — so under `'systemPrompt'` placement the answer is always
- * `'systemPrompt'`. Under `'trailingMessage'`, an explicit `specializationPlacement` wins; `'auto'`
- * relocates exactly when the child template is volatile.
+ * The runtime-state fragment is always the final message of the request, so relocation is always
+ * possible. An explicit `specializationPlacement` wins; `'auto'` relocates exactly when the child
+ * template is volatile.
  *
  * @param promptParams The merged `__agentTypePromptParams` for the agent.
  * @param childTemplateText The child prompt's UNRENDERED template text (placeholders intact).
@@ -92,10 +90,7 @@ export function ResolveSpecializationPlacementParam(
 export function ResolveSpecializationPlacement(
     promptParams: Record<string, unknown> | null | undefined,
     childTemplateText: string | null | undefined
-): VolatileStatePlacement {
-    if (ResolveVolatileStatePlacement(promptParams) !== 'trailingMessage') {
-        return 'systemPrompt';
-    }
+): ResolvedSpecializationPlacement {
     if (!childTemplateText) {
         return 'systemPrompt';
     }
