@@ -9,6 +9,7 @@ import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { MapViewModule } from '@memberjunction/ng-map-view';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
+import { RecordMergeModule } from '@memberjunction/ng-record-merge';
 import { MjSlidePanelComponent, MJButtonDirective, MJAccordionModule, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { FilterBuilderModule } from '@memberjunction/ng-filter-builder';
 
@@ -103,6 +104,7 @@ LoadEntityActionUX();
     ListManagementModule,
     MapViewModule,
     RecordChangesModule,
+    RecordMergeModule,
     MjSlidePanelComponent,
     MJButtonDirective,
     MJAccordionModule,
