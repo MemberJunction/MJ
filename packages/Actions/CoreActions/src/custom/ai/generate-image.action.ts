@@ -1,4 +1,4 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, RuntimeAPIKeyResolver } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView, UserInfo } from "@memberjunction/core";
@@ -10,7 +10,6 @@ import {
     ImageEditParams,
     GeneratedImage,
     GetAIAPIKey,
-    AIAPIKey
 } from "@memberjunction/ai";
 import { MJAIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
@@ -73,27 +72,20 @@ import { AIEngineBase } from "@memberjunction/ai-engine-base";
  * ```
  */
 /**
- * The run's runtime API keys, as BaseAgent stamps them onto an action's Context (`apiKeys`) — or
- * undefined outside an agent run / when the run has none. Tolerant of any Context shape.
- */
-export function ReadRuntimeAPIKeys(context: unknown): AIAPIKey[] | undefined {
-    const keys = (context as { apiKeys?: unknown } | null | undefined)?.apiKeys;
-    return Array.isArray(keys) && keys.length > 0 ? (keys as AIAPIKey[]) : undefined;
-}
-
-/**
  * Resolve the key an image generator should use.
  *
- * The RUN'S keys first, then the platform's — `GetAIAPIKey(driverClass, runtimeKeys)` already
- * encodes that order, and it is the same call the run's prompts make, so a run on a customer's
- * OpenAI key now generates its images on that key too. Then the vendor-name fallback that was
- * always here — but actually USED this time: the previous code found a key by vendor name and then
- * handed the empty driver-class result to the generator, so that branch never produced an image.
+ * Inside an agent run, `resolve` is the run's {@link RuntimeAPIKeyResolver}: the RUN'S key for the
+ * driver class first, then the platform's — the same order the run's prompts use, so a run on a
+ * customer's OpenAI key now generates its images on that key too. Outside a run (or when the agent
+ * refuses this action the run's key) it is undefined / answers undefined, and `GetAIAPIKey` gives
+ * the platform key as it always did. Then the vendor-name fallback that was always here — but
+ * actually USED this time: the previous code found a key by vendor name and then handed the empty
+ * driver-class result to the generator, so that branch never produced an image.
  */
-export function ResolveImageGenerationAPIKey(driverClass: string, vendorName: string | undefined, runtimeKeys?: AIAPIKey[]): string {
-    const byDriver = GetAIAPIKey(driverClass, runtimeKeys);
+export function ResolveImageGenerationAPIKey(driverClass: string, vendorName: string | undefined, resolve?: RuntimeAPIKeyResolver): string {
+    const byDriver = resolve?.(driverClass) || GetAIAPIKey(driverClass);
     if (byDriver) return byDriver;
-    const byVendor = vendorName ? GetAIAPIKey(vendorName, runtimeKeys) : '';
+    const byVendor = vendorName ? resolve?.(vendorName) || GetAIAPIKey(vendorName) : '';
     if (byVendor) return byVendor;
     throw new Error(`No API key found for ${driverClass} or vendor ${vendorName || 'unknown'}`);
 }
@@ -147,7 +139,7 @@ export class GenerateImageAction extends BaseAction {
             const { generator, model, apiName } = await this.prepareImageGenerator(
                 params.ContextUser,
                 modelName,
-                ReadRuntimeAPIKeys(params.Context)
+                params.RuntimeAPIKeyResolver
             );
 
             let result: ImageGenerationResult;
@@ -256,7 +248,7 @@ export class GenerateImageAction extends BaseAction {
     private async prepareImageGenerator(
         contextUser: UserInfo | undefined,
         modelName?: string,
-        runtimeKeys?: AIAPIKey[]
+        resolve?: RuntimeAPIKeyResolver
     ): Promise<{ generator: BaseImageGenerator; model: MJAIModelEntityExtended; apiName: string }> {
         // Ensure AIEngine is loaded
         await AIEngineBase.Instance.Config(false, contextUser);
@@ -301,7 +293,7 @@ export class GenerateImageAction extends BaseAction {
         const driverClass = inferenceProvider.DriverClass;
         const apiName = inferenceProvider.APIName || model.APIName || model.Name;
         const vendor = AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, inferenceProvider.VendorID));
-        const apiKey = ResolveImageGenerationAPIKey(driverClass, vendor?.Name, runtimeKeys);
+        const apiKey = ResolveImageGenerationAPIKey(driverClass, vendor?.Name, resolve);
 
         const generator = MJGlobal.Instance.ClassFactory.CreateInstance<BaseImageGenerator>(
             BaseImageGenerator,

@@ -316,13 +316,22 @@ export class RunActionParams<TContext = any> {
     * Well-known keys stamped by BaseAgent when an action runs inside an agent run:
     * - `AgentID` — the calling agent
     * - `ActiveSkillIDs` — the skills active in the run (always present in a run; `[]` = none)
-    * - `apiKeys` — the run's runtime {@link AIAPIKey} list, when the run has one. An action that
-    *   calls an AI vendor directly should pass it as the second argument of `GetAIAPIKey()` so
-    *   a run on a customer's key uses that key; with no entry for a driver class, GetAIAPIKey
-    *   falls back to the platform key exactly as it does for prompts.
     * - `__resolvedStorageAccountId` — the file storage account the run resolved
     */
    public Context?: TContext;
+
+   /**
+    * The run's {@link RuntimeAPIKeyResolver}, set by BaseAgent when — and only when — the agent run
+    * carries runtime API keys. Per dispatch, like {@link DeferExecution}: it is bound to THIS action,
+    * so the agent's policy and audit line name the right action even when actions run in parallel,
+    * and it is not on {@link Context} — which is the agent's own object, shared by every action in
+    * the run and copied into sub-agent runs. An action that calls an AI vendor directly asks it for
+    * ONE driver class and gets that key, or the platform key when the run has none for that class
+    * (the same fallback prompts get). The key list itself is never handed to an action: it cannot
+    * enumerate the run's credentials, only request the one it names, and the agent may refuse.
+    * Absent outside an agent run, when the action uses `GetAIAPIKey(driverClass)` as it always did.
+    */
+   public RuntimeAPIKeyResolver?: RuntimeAPIKeyResolver;
 
    /**
     * Optional AbortSignal that is aborted when the action exceeds its wall-clock
@@ -566,3 +575,15 @@ export class ActionEngineBase extends BaseEngine<ActionEngineBase> {
    }
 }
 
+/**
+ * Resolves the API key an action should use for ONE AI driver class, inside an agent run.
+ *
+ * BaseAgent sets one on {@link RunActionParams.RuntimeAPIKeyResolver} when — and only when — the run
+ * carries runtime API keys. It answers with the run's key for that driver class, else the platform
+ * key, else `undefined`; it is the run's prompt resolution (`GetAIAPIKey(driverClass, runKeys)`)
+ * behind a function, so an action gets the same key the prompts use without ever holding the list
+ * they come from. `undefined` also means "refused": the agent decides whether this action may use
+ * the run's key for that class, and a refusal leaves the action on the platform key exactly as if
+ * the run had none.
+ */
+export type RuntimeAPIKeyResolver = (driverClass: string) => string | undefined;

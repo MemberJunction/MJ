@@ -111,7 +111,7 @@ import {
     SkillAvailabilityPurpose,
     ArtifactDirective
 } from '@memberjunction/ai-core-plus';
-import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
+import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
@@ -7373,6 +7373,35 @@ The context is now within limits. Please retry your request with the recovered c
 
 
     /**
+     * Whether THIS action may use the run's runtime API key for THIS driver class. The default is
+     * yes: the run was started on those keys, and an action that calls a vendor on the user's behalf
+     * (Generate Image) is doing what the prompts do. Override to narrow it — an agent that knows
+     * which of its actions talk to which vendor can refuse everything else, and a refusal costs the
+     * action nothing but the customer's key: it falls back to the platform key as if the run had none.
+     */
+    protected actionMayUseRuntimeAPIKey(action: MJActionEntityExtended, driverClass: string, params: ExecuteAgentParams): boolean {
+        return true;
+    }
+
+    /**
+     * The {@link RuntimeAPIKeyResolver} handed to one action dispatch: one driver class in, one key
+     * out, the list itself never leaves this closure. Every answer is logged by action and driver
+     * class (never the key), so a run's log shows which action drew which credential.
+     */
+    private buildRuntimeAPIKeyResolver(params: ExecuteAgentParams, actionEntity: MJActionEntityExtended): RuntimeAPIKeyResolver {
+        const runKeys = params.apiKeys;
+        return (driverClass: string): string | undefined => {
+            if (!this.actionMayUseRuntimeAPIKey(actionEntity, driverClass, params)) {
+                this.logStatus(`🔑 Runtime API key for '${driverClass}' refused to action '${actionEntity.Name}' by policy — platform key applies`, true, params);
+                return undefined;
+            }
+            const key = GetAIAPIKey(driverClass, runKeys);
+            this.logStatus(`🔑 Action '${actionEntity.Name}' resolved an API key for '${driverClass}' (${runKeys?.some((k) => k.driverClass === driverClass) ? 'run' : 'platform'})`, true, params);
+            return key || undefined;
+        };
+    }
+
+    /**
      * This method executes one action using the MemberJunction Actions framework.
      * The full ActionResult objects are returned, allowing the caller to access result codes, output parameters,
      * and other execution details.
@@ -7414,24 +7443,6 @@ The context is now within limits. Please retry your request with the recovered c
             if (this._resolvedStorageAccountId) {
                 (actionContext as Record<string, unknown>).__resolvedStorageAccountId = this._resolvedStorageAccountId;
             }
-            // The run's RUNTIME API KEYS, so an action that calls a vendor itself can use the same keys
-            // the run's prompts use. Prompts already get them (params.apiKeys → AIPromptRunner →
-            // GetAIAPIKey(driverClass, apiKeys)); actions were never handed the second argument, so a
-            // run on a customer's OpenAI key would still generate its images on the platform's. Stamped
-            // only when present: an absent key means "platform key", and GetAIAPIKey resolves that
-            // itself from an undefined list — no action has to special-case it.
-            //
-            // NON-ENUMERABLE, deliberately. actionContext IS params.context (by reference, see above),
-            // and context is copied into sub-agent params and can be serialized into run records. A
-            // plain property would ride along into JSON.stringify, Object.entries and spreads — i.e.
-            // into the database. A non-enumerable one is invisible to all three while remaining an
-            // ordinary property read (`context.apiKeys`, `'apiKeys' in context`) for the action.
-            if (params.apiKeys && params.apiKeys.length > 0) {
-                Object.defineProperty(actionContext, 'apiKeys', {
-                    value: params.apiKeys, enumerable: false, configurable: true, writable: true,
-                });
-            }
-
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({
                 Action: actionEntity,
@@ -7439,7 +7450,14 @@ The context is now within limits. Please retry your request with the recovered c
                 ContextUser: contextUser,
                 Filters: [],
                 SkipActionLog: false,
-                Context: actionContext
+                Context: actionContext,
+                // The run's RUNTIME API KEYS, as a RESOLVER bound to this one action — see
+                // buildRuntimeAPIKeyResolver(). Per dispatch on purpose: actionContext IS params.context,
+                // shared by every action in the run (parallel ones included) and copied into sub-agent
+                // runs, so anything stamped there would name the wrong action under parallel dispatch
+                // and travel further than the action it was meant for. Absent when the run has no keys,
+                // so the action uses GetAIAPIKey(driverClass) exactly as before.
+                RuntimeAPIKeyResolver: params.apiKeys && params.apiKeys.length > 0 ? this.buildRuntimeAPIKeyResolver(params, actionEntity) : undefined,
             });
             
             if (result.Success) {
