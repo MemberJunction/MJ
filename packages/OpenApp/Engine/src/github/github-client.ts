@@ -71,6 +71,28 @@ export interface MigrationDownloadResult {
 }
 
 /**
+ * Strips leading and trailing `/` from an in-repo path.
+ *
+ * DELIBERATELY NOT A REGEX. The obvious `replace(/^\/+|\/+$/g, '')` is quadratic in a run of
+ * slashes — the `\/+$` alternative is retried from every index and gives the run back one
+ * character at a time — and the strings reaching here come from a repository URL, which is
+ * caller-supplied. CodeQL flags exactly that shape. Index arithmetic is linear and says the same
+ * thing.
+ */
+function trimSlashes(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && value.charCodeAt(start) === 47 /* / */) start++;
+    while (end > start && value.charCodeAt(end - 1) === 47 /* / */) end--;
+    return value.slice(start, end);
+}
+
+/** `trimSlashes`, preserving `undefined` the way the optional chaining it replaces did. */
+function SubpathOrUndefined(value: string | undefined): string | undefined {
+    return value === undefined ? undefined : trimSlashes(value);
+}
+
+/**
  * Parses a GitHub repository URL into owner, repo, and an optional in-repo subpath.
  *
  * Supports two forms:
@@ -95,7 +117,7 @@ export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string; 
     }
     const owner = match[1];
     const repo = match[2].replace(/\.git$/, '');
-    const rawSubpath = (match[3] ?? '').replace(/^\/+|\/+$/g, '');
+    const rawSubpath = trimSlashes(match[3] ?? '');
     const subpath = rawSubpath.length > 0 ? rawSubpath : undefined;
     return { Owner: owner, Repo: repo, Subpath: subpath };
 }
@@ -219,7 +241,7 @@ async function ListDirectory(octokit: Octokit, owner: string, repo: string, path
  * own independent tag line (`CRM-HubSpot@1.2.0`). undefined for single-app repos (repo-wide `vX.Y.Z`).
  */
 function ScopedTagPrefix(subpath: string | undefined): string | undefined {
-    const s = subpath?.replace(/^\/+|\/+$/g, '');
+    const s = subpath === undefined ? undefined : trimSlashes(subpath);
     return s ? s.replace(/\//g, '-') : undefined;
 }
 
@@ -292,7 +314,7 @@ export async function FetchManifestFromGitHub(
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const effectiveSubpath = SubpathOrUndefined(subpath ?? parsed.Subpath);
     // Prefer the tag that EXISTS over one composed from the folder name; fall back to the composed
     // form so single-app repos and repos that really do tag by folder are untouched.
     const ref = version
@@ -429,7 +451,7 @@ export async function DownloadMigrations(
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const effectiveSubpath = SubpathOrUndefined(subpath ?? parsed.Subpath);
     // Prefer the tag that EXISTS over one composed from the folder name; fall back to the composed
     // form so single-app repos and repos that really do tag by folder are untouched.
     const ref = version
