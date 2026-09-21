@@ -383,6 +383,25 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
     expect(score.matrix).toEqual(train.matrix);
   });
 
+  it('hydrates missing feature columns when row IDs have differing UUID casing', async () => {
+    const narrowRows: SourceRow[] = [
+      { ID: 'uuid-abc-123', AutoRenew: 1 },
+    ];
+    const viewRows: SourceRow[] = [
+      { ID: 'UUID-ABC-123', AutoRenew: 1, MembershipType: 'Individual' },
+    ];
+
+    const result = await new FeatureAssemblyExecutor().assemble({
+      ...base,
+      records: narrowRows,
+      dataAccess: new InMemoryDataAccess({ Members: viewRows }),
+      context: 'on-demand',
+    });
+
+    expect(result.matrix.rows).toHaveLength(1);
+    expect(result.matrix.rows[0]).toEqual([1, 'Individual']);
+  });
+
   it("hydrates the AsOfStrategy 'column' date when the scored rows' projection dropped it", async () => {
     // Real-world repro: Event No-Show Risk (AsOf column = RegistrationDate). The on-demand scope
     // handed rows without RegistrationDate → every record failed at resolveAsOfDate → 0/6747 +

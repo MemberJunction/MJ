@@ -17,3 +17,4 @@ export * from './modeling-plan-spec';
 export * from './modeling-plan-schema';
 export * from './metrics-util';
 export * from './trust';
+export * from './outcome-config';

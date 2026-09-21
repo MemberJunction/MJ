@@ -19,18 +19,20 @@ import {
   MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { CompositeKey, LogError, RunView } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, EntityRecordNameInput, EntityRecordNameResult } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import { MJProcessRunDetailEntity, MJMLModelEntity } from '@memberjunction/core-entities';
+import { MJProcessRunDetailEntity, MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { AgGridModule } from 'ag-grid-angular';
 import {
   AllCommunityModule,
+  CellClickedEvent,
   ColDef,
   GetRowIdParams,
   GridApi,
   GridOptions,
   GridReadyEvent,
   ICellRendererParams,
+  IRowNode,
   ModuleRegistry,
   RowClickedEvent,
   Theme,
@@ -39,11 +41,18 @@ import {
 
 import {
   parseAtRiskRows,
-  labelFromRecord,
-  type AtRiskRow,
+  resolveRenewalPolarity,
+  type RenewalPolarityResult,
   type RowDriver,
 } from '../at-risk.view-models';
-import { BuildRecordIdFilter } from '../../shared/record-id-filter';
+import {
+  type OutcomeConfig,
+  type OutcomeBand,
+  resolveOutcomeConfig,
+  resolveScoreBand,
+  resolveOutcomeStyle,
+  formatPredictionScore,
+} from '@memberjunction/predictive-studio-core';
 import {
   PredictiveStudioScoreHistoryService,
   type ModelScoreHistoryPoint,
@@ -59,11 +68,26 @@ export interface PredictionGridRow {
   score: number;
   scoreFormatted: string;
   riskPct: number;
-  band: 'high' | 'medium' | 'low';
+  band: string;
+  badgeColor?: string;
+  icon?: string;
   class: string | null;
   drivers: RowDriver[];
   status: string;
   scoredAtDate: Date | null;
+}
+
+/** Summary of one dynamic outcome band for toolbar filtering and KPI cards. */
+export interface VisibleBandSummary {
+  key: string;
+  label: string;
+  count: number;
+  pct: number;
+  avgScore: number;
+  avgScoreFormatted: string;
+  badgeColor: string;
+  icon?: string;
+  description?: string;
 }
 
 interface HistogramBin {
@@ -146,7 +170,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public filteredRows: PredictionGridRow[] = [];
 
   public searchText = '';
-  public selectedTier: 'all' | 'high' | 'medium' | 'low' = 'all';
+  public selectedTier: string = 'all';
+  public outcomeConfig: OutcomeConfig = resolveOutcomeConfig();
+  public visibleBands: VisibleBandSummary[] = [];
 
   public activeView: 'grid' | 'chart' = 'grid';
   public readonly viewOptions = [
@@ -156,6 +182,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   // Slide-in detail state
   public detailOpen = false;
+  public drawerWidthPx = 640;
   public selectedRow: PredictionGridRow | null = null;
   public historyLoading = false;
   public historyPoints: ModelScoreHistoryPoint[] = [];
@@ -163,7 +190,17 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public resolvedEntityId: string | null = null;
   public resolvedEntityName: string | null = null;
 
+  public subjectEntityName: string | null = null;
+  public subjectRecordId: string | null = null;
+  public subjectRecordName: string | null = null;
+
   private gridApi: GridApi<PredictionGridRow> | null = null;
+  private chartGridApi: GridApi<PredictionGridRow> | null = null;
+
+  // Viewport-visible record name lookup cache and state
+  private recordNameCache = new Map<string, string>();
+  private inFlightLookups = new Set<string>();
+  private visibleLookupDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // ── AG Grid Configuration ──
   public Theme: Theme = themeAlpine.withParams({
@@ -194,6 +231,27 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     suppressNoRowsOverlay: true,
     rowSelection: { mode: 'singleRow', enableClickSelection: false },
     getRowId: (params: GetRowIdParams<PredictionGridRow>) => params.data.recordId,
+    onBodyScrollEnd: () => this.scheduleVisibleRowsLookup(),
+    onViewportChanged: () => this.scheduleVisibleRowsLookup(),
+    onFirstDataRendered: () => this.scheduleVisibleRowsLookup(),
+    onModelUpdated: () => this.scheduleVisibleRowsLookup(),
+    onCellClicked: (event: CellClickedEvent<PredictionGridRow>) => this.onCellClicked(event),
+  };
+
+  public chartGridOptions: GridOptions<PredictionGridRow> = {
+    animateRows: true,
+    rowHeight: 46,
+    headerHeight: 40,
+    suppressCellFocus: true,
+    enableCellTextSelection: true,
+    suppressNoRowsOverlay: true,
+    rowSelection: { mode: 'singleRow', enableClickSelection: false },
+    getRowId: (params: GetRowIdParams<PredictionGridRow>) => params.data.recordId,
+    onBodyScrollEnd: () => this.scheduleVisibleRowsLookup(),
+    onViewportChanged: () => this.scheduleVisibleRowsLookup(),
+    onFirstDataRendered: () => this.scheduleVisibleRowsLookup(),
+    onModelUpdated: () => this.scheduleVisibleRowsLookup(),
+    onCellClicked: (event: CellClickedEvent<PredictionGridRow>) => this.onCellClicked(event),
   };
 
   public defaultColDef: ColDef = {
@@ -205,14 +263,24 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public isRenewalModel = false;
   public selectedDecileIndex: number | null = null;
 
+  public get isRegression(): boolean {
+    return (
+      (this.problemType ?? '').toLowerCase() === 'regression' ||
+      this.outcomeConfig?.Format === 'currency' ||
+      this.outcomeConfig?.Format === 'number'
+    );
+  }
+
   public columnDefs: ColDef<PredictionGridRow>[] = [];
 
   public setupColumnDefs(): void {
-    const isRenewal = this.isRenewalModel;
+    const scoreLabel = this.outcomeConfig.ScoreLabel || 'Prediction Score';
+    const statusLabel = this.outcomeConfig.StatusLabel || 'Risk Level';
+
     this.columnDefs = [
       {
         field: 'recordName',
-        headerName: 'Record / Member',
+        headerName: 'Record',
         flex: 2,
         minWidth: 220,
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
@@ -222,7 +290,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
           const id = this.escapeHtml(params.data.recordId);
           return `
             <div class="pg-record-cell">
-              <span class="pg-record-name" title="${name}">${name}</span>
+              <div class="pg-record-title-row">
+                <a class="pg-record-link" data-action="open-record" href="javascript:void(0)" title="Open record in Explorer">
+                  <span class="pg-record-name">${name}</span>
+                  <i class="fa-solid fa-arrow-up-right-from-square pg-record-open-icon"></i>
+                </a>
+              </div>
               ${hasCustomName ? `<span class="pg-record-id ps-mono" title="${id}">${id}</span>` : ''}
             </div>
           `;
@@ -230,21 +303,28 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       },
       {
         field: 'score',
-        headerName: isRenewal ? 'Renewal Probability' : 'Prediction Score',
+        headerName: scoreLabel,
         width: 175,
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data) return '';
-          const pct = Math.min(100, Math.max(0, Math.round(params.data.score * 100)));
-          const band = params.data.band;
-          const colorClass = isRenewal
-            ? (band === 'low' ? 'risk-low' : band === 'medium' ? 'risk-medium' : 'risk-high')
-            : (band === 'high' ? 'risk-high' : band === 'medium' ? 'risk-medium' : 'risk-low');
+          const badgeColor = params.data.badgeColor || 'gray';
+          const colorClass = `badge-${badgeColor}`;
           const formatted = this.escapeHtml(params.data.scoreFormatted);
+
+          if (this.isRegression) {
+            return `
+              <div class="pg-score-cell">
+                <span class="pg-score-val ${colorClass}" style="font-weight: 600; font-size: 13.5px;">${formatted}</span>
+              </div>
+            `;
+          }
+
+          const pct = Math.min(100, Math.max(0, Math.round(params.data.score * 100)));
           return `
             <div class="pg-score-cell">
-              <span class="pg-score-pct ${colorClass}">${formatted}</span>
-              <div class="pg-score-bar-track">
-                <div class="pg-score-bar-fill ${colorClass}" style="width: ${pct}%"></div>
+              <span class="pg-score-val ${colorClass}">${formatted}</span>
+              <div class="pg-score-bar">
+                <div class="pg-score-fill ${colorClass}" style="width: ${pct}%"></div>
               </div>
             </div>
           `;
@@ -252,19 +332,18 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       },
       {
         field: 'riskPct',
-        headerName: 'Risk Level',
-        width: 140,
+        headerName: statusLabel,
+        width: 155,
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data) return '';
-          const band = params.data.band;
-          const riskPct = params.data.riskPct;
-          if (band === 'high') {
-            return `<span class="ps-badge red" title="${riskPct}% Churn Risk"><i class="fa-solid fa-circle-exclamation"></i> High Risk (${riskPct}%)</span>`;
-          } else if (band === 'medium') {
-            return `<span class="ps-badge amber" title="${riskPct}% Churn Risk"><i class="fa-solid fa-triangle-exclamation"></i> Med Risk (${riskPct}%)</span>`;
-          } else {
-            return `<span class="ps-badge green" title="${riskPct}% Churn Risk"><i class="fa-solid fa-circle-check"></i> Low Risk (${riskPct}%)</span>`;
+          const badgeColor = params.data.badgeColor || 'gray';
+          const icon = params.data.icon ? `<i class="fa-solid ${this.escapeHtml(params.data.icon)}"></i> ` : '';
+          const label = this.escapeHtml(params.data.status || params.data.band);
+          if (this.isRegression) {
+            return `<span class="ps-badge ${badgeColor}" title="${scoreLabel}: ${this.escapeHtml(params.data.scoreFormatted)}">${icon}${label}</span>`;
           }
+          const pct = Math.round(params.data.score * 100);
+          return `<span class="ps-badge ${badgeColor}" title="${pct}% ${scoreLabel}">${icon}${label} (${pct}%)</span>`;
         },
       },
       {
@@ -274,13 +353,9 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         cellRenderer: (params: ICellRendererParams<PredictionGridRow>): string => {
           if (!params.data || !params.data.class) return '<span class="ps-muted">—</span>';
           const cls = this.escapeHtml(params.data.class);
-          const lower = cls.toLowerCase();
-          if (lower === 'renewed' || lower === 'active') {
-            return `<span class="ps-badge green"><i class="fa-solid fa-check"></i> ${cls}</span>`;
-          } else if (lower === 'lapsed' || lower === 'cancelled' || lower === 'churn') {
-            return `<span class="ps-badge red"><i class="fa-solid fa-xmark"></i> ${cls}</span>`;
-          }
-          return `<span class="ps-badge gray">${cls}</span>`;
+          const style = resolveOutcomeStyle(params.data.class, this.outcomeConfig);
+          const icon = style.Icon ? `<i class="fa-solid ${style.Icon}"></i> ` : '';
+          return `<span class="ps-badge ${style.BadgeColor}">${icon}${cls}</span>`;
         },
       },
       {
@@ -329,9 +404,19 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     if (this.gridApi) {
       this.gridApi.setGridOption('columnDefs', this.columnDefs);
     }
+    if (this.chartGridApi) {
+      this.chartGridApi.setGridOption('columnDefs', this.columnDefs);
+    }
   }
 
   ngOnInit(): void {
+    const pref = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.predictions.drawerWidth');
+    if (pref) {
+      const w = parseInt(pref, 10);
+      if (!isNaN(w) && w >= 360 && w <= 1400) {
+        this.drawerWidthPx = w;
+      }
+    }
     this.setupColumnDefs();
     void this.loadPredictions();
   }
@@ -347,7 +432,14 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   }
 
   ngOnDestroy(): void {
+    if (this.visibleLookupDebounceTimer) {
+      clearTimeout(this.visibleLookupDebounceTimer);
+      this.visibleLookupDebounceTimer = null;
+    }
+    this.recordNameCache.clear();
+    this.inFlightLookups.clear();
     this.gridApi = null;
+    this.chartGridApi = null;
   }
 
   // ── Data Loading & Name Resolution ──
@@ -432,17 +524,26 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         return;
       }
 
-      // 4. Determine polarity and parse per-record predictions
-      const isInverted = this.checkIsInvertedRisk(
-        detailsRes.Results.map((d) => d.ResultPayload),
-        model,
-      );
-      this.isRenewalModel = isInverted;
+      // 4. Resolve OutcomeConfig and determine polarity
+      if (model?.ProblemType) {
+        this.problemType = model.ProblemType.toLowerCase();
+      }
+      this.outcomeConfig = resolveOutcomeConfig(model ?? undefined);
+      this.isRenewalModel = this.outcomeConfig.Polarity === 'positive' && !this.isRegression;
       this.setupColumnDefs();
+
+      const polarity = resolveRenewalPolarity(
+        detailsRes.Results.map((d) => d.ResultPayload),
+        model?.TargetVariable,
+      );
+
+      // When the model outputs P(Renewed) (scoreIsLapseRisk = false), adverse risk is inverted (1 - score).
+      // When the model outputs P(Lapse) (scoreIsLapseRisk = true), adverse risk is ALREADY score (invertedRisk = false).
+      const shouldInvertRisk = polarity.isRenewalModel ? !polarity.scoreIsLapseRisk : false;
 
       const parsedAtRisk = parseAtRiskRows(
         detailsRes.Results.map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })),
-        { invertedRisk: isInverted },
+        { invertedRisk: shouldInvertRisk, outcomeConfig: this.outcomeConfig },
       );
 
       // Map details into indexed lookup for scoredAt timestamp
@@ -454,24 +555,40 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       this.allRows = parsedAtRisk.map((r) => {
         const detail = detailByRecord.get(NormalizeUUID(r.recordId));
         const dt = detail?.CompletedAt ?? detail?.__mj_CreatedAt ?? null;
+        // For renewal models, the primary displayed score is Renewal Probability (0–1).
+        // If the raw score was lapse risk, renewal probability is 1 - r.score.
+        // Otherwise, raw score is already renewal probability.
+        const displayScore = polarity.isRenewalModel
+          ? (polarity.scoreIsLapseRisk ? Math.max(0, Math.min(1, 1 - r.score)) : r.score)
+          : r.score;
+
+        const resolved = this.outcomeConfig
+          ? resolveScoreBand(displayScore, this.outcomeConfig)
+          : null;
+
+        const formatted = formatPredictionScore(displayScore, this.outcomeConfig, this.problemType);
+
         return {
           recordId: r.recordId,
           recordName: r.label ?? r.recordId,
-          score: r.score,
-          scoreFormatted: (r.score * 100).toFixed(1) + '%',
+          score: displayScore,
+          scoreFormatted: formatted,
           riskPct: r.riskPct,
-          band: r.band,
+          band: resolved?.Key ?? r.band,
+          badgeColor: resolved?.BadgeColor ?? r.badgeColor,
+          icon: resolved?.Icon ?? r.icon,
           class: r.class,
           drivers: r.drivers ?? [],
-          status: detail?.Status ?? 'Succeeded',
+          status: resolved?.Label ?? r.status ?? detail?.Status ?? 'Succeeded',
           scoredAtDate: dt instanceof Date ? dt : dt ? new Date(dt) : null,
         };
       });
 
+      this.computeVisibleBands();
       this.applyFilter();
 
-      // 5. Asynchronously resolve friendly display names from target entity in background
-      void this.resolveRecordNames(this.allRows);
+      // 5. Schedule lazy lookup of record names for visible rows
+      this.scheduleVisibleRowsLookup(0);
     } catch (err) {
       this.loadError = err instanceof Error ? err.message : String(err);
       LogError(`PSPredictionsGridComponent.loadPredictions: ${this.loadError}`);
@@ -517,74 +634,165 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     }
   }
 
-  private checkIsInvertedRisk(rawPayloads: Array<string | null | undefined>, model: MJMLModelEntity | null): boolean {
-    const target = (model?.TargetVariable ?? '').toLowerCase();
-    if (target === 'status' || target === 'renewed' || target === 'renewal' || target === 'retention') {
-      return true;
-    }
-    for (const p of rawPayloads.slice(0, 50)) {
-      if (p && (p.includes('"Renewed"') || p.includes('"renewed"') || p.includes('"Lapsed"'))) {
-        return true;
+  /**
+   * Returns row nodes currently rendered in the AG Grid viewport.
+   * Virtualized grids only render rows visible on screen (plus a small buffer).
+   */
+  private getVisibleRowNodes(): IRowNode<PredictionGridRow>[] {
+    const apis = [this.gridApi, this.chartGridApi].filter((api): api is GridApi<PredictionGridRow> => Boolean(api));
+    if (apis.length === 0) return [];
+
+    const nodes: IRowNode<PredictionGridRow>[] = [];
+    for (const api of apis) {
+      const rendered = api.getRenderedNodes();
+      if (rendered && rendered.length > 0) {
+        nodes.push(...rendered);
+        continue;
+      }
+
+      const firstIdx = api.getFirstDisplayedRowIndex();
+      const lastIdx = api.getLastDisplayedRowIndex();
+      if (firstIdx < 0 || lastIdx < 0) continue;
+
+      for (let i = firstIdx; i <= lastIdx; i++) {
+        const node = api.getDisplayedRowAtIndex(i);
+        if (node) {
+          nodes.push(node);
+        }
       }
     }
-    return false;
+    return nodes;
   }
 
   /**
-   * Resolve friendly record names (e.g. Member name, Person full name, Order title)
-   * for the records in batches without blocking the initial grid display.
+   * Schedule lazy lookup of record names for rows currently visible in the AG Grid viewport.
+   * Debounced so rapid scrolling does not trigger redundant batches.
    */
-  private async resolveRecordNames(rows: PredictionGridRow[]): Promise<void> {
-    if (!this.resolvedEntityName || rows.length === 0) return;
+  public scheduleVisibleRowsLookup(delayMs: number = 60): void {
+    if (this.visibleLookupDebounceTimer) {
+      clearTimeout(this.visibleLookupDebounceTimer);
+    }
+    this.visibleLookupDebounceTimer = setTimeout(() => {
+      void this.resolveVisibleRecordNames();
+    }, delayMs);
+  }
+
+  /**
+   * Resolve display names (e.g. member name, company name) ONLY for visible rows in the viewport
+   * using ProviderToUse.GetEntityRecordNames.
+   */
+  private async resolveVisibleRecordNames(): Promise<void> {
+    if ((!this.gridApi && !this.chartGridApi) || !this.resolvedEntityName) {
+      return;
+    }
+
+    const provider = this.ProviderToUse;
+    const entity = provider.EntityByName(this.resolvedEntityName);
+    if (!entity) {
+      return;
+    }
+
+    const visibleNodes = this.getVisibleRowNodes();
+    if (visibleNodes.length === 0) {
+      return;
+    }
+
+    const needed: { normId: string; recordId: string; node: IRowNode<PredictionGridRow> }[] = [];
+    const cachedToUpdate: IRowNode<PredictionGridRow>[] = [];
+
+    for (const node of visibleNodes) {
+      const data = node.data;
+      if (!data || !data.recordId) continue;
+
+      const normId = NormalizeUUID(data.recordId);
+      if (this.recordNameCache.has(normId)) {
+        const cachedName = this.recordNameCache.get(normId);
+        if (cachedName && data.recordName !== cachedName) {
+          data.recordName = cachedName;
+          cachedToUpdate.push(node);
+        }
+        continue;
+      }
+
+      if (this.inFlightLookups.has(normId)) {
+        continue;
+      }
+
+      needed.push({ normId, recordId: data.recordId, node });
+    }
+
+    if (cachedToUpdate.length > 0) {
+      if (this.gridApi) {
+        this.gridApi.refreshCells({ rowNodes: cachedToUpdate, columns: ['recordName'], force: true });
+      }
+      if (this.chartGridApi) {
+        this.chartGridApi.refreshCells({ rowNodes: cachedToUpdate, columns: ['recordName'], force: true });
+      }
+    }
+
+    if (needed.length === 0) {
+      return;
+    }
+
+    // Mark as in-flight
+    for (const item of needed) {
+      this.inFlightLookups.add(item.normId);
+    }
 
     try {
-      const provider = this.ProviderToUse;
-      const entity = provider.EntityByName(this.resolvedEntityName);
-      if (!entity) return;
+      const inputs: EntityRecordNameInput[] = needed.map((item) => ({
+        EntityName: entity.Name,
+        CompositeKey: CompositeKey.FromURLSegment(entity, item.recordId),
+      }));
 
-      const pkNames = entity.PrimaryKeys.map((pk) => pk.Name);
-      const candidates = ['MemberName', 'Member', 'FullName', 'Name', 'FirstName', 'LastName', 'Email', 'Title', 'Description'];
-      const labelFields = candidates.filter((c) => entity.Fields.some((f) => f.Name.toLowerCase() === c.toLowerCase()));
+      const results: EntityRecordNameResult[] = await provider.GetEntityRecordNames(
+        inputs,
+        provider.CurrentUser ?? undefined,
+      );
 
-      const batchSize = 100;
-      for (let i = 0; i < Math.min(rows.length, 500); i += batchSize) {
-        const batch = rows.slice(i, i + batchSize);
-        const ids = batch.map((r) => r.recordId);
+      const nodesToRefresh: IRowNode<PredictionGridRow>[] = [];
 
-        const res = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>(
-          {
-            EntityName: entity.Name,
-            ExtraFilter: BuildRecordIdFilter(entity, ids),
-            ...(labelFields.length > 0 ? { Fields: [...pkNames, ...labelFields] } : {}),
-            ResultType: 'simple',
-            MaxRows: ids.length,
-          },
-          provider.CurrentUser ?? undefined,
-        );
+      for (let i = 0; i < results.length; i++) {
+        const res = results[i];
+        const item = needed[i];
+        if (!item) continue;
 
-        if (!res.Success || !res.Results) continue;
-
-        const byId = new Map<string, Record<string, unknown>>();
-        for (const row of res.Results) {
-          const key = CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment();
-          byId.set(NormalizeUUID(key), row);
-        }
-
-        for (const r of batch) {
-          const rec = byId.get(NormalizeUUID(r.recordId));
-          if (rec) {
-            const lbl = labelFromRecord(rec);
-            if (lbl) r.recordName = lbl;
+        if (res && res.Success && res.RecordName) {
+          this.recordNameCache.set(item.normId, res.RecordName);
+          if (item.node.data) {
+            item.node.data.recordName = res.RecordName;
+            nodesToRefresh.push(item.node);
           }
-        }
-
-        if (this.gridApi) {
-          this.gridApi.applyTransaction({ update: batch });
+        } else {
+          // Fallback: cache the recordId to avoid repeatedly re-querying failed records
+          this.recordNameCache.set(item.normId, item.recordId);
         }
       }
+
+      // Keep allRows in sync so client-side filter and view toggle retain resolved names
+      for (const row of this.allRows) {
+        const cached = this.recordNameCache.get(NormalizeUUID(row.recordId));
+        if (cached && row.recordName !== cached) {
+          row.recordName = cached;
+        }
+      }
+
+      if (nodesToRefresh.length > 0) {
+        if (this.gridApi) {
+          this.gridApi.refreshCells({ rowNodes: nodesToRefresh, columns: ['recordName'], force: true });
+        }
+        if (this.chartGridApi) {
+          this.chartGridApi.refreshCells({ rowNodes: nodesToRefresh, columns: ['recordName'], force: true });
+        }
+      }
+
       this.cdr.markForCheck();
-    } catch {
-      // Cosmetic resolution failure: rows keep their recordId
+    } catch (err) {
+      LogError(`PSPredictionsGridComponent.resolveVisibleRecordNames failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      for (const item of needed) {
+        this.inFlightLookups.delete(item.normId);
+      }
     }
   }
 
@@ -592,9 +800,28 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   public onGridReady(event: GridReadyEvent<PredictionGridRow>): void {
     this.gridApi = event.api;
+    this.scheduleVisibleRowsLookup(50);
+  }
+
+  public onChartGridReady(event: GridReadyEvent<PredictionGridRow>): void {
+    this.chartGridApi = event.api;
+    this.scheduleVisibleRowsLookup(50);
+  }
+
+  public onCellClicked(event: CellClickedEvent<PredictionGridRow>): void {
+    const target = event.event?.target as HTMLElement | null;
+    if (target && target.closest('[data-action="open-record"]')) {
+      if (event.data) {
+        this.drillThrough(event.data);
+      }
+    }
   }
 
   public onRowClicked(event: RowClickedEvent<PredictionGridRow>): void {
+    const target = event.event?.target as HTMLElement | null;
+    if (target && target.closest('[data-action="open-record"]')) {
+      return; // Handled by cell link click; do not open detail drawer
+    }
     if (event.data) {
       this.openDetail(event.data);
     }
@@ -606,15 +833,78 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     this.applyFilter();
   }
 
-  public setTier(tier: 'all' | 'high' | 'medium' | 'low'): void {
+  public setTier(tier: string): void {
     this.selectedTier = tier;
     this.applyFilter();
   }
 
-  public setTierAndGrid(tier: 'high' | 'medium' | 'low'): void {
+  public setTierAndGrid(tier: string): void {
     this.selectedTier = tier;
     this.activeView = 'grid';
     this.applyFilter();
+  }
+
+  public getOutcomeBadgeClass(className: string | null | undefined): string {
+    return resolveOutcomeStyle(className, this.outcomeConfig).BadgeColor;
+  }
+
+  public getBadgeColorVar(color: string): string {
+    switch (color) {
+      case 'green':
+        return 'var(--mj-status-success)';
+      case 'red':
+        return 'var(--mj-status-error)';
+      case 'amber':
+        return 'var(--mj-status-warning)';
+      case 'blue':
+        return 'var(--mj-brand-primary)';
+      default:
+        return 'var(--mj-text-muted)';
+    }
+  }
+
+  private computeVisibleBands(): void {
+    const total = this.allRows.length;
+    const bands = this.outcomeConfig.Bands ?? [];
+    this.visibleBands = bands.map((b) => {
+      const matching = this.allRows.filter((r) => r.band === b.Key);
+      const count = matching.length;
+      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+      const rawAvg = count > 0 ? matching.reduce((sum, r) => sum + r.score, 0) / count : 0;
+      const avgScore = Math.round(rawAvg * 100);
+      const avgScoreFormatted = formatPredictionScore(rawAvg, this.outcomeConfig, this.problemType);
+      return {
+        key: b.Key,
+        label: b.Label,
+        count,
+        pct,
+        avgScore,
+        avgScoreFormatted,
+        badgeColor: b.BadgeColor,
+        icon: b.Icon,
+        description: b.Description,
+      };
+    });
+
+    const knownKeys = new Set(bands.map((b) => b.Key));
+    const extraKeys = new Set(this.allRows.map((r) => r.band).filter((k) => !knownKeys.has(k)));
+    for (const k of extraKeys) {
+      const matching = this.allRows.filter((r) => r.band === k);
+      const count = matching.length;
+      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+      const rawAvg = count > 0 ? matching.reduce((sum, r) => sum + r.score, 0) / count : 0;
+      const avgScore = Math.round(rawAvg * 100);
+      const avgScoreFormatted = formatPredictionScore(rawAvg, this.outcomeConfig, this.problemType);
+      this.visibleBands.push({
+        key: k,
+        label: k.charAt(0).toUpperCase() + k.slice(1),
+        count,
+        pct,
+        avgScore,
+        avgScoreFormatted,
+        badgeColor: 'gray',
+      });
+    }
   }
 
   public onViewToggle(key: string): void {
@@ -634,6 +924,15 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
       this.selectedDecileIndex = idx;
     }
     this.applyFilter();
+
+    if (this.selectedDecileIndex !== null) {
+      setTimeout(() => {
+        const el = document.getElementById('pg-drilldown-anchor');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }, 50);
+    }
   }
 
   public clearDecileFilter(): void {
@@ -671,6 +970,7 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
     this.filteredRows = rows;
     this.cdr.markForCheck();
+    this.scheduleVisibleRowsLookup(30);
   }
 
   // ── Drill-Through Navigation ──
@@ -680,13 +980,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     if (!entName) return;
 
     try {
-      const ck = new CompositeKey();
       const entity = this.ProviderToUse.EntityByName(entName);
-      if (entity) {
-        ck.LoadFromURLSegment(entity, row.recordId);
-      } else {
-        ck.SimpleLoadFromURLSegment(row.recordId);
-      }
+      const ck = CompositeKey.FromURLSegment(entity, row.recordId);
       this.navigationService.OpenEntityRecord(entName, ck);
     } catch (err) {
       LogError(`PSPredictionsGridComponent.drillThrough failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -695,21 +990,126 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
   // ── Slide-In Detail & Score History ──
 
+  public onDrawerWidthChanged(width: number): void {
+    this.drawerWidthPx = width;
+    UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.predictions.drawerWidth', width.toString());
+  }
+
   public openDetail(row: PredictionGridRow): void {
     this.selectedRow = row;
     this.detailOpen = true;
     this.historyPoints = [];
     this.historyLoading = true;
+    this.subjectEntityName = null;
+    this.subjectRecordId = null;
+    this.subjectRecordName = null;
     this.cdr.markForCheck();
 
     void this.loadScoreHistory(row.recordId);
+
+    const entName = this.resolvedEntityName || this.entityName;
+    if (entName) {
+      void this.resolveSubjectRecord(entName, row.recordId);
+    }
   }
 
   public closeDetail(): void {
     this.detailOpen = false;
     this.selectedRow = null;
     this.historyPoints = [];
+    this.subjectEntityName = null;
+    this.subjectRecordId = null;
+    this.subjectRecordName = null;
     this.cdr.markForCheck();
+  }
+
+  public openSubjectRecord(): void {
+    if (!this.subjectEntityName || !this.subjectRecordId) return;
+    try {
+      const entity = this.ProviderToUse.EntityByName(this.subjectEntityName);
+      if (!entity) return;
+      const ck = CompositeKey.FromURLSegment(entity, this.subjectRecordId);
+      this.navigationService.OpenEntityRecord(this.subjectEntityName, ck);
+    } catch (err) {
+      LogError(`PSPredictionsGridComponent.openSubjectRecord failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  private async resolveSubjectRecord(targetEntityName: string, recordId: string): Promise<void> {
+    try {
+      const provider = this.ProviderToUse;
+      const entity = provider.EntityByName(targetEntityName);
+      if (!entity) return;
+
+      const candidates = [
+        { field: 'PersonID', entity: 'MJ_BizApps_Common: People' },
+        { field: 'MemberID', entity: 'MoreCheese: Member Profiles' },
+        { field: 'ContactID', entity: 'MJ_BizApps_Common: Contacts' },
+        { field: 'AccountID', entity: 'MJ_BizApps_Common: Accounts' },
+        { field: 'CustomerID', entity: 'MJ_BizApps_Common: Customers' },
+      ];
+
+      let matchedField: string | null = null;
+      let targetRelatedEntityName: string | null = null;
+
+      for (const c of candidates) {
+        const f = entity.Fields.find((fld) => fld.Name.toLowerCase() === c.field.toLowerCase());
+        if (f) {
+          matchedField = f.Name;
+          targetRelatedEntityName = f.RelatedEntity || c.entity;
+          break;
+        }
+      }
+
+      if (!matchedField || !targetRelatedEntityName) {
+        const personField = entity.Fields.find((fld) => fld.RelatedEntity && fld.RelatedEntity.toLowerCase().includes('people'));
+        if (personField) {
+          matchedField = personField.Name;
+          targetRelatedEntityName = personField.RelatedEntity;
+        }
+      }
+
+      if (!matchedField || !targetRelatedEntityName) return;
+
+      const recRes = await RunView.FromMetadataProvider(provider).RunView<Record<string, unknown>>(
+        {
+          EntityName: entity.Name,
+          ExtraFilter: `${entity.FirstPrimaryKey.Name} = '${recordId.replace(/'/g, "''")}'`, // first-pk-ok: Single-key entity lookup by recordId
+          MaxRows: 1,
+          ResultType: 'simple',
+          Fields: [matchedField],
+        },
+        provider.CurrentUser ?? undefined,
+      );
+
+      if (recRes.Success && recRes.Results && recRes.Results.length > 0) {
+        const subjectId = recRes.Results[0][matchedField];
+        if (typeof subjectId === 'string' && subjectId) {
+          this.subjectEntityName = targetRelatedEntityName;
+          this.subjectRecordId = subjectId;
+
+          const relatedEntity = provider.EntityByName(targetRelatedEntityName);
+          if (relatedEntity) {
+            const names = await provider.GetEntityRecordNames(
+              [
+                {
+                  EntityName: targetRelatedEntityName,
+                  CompositeKey: CompositeKey.FromURLSegment(relatedEntity, subjectId),
+                },
+              ],
+              provider.CurrentUser ?? undefined,
+            );
+
+            if (names && names.length > 0 && names[0].Success) {
+              this.subjectRecordName = names[0].RecordName ?? null;
+            }
+          }
+          this.cdr.markForCheck();
+        }
+      }
+    } catch (err) {
+      LogError(`PSPredictionsGridComponent.resolveSubjectRecord failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private async loadScoreHistory(recordId: string): Promise<void> {
@@ -721,6 +1121,8 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
         entityId: this.resolvedEntityId,
         recordId,
         modelId: this.modelId,
+        outcomeConfig: this.outcomeConfig,
+        problemType: this.problemType,
       });
     } finally {
       this.historyLoading = false;
@@ -783,57 +1185,74 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     return Math.round((total / this.allRows.length) * 100);
   }
 
+  public get meanScoreFormatted(): string {
+    if (this.allRows.length === 0) return '—';
+    const total = this.allRows.reduce((acc, r) => acc + r.score, 0);
+    const avg = total / this.allRows.length;
+    return formatPredictionScore(avg, this.outcomeConfig, this.problemType);
+  }
+
   public get histogramBins(): HistogramBin[] {
     const total = this.allRows.length;
     if (total === 0) return [];
 
+    const isReg = this.isRegression;
+    let minScore = 0;
+    let maxScore = 1;
+
+    if (isReg) {
+      const scores = this.allRows.map((r) => r.score);
+      minScore = Math.min(...scores);
+      maxScore = Math.max(...scores);
+      if (maxScore <= minScore) {
+        maxScore = minScore + 1;
+      }
+    }
+
+    const range = maxScore - minScore;
+    const step = range / 10;
     const counts = new Array(10).fill(0);
+
     for (const r of this.allRows) {
-      const idx = Math.min(9, Math.floor(r.score * 10));
+      const normalized = isReg ? (r.score - minScore) / range : r.score;
+      const idx = Math.min(9, Math.max(0, Math.floor(normalized * 10)));
       counts[idx]++;
     }
 
     const maxCount = Math.max(...counts, 1);
 
     return counts.map((count, idx) => {
-      const lower = idx * 10;
-      const upper = (idx + 1) * 10;
+      const binMin = minScore + idx * step;
+      const binMax = minScore + (idx + 1) * step;
       const pct = (count / total) * 100;
       const pctFormatted = pct < 0.1 && count > 0 ? '<0.1%' : pct.toFixed(1) + '%';
 
       // Power scale height so smaller decile bins (e.g. 2, 21, 35) are visible alongside 5,390
       const height = count === 0 ? 0 : Math.round(14 + Math.pow(count / maxCount, 0.45) * 116);
 
-      let color: string;
-      let riskLabel: string;
-      if (this.isRenewalModel) {
-        if (idx <= 2) {
-          color = 'var(--mj-status-error)';
-          riskLabel = 'High Churn Risk';
-        } else if (idx <= 5) {
-          color = 'var(--mj-status-warning)';
-          riskLabel = 'Medium Risk';
-        } else {
-          color = 'var(--mj-status-success)';
-          riskLabel = 'Low Risk / Healthy';
-        }
+      const centerScore = (binMin + binMax) / 2;
+      const band = resolveScoreBand(centerScore, this.outcomeConfig);
+      const color = band ? this.getBadgeColorVar(band.BadgeColor) : 'var(--mj-brand-primary)';
+
+      let label: string;
+      let shortLabel: string;
+      if (isReg) {
+        const fmtMin = formatPredictionScore(binMin, this.outcomeConfig, this.problemType);
+        const fmtMax = formatPredictionScore(binMax, this.outcomeConfig, this.problemType);
+        label = `${fmtMin}–${fmtMax}`;
+        shortLabel = fmtMin;
       } else {
-        if (idx >= 7) {
-          color = 'var(--mj-status-error)';
-          riskLabel = 'High Risk';
-        } else if (idx >= 4) {
-          color = 'var(--mj-status-warning)';
-          riskLabel = 'Medium Risk';
-        } else {
-          color = 'var(--mj-status-success)';
-          riskLabel = 'Low Risk';
-        }
+        const lower = idx * 10;
+        const upper = (idx + 1) * 10;
+        label = `${lower}%–${upper}%`;
+        shortLabel = `${lower}%`;
       }
+      const riskLabel = band ? band.Label : label;
 
       return {
         idx,
-        label: `${lower}%–${upper}%`,
-        shortLabel: `${lower}%`,
+        label,
+        shortLabel,
         count,
         pct: Math.round(pct),
         pctFormatted,
@@ -880,6 +1299,19 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
     const pts = this.historyPoints;
     if (pts.length === 0) return [];
 
+    const isReg = this.isRegression;
+    let minScore = 0;
+    let maxScore = 1;
+    if (isReg) {
+      const scores = pts.map((p) => p.score);
+      minScore = Math.min(...scores);
+      maxScore = Math.max(...scores);
+      if (maxScore <= minScore) {
+        maxScore = minScore + 1;
+      }
+    }
+    const range = maxScore - minScore;
+
     const xStart = 60;
     const xEnd = 500;
     const yTop = 20;
@@ -890,9 +1322,12 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
 
     return pts.map((pt, i) => {
       const x = pts.length === 1 ? (xStart + xEnd) / 2 : Math.round(xStart + i * step);
-      const clampedScore = Math.max(0, Math.min(1, pt.score));
+      const clampedScore = isReg
+        ? Math.max(0, Math.min(1, (pt.score - minScore) / range))
+        : Math.max(0, Math.min(1, pt.score));
       const y = Math.round(yBottom - clampedScore * ySpan);
-      const color = pt.band === 'high' ? 'var(--mj-status-error)' : pt.band === 'medium' ? 'var(--mj-status-warning)' : 'var(--mj-status-success)';
+      const band = resolveScoreBand(pt.score, this.outcomeConfig);
+      const color = band ? this.getBadgeColorVar(band.BadgeColor) : 'var(--mj-brand-primary)';
       return {
         runId: pt.runId,
         x,
@@ -922,16 +1357,19 @@ export class PSPredictionsGridComponent extends BaseAngularComponent implements 
   public exportCSV(): void {
     if (this.allRows.length === 0) return;
 
-    const headers = ['Record ID', 'Record Name', 'Prediction Score', 'Risk Level', 'Predicted Class', 'Top Drivers', 'Scored At'];
+    const scoreHeader = this.outcomeConfig.ScoreLabel || 'Prediction Score';
+    const statusHeader = this.outcomeConfig.StatusLabel || 'Risk Level';
+    const headers = ['Record ID', 'Record Name', scoreHeader, statusHeader, 'Predicted Class', 'Top Drivers', 'Scored At'];
     const lines = [headers.join(',')];
 
     for (const r of this.filteredRows) {
       const driversStr = r.drivers.map((d) => `${d.up ? '+' : '-'}${d.label}`).join('; ');
+      const statusStr = `${r.status || r.band} (${r.scoreFormatted})`;
       const rowData = [
         `"${r.recordId.replace(/"/g, '""')}"`,
         `"${(r.recordName || r.recordId).replace(/"/g, '""')}"`,
         r.scoreFormatted,
-        r.band.toUpperCase(),
+        statusStr,
         `"${(r.class || '').replace(/"/g, '""')}"`,
         `"${driversStr.replace(/"/g, '""')}"`,
         `"${r.scoredAtDate ? r.scoredAtDate.toISOString() : ''}"`,
