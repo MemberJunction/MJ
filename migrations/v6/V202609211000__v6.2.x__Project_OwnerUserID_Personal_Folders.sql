@@ -28,7 +28,7 @@
 --
 -- WHAT. One additive, NULLABLE column, so nothing existing changes behaviour:
 --
---   Project.OwnerUserID   UNIQUEIDENTIFIER NULL   FK -> __mj.User(ID)
+--   Project.OwnerUserID   UNIQUEIDENTIFIER NULL   FK -> ${flyway:defaultSchema}.User(ID)
 --       NULL (default for every existing row) — SHARED: the folder is visible to the
 --             environment, exactly as today.
 --       set                                      — PERSONAL: the folder belongs to
