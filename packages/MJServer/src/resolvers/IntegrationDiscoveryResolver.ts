@@ -1040,6 +1040,18 @@ class ResourcePressureOutput {
     @Field(() => Float, { nullable: true }) HeapUsedMB?: number;
     @Field(() => Float, { nullable: true }) HeapLimitMB?: number;
     @Field(() => Float, { nullable: true }) ResidentMB?: number;
+    /**
+     * Resident set as a fraction of HOST memory, plus the host totals it is derived from.
+     *
+     * ResidentMB alone is a number with no denominator: a client cannot tell whether 3,478 MB is
+     * comfortable or one step from a SIGKILL without knowing the box. It was the latter on the
+     * sandbox on 2026-09-14 — 3,478 MB of 3,830 MB, killed by the kernel, while HeapUsedFraction
+     * (the only judgeable number this type exposed) sat unremarkable because `--max-old-space-size`
+     * bounds V8's old space and not the response buffers that actually filled the machine.
+     */
+    @Field(() => Float, { nullable: true }) ResidentFraction?: number;
+    @Field(() => Float, { nullable: true }) HostMemTotalMB?: number;
+    @Field(() => Float, { nullable: true }) HostMemAvailableMB?: number;
     @Field(() => Float, { nullable: true }) ArtifactDiskFreeMB?: number;
     @Field(() => Float, { nullable: true }) WorkDirFreeMB?: number;
     @Field(() => Int, { nullable: true }) ActiveSyncCount?: number;
@@ -5934,6 +5946,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 HeapUsedMB: mb(reading.HeapUsedBytes),
                 HeapLimitMB: mb(reading.HeapLimitBytes),
                 ResidentMB: mb(reading.ResidentBytes),
+                ResidentFraction: reading.ResidentFraction ?? undefined,
+                HostMemTotalMB: mb(reading.HostMemTotalBytes),
+                HostMemAvailableMB: mb(reading.HostMemAvailableBytes),
                 ArtifactDiskFreeMB: mb(reading.ArtifactDiskFreeBytes),
                 WorkDirFreeMB: mb(reading.WorkDirFreeBytes),
                 ActiveSyncCount: reading.ActiveSyncCount,

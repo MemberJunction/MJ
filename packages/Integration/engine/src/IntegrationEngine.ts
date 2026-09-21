@@ -47,6 +47,7 @@ import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
 import { ReadResourcePressure, EvaluatePressure } from './ResourcePressure.js';
+import { RunMemoryControl } from './RunMemoryControl.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
 import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
@@ -1907,7 +1908,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal, logger
                 );
                 this.MergeResult(aggregate, mapResult);
-                await this.warnOnResourcePressure(logger, pressureWarned);
+                const memoryPressure = await this.warnOnResourcePressure(logger, pressureWarned);
                 aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
                 logger?.emit('sync.entity-map.complete', {
                     externalObjectName: entityMap.ExternalObjectName,
@@ -1923,7 +1924,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     recordsErrored: mapResult.RecordsErrored,
                 });
                 this.checkSecondLayerEmpty(entityMap, mapResult, depGraph, processedByIoId, ioNameById, ioCategoryById, logger);
-                return { ok: mapResult.Success, throttled: mapResult.Throttled === true };
+                // Host memory pressure enters the SAME AIMD signal a source throttle uses, so it
+                // halves the in-flight cap and ramps back only once maps complete cleanly. That is
+                // the whole adaptive answer to OOM: no per-connector tuning, no advance knowledge of
+                // which connector misbehaves - a connector that returns 10x the requested batch
+                // costs 10x the memory, the reading notices, and the cap follows. Floor is 1, so a
+                // sync always makes progress rather than deadlocking on a full box.
+                return { ok: mapResult.Success, throttled: mapResult.Throttled === true || memoryPressure };
             } catch (err) {
                 // Ownership loss is NOT a per-map failure to record-and-continue: continuing to the
                 // next map would keep writing after another process claimed the run — the exact
@@ -1981,6 +1988,27 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Configuration override (IntegrationSetSyncConfig) wins over the connector's MaxConcurrencyHint constant.
         const maxConcurrency = Math.max(concurrency, this.getConfigOverrides(config).maxConcurrency ?? config.connector.MaxConcurrencyHint ?? concurrency);
         const concController = new AdaptiveConcurrencyController({ start: concurrency, min: 1, max: maxConcurrency });
+
+        // The governor, scoped to THIS run. Created here because this is the only frame that can
+        // see the concurrency controller; handed down on the config because the decision has to be
+        // taken where a batch lands, several frames below.
+        config.memoryControl = new RunMemoryControl(
+            {
+                HoldAdmissions: () => concController.Hold(),
+                ReduceConcurrency: () => concController.OnThrottleOrError(),
+                CurrentInFlight: () => concController.Cap,
+                Report: plan =>
+                    logger?.warning(
+                        'sync',
+                        plan.Exhausted ? 'HOST_MEMORY_EXHAUSTED' : 'HOST_MEMORY_PRESSURE',
+                        plan.Exhausted
+                            ? `This workspace ran short of memory and there was nothing left to slow down — ${plan.Reason}. It needs a larger size for this amount of data.`
+                            : `This workspace is short of memory, so the sync is ${plan.Levers.map(l => LEVER_COPY[l.Code] ?? 'easing off').join(' and ')} to keep going — ${plan.Reason}.`,
+                        { reason: plan.Reason, levers: plan.Levers.map(l => l.Code), exhausted: plan.Exhausted }
+                    )
+            },
+            this.MaxBatchSize
+        );
 
         // Second-layer silent-empty detection state (see checkSecondLayerEmpty): a per-IO running
         // record count + the FK dependency graph, so an association/dependent object that fetches
@@ -2814,6 +2842,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const MAX_FETCH_GAPS = 25;        // give up + hold the watermark if this many pages fail in a row (API down)
         let consecutiveEmptyBatches = 0;  // P3-D: detect a connector that pages empty-but-HasMore forever
         let oversizeBatchWarned = false;  // pagination rule: warn ONCE per object that the connector ignored BatchSize
+        // Whether this connector respects the page size it is given. Assumed true until a batch
+        // proves otherwise, because that verdict decides whether asking for smaller pages is the
+        // cheapest lever available under memory pressure or a wasted round trip that frees nothing.
+        let honoursBatchSize = true;
+        /**
+         * The page size THIS run asks for, which the governor may shrink between batches.
+         *
+         * Read fresh per fetch, and captured into a local for the duration of that fetch: the
+         * error-skip path advances the offset by what was REQUESTED, so reading it again after the
+         * governor moved it would skip or re-read a page.
+         */
+        const askedBatchSize = (): number => config.memoryControl?.BatchSize ?? this.MaxBatchSize;
         const MAX_BATCHES_PER_MAP = 5000;
         const EMPTY_BATCH_WARN_THRESHOLD = 5; // warn once after this many empty-but-HasMore batches in a row
         const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
@@ -2859,6 +2899,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 fetchCompletedCleanly = false;
                 break;
             }
+            // Captured ONCE per iteration. The governor may shrink the run's page size while this
+            // fetch is in flight, and the error-skip path below advances the offset by what was
+            // asked for — re-reading it there would skip or re-read a page.
+            const requestedThisBatch = askedBatchSize();
             const ctx: FetchContext = {
                 CompanyIntegration: config.companyIntegration,
                 ObjectName: entityMap.ExternalObjectName,
@@ -2872,7 +2916,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // to 707 of 23,558 rows — an id-ascending-AND-modstamp-ascending subsequence — with
                 // the run still reporting success. `currentWatermark` remains persistence bookkeeping.
                 WatermarkValue: initialWatermark,
-                BatchSize: this.MaxBatchSize,
+                BatchSize: requestedThisBatch,
                 ContextUser: contextUser,
                 CurrentPage: currentPage,
                 CurrentOffset: currentOffset,
@@ -2894,7 +2938,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 page: currentPage ?? null,
                 offset: currentOffset ?? null,
                 cursor: currentCursor ?? null,
-                batchSize: this.MaxBatchSize,
+                batchSize: requestedThisBatch,
             });
             let batch: FetchBatchResult;
             const fetchStart = Date.now();
@@ -3026,7 +3070,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         `watermark is held so the window is re-fetched next run. Error: ${errMsg}`,
                         { offset: currentOffset ?? null, page: currentPage ?? null, batchIndex: batchCount, error: errMsg },
                     );
-                    if (currentOffset != null) currentOffset += this.MaxBatchSize;
+                    if (currentOffset != null) currentOffset += requestedThisBatch;
                     else if (currentPage != null) currentPage += 1;
                     continue;
                 }
@@ -3097,9 +3141,29 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // run-event stream, not buried in a console.log nobody reads. Warned ONCE per object (the
             // CONSECUTIVE_EMPTY_BATCHES pattern) so a paginating-but-over-size connector doesn't flood
             // the artifact with one warning per page.
-            if (batch.Records.length > this.MaxBatchSize && !oversizeBatchWarned) {
-                oversizeBatchWarned = true;
-                this.warnOversizedBatch(entityMap, batch, batchCount, logger);
+            if (batch.Records.length > requestedThisBatch) {
+                // The verdict the governor needs: a connector that overshoots its page size cannot
+                // be asked to use less memory by asking for a smaller page.
+                honoursBatchSize = false;
+                if (!oversizeBatchWarned) {
+                    oversizeBatchWarned = true;
+                    this.warnOversizedBatch(entityMap, batch, batchCount, requestedThisBatch, logger);
+                }
+            }
+
+            // Decide what to give up, HERE — at the batch, not between tables. A table that fetches
+            // twelve consecutive 2,000-record pages allocates all of it without ever reaching a
+            // between-tables checkpoint, which is how the sandbox reached 3,478 MB of 3,830 MB on
+            // 2026-09-14 with the old check never getting a turn. Never awaited for its answer's
+            // sake and never able to throw: a governor that can fail a run trades an occasional
+            // memory problem for a constant availability one.
+            if (config.memoryControl && batch.Records.length > 0) {
+                await config.memoryControl.NoteBatch({
+                    EntityMapID: entityMap.ID,
+                    ObservedRecords: batch.Records.length,
+                    SampleRecord: batch.Records[0],
+                    HonoursBatchSize: honoursBatchSize
+                });
             }
 
             if (batch.Records.length > 0) {
@@ -3593,17 +3657,25 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMap: ICompanyIntegrationEntityMap,
         batch: FetchBatchResult,
         batchIndex: number,
+        requestedBatchSize: number,
         logger?: SyncLogger
     ): void {
         const objectName = entityMap.ExternalObjectName ?? entityMap.ID;
+        // WHAT WAS ASKED FOR ON THIS PAGE, not `this.MaxBatchSize`. The governor may have shed the
+        // run's page size, and the caller decides a batch is over-size against the shed figure.
+        // Classifying against the un-shed ceiling makes the two disagree in exactly the case the
+        // warning exists for: a 2,000 ceiling shed to 500, a connector returning 800, the caller
+        // marking the connector as not honouring the size — and this returning null, so nothing is
+        // ever reported. `oversizeBatchWarned` latches on that first page, so no later page
+        // reports it either.
         const verdict = IntegrationEngine.ClassifyOversizedBatch(
-            objectName, batch.Records.length, this.MaxBatchSize, batchIndex, batch.HasMore,
+            objectName, batch.Records.length, requestedBatchSize, batchIndex, batch.HasMore,
         );
         if (!verdict) return;
         logger?.warning(objectName, verdict.Code, verdict.Message, {
             batchIndex,
             recordCount: batch.Records.length,
-            requestedBatchSize: this.MaxBatchSize,
+            requestedBatchSize,
             hasMore: batch.HasMore ?? null,
             unbounded: verdict.Unbounded,
         });
@@ -6265,26 +6337,45 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * Merges an entity-map-level result into the aggregate result.
      */
     /**
-     * Warn on the run's own stream when the host is running out of memory or disk.
+     * Warn on the run's own stream when the host is running out of memory or disk, and report
+     * whether memory pressure is present so the caller can shed load.
      *
      * plan.md line 158 wants the user told, and the only moment that is useful is BEFORE the
      * failure. Emitted at an entity-map boundary because that is a natural checkpoint - the
      * measurement is cheap but not free, and per-record would be absurd.
      *
-     * ONCE per code per run. Repeating it every map would bury the run's real events, and the
-     * condition does not become more true by being restated.
+     * The WARNING is once per code per run - repeating it every map would bury the run's real
+     * events, and the condition does not become more true by being restated. The RETURN VALUE is
+     * not: it reports the CURRENT reading every time, because the AIMD cap has to keep being told.
+     * Telling it once would cut concurrency a single step and then ramp straight back up into the
+     * same wall.
+     *
+     * Measured even with no logger. A sync with nowhere to write warnings is still a sync that can
+     * be killed, and the throttle is what keeps it alive.
      */
-    private async warnOnResourcePressure(logger: SyncLogger | undefined, warned: Set<string>): Promise<void> {
-        if (!logger) return;
+    private async warnOnResourcePressure(logger: SyncLogger | undefined, warned: Set<string>): Promise<boolean> {
         try {
             const findings = EvaluatePressure(await ReadResourcePressure());
+            let memoryPressure = false;
             for (const f of findings) {
-                if (warned.has(f.Code)) continue;
+                const isMemory = f.Code === 'HOST_MEMORY_PRESSURE';
+                if (isMemory) memoryPressure = true;
+                if (!logger || warned.has(f.Code)) continue;
                 warned.add(f.Code);
-                logger.warning('sync', f.Code, f.Message, { fraction: f.Fraction });
+                // Carry what we DID, not only what we saw: a customer watching a sync get slower
+                // should be able to tell that the slowdown and the warning are one event, not two
+                // problems. Deliberately a field on the existing warning rather than a new event
+                // type - SyncLogEvent is a closed union every client matches on.
+                logger.warning('sync', f.Code, f.Message, {
+                    fraction: f.Fraction,
+                    ...(isMemory ? { action: 'reduced-concurrency' } : {}),
+                });
             }
+            return memoryPressure;
         } catch {
-            // Measuring headroom must never be the thing that ends a sync.
+            // Measuring headroom must never be the thing that ends a sync - and must never be the
+            // thing that throttles it either, so an unreadable measurement reports no pressure.
+            return false;
         }
     }
 
@@ -6811,6 +6902,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 }
 
 /** Internal configuration bundle for a sync run */
+/** What each lever is called in the one sentence a customer reads. */
+const LEVER_COPY: Record<string, string> = {
+    HOLD_ADMISSIONS: 'not starting more tables for now',
+    REDUCE_CONCURRENCY: 'syncing fewer tables at once',
+    SHRINK_BATCH: 'reading smaller pages from your source',
+    FLUSH_ACCUMULATOR: 'saving more often',
+    DROP_HASH_PREFETCH: 'skipping an optimisation',
+    PAUSE_OTHER_SYNC: 'pausing another sync'
+};
+
 interface RunConfiguration {
     companyIntegration: MJCompanyIntegrationEntity;
     entityMaps: ICompanyIntegrationEntityMap[];
@@ -6819,6 +6920,14 @@ interface RunConfiguration {
     fullSync: boolean;
     /** When set, overrides each entity map's own SyncDirection for this run. */
     syncDirection?: 'Pull' | 'Push' | 'Bidirectional';
+    /**
+     * This run's memory governor, when one is active.
+     *
+     * Threaded on the config because the batch loop is several frames below the layer runner that
+     * owns the concurrency controller, and the decision has to be made where the batch is — a
+     * table fetching twelve consecutive pages never reaches a between-tables checkpoint.
+     */
+    memoryControl?: RunMemoryControl;
 }
 
 /** Shape of a validation result from BaseEntity.Validate() */
