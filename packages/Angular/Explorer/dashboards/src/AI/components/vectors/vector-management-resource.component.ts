@@ -206,8 +206,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (!loaded) throw new Error('Could not load entity document');
 
             doc.Name = this.EditDocName;
-            doc.VectorDatabaseID = this.EditDocVectorDBID;
-            doc.AIModelID = this.EditDocAIModelID;
+            doc.VectorDatabaseID = this.EditDocVectorDBID || null;
+            doc.AIModelID = this.EditDocAIModelID || null;
             doc.VectorIndexID = this.EditDocVectorIndexID || null;
             doc.Status = this.EditDocStatus as 'Active' | 'Inactive';
 

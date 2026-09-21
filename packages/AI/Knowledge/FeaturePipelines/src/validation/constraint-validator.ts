@@ -114,6 +114,10 @@ function validateEnum(
   options?: ValidationOptions
 ): OutputValidationResult {
   const allowed = options?.resolved?.AllowedValues ?? constraint.Values ?? [];
+  if (allowed.length === 0) {
+    const msg = `Enum constraint has no allowed values configured.`;
+    return applyPolicy(rawValue, policy, msg, 'Other');
+  }
   const strVal = String(rawValue).trim();
 
   // Find exact or case-insensitive match in allowed values

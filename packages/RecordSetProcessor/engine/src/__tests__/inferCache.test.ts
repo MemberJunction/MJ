@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { InferProcessor } from '../processors/InferProcessor';
 import { RecordRef, RecordProcessorContext } from '@memberjunction/record-set-processor-base';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { MJFeatureValueCacheEntity } from '@memberjunction/core-entities';
 import { DataFeatureSpec, FeatureValueCacheService } from '@memberjunction/feature-pipelines';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -43,7 +44,7 @@ describe('InferProcessor dedup cache & two-phase execution (P1-7c)', () => {
     const mockUser = { ID: 'u1' } as unknown as UserInfo;
     const context: RecordProcessorContext = {
         contextUser: mockUser,
-        provider: {} as unknown as any,
+        provider: {} as unknown as IMetadataProvider,
         recordProcessID: 'rp-1',
         entityID: 'ent-1',
         processRunID: 'pr-1',
@@ -97,7 +98,7 @@ describe('InferProcessor dedup cache & two-phase execution (P1-7c)', () => {
             .mockImplementation(async (params) => ({
                 ID: `cache-for-${params.keyDisplay}`,
                 ...params,
-            } as unknown as any));
+            } as unknown as MJFeatureValueCacheEntity));
 
         const recordHistorySpy = vi
             .spyOn(FeatureValueCacheService.Instance, 'RecordFeatureValues')

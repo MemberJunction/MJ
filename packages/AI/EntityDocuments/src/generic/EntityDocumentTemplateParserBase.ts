@@ -65,7 +65,7 @@ export abstract class EntityDocumentTemplateParserBase {
     // Pass 1: If template uses Nunjucks {{ }} syntax, pre-render with the MJ TemplateEngine first.
     // This handles conditionals ({% if __Parent %}), filters, and expressions.
     let processedTemplate = Template;
-    if (/\{\{.*\}\}/.test(Template) || /\{%.*%\}/.test(Template)) {
+    if (Template.includes('{{') || Template.includes('{%')) {
       await TemplateEngineServer.Instance.Config(false, ContextUser);
       const renderResult = await TemplateEngineServer.Instance.RenderTemplateSimple(Template, EntityRecord);
       if (renderResult.Success && renderResult.Output) {

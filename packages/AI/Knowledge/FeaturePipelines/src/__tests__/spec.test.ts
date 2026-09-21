@@ -308,10 +308,19 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
   it('enforces numeric bounds and integer constraint', () => {
     const intConstraint = { Type: 'numeric' as const, Min: 1, Max: 10, Integer: true, OnViolation: 'fail' as const };
 
+    expect(validateOutputValue(1, intConstraint).valid).toBe(true);
     expect(validateOutputValue(5, intConstraint).valid).toBe(true);
+    expect(validateOutputValue(10, intConstraint).valid).toBe(true);
     expect(validateOutputValue(5.5, intConstraint).valid).toBe(false);
     expect(validateOutputValue(0, intConstraint).valid).toBe(false);
     expect(validateOutputValue(11, intConstraint).valid).toBe(false);
+  });
+
+  it('handles enum constraint with empty allowed values gracefully', () => {
+    const emptyEnum = { Type: 'enum' as const, Values: [], OnViolation: 'fail' as const };
+    const res = validateOutputValue('IC', emptyEnum);
+    expect(res.valid).toBe(false);
+    expect(res.violationMessage).toContain('no allowed values configured');
   });
 
   it('degrades coerce-to-other to null on non-enum constraint violations', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FeatureValueCacheService } from '../cache/FeatureValueCacheService';
-import { UserInfo, RunView } from '@memberjunction/core';
+import { UserInfo, RunView, IMetadataProvider } from '@memberjunction/core';
 
 // Mock RunView so we don't hit a real database in unit tests
 vi.mock('@memberjunction/core', async () => {
@@ -154,7 +154,7 @@ describe('FeatureValueCacheService (P1-7c)', () => {
                 promptVersionHash: 'p-hash-1',
                 featureValueCacheID: 'cache-entry-1',
                 contextUser: mockUser,
-                provider: mockProvider as unknown as any,
+                provider: mockProvider as unknown as IMetadataProvider,
             });
 
             expect(savedRecords.length).toBe(3);

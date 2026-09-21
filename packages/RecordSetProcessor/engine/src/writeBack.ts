@@ -5,7 +5,7 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { BaseEntity, CompositeKey, IMetadataProvider, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, IMetadataProvider, LogStatus, Metadata, UserInfo, LogError } from '@memberjunction/core';
 import { UUIDsEqual, resolveMappingRef } from '@memberjunction/global';
 import { RecordRef } from '@memberjunction/record-set-processor-base';
 import { TagEngine, TaxonomyMode } from '@memberjunction/tag-engine';
@@ -318,15 +318,23 @@ export async function applyOutputMapping(opts: {
                             'constrained',
                             tagMapping.rootTagId,
                             matchThreshold,
-                            contextUser
+                            contextUser,
+                            { dryRun: true }
                         );
-                    } catch {
+                    } catch (error) {
+                        LogError(`writeBack: ResolveTag dryRun failed: ${error instanceof Error ? error.message : String(error)}`);
                         matchedTag = null;
                     }
 
                     if (matchedTag) {
                         const depth = computeTagDepth(matchedTag.ID, tagMapping.rootTagId, TagEngine.Instance);
-                        const exceedsMaxDepth = tagMapping.maxDepth !== undefined && depth > tagMapping.maxDepth;
+                        const isNonDescendant = depth < 0;
+                        const exceedsMaxDepth = isNonDescendant || (tagMapping.maxDepth !== undefined && depth > tagMapping.maxDepth);
+                        const errorMsg = isNonDescendant
+                            ? `Matched tag '${matchedTag.Name}' is not a descendant of root tag '${tagMapping.rootTagId}'`
+                            : (tagMapping.maxDepth !== undefined && depth > tagMapping.maxDepth)
+                                ? `Match exceeds maxDepth (${depth} > ${tagMapping.maxDepth})`
+                                : undefined;
                         previewTags.push({
                             tagText: trimmedName,
                             resolvedTagID: matchedTag.ID,
@@ -335,7 +343,7 @@ export async function applyOutputMapping(opts: {
                             created: false,
                             rootTagID: tagMapping.rootTagId,
                             depth,
-                            error: exceedsMaxDepth ? `Match exceeds maxDepth (${depth} > ${tagMapping.maxDepth})` : undefined,
+                            error: errorMsg,
                         });
                     } else {
                         if (growthMode === 'auto-grow') {
@@ -379,6 +387,9 @@ export async function applyOutputMapping(opts: {
                     }
 
                     const depth = computeTagDepth(resolvedTag.ID, tagMapping.rootTagId, TagEngine.Instance);
+                    if (depth < 0) {
+                        throw new Error(`applyOutputMapping: tag '${resolvedTag.Name}' is not a descendant of root tag '${tagMapping.rootTagId}'`);
+                    }
                     if (tagMapping.maxDepth !== undefined && depth > tagMapping.maxDepth) {
                         throw new Error(`applyOutputMapping: tag '${resolvedTag.Name}' depth (${depth}) exceeds maxDepth (${tagMapping.maxDepth}) under root '${tagMapping.rootTagId}'`);
                     }

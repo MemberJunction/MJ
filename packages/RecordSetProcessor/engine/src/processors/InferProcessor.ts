@@ -114,16 +114,23 @@ export class InferProcessor implements IRecordProcessor {
 
         const params = new AIPromptParams();
         params.prompt = prompt;
-        if (this.spec?.Outputs && this.spec.Outputs.length > 0) {
-            params.prompt.ValidationBehavior = 'Strict';
-        }
         params.data = await this.buildPromptData(record, context);
         params.contextUser = context.contextUser;
 
         // P1-6 Hook: beforePromptExecute
         await this.beforePromptExecute(params, record, context);
 
-        const result = await new AIPromptRunner().ExecutePrompt(params);
+        const origValidationBehavior = prompt.ValidationBehavior;
+        let result: AIPromptRunResult;
+        try {
+            if (this.spec?.Outputs && this.spec.Outputs.length > 0) {
+                params.prompt.ValidationBehavior = 'Strict';
+            }
+            result = await new AIPromptRunner().ExecutePrompt(params);
+        } finally {
+            prompt.ValidationBehavior = origValidationBehavior;
+        }
+
         const aiPromptRunID = result.promptRun?.ID;
         if (!result.success) {
             return {
@@ -440,9 +447,9 @@ export class InferProcessor implements IRecordProcessor {
             return { valid: true, payload: rawResult };
         }
 
-        const payloadCopy =
+        let payloadCopy: unknown =
             typeof rawResult === 'object' && rawResult !== null
-                ? { ...(rawResult as Record<string, unknown>) }
+                ? structuredClone(rawResult)
                 : rawResult;
         const violations: Array<{ outputName: string; violationMessage: string; policy: ViolationPolicy }> = [];
 
@@ -481,10 +488,14 @@ export class InferProcessor implements IRecordProcessor {
                     violationMessage: validation.violationMessage ?? 'Constraint violation',
                     policy: validation.violationPolicyApplied,
                 });
+            }
 
-                if (typeof payloadCopy === 'object' && payloadCopy !== null && output.Ref.startsWith('$.')) {
+            if (validation.coerced || validation.value !== rawVal) {
+                if (output.Ref === '$') {
+                    payloadCopy = validation.value;
+                } else if (typeof payloadCopy === 'object' && payloadCopy !== null && output.Ref.startsWith('$.')) {
                     const propPath = output.Ref.substring(2);
-                    (payloadCopy as Record<string, unknown>)[propPath] = validation.value;
+                    setNestedValue(payloadCopy as Record<string, unknown>, propPath, validation.value);
                 }
             }
         }
@@ -619,3 +630,49 @@ export class InferProcessor implements IRecordProcessor {
         return { RecordID: record.RecordID, EntityID: record.EntityID };
     }
 }
+
+/**
+ * Sets a value at a dot-delimited path (e.g. 'a.b' or 'items[0].name') on an object,
+ * mutating the object in-place and creating intermediate objects or arrays as needed.
+ */
+function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
+    if (!path) return;
+    const parts = path.split('.');
+    let current: Record<string, unknown> = obj;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (!part) continue;
+        const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+        if (arrayMatch) {
+            const name = arrayMatch[1];
+            const index = parseInt(arrayMatch[2], 10);
+            if (!Array.isArray(current[name])) {
+                current[name] = [];
+            }
+            const arr = current[name] as unknown[];
+            if (!arr[index] || typeof arr[index] !== 'object') {
+                arr[index] = {};
+            }
+            current = arr[index] as Record<string, unknown>;
+        } else {
+            if (current[part] === undefined || current[part] === null || typeof current[part] !== 'object') {
+                current[part] = {};
+            }
+            current = current[part] as Record<string, unknown>;
+        }
+    }
+
+    const lastPart = parts[parts.length - 1];
+    const arrayMatch = lastPart.match(/^([^[]+)\[(\d+)\]$/);
+    if (arrayMatch) {
+        const name = arrayMatch[1];
+        const index = parseInt(arrayMatch[2], 10);
+        if (!Array.isArray(current[name])) {
+            current[name] = [];
+        }
+        (current[name] as unknown[])[index] = value;
+    } else {
+        current[lastPart] = value;
+    }
+}
+

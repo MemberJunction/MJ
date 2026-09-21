@@ -575,6 +575,15 @@ describe('applyOutputMapping', () => {
             error: undefined,
         });
         expect(created.length).toBe(0);
+        expect(mockResolveTag).toHaveBeenCalledWith(
+            'Existing Tag',
+            1.0,
+            'constrained',
+            'root-1',
+            0.8,
+            USER,
+            { dryRun: true }
+        );
 
         mockResolveTag.mockRestore();
         mockGetTagByID.mockRestore();
@@ -627,6 +636,81 @@ describe('applyOutputMapping', () => {
         mockResolveTag.mockRestore();
         mockGetTagByID.mockRestore();
         mockCreateTaggedItem.mockRestore();
+        mockConfig.mockRestore();
+    });
+
+    it('marks non-descendant tags as error in previewTags during dry-run', async () => {
+        const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue({
+            ID: 'tag-unrelated',
+            Name: 'Unrelated Tag',
+            ParentID: 'other-root',
+        } as unknown as MJTagEntity);
+        const mockGetTagByID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockImplementation((id: string) => {
+            if (id === 'tag-unrelated') return { ID: 'tag-unrelated', Name: 'Unrelated Tag', ParentID: 'other-root' } as unknown as MJTagEntity;
+            if (id === 'other-root') return { ID: 'other-root', Name: 'Other Root', ParentID: null } as unknown as MJTagEntity;
+            return undefined;
+        });
+        const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+        const { provider } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: {
+                tags: [
+                    {
+                        ref: '$.tag',
+                        rootTagId: 'root-1',
+                        growth: 'constrained',
+                    },
+                ],
+            },
+            result: { tag: 'Unrelated Tag' },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+
+        expect(out.previewTags?.length).toBe(1);
+        expect(out.previewTags?.[0].depth).toBe(-1);
+        expect(out.previewTags?.[0].error).toContain('is not a descendant of root tag');
+
+        mockResolveTag.mockRestore();
+        mockGetTagByID.mockRestore();
+        mockConfig.mockRestore();
+    });
+
+    it('throws when resolved tag is not a descendant of root tag in non-dry-run mode', async () => {
+        const mockResolveTag = vi.spyOn(TagEngine.Instance, 'ResolveTag').mockResolvedValue({
+            ID: 'tag-unrelated',
+            Name: 'Unrelated Tag',
+            ParentID: 'other-root',
+        } as unknown as MJTagEntity);
+        const mockGetTagByID = vi.spyOn(TagEngine.Instance, 'GetTagByID').mockImplementation((id: string) => {
+            if (id === 'tag-unrelated') return { ID: 'tag-unrelated', Name: 'Unrelated Tag', ParentID: 'other-root' } as unknown as MJTagEntity;
+            if (id === 'other-root') return { ID: 'other-root', Name: 'Other Root', ParentID: null } as unknown as MJTagEntity;
+            return undefined;
+        });
+        const mockConfig = vi.spyOn(TagEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+        const { provider } = fakeProvider();
+        await expect(applyOutputMapping({
+            outputMapping: {
+                tags: [
+                    {
+                        ref: '$.tag',
+                        rootTagId: 'root-1',
+                        growth: 'constrained',
+                    },
+                ],
+            },
+            result: { tag: 'Unrelated Tag' },
+            record,
+            contextUser: USER,
+            provider,
+        })).rejects.toThrow(/is not a descendant of root tag/);
+
+        mockResolveTag.mockRestore();
+        mockGetTagByID.mockRestore();
         mockConfig.mockRestore();
     });
 });

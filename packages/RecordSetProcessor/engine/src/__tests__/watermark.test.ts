@@ -3,7 +3,7 @@ import { WatermarkService } from '../watermark/WatermarkService';
 import { RecordSetProcessor } from '../RecordSetProcessor';
 import { ArraySource, IRecordProcessor, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import { NoOpTracker } from '../trackers/NoOpTracker';
-import { UserInfo, RunView } from '@memberjunction/core';
+import { UserInfo, RunView, IMetadataProvider } from '@memberjunction/core';
 
 // Mock RunView so we don't hit a real database in unit tests
 vi.mock('@memberjunction/core', async () => {
@@ -124,7 +124,7 @@ describe('WatermarkService (P1-7b)', () => {
         const expectedHashRec1 = await WatermarkService.Instance.computeRecordBasisHash(
             recordUnchanged,
             undefined,
-            { contextUser: mockUser, provider: {} as unknown as any }
+            { contextUser: mockUser, provider: {} as unknown as IMetadataProvider }
         );
         expect(expectedHashRec1).toBeDefined();
 

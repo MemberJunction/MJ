@@ -22,12 +22,14 @@ describe('InferProcessor constraint enforcement', () => {
     };
 
     let executedParams: unknown;
+    let executedValidationBehavior: string | undefined;
     let mockResult: unknown = {};
     let mockSuccess = true;
     let mockErrorMessage: string | undefined;
 
     beforeEach(() => {
         executedParams = undefined;
+        executedValidationBehavior = undefined;
         mockResult = {};
         mockSuccess = true;
         mockErrorMessage = undefined;
@@ -38,6 +40,7 @@ describe('InferProcessor constraint enforcement', () => {
 
         vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockImplementation(async (params: unknown) => {
             executedParams = params;
+            executedValidationBehavior = (params as { prompt?: { ValidationBehavior?: string } }).prompt?.ValidationBehavior;
             return {
                 success: mockSuccess,
                 errorMessage: mockErrorMessage,
@@ -90,9 +93,10 @@ describe('InferProcessor constraint enforcement', () => {
         expect(result.Status).toBe('Succeeded');
         expect(result.ResultPayload).toEqual({ seniority: 'Director' });
 
-        // Verify Layer 1 prompt configuration
-        const params = executedParams as { data: Record<string, unknown>; prompt: { ValidationBehavior: string } };
-        expect(params.prompt.ValidationBehavior).toBe('Strict');
+        // Verify Layer 1 prompt configuration: Strict during execution, restored to Warn afterwards
+        const params = executedParams as { data: Record<string, unknown> };
+        expect(executedValidationBehavior).toBe('Strict');
+        expect(mockPrompt.ValidationBehavior).toBe('Warn');
         expect(params.data.constraints).toBeDefined();
         expect(params.data.ConstraintBlock).toBeDefined();
         expect(typeof params.data.constraints).toBe('string');
@@ -229,6 +233,7 @@ describe('InferProcessor constraint enforcement', () => {
         const result = await processor.ProcessRecord(record, mockContext);
 
         expect(result.Status).toBe('Succeeded');
+        expect((result.ResultPayload as { comp: unknown }).comp).toBe(150000);
     });
 
     it('rejects quoted string for numeric constraint when target field is not numeric', async () => {
@@ -343,5 +348,55 @@ describe('InferProcessor constraint enforcement', () => {
         expect(beforeExecuteCalled).toBe(true);
         expect(afterExecuteCalled).toBe(true);
         expect(result.ResultPayload).toEqual({ custom: 'value' });
+    });
+
+    it('writes back coerced nested property paths and enum casing without mutating prompt singleton', async () => {
+        const spec: DataFeatureSpec = {
+            Name: 'Nested Pipeline',
+            PromptID: 'PROMPT-1',
+            Outputs: [
+                {
+                    Ref: '$.analysis.sentimentScore',
+                    Name: 'Score',
+                    Constraint: {
+                        Type: 'numeric',
+                        Min: 0,
+                        Max: 100,
+                        OnViolation: 'fail',
+                    },
+                    Target: { Mode: 'field', EntityFieldName: 'Compensation' }, // numeric target
+                },
+                {
+                    Ref: '$.analysis.seniority',
+                    Name: 'Seniority',
+                    Constraint: {
+                        Type: 'enum',
+                        Values: ['Director', 'Manager', 'IC'],
+                        OnViolation: 'fail',
+                    },
+                    Target: { Mode: 'field', EntityFieldName: 'Notes' },
+                },
+            ],
+        };
+
+        mockPrompt.ValidationBehavior = 'Warn';
+        mockResult = {
+            analysis: {
+                sentimentScore: '95',
+                seniority: 'director',
+            },
+        };
+
+        const processor = new InferProcessor('PROMPT-1', undefined, spec);
+        const result = await processor.ProcessRecord(record, mockContext);
+
+        expect(result.Status).toBe('Succeeded');
+        const payload = result.ResultPayload as {
+            analysis: { sentimentScore: number; seniority: string };
+        };
+        expect(payload.analysis.sentimentScore).toBe(95);
+        expect(payload.analysis.seniority).toBe('Director');
+        // Prompt singleton ValidationBehavior was restored to its original value
+        expect(mockPrompt.ValidationBehavior).toBe('Warn');
     });
 });
