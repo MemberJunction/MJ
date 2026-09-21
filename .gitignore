@@ -97,6 +97,10 @@ Thumbs.db
 # negation because git only ignores files it isn't already tracking.)
 !docker/workbench/.env.database.example
 !citizen-builder/.env.example
+# The SECOND copy of the same template, which is what `mj agent init` actually resolves on a
+# fresh checkout — the negation above covers only the repo-root copy, so this one was ignored
+# and the scaffold shipped without the file it turns into `.env`.
+!packages/MJCLI/src/init-templates/citizen-builder/.env.example
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt
