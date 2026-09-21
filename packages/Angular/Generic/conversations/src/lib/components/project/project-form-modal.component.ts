@@ -267,10 +267,17 @@ const DEFAULT_PROJECT_ICONS = [
       gap: 0.35rem;
     }
 
-    /* The legend carries the group's name, so it matches the other field labels. */
+    /* A <legend> is not matched by the .form-field label rule, so it inherited 16px/400
+       and read larger and lighter than every other field label. Restated here rather than
+       widening that selector, which would also catch the option labels below.
+       (No backticks in this block: it is a template literal.) */
     .visibility-set legend {
       padding: 0;
       margin-bottom: 0.15rem;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.01em;
+      color: var(--mj-text-secondary);
     }
 
     /* Scoped as .form-field .visibility-choice (0,2,1) so it deliberately outranks the
@@ -283,7 +290,11 @@ const DEFAULT_PROJECT_ICONS = [
       gap: 0.5rem;
       cursor: pointer;
       font-weight: 400;
+      font-size: 13px;
       margin: 0;
+      /* The rows were the height of the radio alone (~16px). The checkbox this replaced
+         sat in a 31px row, so the tap target got smaller when the control got clearer. */
+      padding: 0.25rem 0;
     }
 
     .visibility-choice input {
@@ -293,6 +304,9 @@ const DEFAULT_PROJECT_ICONS = [
 
     .visibility-hint {
       margin: 0.15rem 0 0;
+      /* Unsized it inherited 16px and read LARGER than the options it describes. */
+      font-size: 12px;
+      line-height: 1.4;
       color: var(--mj-text-muted);
     }
 
@@ -498,13 +512,12 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
 
     try {
       const md = this.ProviderToUse;
-      const project = this.project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.currentUser);
-
-      project.Name = this.formData.name.trim();
-      project.Description = this.formData.description.trim() || null;
-      project.Color = this.formData.color;
-      project.Icon = this.formData.icon;
-
+      // CONFIRM BEFORE TOUCHING THE ENTITY. `this.project` is the live, engine-cached
+      // object the sidebar renders, so assigning to it and then bailing out leaves the
+      // edits on screen until a reload — rename a shared folder, choose "Only me", save,
+      // cancel this confirm, cancel the dialog, and the sidebar kept the new name. Every
+      // early return below this point must therefore stay above the assignments.
+      //
       // Taking a SHARED folder private removes it from everyone else's sidebar, and any
       // subfolders under it surface as top-level folders for them. That is a big enough
       // effect on other people to be worth confirming; going the other way (private ->
@@ -516,7 +529,7 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
           message:
             'This folder is shared. Making it private removes it from everyone else\'s '
             + 'sidebar, and any folders inside it will show up as top-level folders for them. '
-            + 'Their conversations are not affected.',
+            + 'Conversations they filed here will move to Ungrouped for them.',
           okText: 'Make private',
           cancelText: 'Cancel',
           dangerous: true,
@@ -525,6 +538,13 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
           return;
         }
       }
+
+      const project = this.project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.currentUser);
+
+      project.Name = this.formData.name.trim();
+      project.Description = this.formData.description.trim() || null;
+      project.Color = this.formData.color;
+      project.Icon = this.formData.icon;
 
       // Settable on edit too: "share this with the team" and "take it back" are both
       // things people expect to do to their own folder. Null means shared, which is

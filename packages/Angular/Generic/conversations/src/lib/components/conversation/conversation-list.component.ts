@@ -241,6 +241,7 @@ interface FolderNode {
             <i class="fas fa-users" aria-hidden="true"></i>
           </span>
         }
+        <span class="folder-spacer"></span>
         <span class="folder-count">{{ node.totalCount }}</span>
         <div class="folder-actions" (click)="$event.stopPropagation()">
           <button class="folder-action-btn" (click)="createFolder(node.project.ID, $event)" title="New Subfolder">
@@ -968,7 +969,12 @@ interface FolderNode {
     .folder-chevron.expanded { transform: rotate(90deg); }
     .folder-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
     .folder-name {
-      flex: 1;
+      /* NOT flex: 1. Growing to fill the row pushed the shared badge to the right edge,
+         next to the count and under the hover actions, where the users glyph and the
+         edit pencil overlapped into one icon. The badge belongs beside the name; the
+         .folder-spacer after it takes the slack instead. Shrink + min-width:0 keeps the
+         ellipsis behaviour on a long name. */
+      flex: 0 1 auto;
       min-width: 0;
       white-space: nowrap;
       overflow: hidden;
@@ -983,6 +989,10 @@ interface FolderNode {
       margin-left: auto;
       padding-left: 6px;
       text-align: right;
+    }
+    .folder-spacer {
+      flex: 1 1 auto;
+      min-width: 0;
     }
     .folder-shared {
       flex-shrink: 0;
