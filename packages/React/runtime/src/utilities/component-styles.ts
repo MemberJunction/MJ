@@ -213,6 +213,31 @@ const VIZ_TOKEN_COUNT = 10;
 const VIZ_SEQ_TOKEN_COUNT = 7;
 
 /**
+ * Resolves a single `--mj-*` design token to its value.
+ *
+ * Returns an empty string or `undefined` for a token the host does not define — the caller treats
+ * both as "absent" and keeps the {@link SetupStyles} default for that slot.
+ */
+export type ThemeTokenReader = (token: string) => string | undefined;
+
+/**
+ * Normalizes the accepted token sources into one reader, or `null` when there is nothing to read.
+ *
+ * @param source An element, a reader function, or nothing.
+ */
+function resolveTokenReader(source?: Element | ThemeTokenReader): ThemeTokenReader | null {
+  if (typeof source === 'function') {
+    return (token: string) => (source(token) ?? '').trim();
+  }
+  const el = source ?? (typeof document !== 'undefined' ? document.documentElement : undefined);
+  if (!el || typeof getComputedStyle === 'undefined') {
+    return null;
+  }
+  const cs = getComputedStyle(el);
+  return (token: string) => cs.getPropertyValue(token).trim();
+}
+
+/**
  * Reads the live MJ theme (`--mj-*` custom properties on the document root) and
  * layers it over `SetupStyles()`, producing a `ComponentStyles` that follows the
  * host's active theme — including dark mode and interactive-state (hover/active/
@@ -224,18 +249,24 @@ const VIZ_SEQ_TOKEN_COUNT = 7;
  * token that is absent falls back to its `SetupStyles()` default, so a page
  * without MJ tokens loaded also degrades cleanly.
  *
- * @param root optional element to read tokens from (defaults to document root).
+ * ## Reading tokens from somewhere other than the DOM
+ *
+ * A host without CSS custom properties — React Native is the one that exists — still has the same
+ * `--mj-*` token VALUES, just not in a stylesheet. Passing a {@link ThemeTokenReader} feeds those
+ * values through the identical mapping below, so a native surface and a browser derive
+ * `ComponentStyles` from one table rather than from two that drift. Nothing about the mapping is
+ * DOM-specific; only the lookup was.
+ *
+ * @param source optional element to read tokens from (defaults to the document root), or a reader
+ *   function for hosts that hold their token values outside CSS.
  */
-export function BuildStylesFromTheme(root?: Element): ComponentStyles {
+export function BuildStylesFromTheme(source?: Element | ThemeTokenReader): ComponentStyles {
   const base = SetupStyles();
 
-  const el = root ?? (typeof document !== 'undefined' ? document.documentElement : undefined);
-  if (!el || typeof getComputedStyle === 'undefined') {
+  const read = resolveTokenReader(source);
+  if (!read) {
     return base;
   }
-
-  const cs = getComputedStyle(el);
-  const read = (token: string): string => cs.getPropertyValue(token).trim();
 
   for (const [path, token] of Object.entries(THEME_COLOR_TOKEN_MAP)) {
     const value = read(token);

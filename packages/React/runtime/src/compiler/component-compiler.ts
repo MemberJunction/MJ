@@ -492,9 +492,13 @@ export class ComponentCompiler {
       return loadedLibraries;
     }
 
-    // Only works in browser environment
-    if (typeof window === 'undefined') {
-      console.warn('Library loading is only supported in browser environments');
+    // CDN library loading needs a document to append <script> tags to — not merely a `window`.
+    // React Native defines `window` but has no `document`, so testing for `window` sent Hermes down
+    // the script-loading path and produced a thrown "Library 'lodash' not found" for every
+    // component that declared one. Hosts without a document supply libraries through
+    // `RuntimeContext.libraries` instead, which the factory merges either way.
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+      console.warn('Library loading via CDN is only supported in environments with a DOM; relying on the runtime context for libraries');
       return loadedLibraries;
     }
 

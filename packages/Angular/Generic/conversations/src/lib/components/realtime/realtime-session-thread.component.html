@@ -13,7 +13,23 @@
                   {{ AgentName }} <span class="muted">· voice</span>
                 }
               </div>
-              <div class="bubble">{{ item.Text }}</div>
+              <div class="bubble" [class.bubble--clamped]="IsLongText(item.Text) && !IsExpanded($index)" [class.bubble--expanded]="IsLongText(item.Text) && IsExpanded($index)">
+                <div class="bubble-content" [class.bubble-content--clamped]="IsLongText(item.Text) && !IsExpanded($index)" [class.bubble-content--expanded]="IsLongText(item.Text) && IsExpanded($index)">
+                  <mj-markdown [data]="FormatMarkdownText(item.Text)" [enableCollapsibleHeadings]="true"></mj-markdown>
+                </div>
+                @if (IsLongText(item.Text)) {
+                  <div class="bubble-actions">
+                    <button
+                      type="button"
+                      class="bubble-expand-btn"
+                      (click)="ToggleExpanded($index, $event)"
+                      [attr.aria-expanded]="IsExpanded($index)">
+                      <span>{{ IsExpanded($index) ? 'Show less' : 'Show more' }}</span>
+                      <i class="fa-solid" [class.fa-chevron-up]="IsExpanded($index)" [class.fa-chevron-down]="!IsExpanded($index)" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                }
+              </div>
             </div>
           </div>
         }

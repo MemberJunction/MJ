@@ -15,8 +15,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useMMKVBoolean } from 'react-native-mmkv';
-import { prefsStorage, PrefKeys } from '@/data/preferences';
-import { authenticate, isBiometricAvailable } from '@/auth/biometric';
+import { PrefsStorage, PrefKeys } from '@/data/preferences';
+import { authenticate, IsBiometricAvailable } from '@/auth/biometric';
 
 /**
  * Lock lifecycle:
@@ -32,9 +32,9 @@ const UNLOCK_REASON = 'Unlock MJ Mobile';
 /** The value returned by {@link useAppLock}. */
 export type AppLock = {
     /** Current lock lifecycle state. */
-    State: AppLockState;
+    state: AppLockState;
     /** Re-trigger the biometric prompt (bound to the lock screen's Unlock button). */
-    Unlock: () => Promise<void>;
+    unlock: () => Promise<void>;
 };
 
 /**
@@ -43,8 +43,8 @@ export type AppLock = {
  *
  * @returns The current lock {@link AppLockState} and an imperative `unlock()`.
  */
-export function UseAppLock(): AppLock {
-    const [lockEnabled] = useMMKVBoolean(PrefKeys.faceIdLock, prefsStorage);
+export function useAppLock(): AppLock {
+    const [lockEnabled] = useMMKVBoolean(PrefKeys.faceIdLock, PrefsStorage);
     const [state, setState] = useState<AppLockState>(() => (lockEnabled ? 'locked' : 'unlocked'));
 
     const appState = useRef<AppStateStatus>(AppState.currentState);
@@ -57,7 +57,7 @@ export function UseAppLock(): AppLock {
         setState('authenticating');
         try {
             // Fail open: if biometrics vanished, never trap the user.
-            if (!(await isBiometricAvailable())) {
+            if (!(await IsBiometricAvailable())) {
                 setState('unlocked');
                 return;
             }
@@ -90,10 +90,5 @@ export function UseAppLock(): AppLock {
         return () => sub.remove();
     }, [lockEnabled, unlock]);
 
-    return { State: state, Unlock: unlock };
-}
-
-/** @deprecated Use {@link UseAppLock}. */
-export function useAppLock(): AppLock {
-    return UseAppLock();
+    return { state, unlock };
 }

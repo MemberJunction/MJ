@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { SummarizeBuildResult, BuildOutcomeMessage } from '../pipeline-builder-agent';
+import type { IMetadataProvider, EntityInfo } from '@memberjunction/core';
+import { summarizeBuildResult, buildOutcomeMessage } from '../pipeline-builder-agent';
 import type { BuildPredictionResult } from '../pipeline-builder';
 
 /**
@@ -20,23 +21,107 @@ const failed: BuildPredictionResult = { success: false, published: false, leakag
 
 describe('summarizeBuildResult', () => {
   it('projects a published result', () => {
-    expect(SummarizeBuildResult(published)).toMatchObject({ success: true, pipelineId: 'p1', modelId: 'm1', trustGrade: 'Good', published: true, heldReason: null, errorMessage: null });
+    expect(summarizeBuildResult(published)).toMatchObject({ success: true, pipelineId: 'p1', modelId: 'm1', trustGrade: 'Good', published: true, heldReason: null, errorMessage: null });
   });
   it('projects a HELD result, carrying the plain reason (the safety gate)', () => {
-    const o = SummarizeBuildResult(held);
+    const o = summarizeBuildResult(held);
     expect(o.published).toBe(false);
     expect(o.trustGrade).toBe('Poor');
     expect(o.heldReason).toMatch(/guessing/i);
   });
   it('projects a failed build', () => {
-    expect(SummarizeBuildResult(failed)).toMatchObject({ success: false, published: false, errorMessage: 'Algorithm not found' });
+    expect(summarizeBuildResult(failed)).toMatchObject({ success: false, published: false, errorMessage: 'Algorithm not found' });
   });
 });
 
 describe('buildOutcomeMessage', () => {
   it('describes published / held / failed in plain language', () => {
-    expect(BuildOutcomeMessage(SummarizeBuildResult(published))).toMatch(/built and published/i);
-    expect(BuildOutcomeMessage(SummarizeBuildResult(held))).toMatch(/holding it back/i);
-    expect(BuildOutcomeMessage(SummarizeBuildResult(failed))).toMatch(/couldn't build/i);
+    expect(buildOutcomeMessage(summarizeBuildResult(published))).toMatch(/built and published/i);
+    expect(buildOutcomeMessage(summarizeBuildResult(held))).toMatch(/holding it back/i);
+    expect(buildOutcomeMessage(summarizeBuildResult(failed))).toMatch(/couldn't build/i);
   });
 });
+
+describe('parseFeatureImportance', () => {
+  it('parses JSON string object of key/value weights', async () => {
+    const { parseFeatureImportance } = await import('../pipeline-builder-agent');
+    const res = parseFeatureImportance('{"DuesAmount": 0.45, "TenureMonths": 0.28}');
+    expect(res).toEqual([
+      { feature: 'DuesAmount', importance: 0.45 },
+      { feature: 'TenureMonths', importance: 0.28 },
+    ]);
+  });
+
+  it('parses array of feature/importance objects', async () => {
+    const { parseFeatureImportance } = await import('../pipeline-builder-agent');
+    const res = parseFeatureImportance([
+      { feature: 'LeadTimeDays', importance: 0.62 },
+      { feature: 'Tier', importance: 0.38 },
+    ]);
+    expect(res).toEqual([
+      { feature: 'LeadTimeDays', importance: 0.62 },
+      { feature: 'Tier', importance: 0.38 },
+    ]);
+  });
+
+  it('handles null/undefined gracefully', async () => {
+    const { parseFeatureImportance } = await import('../pipeline-builder-agent');
+    expect(parseFeatureImportance(null)).toEqual([]);
+    expect(parseFeatureImportance(undefined)).toEqual([]);
+    expect(parseFeatureImportance('invalid json')).toEqual([]);
+  });
+});
+
+describe('generateMarkdownReport', () => {
+  it('formats a structured markdown report with metrics and features', async () => {
+    const { generateMarkdownReport } = await import('../pipeline-builder-agent');
+    const md = generateMarkdownReport(
+      'Member Renewal Risk',
+      'Predict renewal',
+      'Status',
+      'AUC',
+      0.864,
+      'Great',
+      'Accurate and reliable.',
+      true,
+      [{ feature: 'DuesAmount', importance: 0.45 }]
+    );
+    expect(md).toContain('# Model Development Results: Member Renewal Risk');
+    expect(md).toContain('**AUC** = **0.864**');
+    expect(md).toContain('DuesAmount');
+    expect(md).toContain('Published to Catalog');
+  });
+});
+
+describe('resolveEntity', () => {
+  it('resolves entity by name, baseView, baseTable, schema prefix, and stripped prefix', async () => {
+    const { resolveEntity } = await import('../pipeline-builder');
+    const fakeEntity = {
+      ID: 'E1',
+      Name: 'MJ: AI Prompt Runs',
+      BaseView: 'vwAIPromptRuns',
+      BaseTable: 'AIPromptRun',
+      SchemaName: '__mj',
+      Fields: [{ Name: 'ID' }, { Name: 'CompletedAt' }],
+    } as unknown as EntityInfo;
+    const fakeProvider = {
+      EntityByName: (n: string) => (n.toLowerCase() === fakeEntity.Name.toLowerCase() ? fakeEntity : undefined),
+      Entities: [fakeEntity],
+    } as unknown as IMetadataProvider;
+
+    // Direct name
+    expect(resolveEntity('MJ: AI Prompt Runs', fakeProvider)?.ID).toBe('E1');
+    // Base view
+    expect(resolveEntity('vwAIPromptRuns', fakeProvider)?.ID).toBe('E1');
+    // Base table
+    expect(resolveEntity('AIPromptRun', fakeProvider)?.ID).toBe('E1');
+    // Schema qualified view
+    expect(resolveEntity('__mj.vwAIPromptRuns', fakeProvider)?.ID).toBe('E1');
+    // Stripped prefix
+    expect(resolveEntity('AI Prompt Runs', fakeProvider)?.ID).toBe('E1');
+    // Unknown returns undefined
+    expect(resolveEntity('NonExistentEntity', fakeProvider)).toBeUndefined();
+  });
+});
+
+

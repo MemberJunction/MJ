@@ -68,7 +68,7 @@ vi.mock('@memberjunction/core', () => {
 });
 
 import { enqueue, list, remove, count, clear, subscribe, type OfflineMutationInput } from '@/data/offline-queue';
-import { replayQueue } from '@/data/offline-sync';
+import { ReplayQueue } from '@/data/offline-sync';
 
 /** Build an update mutation input with overridable fields. */
 function mutation(overrides: Partial<OfflineMutationInput> = {}): OfflineMutationInput {
@@ -142,15 +142,15 @@ describe('offline-queue', () => {
     });
 });
 
-describe('replayQueue', () => {
+describe('ReplayQueue', () => {
     it('syncs every entry on the happy path and applies changed fields', async () => {
         enqueue(mutation({ primaryKey: 'r1', changedFields: { Name: 'Bob', Age: 30 } }));
         enqueue(mutation({ primaryKey: 'r2', changedFields: { Name: 'Cy' } }));
         state.behaviors = ['ok', 'ok'];
 
-        const result = await replayQueue();
+        const result = await ReplayQueue();
 
-        expect(result).toEqual({ Synced: 2, Failed: 0 });
+        expect(result).toEqual({ synced: 2, failed: 0 });
         expect(count()).toBe(0);
         expect(state.saved[0]).toEqual({ entityName: 'Users', pk: 'r1', fields: { Name: 'Bob', Age: 30 } });
     });
@@ -160,9 +160,9 @@ describe('replayQueue', () => {
         enqueue(mutation({ primaryKey: 'good' }));
         state.behaviors = ['business', 'ok'];
 
-        const result = await replayQueue();
+        const result = await ReplayQueue();
 
-        expect(result).toEqual({ Synced: 1, Failed: 1 });
+        expect(result).toEqual({ synced: 1, failed: 1 });
         expect(count()).toBe(0); // both removed: one synced, one dropped
         expect(state.saved.map((s) => s.pk)).toEqual(['good']);
     });
@@ -171,9 +171,9 @@ describe('replayQueue', () => {
         enqueue(mutation({ primaryKey: 'gone' }));
         state.behaviors = ['notfound'];
 
-        const result = await replayQueue();
+        const result = await ReplayQueue();
 
-        expect(result).toEqual({ Synced: 0, Failed: 1 });
+        expect(result).toEqual({ synced: 0, failed: 1 });
         expect(count()).toBe(0);
     });
 
@@ -183,9 +183,9 @@ describe('replayQueue', () => {
         enqueue(mutation({ primaryKey: 'third' }));
         state.behaviors = ['ok', 'network', 'ok'];
 
-        const result = await replayQueue();
+        const result = await ReplayQueue();
 
-        expect(result).toEqual({ Synced: 1, Failed: 0 });
+        expect(result).toEqual({ synced: 1, failed: 0 });
         // first synced+removed; second (network) and third remain queued.
         expect(list().map((e) => e.primaryKey)).toEqual(['second', 'third']);
         expect(list()[0].lastError).toMatch(/network/i);
@@ -194,9 +194,9 @@ describe('replayQueue', () => {
     it('is safe to call repeatedly (idempotent)', async () => {
         enqueue(mutation({ primaryKey: 'r1' }));
         state.behaviors = ['ok'];
-        await replayQueue();
-        const second = await replayQueue();
-        expect(second).toEqual({ Synced: 0, Failed: 0 });
+        await ReplayQueue();
+        const second = await ReplayQueue();
+        expect(second).toEqual({ synced: 0, failed: 0 });
         expect(count()).toBe(0);
     });
 });

@@ -73,7 +73,21 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
       const stamped = { ...(payload ?? {}), BuildAttemptUserMessageCount: userMessageCount } as unknown as P;
       return this.buildSubAgentStep(PIPELINE_BUILDER_SUBAGENT_NAME, BUILD_MESSAGE, stamped);
     }
-    return super.determineNextStep(params, agentType, promptResult, currentPayload);
+    const nextStep = await super.determineNextStep(params, agentType, promptResult, currentPayload);
+    if (payload?.BuildResult?.success && !nextStep.artifactDirective) {
+      const name = payload.Name || `${payload.TargetDefinition?.TargetVariable ?? 'Target'} Prediction`;
+      nextStep.artifactDirective = {
+        behavior: 'create-new',
+        name: `ML Experiment Results - ${name}`,
+        description: `Experiment results and performance evaluation for ${name}`,
+      };
+      // Ensure the rich build result payload (Leaderboard, BestModel, etc.) is carried on the step for artifact creation
+      nextStep.newPayload = {
+        ...(payload ?? {}),
+        ...((nextStep.newPayload as object) ?? {}),
+      } as unknown as P;
+    }
+    return nextStep;
   }
 
   /** Plain text of the most recent user message (normalizing string / content-block content). */

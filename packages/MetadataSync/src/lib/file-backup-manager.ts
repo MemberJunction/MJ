@@ -129,6 +129,24 @@ export class FileBackupManager {
   }
   
   /**
+   * Stop tracking a file so {@link rollback} leaves it as it is now.
+   *
+   * Used for files in an isolated directory whose records were already committed: restoring the
+   * old file would drop the primary keys and sync blocks of rows that stay in the database.
+   *
+   * @param filePath - Absolute path of a file previously passed to {@link backupFile}
+   * @returns true when a backup was tracked for this file
+   */
+  releaseBackup(filePath: string): boolean {
+    const index = this.backups.findIndex(b => b.originalPath === filePath);
+    if (index < 0) {
+      return false;
+    }
+    this.backups.splice(index, 1);
+    return true;
+  }
+
+  /**
    * Rollback all file changes by restoring from backups
    * 
    * Restores all backed-up files to their original state. Files that didn't

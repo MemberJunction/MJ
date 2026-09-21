@@ -10,15 +10,15 @@ export interface FakeProviderOptions<T = unknown> {
    * Rows any `RunView` / `RunViews` call returns — a fixed array (same for every call) or a
    * function of the params (to vary by `EntityName` / `ExtraFilter`).
    */
-  runViewResults?: T[] | ((params: RunViewParams) => T[]);  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  runViewResults?: T[] | ((params: RunViewParams) => T[]);
   /** The provider's `CurrentUser`. Merged over a stub default. */
-  currentUser?: Partial<UserInfo>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  currentUser?: Partial<UserInfo>;
   /**
    * Resolver for `provider.EntityByName(name)`. Components that read entity metadata
    * (`this.ProviderToUse.EntityByName(...)`) need this — without it the default returns
    * `undefined`, which is the right behavior for exercising "entity not found" guard paths.
    */
-  entityByName?: (name: string) => EntityInfo | undefined;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  entityByName?: (name: string) => EntityInfo | undefined;
 
   /**
    * Rows for `provider.Entities` — the entity-metadata array some components scan
@@ -26,14 +26,14 @@ export interface FakeProviderOptions<T = unknown> {
    * present (commonly `Name` + `ID`); pass minimal stubs. Defaults to `[]` (an empty catalog,
    * which exercises the "entity not found" guard).
    */
-  entities?: Array<Partial<EntityInfo>>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  entities?: Array<Partial<EntityInfo>>;
 
   /**
    * Rows for `provider.Roles` — the role catalog components read for permission/role UIs
    * (`md.Roles.find(r => r.Name === '...')`). Only the fields the component reads need to be
    * present (commonly `Name` + `ID`); pass minimal stubs. Defaults to `[]`.
    */
-  roles?: Array<Partial<RoleInfo>>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  roles?: Array<Partial<RoleInfo>>;
 }
 
 /**
@@ -48,7 +48,7 @@ export interface FakeProviderOptions<T = unknown> {
  * const provider = createFakeProvider({ runViewResults: [{ ID: '1', Name: 'Ada' }] }); // T inferred
  * const f = renderComponentFixture(MyDataComponent, { inputs: { Provider: provider } });
  */
-export function CreateFakeProvider<T = unknown>(options: FakeProviderOptions<T> = {}): IMetadataProvider {
+export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> = {}): IMetadataProvider {
   const rowsFor = (params: RunViewParams): T[] =>
     typeof options.runViewResults === 'function' ? options.runViewResults(params) : (options.runViewResults ?? []);
 
@@ -71,7 +71,10 @@ export function CreateFakeProvider<T = unknown>(options: FakeProviderOptions<T> 
   return fake as unknown as IMetadataProvider;
 }
 
-/** @deprecated Use {@link CreateFakeProvider}. */
-export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> = {}): IMetadataProvider {
-  return CreateFakeProvider(options);
-}
+/**
+ * Minimal stub provider for tests that only resolve entity metadata via `EntityByName`.
+ */
+export const fakeMetadataProvider = <T extends { Name: string; DisplayName?: string }>(entities: T[]) => ({
+  Entities: entities,
+  EntityByName: (n: string) => entities.find(e => e.Name.trim().toLowerCase() === n?.trim().toLowerCase()),
+});

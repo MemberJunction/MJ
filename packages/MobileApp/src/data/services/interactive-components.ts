@@ -57,11 +57,6 @@ export function ToInteractiveSpec(parsed: unknown, typeName: string): ComponentS
     return buildSpec(parsed, name, code);
 }
 
-/** @deprecated Use {@link ToInteractiveSpec}. */
-export function toInteractiveSpec(parsed: unknown, typeName: string): ComponentSpec | null {
-    return ToInteractiveSpec(parsed, typeName);
-}
-
 /**
  * Assemble a fully-typed {@link ComponentSpec} from validated content. Required
  * spec fields absent from the artifact JSON are filled with safe defaults; the
@@ -114,9 +109,4 @@ export function ParseInteractiveSpec(content: string, typeName: string): Compone
         return null;
     }
     return ToInteractiveSpec(parsed, typeName);
-}
-
-/** @deprecated Use {@link ParseInteractiveSpec}. */
-export function parseInteractiveSpec(content: string, typeName: string): ComponentSpec | null {
-    return ParseInteractiveSpec(content, typeName);
 }

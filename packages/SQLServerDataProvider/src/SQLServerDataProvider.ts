@@ -28,6 +28,7 @@ import {
   EntityFieldTSType,
   ProviderType,
   UserInfo,
+  PostCommitToken,
   RecordChange,
   IFileSystemProvider,
   TransactionGroupBase,
@@ -87,13 +88,8 @@ import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
  * batch-execution methods that need a live mssql connection, so this is the
  * seam where the behaviour can actually be asserted. See issue #3171.
  */
-export function EscapeRegExpLiteral(literal: string): string {
-  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/** @deprecated Use {@link EscapeRegExpLiteral}. */
 export function escapeRegExpLiteral(literal: string): string {
-  return EscapeRegExpLiteral(literal);
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 /**
  * Checks whether an error indicates a stale/dead database connection that
@@ -424,7 +420,6 @@ export class SQLServerDataProvider
   
   // Transaction state management
   private _transactionState$ = new BehaviorSubject<boolean>(false);
-  private _deferredTasks: Array<{ type: string; data: any; options: any; user: UserInfo }> = [];
 
 
   /**
@@ -436,13 +431,8 @@ export class SQLServerDataProvider
    *   console.log('Transaction active:', isActive);
    * });
    */
-  public get TransactionState$(): Observable<boolean> {
-    return this._transactionState$.asObservable();
-  }
-
-  /** @deprecated Use {@link TransactionState$}. */
   public get transactionState$(): Observable<boolean> {
-    return this.TransactionState$;
+    return this._transactionState$.asObservable();
   }
   
   /**
@@ -472,15 +462,10 @@ export class SQLServerDataProvider
   /**
    * Gets whether a transaction is currently active
    */
-  public get IsTransactionActive(): boolean {
+  public get isTransactionActive(): boolean {
     // Always return instance-level state
     // Request-specific state should be accessed via getTransactionContext
     return this._transactionState$.value;
-  }
-
-  /** @deprecated Use {@link IsTransactionActive}. */
-  public get isTransactionActive(): boolean {
-    return this.IsTransactionActive;
   }
 
   /**
@@ -1065,16 +1050,15 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Override to defer AI action tasks when a transaction is active.
-   * When inside a transaction, tasks are queued to _deferredTasks and
-   * processed after transaction commit (see processDeferredTasks).
+   * Queue the AI action task only once the save is durable: through {@link RunAfterCommit}, so it
+   * is added right away outside a transaction, after the outermost commit inside one, and never if
+   * that transaction rolls back. `postCommitToken` ties the task to the save's own transaction:
+   * the base dispatches this after an `await`, by which time that transaction may have settled.
    */
-  protected override EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo): void {
-    if (this.IsTransactionActive) {
-      this._deferredTasks.push({ type: 'Entity AI Action', data: params, options: null, user });
-    } else {
-      QueueManager.AddTask('Entity AI Action', params, null, user);
-    }
+  protected override EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo, postCommitToken?: PostCommitToken): void {
+    this.RunAfterCommit(async () => {
+      await QueueManager.AddTask('Entity AI Action', params, null, user);
+    }, 'Entity AI Action', postCommitToken);
   }
 
 
@@ -1658,7 +1642,7 @@ export class SQLServerDataProvider
    * @internal
    */
   protected GetDeleteSQL(entity: BaseEntity, user: UserInfo): string {
-    const result = this.getDeleteSQLWithDetails(entity, user);
+    const result = this.GetDeleteSQLWithDetails(entity, user);
     return result.fullSQL;
   }
 
@@ -1666,7 +1650,7 @@ export class SQLServerDataProvider
    * This function generates both the full SQL (with record change metadata) and the simple stored procedure call for delete
    * @returns Object with fullSQL and simpleSQL properties
    */
-  private getDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
+  private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
@@ -1741,7 +1725,7 @@ export class SQLServerDataProvider
   // above). See plans/sp-save-builder-generic-layer-refactor.md (rev 4).
 
   protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult {
-    const sqlDetails = this.getDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
+    const sqlDetails = this.GetDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
     return {
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,
@@ -2152,7 +2136,7 @@ export class SQLServerDataProvider
               // See issue #3171.
               const prefixed = `@${paramName}`;
               processedQuery = processedQuery.replace(
-                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
+                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
                 () => prefixed,
               );
             }
@@ -2279,7 +2263,7 @@ export class SQLServerDataProvider
               // See issue #3171.
               const prefixed = `@${paramName}`;
               processedQuery = processedQuery.replace(
-                new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'),
+                new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'),
                 () => prefixed,
               );
             }
@@ -2591,16 +2575,10 @@ IF ${varName} IS NOT NULL
     });
   }
 
-  protected override async AfterPhysicalCommit(): Promise<void> {
-    await this.processDeferredTasks();
-  }
-
   protected override async AbandonPhysicalTransaction(): Promise<void> {
     const stale = this._transaction;
     this._transaction = null;
     this._transactionState$.next(false);
-    const deferredCount = this._deferredTasks.length;
-    this._deferredTasks = [];
     if (stale) {
       try {
         // Through the queue, like commit and rollback: the handle is already nulled above, so any
@@ -2613,9 +2591,6 @@ IF ${varName} IS NOT NULL
           LogError('AbandonPhysicalTransaction: rollback of doomed handle failed', undefined, e);
         }
       }
-    }
-    if (deferredCount > 0) {
-      LogStatus(`Cleared ${deferredCount} deferred tasks after abandoning a doomed transaction`);
     }
   }
 
@@ -2636,11 +2611,6 @@ IF ${varName} IS NOT NULL
     } finally {
       this._transaction = null;
       this._transactionState$.next(false);
-      const deferredCount = this._deferredTasks.length;
-      this._deferredTasks = [];
-      if (deferredCount > 0) {
-        LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
-      }
     }
   }
 
@@ -2655,44 +2625,13 @@ IF ${varName} IS NOT NULL
    */
   public async RefreshIfNeeded(): Promise<boolean> {
     // Skip refresh if a transaction is active
-    if (this.IsTransactionActive) {
+    if (this.isTransactionActive) {
       LogStatus('Skipping metadata refresh - transaction is active');
       return false;
     }
 
     // Call parent implementation if no transaction
     return super.RefreshIfNeeded();
-  }
-
-  /**
-   * Process any deferred tasks that were queued during a transaction
-   * This is called after a successful transaction commit
-   * @private
-   */
-  private async processDeferredTasks(): Promise<void> {
-    if (this._deferredTasks.length === 0) return;
-
-    LogStatus(`Processing ${this._deferredTasks.length} deferred tasks after transaction commit`);
-    
-    // Copy and clear the deferred tasks array
-    const tasksToProcess = [...this._deferredTasks];
-    this._deferredTasks = [];
-    
-    // Process each deferred task
-    for (const task of tasksToProcess) {
-      try {
-        if (task.type === 'Entity AI Action') {
-          // Process the AI action now that we're outside the transaction
-          await QueueManager.AddTask('Entity AI Action', task.data, task.options, task.user);
-        }
-        // Add other task types here as needed
-      } catch (error) {
-        LogError(`Failed to process deferred ${task.type} task: ${error}`);
-        // Continue processing other tasks even if one fails
-      }
-    }
-    
-    LogStatus(`Completed processing deferred tasks`);
   }
 
   override get FileSystemProvider(): IFileSystemProvider {

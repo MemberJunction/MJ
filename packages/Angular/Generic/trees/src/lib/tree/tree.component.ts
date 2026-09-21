@@ -1091,7 +1091,7 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
 
             const node = CreateDefaultTreeNode({
                 ID: id,
-                Label: String(data[displayField] || ''),
+                Label: String(data[displayField] || data['Name'] || ''),
                 Type: 'branch',
                 ParentID: parentId,
                 Icon: this.getNodeIcon(data, config.IconField, config.DefaultIcon || 'fa-solid fa-folder'),
@@ -1186,7 +1186,7 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
 
             const leaf = CreateDefaultTreeNode({
                 ID: id,
-                Label: String(data[displayField] || ''),
+                Label: String(data[displayField] || data['Name'] || ''),
                 Type: 'leaf',
                 ParentID: null, // Will be set based on attachment
                 Icon: this.getNodeIcon(data, config.IconField, config.DefaultIcon || 'fa-solid fa-file'),

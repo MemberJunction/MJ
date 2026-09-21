@@ -2368,15 +2368,15 @@ Codex should start and stop MJAPI and MJExplorer as background processes itself.
 # Run as a background task from: packages/MJAPI/
 npm run start
 
-# Start MJExplorer (port 4201, configured in package.json start script)
+# Start MJExplorer (port 4200, configured in package.json start script)
 # Run as a background task from: packages/MJExplorer/
 npm run start
 ```
 
 **Key points:**
 
-- MJAPI runs on port **4001** (set by `GRAPHQL_PORT=4001` in `.env`)
-- MJExplorer runs on port **4201** (set by `--port 4201` in its start script)
+- MJAPI runs on port **4001** (set by `GRAPHQL_PORT=4001` in `.env`, or 4000 in local dev)
+- MJExplorer runs on port **4200** (set by `--port 4200` in its start script)
 - Run both as background tasks so you can monitor output and restart as needed
 - After rebuilding a server-side package, restart MJAPI to pick up changes
 - After rebuilding an Angular library, MJExplorer's Vite dev server auto-detects changes and triggers a browser reload — no restart needed
@@ -2388,10 +2388,10 @@ To avoid re-authenticating every time you launch a browser session, use the `--p
 
 ```bash
 # First-time launch (requires manual login in the headed browser):
-npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4200
 
 # Subsequent launches reuse cached auth automatically:
-npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4200
 ```
 
 **Key points:**
@@ -2405,7 +2405,7 @@ npx playwright-cli open --headed --profile .playwright-cli/profile http://localh
 
 ```bash
 # Open browser with persistent auth
-npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4200
 
 # Take a snapshot (get element refs for interaction)
 npx playwright-cli snapshot
@@ -2433,7 +2433,7 @@ npx playwright-cli close
 
 1. Start MJAPI and MJExplorer as background processes (if not already running)
 2. Wait for both servers to be ready (MJAPI listening, MJExplorer compiled)
-3. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201`
+3. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4200`
 4. Authenticate once if needed (cached for future sessions)
 5. Use `snapshot` to inspect the page, `click`/`type` to interact
 6. Use `console info` / `console error` to check for issues

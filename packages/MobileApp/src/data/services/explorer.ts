@@ -6,6 +6,7 @@
 
 import { Metadata, RunView, RunQuery, CompositeKey, type UserInfo, type EntityInfo, type EntityFieldInfo } from '@memberjunction/core';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
+import { BuildDashboardConfig, type DashboardPanelSpec } from '@/dashboards/dashboard-config';
 
 // ---------------------------------------------------------------------------
 // Entities
@@ -13,10 +14,10 @@ import type { MJDashboardEntity } from '@memberjunction/core-entities';
 
 /** A browsable entity row (from MJ's `Metadata.Entities`) shown in the explorer's entity list. */
 export type EntityListItem = {
-    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    displayName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
-    schemaName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
-    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;
+    displayName: string;
+    schemaName: string;
+    description: string | null;
 };
 
 /**
@@ -36,19 +37,9 @@ export function LoadEntities(): EntityListItem[] {
         .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-/** @deprecated Use {@link LoadEntities}. */
-export function loadEntities(): EntityListItem[] {
-    return LoadEntities();
-}
-
 /** Total number of entities known to the metadata (all, unfiltered). */
 export function EntityCount(): number {
     return new Metadata().Entities.length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
-}
-
-/** @deprecated Use {@link EntityCount}. */
-export function entityCount(): number {
-    return EntityCount();
 }
 
 /**
@@ -60,7 +51,7 @@ function primaryDisplayField(entity: EntityInfo): EntityFieldInfo | undefined {
         entity.Fields.find((f) => f.Name === entity.NameField?.Name) ??
         entity.Fields.find((f) => f.Name.toLowerCase() === 'name') ??
         entity.Fields.find((f) => f.Type === 'nvarchar' && !f.IsPrimaryKey) ??
-        entity.FirstPrimaryKey // first-pk-ok: card-title display fallback only; record identity is built from the full key (see loadEntityRecords)
+        entity.FirstPrimaryKey // first-pk-ok: card-title display fallback only; record identity is built from the full key (see LoadEntityRecords)
     );
 }
 
@@ -80,18 +71,18 @@ function displayCellValue(v: unknown): string {
 /** One entity record projected to a card: id, title, subtitle, and the raw field bag. */
 export type EntityRecordRow = {
     /** Composite PK serialized (entity record id). */
-    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    id: string;
+    title: string;
     /** A couple of secondary fields for the card subtitle. */
-    subtitle: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
-    raw: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    subtitle: string;
+    raw: Record<string, unknown>;
 };
 
-/** Result of {@link loadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
+/** Result of {@link LoadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
 export type EntityRecordsLoad = {
-    Entity: EntityInfo;
-    Rows: EntityRecordRow[];
-    TotalShown: number;
+    entity: EntityInfo;
+    rows: EntityRecordRow[];
+    totalShown: number;
 };
 
 /**
@@ -138,7 +129,7 @@ export async function LoadEntityRecords(
 
     const rows: EntityRecordRow[] = (result.Results ?? []).map((r) => {
         // Compact record id — the bare value for a single-column key, `F1|v1||F2|v2` for a composite
-        // key — which loadRecordDetail reads back with CompositeKey.FromURLSegment.
+        // key — which LoadRecordDetail reads back with CompositeKey.FromURLSegment.
         const idVal = entity.PrimaryKeys.length > 0 ? CompositeKey.FromEntityRecord(entity, r).ToCompactURLSegment() : '';
         const title = titleField ? String(r[titleField.Name] ?? '(no name)') : idVal;
         const subtitle = secondary
@@ -149,26 +140,17 @@ export async function LoadEntityRecords(
         return { id: idVal, title, subtitle, raw: r };
     });
 
-    return { Entity: entity, Rows: rows, TotalShown: rows.length };
-}
-
-/** @deprecated Use {@link LoadEntityRecords}. */
-export async function loadEntityRecords(
-    entityName: string,
-    contextUser?: UserInfo,
-    maxRows = 100,
-): Promise<EntityRecordsLoad | null> {
-    return LoadEntityRecords(entityName, contextUser, maxRows);
+    return { entity, rows, totalShown: rows.length };
 }
 
 /** A single displayable field of a record: its key, label, and stringified value. */
-export type RecordFieldRow = { key: string; label: string; value: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+export type RecordFieldRow = { key: string; label: string; value: string };
 
-/** Result of {@link loadRecordDetail}: the entity metadata, a title, and the projected field rows. */
+/** Result of {@link LoadRecordDetail}: the entity metadata, a title, and the projected field rows. */
 export type RecordDetailLoad = {
-    Entity: EntityInfo;
-    Title: string;
-    Fields: RecordFieldRow[];
+    entity: EntityInfo;
+    title: string;
+    fields: RecordFieldRow[];
 };
 
 /**
@@ -205,16 +187,7 @@ export async function LoadRecordDetail(
             };
         });
 
-    return { Entity: entityInfo, Title: title, Fields: fields };
-}
-
-/** @deprecated Use {@link LoadRecordDetail}. */
-export async function loadRecordDetail(
-    entityName: string,
-    recordId: string,
-    contextUser?: UserInfo,
-): Promise<RecordDetailLoad | null> {
-    return LoadRecordDetail(entityName, recordId, contextUser);
+    return { entity: entityInfo, title, fields };
 }
 
 // ---------------------------------------------------------------------------
@@ -223,10 +196,18 @@ export async function loadRecordDetail(
 
 /** A saved query (from MJ's `Metadata.Queries`) shown in the explorer's query list. */
 export type QueryListItem = {
-    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    category: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    id: string;
+    name: string;
+    description: string | null;
+    category: string | null;
+    /**
+     * Whether the query needs a parameter with no default before it can run.
+     *
+     * A dashboard panel supplies no parameters, so one of these renders as
+     * `Parameter validation failed: Required parameter 'X' is missing` — an error where a panel
+     * should be. The composer needs to know BEFORE offering it, not after saving.
+     */
+    requiresParameters: boolean;
 };
 
 /**
@@ -244,13 +225,10 @@ export function LoadQueries(): QueryListItem[] {
             name: q.Name ?? '(unnamed query)',
             description: q.Description ?? null,
             category: q.CategoryInfo?.Name ?? null,
+            // A parameter with a default is fine — the query runs without being asked.
+            requiresParameters: (q.Parameters ?? []).some((p) => p.IsRequired && !p.DefaultValue),
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/** @deprecated Use {@link LoadQueries}. */
-export function loadQueries(): QueryListItem[] {
-    return LoadQueries();
 }
 
 /** Count of approved saved queries in metadata. */
@@ -258,18 +236,13 @@ export function QueryCount(): number {
     return new Metadata().Queries.filter((q) => q.Status === 'Approved').length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
 }
 
-/** @deprecated Use {@link QueryCount}. */
-export function queryCount(): number {
-    return QueryCount();
-}
-
 /** Result of running a saved query: column names, row objects, count, and success/error. */
 export type QueryRunResult = {
-    Columns: string[];
-    Rows: Record<string, unknown>[];
-    RowCount: number;
-    Success: boolean;
-    ErrorMessage?: string;
+    columns: string[];
+    rows: Record<string, unknown>[];
+    rowCount: number;
+    success: boolean;
+    errorMessage?: string;
 };
 
 /**
@@ -283,7 +256,7 @@ export type QueryRunResult = {
  * @param maxRows     Row cap (default 200).
  * @returns A {@link QueryRunResult} with columns, rows, count, and status.
  */
-export async function runQuery(  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+export async function runQuery(
     queryId: string,
     parameters?: Record<string, unknown>,
     contextUser?: UserInfo,
@@ -297,11 +270,11 @@ export async function runQuery(  // case-violation-ok-legacy-back-compat: the Pa
     const rows = (result.Results ?? []) as Record<string, unknown>[];
     const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
     return {
-        Columns: columns,
-        Rows: rows,
-        RowCount: result.RowCount ?? rows.length,
-        Success: result.Success,
-        ErrorMessage: result.Success ? undefined : (result.ErrorMessage ?? 'Query failed.'),
+        columns,
+        rows,
+        rowCount: result.RowCount ?? rows.length,
+        success: result.Success,
+        errorMessage: result.Success ? undefined : (result.ErrorMessage ?? 'Query failed.'),
     };
 }
 
@@ -311,9 +284,9 @@ export async function runQuery(  // case-violation-ok-legacy-back-compat: the Pa
 
 /** A dashboard row shown in the explorer's dashboard list. */
 export type DashboardListItem = {
-    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    id: string;
+    name: string;
+    description: string | null;
 };
 
 /**
@@ -328,7 +301,17 @@ export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardL
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string; Name: string; Description: string | null }>(
         {
-            EntityName: 'Dashboards',
+            EntityName: 'MJ: Dashboards',
+            // `Config` only. The other two types are not dashboards this app can open: a `Code`
+            // dashboard's panels ARE an Angular component and a `Dynamic Code` dashboard's are
+            // generated at runtime for a browser — neither has anything a native surface could
+            // render, which is why every one of them used to arrive here and then apologise.
+            //
+            // Listing a row that can only disappoint is worse than not listing it: the list stops
+            // being a menu of things you can do and becomes a menu of things you mostly cannot.
+            // A `Config` dashboard is data — panels of queries and artifacts — and renders here
+            // properly, which makes this list exactly the dashboards mobile supports.
+            ExtraFilter: `Type = 'Config'`,
             Fields: ['ID', 'Name', 'Description'],
             OrderBy: 'Name',
             MaxRows: 200,
@@ -340,9 +323,92 @@ export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardL
     return (result.Results ?? []).map((d) => ({ id: d.ID, name: d.Name, description: d.Description }));
 }
 
-/** @deprecated Use {@link LoadDashboards}. */
-export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
-    return LoadDashboards(contextUser);
+/** An artifact that can be placed on a dashboard. */
+export type DashboardArtifactOption = {
+    id: string;
+    name: string;
+    typeName: string;
+    /** The conversation it came from, so a user can tell two similarly-named artifacts apart. */
+    conversation: string | null;
+};
+
+/**
+ * Lists the artifacts a user can put on a dashboard, newest first.
+ *
+ * Restricted to the types that render as a PANEL rather than a document: an interactive component,
+ * a data/query result, a chart. A 40-page markdown report is an artifact too, and putting it in a
+ * dashboard tile helps nobody.
+ *
+ * @param contextUser Optional acting user (server-side scoping).
+ */
+export async function LoadDashboardArtifactOptions(contextUser?: UserInfo): Promise<DashboardArtifactOption[]> {
+    const rv = new RunView();
+    const result = await rv.RunView<{
+        ID: string; Name: string; ArtifactType: string | null; Conversation: string | null;
+    }>(
+        {
+            EntityName: 'MJ: Conversation Artifacts',
+            Fields: ['ID', 'Name', 'ArtifactType', 'Conversation'],
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 100,
+            ResultType: 'simple',
+        },
+        contextUser,
+    );
+    if (!result.Success) return [];
+    const panelTypes = new Set(['component', 'data', 'data snapshot', 'json', 'image', 'svg image']);
+    return (result.Results ?? [])
+        .filter((a) => panelTypes.has((a.ArtifactType ?? '').trim().toLowerCase()))
+        .map((a) => ({
+            id: a.ID,
+            name: a.Name,
+            typeName: a.ArtifactType ?? 'Artifact',
+            conversation: a.Conversation ?? null,
+        }));
+}
+
+/**
+ * Creates a `Config` dashboard from a set of saved queries.
+ *
+ * The layout it writes is the Golden Layout tree MJ Explorer reads, so a dashboard composed on a
+ * phone opens on the desktop and can be rearranged there — see `dashboard-config.ts` for why a
+ * simpler mobile-only shape was rejected.
+ *
+ * `Type` is `Config` rather than `Code`: every dashboard currently in MJ is a `Code` dashboard
+ * whose panels are an Angular component, which is precisely why none of them render anywhere but
+ * Explorer. A `Config` dashboard is data, and data renders wherever there is a renderer.
+ *
+ * @param name The dashboard's name.
+ * @param description Optional description.
+ * @param panels The panels, in the order the user arranged them.
+ * @param contextUser Optional acting user.
+ * @returns The new dashboard's id, or null with a reason when the save failed.
+ */
+export async function CreateConfigDashboard(
+    name: string,
+    description: string | null,
+    panels: readonly DashboardPanelSpec[],
+    contextUser?: UserInfo,
+): Promise<{ ID: string } | { Error: string }> {
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+    const currentUser = contextUser ?? md.CurrentUser;
+    if (!currentUser) return { Error: 'Not signed in.' };
+
+    const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards', currentUser);
+    dashboard.NewRecord();
+    dashboard.Name = name;
+    dashboard.Description = description;
+    dashboard.UserID = currentUser.ID;
+    dashboard.Type = 'Config';
+    // `Global` rather than `App`: a dashboard composed from Data Explorer is not scoped to an
+    // application, and an `App` scope with no ApplicationID is not a valid row.
+    dashboard.Scope = 'Global';
+    dashboard.UIConfigDetails = BuildDashboardConfig(panels);
+
+    if (!(await dashboard.Save())) {
+        return { Error: dashboard.LatestResult?.Message ?? 'The dashboard could not be saved.' };
+    }
+    return { ID: dashboard.ID };
 }
 
 /** Renderable dashboard part kinds (mirrors MJ's Dashboard Part Types). */
@@ -351,26 +417,26 @@ export type DashboardPartKind = 'view' | 'query' | 'artifact' | 'weburl' | 'unkn
 /** A single parsed dashboard panel. */
 export type DashboardPart = {
     /** Panel id from the layout. */
-    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    id: string;
     /** Panel display title. */
-    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    title: string;
     /** Normalized renderer kind. */
-    kind: DashboardPartKind;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    kind: DashboardPartKind;
     /** Resolved Dashboard Part Type name. */
-    typeName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    typeName: string;
     /** Raw, type-specific panel config (viewId/queryId/artifactId/url/…). */
-    config: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    config: Record<string, unknown>;
 };
 
 /** A dashboard resolved into its renderable parts. */
 export type DashboardLoad = {
-    Id: string;
-    Name: string;
-    Description: string | null;
-    UpdatedAt: Date | null;
-    Parts: DashboardPart[];
+    id: string;
+    name: string;
+    description: string | null;
+    updatedAt: Date | null;
+    parts: DashboardPart[];
     /** Count of parts that can't render natively on mobile (desktop-only). */
-    DesktopOnlyCount: number;
+    desktopOnlyCount: number;
 };
 
 /** A node in the Golden Layout tree stored in `Dashboard.UIConfigDetails`. */
@@ -418,8 +484,23 @@ function kindFromTypeName(name: string): DashboardPartKind {
     return 'unknown';
 }
 
-/** Parse `UIConfigDetails` into raw panels, tolerating malformed JSON. */
-function parsePanels(uiConfigDetails: string): RawPanel[] {
+/**
+ * Parse `UIConfigDetails` into raw panels, tolerating malformed JSON.
+ *
+ * Exported for tests. The shape this has to survive is **Golden Layout's native
+ * `ResolvedLayoutConfig`**, which is what MJ Explorer persists — not the simplified tree the
+ * mobile composer writes. Two properties of that format matter and are easy to get wrong:
+ *
+ * - **Components live inside `stack` nodes**, always, even a stack of one. A walk that only
+ *   descends rows and columns finds nothing in a real Explorer dashboard.
+ * - **Panels in the SAME stack are tabs on a desktop.** A phone has no tabs, so they flatten into
+ *   the panel list in order and stack vertically. Nothing is hidden behind a tab the user cannot
+ *   reach.
+ *
+ * The walk therefore keys on `type === 'component'` and recurses on `content` regardless of node
+ * type — the same thing the Angular viewer's own walker does.
+ */
+export function parsePanels(uiConfigDetails: string): RawPanel[] {
     if (!uiConfigDetails || uiConfigDetails.trim() === '') return [];
     try {
         const parsed: unknown = JSON.parse(uiConfigDetails);
@@ -473,18 +554,13 @@ export async function LoadDashboard(dashboardId: string, contextUser?: UserInfo)
 
     const updatedAtRaw = (dashboard as unknown as { __mj_UpdatedAt?: Date }).__mj_UpdatedAt;
     return {
-        Id: dashboard.ID,
-        Name: dashboard.Name,
-        Description: dashboard.Description,
-        UpdatedAt: updatedAtRaw ? new Date(updatedAtRaw) : null,
-        Parts: parts,
-        DesktopOnlyCount: parts.filter((p) => p.kind === 'unknown' || p.kind === 'weburl' || p.kind === 'view').length,
+        id: dashboard.ID,
+        name: dashboard.Name,
+        description: dashboard.Description,
+        updatedAt: updatedAtRaw ? new Date(updatedAtRaw) : null,
+        parts,
+        desktopOnlyCount: parts.filter((p) => p.kind === 'unknown' || p.kind === 'weburl' || p.kind === 'view').length,
     };
-}
-
-/** @deprecated Use {@link LoadDashboard}. */
-export async function loadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
-    return LoadDashboard(dashboardId, contextUser);
 }
 
 /** Map Dashboard Part Type id → name (small lookup table). */

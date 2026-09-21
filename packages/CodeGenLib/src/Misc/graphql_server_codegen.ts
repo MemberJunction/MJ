@@ -396,12 +396,16 @@ export class ${serverGraphQLTypeName} {`;
    * {@link EntityFieldInfo.IsUnrestrictableField}, the same predicate the runtime aggregation and
    * the save-time guard use. Anything else can legitimately be absent for SOME caller, so the
    * schema must not promise otherwise.
+   * And critically, a column in the database MUST also be NOT NULL (`!fieldInfo.AllowsNull`).
+   * If a column allows NULL in the database (such as spatial coordinates like `__mj_Latitude`
+   * or nullable system/embedded columns), rows can legitimately store NULL, and GraphQL will
+   * fail with "Cannot return null for non-nullable field" if declared non-nullable.
    *
    * INPUT types are unaffected and keep deriving from `AllowsNull` — they carry the WRITE
    * contract, which the database constraint does still govern.
    */
   protected isNonNullableServerField(fieldInfo: EntityFieldInfo): boolean {
-    return fieldInfo.IsUnrestrictableField;
+    return !fieldInfo.AllowsNull && fieldInfo.IsUnrestrictableField;
   }
 
   protected generateServerField(fieldInfo: EntityFieldInfo): string {

@@ -50,15 +50,22 @@ function maybeParseJsonScalar(raw: string): unknown {
  *
  * Accepts a loose shape so tests don't need the full DriverExecutionContext type.
  */
-export function BuildVariableValuesFromContext(
+export function buildVariableValuesFromContext(
     context: { resolvedVariables?: { values?: Record<string, unknown> } } | null | undefined,
     env: NodeJS.ProcessEnv = process.env
 ): Record<string, unknown> {
     const values: Record<string, unknown> = {};
 
     // Layer 1: env vars (lowest priority) — JSON-parse when value looks structured.
+    //
+    // An EMPTY value counts as unset. docker-compose declares each variable as
+    // `"${MJ_TEST_VAR_x:-}"`, so inside the container the key always exists — as ""
+    // when the host never supplied one. Treating that as a value substituted the
+    // empty string into every `{{authUsername}}`/`{{authPassword}}`, and the suite
+    // submitted blank credentials to the identity provider instead of failing with
+    // "variable not provided". A variable nobody set must look unset here.
     for (const [key, value] of Object.entries(env)) {
-        if (key.startsWith(ENV_PREFIX) && value !== undefined) {
+        if (key.startsWith(ENV_PREFIX) && value !== undefined && value.trim() !== '') {
             values[key.slice(ENV_PREFIX.length)] = maybeParseJsonScalar(value);
         }
     }
@@ -74,12 +81,35 @@ export function BuildVariableValuesFromContext(
     return values;
 }
 
-/** @deprecated Use {@link BuildVariableValuesFromContext}. */
-export function buildVariableValuesFromContext(
-    context: { resolvedVariables?: { values?: Record<string, unknown> } } | null | undefined,
-    env: NodeJS.ProcessEnv = process.env
-): Record<string, unknown> {
-    return BuildVariableValuesFromContext(context, env);
+/**
+ * Every unresolved `{{var}}` in a test's auth bindings, labelled by where it sits.
+ *
+ * The auth block is the one place an unresolved placeholder cannot be seen in the
+ * run: a blank or literal `{{authPassword}}` is typed into the password field and
+ * the run fails at the identity provider looking like a credential problem, not a
+ * configuration one. `startUrl` and `goal` fail loudly on their own; this does not.
+ */
+export function findUnresolvedAuthPlaceholders(auth: unknown): string[] {
+    const bindings = (auth as { bindings?: unknown })?.bindings;
+    if (!Array.isArray(bindings)) {
+        return [];
+    }
+    const out: string[] = [];
+    bindings.forEach((binding, i) => {
+        const method = (binding as { method?: Record<string, unknown> })?.method;
+        if (!method) {
+            return;
+        }
+        for (const [field, value] of Object.entries(method)) {
+            if (typeof value !== 'string') {
+                continue;
+            }
+            for (const key of findUnresolvedPlaceholders(value)) {
+                out.push(`auth.bindings[${i}].${field}:{{${key}}}`);
+            }
+        }
+    });
+    return out;
 }
 
 /**
@@ -94,13 +124,13 @@ export function buildVariableValuesFromContext(
  * setting `params.ApplicationContext` in that case so the engine doesn't
  * render an empty heading.
  */
-export function ComposeApplicationContext(
+export function composeApplicationContext(
     suiteLevel: string | undefined,
     perTest: string | undefined,
     values: Record<string, unknown>
 ): string | undefined {
     const layers: string[] = [];
-    const substitute = (s: string) => Object.keys(values).length === 0 ? s : SubstituteVariables(s, values);
+    const substitute = (s: string) => Object.keys(values).length === 0 ? s : substituteVariables(s, values);
 
     if (typeof suiteLevel === 'string' && suiteLevel.trim()) {
         layers.push(substitute(suiteLevel));
@@ -109,15 +139,6 @@ export function ComposeApplicationContext(
         layers.push(`## Test-specific Notes\n\n${substitute(perTest)}`);
     }
     return layers.length === 0 ? undefined : layers.join('\n\n');
-}
-
-/** @deprecated Use {@link ComposeApplicationContext}. */
-export function composeApplicationContext(
-    suiteLevel: string | undefined,
-    perTest: string | undefined,
-    values: Record<string, unknown>
-): string | undefined {
-    return ComposeApplicationContext(suiteLevel, perTest, values);
 }
 
 /**
@@ -133,7 +154,7 @@ export function composeApplicationContext(
  *
  * Returns a NEW object — the input is not mutated.
  */
-export function SubstituteVariables<T>(obj: T, values: Record<string, unknown>): T {
+export function substituteVariables<T>(obj: T, values: Record<string, unknown>): T {
     if (Object.keys(values).length === 0) {
         return obj;
     }
@@ -164,7 +185,20 @@ export function SubstituteVariables<T>(obj: T, values: Record<string, unknown>):
     return walk(obj) as T;
 }
 
-/** @deprecated Use {@link SubstituteVariables}. */
-export function substituteVariables<T>(obj: T, values: Record<string, unknown>): T {
-    return SubstituteVariables(obj, values);
+/**
+ * Return the distinct `{{key}}` placeholder names still present in a string
+ * after substitution. A non-empty result means variables the string
+ * referenced were never provided — the caller can fail fast with the missing
+ * keys instead of letting the literal `{{key}}` flow into a URL/goal and
+ * surface later as a mysterious navigation error.
+ */
+export function findUnresolvedPlaceholders(value: string | undefined): string[] {
+    if (!value) {
+        return [];
+    }
+    const keys = new Set<string>();
+    for (const match of value.matchAll(EMBEDDED)) {
+        keys.add(match[1]);
+    }
+    return [...keys];
 }

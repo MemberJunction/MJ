@@ -8,8 +8,8 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useMJ } from '@/providers/mj-provider';
-import { loadConversations, loadConversation, type ConversationListItem, type ConversationDetailLoad } from '@/data/services/conversations';
-import { loadArtifact, loadConversationArtifacts, type LoadedArtifact, type ArtifactSummary } from '@/data/services/artifacts';
+import { LoadConversations, LoadConversation, type ConversationListItem, type ConversationDetailLoad } from '@/data/services/conversations';
+import { LoadArtifact, LoadConversationArtifacts, type LoadedArtifact, type ArtifactSummary } from '@/data/services/artifacts';
 
 /** Returned state shape for {@link useConversations} (the list screen). */
 export type UseConversationsState = {
@@ -24,7 +24,7 @@ export type UseConversationsState = {
  *
  * Behavior:
  * - When the MJ provider is `ready`, fetches real conversations via
- *   `loadConversations` (RunView over the Conversations entity).
+ *   `LoadConversations` (RunView over the Conversations entity).
  * - In any other provider state, `conversations` stays `null` so the caller
  *   can fall back to mocks — keeps the design visible before a JWT is set.
  *
@@ -45,7 +45,7 @@ export function UseConversations(): UseConversationsState {
         setLoading(true);
         setError(null);
         try {
-            const list = await loadConversations();
+            const list = await LoadConversations();
             setConversations(list);
         } catch (e) {
             setError(e instanceof Error ? e : new Error(String(e)));
@@ -74,7 +74,7 @@ export type UseConversationState = {
 
 /**
  * Hook for a single conversation thread plus its associated artifacts.
- * Loads via `loadConversation` (RunView over messages/details for the given
+ * Loads via `LoadConversation` (RunView over messages/details for the given
  * conversation) once the provider is `ready` and an id is supplied.
  *
  * @param conversationId The conversation to load; when `undefined` the hook
@@ -93,7 +93,7 @@ export function UseConversation(conversationId: string | undefined): UseConversa
         setLoading(true);
         setError(null);
         try {
-            const result = await loadConversation(conversationId);
+            const result = await LoadConversation(conversationId);
             setData(result);
         } catch (e) {
             setError(e instanceof Error ? e : new Error(String(e)));
@@ -114,7 +114,7 @@ export function useConversation(conversationId: string | undefined): UseConversa
 
 /**
  * Loads a single artifact (its latest version content + classification) via
- * `loadArtifact`. Uses a cancellation flag so a late-resolving fetch can't set
+ * `LoadArtifact`. Uses a cancellation flag so a late-resolving fetch can't set
  * state after the id changes or the component unmounts.
  *
  * @param artifactId The artifact to load; `undefined` keeps the hook idle.
@@ -135,7 +135,7 @@ export function UseArtifact(artifactId: string | undefined) {
         setError(null);
         (async () => {
             try {
-                const a = await loadArtifact(artifactId);
+                const a = await LoadArtifact(artifactId);
                 if (!cancelled) setArtifact(a);
             } catch (e) {
                 if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
@@ -157,7 +157,7 @@ export function useArtifact(artifactId: string | undefined) {
 /**
  * Loads the artifact summaries for a conversation (the artifact dock view):
  * category, preview snippet, and best-effort agent attribution, via
- * `loadConversationArtifacts`. Guarded by a cancellation flag.
+ * `LoadConversationArtifacts`. Guarded by a cancellation flag.
  *
  * @param conversationId The conversation whose artifacts to summarize;
  *   `undefined` keeps the hook idle.
@@ -177,7 +177,7 @@ export function UseConversationArtifacts(conversationId: string | undefined) {
         setError(null);
         (async () => {
             try {
-                const list = await loadConversationArtifacts(conversationId);
+                const list = await LoadConversationArtifacts(conversationId);
                 if (!cancelled) setArtifacts(list);
             } catch (e) {
                 if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));

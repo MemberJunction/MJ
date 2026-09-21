@@ -6,7 +6,8 @@
  * all related entities are saved atomically with rollback capability.
  */
 
-import { GetDataProvider } from './provider-utils';
+import type { DatabaseProviderBase } from '@memberjunction/core';
+import { getDataProvider } from './provider-utils';
 import { SQLLogger } from './sql-logger';
 
 export interface TransactionOptions {
@@ -15,9 +16,22 @@ export interface TransactionOptions {
 export class TransactionManager {
   private inTransaction = false;
   private sqlLogger?: SQLLogger;
+  private readonly explicitProvider?: DatabaseProviderBase;
 
-  constructor(sqlLogger?: SQLLogger) {
+  /**
+   * @param sqlLogger - optional SQL logger
+   * @param provider - the provider that owns the transaction. Pass it whenever the caller runs
+   *   work on a specific provider (an atomic `mj sync push` runs every save on it), so the
+   *   transaction and the work cannot end up on different instances. Defaults to the provider
+   *   `initializeProvider()` set up.
+   */
+  constructor(sqlLogger?: SQLLogger, provider?: DatabaseProviderBase) {
     this.sqlLogger = sqlLogger;
+    this.explicitProvider = provider;
+  }
+
+  private resolveProvider(): DatabaseProviderBase | null {
+    return this.explicitProvider ?? getDataProvider();
   }
 
   /**
@@ -37,12 +51,12 @@ export class TransactionManager {
    * `IsInTransaction` defaults to `false` on `DatabaseProviderBase` and the
    * SQL Server provider doesn't override it.
    */
-  async BeginTransaction(options?: TransactionOptions): Promise<void> {
+  async beginTransaction(options?: TransactionOptions): Promise<void> {
     if (this.inTransaction) {
       throw new Error('Transaction already in progress');
     }
 
-    const provider = GetDataProvider();
+    const provider = this.resolveProvider();
     if (!provider) {
       throw new Error('No data provider available');
     }
@@ -55,20 +69,15 @@ export class TransactionManager {
     }
   }
 
-  /** @deprecated Use {@link BeginTransaction}. */
-  async beginTransaction(options?: TransactionOptions): Promise<void> {
-    return this.BeginTransaction(options);
-  }
-
   /**
    * Commit the current transaction.
    */
-  async CommitTransaction(): Promise<void> {
+  async commitTransaction(): Promise<void> {
     if (!this.inTransaction) {
       return; // No transaction to commit
     }
 
-    const provider = GetDataProvider();
+    const provider = this.resolveProvider();
     if (!provider) {
       throw new Error('No data provider available');
     }
@@ -81,21 +90,16 @@ export class TransactionManager {
     }
   }
 
-  /** @deprecated Use {@link CommitTransaction}. */
-  async commitTransaction(): Promise<void> {
-    return this.CommitTransaction();
-  }
-
   /**
    * Rollback the current transaction.
    * Returns true if rollback succeeded or no transaction was active, false if rollback failed.
    */
-  async RollbackTransaction(): Promise<boolean> {
+  async rollbackTransaction(): Promise<boolean> {
     if (!this.inTransaction) {
       return true; // No transaction to rollback
     }
 
-    const provider = GetDataProvider();
+    const provider = this.resolveProvider();
     if (!provider) {
       throw new Error('No data provider available');
     }
@@ -107,51 +111,38 @@ export class TransactionManager {
     } catch (error) {
       // Log but don't throw - we're already in an error state
       console.error('Failed to rollback transaction:', error);
+      if (provider.TransactionDepth === 0) {
+        // The provider already dropped its handle, so there is nothing left to retry. The rollback
+        // is still reported as failed: the server-side transaction was not confirmed as rolled back.
+        this.inTransaction = false;
+      }
       return false;
     }
-  }
-
-  /** @deprecated Use {@link RollbackTransaction}. */
-  async rollbackTransaction(): Promise<boolean> {
-    return this.RollbackTransaction();
   }
 
   /**
    * Execute a function within a transaction
    */
-  async ExecuteInTransaction<T>(
-    fn: () => Promise<T>,
-    options?: TransactionOptions
-  ): Promise<T> {
-    await this.BeginTransaction(options);
-
-    try {
-      const result = await fn();
-      await this.CommitTransaction();
-      return result;
-    } catch (error) {
-      await this.RollbackTransaction();
-      throw error;
-    }
-  }
-
-  /** @deprecated Use {@link ExecuteInTransaction}. */
   async executeInTransaction<T>(
     fn: () => Promise<T>,
     options?: TransactionOptions
   ): Promise<T> {
-    return this.ExecuteInTransaction(fn, options);
+    await this.beginTransaction(options);
+
+    try {
+      const result = await fn();
+      await this.commitTransaction();
+      return result;
+    } catch (error) {
+      await this.rollbackTransaction();
+      throw error;
+    }
   }
 
   /**
    * Check if currently in a transaction.
    */
-  get IsInTransaction(): boolean {
-    return this.inTransaction;
-  }
-
-  /** @deprecated Use {@link IsInTransaction}. */
   get isInTransaction(): boolean {
-    return this.IsInTransaction;
+    return this.inTransaction;
   }
 }

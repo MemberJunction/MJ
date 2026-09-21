@@ -2,7 +2,7 @@
  * Offline mutation queue (P3.2) — an MMKV-persisted, FIFO queue of record
  * mutations that could not be written to MJAPI because the device was offline.
  *
- * Each entry captures exactly what {@link ../data/offline-sync!replayQueue} needs
+ * Each entry captures exactly what {@link ../data/offline-sync!ReplayQueue} needs
  * to re-drive a `BaseEntity` save deterministically once connectivity returns:
  * the entity name, the record's primary key (or `null` for a create), the set of
  * changed scalar field values, and the operation kind. Values are constrained to

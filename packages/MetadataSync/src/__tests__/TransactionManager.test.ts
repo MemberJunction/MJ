@@ -130,4 +130,48 @@ describe('TransactionManager', () => {
       expect(tm.isInTransaction).toBe(false);
     });
   });
+  describe('explicit provider', () => {
+    it('uses the provider passed to the constructor instead of the global one', async () => {
+      const own = {
+        BeginTransaction: vi.fn(async () => {}),
+        CommitTransaction: vi.fn(async () => {}),
+        RollbackTransaction: vi.fn(async () => {}),
+      };
+      const tm = new TransactionManager(undefined, own as unknown as ConstructorParameters<typeof TransactionManager>[1]);
+      await tm.beginTransaction();
+      await tm.commitTransaction();
+      await tm.beginTransaction();
+      expect(await tm.rollbackTransaction()).toBe(true);
+
+      expect(own.BeginTransaction).toHaveBeenCalledTimes(2);
+      expect(own.CommitTransaction).toHaveBeenCalledTimes(1);
+      expect(own.RollbackTransaction).toHaveBeenCalledTimes(1);
+      expect(mockProvider.BeginTransaction).not.toHaveBeenCalled();
+    });
+  });
+  describe('failed rollback', () => {
+    it('stays in a transaction when the provider still holds one, so the caller can retry', async () => {
+      const own = {
+        TransactionDepth: 1,
+        BeginTransaction: vi.fn(async () => {}),
+        RollbackTransaction: vi.fn(async () => { throw new Error('request in flight'); }),
+      };
+      const tm = new TransactionManager(undefined, own as unknown as ConstructorParameters<typeof TransactionManager>[1]);
+      await tm.beginTransaction();
+      expect(await tm.rollbackTransaction()).toBe(false);
+      expect(tm.isInTransaction).toBe(true);
+    });
+
+    it('leaves the transaction when the provider already dropped its handle', async () => {
+      const own = {
+        TransactionDepth: 0,
+        BeginTransaction: vi.fn(async () => {}),
+        RollbackTransaction: vi.fn(async () => { throw new Error('request in flight'); }),
+      };
+      const tm = new TransactionManager(undefined, own as unknown as ConstructorParameters<typeof TransactionManager>[1]);
+      await tm.beginTransaction();
+      expect(await tm.rollbackTransaction()).toBe(false);
+      expect(tm.isInTransaction).toBe(false);
+    });
+  });
 });

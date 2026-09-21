@@ -1,5 +1,34 @@
 import { BaseEntity } from '@memberjunction/core';
 
+/** Suffix CodeGen appends to a JSON column's name for its typed accessor. */
+const TYPED_JSON_COMPANION_SUFFIX = 'Object';
+
+/**
+ * Whether `propertyName` is CodeGen's typed accessor for a real JSON field —
+ * `ConfigurationObject` beside a `Configuration` column.
+ *
+ * These are derived: no column, no EntityField, and the same content the real
+ * field already holds. Writing both duplicates the column into the metadata file
+ * and, worse, defeats field externalization — `Configuration.ReplayScript`
+ * becomes an `@file:` reference while the companion keeps the whole value inline,
+ * so nothing is actually externalized.
+ *
+ * Identified structurally rather than by name so it holds for every entity: the
+ * property must end in `Object` AND the remainder must be a real field. A
+ * `BusinessObject` property on an entity with no `Business` field is a genuine
+ * computed property and is kept.
+ */
+export function isTypedJsonCompanion(propertyName: string, entityFieldNames: readonly string[]): boolean {
+    if (!propertyName.toLowerCase().endsWith(TYPED_JSON_COMPANION_SUFFIX.toLowerCase())) {
+        return false;
+    }
+    const base = propertyName.slice(0, -TYPED_JSON_COMPANION_SUFFIX.length).toLowerCase();
+    if (!base) {
+        return false;
+    }
+    return entityFieldNames.some(f => f.toLowerCase() === base);
+}
+
 /**
  * Handles discovery and extraction of all properties from BaseEntity objects,
  * including both database fields and virtual properties defined in subclasses.
@@ -60,11 +89,19 @@ export class EntityPropertyExtractor {
     fieldOverrides?: Record<string, any>
   ): void {
     const virtualProperties = this.discoverVirtualProperties(record);
-    
+    const entityFieldNames = record.EntityInfo?.Fields?.map(f => f.Name) ?? [];
+
     for (const propertyName of virtualProperties) {
       try {
         // Skip if this property is overridden
         if (fieldOverrides && propertyName in fieldOverrides) {
+          continue;
+        }
+
+        // Skip CodeGen's typed accessor for a JSON column — it duplicates the
+        // real field and would keep inline the very value externalization just
+        // moved out to a file.
+        if (isTypedJsonCompanion(propertyName, entityFieldNames)) {
           continue;
         }
         

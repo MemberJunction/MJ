@@ -848,6 +848,23 @@ export interface IMetadataProvider {
     GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
 
     /**
+     * Checks whether an entity record name is currently available in the in-memory LRU cache.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns True if the record name is cached in memory, false otherwise
+     */
+    HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean;
+
+    /**
+     * Retrieves an entity record name from the in-memory LRU cache if already cached.
+     * Returns undefined immediately when not cached and will NEVER initiate a database lookup.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns The cached display name, or undefined if not in cache
+     */
+    GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined;
+
+    /**
      * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
      * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
      * @param entityName - The name of the entity

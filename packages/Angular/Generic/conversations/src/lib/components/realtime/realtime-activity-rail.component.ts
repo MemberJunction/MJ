@@ -8,7 +8,7 @@ import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import {
   RealtimeSessionState, RealtimeDelegationCardVM, FriendlyStepLabel, FormatElapsed
 } from './realtime-session-state';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 import {
   ACTIVITY_SPLIT_DEFAULT_PERCENT, ACTIVITY_SPLIT_PREF_KEY,
   ClampActivitySplitPercent, ParseActivitySplitPercent, SerializeActivitySplitPercent

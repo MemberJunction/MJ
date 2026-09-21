@@ -242,3 +242,27 @@ describe('matrixToFeatureRows — frozen-schema mapping', () => {
     expect(Object.keys(rows[0])).not.toContain('extra');
   });
 });
+
+describe('MLModelInferenceProcessor — empty feature assembly guardrail', () => {
+  it('refuses to score and fails the record when feature assembly produces 0 columns for a model with schema features', async () => {
+    const emptyLineageModel = new FakeMLModel();
+    emptyLineageModel.Lineage = JSON.stringify({
+      targetEntityName: 'Members',
+      sourceBindings: [],
+      featureSteps: { Steps: [] },
+      asOfStrategy: { Mode: 'none' },
+    });
+    // FeatureSchema expects features, but lineage featureSteps is empty
+    emptyLineageModel.FeatureSchema = JSON.stringify([
+      { Name: 'tenure', Kind: 'numeric' },
+      { Name: 'city', Kind: 'categorical' },
+    ]);
+
+    const { deps } = buildDeps(emptyLineageModel);
+    const proc = buildProcessor(deps);
+
+    const result = await proc.ProcessRecord(memberRecord('m1', 1, 1, 'NYC'), CTX);
+    expect(result.Status).toBe('Failed');
+    expect(result.ErrorMessage).toMatch(/feature assembly produced 0 columns/);
+  });
+});

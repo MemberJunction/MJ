@@ -31,7 +31,7 @@ import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { SqlServerAdapter } from '../adapters/SqlServerAdapter.js';
 import { Diagnostics, type DiagnosticCheck, type EnvironmentInfo } from '../models/Diagnostics.js';
-import { ResolvePackageManager, type PackageManagerType } from '../models/PackageManager.js';
+import { resolvePackageManager, type PackageManagerType } from '../models/PackageManager.js';
 
 /** Hard minimum Node.js major version. Update this when MJ raises the floor. */
 const MIN_NODE_VERSION = 22;
@@ -97,6 +97,9 @@ export class PreflightPhase {
   private fileSystem = new FileSystemAdapter();
   private sqlAdapter = new SqlServerAdapter();
 
+  /** Why a `<binary> --version` probe failed, keyed by binary. Feeds the diagnostic message. */
+  private readonly probeFailures = new Map<string, string>();
+
   /**
    * Run all preflight checks and return the results.
    *
@@ -104,11 +107,32 @@ export class PreflightPhase {
    * @returns Result with pass/fail status, diagnostics, and detected OS.
    */
   async Run(context: PreflightContext): Promise<PreflightResult> {
+    this.probeFailures.clear();
+
     const { Emitter: emitter } = context;
     const hardFailures: string[] = [];
 
     // Gather environment info
-    const packageManager = ResolvePackageManager(context.Config.PackageManager);
+    const packageManager = resolvePackageManager(context.Config.PackageManager);
+
+    // gatherEnvironment probes `<binary> --version` from the target directory,
+    // because corepack resolves the package-manager version per directory.
+    // Spawning with a cwd that does not exist fails ENOENT, which used to surface
+    // as a flatly wrong "pnpm not found on PATH" (#4562). Create it first — the
+    // install creates it moments later anyway, and `CanWrite` already relied on
+    // doing so as a side effect, just too late to help this probe.
+    //
+    // Deliberately swallow a failure here rather than letting it reject `Run`:
+    // an unwritable parent or a target path that already exists as a file would
+    // otherwise surface as a generic UNEXPECTED_ERROR before any diagnostic ran,
+    // losing checkWritePermissions' own message and SuggestedFix. Leave it to
+    // that check, further down, to report the same failure properly.
+    try {
+      await this.fileSystem.CreateDirectory(context.TargetDir);
+    } catch {
+      // Intentionally ignored — checkWritePermissions (below) re-probes this
+      // directory and reports a clean diagnostic with a SuggestedFix.
+    }
     const environment = await this.gatherEnvironment(packageManager, context.TargetDir);
     const diagnostics = new Diagnostics(environment);
     const detectedOS = this.detectOS();
@@ -231,11 +255,23 @@ export class PreflightPhase {
     };
   }
 
-  /** Run `<binary> --version` from `cwd`, returning `"not found"` when the binary is missing. */
+  /**
+   * Run `<binary> --version` from `cwd`, returning `"not found"` when the binary
+   * cannot be run.
+   *
+   * `cwd` is the target directory on purpose: corepack resolves the package
+   * manager version per directory, so probing elsewhere can report a version the
+   * install will not actually use. The caller must ensure the directory exists.
+   *
+   * On failure the reason is recorded in {@link probeFailures} so the diagnostic
+   * can say *why* instead of assuming the binary is absent.
+   */
   private async probeVersion(binary: string, cwd: string): Promise<string> {
     try {
       return await this.processRunner.RunSimple(binary, ['--version'], cwd);
-    } catch {
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.probeFailures.set(binary, reason);
       return 'not found';
     }
   }
@@ -286,10 +322,13 @@ export class PreflightPhase {
           'To install with npm instead, set PackageManager to "npm" in your install config.'
         : 'npm is included with Node.js. Reinstall Node.js from https://nodejs.org';
 
+      const probeFailure = this.probeFailures.get(packageManager);
       return {
         Name: 'Package manager',
         Status: 'fail',
-        Message: `${packageManager} not found on PATH`,
+        Message: probeFailure
+          ? `${packageManager} could not be run: ${probeFailure}`
+          : `${packageManager} not found on PATH`,
         SuggestedFix: suggestedFix,
       };
     }

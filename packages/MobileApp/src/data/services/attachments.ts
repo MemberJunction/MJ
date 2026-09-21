@@ -15,50 +15,47 @@
  *     UI code doesn't care whether an item came from the camera, the library, or
  *     the Files app.
  *
- * ## Backend persistence status
- * MJ *does* have a first-class attachment entity — {@link MJFileEntity}
- * (`MJ: Files`) — and {@link persistAttachment} creates its catalog record via
- * the standard object model. However, uploading the raw *bytes* is a separate,
- * bespoke server capability: MJ's `FileResolver.CreateFile` mutation mints a
- * pre-signed `UploadUrl` that the client then PUTs the bytes to. That flow is a
- * custom GraphQL endpoint, NOT part of the plain `Metadata.GetEntityObject` /
- * `Save` object model, so it is intentionally out of scope here (we do not
- * invent an upload endpoint). Consequently {@link persistAttachment} records the
- * file metadata with `Status = 'Pending'` and leaves byte upload as documented
- * future work. Until that pipeline is wired, the chat composers use the
- * {@link composeMessageWithAttachment} fallback to describe the attachment inline
- * in the message text, so the capture UX is real end-to-end.
+ * ## Backend persistence
+ * Bytes are uploaded through `GraphQLFileStorageClient.UploadFile`, which posts the
+ * base64 payload to MJ Storage's server-side subsystem. That one call uploads the
+ * bytes *and* creates the `MJ: Files` catalog record, so the client never needs to
+ * mint a pre-signed URL, PUT to it, and then reconcile the record's status — three
+ * steps that previously had no mobile implementation and left every attachment
+ * stranded at `Status = 'Pending'`.
  *
- * // TODO(P3.x): once a mobile file-upload path exists (CreateFile pre-signed
- * // URL -> PUT bytes -> mark Uploaded, then link via `MJ: File Entity Record
- * // Links`), have the composers persist + reference the File instead of the
- * // inline text note.
+ * {@link linkAttachmentToRecord} then relates the stored file to whatever record it
+ * belongs to (a `Conversation Detail`, an entity row) via `MJ: File Entity Record
+ * Links`, which is what makes an attachment discoverable from the record rather
+ * than only from the file catalog.
+ *
+ * {@link ComposeMessageWithAttachment} is still used alongside this — not as a
+ * fallback for missing upload, but because a chat message should *say* that it
+ * carries an attachment. The note is the human-readable half; the File record and
+ * its link are the machine-readable half.
  */
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import type { MJFileEntity } from '@memberjunction/core-entities';
+import type { UserInfo } from '@memberjunction/core';
+import { AttachCapturedFileToMessage, type AttachResult } from './attachment-storage';
+import { DescribeAttachment, type AttachmentKind, type CapturedAttachment } from './attachment-meta';
 
-/** Whether a captured attachment is an image (thumbnail-able) or an opaque document. */
-export type AttachmentKind = 'image' | 'document';
+// Re-exported so existing call sites keep one import for the whole attachment surface.
+// Intra-package re-export — the no-re-export rule governs crossing package boundaries.
+export {
+    type AttachmentKind,
+    type CapturedAttachment,
+    DescribeAttachment,
+    ComposeMessageWithAttachment,
+} from './attachment-meta';
+export {
+    AttachCapturedFileToMessage,
+    LinkFileToRecord,
+    Base64SizeBytes,
+    type AttachResult,
+} from './attachment-storage';
 
-/**
- * A normalized, transport-agnostic reference to a captured file. Produced by
- * every picker in this module regardless of source (camera / library / Files).
- */
-export type CapturedAttachment = {
-    /** Local `file://` (or content) URI where the picked bytes live on device. */
-    Uri: string;
-    /** Display filename, e.g. `IMG_0421.HEIC` or `Q3-report.pdf`. */
-    Name: string;
-    /** MIME type, e.g. `image/jpeg`, `application/pdf`. */
-    MimeType: string;
-    /** Size in bytes, when the picker reported it (some sources omit it). */
-    size?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
-    /** Coarse classification driving preview UI (thumbnail vs. filename chip). */
-    Kind: AttachmentKind;
-};
+
 
 /** Minimal shape shared by every Expo permission response we consult. */
 type PermissionState = { granted: boolean; canAskAgain?: boolean };
@@ -108,11 +105,11 @@ function imageResultToAttachment(result: ImagePicker.ImagePickerResult): Capture
     if (result.canceled || !result.assets || result.assets.length === 0) return null;
     const asset = result.assets[0];
     return {
-        Uri: asset.uri,
-        Name: asset.fileName ?? deriveName(asset.uri, 'image'),
-        MimeType: asset.mimeType ?? 'image/jpeg',
+        uri: asset.uri,
+        name: asset.fileName ?? deriveName(asset.uri, 'image'),
+        mimeType: asset.mimeType ?? 'image/jpeg',
         size: asset.fileSize,
-        Kind: 'image',
+        kind: 'image',
     };
 }
 
@@ -139,11 +136,6 @@ export async function PickImageFromLibrary(): Promise<CapturedAttachment | null>
     }
 }
 
-/** @deprecated Use {@link PickImageFromLibrary}. */
-export async function pickImageFromLibrary(): Promise<CapturedAttachment | null> {
-    return PickImageFromLibrary();
-}
-
 /**
  * Capture a new photo with the camera.
  *
@@ -168,11 +160,6 @@ export async function CapturePhoto(): Promise<CapturedAttachment | null> {
     }
 }
 
-/** @deprecated Use {@link CapturePhoto}. */
-export async function capturePhoto(): Promise<CapturedAttachment | null> {
-    return CapturePhoto();
-}
-
 /**
  * Pick an arbitrary document (PDF, spreadsheet, etc.) via the system Files UI.
  * No runtime permission is required for the document picker.
@@ -187,20 +174,15 @@ export async function PickDocument(): Promise<CapturedAttachment | null> {
         if (result.canceled || !result.assets || result.assets.length === 0) return null;
         const asset = result.assets[0];
         return {
-            Uri: asset.uri,
-            Name: asset.name ?? deriveName(asset.uri, 'document'),
-            MimeType: asset.mimeType ?? 'application/octet-stream',
+            uri: asset.uri,
+            name: asset.name ?? deriveName(asset.uri, 'document'),
+            mimeType: asset.mimeType ?? 'application/octet-stream',
             size: asset.size,
-            Kind: 'document',
+            kind: 'document',
         };
     } catch {
         return null;
     }
-}
-
-/** @deprecated Use {@link PickDocument}. */
-export async function pickDocument(): Promise<CapturedAttachment | null> {
-    return PickDocument();
 }
 
 /**
@@ -213,129 +195,31 @@ export async function pickDocument(): Promise<CapturedAttachment | null> {
  */
 export async function ReadAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
     try {
-        return await new File(att.Uri).base64();
+        return await new File(att.uri).base64();
     } catch {
         return null;
     }
 }
 
-/** @deprecated Use {@link ReadAttachmentBase64}. */
-export async function readAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
-    return ReadAttachmentBase64(att);
-}
-
-/** Human-readable byte size, e.g. `842 B`, `12 KB`, `3.4 MB`. */
-function formatBytes(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    const kb = bytes / 1024;
-    if (kb < 1024) return `${Math.round(kb)} KB`;
-    return `${(kb / 1024).toFixed(1)} MB`;
-}
-
 /**
- * A short, human-readable description of an attachment, used as the inline
- * fallback note appended to a message when there's no byte-upload pipeline.
+ * Reads a captured file's bytes and attaches it to a chat message.
  *
- * @example `[Attached image: IMG_0421.jpg (image/jpeg, 245 KB)]`
+ * The only part of the attachment path that needs a device: `expo-file-system` reads the bytes,
+ * then `attachment-storage` — which has no Expo dependency and therefore can be tested against a
+ * live server — decides how to store them and writes the row.
+ *
+ * @param att The captured attachment.
+ * @param conversationDetailId The message to attach it to.
+ * @param contextUser Optional context user; defaults to the signed-in user.
  */
-export function DescribeAttachment(att: CapturedAttachment): string {
-    const size = att.size != null ? `, ${formatBytes(att.size)}` : '';
-    const label = att.Kind === 'image' ? 'image' : 'file';
-    return `[Attached ${label}: ${att.Name} (${att.MimeType}${size})]`;
-}
-
-/** @deprecated Use {@link DescribeAttachment}. */
-export function describeAttachment(att: CapturedAttachment): string {
-    return DescribeAttachment(att);
-}
-
-/**
- * Compose the outbound message text for a send that may carry an attachment.
- * When an attachment is present, its {@link describeAttachment} note is appended
- * (the documented fallback until byte upload exists); otherwise the text is
- * returned unchanged (trimmed).
- *
- * @param text The user-typed message body.
- * @param att The chosen attachment, or `null`.
- * @returns The message text to actually send (never empty when an attachment is set).
- */
-export function ComposeMessageWithAttachment(text: string, att: CapturedAttachment | null): string {
-    const trimmed = text.trim();
-    if (!att) return trimmed;
-    const note = DescribeAttachment(att);
-    return trimmed.length > 0 ? `${trimmed}\n\n${note}` : note;
-}
-
-/** @deprecated Use {@link ComposeMessageWithAttachment}. */
-export function composeMessageWithAttachment(text: string, att: CapturedAttachment | null): string {
-    return ComposeMessageWithAttachment(text, att);
-}
-
-/**
- * Resolve the highest-priority active file-storage provider's ID, needed as the
- * required `ProviderID` FK on a `MJ: Files` record.
- *
- * @returns The provider ID, or `null` when none is configured / the query fails.
- */
-async function resolveActiveStorageProviderId(contextUser?: UserInfo): Promise<string | null> {
-    const rv = new RunView();
-    const result = await rv.RunView<{ ID: string }>(
-        {
-            EntityName: 'MJ: File Storage Providers',
-            ExtraFilter: 'IsActive=1',
-            OrderBy: 'Priority ASC',
-            Fields: ['ID'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        },
-        contextUser,
-    );
-    if (!result.Success || !result.Results || result.Results.length === 0) return null;
-    return result.Results[0].ID;
-}
-
-/**
- * Persist an attachment's *metadata* as an MJ {@link MJFileEntity} (`MJ: Files`)
- * catalog record via the standard object model.
- *
- * IMPORTANT: this creates the catalog row only — it does NOT upload the file
- * bytes. Byte upload is a separate, bespoke server capability (the `CreateFile`
- * pre-signed-URL flow) that lives outside the plain object model; see this
- * module's header. The record is therefore saved with `Status = 'Pending'`.
- * Returns `null` (never throws) when no storage provider is configured or the
- * save fails, so the caller can fall back cleanly to the inline note.
- *
- * @param att The captured attachment to catalog.
- * @param contextUser Optional acting user (falls back to the current user).
- * @returns `{ id }` of the created File record, or `null` on failure.
- */
-export async function PersistAttachment(
+export async function AttachCapturedFile(
     att: CapturedAttachment,
+    conversationDetailId: string,
     contextUser?: UserInfo,
-): Promise<{ id: string } | null> {
-    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
-    const currentUser = contextUser ?? md.CurrentUser;
-
-    const providerId = await resolveActiveStorageProviderId(currentUser);
-    if (!providerId) return null;
-
-    const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', currentUser);
-    file.NewRecord();
-    file.Name = att.Name;
-    file.ProviderID = providerId;
-    file.ContentType = att.MimeType;
-    // 'Pending' == catalog row created, bytes not yet uploaded (see header TODO).
-    file.Status = 'Pending';
-
-    const saved = await file.Save();
-    if (!saved) return null;
-    return { id: file.ID };
-}
-
-/** @deprecated Use {@link PersistAttachment}. */
-export async function persistAttachment(
-    att: CapturedAttachment,
-    contextUser?: UserInfo,
-): Promise<{ id: string } | null> {
-    return PersistAttachment(att, contextUser);
+): Promise<AttachResult> {
+    const base64 = await ReadAttachmentBase64(att);
+    if (!base64) {
+        return { ok: false, reason: 'invalid', message: 'The file could not be read from this device.' };
+    }
+    return AttachCapturedFileToMessage(conversationDetailId, att, base64, null, contextUser);
 }

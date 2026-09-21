@@ -10,9 +10,9 @@
  */
 import { useEffect, useRef } from 'react';
 import { useMMKVBoolean } from 'react-native-mmkv';
-import { prefsStorage, PrefKeys } from '@/data/preferences';
+import { PrefsStorage, PrefKeys } from '@/data/preferences';
 import { useMJ } from '@/providers/mj-provider';
-import { configureNotificationHandler, registerForPushNotifications } from '@/data/services/notifications';
+import { ConfigureNotificationHandler, RegisterForPushNotifications } from '@/data/services/notifications';
 
 /**
  * Effect-only hook that performs one-time push registration when the provider
@@ -20,12 +20,12 @@ import { configureNotificationHandler, registerForPushNotifications } from '@/da
  */
 export function UsePushRegistration(): void {
     const { status } = useMJ();
-    const [pushOn] = useMMKVBoolean(PrefKeys.pushNotifications, prefsStorage);
+    const [pushOn] = useMMKVBoolean(PrefKeys.pushNotifications, PrefsStorage);
     const registeredRef = useRef(false);
 
     // Foreground handler should be active regardless of registration state.
     useEffect(() => {
-        configureNotificationHandler();
+        ConfigureNotificationHandler();
     }, []);
 
     // Re-arm registration whenever the preference is turned off.
@@ -37,7 +37,7 @@ export function UsePushRegistration(): void {
         if (status !== 'ready' || !pushOn || registeredRef.current) return;
         registeredRef.current = true;
         void (async () => {
-            const result = await registerForPushNotifications();
+            const result = await RegisterForPushNotifications();
             console.log('[push] boot registration:', result);
         })();
     }, [status, pushOn]);

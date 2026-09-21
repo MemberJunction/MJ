@@ -3,12 +3,16 @@ import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
+  MJArtifactEntity,
+  MJArtifactVersionEntity,
   MJExperimentSessionEntity,
   PredictiveStudioControlExperimentSessionOperation,
   PredictiveStudioExperimentSessionAction,
 } from '@memberjunction/core-entities';
+import { type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSIterationCard, PSLeaderboardEntry } from '../predictive-studio.types';
 import {
@@ -17,6 +21,7 @@ import {
   GroupIterationsToKanban,
 } from '../predictive-studio.view-models';
 import { PSConfirmModalComponent } from './ps-confirm-modal.component';
+import { PSRunExperimentModalComponent } from './ps-run-experiment-modal.component';
 
 /** A budget gauge derived from the session's budget JSON + actual iteration spend. */
 interface BudgetGaugeVM {
@@ -46,7 +51,7 @@ interface BudgetGaugeVM {
 @Component({
   standalone: true,
   selector: 'ps-experiments',
-  imports: [CommonModule, MJButtonDirective, PSConfirmModalComponent],
+  imports: [CommonModule, MJButtonDirective, PSConfirmModalComponent, PSRunExperimentModalComponent, ArtifactsModule],
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.css', './ps-experiments.component.css'],
   template: `
@@ -55,17 +60,39 @@ interface BudgetGaugeVM {
         <div class="ps-empty" data-testid="ps-experiments-empty">
           <span class="ps-empty-ico"><i class="fa-solid fa-flask"></i></span>
           <h3>No experiment sessions yet</h3>
-          <p>Launch an experiment to watch the Model Dev Agent search algorithms and feature sets in waves. Running and completed iterations will appear here with a live leaderboard.</p>
+          <p>Launch an experiment to watch the Model Dev Agent search algorithms and feature sets in waves, or configure a manual multi-algorithm tournament.</p>
+          <div style="margin-top: 12px; display: flex; gap: 8px;">
+            <button mjButton variant="primary" size="sm" data-testid="ps-experiments-new-btn-empty" (click)="openNewExperimentModal()">
+              <i class="fa-solid fa-flask"></i> New Experiment
+            </button>
+          </div>
         </div>
       } @else {
         <!-- session header strip -->
         <div class="sess-head">
           <div>
-            <div class="ps-small ps-muted">Experiment session</div>
+            <div class="ps-small ps-muted" style="display: flex; align-items: center; gap: 8px;">
+              <span>Experiment session</span>
+              @if (sessions.length > 1) {
+                <span class="ps-muted">· Switch:</span>
+                <select class="mj-input" style="padding: 2px 6px; font-size: 12px; height: 26px;"
+                  [value]="sessionId" (change)="selectSession($any($event.target).value)">
+                  @for (s of sessions; track s.ID) {
+                    <option [value]="s.ID">{{ s.Name }} ({{ s.Status }})</option>
+                  }
+                </select>
+              }
+            </div>
             <h2>{{ session.Name }} <span class="ps-badge" [class]="sessionBadgeClass"><span class="ps-dot" [style.background]="sessionDotColor"></span> {{ session.Status }}</span></h2>
           </div>
           <span class="ps-spacer"></span>
           <span class="ps-small ps-muted">{{ iterationCountLabel }}</span>
+          <button mjButton variant="secondary" size="sm" data-testid="ps-experiments-view-artifact" [disabled]="artifactLoading" (click)="viewResultsArtifact()">
+            <i class="fa-solid fa-flask-vial"></i> {{ artifactLoading ? 'Loading…' : 'View Results Artifact' }}
+          </button>
+          <button mjButton variant="primary" size="sm" data-testid="ps-experiments-new-btn" (click)="openNewExperimentModal()">
+            <i class="fa-solid fa-plus"></i> New Experiment
+          </button>
           @if (canPause) {
             <button mjButton variant="secondary" size="sm" data-testid="ps-experiments-pause" (click)="requestControl('pause')"><i class="fa-solid fa-pause"></i> Pause</button>
           }
@@ -189,6 +216,32 @@ interface BudgetGaugeVM {
           <div [innerHTML]="pendingMessage"></div>
         </ps-confirm-modal>
       }
+
+      @if (showArtifactModal && activeArtifactId) {
+        <div class="ps-modal-backdrop" (click)="closeArtifactModal()">
+          <div class="ps-modal-dialog" style="max-width: 960px; width: 92vw; height: 85vh; display: flex; flex-direction: column; padding: 0; overflow: hidden;"
+            (click)="$event.stopPropagation()">
+            <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+              <mj-artifact-viewer-panel
+                [artifactId]="activeArtifactId"
+                [currentUser]="currentUser!"
+                [showCloseButton]="true"
+                (closed)="closeArtifactModal()">
+              </mj-artifact-viewer-panel>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (showNewExperimentModal) {
+        <ps-run-experiment-modal
+          [engine]="engine"
+          [provider]="provider"
+          [currentUser]="currentUser"
+          (started)="onExperimentStarted($event)"
+          (closed)="closeNewExperimentModal()">
+        </ps-run-experiment-modal>
+      }
     </div>
   `,
 })
@@ -265,6 +318,127 @@ export class PSExperimentsComponent implements OnInit {
   /** @deprecated Use {@link Busy}. */
   public set busy(value) {
     this.Busy = value;
+  }
+
+  public showNewExperimentModal = false;
+  public showArtifactModal = false;
+  public activeArtifactId: string | null = null;
+  public artifactLoading = false;
+
+  public get sessions(): MJExperimentSessionEntity[] {
+    return this.engine?.Sessions ?? [];
+  }
+
+  public selectSession(id: string): void {
+    this.sessionId = id;
+    this.rebuild();
+    this.cdr.detectChanges();
+  }
+
+  public openNewExperimentModal(): void {
+    this.showNewExperimentModal = true;
+  }
+
+  public closeNewExperimentModal(): void {
+    this.showNewExperimentModal = false;
+  }
+
+  public async onExperimentStarted(newSessionId: string): Promise<void> {
+    this.closeNewExperimentModal();
+    await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
+    this.sessionId = newSessionId;
+    this.rebuild();
+    this.cdr.detectChanges();
+  }
+
+  public closeArtifactModal(): void {
+    this.showArtifactModal = false;
+    this.activeArtifactId = null;
+  }
+
+  public async viewResultsArtifact(): Promise<void> {
+    const s = this.session;
+    if (!s || this.artifactLoading) return;
+
+    this.artifactLoading = true;
+    try {
+      const p = this.provider ?? Metadata.Provider;
+      const rv = new RunView();
+      const res = await rv.RunView<MJArtifactEntity>({
+        EntityName: 'MJ: Artifacts',
+        ExtraFilter: `Name LIKE '${s.Name}%' OR Comments LIKE '%${s.ID}%'`,
+        ResultType: 'entity_object',
+      }, this.currentUser ?? undefined);
+
+      if (res.Success && res.Results && res.Results.length > 0) {
+        this.activeArtifactId = res.Results[0].ID;
+        this.showArtifactModal = true;
+        return;
+      }
+
+      const art = await p.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser ?? undefined);
+      art.Name = `${s.Name} — Results`;
+      art.Description = `Modeling results, leaderboard, and winning model metrics for ${s.Name}.`;
+      art.TypeID = 'D41AB707-58F1-4413-8725-9DF31C95F4C5';
+      art.Comments = `Auto-generated for Experiment Session ${s.ID}`;
+      const saved = await art.Save();
+      if (!saved) {
+        this.notifications.CreateSimpleNotification('Could not generate artifact record.', 'error', 5000);
+        return;
+      }
+
+      const ver = await p.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser ?? undefined);
+      ver.ArtifactID = art.ID;
+      ver.VersionNumber = 1;
+      ver.Comments = 'Initial results artifact';
+
+      const planSpec = this.parsePlanSpec(s.PlanSpec);
+      const winningRow = this.leaderboard[0];
+      const winningIteration = winningRow
+        ? this.engine.IterationsForSession(s.ID).find((it) => this.engine.AlgorithmForIteration(it.ID) === winningRow.algorithm && it.Score === winningRow.auc)
+        : undefined;
+      const winningRun = winningIteration ? this.engine.TrainingRuns.find((r) => UUIDsEqual(r.ExperimentSessionIterationID, winningIteration.ID)) : undefined;
+      const winningModelId = winningRun?.ResultingModelID ?? undefined;
+
+      const payload = {
+        Name: s.Name,
+        Goal: s.Goal || planSpec?.Goal || 'Predictive modeling experiment',
+        TargetMetric: planSpec?.TargetDefinition?.SuccessMetric || 'Score',
+        Summary: `Experiment session completed with ${this.leaderboard.length} iterations. Winning algorithm: ${winningRow?.algorithm ?? 'None'}.`,
+        Leaderboard: this.leaderboard.map((lb) => ({
+          rank: lb.rank,
+          algorithm: lb.algorithm,
+          algorithmName: lb.algorithm,
+          featureSet: lb.features,
+          score: lb.auc,
+          isWinner: lb.best,
+        })),
+        BestModelID: winningModelId,
+        BestModel: winningModelId && winningRow ? { ID: winningModelId, Name: winningRow.algorithm } : undefined,
+        Markdown: `## Experiment Session: ${s.Name}\n\n**Status:** ${s.Status}\n**Goal:** ${s.Goal || 'N/A'}\n\n### Leaderboard\n\nRanked by metric:\n` +
+          this.leaderboard.map(l => `- **#${l.rank} ${l.algorithm}**: Score ${l.auc.toFixed(3)} (${l.features})`).join('\n'),
+      };
+
+      ver.Content = JSON.stringify(payload);
+      await ver.Save();
+
+      this.activeArtifactId = art.ID;
+      this.showArtifactModal = true;
+    } catch (e) {
+      this.notifications.CreateSimpleNotification(`Error: ${e instanceof Error ? e.message : String(e)}`, 'error', 5000);
+    } finally {
+      this.artifactLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  private parsePlanSpec(raw: string | null): ModelingPlanSpec | null {
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as ModelingPlanSpec;
+    } catch {
+      return null;
+    }
   }
 
   ngOnInit(): void {

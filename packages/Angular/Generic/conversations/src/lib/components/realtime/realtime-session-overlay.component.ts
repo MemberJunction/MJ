@@ -6,8 +6,9 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJStorageMediaPlayerComponent, MediaTranscriptCue } from '@memberjunction/ng-media-player';
-import { RealtimeConnectionState, RealtimeSessionService } from '../../services/realtime-session.service';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { RealtimeConnectionState } from '@memberjunction/realtime-runtime';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTurn } from '../../services/realtime-session-review.service';
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
@@ -29,7 +30,7 @@ import {
 import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeDirection } from './realtime-audio-visuals';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
 import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
-import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 
 /**

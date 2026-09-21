@@ -182,7 +182,7 @@ function shimCreateElement(
  * The React implementation injected into the interactive-component runtime.
  * Identical to the real `react` module in every respect except `createElement`,
  * which is replaced with {@link shimCreateElement}. Consumed by
- * `getInteractiveRuntime()` (as the runtime context React) and by
+ * `GetInteractiveRuntime()` (as the runtime context React) and by
  * `createErrorBoundary(ShimReact, …)`.
  */
 export const ShimReact = { ...React, createElement: shimCreateElement };

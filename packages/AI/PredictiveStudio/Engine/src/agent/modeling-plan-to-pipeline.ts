@@ -100,8 +100,10 @@ function buildValidation(spec: ModelingPlanSpec): ValidationStrategy {
   };
 }
 
-/** Derive a concise pipeline name from the plan's goal (trim + cap length). */
-function deriveName(goal: string): string {
+/** Derive a concise pipeline name from the plan's goal or custom name (trim + cap length). */
+function deriveName(goal: string, customName?: string): string {
+  const custom = (customName ?? '').trim();
+  if (custom) return custom.length <= 80 ? custom : `${custom.slice(0, 77)}…`;
   const trimmed = (goal ?? '').trim();
   if (!trimmed) return 'New prediction';
   return trimmed.length <= 80 ? trimmed : `${trimmed.slice(0, 77)}…`;
@@ -114,9 +116,10 @@ function deriveName(goal: string): string {
  * clean failure rather than creating a broken pipeline.
  *
  * @param spec the approved modeling plan the agent accumulated.
+ * @param experimentIndex optional index of the specific experiment from ProposedExperiments to configure.
  * @returns the resolved {@link PipelineConfig}.
  */
-export function ModelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineConfig {
+export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec, experimentIndex?: number): PipelineConfig {
   const target = spec.TargetDefinition;
   if (!target?.EntityName?.trim()) {
     throw new Error('ModelingPlanSpec.TargetDefinition.EntityName is required to build a pipeline.');
@@ -124,13 +127,23 @@ export function ModelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineCo
   if (!target.TargetVariable?.trim()) {
     throw new Error('ModelingPlanSpec.TargetDefinition.TargetVariable is required to build a pipeline.');
   }
-  const experiment = chooseExperiment(spec);
+  const experiments = spec.ProposedExperiments ?? [];
+  const experiment =
+    experimentIndex !== undefined && experiments[experimentIndex]
+      ? experiments[experimentIndex]
+      : chooseExperiment(spec);
   if (!experiment?.AlgorithmName?.trim()) {
     throw new Error('ModelingPlanSpec needs at least one ProposedExperiment with an AlgorithmName to build a pipeline.');
   }
 
+  const baseName = deriveName(spec.Goal, spec.Name);
+  const name =
+    experimentIndex !== undefined && experiments.length > 1
+      ? `${baseName} (${experiment.AlgorithmName})`
+      : baseName;
+
   return {
-    name: deriveName(spec.Goal),
+    name,
     description: spec.Goal?.trim() || 'Created by the Predictive Studio Agent.',
     targetEntityName: target.EntityName.trim(),
     targetVariable: target.TargetVariable.trim(),
@@ -142,9 +155,4 @@ export function ModelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineCo
     leakageGuard: buildLeakageGuard(spec),
     validation: buildValidation(spec),
   };
-}
-
-/** @deprecated Use {@link ModelingPlanToPipelineConfig}. */
-export function modelingPlanToPipelineConfig(spec: ModelingPlanSpec): PipelineConfig {
-  return ModelingPlanToPipelineConfig(spec);
 }

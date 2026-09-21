@@ -8,6 +8,6 @@ appId: org.memberjunction.mobile
 # Cold launch re-runs the auth boot (token load + GraphQL client setup), which
 # can take ~10-15s, so wait generously for the home screen to settle.
 - extendedWaitUntil:
-    visible: "Conversations"
+    visible: "Ask an agent anything, or pick up where you left off."
     timeout: 30000
 - assertVisible: "New conversation"

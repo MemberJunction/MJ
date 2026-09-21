@@ -2,7 +2,7 @@
  * React hook exposing the offline mutation queue to UI (P3.2).
  *
  * Surfaces the live pending `count`, a `syncing` flag, and an imperative
- * `syncNow()` that drains the queue back to MJAPI. The count stays current via the
+ * `SyncNow()` that drains the queue back to MJAPI. The count stays current via the
  * queue's change-subscription, so any enqueue/remove/clear anywhere in the app
  * re-renders subscribers.
  *
@@ -10,29 +10,29 @@
  * module available, this hook cannot detect the instant connectivity returns.
  * Instead it replays opportunistically when the app comes to the foreground
  * (`AppState` → `'active'`) — the moment a user is most likely to be back online —
- * and offers the manual `syncNow()` affordance. It is foreground + manual, not
+ * and offers the manual `SyncNow()` affordance. It is foreground + manual, not
  * instant reconnect.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { count as queueCount, subscribe } from '@/data/offline-queue';
-import { syncNow as runSync, type ReplayResult } from '@/data/offline-sync';
+import { SyncNow as runSync, type ReplayResult } from '@/data/offline-sync';
 
 /** The value returned by {@link useOfflineQueue}. */
 export type OfflineQueueState = {
     /** Number of mutations currently waiting to sync. */
-    Count: number;
+    count: number;
     /** True while a replay pass is in flight. */
-    Syncing: boolean;
+    syncing: boolean;
     /** Manually drain the queue; resolves with what synced/failed. */
     SyncNow: () => Promise<ReplayResult>;
 };
 
 /**
  * Track the pending offline-queue count and drive replay on foreground / manual sync.
- * @returns `{ count, syncing, syncNow }` for a badge or settings row to consume.
+ * @returns `{ count, syncing, SyncNow }` for a badge or settings row to consume.
  */
-export function UseOfflineQueue(): OfflineQueueState {
+export function useOfflineQueue(): OfflineQueueState {
     const [count, setCount] = useState<number>(() => queueCount());
     const [syncing, setSyncing] = useState(false);
 
@@ -42,7 +42,7 @@ export function UseOfflineQueue(): OfflineQueueState {
         return subscribe(setCount);
     }, []);
 
-    const syncNow = useCallback(async (): Promise<ReplayResult> => {
+    const SyncNow = useCallback(async (): Promise<ReplayResult> => {
         setSyncing(true);
         try {
             return await runSync();
@@ -56,15 +56,10 @@ export function UseOfflineQueue(): OfflineQueueState {
     // reconnect signal without a network-state native module). Skip when empty.
     useEffect(() => {
         const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
-            if (next === 'active' && queueCount() > 0) void syncNow();
+            if (next === 'active' && queueCount() > 0) void SyncNow();
         });
         return () => sub.remove();
-    }, [syncNow]);
+    }, [SyncNow]);
 
-    return { Count: count, Syncing: syncing, SyncNow: syncNow };
-}
-
-/** @deprecated Use {@link UseOfflineQueue}. */
-export function useOfflineQueue(): OfflineQueueState {
-    return UseOfflineQueue();
+    return { count, syncing, SyncNow };
 }

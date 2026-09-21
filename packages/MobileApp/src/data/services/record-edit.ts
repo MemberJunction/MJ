@@ -2,10 +2,10 @@
  * Record edit service — turns a single MJ record into an editable form model and
  * saves user edits back through the MJ object model.
  *
- * Flow: {@link loadRecordForEdit} loads a strongly-typed {@link BaseEntity} via
+ * Flow: {@link LoadRecordForEdit} loads a strongly-typed {@link BaseEntity} via
  * `Metadata.GetEntityObject` + `InnerLoad`, projects its editable scalar fields
  * into {@link FieldEditorDescriptor}s (driven by `EntityFieldInfo` metadata), and
- * captures the current values as a form-friendly bag. {@link saveRecord} applies
+ * captures the current values as a form-friendly bag. {@link SaveRecord} applies
  * the edited values back onto the live entity, runs `BaseEntity.Validate()`, and
  * calls `BaseEntity.Save()` — returning a typed {@link RecordSaveResult}.
  *
@@ -37,7 +37,7 @@ import { enqueue, type QueueScalar } from '@/data/offline-queue';
 export type EditorKind = 'text' | 'number' | 'boolean' | 'date' | 'dropdown' | 'longtext';
 
 /** One selectable option for a {@link EditorKind} of `dropdown` (from the field's value list). */
-export type EditorOption = { value: string; label: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+export type EditorOption = { value: string; label: string };
 
 /**
  * A form-side field value. Booleans back the toggle editor; every other editor
@@ -52,52 +52,52 @@ export type FieldValue = string | boolean | null;
  */
 export type FieldEditorDescriptor = {
     /** The entity field name (used as the value bag key and for `Set`/`Get`). */
-    key: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    key: string;
     /** Human label (`DisplayName` falling back to `Name`). */
-    label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    label: string;
     /** How to render this field. */
-    kind: EditorKind;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    kind: EditorKind;
     /** True when the field disallows null (shown as a required marker). */
-    required: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    required: boolean;
     /** Max character length for string editors; `0` means unbounded. */
-    MaxLength: number;
+    maxLength: number;
     /** Options for a `dropdown` editor (empty for other kinds). */
-    Options: EditorOption[];
+    options: EditorOption[];
 };
 
-/** Result of {@link loadRecordForEdit}: the live entity plus its form model. */
+/** Result of {@link LoadRecordForEdit}: the live entity plus its form model. */
 export type RecordEditLoad = {
     /** The loaded, strongly-typed entity — retained so edits can be saved to it. */
-    record: BaseEntity;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    record: BaseEntity;
     /** The entity metadata (for titles, display names). */
-    entity: EntityInfo;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    entity: EntityInfo;
     /** A display title for the record (name field, else the id). */
-    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    title: string;
     /** The editable field descriptors, in metadata order. */
-    Descriptors: FieldEditorDescriptor[];
+    descriptors: FieldEditorDescriptor[];
     /** The current field values, keyed by field name. */
-    values: Record<string, FieldValue>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    values: Record<string, FieldValue>;
     /** False when the entity/user cannot update — the UI should surface this. */
-    CanUpdate: boolean;
+    canUpdate: boolean;
 };
 
 /** A per-field validation failure surfaced inline in the form. */
-export type FieldValidationError = { key: string; message: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+export type FieldValidationError = { key: string; message: string };
 
-/** Result of {@link saveRecord}: success plus an optional error / field errors. */
+/** Result of {@link SaveRecord}: success plus an optional error / field errors. */
 export type RecordSaveResult = {
-    success: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    success: boolean;
     /** A single human-readable error message when `success` is false. */
-    error?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    error?: string;
     /** Per-field validation errors when validation failed. */
-    ValidationErrors?: FieldValidationError[];
+    validationErrors?: FieldValidationError[];
     /**
      * True when the save could not reach the server (offline) and the edit was
      * instead enqueued for later replay. `success` is still `true` in this case —
      * the UI should say "Saved offline — will sync when you're back online" rather
      * than reporting a failure. See {@link ../offline-queue!enqueue}.
      */
-    Queued?: boolean;
+    queued?: boolean;
 };
 
 /** String fields at or above this character length render as `longtext` (multiline). */
@@ -113,23 +113,23 @@ const LONGTEXT_THRESHOLD = 500;
  * unit-testable without constructing a full `EntityFieldInfo`.
  */
 export type FieldMeta = {
-    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
-    TsType: EntityFieldTSType;
+    name: string;
+    label: string;
+    tsType: EntityFieldTSType;
     /** `EntityFieldInfo.ReadOnly` — folds in `!AllowUpdateAPI`, PK, and special date fields. */
-    ReadOnly: boolean;
+    readOnly: boolean;
     /** View-only / joined-display columns that don't accept writes. */
-    IsVirtual: boolean;
+    isVirtual: boolean;
     /** When false, a value is required. */
-    AllowsNull: boolean;
+    allowsNull: boolean;
     /** Character length; `0` means unbounded (e.g. `nvarchar(max)`). */
-    MaxLength: number;
+    maxLength: number;
     /** Whether the field is backed by a value list. */
-    ValueListType: EntityFieldValueListType;
+    valueListType: EntityFieldValueListType;
     /** The value list options (empty when not a list field). */
-    Options: EditorOption[];
+    options: EditorOption[];
     /** Field lifecycle status; only `Active` fields are editable. */
-    status: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    status: string;
 };
 
 /**
@@ -143,20 +143,15 @@ export function DescribeField(field: EntityFieldInfo): FieldMeta {
     return {
         name: field.Name,
         label: field.DisplayName || field.Name,
-        TsType: field.TSType,
-        ReadOnly: field.ReadOnly,
-        IsVirtual: field.IsVirtual === true,
-        AllowsNull: field.AllowsNull === true,
-        MaxLength: field.MaxLength,
-        ValueListType: field.ValueListTypeEnum,
-        Options: field.EntityFieldValues.map((v) => ({ value: v.Value, label: v.Value })),
+        tsType: field.TSType,
+        readOnly: field.ReadOnly,
+        isVirtual: field.IsVirtual === true,
+        allowsNull: field.AllowsNull === true,
+        maxLength: field.MaxLength,
+        valueListType: field.ValueListTypeEnum,
+        options: field.EntityFieldValues.map((v) => ({ value: v.Value, label: v.Value })),
         status: field.Status,
     };
-}
-
-/** @deprecated Use {@link DescribeField}. */
-export function describeField(field: EntityFieldInfo): FieldMeta {
-    return DescribeField(field);
 }
 
 /**
@@ -168,12 +163,7 @@ export function describeField(field: EntityFieldInfo): FieldMeta {
  * @returns True when the field should appear in the edit form.
  */
 export function IsEditableField(meta: FieldMeta): boolean {
-    return !meta.ReadOnly && !meta.IsVirtual && meta.status === 'Active';
-}
-
-/** @deprecated Use {@link IsEditableField}. */
-export function isEditableField(meta: FieldMeta): boolean {
-    return IsEditableField(meta);
+    return !meta.readOnly && !meta.isVirtual && meta.status === 'Active';
 }
 
 /**
@@ -186,8 +176,8 @@ export function isEditableField(meta: FieldMeta): boolean {
  * @returns The editor kind to render.
  */
 export function EditorKindForField(meta: FieldMeta): EditorKind {
-    if (meta.ValueListType !== EntityFieldValueListType.None && meta.Options.length > 0) return 'dropdown';
-    switch (meta.TsType) {
+    if (meta.valueListType !== EntityFieldValueListType.None && meta.options.length > 0) return 'dropdown';
+    switch (meta.tsType) {
         case EntityFieldTSType.Boolean:
             return 'boolean';
         case EntityFieldTSType.Number:
@@ -195,15 +185,10 @@ export function EditorKindForField(meta: FieldMeta): EditorKind {
         case EntityFieldTSType.Date:
             return 'date';
         case EntityFieldTSType.String:
-            return meta.MaxLength === 0 || meta.MaxLength >= LONGTEXT_THRESHOLD ? 'longtext' : 'text';
+            return meta.maxLength === 0 || meta.maxLength >= LONGTEXT_THRESHOLD ? 'longtext' : 'text';
         default:
             return 'text';
     }
-}
-
-/** @deprecated Use {@link EditorKindForField}. */
-export function editorKindForField(meta: FieldMeta): EditorKind {
-    return EditorKindForField(meta);
 }
 
 /**
@@ -218,15 +203,10 @@ export function BuildDescriptor(meta: FieldMeta): FieldEditorDescriptor {
         key: meta.name,
         label: meta.label,
         kind,
-        required: !meta.AllowsNull,
-        MaxLength: meta.MaxLength,
-        Options: kind === 'dropdown' ? meta.Options : [],
+        required: !meta.allowsNull,
+        maxLength: meta.maxLength,
+        options: kind === 'dropdown' ? meta.options : [],
     };
-}
-
-/** @deprecated Use {@link BuildDescriptor}. */
-export function buildDescriptor(meta: FieldMeta): FieldEditorDescriptor {
-    return BuildDescriptor(meta);
 }
 
 // ---------------------------------------------------------------------------
@@ -249,18 +229,13 @@ export function FormValueFromRaw(raw: unknown, kind: EditorKind): FieldValue {
     return String(raw);
 }
 
-/** @deprecated Use {@link FormValueFromRaw}. */
-export function formValueFromRaw(raw: unknown, kind: EditorKind): FieldValue {
-    return FormValueFromRaw(raw, kind);
-}
-
 /** The set of concrete types accepted by `BaseEntity.Set` for the fields we edit. */
 export type EntityFieldValue = string | number | boolean | Date | null;
 
 /**
  * Convert a form-side {@link FieldValue} back to the concrete type the entity
  * expects for the given editor kind. Empty strings become `null`; numbers and
- * dates are parsed. Callers should validate first (see {@link validateRequired}).
+ * dates are parsed. Callers should validate first (see {@link ValidateRequired}).
  *
  * @param value The current form value.
  * @param kind The editor kind for the field.
@@ -278,11 +253,6 @@ export function EntityValueFromForm(value: FieldValue, kind: EditorKind): Entity
         return Number.isNaN(d.getTime()) ? null : d;
     }
     return value;
-}
-
-/** @deprecated Use {@link EntityValueFromForm}. */
-export function entityValueFromForm(value: FieldValue, kind: EditorKind): EntityFieldValue {
-    return EntityValueFromForm(value, kind);
 }
 
 /**
@@ -311,14 +281,6 @@ export function ValidateRequired(
         }
     }
     return errors;
-}
-
-/** @deprecated Use {@link ValidateRequired}. */
-export function validateRequired(
-    descriptors: FieldEditorDescriptor[],
-    values: Record<string, FieldValue>,
-): FieldValidationError[] {
-    return ValidateRequired(descriptors, values);
 }
 
 // ---------------------------------------------------------------------------
@@ -379,24 +341,15 @@ export async function LoadRecordForEdit(
         record,
         entity,
         title: recordTitle(entity, record, recordId),
-        Descriptors: descriptors,
+        descriptors,
         values,
-        CanUpdate: computeCanUpdate(entity, contextUser ?? md.CurrentUser),
+        canUpdate: computeCanUpdate(entity, contextUser ?? md.CurrentUser),
     };
-}
-
-/** @deprecated Use {@link LoadRecordForEdit}. */
-export async function loadRecordForEdit(
-    entityName: string,
-    recordId: string,
-    contextUser?: UserInfo,
-): Promise<RecordEditLoad | null> {
-    return LoadRecordForEdit(entityName, recordId, contextUser);
 }
 
 /** Apply the edited form values back onto the live entity via `Set`. */
 function applyEdits(load: RecordEditLoad, values: Record<string, FieldValue>): void {
-    for (const d of load.Descriptors) {
+    for (const d of load.descriptors) {
         // Only write fields the user actually changed (compare against the initial
         // load values, mirroring buildOfflineChanges). Re-setting every editable
         // field marks untouched fields dirty and can round-trip a value into a form
@@ -433,7 +386,7 @@ function buildOfflineChanges(
     values: Record<string, FieldValue>,
 ): { changedFields: Record<string, QueueScalar>; primaryKey: string | null } {
     const changedFields: Record<string, QueueScalar> = {};
-    for (const d of load.Descriptors) {
+    for (const d of load.descriptors) {
         if (values[d.key] === load.values[d.key]) continue;
         changedFields[d.key] = toQueueScalar(EntityValueFromForm(values[d.key], d.kind));
     }
@@ -471,17 +424,17 @@ export async function SaveRecord(
     contextUser?: UserInfo,
 ): Promise<RecordSaveResult> {
     void contextUser; // entity already bound to its context user from load
-    if (!load.CanUpdate) {
+    if (!load.canUpdate) {
         return { success: false, error: 'You do not have permission to update this record.' };
     }
 
-    const requiredErrors = ValidateRequired(load.Descriptors, values);
-    if (requiredErrors.length > 0) return { success: false, ValidationErrors: requiredErrors };
+    const requiredErrors = ValidateRequired(load.descriptors, values);
+    if (requiredErrors.length > 0) return { success: false, validationErrors: requiredErrors };
 
     applyEdits(load, values);
 
     const entityErrors = collectEntityValidation(load);
-    if (entityErrors.length > 0) return { success: false, ValidationErrors: entityErrors };
+    if (entityErrors.length > 0) return { success: false, validationErrors: entityErrors };
 
     // `Save()` returns false for business failures (validation/permission/FK) but
     // THROWS on transport/network errors. We treat the throw as the "offline" signal:
@@ -495,15 +448,6 @@ export async function SaveRecord(
         return { success: true };
     } catch {
         queueOfflineEdit(load, values);
-        return { success: true, Queued: true };
+        return { success: true, queued: true };
     }
-}
-
-/** @deprecated Use {@link SaveRecord}. */
-export async function saveRecord(
-    load: RecordEditLoad,
-    values: Record<string, FieldValue>,
-    contextUser?: UserInfo,
-): Promise<RecordSaveResult> {
-    return SaveRecord(load, values, contextUser);
 }

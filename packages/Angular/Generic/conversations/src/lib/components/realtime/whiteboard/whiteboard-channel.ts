@@ -3,7 +3,7 @@ import { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { CHANNEL_INBOUND_VIDEO_TRACK, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
-import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import {
   ApplyWhiteboardAgentTool, BuildWhiteboardExportSvg, RealtimeWhiteboardHostComponent, WHITEBOARD_TOOL_DEFINITIONS,
   WHITEBOARD_TOOL_PREFIX, WhiteboardState, WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent

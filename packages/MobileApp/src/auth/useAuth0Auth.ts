@@ -2,9 +2,9 @@ import { useCallback } from 'react';
 import { useAuthRequest, ResponseType } from 'expo-auth-session';
 import { Env } from '@/config/env';
 import {
-    getAuth0Discovery,
-    getAuth0RedirectUri,
-    exchangeAuth0Code,
+    GetAuth0Discovery,
+    GetAuth0RedirectUri,
+    ExchangeAuth0Code,
     type Auth0Tokens,
 } from '@/auth/auth0';
 
@@ -19,13 +19,13 @@ import {
  *    the user cancels/errors, or no code/verifier is present.
  *  - `ready`: `true` once the underlying auth request has initialized.
  */
-export function UseAuth0Auth() {
-    const discovery = getAuth0Discovery();
+export function useAuth0Auth() {
+    const discovery = GetAuth0Discovery();
     const [request, , promptAsync] = useAuthRequest(
         {
             clientId: Env.auth0ClientId,
             scopes: [...Env.auth0Scopes],
-            redirectUri: getAuth0RedirectUri(),
+            redirectUri: GetAuth0RedirectUri(),
             responseType: ResponseType.Code,
             usePKCE: true,
         },
@@ -45,13 +45,8 @@ export function UseAuth0Auth() {
         if (!code) throw new Error('No auth code returned by Auth0.');
         const verifier = request.codeVerifier;
         if (!verifier) throw new Error('PKCE code verifier missing.');
-        return exchangeAuth0Code(code, verifier);
+        return ExchangeAuth0Code(code, verifier);
     }, [request, promptAsync]);
 
     return { signIn, ready: !!request };
-}
-
-/** @deprecated Use {@link UseAuth0Auth}. */
-export function useAuth0Auth() {
-    return UseAuth0Auth();
 }

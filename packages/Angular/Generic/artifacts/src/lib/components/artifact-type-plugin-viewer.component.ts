@@ -312,14 +312,14 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
         return;
       }
 
-      // Get the component type using MJGlobal ClassFactory
-      // CreateInstance returns the registered component class for the given DriverClass key
-      const tempInstance = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseArtifactViewerPluginComponent>(
+      // Look up the registered component class from ClassFactory WITHOUT instantiating it,
+      // so Angular's createComponent can properly instantiate it within the Angular injection context.
+      const registration = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
         BaseArtifactViewerPluginComponent,
         driverClass
       );
 
-      if (!tempInstance) {
+      if (!registration?.SubClass) {
         this.setError(
           'Viewer Component Not Found',
           `The viewer component "${driverClass}" is not registered in the application. This usually means the required package or module hasn't been loaded.`,
@@ -329,8 +329,8 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
         return;
       }
 
-      // Get the component type from the instance
-      const componentType = tempInstance.constructor as Type<BaseArtifactViewerPluginComponent>;
+      // Get the component type from the registration
+      const componentType = registration.SubClass as Type<BaseArtifactViewerPluginComponent>;
 
       // Destroy previous viewer if exists
       this.destroyCurrentViewer();

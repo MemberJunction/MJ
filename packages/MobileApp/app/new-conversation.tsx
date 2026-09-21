@@ -1,16 +1,18 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-    ActivityIndicator, KeyboardAvoidingView, Platform, Pressable,
+    ActivityIndicator, KeyboardAvoidingView, Pressable,
     ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AttachmentChip } from '@/components/AttachmentChip';
+import { MJChatEmptyStateDefault } from '@/chat/slots/defaults';
+import { MentionsToPlainText } from '@/data/mention-display';
+import { MJComposer } from '@/chat/composer/MJComposer';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
 import { Icons } from '@/components/Icon';
 import { useAgents } from '@/hooks/useAgents';
-import { createConversation } from '@/data/services/agents';
-import { composeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
+import { CreateConversation } from '@/data/services/agents';
+import { ComposeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
 import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
 
 /** A starter-prompt card: display `title`, the full `prompt` it inserts, plus icon/color. */
@@ -32,7 +34,7 @@ const SUGGESTIONS: Suggestion[] = [
  *   prompt, or an `@agent`-addressed prompt), create the MJ conversation, then
  *   hand off to the chat thread which actually runs the send.
  * Data: `useAgents()` (available agents for the `@mention` rail, MJ `AI Agents`);
- *   `createConversation(title)` (`@/data/services/agents`) creates the
+ *   `CreateConversation(title)` (`@/data/services/agents`) creates the
  *   `Conversations` record — the title is derived from the first ~6 words of the
  *   message.
  * Interactions: type a message and Send; tap a suggestion to prefill; tap an
@@ -41,6 +43,19 @@ const SUGGESTIONS: Suggestion[] = [
  *   the same working-indicator + reply-polling UX as in-thread sends.
  * Mockup: `plans/mobile-app-react-native/html/new-conversation.html`.
  */
+/**
+ * Starter prompts, in the `Title — description` shape the empty state splits on.
+ *
+ * Deliberately the same FOUR the web offers, phrased the same way, so the first thing a user sees
+ * is the first thing they saw on the desktop.
+ */
+const STARTER_PROMPTS = [
+    'Search files — Search my files and documents for related information',
+    'Search everything — Search everything in my system across all sources',
+    'Research compiler — Create an agent to research a topic end to end',
+    'Data quality — Analyze my data and find gaps or inconsistencies',
+];
+
 export default function NewConversationScreen() {
     const { agents } = useAgents();
     const [text, setText] = useState('');
@@ -51,17 +66,24 @@ export default function NewConversationScreen() {
 
     const canSend = (text.trim().length > 0 || attachment != null) && !busy;
 
-    const start = async (overrideText?: string) => {
-        // Fold any pending attachment into the first message via the documented
-        // inline-note fallback (no mobile byte-upload pipeline yet; see attachments.ts).
-        const body = composeMessageWithAttachment(overrideText ?? text, attachment);
-        if (!body || busy) return;
+    /**
+     * Creates the conversation and hands the first message to the thread.
+     *
+     * The composer has already composed the body (including any attachment note) and serialized
+     * its mentions, so this takes the finished string rather than reaching into composer state —
+     * which is what lets the two screens share one composer.
+     */
+    const submit = async (body: string, attached: CapturedAttachment | null = null) => {
+        if (!body.trim() || busy) return;
         setBusy(true);
         setError(null);
         try {
-            // Title from the first ~6 words of the prompt
-            const title = body.split(/\s+/).slice(0, 6).join(' ');
-            const conv = await createConversation(title);
+            // Title from the first ~6 words of the prompt — of the READABLE prompt. `body` is the
+            // wire format, so a message that opens with a mention would otherwise name the
+            // conversation `@{"type":"agent","id":"55…` and show that in the thread header and the
+            // conversation list. Same conversion the thread applies to message text.
+            const title = MentionsToPlainText(body).split(/\s+/).slice(0, 6).join(' ');
+            const conv = await CreateConversation(title);
             if (!conv) {
                 setError('Could not create the conversation.');
                 return;
@@ -69,7 +91,16 @@ export default function NewConversationScreen() {
             // Navigate into the thread and let it run the send — the thread shows the
             // "agent working" indicator and polls for the reply. Passing the message via
             // ?autosend gives the first message the same progress UX as in-thread sends.
-            router.replace({ pathname: '/chat/[id]', params: { id: conv.id, autosend: body } });
+            router.replace({
+                pathname: '/chat/[id]',
+                params: {
+                    id: conv.id,
+                    autosend: body,
+                    // Serialized because route params are strings. Only the small descriptor
+                    // travels — the bytes stay on disk at `uri` until the thread uploads them.
+                    ...(attached ? { autosendAttachment: JSON.stringify(attached) } : {}),
+                },
+            });
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         } finally {
@@ -79,7 +110,7 @@ export default function NewConversationScreen() {
 
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
                 <View style={styles.header}>
                     <Pressable hitSlop={8} style={styles.iconBtn} onPress={() => router.back()}>
                         <Icons.ChevronLeft size={22} color={Colors.ink} strokeWidth={2.2} />
@@ -88,96 +119,33 @@ export default function NewConversationScreen() {
                     <View style={styles.iconBtn} />
                 </View>
 
-                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                    <View style={styles.heroBlock}>
-                        <Text style={styles.heroTitle}>What can we help with today?</Text>
-                        <Text style={styles.heroCopy}>
-                            Start typing, or pick a prompt below. Address a specific agent with{' '}
-                            <Text style={styles.bold}>@</Text>.
-                        </Text>
-                    </View>
-
-                    <View style={styles.composerCard}>
-                        <TextInput
-                            placeholder="Ask anything — Skip will route to the right agent…"
-                            placeholderTextColor={Colors.ink3}
-                            style={styles.composerInput}
-                            multiline
-                            value={text}
-                            onChangeText={setText}
-                            editable={!busy}
-                        />
-                        {attachment ? (
-                            <View style={styles.attachRow}>
-                                <AttachmentChip Attachment={attachment} OnRemove={() => setAttachment(null)} />
-                            </View>
-                        ) : null}
-                        <View style={styles.composerFoot}>
-                            <Pressable style={styles.attachBtn} onPress={() => setPickerVisible(true)} disabled={busy} hitSlop={6}>
-                                <Icons.Paperclip size={18} color={Colors.ink3} strokeWidth={2} />
-                            </Pressable>
-                            <Pressable style={styles.micBtn} onPress={() => router.push('/voice-mode')} disabled={busy}>
-                                <Icons.Mic size={16} color={Colors.inverse} strokeWidth={2.2} />
-                            </Pressable>
-                            <Pressable
-                                style={[styles.sendBtn, canSend ? styles.sendBtnActive : styles.sendBtnMuted]}
-                                onPress={() => start()}
-                                disabled={!canSend}
-                            >
-                                {busy ? (
-                                    <ActivityIndicator size="small" color={canSend ? Colors.inverse : Colors.ink3} />
-                                ) : (
-                                    <>
-                                        <Text style={[styles.sendBtnText, canSend && styles.sendBtnTextActive]}>Send</Text>
-                                        <Icons.ChevronRight size={13} color={canSend ? Colors.inverse : Colors.ink3} strokeWidth={2.5} />
-                                    </>
-                                )}
-                            </Pressable>
-                        </View>
-                    </View>
-
-                    {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-                    <Text style={styles.sectionLabel}>Start a conversation about…</Text>
-                    <View style={styles.suggestions}>
-                        {SUGGESTIONS.map((s) => (
-                            <Pressable key={s.title} style={styles.sug} onPress={() => setText(s.prompt)} disabled={busy}>
-                                <View style={[styles.sugIcon, { backgroundColor: s.color }]}>{s.icon}</View>
-                                <View style={styles.sugBody}>
-                                    <Text style={styles.sugTitle}>{s.title}</Text>
-                                    <Text style={styles.sugSub} numberOfLines={1}>{s.prompt}</Text>
-                                </View>
-                                <Icons.ChevronRight size={16} color={Colors.ink3} strokeWidth={2} />
-                            </Pressable>
-                        ))}
-                    </View>
-
-                    {agents && agents.length > 0 ? (
-                        <>
-                            <Text style={styles.sectionLabel}>Or talk to an agent</Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.agentRail} keyboardShouldPersistTaps="handled">
-                                {agents.map((a) => (
-                                    <Pressable
-                                        key={a.id}
-                                        style={styles.agentPill}
-                                        onPress={() => setText((t) => `@${a.name.replace(/\s+/g, '')} ${t}`.trimStart())}
-                                        disabled={busy}
-                                    >
-                                        <View style={[styles.agentPillAv, { backgroundColor: a.color }]}>
-                                            <Text style={styles.agentPillAvText}>{a.initial}</Text>
-                                        </View>
-                                        <Text style={styles.agentPillName}>{a.name}</Text>
-                                    </Pressable>
-                                ))}
-                            </ScrollView>
-                        </>
-                    ) : null}
-                    <View style={{ height: Spacing.xxxl }} />
+                <ScrollView
+                    contentContainerStyle={styles.content}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {/*
+                      * The SAME empty state the chat thread renders, so starting a conversation
+                      * looks identical wherever you start it — and so a host that replaces the
+                      * `emptyState` slot changes both.
+                      */}
+                    <MJChatEmptyStateDefault
+                        Greeting="Welcome to Conversations"
+                        Subtext="Start a new conversation by typing a message below, or choose a suggested prompt to get started."
+                        SuggestedPrompts={STARTER_PROMPTS}
+                        OnPromptSelected={(p) => void submit(p)}
+                    />
                 </ScrollView>
-                <AttachmentPicker
-                    Visible={pickerVisible}
-                    OnClose={() => setPickerVisible(false)}
-                    OnPicked={(a) => setAttachment(a)}
+
+                {/*
+                  * The SAME composer the chat thread uses. This screen previously had its own plain
+                  * TextInput — under copy that told the user to "address a specific agent with @",
+                  * which did nothing here because the triggers lived only in the other copy.
+                  */}
+                <MJComposer
+                    OnSend={(body, att) => void submit(body, att)}
+                    Disabled={busy}
+                    Placeholder="Ask anything — your agent will route it…"
                 />
             </KeyboardAvoidingView>
         </SafeAreaView>

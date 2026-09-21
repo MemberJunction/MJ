@@ -2,7 +2,7 @@
  * Offline sync engine (P3.2) — drains the {@link ./offline-queue!list offline
  * mutation queue} back to MJAPI once connectivity returns.
  *
- * {@link replayQueue} walks the queue oldest-first and, for each entry, re-drives
+ * {@link ReplayQueue} walks the queue oldest-first and, for each entry, re-drives
  * a `BaseEntity` save deterministically: it loads the entity via
  * `Metadata.GetEntityObject` + `InnerLoad(CompositeKey.FromID(pk))` (mirroring the
  * write path in `services/record-edit.ts`), applies the captured scalar fields, and
@@ -21,17 +21,17 @@
  * concurrent invocations onto the same promise.
  */
 import { Metadata, CompositeKey, type BaseEntity } from '@memberjunction/core';
-import { list, remove, recordError, type OfflineMutation } from '@/data/offline-queue';
+import { list, remove, RecordError, type OfflineMutation } from '@/data/offline-queue';
 
 /** The tally returned by a replay pass. */
 export type ReplayResult = {
     /** Number of mutations successfully written to the server this pass. */
-    Synced: number;
+    synced: number;
     /** Number of mutations dropped due to unrecoverable business failures this pass. */
-    Failed: number;
+    failed: number;
 };
 
-/** The in-flight replay promise, used to collapse concurrent {@link replayQueue} calls. */
+/** The in-flight replay promise, used to collapse concurrent {@link ReplayQueue} calls. */
 let inFlight: Promise<ReplayResult> | null = null;
 
 /** Extract a human-readable message from an unknown thrown value. */
@@ -106,7 +106,7 @@ async function replayEntry(entry: OfflineMutation): Promise<EntryOutcome> {
         return 'dropped';
     } catch (error) {
         // A throw means transport/network failure — we are still offline. Keep it queued.
-        recordError(entry.id, errorMessage(error));
+        RecordError(entry.id, errorMessage(error));
         return 'offline';
     }
 }
@@ -121,7 +121,7 @@ async function drainQueue(): Promise<ReplayResult> {
         else if (outcome === 'dropped') failed += 1;
         else break; // 'offline' — stop; remaining entries stay queued for next attempt.
     }
-    return { Synced: synced, Failed: failed };
+    return { synced, failed };
 }
 
 /**
@@ -142,22 +142,12 @@ export async function ReplayQueue(): Promise<ReplayResult> {
     return inFlight;
 }
 
-/** @deprecated Use {@link ReplayQueue}. */
-export async function replayQueue(): Promise<ReplayResult> {
-    return ReplayQueue();
-}
-
 /**
  * Manually trigger a replay pass. Thin, intention-revealing alias over
- * {@link replayQueue} for UI "Sync now" affordances.
+ * {@link ReplayQueue} for UI "Sync now" affordances.
  *
  * @returns The {@link ReplayResult} of the pass.
  */
 export async function SyncNow(): Promise<ReplayResult> {
     return ReplayQueue();
-}
-
-/** @deprecated Use {@link SyncNow}. */
-export async function syncNow(): Promise<ReplayResult> {
-    return SyncNow();
 }

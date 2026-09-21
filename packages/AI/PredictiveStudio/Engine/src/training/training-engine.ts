@@ -43,6 +43,8 @@ import {
   type ProblemType,
   type FittedPreprocessing,
   type FeatureStepGraph,
+  type OutcomeConfig,
+  resolveOutcomeConfig,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
@@ -62,6 +64,7 @@ interface ResolvedPipeline {
   asOf: AsOfStrategy;
   leakageGuard: LeakageGuard;
   validation: ValidationStrategy;
+  outcomeConfig: OutcomeConfig;
 }
 
 /** The result of carving a matrix into a training portion + a locked holdout. */
@@ -99,7 +102,12 @@ export class TrainingEngine {
 
     try {
       const assembly = await this.assemble(resolved, input, deps);
-      const split = this.carveLockedHoldout(assembly.matrix, resolved.validation, resolved.targetVariable);
+      const targetIdx = assembly.matrix.columns.indexOf(resolved.targetVariable);
+      const cleanRows = targetIdx >= 0
+        ? assembly.matrix.rows.filter((r) => r[targetIdx] !== null && r[targetIdx] !== undefined)
+        : assembly.matrix.rows;
+      const cleanMatrix: MatrixData = { columns: assembly.matrix.columns, rows: cleanRows };
+      const split = this.carveLockedHoldout(cleanMatrix, resolved.validation, resolved.targetVariable);
       const validation = this.buildValidationConfig(resolved.validation);
       const trainRequest = this.buildTrainRequest(resolved, assembly, split.training, validation);
 
@@ -130,6 +138,11 @@ export class TrainingEngine {
     const resolvedDriverKey =
       (await deps.recordLoader.resolveAlgorithmDriverKey?.(pipeline.AlgorithmID, deps.contextUser, deps.provider)) ??
       pipeline.Algorithm;
+    const stepsRaw = parseJson<Record<string, unknown>>(pipeline.FeatureSteps, {});
+    const hyperRaw = parseJson<Record<string, unknown>>(pipeline.Hyperparameters, {});
+    const explicitOutcome = (stepsRaw.OutcomeConfig ?? stepsRaw.outcomeConfig ?? hyperRaw.OutcomeConfig ?? hyperRaw.outcomeConfig) as OutcomeConfig | undefined;
+    const outcomeConfig = explicitOutcome ?? resolveOutcomeConfig(pipeline);
+
     return {
       pipeline,
       targetEntityName: pipeline.TargetEntity,
@@ -142,6 +155,7 @@ export class TrainingEngine {
       asOf: parseJson<AsOfStrategy>(pipeline.AsOfStrategy, { Mode: 'none' }),
       leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT }),
       validation: parseJson<ValidationStrategy>(pipeline.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 }),
+      outcomeConfig,
     };
   }
 
@@ -354,6 +368,7 @@ export class TrainingEngine {
       sourceBindings: resolved.sourceBindings,
       featureSteps: resolved.featureSteps,
       asOfStrategy: resolved.asOf,
+      outcomeConfig: resolved.outcomeConfig,
       sidecarVersion: input.sidecarVersion ?? null,
       lockedHoldoutRowCount: split.holdoutRowCount,
       trainingRowCount: split.trainingRowCount,

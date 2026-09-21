@@ -1,6 +1,6 @@
 import { Subject } from 'rxjs';
 import type { TemplateRef } from '@angular/core';
-import type { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
+import type { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 import { ChannelTabColor } from './realtime-surface-tab-style';
 
 /**
