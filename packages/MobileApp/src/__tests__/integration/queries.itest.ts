@@ -1,22 +1,22 @@
 /**
  * Integration: saved queries (RunQuery) against the live backend.
  *
- * loadQueries() reads approved queries from metadata; if any exist, runQuery()
+ * LoadQueries() reads approved queries from metadata; if any exist, runQuery()
  * executes the first one and we assert a clean result (success with columns/rows,
  * or a clean empty result). We do not assume a specific query is seeded.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initLiveProvider, hasToken } from './setup-live';
-import { loadQueries, runQuery } from '@/data/services/explorer';
+import { LoadQueries, runQuery } from '@/data/services/explorer';
 
 describe.skipIf(!hasToken())('integration: queries', () => {
     beforeAll(async () => {
         await initLiveProvider();
     });
 
-    it('loadQueries returns the runnable (approved) queries as a sorted list', () => {
-        const queries = loadQueries();
+    it('LoadQueries returns the runnable (approved) queries as a sorted list', () => {
+        const queries = LoadQueries();
         expect(Array.isArray(queries)).toBe(true);
         // Shape check on whatever is present.
         for (const q of queries) {
@@ -28,7 +28,7 @@ describe.skipIf(!hasToken())('integration: queries', () => {
     });
 
     it('runQuery on the first approved query returns a clean result', async () => {
-        const queries = loadQueries();
+        const queries = LoadQueries();
         if (queries.length === 0) {
             // No approved queries seeded — nothing to run, but the API must not throw.
             expect(queries.length).toBe(0);

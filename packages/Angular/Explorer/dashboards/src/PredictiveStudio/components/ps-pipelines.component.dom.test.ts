@@ -2,8 +2,9 @@ import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, capture, fakeMetadataProvider } from '@memberjunction/ng-test-utils';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { PSPipelinesComponent } from './ps-pipelines.component';
 
 try {
@@ -34,9 +35,9 @@ const makePipeline = (over: Record<string, unknown> = {}) =>
     AsOfStrategy: JSON.stringify({ Mode: 'none' }),
     ValidationStrategy: JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 }),
     ...over,
-  });
+  }) as unknown as MJMLTrainingPipelineEntity;
 
-const makeEngine = (pipelines: unknown[]) =>
+const makeEngine = (pipelines: MJMLTrainingPipelineEntity[]) =>
   ({
     Pipelines: pipelines,
     Algorithms: [{ ID: 'a1', Name: 'XGBoost' }],
@@ -44,7 +45,7 @@ const makeEngine = (pipelines: unknown[]) =>
     Models: [],
   } as unknown as PredictiveStudioEngine);
 
-const render = (pipelines: unknown[], viewMode: 'stages' | 'dag' = 'stages') =>
+const render = (pipelines: MJMLTrainingPipelineEntity[], viewMode: 'stages' | 'dag' = 'stages') =>
   renderComponentFixture(PSPipelinesComponent, { inputs: { engine: makeEngine(pipelines), viewMode } });
 
 describe('PSPipelinesComponent (DOM)', () => {
@@ -90,5 +91,50 @@ describe('PSPipelinesComponent (DOM)', () => {
     fixture.detectChanges();
     expect(query(fixture, '[data-testid="ps-pipelines-dirty"]')).not.toBeNull();
     expect((query(fixture, '[data-testid="ps-pipelines-save"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('resolves entity DisplayName for source nodes without requiring an alias', () => {
+    const pipe = makePipeline({
+      SourceBindings: JSON.stringify([
+        { Kind: 'Entity', Ref: 'MoreCheese: Member Profiles' },
+      ]),
+    });
+    const fakeProvider = fakeMetadataProvider([
+      { Name: 'MoreCheese: Member Profiles', DisplayName: 'Member Profiles' },
+    ]);
+    const fixture = renderComponentFixture(PSPipelinesComponent, {
+      inputs: {
+        engine: makeEngine([pipe]),
+        provider: fakeProvider,
+        viewMode: 'dag',
+      },
+    });
+    const nodes = queryAll(fixture, '[data-testid="ps-pipelines-node"]');
+    const sourceNode = nodes.find((n) => n.textContent?.includes('Member Profiles'));
+    expect(sourceNode).toBeDefined();
+  });
+
+  it('renders feature transform cards with column chips in Stage 2 of Stages View', () => {
+    const pipe = makePipeline({
+      FeatureSteps: JSON.stringify({
+        Steps: [
+          {
+            Id: 'select_1',
+            Kind: 'select',
+            Label: 'Base Features',
+            Columns: ['TicketTier', 'UnitPrice', 'LineTotalNet'],
+            Inputs: ['MJ_BizApps_Orders: Event Order Lines']
+          }
+        ]
+      })
+    });
+    const fixture = render([pipe], 'stages');
+    const stepCards = queryAll(fixture, '[data-testid="ps-pipelines-step-card"]');
+    expect(stepCards.length).toBe(1);
+    expect(stepCards[0].textContent).toContain('Base Features');
+    expect(stepCards[0].textContent).toContain('TicketTier');
+    expect(stepCards[0].textContent).toContain('UnitPrice');
+    expect(stepCards[0].textContent).toContain('LineTotalNet');
+    expect(stepCards[0].textContent).toContain('MJ_BizApps_Orders: Event Order Lines');
   });
 });

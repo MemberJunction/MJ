@@ -3,7 +3,7 @@ import type { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { CHANNEL_INBOUND_VIDEO_TRACK, JSONValue, RealtimeToolDefinition, RealtimeTrack, RealtimeTrackDescriptor } from '@memberjunction/ai';
 import { ChannelInboundVideoBridge, IChannelFrameProvider } from '@memberjunction/ai-realtime-client';
-import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import { RemoteBrowserHumanInputEvent, RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
 import {
   MapToolToAction,
