@@ -85,7 +85,21 @@ END $$;
 -- `mj codegen`.
 --
 -- Idempotent and non-fatal: a database with no drifted view warns nothing.
+--
+-- GUARDED ON THE FUNCTION EXISTING, because this file must not require CodeGen to have run.
+-- `spRecompileAllViews` is emitted by metadataSupportObjects.ts, so on the migrate-only path --
+-- a fresh database brought up by `mj migrate` alone, which is exactly what release-time PG
+-- validation does -- it is not there yet, and an unguarded PERFORM fails the whole migration
+-- with `function __mj.spRecompileAllViews(unknown) does not exist`. The prune above survives
+-- only because a versioned migration ships its function; this one has no such migration.
+--
+-- `to_regprocedure` returns NULL instead of raising for an absent routine, and the argument is
+-- cast so the lookup matches the emitted `text` signature rather than resolving `unknown`.
 DO $$
 BEGIN
-  PERFORM ${flyway:defaultSchema}."spRecompileAllViews"('sys,information_schema,staging');
+  IF to_regprocedure('${flyway:defaultSchema}."spRecompileAllViews"(text)') IS NOT NULL THEN
+    PERFORM ${flyway:defaultSchema}."spRecompileAllViews"('sys,information_schema,staging'::text);
+  ELSE
+    RAISE NOTICE 'spRecompileAllViews is not present yet - skipping the stale-view check. It is emitted by CodeGen; run `mj codegen` to get it.';
+  END IF;
 END $$;
