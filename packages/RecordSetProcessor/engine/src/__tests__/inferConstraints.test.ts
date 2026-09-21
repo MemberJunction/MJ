@@ -5,7 +5,7 @@ import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, type AIPromptRunResult } from '@memberjunction/ai-core-plus';
 import { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
 import { DataFeatureSpec } from '@memberjunction/feature-pipelines';
-import { InferProcessor } from '../processors/InferProcessor';
+import { InferProcessor, setNestedValue } from '../processors/InferProcessor';
 
 describe('InferProcessor constraint enforcement', () => {
     const USER = {} as UserInfo;
@@ -23,6 +23,7 @@ describe('InferProcessor constraint enforcement', () => {
 
     let executedParams: unknown;
     let executedValidationBehavior: string | undefined;
+    let executedParamsValidationBehavior: string | undefined;
     let mockResult: unknown = {};
     let mockSuccess = true;
     let mockErrorMessage: string | undefined;
@@ -30,6 +31,7 @@ describe('InferProcessor constraint enforcement', () => {
     beforeEach(() => {
         executedParams = undefined;
         executedValidationBehavior = undefined;
+        executedParamsValidationBehavior = undefined;
         mockResult = {};
         mockSuccess = true;
         mockErrorMessage = undefined;
@@ -40,7 +42,9 @@ describe('InferProcessor constraint enforcement', () => {
 
         vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockImplementation(async (params: unknown) => {
             executedParams = params;
-            executedValidationBehavior = (params as { prompt?: { ValidationBehavior?: string } }).prompt?.ValidationBehavior;
+            const promptParams = params as AIPromptParams;
+            executedValidationBehavior = promptParams.prompt?.ValidationBehavior;
+            executedParamsValidationBehavior = promptParams.validationBehavior;
             return {
                 success: mockSuccess,
                 errorMessage: mockErrorMessage,
@@ -96,6 +100,7 @@ describe('InferProcessor constraint enforcement', () => {
         // Verify Layer 1 prompt configuration: Strict during execution, restored to Warn afterwards
         const params = executedParams as { data: Record<string, unknown> };
         expect(executedValidationBehavior).toBe('Strict');
+        expect(executedParamsValidationBehavior).toBe('Strict');
         expect(mockPrompt.ValidationBehavior).toBe('Warn');
         expect(params.data.constraints).toBeDefined();
         expect(params.data.ConstraintBlock).toBeDefined();
@@ -398,5 +403,85 @@ describe('InferProcessor constraint enforcement', () => {
         expect(payload.analysis.seniority).toBe('Director');
         // Prompt singleton ValidationBehavior was restored to its original value
         expect(mockPrompt.ValidationBehavior).toBe('Warn');
+        expect(executedValidationBehavior).toBe('Strict');
+        expect(executedParamsValidationBehavior).toBe('Strict');
+    });
+
+    it('guards setNestedValue against prototype pollution attacks (R15)', () => {
+        // Plain object to target
+        const payload: Record<string, unknown> = {};
+
+        // Attack 1: direct __proto__
+        setNestedValue(payload, '__proto__.polluted', 'PWNED');
+        const testObj1: Record<string, unknown> = {};
+        expect(testObj1['polluted']).toBeUndefined();
+        expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
+
+        // Attack 2: constructor.prototype
+        setNestedValue(payload, 'constructor.prototype.isAdmin', true);
+        const testObj2: Record<string, unknown> = {};
+        expect(testObj2['isAdmin']).toBeUndefined();
+        expect(Object.prototype.hasOwnProperty('isAdmin')).toBe(false);
+
+        // Attack 3: direct prototype
+        setNestedValue(payload, 'prototype.polluted', 'PWNED');
+        const testObj3: Record<string, unknown> = {};
+        expect(testObj3['polluted']).toBeUndefined();
+        expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
+
+        // Attack 4: inside array index
+        setNestedValue(payload, 'items[0].__proto__.polluted', 'PWNED');
+        const testObj4: Record<string, unknown> = {};
+        expect(testObj4['polluted']).toBeUndefined();
+        expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
+
+        setNestedValue(payload, 'items[0].constructor.prototype.isAdmin', true);
+        const testObj5: Record<string, unknown> = {};
+        expect(testObj5['isAdmin']).toBeUndefined();
+        expect(Object.prototype.hasOwnProperty('isAdmin')).toBe(false);
+
+        // Valid assignment still works with nested paths
+        setNestedValue(payload, 'profile.user.name', 'Alice');
+        const profile = payload['profile'] as Record<string, unknown>;
+        const user = profile['user'] as Record<string, unknown>;
+        expect(user['name']).toBe('Alice');
+        // Intermediates are created with Object.create(null)
+        expect(Object.getPrototypeOf(profile)).toBeNull();
+        expect(Object.getPrototypeOf(user)).toBeNull();
+    });
+
+    it('does not mutate prompt singleton when an entity prototype has a ValidationBehavior setter (R11-B)', async () => {
+        // Simulate a real BaseEntity with getter/setter on prototype
+        class FakeEntity {
+            private _val: 'Warn' | 'Strict' | 'None' = 'Warn';
+            get ValidationBehavior(): 'Warn' | 'Strict' | 'None' {
+                return this._val;
+            }
+            set ValidationBehavior(v: 'Warn' | 'Strict' | 'None') {
+                this._val = v;
+            }
+            get ID() { return 'PROMPT-FAKE'; }
+            get Name() { return 'Fake Prompt'; }
+        }
+
+        const fakeEntityPrompt = new FakeEntity();
+        // @ts-expect-error mock getter
+        vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([fakeEntityPrompt]);
+
+        const spec: DataFeatureSpec = {
+            Name: 'Prototype Isolation Spec',
+            PromptID: 'PROMPT-FAKE',
+            Outputs: [{ Ref: '$.out', Name: 'Out', Target: { Mode: 'field', EntityFieldName: 'Notes' } }],
+        };
+
+        const processor = new InferProcessor('PROMPT-FAKE', undefined, spec);
+        await processor.ProcessRecord(record, mockContext);
+
+        // The shared singleton's setter was NOT called
+        expect(fakeEntityPrompt.ValidationBehavior).toBe('Warn');
+        // But the executed params and execution-scoped proxy read 'Strict'
+        expect(executedValidationBehavior).toBe('Strict');
+        expect(executedParamsValidationBehavior).toBe('Strict');
     });
 });
+

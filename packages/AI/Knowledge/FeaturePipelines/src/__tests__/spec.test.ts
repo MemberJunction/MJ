@@ -348,5 +348,49 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     const issues = validateSpec(spec, sampleEntity);
     expect(issues.some(i => i.Path?.includes('Constraint.OnViolation') && i.Severity === 'error')).toBe(true);
   });
+
+  it('rejects prototype pollution property names in output Ref (R15)', () => {
+    const maliciousPaths = [
+      '$.__proto__.polluted',
+      '$.constructor.prototype.isAdmin',
+      '$.items[0].prototype.leak',
+      '$.nested.__proto__',
+    ];
+
+    for (const ref of maliciousPaths) {
+      const spec: DataFeatureSpec = {
+        Name: 'Malicious Ref Spec',
+        PromptID: 'prompt-1',
+        Outputs: [
+          {
+            Ref: ref,
+            Name: 'Injected',
+            Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
+          },
+        ],
+      };
+      const issues = validateSpec(spec, sampleEntity);
+      const pollutionIssue = issues.find(i => i.Path === 'Outputs[0].Ref');
+      expect(pollutionIssue).toBeDefined();
+      expect(pollutionIssue?.Severity).toBe('error');
+      expect(pollutionIssue?.Message).toContain('prototype pollution property names');
+    }
+
+    // Valid paths should not be flagged for prototype pollution
+    const validSpec: DataFeatureSpec = {
+      Name: 'Valid Spec',
+      PromptID: 'prompt-1',
+      Outputs: [
+        {
+          Ref: '$.analysis.score',
+          Name: 'Valid',
+          Target: { Mode: 'field', EntityFieldName: 'SentimentScore' },
+        },
+      ],
+    };
+    const validIssues = validateSpec(validSpec, sampleEntity);
+    expect(validIssues.some(i => i.Message.includes('prototype pollution'))).toBe(false);
+  });
 });
+
 

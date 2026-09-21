@@ -85,7 +85,10 @@ export interface IRecordProcessor {
      *
      * @param records - The batch of records to process.
      * @param context - The execution context.
-     * @returns Map of RecordID -> RecordResult.
+     * @returns Either:
+     * - A `Map<string, RecordResult>` keyed by RecordID.
+     * - Or a `RecordResult[]`. When returning an array, it MUST be positionally aligned 1:1
+     *   with the input `records` array (same length and order).
      */
     ProcessBatch?(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult> | RecordResult[]>;
 }

@@ -112,15 +112,23 @@ export class InferProcessor implements IRecordProcessor {
         // P1-6 Hook: beforeBuildContext
         await this.beforeBuildContext(record, context);
 
-        // Create an execution-scoped prompt delegate so setting ValidationBehavior = 'Strict'
-        // does not mutate the shared prompt in AIEngine cache across concurrent runs (R11-B).
-        const executionPrompt = Object.create(prompt) as MJAIPromptEntityExtended;
-        if (this.spec?.Outputs && this.spec.Outputs.length > 0) {
-            executionPrompt.ValidationBehavior = 'Strict';
-        }
+        // Carry ValidationBehavior on the execution run (AIPromptParams.validationBehavior)
+        // and wrap the prompt in an execution-scoped Proxy so reads of params.prompt.ValidationBehavior
+        // see the execution's behavior without mutating the shared entity in AIEngine cache (R11-B).
+        const targetValidationBehavior = (this.spec?.Outputs && this.spec.Outputs.length > 0) ? 'Strict' : prompt.ValidationBehavior;
+
+        const executionPrompt = new Proxy(prompt, {
+            get(target, prop, receiver) {
+                if (prop === 'ValidationBehavior') {
+                    return targetValidationBehavior;
+                }
+                return Reflect.get(target, prop, receiver);
+            }
+        });
 
         const params = new AIPromptParams();
         params.prompt = executionPrompt;
+        params.validationBehavior = targetValidationBehavior;
         params.data = await this.buildPromptData(record, context);
         params.contextUser = context.contextUser;
 
@@ -633,37 +641,48 @@ export class InferProcessor implements IRecordProcessor {
  * Sets a value at a dot-delimited path (e.g. 'a.b' or 'items[0].name') on an object,
  * mutating the object in-place and creating intermediate objects or arrays as needed.
  */
-function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
+export function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
     if (!path) return;
     const parts = path.split('.');
     let current: Record<string, unknown> = obj;
     for (let i = 0; i < parts.length - 1; i++) {
         const part = parts[i];
-        if (!part) continue;
+        if (!part || part === '__proto__' || part === 'constructor' || part === 'prototype') {
+            return;
+        }
         const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
         if (arrayMatch) {
             const name = arrayMatch[1];
+            if (name === '__proto__' || name === 'constructor' || name === 'prototype') {
+                return;
+            }
             const index = parseInt(arrayMatch[2], 10);
             if (!Array.isArray(current[name])) {
                 current[name] = [];
             }
             const arr = current[name] as unknown[];
             if (!arr[index] || typeof arr[index] !== 'object') {
-                arr[index] = {};
+                arr[index] = Object.create(null);
             }
             current = arr[index] as Record<string, unknown>;
         } else {
             if (current[part] === undefined || current[part] === null || typeof current[part] !== 'object') {
-                current[part] = {};
+                current[part] = Object.create(null);
             }
             current = current[part] as Record<string, unknown>;
         }
     }
 
     const lastPart = parts[parts.length - 1];
+    if (lastPart === '__proto__' || lastPart === 'constructor' || lastPart === 'prototype') {
+        return;
+    }
     const arrayMatch = lastPart.match(/^([^[]+)\[(\d+)\]$/);
     if (arrayMatch) {
         const name = arrayMatch[1];
+        if (name === '__proto__' || name === 'constructor' || name === 'prototype') {
+            return;
+        }
         const index = parseInt(arrayMatch[2], 10);
         if (!Array.isArray(current[name])) {
             current[name] = [];

@@ -196,6 +196,16 @@ export function validateSpec(
           FixRecommendation: 'Specify a result path like "$.value" or "$.summary".',
           Severity: 'error',
         });
+      } else {
+        const segments = out.Ref.split(/[.\[\]]+/).filter(Boolean);
+        if (segments.some(seg => seg === '__proto__' || seg === 'constructor' || seg === 'prototype')) {
+          issues.push({
+            Path: `${basePath}.Ref`,
+            Message: `Output '${out.Name || i}' has an invalid result path Ref '${out.Ref}': prototype pollution property names ('__proto__', 'constructor', 'prototype') are forbidden.`,
+            FixRecommendation: 'Remove forbidden property names from the result path Ref.',
+            Severity: 'error',
+          });
+        }
       }
 
       // Target mode validation
