@@ -97,6 +97,7 @@ Thumbs.db
 # negation because git only ignores files it isn't already tracking.)
 !docker/workbench/.env.database.example
 !citizen-builder/.env.example
+!packages/MJCLI/src/init-templates/citizen-builder/.env.example
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt
