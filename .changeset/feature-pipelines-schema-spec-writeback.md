@@ -6,4 +6,4 @@
 "@memberjunction/feature-pipelines": minor
 ---
 
-Feature Pipelines: schema migration (V202609210500), data feature spec, runtime constraint validation, and write-back extensions.
+Feature Pipelines: schema migration (V202609212241), data feature spec, runtime constraint validation, and write-back extensions.
