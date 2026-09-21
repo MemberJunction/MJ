@@ -109,4 +109,22 @@ describe('modelingPlanToPipelineConfig', () => {
     const cfg = modelingPlanToPipelineConfig(baseSpec());
     expect(cfg.warnings).toEqual([]);
   });
+
+  it('falls back gracefully to structured warning when an unknown kind arrives at runtime', () => {
+    const spec = baseSpec({
+      CandidateFeatures: [
+        { Name: 'AudioFeature', SourceRef: 'Memberships', Kind: 'audio' as unknown as 'numeric', Why: 'audio signal' },
+      ],
+      ProposedExperiments: [
+        { Label: 'All', AlgorithmName: 'random_forest', FeatureSet: [], Rationale: 'test', Priority: 1 },
+      ],
+    });
+    const cfg = modelingPlanToPipelineConfig(spec);
+    expect(cfg.warnings).toHaveLength(1);
+    expect(cfg.warnings[0]).toEqual({
+      FeatureName: 'AudioFeature',
+      Kind: 'audio',
+      Reason: expect.stringMatching(/cannot be automatically mapped to a pipeline step/),
+    });
+  });
 });

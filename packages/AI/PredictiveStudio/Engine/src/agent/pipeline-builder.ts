@@ -128,6 +128,19 @@ export class PredictiveStudioPipelineBuilder {
    */
   public async build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const { spec, provider, user, autoPublish = true, sidecarVersion = 'predictive-studio-agent' } = input;
+    const collectedWarnings: FeatureStepWarning[] = [];
+    const seenWarningKeys = new Set<string>();
+
+    const recordWarnings = (warnings: FeatureStepWarning[]) => {
+      for (const w of warnings) {
+        const key = `${w.FeatureName}:${w.Kind}`;
+        if (!seenWarningKeys.has(key)) {
+          seenWarningKeys.add(key);
+          collectedWarnings.push(w);
+        }
+      }
+    };
+
     try {
       const experiments = (spec.ProposedExperiments && spec.ProposedExperiments.length > 0)
         ? [...spec.ProposedExperiments].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))
@@ -135,6 +148,7 @@ export class PredictiveStudioPipelineBuilder {
 
       if (experiments.length <= 1) {
         const config = modelingPlanToPipelineConfig(spec);
+        recordWarnings(config.warnings);
         const pipeline = await this.createPipeline(config, provider, user);
         const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
         const model = trainResult.model;
@@ -166,7 +180,7 @@ export class PredictiveStudioPipelineBuilder {
           heldReason,
           errorMessage: null,
           leaderboard: [singleRow],
-          warnings: config.warnings.length > 0 ? config.warnings : undefined,
+          warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
         };
       }
 
@@ -182,15 +196,12 @@ export class PredictiveStudioPipelineBuilder {
         featureSetName: string;
       }
       const trained: TrainedCandidate[] = [];
-      const tournamentWarnings: FeatureStepWarning[] = [];
 
       for (let i = 0; i < candidatesToRun.length; i++) {
         const exp = candidatesToRun[i];
         try {
           const config = modelingPlanToPipelineConfig(spec, i);
-          if (config.warnings.length > 0) {
-            tournamentWarnings.push(...config.warnings);
-          }
+          recordWarnings(config.warnings);
           const pipeline = await this.createPipeline(config, provider, user);
           const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
           const model = trainResult.model;
@@ -247,12 +258,19 @@ export class PredictiveStudioPipelineBuilder {
         heldReason,
         errorMessage: null,
         leaderboard,
-        warnings: tournamentWarnings.length > 0 ? tournamentWarnings : undefined,
+        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilder.build failed: ${errorMessage}`);
-      return { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
+      return {
+        success: false,
+        published: false,
+        leakageFlagged: false,
+        heldReason: null,
+        errorMessage,
+        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
+      };
     }
   }
 

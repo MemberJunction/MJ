@@ -99,7 +99,10 @@ export function buildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
     : '';
   if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
   if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.${warningText}`;
-  return `I built and trained the prediction, but I'm holding it back: ${o.heldReason ?? 'it needs review before it can be published.'}.${warningText}`;
+  const heldMessage = o.heldReason
+    ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
+    : 'it needs review before it can be published.';
+  return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${warningText}`;
 }
 
 /** Parse raw feature importance off the trained MLModel entity. */

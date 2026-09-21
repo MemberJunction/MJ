@@ -70,26 +70,35 @@ function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { step
   const rawColumns: string[] = [];
 
   for (const f of selected) {
-    if (f.Kind === 'numeric' || f.Kind === 'categorical') {
-      rawColumns.push(f.Name);
-    } else if (f.Kind === 'llm-derived') {
-      warnings.push({
-        FeatureName: f.Name,
-        Kind: f.Kind,
-        Reason: `Candidate feature "${f.Name}" (llm-derived) was dropped from training pipeline steps. LLM-derived features require an upstream Feature Pipeline to persist values before training.`,
-      });
-    } else if (f.Kind === 'embedding') {
-      warnings.push({
-        FeatureName: f.Name,
-        Kind: f.Kind,
-        Reason: `Candidate feature "${f.Name}" (embedding) was dropped from training pipeline steps. Embedding features require a dedicated vector embedding step.`,
-      });
-    } else {
-      warnings.push({
-        FeatureName: f.Name,
-        Kind: f.Kind,
-        Reason: `Candidate feature "${f.Name}" with kind "${f.Kind}" cannot be automatically mapped to a pipeline step.`,
-      });
+    switch (f.Kind) {
+      case 'numeric':
+      case 'categorical':
+        rawColumns.push(f.Name);
+        break;
+      case 'llm-derived':
+        warnings.push({
+          FeatureName: f.Name,
+          Kind: f.Kind,
+          Reason: `Candidate feature "${f.Name}" (llm-derived) was dropped from training pipeline steps. LLM-derived features require an upstream Feature Pipeline to persist values before training.`,
+        });
+        break;
+      case 'embedding':
+        warnings.push({
+          FeatureName: f.Name,
+          Kind: f.Kind,
+          Reason: `Candidate feature "${f.Name}" (embedding) was dropped from training pipeline steps. Embedding features require a dedicated vector embedding step.`,
+        });
+        break;
+      default: {
+        const _exhaustive: never = f.Kind;
+        void _exhaustive;
+        warnings.push({
+          FeatureName: f.Name,
+          Kind: f.Kind,
+          Reason: `Candidate feature "${f.Name}" with kind "${String(f.Kind)}" cannot be automatically mapped to a pipeline step.`,
+        });
+        break;
+      }
     }
   }
 
