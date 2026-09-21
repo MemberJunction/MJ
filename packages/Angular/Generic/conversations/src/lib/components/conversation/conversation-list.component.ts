@@ -1014,6 +1014,19 @@ interface FolderNode {
       pointer-events: none;
       transition: opacity 0.2s;
       z-index: 5;
+      /* OPAQUE, so this overlay occludes what is behind it instead of sitting on top of
+         it. It is absolutely positioned over the end of the row, so on hover a long
+         folder name — or the shared badge after it — ran underneath the buttons and the
+         glyphs drew on top of each other. Predates the badge; the badge just made it
+         obvious, because two icons overlapping reads as one wrong icon where clipped
+         text only reads as clipped text.
+
+         Not the .folder-row:hover value itself: that is 8% ink over TRANSPARENT, so
+         copying it would tint without hiding anything. Compositing the same 8% over
+         --conv-list-bg gives the identical colour, opaque. */
+      background: color-mix(in srgb, var(--conv-list-ink) 8%, var(--conv-list-bg));
+      padding-left: 10px;
+      border-radius: 4px;
     }
     .folder-row:hover .folder-actions { opacity: 1; pointer-events: auto; }
     .folder-row:hover .folder-count { opacity: 0; }
