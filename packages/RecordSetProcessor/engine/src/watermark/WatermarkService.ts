@@ -5,7 +5,7 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { BaseSingleton, computeContentHashAsync } from '@memberjunction/global';
+import { BaseSingleton, computeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
 import { BaseEntity, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import type { MJRecordProcessEntity, MJRecordProcessWatermarkEntity } from '@memberjunction/core-entities';
 import type { IRecordProcessor, RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
@@ -34,6 +34,8 @@ export interface CheckBatchWatermarksParams {
     contextUser: UserInfo;
     provider?: IMetadataProvider;
     processRunID?: string;
+    maxConcurrency?: number;
+    excludeFields?: string[];
 }
 
 /** Parameters for updating/upserting a watermark after a successful process. */
@@ -109,7 +111,8 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
             const updatedAt = this.extractUpdatedAt(r);
             if (updatedAt) {
                 const recTime = new Date(updatedAt).getTime();
-                results.set(r.RecordID, { shouldSkip: recTime <= lastRunTime });
+                // Strictly < ensures records modified during the last run's timestamp window are not permanently skipped
+                results.set(r.RecordID, { shouldSkip: recTime < lastRunTime });
             } else {
                 results.set(r.RecordID, { shouldSkip: false });
             }
@@ -129,20 +132,25 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
             processRunID: params.processRunID,
         };
 
-        // Step 1: Compute basis hash for each record
+        // Step 1: Compute basis hash for each record with bounded concurrency
         const computedHashes = new Map<string, string>();
-        await Promise.all(
-            params.records.map(async (record) => {
+        const queue = [...params.records];
+        const concurrency = Math.max(1, params.maxConcurrency ?? 1);
+        const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+            while (queue.length > 0) {
+                const record = queue.shift();
+                if (!record) break;
                 try {
-                    const hash = await this.computeRecordBasisHash(record, params.processor, recordContext);
+                    const hash = await this.computeRecordBasisHash(record, params.processor, recordContext, { excludeFields: params.excludeFields });
                     if (hash) {
                         computedHashes.set(record.RecordID, hash);
                     }
                 } catch (e) {
                     LogError(`WatermarkService: failed computing basis hash for record '${record.RecordID}': ${e instanceof Error ? e.message : String(e)}`);
                 }
-            })
-        );
+            }
+        });
+        await Promise.all(workers);
 
         if (computedHashes.size === 0) {
             for (const r of params.records) {
@@ -156,7 +164,8 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
             params.recordProcessID,
             params.entityID,
             Array.from(computedHashes.keys()),
-            params.contextUser
+            params.contextUser,
+            provider
         );
 
         // Step 3: Compare hashes
@@ -182,7 +191,8 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
     public async computeRecordBasisHash(
         record: RecordRef,
         processor: IRecordProcessor | undefined,
-        context: RecordProcessorContext
+        context: RecordProcessorContext,
+        options?: { excludeFields?: string[] }
     ): Promise<string | undefined> {
         if (processor && hasComputeBasisHash(processor)) {
             const hash = await processor.ComputeBasisHash(record, context);
@@ -192,11 +202,17 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         }
 
         if (record.Record instanceof BaseEntity) {
-            return record.Record.ComputeContentHash();
+            return record.Record.ComputeContentHash({ ExcludeFields: options?.excludeFields });
         }
 
         if (record.Record && typeof record.Record === 'object') {
-            return computeContentHashAsync(record.Record as Record<string, unknown>);
+            const copy = { ...(record.Record as Record<string, unknown>) };
+            if (options?.excludeFields) {
+                for (const ef of options.excludeFields) {
+                    delete copy[ef];
+                }
+            }
+            return computeContentHashAsync(copy);
         }
 
         return undefined;
@@ -209,17 +225,18 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         recordProcessID: string,
         entityID: string,
         recordIDs: string[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<Map<string, MJRecordProcessWatermarkEntity>> {
         const map = new Map<string, MJRecordProcessWatermarkEntity>();
         if (recordIDs.length === 0) {
             return map;
         }
 
-        const quotedIDs = recordIDs.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
-        const filter = `RecordProcessID = '${recordProcessID}' AND EntityID = '${entityID}' AND RecordID IN (${quotedIDs})`;
+        const quotedIDs = recordIDs.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+        const filter = `RecordProcessID = '${EscapeSQLString(recordProcessID)}' AND EntityID = '${EscapeSQLString(entityID)}' AND RecordID IN (${quotedIDs})`;
 
-        const rv = new RunView();
+        const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
         const res = await rv.RunView<MJRecordProcessWatermarkEntity>(
             {
                 EntityName: 'MJ: Record Process Watermarks',
@@ -229,7 +246,12 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
             contextUser
         );
 
-        if (res.Success && res.Results) {
+        if (!res.Success) {
+            LogError(`WatermarkService: failed loading existing watermarks: ${res.ErrorMessage || 'unknown error'}`);
+            return map;
+        }
+
+        if (res.Results) {
             for (const wm of res.Results) {
                 map.set(wm.RecordID, wm);
             }
@@ -245,8 +267,8 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         let wm = params.existingWatermark;
 
         if (!wm) {
-            const rv = new RunView();
-            const filter = `RecordProcessID = '${params.recordProcessID}' AND EntityID = '${params.entityID}' AND RecordID = '${params.recordID.replace(/'/g, "''")}'`;
+            const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+            const filter = `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}' AND EntityID = '${EscapeSQLString(params.entityID)}' AND RecordID = '${EscapeSQLString(params.recordID)}'`;
             const res = await rv.RunView<MJRecordProcessWatermarkEntity>(
                 {
                     EntityName: 'MJ: Record Process Watermarks',
@@ -270,7 +292,7 @@ export class WatermarkService extends BaseSingleton<WatermarkService> {
         wm.LastProcessedAt = new Date();
         const saved = await wm.Save();
         if (!saved) {
-            LogError(`WatermarkService: failed to save watermark for record '${params.recordID}' on process '${params.recordProcessID}'`);
+            LogError(`WatermarkService: failed to save watermark for record '${params.recordID}' on process '${params.recordProcessID}': ${wm.LatestResult?.CompleteMessage || 'Save returned false'}`);
         }
     }
 

@@ -3645,37 +3645,37 @@ export abstract class BaseEntity<T = unknown> {
      */
     public async ComputeContentHash(options?: ComputeContentHashOptions): Promise<string> {
         const excludeSystem = options?.ExcludeSystemFields ?? true;
-        const requestedFields = options?.Fields ? new Set(options.Fields) : null;
+        const allData = this.GetAll(false, false) as Record<string, unknown>;
+
+        // If specific fields are requested, validate each exists (case-insensitively) and resolve canonical name
+        let targetFieldNames: string[];
+        if (options?.Fields && options.Fields.length > 0) {
+            targetFieldNames = options.Fields.map((req) => {
+                const fieldInfo = this.GetFieldByName(req);
+                if (!fieldInfo) {
+                    throw new Error(`ComputeContentHash: field '${req}' does not exist on entity '${this.EntityInfo.Name}'`);
+                }
+                return fieldInfo.Name;
+            });
+        } else {
+            targetFieldNames = Object.keys(allData);
+        }
+
+        const excludeSet = new Set((options?.ExcludeFields ?? []).map((f) => f.trim().toLowerCase()));
 
         const data: Record<string, unknown> = {};
-
-        // Collect all loaded fields from this entity
-        for (const field of this.Fields) {
-            if (field.NotLoaded) continue;
-            const name = field.Name;
+        for (const name of targetFieldNames) {
             if (excludeSystem && name.startsWith('__mj_')) continue;
-            if (requestedFields && !requestedFields.has(name)) continue;
+            if (excludeSet.has(name.toLowerCase())) continue;
 
-            const val = field.Value;
+            const val = allData[name];
             if (val !== undefined) {
                 data[name] = val;
             }
         }
 
-        // Merge IS-A parent entity fields if present (matching GetAll behavior)
-        if (this._parentEntity) {
-            for (const field of this._parentEntity.Fields) {
-                if (field.NotLoaded) continue;
-                const name = field.Name;
-                if (excludeSystem && name.startsWith('__mj_')) continue;
-                if (requestedFields && !requestedFields.has(name)) continue;
-
-                // Parent entity is authoritative for its fields
-                const val = field.Value;
-                if (val !== undefined) {
-                    data[name] = val;
-                }
-            }
+        if (Object.keys(data).length === 0) {
+            throw new Error(`ComputeContentHash: cannot compute content hash on empty basis for entity '${this.EntityInfo.Name}'`);
         }
 
         return computeContentHashAsync(data);

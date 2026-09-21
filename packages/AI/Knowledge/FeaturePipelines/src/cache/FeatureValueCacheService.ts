@@ -4,7 +4,7 @@
  * @module @memberjunction/feature-pipelines
  */
 
-import { BaseSingleton, canonicalize, computeContentHashAsync } from '@memberjunction/global';
+import { BaseSingleton, canonicalize, computeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import type { MJFeatureValueCacheEntity, MJFeatureValueEntity } from '@memberjunction/core-entities';
 
@@ -162,15 +162,15 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             return results;
         }
 
-        const quotedKeys = params.keyHashes.map((k) => `'${k.replace(/'/g, "''")}'`).join(', ');
+        const quotedKeys = params.keyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ');
         const scopeFilter =
             params.scope === 'prompt' || !params.recordProcessID
                 ? 'RecordProcessID IS NULL'
-                : `RecordProcessID = '${params.recordProcessID}'`;
+                : `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}'`;
 
-        const filter = `${scopeFilter} AND PromptID = '${params.promptID}' AND PromptVersionHash = '${params.promptVersionHash}' AND ConstraintHash = '${params.constraintHash}' AND KeyHash IN (${quotedKeys})`;
+        const filter = `${scopeFilter} AND PromptID = '${EscapeSQLString(params.promptID)}' AND PromptVersionHash = '${EscapeSQLString(params.promptVersionHash)}' AND ConstraintHash = '${EscapeSQLString(params.constraintHash)}' AND KeyHash IN (${quotedKeys})`;
 
-        const rv = new RunView();
+        const rv = params.provider ? RunView.FromMetadataProvider(params.provider) : new RunView();
         const res = await rv.RunView<MJFeatureValueCacheEntity>(
             {
                 EntityName: 'MJ: Feature Value Caches',
@@ -180,7 +180,12 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             params.contextUser
         );
 
-        if (!res.Success || !res.Results) {
+        if (!res.Success) {
+            LogError(`FeatureValueCacheService.BatchLookup: RunView failed: ${res.ErrorMessage}`);
+            return results;
+        }
+
+        if (!res.Results) {
             return results;
         }
 
@@ -194,7 +199,11 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             // Record hit
             entry.HitCount = (entry.HitCount ?? 0) + 1;
             entry.LastHitAt = new Date();
-            void entry.Save().catch((err) => {
+            void entry.Save().then((saved) => {
+                if (!saved) {
+                    LogError(`FeatureValueCacheService: failed updating HitCount on cache '${entry.ID}': ${entry.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }).catch((err) => {
                 LogError(`FeatureValueCacheService: failed updating HitCount on cache '${entry.ID}': ${err instanceof Error ? err.message : String(err)}`);
             });
 

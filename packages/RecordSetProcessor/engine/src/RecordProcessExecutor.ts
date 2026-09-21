@@ -5,8 +5,8 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
+import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { EscapeSQLString, SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
     ArraySource,
@@ -79,18 +79,18 @@ export class RecordProcessExecutor {
         let lastRunAt = options.lastRunAt;
         if (!lastRunAt && rp.SkipUnchanged && rp.WatermarkStrategy === 'UpdatedAt') {
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(provider);
                 const lastRunRes = await rv.RunView<{ StartedAt?: Date }>({
                     EntityName: 'MJ: Process Runs',
-                    ExtraFilter: `RecordProcessID = '${rp.ID}' AND Status = 'Completed'`,
+                    ExtraFilter: `RecordProcessID = '${EscapeSQLString(rp.ID)}' AND Status = 'Completed'`,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 1,
                 }, options.contextUser);
                 if (lastRunRes.Success && lastRunRes.Results && lastRunRes.Results.length > 0) {
                     lastRunAt = lastRunRes.Results[0].StartedAt ?? null;
                 }
-            } catch {
-                // Non-fatal fallback: proceed without skipping if history cannot be queried
+            } catch (err) {
+                LogError(`RecordProcessExecutor: failed to query last run for RecordProcess '${rp.ID}': ${err instanceof Error ? err.message : String(err)}`);
             }
         }
 

@@ -31,6 +31,14 @@ export class WriteBackProcessor implements IRecordProcessor {
         private readonly run?: RunProvenance,
     ) {}
 
+    public get OutputMapping(): OutputMappingConfig {
+        return this.outputMapping;
+    }
+
+    public getWriteBackFields(): string[] {
+        return Object.keys(this.outputMapping.fields ?? {});
+    }
+
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
         const result = await this.inner.ProcessRecord(record, context);
         if (result.Status !== 'Succeeded') {

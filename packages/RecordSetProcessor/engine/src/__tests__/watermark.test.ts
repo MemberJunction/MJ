@@ -72,7 +72,7 @@ describe('WatermarkService (P1-7b)', () => {
                 RecordID: 'rec-old',
                 Record: { ID: 'rec-old', __mj_UpdatedAt: new Date('2026-09-20T10:00:00Z') },
             },
-            // Exactly equal to lastRunAt -> should skip
+            // Equal to lastRunAt -> should NOT skip (conservative boundary so records stamped in same tick are not skipped)
             {
                 EntityID: entityID,
                 RecordID: 'rec-equal',
@@ -103,7 +103,7 @@ describe('WatermarkService (P1-7b)', () => {
         });
 
         expect(decisions.get('rec-old')?.shouldSkip).toBe(true);
-        expect(decisions.get('rec-equal')?.shouldSkip).toBe(true);
+        expect(decisions.get('rec-equal')?.shouldSkip).toBe(false);
         expect(decisions.get('rec-new')?.shouldSkip).toBe(false);
         expect(decisions.get('rec-no-time')?.shouldSkip).toBe(false);
     });
@@ -120,13 +120,20 @@ describe('WatermarkService (P1-7b)', () => {
             Record: { ID: 'rec-2', Title: 'Staff Engineer' },
         };
 
-        // Compute what hash rec-1 produces
+        // Compute what hash rec-1 and rec-2 produce
         const expectedHashRec1 = await WatermarkService.Instance.computeRecordBasisHash(
             recordUnchanged,
             undefined,
             { contextUser: mockUser, provider: {} as unknown as IMetadataProvider }
         );
+        const expectedHashRec2 = await WatermarkService.Instance.computeRecordBasisHash(
+            recordChanged,
+            undefined,
+            { contextUser: mockUser, provider: {} as unknown as IMetadataProvider }
+        );
         expect(expectedHashRec1).toBeDefined();
+        expect(expectedHashRec2).toBeDefined();
+        expect(expectedHashRec2).not.toBe(expectedHashRec1);
 
         // Mock RunView returning existing watermark for rec-1 matching hash, and rec-2 with stale hash
         (RunView as unknown as { mockResults: unknown[] }).mockResults = [

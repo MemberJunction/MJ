@@ -495,6 +495,11 @@ export interface ComputeContentHashOptions {
     Fields?: string[];
 
     /**
+     * Explicit list of field names to exclude from the hash basis (e.g. write-back target fields).
+     */
+    ExcludeFields?: string[];
+
+    /**
      * Whether to exclude system columns (`__mj_` prefixed, such as `__mj_CreatedAt`, `__mj_UpdatedAt`)
      * from the hash basis. Defaults to true.
      */

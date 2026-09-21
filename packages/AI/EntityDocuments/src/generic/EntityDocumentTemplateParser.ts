@@ -1,9 +1,14 @@
 import { CompositeKey, LogError, LogStatus, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
-import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJEntityDocumentEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityDocumentTemplateParserBase } from './EntityDocumentTemplateParserBase';
 import { EntityDocumentCache } from '../models/EntityDocumentCache';
+
+interface EntityDocumentVirtualProps {
+  TemplateText?: string;
+  Template?: string;
+}
 
 /**
  * First-level subclass of EntityDocumentTemplateParserBase used to parse entity document templates
@@ -106,35 +111,17 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
    * Resolves the template text from an Entity Document.
    * Priority:
    * 1. doc.TemplateText virtual property (MJEntityDocumentEntityExtended)
-   * 2. doc.TemplateID_Object embedded record content
-   * 3. TemplateEngine cached contents for doc.TemplateID
-   * 4. RunView on MJ: Template Contents
+   * 2. TemplateEngine cached contents for doc.TemplateID
+   * 3. RunView on MJ: Template Contents
    */
   public async resolveDocumentTemplateText(doc: MJEntityDocumentEntity, contextUser: UserInfo): Promise<string> {
     // 1. Virtual property on extended entity subclass if populated
-    const extendedDoc = doc as unknown as { TemplateText?: string };
-    if (extendedDoc.TemplateText && extendedDoc.TemplateText.trim().length > 0) {
-      return extendedDoc.TemplateText;
+    const virtualDoc = doc as EntityDocumentVirtualProps;
+    if (virtualDoc.TemplateText && virtualDoc.TemplateText.trim().length > 0) {
+      return virtualDoc.TemplateText;
     }
 
-    // 2. Embedded record TemplateID_Object if loaded
-    const embeddedTemplate = (doc as unknown as { TemplateID_Object?: { Content?: MJTemplateContentEntity[]; GetHighestPriorityContent?: () => MJTemplateContentEntity } }).TemplateID_Object;
-    if (embeddedTemplate) {
-      if (typeof embeddedTemplate.GetHighestPriorityContent === 'function') {
-        const topContent = embeddedTemplate.GetHighestPriorityContent();
-        if (topContent?.TemplateText) {
-          return topContent.TemplateText;
-        }
-      }
-      if (Array.isArray(embeddedTemplate.Content) && embeddedTemplate.Content.length > 0) {
-        const top = embeddedTemplate.Content[0];
-        if (top?.TemplateText) {
-          return top.TemplateText;
-        }
-      }
-    }
-
-    // 3. TemplateEngine cached template contents
+    // 2. TemplateEngine cached template contents
     if (doc.TemplateID) {
       const cached = TemplateEngineServer.Instance.TemplateContents.filter((tc) =>
         UUIDsEqual(tc.TemplateID, doc.TemplateID)
@@ -161,12 +148,12 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
         }
       }
 
-      // 4. Fallback: RunView lookup for template content
+      // 3. Fallback: RunView lookup for template content
       const rv = new RunView();
       const rvResult = await rv.RunView<MJTemplateContentEntity>(
         {
           EntityName: 'MJ: Template Contents',
-          ExtraFilter: `TemplateID = '${doc.TemplateID}'`,
+          ExtraFilter: `TemplateID = '${EscapeSQLString(doc.TemplateID)}'`,
           OrderBy: 'Priority ASC',
           MaxRows: 1,
           ResultType: 'entity_object',
@@ -180,7 +167,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
     }
 
     // Fallback: if doc has a Template property that is string, return it as last resort
-    const fallbackTemplate = (doc as unknown as { Template?: string }).Template;
+    const fallbackTemplate = (doc as EntityDocumentVirtualProps).Template;
     return fallbackTemplate ?? '';
   }
 }

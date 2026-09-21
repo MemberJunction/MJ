@@ -25,6 +25,7 @@ import {
 import { RateLimiter } from './RateLimiter';
 import { GenericProcessRunTracker } from './trackers/GenericProcessRunTracker';
 import { WatermarkService, type WatermarkDecision } from './watermark/WatermarkService';
+import type { OutputMappingConfig } from './writeBack';
 
 /** Default batch size when none is supplied. */
 const DEFAULT_BATCH_SIZE = 100;
@@ -199,6 +200,14 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
         let watermarkDecisions: Map<string, WatermarkDecision> | undefined;
         if (options.skipUnchanged && options.recordProcessID && options.entityID) {
             try {
+                let writeBackFields: string[] | undefined;
+                const procWithWriteBack = options.processor as { getWriteBackFields?: () => string[]; OutputMapping?: OutputMappingConfig };
+                if (typeof procWithWriteBack.getWriteBackFields === 'function') {
+                    writeBackFields = procWithWriteBack.getWriteBackFields();
+                } else if (procWithWriteBack.OutputMapping?.fields) {
+                    writeBackFields = Object.keys(procWithWriteBack.OutputMapping.fields);
+                }
+
                 watermarkDecisions = await WatermarkService.Instance.CheckBatchWatermarks({
                     recordProcessID: options.recordProcessID,
                     entityID: options.entityID,
@@ -210,6 +219,8 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
                     contextUser: options.contextUser,
                     provider: ctx.provider,
                     processRunID: ctx.handle.ProcessRunID,
+                    maxConcurrency: ctx.maxConcurrency,
+                    excludeFields: writeBackFields,
                 });
             } catch (e) {
                 LogError(`RecordSetProcessor: Watermark check failed (proceeding without skipping): ${e instanceof Error ? e.message : String(e)}`);
@@ -235,7 +246,18 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             const batchStarted = Date.now();
             let batchResults: Map<string, RecordResult>;
             try {
-                batchResults = await options.processor.ProcessBatch(eligibleRecords, recordContext);
+                const rawBatchResults = await options.processor.ProcessBatch(eligibleRecords, recordContext);
+                if (rawBatchResults instanceof Map) {
+                    batchResults = rawBatchResults;
+                } else if (Array.isArray(rawBatchResults)) {
+                    batchResults = new Map();
+                    for (let i = 0; i < eligibleRecords.length; i++) {
+                        const res = rawBatchResults[i] ?? { Status: 'Failed', ErrorMessage: 'No result returned for record' };
+                        batchResults.set(eligibleRecords[i].RecordID, res);
+                    }
+                } else {
+                    batchResults = new Map();
+                }
             } catch (e) {
                 const errMsg = e instanceof Error ? e.message : String(e);
                 batchResults = new Map();

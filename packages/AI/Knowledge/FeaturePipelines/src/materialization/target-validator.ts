@@ -8,6 +8,7 @@
  * @module @memberjunction/feature-pipelines
  */
 
+import { SQLMaxLength } from '@memberjunction/core';
 import {
   type DataFeatureSpec,
   type SpecValidationIssue,
@@ -20,6 +21,7 @@ export interface FieldInfoLike {
   Name: string;
   Type?: string | null;
   Length?: number | null;
+  MaxLength?: number | null;
   Precision?: number | null;
   Scale?: number | null;
   TSType?: string | null;
@@ -288,6 +290,19 @@ function validateNumericBounds(
   }
 }
 
+function getEffectiveMaxLength(field: FieldInfoLike): number | undefined {
+  if (field.MaxLength !== undefined && field.MaxLength !== null && field.MaxLength > 0) {
+    return field.MaxLength;
+  }
+  if (field.Type && field.Length && field.Length > 0) {
+    return SQLMaxLength(field.Type, field.Length);
+  }
+  if (field.Length && field.Length > 0) {
+    return field.Length;
+  }
+  return undefined;
+}
+
 function validateStringLengths(
   constraint: ValueConstraint & { Type: 'freetext' | 'enum' },
   field: FieldInfoLike,
@@ -295,22 +310,23 @@ function validateStringLengths(
   basePath: string,
   issues: SpecValidationIssue[]
 ): void {
-  if (field.Length && field.Length > 0) {
-    if (constraint.Type === 'freetext' && constraint.MaxLength !== undefined && constraint.MaxLength > field.Length) {
+  const maxLen = getEffectiveMaxLength(field);
+  if (maxLen && maxLen > 0) {
+    if (constraint.Type === 'freetext' && constraint.MaxLength !== undefined && constraint.MaxLength > maxLen) {
       issues.push({
         Field: field.Name,
         Path: `${basePath}.Constraint.MaxLength`,
-        Message: `Target column '${field.Name}' has maximum length ${field.Length}, but freetext constraint MaxLength is ${constraint.MaxLength}.`,
-        FixRecommendation: `Reduce constraint MaxLength to <= ${field.Length}, or widen the column length in a database migration.`,
+        Message: `Target column '${field.Name}' has maximum length ${maxLen}, but freetext constraint MaxLength is ${constraint.MaxLength}.`,
+        FixRecommendation: `Reduce constraint MaxLength to <= ${maxLen}, or widen the column length in a database migration.`,
         Severity: 'error',
       });
     } else if (constraint.Type === 'enum' && constraint.Values) {
       for (const val of constraint.Values) {
-        if (val.length > field.Length) {
+        if (val.length > maxLen) {
           issues.push({
             Field: field.Name,
             Path: `${basePath}.Constraint.Values`,
-            Message: `Enum constraint value '${val}' on output '${outputName}' has length ${val.length}, which exceeds maximum length ${field.Length} of target column '${field.Name}'.`,
+            Message: `Enum constraint value '${val}' on output '${outputName}' has length ${val.length}, which exceeds maximum length ${maxLen} of target column '${field.Name}'.`,
             FixRecommendation: `Shorten the enum value or widen the column length in a database migration.`,
             Severity: 'error',
           });

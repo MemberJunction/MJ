@@ -87,7 +87,7 @@ export interface IRecordProcessor {
      * @param context - The execution context.
      * @returns Map of RecordID -> RecordResult.
      */
-    ProcessBatch?(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>>;
+    ProcessBatch?(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult> | RecordResult[]>;
 }
 
 /** Opaque handle returned by a tracker's `BeginRun`, threaded back through the other tracker calls. */

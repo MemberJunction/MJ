@@ -112,24 +112,22 @@ export class InferProcessor implements IRecordProcessor {
         // P1-6 Hook: beforeBuildContext
         await this.beforeBuildContext(record, context);
 
+        // Create an execution-scoped prompt delegate so setting ValidationBehavior = 'Strict'
+        // does not mutate the shared prompt in AIEngine cache across concurrent runs (R11-B).
+        const executionPrompt = Object.create(prompt) as MJAIPromptEntityExtended;
+        if (this.spec?.Outputs && this.spec.Outputs.length > 0) {
+            executionPrompt.ValidationBehavior = 'Strict';
+        }
+
         const params = new AIPromptParams();
-        params.prompt = prompt;
+        params.prompt = executionPrompt;
         params.data = await this.buildPromptData(record, context);
         params.contextUser = context.contextUser;
 
         // P1-6 Hook: beforePromptExecute
         await this.beforePromptExecute(params, record, context);
 
-        const origValidationBehavior = prompt.ValidationBehavior;
-        let result: AIPromptRunResult;
-        try {
-            if (this.spec?.Outputs && this.spec.Outputs.length > 0) {
-                params.prompt.ValidationBehavior = 'Strict';
-            }
-            result = await new AIPromptRunner().ExecutePrompt(params);
-        } finally {
-            prompt.ValidationBehavior = origValidationBehavior;
-        }
+        const result: AIPromptRunResult = await new AIPromptRunner().ExecutePrompt(params);
 
         const aiPromptRunID = result.promptRun?.ID;
         if (!result.success) {

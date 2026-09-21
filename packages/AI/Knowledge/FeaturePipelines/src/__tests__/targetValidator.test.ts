@@ -27,7 +27,8 @@ describe('validateMaterializationTargets (P1-4)', () => {
       {
         Name: 'ChurnRiskBand',
         Type: 'nvarchar',
-        Length: 20,
+        Length: 40,
+        MaxLength: 20,
         TSType: 'string',
         IsVirtual: false,
         EntityFieldValues: [
@@ -77,6 +78,8 @@ describe('validateMaterializationTargets (P1-4)', () => {
     Fields: [
       { Name: 'ID', TSType: 'string', IsPrimaryKey: true, IsVirtual: false },
       { Name: 'CustomerID', TSType: 'string', IsVirtual: false },
+      { Name: 'VirtualParentID', TSType: 'string', IsVirtual: true },
+      { Name: 'IncompatibleParentID', TSType: 'number', IsVirtual: false },
       { Name: 'Severity', TSType: 'string', Length: 20, IsVirtual: false },
       { Name: 'CalculatedScore', TSType: 'number', IsVirtual: true },
     ],
@@ -272,6 +275,7 @@ describe('validateMaterializationTargets (P1-4)', () => {
           Constraint: {
             Type: 'enum',
             FromFieldMetadata: true,
+            Values: ['Extreme', 'Critical'],
             OnViolation: 'fail',
           },
         },
@@ -428,7 +432,99 @@ describe('validateMaterializationTargets (P1-4)', () => {
     const issues1 = validateMaterializationTargets(badChildSpec, mockProvider, 'Customers');
     expect(issues1.some((i) => i.Message.includes("references entity 'NonExistentChildEntity', which does not exist"))).toBe(true);
 
-    // 2. Virtual mapped field on child
+    // 2. Missing ParentField on child
+    const missingParentFieldSpec: DataFeatureSpec = {
+      Name: 'Missing ParentField',
+      Description: 'ParentField does not exist on CustomerChurnAlerts',
+      Context: { Fields: ['Name'] },
+      PromptID: 'p1',
+      Outputs: [
+        {
+          Ref: '$.alert',
+          Name: 'Alert',
+          Target: {
+            Mode: 'child',
+            EntityName: 'CustomerChurnAlerts',
+            ParentField: 'NonExistentParentField',
+            Map: { Severity: '$.sev' },
+          },
+        },
+      ],
+      Caching: { Cacheable: false },
+    };
+    const issuesMissingParent = validateMaterializationTargets(missingParentFieldSpec, mockProvider, 'Customers');
+    expect(issuesMissingParent.some((i) => i.Message.includes("specifies ParentField 'NonExistentParentField', but that field does not exist"))).toBe(true);
+
+    // 3. Virtual ParentField on child
+    const virtualParentFieldSpec: DataFeatureSpec = {
+      Name: 'Virtual ParentField',
+      Description: 'ParentField is virtual on CustomerChurnAlerts',
+      Context: { Fields: ['Name'] },
+      PromptID: 'p1',
+      Outputs: [
+        {
+          Ref: '$.alert',
+          Name: 'Alert',
+          Target: {
+            Mode: 'child',
+            EntityName: 'CustomerChurnAlerts',
+            ParentField: 'VirtualParentID',
+            Map: { Severity: '$.sev' },
+          },
+        },
+      ],
+      Caching: { Cacheable: false },
+    };
+    const issuesVirtualParent = validateMaterializationTargets(virtualParentFieldSpec, mockProvider, 'Customers');
+    expect(issuesVirtualParent.some((i) => i.Message.includes("ParentField 'VirtualParentID' on child entity 'CustomerChurnAlerts' is virtual"))).toBe(true);
+
+    // 4. Type-incompatible ParentField on child (e.g. number FK pointing to string PK)
+    const incompatibleParentFieldSpec: DataFeatureSpec = {
+      Name: 'Incompatible ParentField',
+      Description: 'ParentField type does not match parent primary key type',
+      Context: { Fields: ['Name'] },
+      PromptID: 'p1',
+      Outputs: [
+        {
+          Ref: '$.alert',
+          Name: 'Alert',
+          Target: {
+            Mode: 'child',
+            EntityName: 'CustomerChurnAlerts',
+            ParentField: 'IncompatibleParentID',
+            Map: { Severity: '$.sev' },
+          },
+        },
+      ],
+      Caching: { Cacheable: false },
+    };
+    const issuesIncompatibleParent = validateMaterializationTargets(incompatibleParentFieldSpec, mockProvider, 'Customers');
+    expect(issuesIncompatibleParent.some((i) => i.Message.includes("is not type-compatible with parent primary key"))).toBe(true);
+
+    // 5. Nonexistent mapped field on child
+    const nonexistentMapSpec: DataFeatureSpec = {
+      Name: 'Nonexistent Mapped Field',
+      Description: 'Maps to NonExistentChildField which does not exist on CustomerChurnAlerts',
+      Context: { Fields: ['Name'] },
+      PromptID: 'p1',
+      Outputs: [
+        {
+          Ref: '$.alert',
+          Name: 'Alert',
+          Target: {
+            Mode: 'child',
+            EntityName: 'CustomerChurnAlerts',
+            ParentField: 'CustomerID',
+            Map: { NonExistentChildField: '$.val' },
+          },
+        },
+      ],
+      Caching: { Cacheable: false },
+    };
+    const issuesNonexistentMap = validateMaterializationTargets(nonexistentMapSpec, mockProvider, 'Customers');
+    expect(issuesNonexistentMap.some((i) => i.Message.includes("Mapped child field 'NonExistentChildField' does not exist on child entity 'CustomerChurnAlerts'"))).toBe(true);
+
+    // 6. Virtual mapped field on child
     const virtualMapSpec: DataFeatureSpec = {
       Name: 'Virtual Mapped Field',
       Description: 'Maps to CalculatedScore which is virtual on CustomerChurnAlerts',
@@ -451,7 +547,7 @@ describe('validateMaterializationTargets (P1-4)', () => {
     const issues2 = validateMaterializationTargets(virtualMapSpec, mockProvider, 'Customers');
     expect(issues2.some((i) => i.Message.includes("Mapped child field 'CalculatedScore' on child entity 'CustomerChurnAlerts' is virtual"))).toBe(true);
 
-    // 3. Valid child target
+    // 7. Valid child target
     const validChildSpec: DataFeatureSpec = {
       Name: 'Valid Child Target',
       Description: 'Physical ParentField and physical mapped fields',
