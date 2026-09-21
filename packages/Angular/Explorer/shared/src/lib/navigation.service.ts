@@ -503,9 +503,7 @@ export class NavigationService implements OnDestroy {
     let forceNew = this.shouldForceNewTab(options);
 
     const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves entity and cached record names using global metadata cache
-    const entityInfo = typeof md?.EntityByName === 'function'
-      ? md.EntityByName(entityName)
-      : md?.Entities?.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    const entityInfo = md?.EntityByName(entityName);
     const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
     const compositeKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(entityInfo, recordId) : new CompositeKey();
     const cachedRecordName = md ? md.GetCachedRecordNameOnlyIfCached(entityName, compositeKey) : undefined;
@@ -679,9 +677,7 @@ export class NavigationService implements OnDestroy {
       if (typeof parentEntity === 'string' && typeof parentRecordId === 'string' && parentRecordId) {
         context['sourceTabId'] = activeTab.id;
         const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves parent entity and cached record names using global metadata cache
-        const parentEntityInfo = typeof md?.EntityByName === 'function'
-          ? md.EntityByName(parentEntity)
-          : md?.Entities?.find(e => e.Name.toLowerCase() === parentEntity.toLowerCase());
+        const parentEntityInfo = md?.EntityByName(parentEntity);
         const parentKey = typeof CompositeKey?.FromURLSegment === 'function' ? CompositeKey.FromURLSegment(parentEntityInfo, parentRecordId) : new CompositeKey();
         const cachedParentName = md ? md.GetCachedRecordNameOnlyIfCached(parentEntity, parentKey) : undefined;
         const fallbackParentLabel = parentEntityInfo?.DisplayName || parentEntityInfo?.Name || parentEntity;
@@ -1066,9 +1062,7 @@ export class NavigationService implements OnDestroy {
     let forceNew = tabsMode || this.shouldForceNewTab(options);
 
     const md = Metadata.Provider; // global-provider-ok: navigation service shell singleton resolves entity name for new record tab using global metadata cache
-    const entityInfo = typeof md?.EntityByName === 'function'
-      ? md.EntityByName(entityName)
-      : md?.Entities?.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    const entityInfo = md?.EntityByName(entityName);
     const friendlyEntityName = entityInfo?.DisplayName || entityInfo?.Name || entityName;
 
     const request: TabRequest = {

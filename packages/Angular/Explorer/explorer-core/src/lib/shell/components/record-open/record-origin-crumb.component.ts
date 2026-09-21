@@ -135,9 +135,7 @@ export class RecordOriginCrumbComponent {
         return this.asyncResolvedLabel;
       }
       const md = Metadata.Provider; // global-provider-ok: shell breadcrumb component displays navigation history using global metadata cache
-      const entity = typeof md?.EntityByName === 'function'
-        ? md.EntityByName(this.Origin.sourceRecordEntity)
-        : md?.Entities?.find(e => e.Name.toLowerCase() === this.Origin?.sourceRecordEntity?.toLowerCase());
+      const entity = md?.EntityByName(this.Origin.sourceRecordEntity);
       const key = CompositeKey.FromURLSegment(entity, this.Origin.sourceRecordId);
       const cached = md ? md.GetCachedRecordNameOnlyIfCached(this.Origin.sourceRecordEntity, key) : undefined;
       if (cached) {
@@ -155,9 +153,7 @@ export class RecordOriginCrumbComponent {
   private resolveAsyncLabel(): void {
     const md = Metadata.Provider; // global-provider-ok: shell breadcrumb component asynchronously resolves record name using global metadata provider
     if (this.Origin?.sourceRecordEntity && this.Origin?.sourceRecordId && md) {
-      const entity = typeof md.EntityByName === 'function'
-        ? md.EntityByName(this.Origin.sourceRecordEntity)
-        : md.Entities?.find(e => e.Name.toLowerCase() === this.Origin?.sourceRecordEntity?.toLowerCase());
+      const entity = md.EntityByName(this.Origin.sourceRecordEntity);
       const key = CompositeKey.FromURLSegment(entity, this.Origin.sourceRecordId);
       const cached = md.GetCachedRecordNameOnlyIfCached(this.Origin.sourceRecordEntity, key);
       if (cached) {

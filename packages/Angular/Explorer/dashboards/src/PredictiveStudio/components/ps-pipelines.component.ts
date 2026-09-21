@@ -1295,8 +1295,8 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   private sourceNode(sb: SourceBinding, i: number): DagNode {
     const md = this.provider ?? new Metadata();
     let title = sb.Alias;
-    if (!title && sb.Kind === 'Entity') {
-      const entity = md?.EntityByName(sb.Ref);
+    if (!title && sb.Kind === 'Entity' && sb.Ref) {
+      const entity = md.EntityByName(sb.Ref);
       title = entity?.DisplayName || entity?.Name;
     }
     title = title || sb.Ref || 'source';

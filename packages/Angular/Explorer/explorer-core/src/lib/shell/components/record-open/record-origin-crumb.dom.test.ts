@@ -2,7 +2,7 @@ import '@angular/compiler';
 import { describe, it, expect, vi } from 'vitest';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, fakeMetadataProvider } from '@memberjunction/ng-test-utils';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { Metadata } from '@memberjunction/core';
 import { RecordOriginCrumbComponent } from './record-origin-crumb.component';
@@ -86,13 +86,13 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
     // Provide metadata for entity lookup
     const prevProvider = (globalThis as Record<string, unknown>)['__mock_provider'];
     (Metadata as { Provider: unknown }).Provider = {
-      Entities: [
+      ...fakeMetadataProvider([
         {
           Name: 'MJ_BizApps_Orders: Order Headers',
           DisplayName: 'Order Headers',
           FirstPrimaryKey: { Name: 'ID' }
         }
-      ],
+      ]),
       GetCachedRecordNameOnlyIfCached: () => undefined
     };
 
@@ -116,13 +116,13 @@ describe('RecordOriginCrumbComponent (DOM)', () => {
   it('renders cached record name when available in metadata cache', () => {
     const prevProvider = (globalThis as Record<string, unknown>)['__mock_provider'];
     (Metadata as { Provider: unknown }).Provider = {
-      Entities: [
+      ...fakeMetadataProvider([
         {
           Name: 'MJ_BizApps_Orders: Order Headers',
           DisplayName: 'Order Headers',
           FirstPrimaryKey: { Name: 'ID' }
         }
-      ],
+      ]),
       GetCachedRecordNameOnlyIfCached: () => 'ORD-00042'
     };
 

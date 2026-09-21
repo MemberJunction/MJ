@@ -18,6 +18,10 @@ import { SetRecordOpenStyle } from '../record-open-style';
 import { Metadata } from '@memberjunction/core';
 import type { CompositeKey } from '@memberjunction/core';
 import type { TabRequest } from '@memberjunction/ng-base-application';
+const fakeMetadataProvider = (entities: { Name: string; DisplayName?: string }[]) => ({
+  Entities: entities,
+  EntityByName: (n: string) => entities.find(e => e.Name.trim().toLowerCase() === n?.trim().toLowerCase()),
+});
 
 vi.mock('@angular/core', () => ({
   Directive: () => (target: Function) => target,
@@ -281,7 +285,7 @@ describe('record origin chain', () => {
       const { service, stubs } = createService();
       const getEntityRecordName = vi.fn().mockResolvedValue('Async Name');
       (Metadata as unknown as { Provider: unknown }).Provider = {
-        Entities: [{ Name: 'Widgets', DisplayName: 'Widget' }],
+        ...fakeMetadataProvider([{ Name: 'Widgets', DisplayName: 'Widget' }]),
         HasCachedRecordName: vi.fn().mockReturnValue(true),
         GetCachedRecordNameOnlyIfCached: vi.fn().mockReturnValue('Widget #42'),
         GetEntityRecordName: getEntityRecordName,
@@ -301,7 +305,7 @@ describe('record origin chain', () => {
       const getEntityRecordName = vi.fn().mockReturnValue(lookupPromise);
 
       (Metadata as unknown as { Provider: unknown }).Provider = {
-        Entities: [{ Name: 'Widgets', DisplayName: 'Widget' }],
+        ...fakeMetadataProvider([{ Name: 'Widgets', DisplayName: 'Widget' }]),
         HasCachedRecordName: vi.fn().mockReturnValue(false),
         GetCachedRecordNameOnlyIfCached: vi.fn().mockReturnValue(undefined),
         GetEntityRecordName: getEntityRecordName,

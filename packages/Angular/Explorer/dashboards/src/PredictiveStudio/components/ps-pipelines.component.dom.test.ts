@@ -2,8 +2,8 @@ import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
-import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
+import { renderComponentFixture, query, queryAll, capture, fakeMetadataProvider } from '@memberjunction/ng-test-utils';
+import type { PredictiveStudioEngine, Pipeline } from '../engine/predictive-studio.engine';
 import { PSPipelinesComponent } from './ps-pipelines.component';
 
 try {
@@ -34,7 +34,7 @@ const makePipeline = (over: Record<string, unknown> = {}) =>
     AsOfStrategy: JSON.stringify({ Mode: 'none' }),
     ValidationStrategy: JSON.stringify({ Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 }),
     ...over,
-  });
+  }) as unknown as Pipeline;
 
 const makeEngine = (pipelines: unknown[]) =>
   ({
@@ -98,11 +98,9 @@ describe('PSPipelinesComponent (DOM)', () => {
         { Kind: 'Entity', Ref: 'MoreCheese: Member Profiles' },
       ]),
     });
-    const fakeProvider = {
-      Entities: [
-        { Name: 'MoreCheese: Member Profiles', DisplayName: 'Member Profiles' },
-      ],
-    };
+    const fakeProvider = fakeMetadataProvider([
+      { Name: 'MoreCheese: Member Profiles', DisplayName: 'Member Profiles' },
+    ]);
     const fixture = renderComponentFixture(PSPipelinesComponent, {
       inputs: {
         engine: makeEngine([pipe]),
