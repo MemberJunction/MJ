@@ -183,7 +183,7 @@ export class RecordProcessExecutor {
             return new FieldRulesProcessor({ RuleSet: ruleSet, DryRun: dryRun });
         }
 
-        const inputMapping = rp.InputMapping ? SafeJSONParse(rp.InputMapping) : undefined;
+        const inputMapping = rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : undefined;
         let base: IRecordProcessor;
         if (rp.WorkType === 'Action') {
             if (!rp.ActionID) {

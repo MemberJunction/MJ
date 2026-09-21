@@ -533,13 +533,15 @@ export class FeatureAssemblyExecutor {
     schema: FeatureSchemaEntry[],
     emitters: ColumnEmitter[],
   ): void {
-    const col = step.FeaturePipelineRef;
-    if (!guard.isFieldAllowed(col)) {
-      return;
+    const cols = step.Columns && step.Columns.length > 0 ? step.Columns : [step.FeaturePipelineRef];
+    for (const col of cols) {
+      if (!guard.isFieldAllowed(col)) {
+        continue;
+      }
+      schema.push({ Name: col, Kind: 'llm-derived' });
+      // Read the persisted attribute off the target row by its column name.
+      emitters.push({ column: col, kind: 'select', sourceColumn: col });
     }
-    schema.push({ Name: col, Kind: 'llm-derived' });
-    // Read the persisted attribute off the target row by its pipeline-ref column name.
-    emitters.push({ column: col, kind: 'select', sourceColumn: col });
   }
 
   /** Plan flow-agent output columns (resolved from persisted attributes for now). */

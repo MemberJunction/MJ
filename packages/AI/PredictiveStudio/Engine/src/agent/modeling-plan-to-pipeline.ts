@@ -68,6 +68,7 @@ function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { step
 
   const warnings: FeatureStepWarning[] = [];
   const rawColumns: string[] = [];
+  const llmPipelineMap = new Map<string, string[]>();
 
   for (const f of selected) {
     switch (f.Kind) {
@@ -75,13 +76,23 @@ function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { step
       case 'categorical':
         rawColumns.push(f.Name);
         break;
-      case 'llm-derived':
-        warnings.push({
-          FeatureName: f.Name,
-          Kind: f.Kind,
-          Reason: `Candidate feature "${f.Name}" (llm-derived) was dropped from training pipeline steps. LLM-derived features require an upstream Feature Pipeline to persist values before training.`,
-        });
+      case 'llm-derived': {
+        const pipelineSource = spec.CandidateSources?.find(
+          (s) => s.Ref === f.SourceRef && s.Kind === 'FeaturePipeline'
+        );
+        if (pipelineSource) {
+          const list = llmPipelineMap.get(pipelineSource.Ref) ?? [];
+          list.push(f.Name);
+          llmPipelineMap.set(pipelineSource.Ref, list);
+        } else {
+          warnings.push({
+            FeatureName: f.Name,
+            Kind: f.Kind,
+            Reason: `Candidate feature "${f.Name}" (llm-derived) was dropped from training pipeline steps. LLM-derived features require an upstream Feature Pipeline to persist values before training.`,
+          });
+        }
         break;
+      }
       case 'embedding':
         warnings.push({
           FeatureName: f.Name,
@@ -105,6 +116,14 @@ function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { step
   const steps: FeatureStep[] = [];
   if (rawColumns.length > 0) {
     steps.push({ Id: 'select-raw', Kind: 'select', Columns: rawColumns });
+  }
+  for (const [pipelineRef, cols] of llmPipelineMap.entries()) {
+    steps.push({
+      Id: `llm-derived-${pipelineRef}`,
+      Kind: 'llm-derived',
+      FeaturePipelineRef: pipelineRef,
+      Columns: cols,
+    });
   }
   // One-hot each categorical feature so the sidecar fits the vocabulary once and applies it everywhere.
   for (const f of selected.filter((f) => f.Kind === 'categorical')) {

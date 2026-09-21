@@ -127,4 +127,31 @@ describe('modelingPlanToPipelineConfig', () => {
       Reason: expect.stringMatching(/cannot be automatically mapped to a pipeline step/),
     });
   });
+
+  it('resolves llm-derived candidate features referencing a FeaturePipeline source into an LLMDerivedFeatureStep with explicit Columns', () => {
+    const spec = baseSpec({
+      CandidateSources: [
+        { Kind: 'Entity', Ref: 'Memberships', Why: 'the membership records' },
+        { Kind: 'FeaturePipeline', Ref: 'JobFunctionSeniorityPipeline', Why: 'derived job function & seniority' },
+      ],
+      CandidateFeatures: [
+        { Name: 'AutoRenew', SourceRef: 'Memberships', Kind: 'numeric', Why: 'renewal intent' },
+        { Name: 'JobFunction', SourceRef: 'JobFunctionSeniorityPipeline', Kind: 'llm-derived', Why: 'normalized job function' },
+        { Name: 'SeniorityLevel', SourceRef: 'JobFunctionSeniorityPipeline', Kind: 'llm-derived', Why: 'seniority tier' },
+      ],
+      ProposedExperiments: [
+        { Label: 'All', AlgorithmName: 'random_forest', FeatureSet: [], Rationale: 'test llm-derived resolution', Priority: 1 },
+      ],
+    });
+    const cfg = modelingPlanToPipelineConfig(spec);
+    expect(cfg.warnings).toHaveLength(0);
+    const llmStep = cfg.featureSteps.Steps.find((s) => s.Kind === 'llm-derived');
+    expect(llmStep).toBeDefined();
+    expect(llmStep).toEqual({
+      Id: 'llm-derived-JobFunctionSeniorityPipeline',
+      Kind: 'llm-derived',
+      FeaturePipelineRef: 'JobFunctionSeniorityPipeline',
+      Columns: ['JobFunction', 'SeniorityLevel'],
+    });
+  });
 });

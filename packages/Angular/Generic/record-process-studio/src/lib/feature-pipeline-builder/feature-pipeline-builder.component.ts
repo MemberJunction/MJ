@@ -22,7 +22,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityFieldInfo, RunView, UserInfo } from '@memberjunction/core';
-import { MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { MJRecordProcessEntity, MJAIPromptEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
 import {
     DataFeatureSpec,
     DataFeatureOutput,
@@ -37,18 +37,9 @@ import {
 import { SafeJSONParse } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 
-export interface PromptOption {
-    ID: string;
-    Name: string;
-    Description?: string;
-    TemplateText?: string;
-}
+export type PromptOption = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'Description'>;
 
-export interface EntityDocOption {
-    ID: string;
-    Name: string;
-    EntityID: string;
-}
+export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'EntityID'>;
 
 @Component({
     selector: 'mj-feature-pipeline-builder',
@@ -450,18 +441,16 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
 
     private async loadPrompts(): Promise<void> {
         try {
-            const rv = new RunView();
-            const res = await rv.RunView({
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const res = await rv.RunView<PromptOption>({
                 EntityName: 'MJ: AI Prompts',
+                Fields: ['ID', 'Name', 'Description'],
                 ResultType: 'simple',
-            }, this.ProviderToUse.CurrentUser);
+            });
             if (res.Success && Array.isArray(res.Results)) {
-                this.availablePrompts = res.Results.map((r: Record<string, unknown>) => ({
-                    ID: String(r.ID),
-                    Name: String(r.Name),
-                    Description: r.Description ? String(r.Description) : undefined,
-                    TemplateText: r.TemplateText ? String(r.TemplateText) : undefined,
-                }));
+                this.availablePrompts = res.Results;
+            } else {
+                this.availablePrompts = [];
             }
         } catch {
             this.availablePrompts = [];
@@ -470,17 +459,16 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
 
     private async loadEntityDocs(): Promise<void> {
         try {
-            const rv = new RunView();
-            const res = await rv.RunView({
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const res = await rv.RunView<EntityDocOption>({
                 EntityName: 'MJ: Entity Documents',
+                Fields: ['ID', 'Name', 'EntityID'],
                 ResultType: 'simple',
-            }, this.ProviderToUse.CurrentUser);
+            });
             if (res.Success && Array.isArray(res.Results)) {
-                this.availableDocs = res.Results.map((r: Record<string, unknown>) => ({
-                    ID: String(r.ID),
-                    Name: String(r.Name),
-                    EntityID: String(r.EntityID),
-                }));
+                this.availableDocs = res.Results;
+            } else {
+                this.availableDocs = [];
             }
         } catch {
             this.availableDocs = [];
