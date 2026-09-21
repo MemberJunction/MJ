@@ -2409,10 +2409,20 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    */
   private emitDisplayName(): void {
     if (this.state.selectedEntityName) {
-      this.DisplayNameChanged.emit(this.state.selectedEntityName);
+      const displayName = this.selectedEntity?.DisplayNameOrName || this.getEntityDisplayName(this.state.selectedEntityName);
+      this.DisplayNameChanged.emit(displayName);
     } else {
       this.DisplayNameChanged.emit('Data');
     }
+  }
+
+  /**
+   * Get user-friendly display name for an entity.
+   */
+  public getEntityDisplayName(entityName?: string): string {
+    if (!entityName) return '';
+    const entity = this.metadata.Entities.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    return entity?.DisplayNameOrName || entityName;
   }
 
   // ========================================

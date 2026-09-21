@@ -1,0 +1,38 @@
+[
+  {
+    "fields": {
+      "Name": "websearch",
+      "FullPath": "websearch",
+      "ParentID": null,
+      "Category": "Web Search",
+      "Description": "Parent scope for external web search operations.",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-globe",
+        "color": "#10736b"
+      }
+    },
+    "primaryKey": {
+      "ID": "05DCDBFF-F9AC-4592-A5F6-EA7FAC69826E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "websearch:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=websearch",
+      "Category": "Web Search",
+      "Description": "Run a web search through the configured provider set. Each call spends money at an external vendor, so grant deliberately.",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-magnifying-glass",
+        "color": "#10736b"
+      }
+    },
+    "primaryKey": {
+      "ID": "11B60E20-7889-4D64-AB86-55CF548B875D"
+    }
+  }
+]

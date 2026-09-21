@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     initial: {
-        color: '#ffffff',
+        color: Colors.inverse,
         fontWeight: '700',
     },
 });

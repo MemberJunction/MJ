@@ -277,9 +277,14 @@ export class ApplicationDialogComponent extends BaseAngularComponent implements 
     }
     const searchLower = this.entitySearchTerm.toLowerCase().trim();
     return this.availableEntities.filter(entity =>
+      (entity.DisplayName || '').toLowerCase().includes(searchLower) ||
       (entity.Name || '').toLowerCase().includes(searchLower) ||
       (entity.Description || '').toLowerCase().includes(searchLower)
     );
+  }
+
+  public getEntityDisplayName(entity: MJEntityEntity): string {
+    return entity.DisplayName || entity.Name;
   }
 
   public onEntitySearchChange(event: Event): void {

@@ -40,7 +40,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { LogError, RunView } from '@memberjunction/core';
 import type {
   IRecordProcessor,
   RecordProcessorContext,
@@ -50,18 +50,22 @@ import type {
 import type {
   MJMLModelEntity,
 } from '@memberjunction/core-entities';
-import type {
-  PredictRequest,
-  PredictResponse,
-  Prediction,
-  FeatureSchemaEntry,
-  FittedPreprocessing,
-  SourceBinding,
-  AsOfStrategy,
-  LeakageGuard,
-  ProblemType,
-  FeatureStepGraph,
-  MatrixData,
+import {
+  resolveOutcomeConfig,
+  resolveScoreBand,
+  resolveOutcomeStyle,
+  type PredictRequest,
+  type PredictResponse,
+  type Prediction,
+  type FeatureSchemaEntry,
+  type FittedPreprocessing,
+  type SourceBinding,
+  type AsOfStrategy,
+  type LeakageGuard,
+  type ProblemType,
+  type FeatureStepGraph,
+  type MatrixData,
+  type OutcomeConfig,
 } from '@memberjunction/predictive-studio-core';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec } from '../feature-assembly';
@@ -198,12 +202,15 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     if (!bytes) {
       throw new Error(`MLModelInferenceProcessor: artifact '${model.ArtifactFileID}' not found for model '${this.modelId}'`);
     }
-    return this.buildLoadedModel(model, bytes);
+    return this.buildLoadedModel(model, bytes, context);
   }
 
   /** Assemble the frozen inference contract from a loaded model row + artifact bytes. */
-  private buildLoadedModel(model: MJMLModelEntity, bytes: Uint8Array): LoadedModel {
-    const pipeline = this.resolvePipelineConfig(model);
+  private async buildLoadedModel(model: MJMLModelEntity, bytes: Uint8Array, context: RecordProcessorContext): Promise<LoadedModel> {
+    let pipeline = this.resolvePipelineConfig(model);
+    if ((pipeline.featureSteps.Steps.length === 0 || !pipeline.targetEntityName) && model.PipelineID) {
+      pipeline = await this.loadPipelineFallback(model.PipelineID, pipeline, context);
+    }
     return {
       modelId: model.ID,
       targetEntityName: pipeline.targetEntityName,
@@ -216,7 +223,58 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       featureSteps: pipeline.featureSteps,
       asOf: pipeline.asOf,
       leakageGuard: pipeline.leakageGuard,
+      outcomeConfig: pipeline.outcomeConfig,
     };
+  }
+
+  /**
+   * Fallback to query `MJ: ML Training Pipelines` when the model's frozen lineage blob
+   * lacks featureSteps or targetEntityName.
+   */
+  private async loadPipelineFallback(
+    pipelineId: string,
+    existing: ResolvedScoringPipeline,
+    context: RecordProcessorContext,
+  ): Promise<ResolvedScoringPipeline> {
+    try {
+      const rv = context.provider ? RunView.FromMetadataProvider(context.provider) : new RunView();
+      interface PipelineViewRow {
+        TargetEntityID?: string;
+        TargetEntity?: string;
+        SourceBindings?: string;
+        FeatureSteps?: string;
+        AsOfStrategy?: string;
+      }
+      const res = await rv.RunView<PipelineViewRow>(
+        {
+          EntityName: 'MJ: ML Training Pipelines',
+          ExtraFilter: `ID='${pipelineId}'`,
+          ResultType: 'simple',
+          MaxRows: 1,
+        },
+        context.contextUser,
+      );
+      if (res.Success && res.Results.length > 0) {
+        const row = res.Results[0];
+        const rawSteps = parseJson<FeatureStepGraph>(row.FeatureSteps, { Steps: [] });
+        const targetEntity =
+          row.TargetEntity ||
+          (row.TargetEntityID && context.provider ? context.provider.EntityByID(row.TargetEntityID)?.Name : undefined) ||
+          existing.targetEntityName;
+
+        return {
+          targetEntityName: existing.targetEntityName || targetEntity,
+          sourceBindings: existing.sourceBindings.length > 0 ? existing.sourceBindings : parseJson<SourceBinding[]>(row.SourceBindings, []),
+          featureSteps: existing.featureSteps.Steps.length > 0 ? existing.featureSteps : (isFeatureStepGraph(rawSteps) ? rawSteps : { Steps: [] }),
+          asOf: existing.asOf.Mode !== 'none' ? existing.asOf : parseJson<AsOfStrategy>(row.AsOfStrategy, { Mode: 'none' }),
+          leakageGuard: existing.leakageGuard,
+          outcomeConfig: existing.outcomeConfig,
+        };
+      }
+    } catch (err) {
+      LogError(`MLModelInferenceProcessor: failed to load fallback pipeline '${pipelineId}': ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return existing;
   }
 
   /**
@@ -227,6 +285,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    */
   private resolvePipelineConfig(model: MJMLModelEntity): ResolvedScoringPipeline {
     const lineage = parseJson<Record<string, unknown>>(model.Lineage, {});
+    const outcomeConfig = resolveOutcomeConfig(model);
     return {
       // The target entity the model scores is the training-unit entity from lineage.
       targetEntityName: typeof lineage.targetEntityName === 'string' ? lineage.targetEntityName : (model.Pipeline ?? ''),
@@ -236,6 +295,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       // Scoring never re-fits or re-evaluates leakage — a permissive guard is fine here;
       // the frozen FeatureSchema is the contract that bounds which columns are produced.
       leakageGuard: { DenyFields: [], SingleFeatureDominanceThreshold: 1 },
+      outcomeConfig,
     };
   }
 
@@ -252,7 +312,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     rows: SourceRow[],
     context: RecordProcessorContext,
   ): Promise<FeatureAssemblyResult> {
-    return this.assembler.assemble({
+    const assembly = await this.assembler.assemble({
       targetEntityName: model.targetEntityName,
       records: rows,
       sources: model.sourceBindings,
@@ -266,6 +326,16 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       contextUser: context.contextUser,
       provider: context.provider,
     });
+
+    if (assembly.matrix.columns.length === 0 && model.featureSchema.length > 0) {
+      throw new Error(
+        `MLModelInferenceProcessor: feature assembly produced 0 columns for model '${model.modelId}' ` +
+          `which requires ${model.featureSchema.length} feature(s) [${model.featureSchema.map((f) => f.Name).join(', ')}]. ` +
+          `Refusing to score with empty features to avoid degenerate predictions.`,
+      );
+    }
+
+    return assembly;
   }
 
   // region: sidecar predict -----------------------------------------------------
@@ -290,12 +360,20 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /** Shape a single sidecar prediction into the record result payload. */
   private toPayload(model: LoadedModel, prediction: Prediction): MLInferenceResultPayload {
+    const band = resolveScoreBand(prediction.score, model.outcomeConfig);
+    const style = resolveOutcomeStyle(prediction.class, model.outcomeConfig);
     return {
       modelId: model.modelId,
       target: model.targetVariable,
       problemType: model.problemType,
       score: prediction.score,
       class: prediction.class,
+      status: band?.Label,
+      band: band?.Key,
+      badgeColor: band?.BadgeColor,
+      icon: band?.Icon ?? style?.Icon,
+      scoreLabel: model.outcomeConfig.ScoreLabel,
+      statusLabel: model.outcomeConfig.StatusLabel,
       // Top signed per-record drivers behind THIS prediction (P1-5), when the model supports exact
       // per-row attribution (linear models); omitted otherwise (the UI falls back to global importance).
       drivers: prediction.contributions?.map((c) => ({ feature: c.feature, value: c.value })),
@@ -346,6 +424,18 @@ export interface MLInferenceResultPayload {
    * which moves on any edit, not just scoring.
    */
   scoredAt: string;
+  /** Qualitative status label evaluated against model OutcomeConfig (e.g. "High", "Low Risk", "Severe"). */
+  status?: string;
+  /** Normalized status tier key (e.g. "high", "medium", "low"). */
+  band?: string;
+  /** Semantic badge color for UI rendering: 'green' | 'amber' | 'red' | 'blue' | 'gray'. */
+  badgeColor?: 'green' | 'amber' | 'red' | 'blue' | 'gray';
+  /** FontAwesome icon name (e.g. 'fa-circle-check', 'fa-triangle-exclamation'). */
+  icon?: string;
+  /** Display label for the score column (e.g. "Renewal Probability", "Default Risk"). */
+  scoreLabel?: string;
+  /** Display label for the status column (e.g. "Renewal Status", "Risk Level"). */
+  statusLabel?: string;
 }
 
 /** Internal — the assembly config resolved off a model for scoring. */
@@ -355,6 +445,7 @@ interface ResolvedScoringPipeline {
   featureSteps: FeatureStepGraph;
   asOf: AsOfStrategy;
   leakageGuard: LeakageGuard;
+  outcomeConfig: OutcomeConfig;
 }
 
 /**

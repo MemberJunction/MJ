@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } fr
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RegisterClass } from '@memberjunction/global';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
-import { RealtimeSessionService, RealtimeChannelFocusEvent } from '../lib/services/realtime-session.service';
-import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { RealtimeChannelFocusEvent } from '@memberjunction/realtime-runtime';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
+import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 
 /**
  * INTERACTIVE-CHANNEL plumbing in the session service — the registry-driven plugin path:

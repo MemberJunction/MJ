@@ -116,6 +116,20 @@ export {
 } from './utilities/core-libraries';
 
 export {
+  generateComponentHierarchyHash
+} from './utilities/component-hash';
+
+export {
+  RuntimeUtilities,
+  createRuntimeUtilities
+} from './utilities/runtime-utilities';
+
+export {
+  resolveEntityRecordKey,
+  EntityRecordKeyInput
+} from './utilities/entity-record-key';
+
+export {
   LibraryRegistry,
   LibraryDefinition
 } from './utilities/library-registry';

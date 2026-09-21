@@ -200,4 +200,3 @@ const similar = await AIEngine.Instance.FindSimilarAgents(userQuery, 5, contextU
 - `@memberjunction/core` -- MJ framework core
 - `@memberjunction/core-entities` -- Generated entity classes
 - `@memberjunction/actions-base` -- Action framework integration
-- `@memberjunction/storage` -- File storage integration for attachments
