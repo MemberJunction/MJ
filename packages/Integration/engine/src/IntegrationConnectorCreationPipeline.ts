@@ -405,7 +405,35 @@ export class IntegrationConnectorCreationPipeline {
         try {
             await withDeadline('ConnectionTest', this.StageConnectionTest(emitter, opts));
             const sourceSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts));
-            const persistResult = await withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));
+            let persistResult = await withDeadline('Persist', this.StagePersist(emitter, opts, sourceSchema));
+
+            // MJ-DISC-16 — heal first-discovery sampling in the SAME run.
+            //
+            // The Introspect above could not sample any net-new object: sampling reads the catalog,
+            // and those rows only came into existence in the Persist that follows it. So a
+            // brand-new object lands with the widths its catalog DESCRIPTION claims and no evidence
+            // from actual records — and at sync, values longer than the guess are dropped. From the
+            // outside that is indistinguishable from a clean discovery.
+            //
+            // Their rows exist now. Refresh the engine's catalog cache and run one more
+            // Introspect+Persist, which this time can sample them. Verified live 2026-09-07: a
+            // manual second refresh sampled all 258 custom types cleanly.
+            //
+            // Non-fatal by design — a failed heal leaves exactly the state we already had, and
+            // failing the whole discovery over it would be worse than the guessed widths.
+            const unsampled = [...(this._firstDiscoveryFallbacks ?? [])];
+            if (unsampled.length > 0) {
+                try {
+                    emitter.stageStart('Introspect', `${unsampled.length} first-discovered object(s) were persisted without sampling — sampling them now`);
+                    await IntegrationEngineBase.Instance.RefreshCatalog(opts.ContextUser);
+                    const healSchema = await withDeadline('Introspect', this.StageIntrospect(emitter, opts));
+                    persistResult = await withDeadline('Persist', this.StagePersist(emitter, opts, healSchema));
+                } catch (healErr) {
+                    const hm = healErr instanceof Error ? healErr.message : String(healErr);
+                    emitter.stageError('Introspect', `First-discovery healing pass failed (run schema refresh once more to complete sampling evidence): ${hm}`, { code: 'first-discovery-heal-failed' });
+                }
+            }
+
             const { verdicts, unresolved } = await withDeadline('PKClassify', this.StagePKClassify(emitter, opts));
 
             emitter.stageComplete('Pipeline', {
@@ -458,10 +486,18 @@ export class IntegrationConnectorCreationPipeline {
 
     // ── Stage 2: introspect ──────────────────────────────────────────────
 
+    /**
+     * Objects whose sampling fell back because they had no catalog row yet — the first-discovery
+     * case. Reset at the start of every Introspect so a healing pass cannot inherit the first
+     * pass's list and loop.
+     */
+    private _firstDiscoveryFallbacks?: Set<string>;
+
     private async StageIntrospect(
         emitter: IntegrationProgressEmitter,
         opts: ConnectorCreationPipelineOptions
     ) {
+        this._firstDiscoveryFallbacks = new Set<string>();
         emitter.stageStart('Introspect', 'Discovering objects and fields via connector');
         const startMs = Date.now();
         // Sampling is now per OBJECT, so this stage's cost scales with the catalog — and on a large
@@ -699,6 +735,13 @@ export class IntegrationConnectorCreationPipeline {
      */
     private ReportSampleFallback(objectName: string, err: unknown, emitter: IntegrationProgressEmitter): void {
         const msg = err instanceof Error ? err.message : String(err);
+        // MJ-DISC-16: an object discovered for the FIRST time cannot be sampled in the run that
+        // discovers it — sampling reads through the catalog, and its row only exists after Persist.
+        // Remember exactly those, so the pipeline can heal them in the same run rather than leaving
+        // a brand-new object with catalog-guessed widths until someone happens to refresh again.
+        if (/IntegrationObject not found/i.test(msg)) {
+            (this._firstDiscoveryFallbacks ??= new Set<string>()).add(objectName);
+        }
         emitter.stageError(
             'Introspect',
             `Sampling fell back to the catalog description for "${objectName}" — real widths and ` +

@@ -1593,7 +1593,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             });
             // A cancelled run returns normally (no throw) with abortSignal.aborted set — finalize it as
             // 'cancelled' (exitReason='aborted'), NOT 'completed', so a stopped run is distinguishable.
-            await this.finalizeSyncProgress(progress, abortSignal?.aborted ? 'cancelled' : 'completed', result.ErrorMessage);
+            //
+            // MJ-RUN-4: a run that abandoned objects must not read as an unqualified success. It is
+            // still 'completed' — the watermark is held and the unfetched window retries next run,
+            // so this is not a failure — but the message has to name what did not finish, or a
+            // nightly sync that dies on its first page every night looks like an unbroken run of
+            // clean Successes with TotalRecords=0.
+            const incomplete = result.IncompleteObjects ?? [];
+            const completionMessage = (!abortSignal?.aborted && incomplete.length > 0)
+                ? `Sync run complete — ${incomplete.length} object(s) INCOMPLETE: ` +
+                  `${incomplete.slice(0, 10).join(', ')}${incomplete.length > 10 ? ', …' : ''}`
+                : result.ErrorMessage;
+            await this.finalizeSyncProgress(progress, abortSignal?.aborted ? 'cancelled' : 'completed', completionMessage);
             console.log(`[IntegrationEngine] Sync complete:\n${summary}`);
             return result;
         } catch (err) {
@@ -2451,6 +2462,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     `FetchChanges(${objectName})`,
                 ),
                 undefined,
+                // A timeout is NOT retryable here, deliberately: WithTimeout abandons the attempt
+                // without CANCELLING it, so a retry stacks a second full page of vendor requests on
+                // a source already too slow to finish the first. A transport error IS retryable — a
+                // reset socket is worth another go.
+                //
+                // The fleet carries a patch (MJ-MEM-2) that inverts this, because the same rule
+                // abandoned sixteen NetSuite objects for a whole run on ACR dev. That divergence
+                // stays IN THE PATCH and must not be ported here — it contradicts this decision and
+                // the two tests that pin it. The fix that satisfies both is to SUSPEND a timed-out
+                // object and resume from its persisted keyset next run, which neither side has yet.
                 (err) => !(err instanceof OperationTimeoutError) && IsRetryableError(ClassifyError(err).Code),
                 (attempt, err, delayMs) => {
                     // Report a throttle NOW, not after the retries are spent. ReportThrottle
@@ -2935,6 +2956,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     batch = await this.governedFetch(config, ctx, entityMap.ExternalObjectName, fetchTimeoutMs, batchCount, logger);
                 }
                 this.reportRateOutcome(config);   // clean fetch → ramp the adaptive rate back up
+                // MJ-RUN-35: remember what the source said it holds. Last statement wins — the
+                // freshest page is the most current answer — and a page that says nothing must
+                // never erase a total an earlier page gave.
+                if (typeof batch.SourceTotalRecords === 'number' && batch.SourceTotalRecords >= 0) {
+                    sourceTotalRecords = batch.SourceTotalRecords;
+                }
                 fetchGapCount = 0;                // clean fetch → reset the consecutive fetch-gap counter
                 // §10: connector type-driven post-processing hook (default no-op) — enforce/normalize
                 // record values to their resolved formats before mapping + write.
@@ -3080,6 +3107,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     ErrorCode: 'CONNECTOR_ERROR',
                     Severity: 'Warning',
                 });
+                // MJ-RUN-4: an abandoned object must also reach the RUN-level result, not only the
+                // per-object warning above. A caller reading the run summary otherwise sees a clean
+                // completion and has to go mining the event stream to discover that sixteen objects
+                // ended INCOMPLETE.
+                (result.IncompleteObjects ??= []).push(entityMap.ExternalObjectName ?? entityMap.ID);
                 break;
             }
             logger?.emit('sync.fetch.batch.complete', {
@@ -3115,7 +3147,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 honoursBatchSize = false;
                 if (!oversizeBatchWarned) {
                     oversizeBatchWarned = true;
-                    this.warnOversizedBatch(entityMap, batch, batchCount, logger);
+                    this.warnOversizedBatch(entityMap, batch, batchCount, requestedThisBatch, logger);
                 }
             }
 
@@ -3148,6 +3180,47 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
 
             if (!orphanTrackingOverflowed) {
+                // MJ-RUN-36: an identity seen in an EARLIER batch means the pages overlapped.
+                //
+                // `CollapseDuplicateIdentities` below is within-batch only ("already present in the
+                // same batch"), so it cannot see this, and before this check nothing could: a page
+                // that re-served a row another page already gave was written twice, quietly, as an
+                // insert and then an update.
+                //
+                // That matters far beyond the wasted write. Position-based pagination has no
+                // guaranteed order unless the source promises one, so a boundary that moves BACKWARD
+                // to re-serve a row has also moved FORWARD past another — the repeat is the visible
+                // half of an omission. The row count then understates the source while the run
+                // reports success, which is the failure mode with no signal attached to it.
+                //
+                // The set is already accumulated here for orphan detection, so this costs one lookup
+                // per record and no extra memory.
+                // TWO PASSES, and the order is the whole correctness of this check.
+                //
+                // Checking and adding in one loop misattributes a batch's OWN duplicate to page
+                // overlap: by the time the second copy is examined, the first has already been added,
+                // so an in-batch repeat looks exactly like a row an earlier page served. Verified —
+                // page 1 [ext-1, ext-2] then page 2 [ext-3, ext-3] reported BOTH a within-batch
+                // collapse and a page overlap, and only one of them was true.
+                //
+                // So pass one asks only about identities from EARLIER batches, while the set still
+                // holds exactly those. Pass two then adds this batch. No copy of the set is taken —
+                // it can hold hundreds of thousands of ids.
+                //
+                // `positionPaged` is also the batch-1 guard: currentOffset/currentPage are only set
+                // from the PREVIOUS batch's NextOffset/NextPage, so both are null on the first batch
+                // by construction and nothing can be a repeat yet.
+                const positionPaged = currentOffset != null || currentPage != null;
+                if (positionPaged) {
+                    for (const rec of batch.Records) {
+                        if (fetchedExternalIDs.has(rec.ExternalID)) {
+                            crossBatchRepeatCount++;
+                            if (crossBatchRepeatSamples.length < 5) {
+                                crossBatchRepeatSamples.push(String(rec.ExternalID));
+                            }
+                        }
+                    }
+                }
                 for (const rec of batch.Records) {
                     fetchedExternalIDs.add(rec.ExternalID);
                 }
@@ -3458,7 +3531,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // last ordering key so the next run resumes the seek from here instead of restarting.
             await this.runWriteForMap(entityMapID, () => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
             result.WatermarkAfter = currentAfterKey;
-        } else if (!hadFetchGap && currentWatermark && currentWatermark !== initialWatermark) {
+        } else if (!hadFetchGap && !windowHasHole && currentWatermark && currentWatermark !== initialWatermark) {
             // A WATERMARK-based connector stopped early (cancel / safety limit / duplicate batch /
             // schema-not-generated / unskippable fetch error) but whole batches DID complete. Persist the
             // max watermark seen so the next run resumes from there instead of re-fetching everything
@@ -3584,17 +3657,25 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMap: ICompanyIntegrationEntityMap,
         batch: FetchBatchResult,
         batchIndex: number,
+        requestedBatchSize: number,
         logger?: SyncLogger
     ): void {
         const objectName = entityMap.ExternalObjectName ?? entityMap.ID;
+        // WHAT WAS ASKED FOR ON THIS PAGE, not `this.MaxBatchSize`. The governor may have shed the
+        // run's page size, and the caller decides a batch is over-size against the shed figure.
+        // Classifying against the un-shed ceiling makes the two disagree in exactly the case the
+        // warning exists for: a 2,000 ceiling shed to 500, a connector returning 800, the caller
+        // marking the connector as not honouring the size — and this returning null, so nothing is
+        // ever reported. `oversizeBatchWarned` latches on that first page, so no later page
+        // reports it either.
         const verdict = IntegrationEngine.ClassifyOversizedBatch(
-            objectName, batch.Records.length, this.MaxBatchSize, batchIndex, batch.HasMore,
+            objectName, batch.Records.length, requestedBatchSize, batchIndex, batch.HasMore,
         );
         if (!verdict) return;
         logger?.warning(objectName, verdict.Code, verdict.Message, {
             batchIndex,
             recordCount: batch.Records.length,
-            requestedBatchSize: this.MaxBatchSize,
+            requestedBatchSize,
             hasMore: batch.HasMore ?? null,
             unbounded: verdict.Unbounded,
         });
@@ -5580,6 +5661,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // 2x margin defended by nothing is not a guard. Same reasoning as baseEngine's own
                 // IgnoreMaxRows use, and this file documents the identical trap on the push side.
                 IgnoreMaxRows: true,
+                // L4 — this prefetch runs once per batch and every batch's filter is unique, so the
+                // provider's result cache keeps one entry per batch that is never hit again. Memory
+                // then grows O(records processed) for the lifetime of the run, which is how a
+                // ~500k-record drain killed a 3.8 GB box: the KERNEL oom-killed the process at
+                // ~2.3 GB RSS, twice, BEFORE V8's own ceiling was reached — so no
+                // --max-old-space-size value fixes it and box RAM is the binding constraint.
+                // BypassCache makes the call O(batch), matching LoadAllRecordMaps below.
+                BypassCache: true,
             }, contextUser);
             if (!res.Success) return undefined;
             const Hashes = new Map<string, string>();
