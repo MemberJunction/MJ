@@ -1,11 +1,21 @@
 import {
     AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatMessageRole, ClassifyParams, ClassifyResult,
-    SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer,
+    SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, getTextFromContent,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { HttpPost, HttpRequestConfig, IsHttpError, IsCancellationError } from '@memberjunction/network-utils';
 import { BETTY_BASE_URL_VAR, BettyEndpoint, GetBettyBaseURL } from '../config';
 import { BettyChatRequest, BettyChatResponse, BettyReference } from '../generic/Betty.types';
+
+/**
+ * How long to wait for a Betty turn, in milliseconds.
+ *
+ * Set explicitly because `HttpRequest` defaults to 30s, which is a TRANSPORT default rather than a
+ * generation one. A Betty answer retrieves over the customer's corpus before it writes a word, so
+ * 30s cuts off legitimately slow turns — and because the abort produces an `HttpError` with no
+ * status, the caller would see it as the host being unreachable rather than as a timeout.
+ */
+const BETTY_REQUEST_TIMEOUT_MS = 120_000;
 
 /**
  * MemberJunction provider for **Betty**, the MJ-native organization-scoped assistant.
@@ -74,6 +84,7 @@ export class BettyLLM extends BaseLLM {
         const config: Omit<HttpRequestConfig, 'Url' | 'Method' | 'Body'> = {
             Headers: { Authorization: `Bearer ${this.apiKey}` },
             Signal: cancellationToken,
+            Timeout: BETTY_REQUEST_TIMEOUT_MS,
         };
 
         try {
@@ -88,36 +99,59 @@ export class BettyLLM extends BaseLLM {
         }
     }
 
-    /** The latest user message is the turn; everything before it is advisory context. */
+    /** The latest user message is the turn; every other turn is advisory context. */
     private buildRequest(params: ChatParams): BettyChatRequest | null {
-        const userTurns = params.messages.filter((m) => m.role === ChatMessageRole.user);
-        const latest = userTurns[userTurns.length - 1];
-        if (!latest) return null;
+        // The INDEX, not the message: `contextFromHistory` has to split the transcript at the same
+        // turn this sends, and the latest user turn is NOT necessarily the last element of the
+        // array — `AIPromptRunner` assembles `[system(renderedPrompt), ...conversationMessages]`,
+        // and caller-supplied history is not guaranteed to end on a user turn.
+        const latestIndex = params.messages.map((m) => m.role).lastIndexOf(ChatMessageRole.user);
+        if (latestIndex < 0) return null;
 
-        const context = this.contextFromHistory(params);
+        const context = this.contextFromHistory(params, latestIndex);
         return {
-            message: String(latest.content ?? ''),
+            // Content is `string | ChatMessageContentBlock[]`, and `AIPromptRunner` rewrites the
+            // last user message into blocks whenever the prompt carries file inputs. Stringifying
+            // that array would post `[object Object]` and Betty would answer a question nobody
+            // asked, with no error to show for it.
+            message: getTextFromContent(params.messages[latestIndex].content ?? ''),
             ...(context ? { context: { text: context } } : {}),
         };
     }
 
     /**
-     * Render everything before the final user turn as a transcript.
+     * Render every turn except the one being sent as a transcript.
      *
      * `context.text` is documented as free-text situational context and is explicitly
      * non-authorizing, which is the correct channel for this: it informs the answer without
      * widening what content the credential can reach.
+     *
+     * The turn is excluded BY INDEX rather than by dropping the last element. Dropping the tail
+     * only lines up when the latest user turn happens to be last; when anything follows it the
+     * question ends up both as the message and as a line of its own transcript, and the turn that
+     * actually follows it is lost.
      */
-    private contextFromHistory(params: ChatParams): string | undefined {
-        const prior = params.messages.slice(0, -1)
-            .filter((m) => m.role !== ChatMessageRole.system)
-            .map((m) => `${m.role === ChatMessageRole.assistant ? 'Assistant' : 'User'}: ${String(m.content ?? '')}`);
+    private contextFromHistory(params: ChatParams, latestIndex: number): string | undefined {
+        const prior = params.messages
+            .filter((m, i) => i !== latestIndex && m.role !== ChatMessageRole.system)
+            .map((m) => `${this.speakerFor(m.role)}: ${getTextFromContent(m.content ?? '')}`);
 
         const system = params.messages.find((m) => m.role === ChatMessageRole.system);
-        const preamble = system ? [`Instructions from the calling application: ${String(system.content ?? '')}`] : [];
+        const preamble = system
+            ? [`Instructions from the calling application: ${getTextFromContent(system.content ?? '')}`]
+            : [];
         const lines = [...preamble, ...(prior.length ? ['Earlier in this conversation:', ...prior] : [])];
 
         return lines.length ? lines.join('\n') : undefined;
+    }
+
+    /** Who said it. A `tool` turn is not the user, and labelling it `User:` misattributes it. */
+    private speakerFor(role: ChatMessageRole): string {
+        switch (role) {
+            case ChatMessageRole.assistant: return 'Assistant';
+            case ChatMessageRole.tool: return 'Tool result';
+            default: return 'User';
+        }
     }
 
     private toChatResult(data: BettyChatResponse, startTime: Date): ChatResult {
@@ -176,7 +210,10 @@ export class BettyLLM extends BaseLLM {
     private describe(ex: unknown): string {
         if (IsHttpError(ex)) {
             const payload = ex.Data as { error?: { message?: string }; message?: string } | undefined;
-            const detail = payload?.error?.message ?? payload?.message ?? ex.StatusText ?? ex.message;
+            // `||`, not `??`: `HttpError.StatusText` defaults to '' when there was no response at
+            // all (timeout, DNS failure, connection refused), and '' is not nullish — `??` would
+            // stop there and discard `ex.message`, the only part that says what actually happened.
+            const detail = payload?.error?.message || payload?.message || ex.StatusText || ex.message;
             return ex.Status ? `Betty returned ${ex.Status}: ${detail}` : `Could not reach Betty: ${detail}`;
         }
         return ex instanceof Error ? ex.message : 'Unknown error calling Betty.';
@@ -234,9 +271,4 @@ export class BettyLLM extends BaseLLM {
     public async ClassifyText(_params: ClassifyParams): Promise<ClassifyResult> {
         throw new Error('Method not implemented.');
     }
-}
-
-/** Tree-shaking guard — see the class-registration manifest system. */
-export function LoadBettyLLM(): void {
-    // Intentionally empty: importing this symbol keeps the @RegisterClass decorator above alive.
 }
