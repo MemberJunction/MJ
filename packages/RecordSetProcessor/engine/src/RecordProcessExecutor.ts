@@ -29,7 +29,7 @@ import { AgentRecordProcessor } from './processors/AgentRecordProcessor';
 import { InferProcessor } from './processors/InferProcessor';
 import { FieldRulesProcessor } from './processors/FieldRulesProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
-import { OutputMappingConfig, RunProvenance } from './writeBack';
+import { ChildRecordMapping, FieldLookupConfig, OutputMappingConfig, RunProvenance, TagOutputMapping } from './writeBack';
 import { validateSpec, validateMaterializationTargets, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 /** Options for executing a Record Process. */
@@ -185,6 +185,7 @@ export class RecordProcessExecutor {
 
         const inputMapping = rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : undefined;
         let base: IRecordProcessor;
+        let spec: DataFeatureSpec | undefined;
         if (rp.WorkType === 'Action') {
             if (!rp.ActionID) {
                 throw new Error(`Record Process '${rp.Name}': WorkType=Action requires ActionID`);
@@ -199,7 +200,6 @@ export class RecordProcessExecutor {
             if (!rp.PromptID) {
                 throw new Error(`Record Process '${rp.Name}': WorkType=Infer requires PromptID`);
             }
-            let spec: DataFeatureSpec | undefined;
             if (rp.Configuration && rp.Configuration.trim().length > 0) {
                 try {
                     spec = JSON.parse(rp.Configuration) as DataFeatureSpec;
@@ -239,6 +239,23 @@ export class RecordProcessExecutor {
         }
 
         const outputMapping = rp.OutputMapping ? SafeJSONParse<OutputMappingConfig>(rp.OutputMapping) : undefined;
+        if (outputMapping?.fields && spec?.Outputs) {
+            for (const out of spec.Outputs) {
+                if (out.Target && out.Target.Mode === 'field') {
+                    const fieldName = out.Target.EntityFieldName;
+                    if (outputMapping.fields[fieldName] && (out.Target.LookupMatchField || out.Target.OnLookupMiss)) {
+                        outputMapping.fieldLookups = outputMapping.fieldLookups ?? {};
+                        if (!outputMapping.fieldLookups[fieldName]) {
+                            outputMapping.fieldLookups[fieldName] = {
+                                matchField: out.Target.LookupMatchField ?? 'Name',
+                                onLookupMiss: out.Target.OnLookupMiss ?? 'null',
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
         if (
             outputMapping &&
             (outputMapping.fields ||

@@ -5,7 +5,7 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { BaseEntity, CompositeKey, IMetadataProvider, LogStatus, Metadata, UserInfo, LogError } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, IMetadataProvider, LogStatus, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
 import { UUIDsEqual, resolveMappingRef } from '@memberjunction/global';
 import { RecordRef } from '@memberjunction/record-set-processor-base';
 import { TagEngine, TaxonomyMode } from '@memberjunction/tag-engine';
@@ -20,6 +20,16 @@ export interface RunProvenance {
     AIPromptRunID?: string;
     ExecutedAt?: string;
     FeatureValueCacheID?: string;
+}
+
+/** Foreign-key lookup configuration for resolving a name or match field to a foreign-key ID. */
+export interface FieldLookupConfig {
+    /** Target related entity name or ID to look up against. Derived from field metadata if omitted. */
+    relatedEntity?: string;
+    /** Column on the related entity to match against (default 'Name'). */
+    matchField?: string;
+    /** Policy when lookup yields no matching record: 'null' (write null), 'fail' (throw error), 'create' (create new record and use its ID). Default 'null'. */
+    onLookupMiss?: 'null' | 'fail' | 'create';
 }
 
 /** Child record mapping configuration, supporting optional array fan-out. */
@@ -54,6 +64,8 @@ export interface TagOutputMapping {
 export interface OutputMappingConfig {
     /** Map of `EntityFieldName -> resultRef` (e.g. `{ "Satisfaction": "$.satisfaction" }`) applied to the processed record. */
     fields?: Record<string, string>;
+    /** Optional foreign-key lookup configurations per target field name. */
+    fieldLookups?: Record<string, FieldLookupConfig>;
     /** Optional single child record to create from the result (kept for backward compatibility). */
     childRecord?: ChildRecordMapping;
     /** Optional child records to create from the result, supporting fan-out over arrays. */
@@ -168,6 +180,102 @@ export async function applyOutputMapping(opts: {
         const resolved: Record<string, unknown> = {};
         for (const [field, ref] of Object.entries(outputMapping.fields)) {
             resolved[field] = resolveMappingRef(ref, sources);
+        }
+
+        // Resolve foreign-key fields where the mapped value is a match string (e.g. 'Director') instead of an ID
+        for (const [field, val] of Object.entries(resolved)) {
+            if (val === null || val === undefined || val === '') {
+                continue;
+            }
+            const fieldInfo = entity.Fields?.find((f) => f.Name.toLowerCase() === field.toLowerCase());
+            const lookupConfig = outputMapping.fieldLookups?.[field];
+            const isFK = Boolean(lookupConfig || fieldInfo?.RelatedEntity || fieldInfo?.RelatedEntityID);
+            if (!isFK) {
+                continue;
+            }
+
+            // If the value is already a valid UUID, no lookup is required.
+            const isUUID = typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim());
+            if (isUUID) {
+                resolved[field] = val.trim();
+                continue;
+            }
+
+            let matchValue: unknown = val;
+            if (Array.isArray(matchValue) && matchValue.length > 0) {
+                matchValue = matchValue[0];
+            }
+            if (matchValue && typeof matchValue === 'object' && 'Name' in matchValue) {
+                matchValue = (matchValue as { Name: unknown }).Name;
+            }
+            if (typeof matchValue !== 'string' && typeof matchValue !== 'number') {
+                continue;
+            }
+            const strVal = String(matchValue).trim();
+            if (strVal.length === 0) {
+                continue;
+            }
+
+            const relatedEntityName = lookupConfig?.relatedEntity ||
+                fieldInfo?.RelatedEntity ||
+                (fieldInfo?.RelatedEntityID ? provider.EntityByID(fieldInfo.RelatedEntityID)?.Name : undefined);
+
+            if (!relatedEntityName) {
+                if (lookupConfig?.onLookupMiss === 'fail') {
+                    throw new Error(`applyOutputMapping: cannot resolve foreign key for field '${field}': related entity unknown in metadata`);
+                }
+                resolved[field] = null;
+                continue;
+            }
+
+            const matchField = lookupConfig?.matchField || 'Name';
+            const onLookupMiss = lookupConfig?.onLookupMiss || 'null';
+
+            const rv = provider && typeof (provider as unknown as { RunView?: unknown }).RunView === 'function'
+                ? RunView.FromMetadataProvider(provider)
+                : (RunView.Provider ? new RunView() : undefined);
+
+            if (!rv) {
+                continue;
+            }
+
+            const escapedVal = strVal.replace(/'/g, "''");
+            const viewRes = await rv.RunView<{ ID?: string; [k: string]: unknown }>({
+                EntityName: relatedEntityName,
+                ExtraFilter: `[${matchField}] = '${escapedVal}'`,
+                MaxRows: 1,
+            }, contextUser);
+
+            if (viewRes.Success && viewRes.Results && viewRes.Results.length > 0) {
+                const matchRow = viewRes.Results[0];
+                const relEntity = provider.EntityByName(relatedEntityName);
+                const pkFieldName = relEntity?.FirstPrimaryKey?.Name ?? 'ID'; // first-pk-ok: FK target PK resolution
+                const resolvedID = matchRow[pkFieldName] ?? matchRow.ID;
+                resolved[field] = resolvedID;
+            } else if (!viewRes.Success) {
+                throw new Error(`applyOutputMapping: RunView failed for lookup on '${relatedEntityName}': ${viewRes.ErrorMessage ?? 'unknown error'}`);
+            } else {
+                // Zero-row lookup miss
+                if (onLookupMiss === 'null') {
+                    resolved[field] = null;
+                } else if (onLookupMiss === 'fail') {
+                    throw new Error(`applyOutputMapping: lookup for '${field}' on entity '${relatedEntityName}' where [${matchField}]='${strVal}' matched 0 rows (OnLookupMiss=fail)`);
+                } else if (onLookupMiss === 'create') {
+                    if (dryRun) {
+                        resolved[field] = `preview-new-${relatedEntityName}-${strVal}`;
+                    } else {
+                        const newObj = await provider.GetEntityObject<BaseEntity>(relatedEntityName, contextUser);
+                        newObj.NewRecord();
+                        // Dynamic, config-driven match field — legitimate use of Set()
+                        newObj.Set(matchField, strVal);
+                        const created = await newObj.Save();
+                        if (!created) {
+                            throw new Error(`applyOutputMapping: failed creating new record in '${relatedEntityName}' with ${matchField}='${strVal}': ${newObj.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                        }
+                        resolved[field] = newObj.PrimaryKey.ToCompactURLSegment();
+                    }
+                }
+            }
         }
         if (dryRun) {
             // Compute-only: surface what an apply WOULD write, persist nothing.
