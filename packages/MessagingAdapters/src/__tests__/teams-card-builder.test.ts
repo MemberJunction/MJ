@@ -747,12 +747,22 @@ describe('buildUnopenableResourceNotes — compose:email', () => {
         ...over,
     });
 
-    it('emits a note naming the recipient and subject', () => {
+    it('emits a note naming the draft and the route back to Explorer', () => {
         const notes = buildUnopenableResourceNotes([cmd()]);
         expect(notes.length).toBe(1);
         const text = JSON.stringify(notes);
-        expect(text).toContain('bob@example.com');
-        expect(text).toContain('Membership renewal');
+        expect(text).toContain('Open draft in Mail');
+        expect(text).toContain('View in MJ Explorer');
+    });
+
+    // A Teams channel or group chat is a shared, retained surface: correspondence metadata safe for
+    // the person who will send the mail is not safe for every participant.
+    it('discloses neither the recipient nor the subject in the card', () => {
+        const notes = buildUnopenableResourceNotes([cmd({ to: ['private.person@example.com'], subject: 'Confidential: settlement terms' })]);
+        const text = JSON.stringify(notes);
+        expect(text).not.toContain('private.person@example.com');
+        expect(text).not.toContain('settlement');
+        expect(text).toContain('View in MJ Explorer');
     });
 
     it('never puts a mailto: URL in an action button', () => {
@@ -768,14 +778,14 @@ describe('buildUnopenableResourceNotes — compose:email', () => {
     // An Adaptive Card TextBlock renders a markdown subset INCLUDING links, and every field here
     // is agent-authored — so an injected subject must not become a live hyperlink in an MJ card.
     it('escapes markdown so agent text cannot inject a link', () => {
-        const notes = buildUnopenableResourceNotes([cmd({ subject: 'Renewal [click here](https://evil.example)' })]);
+        const notes = buildUnopenableResourceNotes([cmd({ label: 'Renewal [click here](https://evil.example)' })]);
         const text = String((notes[0] as { text: string }).text);
         expect(text).not.toContain('[click here](https://evil.example)');
         expect(text).toContain('\\[click here\\]');
     });
 
     it('escapes underscores so agent text cannot break out of the italics', () => {
-        const notes = buildUnopenableResourceNotes([cmd({ subject: 'a_b_c' })]);
+        const notes = buildUnopenableResourceNotes([cmd({ label: 'a_b_c' })]);
         expect(String((notes[0] as { text: string }).text)).toContain('a\\_b\\_c');
     });
 });

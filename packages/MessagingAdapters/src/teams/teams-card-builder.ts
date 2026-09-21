@@ -272,7 +272,7 @@ export function buildUnopenableResourceNotes(commands: ActionableCommand[]): Rec
         } else if (cmd.type === 'compose:email') {
             // A mailto: URL fails isOpenableURI, so buildActionButtons drops it. Without this note
             // the command would render as nothing at all and the user would never learn a draft
-            // exists. Name the recipient and subject so the note identifies WHICH draft.
+            // exists. Name the draft by its label only — no recipient or subject on a shared surface.
             notes.push(formatComposeEmailNote(cmd));
         }
     }
@@ -293,19 +293,13 @@ export function buildUnopenableResourceNotes(commands: ActionableCommand[]): Rec
  *
  * Teams cannot open a `mailto:` from an Action.OpenUrl (its URI check accepts http/https only), so
  * the draft is described and the user is pointed at Explorer, where the Email Draft artifact holds
- * the full text.
+ * the full text. DELIBERATELY WITHOUT the recipient or subject: a Teams channel or group chat is a
+ * shared, retained surface, and correspondence metadata safe for the person who will send the mail
+ * is not safe for every participant. Only the label and the route back are shown; recipient and
+ * subject would need an explicit private-context signal from the adapter, which does not exist yet.
  */
 function formatComposeEmailNote(cmd: ComposeEmailCommand): string {
-    const parts: string[] = [];
-    const to = (cmd.to ?? []).filter(r => r.trim().length > 0);
-    if (to.length > 0) {
-        parts.push(`to ${escapeCardMarkdown(to.join(', '))}`);
-    }
-    if (cmd.subject) {
-        parts.push(escapeCardMarkdown(cmd.subject));
-    }
-    const detail = parts.length > 0 ? ` (${parts.join(' — ')})` : '';
-    return `✉️ _${escapeCardMarkdown(cmd.label ?? 'Email draft')}${detail} — open it with "View in MJ Explorer" below to send._`;
+    return `✉️ _${escapeCardMarkdown(cmd.label ?? 'Email draft')} — email draft available; open it with "View in MJ Explorer" below to review and send._`;
 }
 
 /**

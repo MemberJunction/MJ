@@ -376,7 +376,7 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
       // A mailto: URL fails isOpenableURI (http/https only), so Slack would silently drop a button
       // built from one — and without an explicit branch the command renders as NOTHING AT ALL.
       // Degrade to a note naming the draft and pointing back at Explorer, where the Email Draft
-      // artifact carries the full text.
+      // artifact carries the full text. The note carries NO recipient or subject — see the helper.
       resourceInfoItems.push(formatComposeEmailInfo(cmd));
     } else if (cmd.type === 'open:resource') {
       const resourceCmd = cmd as OpenResourceCommand;
@@ -416,24 +416,18 @@ export function buildActionButtons(commands: ActionableCommand[], explorerBaseUR
  * Describe a `compose:email` command as text for a context block.
  *
  * Slack cannot open a `mailto:` link from a button (its URL check accepts http/https only), so the
- * draft is described rather than offered. The recipient and subject are included because they are
- * what makes the note actionable — the reader can recognise which draft it refers to.
+ * draft is described rather than offered. DELIBERATELY WITHOUT the recipient or subject: a Slack
+ * channel is a shared, retained, exportable surface, and "safe to show the person who will open the
+ * draft" is not "safe to show everyone in the channel". The reader gets the label and the route
+ * back to Explorer, where the Email Draft artifact — and its recipients — are shown to the signed-in
+ * user only. Recipient/subject would need an explicit private-context signal from the adapter to
+ * come back here, and none exists today.
  */
 function formatComposeEmailInfo(cmd: ComposeEmailCommand): string {
-  const parts: string[] = [];
-  const to = (cmd.to ?? []).filter((r) => r.trim().length > 0);
-  if (to.length > 0) {
-    parts.push(`to ${escapeMrkdwn(to.join(', '))}`);
-  }
-  if (cmd.subject) {
-    // Deliberately NOT wrapped in its own `_..._`: the whole note is already italic, and Slack
-    // pairs underscores left-to-right, so a nested pair closes the outer italic early and leaves
-    // the trailing underscores rendering literally. escapeMrkdwn does not escape `_`, so a subject
-    // containing one breaks it the same way — keeping the subject plain avoids both.
-    parts.push(escapeMrkdwn(cmd.subject));
-  }
-  const detail = parts.length > 0 ? ` (${parts.join(' — ')})` : '';
-  return `✉️ _${escapeMrkdwn(cmd.label) || 'Email draft'}${detail} — open it in MJ Explorer to send._`;
+  // Not wrapped in its own `_..._`: the whole note is one italic span, and Slack pairs underscores
+  // left-to-right, so a nested pair would close the outer italic early. escapeMrkdwn does not
+  // escape `_`, so the label stays plain inside the span for the same reason.
+  return `✉️ _${escapeMrkdwn(cmd.label) || 'Email draft'} — email draft available; open it in MJ Explorer to review and send._`;
 }
 
 /**

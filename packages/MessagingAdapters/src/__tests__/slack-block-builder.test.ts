@@ -961,12 +961,23 @@ describe('buildActionButtons — compose:email', () => {
         ...over,
     });
 
-    it('renders a context note rather than nothing', () => {
+    it('renders a context note rather than nothing — the label and the route back to Explorer', () => {
         const blocks = buildActionButtons([cmd()]);
         expect(blocks.length).toBeGreaterThan(0);
         const text = JSON.stringify(blocks);
-        expect(text).toContain('bob@example.com');
-        expect(text).toContain('Membership renewal');
+        expect(text).toContain('Open draft in Mail');
+        expect(text).toContain('MJ Explorer');
+    });
+
+    // A Slack channel is a shared, retained, exportable surface. What is safe to show the person
+    // who will send the mail (Explorer puts the recipients beside the button) is not safe to show
+    // every participant — so the fallback carries neither the recipient nor the subject.
+    it('discloses neither the recipient nor the subject on the channel', () => {
+        const blocks = buildActionButtons([cmd({ to: ['private.person@example.com'], subject: 'Confidential: settlement terms' })]);
+        const text = JSON.stringify(blocks);
+        expect(text).not.toContain('private.person@example.com');
+        expect(text).not.toContain('settlement');
+        expect(text).toContain('MJ Explorer');  // …but the reader still has a route to the draft
     });
 
     it('never emits a button carrying a mailto: URL', () => {
