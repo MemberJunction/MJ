@@ -58,6 +58,9 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
     return {
         ...actual,
         GetAIAPIKey: vi.fn(() => 'mock-api-key'),
+        // Overridden alongside GetAIAPIKey: MakeAIAPIKeyResolver reaches it through a same-module
+        // binding, so spreading `actual` would otherwise run the real environment lookup.
+        MakeAIAPIKeyResolver: () => () => 'mock-api-key',
     };
 });
 

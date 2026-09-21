@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AIAPIKeys, GetAIAPIKey, GetAIAPIKeyGlobal } from '../generic/apiKeyDictionary';
+import { AIAPIKeys, GetAIAPIKey, GetAIAPIKeyGlobal, MakeAIAPIKeyResolver } from '../generic/apiKeyDictionary';
 import { MJGlobal } from '@memberjunction/global';
 
 describe('AIAPIKeys', () => {
@@ -163,5 +163,40 @@ describe('AIAPIKeys.GetAPIKey — a driver name that is missing (#3532)', () => 
     it('GetAIAPIKey survives a missing driver name too', () => {
         expect(() => GetAIAPIKey(null as unknown as string)).not.toThrow();
         expect(GetAIAPIKey(null as unknown as string)).toBeUndefined();
+    });
+});
+
+describe('MakeAIAPIKeyResolver', () => {
+    /**
+     * The canonical way a run's keys reach code that spends them — prompts, actions, realtime — without
+     * that code holding the list. Precedence is the one `GetAIAPIKey` already applies, so a caller that
+     * swaps a bare `GetAIAPIKey(driverClass)` for a resolver cannot change behaviour by accident.
+     */
+    let originalEnv: NodeJS.ProcessEnv;
+    beforeEach(() => { originalEnv = { ...process.env }; });
+    afterEach(() => { process.env = originalEnv; });
+
+    it('prefers the run\'s key for that driver class over the platform\'s', () => {
+        process.env['AI_VENDOR_API_KEY__OPENAILLM'] = 'platform-key';
+        const resolve = MakeAIAPIKeyResolver([{ driverClass: 'OpenAILLM', apiKey: 'sk-customer' }]);
+        expect(resolve('OpenAILLM')).toBe('sk-customer');
+    });
+
+    it('falls back to the platform key PER DRIVER CLASS — a run keyed for one vendor still uses ours for another', () => {
+        process.env['AI_VENDOR_API_KEY__OPENAIIMAGEGENERATOR'] = 'platform-image-key';
+        const resolve = MakeAIAPIKeyResolver([{ driverClass: 'OpenAILLM', apiKey: 'sk-customer' }]);
+        expect(resolve('OpenAIImageGenerator')).toBe('platform-image-key');
+    });
+
+    it('is exactly the platform lookup when the run has no keys, so no caller special-cases that', () => {
+        process.env['AI_VENDOR_API_KEY__OPENAILLM'] = 'platform-key';
+        expect(MakeAIAPIKeyResolver()('OpenAILLM')).toBe('platform-key');
+        expect(MakeAIAPIKeyResolver([])('OpenAILLM')).toBe('platform-key');
+    });
+
+    it('answers undefined — never an empty string — when neither source has a key', () => {
+        // Callers branch on falsiness to skip a vendor; '' and undefined must not diverge.
+        delete process.env['AI_VENDOR_API_KEY__NOSUCHDRIVER'];
+        expect(MakeAIAPIKeyResolver([])('NoSuchDriver')).toBeUndefined();
     });
 });

@@ -13,7 +13,7 @@
  * @author MemberJunction.com
  */
 
-import { GetAIAPIKey } from '@memberjunction/ai';
+import { AIAPIKeyResolver, MakeAIAPIKeyResolver } from '@memberjunction/ai';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 
@@ -35,13 +35,18 @@ export interface RealtimeVendorSelection {
 }
 
 /**
- * Resolves a key for a `DriverClass` from the environment. Injectable so callers that already own a
- * key-resolution seam (and their tests) can substitute one without reaching into the environment.
+ * Resolves a key for a `DriverClass`. Injectable so callers that already own a key-resolution seam
+ * (and their tests) can substitute one without reaching into the environment.
+ *
+ * An alias of {@link AIAPIKeyResolver} — the canonical shape in `@memberjunction/ai`, shared with
+ * the prompt and action paths — kept under this name because it is the published realtime API. A
+ * run-scoped resolver (`MakeAIAPIKeyResolver(params.apiKeys)`) is what carries a customer's own
+ * credentials in here; the default below is the platform-only lookup.
  */
-export type RealtimeAPIKeyResolver = (driverClass: string) => string | undefined;
+export type RealtimeAPIKeyResolver = AIAPIKeyResolver;
 
-/** The default resolver — the process's configured AI API keys. */
-const defaultAPIKeyResolver: RealtimeAPIKeyResolver = (driverClass) => GetAIAPIKey(driverClass) || undefined;
+/** The default resolver — the process's configured AI API keys, with no run-scoped keys. */
+const defaultAPIKeyResolver: RealtimeAPIKeyResolver = MakeAIAPIKeyResolver();
 
 /**
  * Selects the vendor that will run a realtime model: the highest-`Priority` **Active** `MJ: AI Model

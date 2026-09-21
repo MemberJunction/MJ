@@ -40,6 +40,9 @@ import {
     ChatMessage,
     ClientRealtimeSessionConfig,
     GetAIAPIKey,
+    AIAPIKey,
+    AIAPIKeyResolver,
+    MakeAIAPIKeyResolver,
     IRealtimeSession,
     JSONObject,
     RealtimeSessionParams,
@@ -96,6 +99,13 @@ import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtim
  * id — it is a runtime choice made when the voice session starts.
  */
 export interface PrepareClientSessionInput {
+    /**
+     * The run's runtime API keys, when the session is started inside an agent run that carries them
+     * (`ExecuteAgentParams.apiKeys`). Vendor selection and the minted session both resolve against
+     * these first and fall back to the platform key per driver class — the same precedence every
+     * prompt follows. Absent ⇒ platform keys only, which is every client-initiated session today.
+     */
+    APIKeys?: AIAPIKey[];
     /** The Realtime Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
     CoAgent?: MJAIAgentEntityExtended;
     /** The Realtime Co-Agent id (resolved from cached metadata). Provide this OR {@link PrepareClientSessionInput.CoAgent}. */
@@ -1568,14 +1578,19 @@ export class RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         effectiveConfig?: RealtimeCoAgentConfig
     ): Promise<RealtimeModelResolutionOutcome> {
+        // One resolver for every branch below: the session's runtime keys (when it was started inside
+        // a run that carries them) ahead of the platform key, per driver class. Built here rather than
+        // per branch so the requested-model, configured-preference and default paths cannot disagree
+        // about which credentials the session may use.
+        const resolveAPIKey = MakeAIAPIKeyResolver(input.APIKeys);
         if (input.PreferredModelID) {
-            return this.resolvePreferredRealtimeModel(input.PreferredModelID);
+            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveAPIKey);
         }
-        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig);
+        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveAPIKey);
         if (fromConfig) {
             return { Resolution: fromConfig };
         }
-        const resolution = await this.resolveRealtimeModel(coAgent);
+        const resolution = await this.resolveRealtimeModel(coAgent, resolveAPIKey);
         return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
     }
 
@@ -1589,7 +1604,7 @@ export class RealtimeClientSessionService {
      * @param effectiveConfig The resolved effective configuration.
      * @returns The resolution, or `null` when no preference is configured or it can't be satisfied.
      */
-    protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig): RealtimeModelResolution | null {
+    protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig, resolve?: AIAPIKeyResolver): RealtimeModelResolution | null {
         const preference = effectiveConfig?.realtime?.modelPreference;
         if (!preference) {
             return null;
@@ -1609,7 +1624,7 @@ export class RealtimeClientSessionService {
             );
             return null;
         }
-        const resolution = this.resolveVendorAndInstantiate(model);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve);
         if (!resolution) {
             LogError(
                 `RealtimeClientSessionService: configured realtime model preference '${model.Name}' has no usable ` +
@@ -1648,7 +1663,7 @@ export class RealtimeClientSessionService {
      * @param preferredModelID The `MJ: AI Models.ID` the user chose.
      * @returns The resolution outcome (resolution or a specific failure reason).
      */
-    protected resolvePreferredRealtimeModel(preferredModelID: string): RealtimeModelResolutionOutcome {
+    protected resolvePreferredRealtimeModel(preferredModelID: string, resolve?: AIAPIKeyResolver): RealtimeModelResolutionOutcome {
         const model = this.findModelByID(preferredModelID);
         if (!model) {
             return { ErrorMessage: `The requested realtime model (id '${preferredModelID}') was not found in AI model metadata.` };
@@ -1659,7 +1674,7 @@ export class RealtimeClientSessionService {
         if (!this.isRealtimeModel(model)) {
             return { ErrorMessage: `The requested model '${model.Name}' is not a Realtime model (its type is '${model.AIModelType}').` };
         }
-        const resolution = this.resolveVendorAndInstantiate(model);
+        const resolution = this.resolveVendorAndInstantiate(model, resolve);
         if (!resolution) {
             return {
                 ErrorMessage:
@@ -1697,7 +1712,7 @@ export class RealtimeClientSessionService {
      * @param coAgent The co-agent being voiced (reserved for future per-agent model preference).
      * @returns The resolved model + identifiers, or `null`.
      */
-    protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended): Promise<RealtimeModelResolution | null> {
+    protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver): Promise<RealtimeModelResolution | null> {
         // Walk candidates in descending PowerRank, returning the FIRST that fully resolves to a usable
         // client-direct driver (active vendor + API key + ClassFactory driver + SupportsClientDirect).
         // Single-pick dead-ended whenever the highest-power model lacked a key or client-direct support
@@ -1705,7 +1720,7 @@ export class RealtimeClientSessionService {
         // surfaced "No usable Realtime model" instead of falling through to a model that works.
         const candidates = this.selectRealtimeModelCandidates(coAgent);
         for (const model of candidates) {
-            const resolution = this.resolveVendorAndInstantiate(model);
+            const resolution = this.resolveVendorAndInstantiate(model, resolve);
             if (resolution && resolution.Model.SupportsClientDirect) {
                 return resolution;
             }
@@ -1720,13 +1735,16 @@ export class RealtimeClientSessionService {
      * @param model The chosen model entity.
      * @returns The full resolution, or `null` when no vendor/key/driver can be satisfied.
      */
-    protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended): RealtimeModelResolution | null {
-        const vendor = this.selectRealtimeVendor(model.ID);
+    protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended, resolve?: AIAPIKeyResolver): RealtimeModelResolution | null {
+        // The run's keys first, then this service's own seam (which subclasses and tests override) —
+        // so a run-scoped credential wins without taking that seam away from anyone who replaced it.
+        const resolveKey: AIAPIKeyResolver = (driverClass) => resolve?.(driverClass) ?? this.getAPIKeyForDriver(driverClass);
+        const vendor = this.selectRealtimeVendor(model.ID, resolveKey);
         if (!vendor) {
             return null;
         }
 
-        const apiKey = this.getAPIKeyForDriver(vendor.DriverClass);
+        const apiKey = resolveKey(vendor.DriverClass);
         if (!apiKey) {
             return null;
         }
@@ -1793,8 +1811,8 @@ export class RealtimeClientSessionService {
      * @param modelID The chosen model's id.
      * @returns The vendor driver/api identifiers, or `null` when none has a usable key.
      */
-    protected selectRealtimeVendor(modelID: string): RealtimeVendorSelection | null {
-        return SelectRealtimeVendorForModel(modelID, (driverClass) => this.getAPIKeyForDriver(driverClass));
+    protected selectRealtimeVendor(modelID: string, resolve?: AIAPIKeyResolver): RealtimeVendorSelection | null {
+        return SelectRealtimeVendorForModel(modelID, resolve ?? ((driverClass) => this.getAPIKeyForDriver(driverClass)));
     }
 
     /**

@@ -20,7 +20,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, MakeAIAPIKeyResolver, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
@@ -2050,6 +2050,9 @@ export class BaseAgent {
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
+            // The run's runtime API keys, so a client-direct voice session mints on the customer's
+            // credential like every prompt in the same run. Absent ⇒ platform keys, as before.
+            APIKeys: params.apiKeys,
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
@@ -2091,13 +2094,21 @@ export class BaseAgent {
         // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
         // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
         // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
+        // The run's runtime API keys reach realtime exactly as they reach prompts and actions: one
+        // resolver, driver class in, key out, the platform key when the run has none for that class.
+        //
+        // This also affects WHICH vendor runs the session, deliberately. Vendor selection walks
+        // candidates by priority and takes the first whose key resolves, so an organization that
+        // brings its own credential for a vendor we hold no platform key for now reaches that
+        // vendor — which is the point of bringing your own key, not a side effect of it.
+        const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys);
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
         for (const model of candidates) {
-            const vendor = SelectRealtimeVendorForModel(model.ID);
+            const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
             if (!vendor) {
                 continue;
             }
-            const apiKey = GetAIAPIKey(vendor.DriverClass);
+            const apiKey = resolveAPIKey(vendor.DriverClass);
             if (!apiKey) {
                 continue;
             }
