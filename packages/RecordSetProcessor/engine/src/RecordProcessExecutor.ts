@@ -212,7 +212,7 @@ export class RecordProcessExecutor {
                     throw new Error(`Record Process '${rp.Name}': invalid DataFeatureSpec in Configuration: ${errors.map((err) => err.Message).join('; ')}`);
                 }
 
-                const targetProvider = provider ?? (Metadata.Provider ? Metadata.Provider : undefined);
+                const targetProvider = provider ?? Metadata.Provider;
                 if (targetProvider && rp.EntityID) {
                     const materializationIssues = validateMaterializationTargets(spec, targetProvider, rp.EntityID);
                     const matErrors = materializationIssues.filter((i) => i.Severity === 'error');
