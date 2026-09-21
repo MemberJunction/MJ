@@ -2,7 +2,7 @@
   "entity": "MJ: Test Suites",
   "filePattern": "**/.*.json",
   "pull": {
-    "filter": "Name NOT LIKE 'Integration Tests%'",
+    "filter": "Name NOT LIKE 'Integration Tests%' AND ID NOT IN (SELECT st.SuiteID FROM __mj.TestSuiteTest st INNER JOIN __mj.Test t ON t.ID = st.TestID INNER JOIN __mj.TestType tt ON tt.ID = t.TypeID WHERE tt.Name = 'Computer Use')",
     "lookupFields": {
       "TypeID": {
         "entity": "MJ: Test Types",

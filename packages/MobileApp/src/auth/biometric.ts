@@ -21,7 +21,7 @@ export type BiometricLabel = 'Face ID' | 'Touch ID' | 'Biometrics';
  * @returns `true` only when a biometric prompt would succeed; `false` on
  *   simulators without enrollment, unsupported devices, or any native error.
  */
-export async function isBiometricAvailable(): Promise<boolean> {
+export async function IsBiometricAvailable(): Promise<boolean> {
     try {
         const [hasHardware, isEnrolled] = await Promise.all([
             LocalAuthentication.hasHardwareAsync(),
@@ -41,7 +41,7 @@ export async function isBiometricAvailable(): Promise<boolean> {
  * @returns `'Face ID'`, `'Touch ID'`, or `'Biometrics'` (the safe default when
  *   the modality can't be determined).
  */
-export async function getBiometricLabel(): Promise<BiometricLabel> {
+export async function GetBiometricLabel(): Promise<BiometricLabel> {
     try {
         const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
         if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) return 'Face ID';
@@ -64,7 +64,7 @@ export async function getBiometricLabel(): Promise<BiometricLabel> {
  */
 export async function authenticate(reason: string): Promise<boolean> {
     try {
-        if (!(await isBiometricAvailable())) return false;
+        if (!(await IsBiometricAvailable())) return false;
         const result = await LocalAuthentication.authenticateAsync({
             promptMessage: reason,
             cancelLabel: 'Cancel',
