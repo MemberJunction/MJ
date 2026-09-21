@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IMetadataProvider } from '@memberjunction/core';
 import { RealtimeClientUsage } from '@memberjunction/ai-realtime-client';
-import { RealtimeSessionService, RealtimeDelegationResult } from '../lib/services/realtime-session.service';
+import { RealtimeDelegationResult } from '@memberjunction/realtime-runtime';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 
 /**
  * The explicit delegation-CANCEL channel ({@link RealtimeSessionService.CancelDelegation} /

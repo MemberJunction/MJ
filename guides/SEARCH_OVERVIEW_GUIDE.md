@@ -2,6 +2,12 @@
 
 MJ has **multiple search APIs**, each tuned for a different question. They're complementary, not competing. This guide helps you pick the right one and points to the deeper docs for each.
 
+> **First fork: is the answer inside MJ, or out on the web?** Everything below the fork searches
+> content this instance owns — entity records, vectors, full-text indexes, storage files. Searching
+> the **public web** is a different system with a different result shape, a different failure mode,
+> and a per-query cost: `@memberjunction/web-search-engine`. See
+> [Web search is a different system](#web-search-is-a-different-system) at the end.
+
 ## The decision tree
 
 ```
@@ -26,10 +32,16 @@ What are you looking for?
 │     Uses each entity's UserSearchString rule (LIKE / FTS at the DB layer).
 │     See: packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md
 │
-└─ Cross-source unified search (vectors + FTS + entities + storage, scoped)?
-   └─ SearchEngine.Search(params, contextUser)   // @memberjunction/search-engine
-      Multi-provider, RRF-fused, optional reranker, scope-aware.
-      See: guides/SEARCH_SCOPES_AND_RAG_GUIDE.md
+├─ Cross-source unified search (vectors + FTS + entities + storage, scoped)?
+│  └─ SearchEngine.Search(params, contextUser)   // @memberjunction/search-engine
+│     Multi-provider, RRF-fused, optional reranker, scope-aware.
+│     See: guides/SEARCH_SCOPES_AND_RAG_GUIDE.md
+│
+└─ The PUBLIC WEB, not content MJ holds?
+   └─ WebSearchEngine.Instance.Search(params, contextUser)  // @memberjunction/web-search-engine
+      External vendors (Brave, Tavily, …) behind one interface, admin-ordered with failover.
+      From an agent: the `Web Search` Action. From a browser: the `WebSearch.Query` remote op.
+      See: packages/WebSearchEngine/README.md
 ```
 
 ## What each API actually does
@@ -81,6 +93,72 @@ GraphQL surface: `SearchKnowledge` / `SearchScopes` / `PreviewSearch` resolvers 
 
 See **[guides/SEARCH_SCOPES_AND_RAG_GUIDE.md](./SEARCH_SCOPES_AND_RAG_GUIDE.md)** for the scope architecture, provider configuration, RAG+ patterns, and the agent integration story.
 
+### 5. `WebSearchEngine.Search` — the public web
+
+**On:** `WebSearchEngine.Instance` (`@memberjunction/web-search-engine`). **Source:** external
+search vendors. **Returns:** `WebSearchResult` with `WebSearchHit[]`.
+
+```typescript
+await WebSearchEngine.Instance.Config(false, contextUser);
+const result = await WebSearchEngine.Instance.Search({ Query: 'nonprofit dues trends' }, contextUser);
+// result.Hits: { Title, URL, Snippet, … }   result.ProviderUsed: 'Brave'
+```
+
+---
+
+## Web search is a different system
+
+It is tempting to read `SearchEngine` and `WebSearchEngine` as two halves of one thing. They are
+not, and the difference is worth understanding before reaching for either.
+
+|  | `search-engine` | `web-search-engine` |
+|---|---|---|
+| Searches | content MJ owns | the public web |
+| Result identity | `EntityName` + `RecordID` — a row you can open | a URL |
+| Result type | `SearchResultItem` | `WebSearchHit` |
+| Multiple sources | queried **together**, fused with RRF | tried **in order**, first success wins |
+| Cost per query | a database query | real money at an external vendor |
+| Failure mode | a slow query | a rate limit, an expired key, a discontinued API |
+| Provider table | `__mj.SearchProvider` | `__mj.WebSearchProvider` |
+
+**Why they can't share a result type.** `SearchResultItem` *requires* `ID`, `EntityName` and
+`RecordID` — the primary key of a source record — and the pipeline ends in `SearchEnricher`, which
+resolves entity icons and record display names by entity lookup. A web hit has a URL and none of
+those. Fitting one in would mean inventing an `EntityName`, which the compiler would accept and
+every downstream consumer would trip over.
+
+**Why "fused" vs "in order" is the deeper split.** Internal providers are cheap and complementary,
+so running all of them and fusing the ranks is strictly better. Web providers are expensive and
+*substitutable* — running four vendors for one query costs four times as much for one answer. So
+the web engine picks one, in the administrator's priority order, and moves on only when a provider
+fails in a way another might survive.
+
+**What they do share** is the plugin pattern: a provider table carrying `DriverClass` / `Priority` /
+`Status` / `CredentialID`, ClassFactory resolution by driver key, and the
+`Initialize()` → `CheckAvailability()` → `IsAvailable()` lifecycle. Learn one and you have read both.
+
+### Two things to know before you call it
+
+**Never let an agent choose the vendor.** An LLM picking between "Brave" and "Tavily" is making an
+infrastructure decision it has no information for — it cannot know which key is configured, which is
+cheaper, or which is rate-limited right now. All MJ agents and skills route through the provider-neutral `Web Search`
+Action with `Provider` left unset so the engine can fail over across configured vendors; naming an explicit
+`Provider` fails closed rather than failing over (so agent prompts and workflow steps should always leave it unset).
+
+**Read `Attempts`, including on success.** If the primary provider rate-limits every call and the
+secondary quietly serves everything, the system looks healthy while the spend moves to a vendor
+nobody chose. `result.Attempts` is what makes that visible.
+
+### Why it exists at all
+
+Google discontinues the Custom Search JSON API on 2027-01-01 and has already closed it to new
+customers; Microsoft retired the Bing Search APIs on 2025-08-11. Both replaced a commodity SERP API
+with an answer-shaped grounding product tied to their own agent stack. The conclusion this package
+encodes is not "use vendor X" but that **any single web-search dependency has an expiry date**, so
+changing vendors must be a metadata edit rather than a code change.
+
+---
+
 ## Shared infrastructure
 
 ### `ComputeRRF` — canonical weighted Reciprocal Rank Fusion
@@ -103,6 +181,8 @@ Optional per-list `weights`. Omitting them gives canonical unweighted RRF (the p
 **In:** MJ core schema. **What:** per-entity template + per-record rendered text + persisted embedding (`VectorJSON`). Drives both this guide's `SearchEntity` semantic pass and the wider vector-sync pipeline used by `SearchEngine` vector providers, dupe detection, knowledge pipelines, etc. The same pipeline powers all of them.
 
 ## Pointers to the deep docs
+
+- **Web search**: [`packages/WebSearchEngine/README.md`](../packages/WebSearchEngine/README.md) — providers, failover, credentials, writing a driver
 
 | For | Read |
 |---|---|

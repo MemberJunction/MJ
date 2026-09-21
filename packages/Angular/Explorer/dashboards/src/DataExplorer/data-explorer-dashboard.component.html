@@ -291,7 +291,7 @@
                       </div>
                       <div class="qa-item-info">
                         <div class="qa-item-name">{{ record.recordName || record.recordId }}</div>
-                        <div class="qa-item-meta">{{ record.entityName }}</div>
+                        <div class="qa-item-meta">{{ getEntityDisplayName(record.entityName) }}</div>
                       </div>
                       <span class="qa-item-time">{{ record.relativeTime }}</span>
                     </div>
@@ -337,7 +337,7 @@
                       </div>
                       <div class="qa-item-info">
                         <div class="qa-item-name">{{ record.recordName || record.recordId }}</div>
-                        <div class="qa-item-meta">{{ record.entityName }}</div>
+                        <div class="qa-item-meta">{{ getEntityDisplayName(record.entityName) }}</div>
                       </div>
                     </div>
                   }

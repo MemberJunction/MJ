@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, Metadata, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import {
   MJUserViewEntityExtended,
   ViewColumnInfo,
@@ -1270,7 +1270,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   /**
    * Format a value for preview display
    */
-  FormatPreviewValue(value: unknown, format: ColumnFormat | undefined): string {
+  /**
+   * @param field The column's field, so a SQL `date` previews as its stored calendar day rather
+   * than shifting into the reader's zone (MJ#4210).
+   */
+  FormatPreviewValue(value: unknown, format: ColumnFormat | undefined, field?: EntityFieldInfo): string {
     if (value == null) return '—';
     if (!format || format.type === 'auto') return String(value);
 
@@ -1283,7 +1287,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         return this.formatPercent(value as number, format);
       case 'date':
       case 'datetime':
-        return this.formatDate(value as Date, format);
+        return this.formatDate(value as Date, format, IsDateOnlySQLType(field?.Type));
       case 'boolean':
         return this.formatBoolean(value as boolean, format);
       default:
@@ -1320,7 +1324,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     return new Intl.NumberFormat('en-US', options).format(value / 100);
   }
 
-  private formatDate(value: Date, format: ColumnFormat): string {
+  private formatDate(value: Date, format: ColumnFormat, dateOnly: boolean): string {
     const date = value instanceof Date ? value : new Date(value);
     if (isNaN(date.getTime())) return String(value);
 
@@ -1328,6 +1332,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     const formatStr = format.dateFormat || 'medium';
     const includeWeekday = formatStr.includes('-weekday');
     const baseFormat = formatStr.replace('-weekday', '') as 'short' | 'medium' | 'long';
+    // A `date` column has no time to show and must not shift into the reader's zone.
+    const withTime = format.type === 'datetime' && !dateOnly;
 
     let options: Intl.DateTimeFormatOptions;
 
@@ -1342,7 +1348,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         // medium
         options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
       }
-      if (format.type === 'datetime') {
+      if (withTime) {
         options.hour = 'numeric';
         options.minute = '2-digit';
       }
@@ -1351,12 +1357,12 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       options = {
         dateStyle: baseFormat === 'short' ? 'short' : baseFormat === 'long' ? 'long' : 'medium'
       };
-      if (format.type === 'datetime') {
+      if (withTime) {
         options.timeStyle = 'short';
       }
     }
 
-    return new Intl.DateTimeFormat('en-US', options).format(date);
+    return dateOnly ? FormatDateOnly(date, options, 'en-US') : new Intl.DateTimeFormat('en-US', options).format(date);
   }
 
   private formatBoolean(value: boolean, format: ColumnFormat): string {

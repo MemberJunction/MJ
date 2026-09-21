@@ -3,6 +3,7 @@ import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
+import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -548,8 +549,8 @@ const telephonySchema = z.object({
 }).passthrough();
 
 const realtimeSchema = z.object({
-  /** Master switch. When false (default), the WebRTC SDP broker router is not mounted. */
-  enabled: zodBooleanWithTransforms().default(false),
+  /** Master switch. When false, the WebRTC SDP broker router is not mounted. Defaults to true. */
+  enabled: zodBooleanWithTransforms().default(true),
 }).passthrough();
 
 const configInfoSchema = z.object({
@@ -759,9 +760,9 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     maxConcurrentRuns: 3
   },
 
-  // Realtime WebRTC SDP broker defaults (off by default)
+  // Realtime WebRTC SDP broker defaults (on by default; can be disabled via MJ_REALTIME_ENABLED=false)
   realtime: {
-    enabled: parseBooleanEnv(process.env.MJ_REALTIME_ENABLED),
+    enabled: RealtimeEnabledDefault(process.env.MJ_REALTIME_ENABLED),
   },
 
   // Telemetry defaults — on unless the operator turns it off via MJ_TELEMETRY_ENABLED.

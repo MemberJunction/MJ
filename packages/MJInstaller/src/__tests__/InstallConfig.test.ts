@@ -15,45 +15,25 @@ import {
 /* ================================================================== */
 
 describe('InstallConfigDefaults', () => {
-  it('should set DatabaseHost to "localhost"', () => {
-    expect(InstallConfigDefaults.DatabaseHost).toBe('localhost');
-  });
-
-  it('should set DatabasePort to 1433', () => {
-    expect(InstallConfigDefaults.DatabasePort).toBe(1433);
-  });
-
-  it('should set DatabaseTrustCert to false', () => {
-    expect(InstallConfigDefaults.DatabaseTrustCert).toBe(false);
-  });
-
-  it('should set APIPort to 4000', () => {
-    expect(InstallConfigDefaults.APIPort).toBe(4000);
-  });
-
-  it('should set ExplorerPort to 4200', () => {
-    expect(InstallConfigDefaults.ExplorerPort).toBe(4200);
-  });
-
   it('should set AuthProvider to "none"', () => {
     expect(InstallConfigDefaults.AuthProvider).toBe('none');
   });
 
-  it('should have exactly 8 keys', () => {
+  it('should set InstallMode to "distribution"', () => {
+    expect(InstallConfigDefaults.InstallMode).toBe('distribution');
+  });
+
+  it('should set PackageManager to "pnpm"', () => {
+    expect(InstallConfigDefaults.PackageManager).toBe('pnpm');
+  });
+
+  it('should have exactly 3 keys', () => {
+    // Only fields a phase BEFORE `configure` reads belong here. A field whose
+    // only default is a prompt fallback makes ConfigurePhase's `??` guard
+    // permanently non-nullish, so its prompt can never fire — see #4562.
     const keys = Object.keys(InstallConfigDefaults);
-    expect(keys).toHaveLength(8);
-    expect(keys).toEqual(
-      expect.arrayContaining([
-        'DatabaseHost',
-        'DatabasePort',
-        'DatabaseTrustCert',
-        'APIPort',
-        'ExplorerPort',
-        'AuthProvider',
-        'InstallMode',
-        'PackageManager',
-      ])
-    );
+    expect(keys).toHaveLength(3);
+    expect(keys).toEqual(expect.arrayContaining(['AuthProvider', 'InstallMode', 'PackageManager']));
   });
 });
 

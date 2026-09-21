@@ -1,0 +1,38 @@
+{
+  "id": "codesmith-clarify-missing-data-01",
+  "agent": "Codesmith Agent",
+  "tags": [
+    "clarify",
+    "prompt-mandated-action"
+  ],
+  "description": "The payload has no input data. Codesmith's prompt says ALWAYS write code and shows how to handle empty input in code, so executing defensive code is as correct as asking for the data (the agent's prompt is trusted).",
+  "input": {
+    "payload": {
+      "task": "summarize the dataset"
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Summarize the dataset."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        }
+      },
+      {
+        "kind": "taskComplete"
+      },
+      {
+        "kind": "action",
+        "actions": [{ "name": "Execute Code" }]
+      }
+    ]
+  }
+}

@@ -1,0 +1,464 @@
+/**
+ * native-tool-matrix.test.ts — unit tier for the provider tool-calling matrix.
+ *
+ * The rig calls live models, so nothing about ITS results is deterministic. The evaluator is a
+ * different matter: given a canned `ChatResult` it must produce exactly one observation, and that
+ * is what this file pins. The point is the split the test plan draws — "the deterministic tier
+ * means the measurement instrument is verified on every PR without spending a model token; live
+ * runs then only carry measurement noise, not harness bugs."
+ */
+import { describe, expect, it } from 'vitest';
+import { ChatResult } from '@memberjunction/ai';
+import type { ChatResultChoice, ChatToolCall } from '@memberjunction/ai';
+import { evaluateToolChoice, matchArgument, observeChatResult, readEnvelope, scoreCalls, stripJsonFence } from '../native-tool-matrix/observe';
+import { buildManifest, cellId, DEFAULT_MATRIX_SPEC, expandMatrix } from '../native-tool-matrix/matrix';
+import { buildUserPrompt, getScenario, JSON_MODE_PROMPT_SUFFIX, PROBE_SCENARIOS } from '../native-tool-matrix/scenarios';
+import { renderScorecard, summarizeCells } from '../native-tool-matrix/report';
+import { AUTH_FAILURE_MARKERS, isAuthFailure } from '../native-tool-matrix/credentials';
+import { ACTION_FIXTURES, buildToolFromAction, getActionFixture, sanitizeToolName } from '../native-tool-matrix/actionTools';
+import type { ProbeRecord } from '../native-tool-matrix/report';
+
+/** Builds a successful ChatResult with the given assistant turn — the shape a driver returns. */
+function chatResult(options: { content?: string; toolCalls?: ChatToolCall[]; finishReason?: string; promptTokens?: number }): ChatResult {
+    const result = new ChatResult(true, new Date(0), new Date(1000));
+    const choice: ChatResultChoice = {
+        message: { role: 'assistant', content: options.content ?? '', toolCalls: options.toolCalls },
+        finish_reason: options.finishReason ?? 'stop',
+        index: 0
+    };
+    result.data = { choices: [choice], usage: { promptTokens: options.promptTokens ?? 100, completionTokens: 20 } };
+    return result;
+}
+
+function failedResult(message: string): ChatResult {
+    const result = new ChatResult(false, new Date(0), new Date(1000));
+    result.errorMessage = message;
+    return result;
+}
+
+const weatherCall: ChatToolCall = { id: 'call_1', name: 'get_weather', arguments: { location: 'Paris' } };
+const timeCall: ChatToolCall = { id: 'call_2', name: 'get_time', arguments: { timezone: 'Asia/Tokyo' } };
+
+describe('matchArgument', () => {
+    it('accepts a non-empty string and rejects blank or missing', () => {
+        expect(matchArgument({ kind: 'nonEmptyString', parameter: 'sql' }, { sql: 'SELECT 1' })).toBe(true);
+        expect(matchArgument({ kind: 'nonEmptyString', parameter: 'sql' }, { sql: '   ' })).toBe(false);
+        expect(matchArgument({ kind: 'nonEmptyString', parameter: 'sql' }, {})).toBe(false);
+    });
+
+    it('compares case-insensitively for free text — an LLM writing "paris, france" is still right', () => {
+        expect(matchArgument({ kind: 'containsIgnoreCase', parameter: 'location', value: 'paris' }, { location: 'Paris, France' })).toBe(true);
+        expect(matchArgument({ kind: 'containsIgnoreCase', parameter: 'location', value: 'paris' }, { location: 'Lyon' })).toBe(false);
+    });
+
+    it('enforces enums exactly', () => {
+        const matcher = { kind: 'oneOf' as const, parameter: 'unit', values: ['celsius', 'fahrenheit'] };
+        expect(matchArgument(matcher, { unit: 'celsius' })).toBe(true);
+        expect(matchArgument(matcher, { unit: 'Celsius' })).toBe(false);
+    });
+});
+
+describe('stripJsonFence', () => {
+    it('unwraps a fenced object, with or without a language tag', () => {
+        expect(stripJsonFence('```json\n{"a":1}\n```')).toBe('{"a":1}');
+        expect(stripJsonFence('```\n{"a":1}\n```')).toBe('{"a":1}');
+    });
+
+    it('leaves unfenced text alone', () => {
+        expect(stripJsonFence('  {"a":1}  ')).toBe('{"a":1}');
+    });
+});
+
+describe('readEnvelope', () => {
+    it('accepts a terminal envelope carrying only taskComplete', () => {
+        const read = readEnvelope('{"taskComplete": true, "message": "Paris is the capital."}');
+        expect(read).toMatchObject({ parsed: true, valid: true });
+    });
+
+    it('requires a continuing envelope to name its next step', () => {
+        expect(readEnvelope('{"taskComplete": false}')).toMatchObject({ parsed: true, valid: false });
+        expect(readEnvelope('{"taskComplete": false, "nextStep": {"type": "Actions"}}')).toMatchObject({ parsed: true, valid: true });
+    });
+
+    it('reports prose and arrays as unparsed rather than throwing', () => {
+        expect(readEnvelope('Sure! Let me look that up.')).toMatchObject({ parsed: false, valid: false });
+        expect(readEnvelope('[1,2,3]')).toMatchObject({ parsed: false, valid: false });
+        expect(readEnvelope('')).toMatchObject({ parsed: false, valid: false });
+    });
+});
+
+describe('scoreCalls', () => {
+    const expected = [
+        { toolName: 'get_weather', arguments: [{ kind: 'containsIgnoreCase' as const, parameter: 'location', value: 'paris' }] },
+        { toolName: 'get_time', arguments: [{ kind: 'containsIgnoreCase' as const, parameter: 'timezone', value: 'tokyo' }] }
+    ];
+
+    it('matches names in any order', () => {
+        const observed = [
+            { name: 'get_time', arguments: { timezone: 'Asia/Tokyo' }, channel: 'tool-call' as const },
+            { name: 'get_weather', arguments: { location: 'Paris' }, channel: 'tool-call' as const }
+        ];
+        expect(scoreCalls(expected, observed)).toEqual({ namesMatch: true, argumentMatchRate: 1 });
+    });
+
+    it('reports partial argument fidelity when a call is right but its arguments are not', () => {
+        const observed = [
+            { name: 'get_weather', arguments: { location: 'Paris' }, channel: 'tool-call' as const },
+            { name: 'get_time', arguments: { timezone: 'UTC' }, channel: 'tool-call' as const }
+        ];
+        expect(scoreCalls(expected, observed)).toEqual({ namesMatch: true, argumentMatchRate: 0.5 });
+    });
+
+    it('reports null argument fidelity when no matchers apply', () => {
+        expect(scoreCalls([], []).argumentMatchRate).toBeNull();
+    });
+});
+
+describe('evaluateToolChoice', () => {
+    it("holds 'none' to zero calls and 'required' to at least one", () => {
+        expect(evaluateToolChoice('none', undefined, [])).toBe(true);
+        expect(evaluateToolChoice('none', undefined, [weatherCall])).toBe(false);
+        expect(evaluateToolChoice('required', undefined, [weatherCall])).toBe(true);
+        expect(evaluateToolChoice('required', undefined, [])).toBe(false);
+    });
+
+    it("holds a named choice to that tool alone", () => {
+        expect(evaluateToolChoice('named', 'get_weather', [weatherCall])).toBe(true);
+        expect(evaluateToolChoice('named', 'get_weather', [weatherCall, timeCall])).toBe(false);
+        expect(evaluateToolChoice('named', 'get_weather', [])).toBe(false);
+    });
+
+    it('reports null for the modes that force nothing, rather than a vacuous pass', () => {
+        expect(evaluateToolChoice('auto', undefined, [])).toBeNull();
+        expect(evaluateToolChoice('no-tools', undefined, [])).toBeNull();
+    });
+});
+
+describe('observeChatResult', () => {
+    const singleCall = getScenario('single-call');
+    const noCallNeeded = getScenario('no-call-needed');
+    const envelope = getScenario('envelope');
+
+    it('scores a clean, text-free tool call as correct — the case Gemini used to report as no output', () => {
+        const observation = observeChatResult(chatResult({ toolCalls: [weatherCall], finishReason: 'tool_calls' }), singleCall, 'auto', true);
+        expect(observation).toMatchObject({
+            driverSucceeded: true, textPresent: false, nativeToolCallCount: 1,
+            nativeCallsWellFormed: true, channel: 'tool-call', decisionCorrect: true, argumentMatchRate: 1
+        });
+    });
+
+    it('records text and calls arriving together without treating either as an error', () => {
+        const observation = observeChatResult(chatResult({ content: 'Let me check.', toolCalls: [weatherCall] }), singleCall, 'auto', true);
+        expect(observation.textAndCallsTogether).toBe(true);
+        expect(observation.decisionCorrect).toBe(true);
+    });
+
+    it('captures the arguments the model sent, so a fidelity failure can be diagnosed', () => {
+        const observation = observeChatResult(chatResult({ toolCalls: [weatherCall] }), singleCall, 'auto', true);
+        expect(observation.observedArguments).toEqual([{ location: 'Paris' }]);
+    });
+
+    it('truncates a runaway argument value rather than storing it whole', () => {
+        const huge: ChatToolCall = { id: 'x', name: 'get_weather', arguments: { location: 'x'.repeat(1000) } };
+        const observation = observeChatResult(chatResult({ toolCalls: [huge] }), singleCall, 'auto', true);
+        const stored = String(observation.observedArguments[0].location);
+        expect(stored.length).toBeLessThan(1000);
+        expect(stored.endsWith('…[truncated]')).toBe(true);
+    });
+
+    it('flags a call to a tool that was never declared', () => {
+        const rogue: ChatToolCall = { id: 'x', name: 'delete_everything', arguments: {} };
+        const observation = observeChatResult(chatResult({ toolCalls: [rogue] }), singleCall, 'auto', true);
+        expect(observation.nativeCallsWellFormed).toBe(false);
+        expect(observation.undeclaredToolNames).toEqual(['delete_everything']);
+        expect(observation.decisionCorrect).toBe(false);
+    });
+
+    it('counts a spurious call as the failure it is when no call was warranted', () => {
+        const answered = observeChatResult(chatResult({ content: 'Paris.' }), noCallNeeded, 'auto', true);
+        expect(answered.decisionCorrect).toBe(true);
+        const reached = observeChatResult(chatResult({ toolCalls: [weatherCall] }), noCallNeeded, 'auto', true);
+        expect(reached.decisionCorrect).toBe(false);
+    });
+
+    it('reads an envelope decision through the same expectation as a native call', () => {
+        const body = JSON.stringify({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'get_weather', params: { location: 'Paris' } }] } });
+        const observation = observeChatResult(chatResult({ content: body }), envelope, 'no-tools', false);
+        expect(observation).toMatchObject({ channel: 'envelope', envelopeParsed: true, envelopeValid: true, decisionCorrect: true, argumentMatchRate: 1 });
+    });
+
+    it('prefers the native call when a model answers through both channels', () => {
+        const body = JSON.stringify({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'run_query', params: { sql: 'SELECT 1' } }] } });
+        const observation = observeChatResult(chatResult({ content: body, toolCalls: [weatherCall] }), envelope, 'auto', true);
+        expect(observation.channel).toBe('tool-call');
+        expect(observation.observedCallNames).toEqual(['get_weather']);
+    });
+
+    it('leaves envelope fields null on scenarios that never asked for one', () => {
+        const observation = observeChatResult(chatResult({ content: 'Paris.' }), noCallNeeded, 'auto', true);
+        expect(observation.envelopeParsed).toBeNull();
+        expect(observation.envelopeValid).toBeNull();
+    });
+
+    it('turns a provider failure into a row rather than a gap', () => {
+        const observation = observeChatResult(failedResult('400 function calling is not enabled for models with response mime type'), singleCall, 'auto', true);
+        expect(observation).toMatchObject({ driverSucceeded: false, channel: 'error', decisionCorrect: false });
+        expect(observation.errorMessage).toContain('function calling is not enabled');
+    });
+
+    it('does not flag envelope actions as undeclared in a no-tools cell', () => {
+        const body = JSON.stringify({ taskComplete: false, nextStep: { type: 'Actions', actions: [{ name: 'get_weather', params: { location: 'Paris' } }] } });
+        const observation = observeChatResult(chatResult({ content: body }), envelope, 'no-tools', false);
+        expect(observation.undeclaredToolNames).toEqual([]);
+    });
+});
+
+describe('scenarios', () => {
+    it('offers a distractor tool that is never the right answer, so name accuracy is separable', () => {
+        const expectedNames = new Set(PROBE_SCENARIOS.flatMap((s) => s.expectation.calls.map((c) => c.toolName)));
+        expect(expectedNames.has('run_query')).toBe(false);
+        expect(PROBE_SCENARIOS.every((s) => s.tools.some((t) => t.name === 'run_query'))).toBe(true);
+    });
+
+    it("appends the JSON-mode suffix only in JSON cells — OpenAI's json_object rejects a prompt without it", () => {
+        const scenario = getScenario('single-call');
+        expect(buildUserPrompt(scenario, 'Any')).toBe(scenario.userPrompt);
+        expect(buildUserPrompt(scenario, 'JSON')).toBe(scenario.userPrompt + JSON_MODE_PROMPT_SUFFIX);
+    });
+
+    it('keeps every tool schema inside the cross-provider common subset Gemini accepts', () => {
+        const allowed = new Set(['type', 'description', 'enum', 'items', 'properties', 'required']);
+        for (const tool of PROBE_SCENARIOS.flatMap((s) => s.tools)) {
+            expect(Object.keys(tool.inputSchema).every((k) => allowed.has(k))).toBe(true);
+            const properties = tool.inputSchema.properties as Record<string, Record<string, unknown>>;
+            for (const property of Object.values(properties)) {
+                expect(Object.keys(property).every((k) => allowed.has(k))).toBe(true);
+            }
+        }
+    });
+
+    it('throws on an unknown scenario id rather than silently running nothing', () => {
+        expect(() => getScenario('nope')).toThrow(/Unknown probe scenario/);
+    });
+});
+
+describe('expandMatrix', () => {
+    it('drops only vacuous combinations, and says why for each', () => {
+        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        expect(expanded.cells.length).toBeGreaterThan(0);
+        expect(expanded.skipped.length).toBeGreaterThan(0);
+        expect(expanded.skipped.every((s) => s.reason.length > 0)).toBe(true);
+    });
+
+    it("never runs a call-warranting scenario with no tools declared and no envelope to read", () => {
+        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        const bad = expanded.cells.filter((c) => c.toolMode === 'no-tools' && c.scenarioId === 'single-call');
+        expect(bad).toEqual([]);
+    });
+
+    it('never forces a named tool on the parallel-call scenario', () => {
+        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        expect(expanded.cells.filter((c) => c.toolMode === 'named' && c.scenarioId === 'parallel-call')).toEqual([]);
+    });
+
+    it('sweeps the thinking axis only on the models that declare effort levels', () => {
+        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        const thinking = expanded.cells.filter((c) => c.effortLevel !== null);
+        expect(thinking.length).toBeGreaterThan(0);
+        expect(thinking.every((c) => c.toolMode === 'auto' && c.responseFormat === 'Any')).toBe(true);
+        expect(thinking.every((c) => (c.model.effortLevels ?? []).includes(c.effortLevel))).toBe(true);
+    });
+
+    it('gives every cell a unique id', () => {
+        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        expect(new Set(expanded.cells.map((c) => c.id)).size).toBe(expanded.cells.length);
+    });
+
+    it('sizes the manifest off the real prompts, and scales with reps', () => {
+        const expanded = expandMatrix(DEFAULT_MATRIX_SPEC);
+        const one = buildManifest(expanded, 1);
+        const three = buildManifest(expanded, 3);
+        expect(one.callCount).toBe(expanded.cells.length);
+        expect(three.callCount).toBe(one.callCount * 3);
+        expect(three.estimatedPromptTokens).toBe(one.estimatedPromptTokens * 3);
+        expect(one.perModel.length).toBe(DEFAULT_MATRIX_SPEC.models.length);
+    });
+});
+
+describe('summarizeCells and renderScorecard', () => {
+    const model = DEFAULT_MATRIX_SPEC.models[0];
+    const id = cellId(model, 'single-call', 'auto', 'Any', null);
+
+    function record(rep: number, decisionCorrect: boolean, calls: number): ProbeRecord {
+        return {
+            label: 'unit', timestamp: new Date(0).toISOString(), cellId: id,
+            modelLabel: model.label, apiName: model.apiName, developer: model.developer,
+            generation: model.generation, driverClass: model.driverClass,
+            scenarioId: 'single-call', toolMode: 'auto', responseFormat: 'Any', effortLevel: null,
+            rep, latencyMs: 1000,
+            observation: {
+                driverSucceeded: true, errorMessage: null, finishReason: 'tool_calls', streamingSuppressedForTools: false,
+                textPresent: false, textLength: 0, nativeToolCallCount: calls, textAndCallsTogether: false,
+                nativeCallsWellFormed: true, undeclaredToolNames: [], envelopeParsed: null, envelopeValid: null,
+                channel: 'tool-call', observedCallNames: ['get_weather'], observedArguments: [{ location: 'Paris' }], decisionCorrect, argumentMatchRate: 1,
+                toolChoiceHonored: null, promptTokens: 120, completionTokens: 20
+            }
+        };
+    }
+
+    it('turns repetitions into rates rather than a pass/fail', () => {
+        const summaries = summarizeCells([record(1, true, 1), record(2, false, 1), record(3, true, 2)]);
+        expect(summaries).toHaveLength(1);
+        expect(summaries[0]).toMatchObject({ reps: 3, errorCount: 0, nativeCallRate: 1, parallelRate: 1 / 3 });
+        expect(summaries[0].decisionCorrectRate).toBeCloseTo(2 / 3);
+        expect(summaries[0].finishReasons).toEqual({ tool_calls: 3 });
+    });
+
+    it('reports success-conditioned metrics as null, not zero, when every repetition errored', () => {
+        const errored = { ...record(1, false, 0) };
+        errored.observation = { ...errored.observation, driverSucceeded: false, errorMessage: '400 unsupported', channel: 'error', finishReason: null };
+        const [summary] = summarizeCells([errored, { ...errored, rep: 2 }]);
+        // A cell where every call was rejected must not read as "the model chose not to call a tool".
+        expect(summary.nativeCallRate).toBeNull();
+        expect(summary.meanNativeCalls).toBeNull();
+        expect(summary.parallelRate).toBeNull();
+        // Decision accuracy still counts the error — a rejected request is a wrong answer to the caller.
+        expect(summary.decisionCorrectRate).toBe(0);
+        expect(summary.errorCount).toBe(2);
+    });
+
+    it('orders model rows deterministically, since models run in parallel and record order does not', () => {
+        const second = DEFAULT_MATRIX_SPEC.models.find((m) => m.developer !== model.developer);
+        expect(second).toBeDefined();
+        const other: ProbeRecord = { ...record(1, true, 1), modelLabel: second!.label, apiName: second!.apiName, developer: second!.developer, cellId: 'other' };
+        const forward = renderScorecard(summarizeCells([record(1, true, 1), other]), { label: 'u', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 2, skippedCount: null, callCount: 2 });
+        const reversed = renderScorecard(summarizeCells([other, record(1, true, 1)]), { label: 'u', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 2, skippedCount: null, callCount: 2 });
+        expect(forward).toBe(reversed);
+    });
+
+    it('renders every question section, and says so plainly when nothing failed', () => {
+        const markdown = renderScorecard(summarizeCells([record(1, true, 1)]), {
+            label: 'unit', startedAt: 'a', finishedAt: 'b', reps: 1, cellCount: 1, skippedCount: 0, callCount: 1
+        });
+        for (const heading of ['Forcing semantics', 'responseFormat: JSON', 'Parallel calls', 'Coherence', 'envelope under declared tools', 'Call shape', 'Finish-reason', 'Cost profile']) {
+            expect(markdown).toContain(heading);
+        }
+        expect(markdown).toContain('None — every cell returned a successful result');
+        expect(markdown).toContain(model.label);
+    });
+});
+
+describe('isAuthFailure', () => {
+    // Verbatim from the tool-capable providers. These are the messages the rig must act on.
+    it.each([
+        ['Anthropic', '401 {"type":"error","error":{"type":"authentication_error","message":"API key is invalid."},"request_id":null}'],
+        ['OpenAI', '401 Incorrect API key provided: sk-proj-****. You can find your API key at https://platform.openai.com/account/api-keys.'],
+        ['Gemini', '{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}'],
+        ['generic 403', 'Error: 403 Forbidden'],
+        ['permission denied', '{"error":{"code":403,"status":"PERMISSION_DENIED"}}']
+    ])('treats a %s credential rejection as an auth failure', (_provider, message) => {
+        expect(isAuthFailure(message)).toBe(true);
+    });
+
+    // A false positive abandons a model that would have produced data, so these must NOT match.
+    it.each([
+        ['rate limit', '429 Too Many Requests — rate limit exceeded, please retry after 20s'],
+        ['quota', '{"error":{"code":429,"message":"You exceeded your current quota","status":"RESOURCE_EXHAUSTED"}}'],
+        ['unknown model', '404 The model `gpt-9` does not exist or you do not have access to it.'],
+        ['server error', '500 Internal Server Error'],
+        ['overloaded', '{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}'],
+        ['the JSON-mode finding', "{\"error\":{\"code\":400,\"message\":\"Forced function calling (ANY mode) with a response mime type: 'application/json' is unsupported\"}}"],
+        ['a token count that contains 401', 'Request failed: prompt was 1401 tokens, over the limit'],
+        ['a request id that contains 403', 'Request req_88403912 failed after 3 retries']
+    ])('does not mistake a %s for an auth failure', (_kind, message) => {
+        expect(isAuthFailure(message)).toBe(false);
+    });
+
+    it('handles absent messages rather than throwing', () => {
+        expect(isAuthFailure(null)).toBe(false);
+        expect(isAuthFailure(undefined)).toBe(false);
+        expect(isAuthFailure('')).toBe(false);
+    });
+
+    it('matches case-insensitively, since providers do not agree on casing', () => {
+        expect(isAuthFailure('UNAUTHORIZED')).toBe(true);
+        expect(isAuthFailure('Authentication_Error')).toBe(true);
+    });
+
+    it('keeps every marker lower-cased, or the case-insensitive compare silently never fires', () => {
+        expect(AUTH_FAILURE_MARKERS.filter((m) => m !== m.toLowerCase())).toEqual([]);
+    });
+});
+
+describe('buildToolFromAction — the §8.2 Action→ChatTool mapping', () => {
+    const calc = getActionFixture('Calculate Expression');
+    const query = getActionFixture('Run Ad-hoc Query');
+
+    it('sanitizes Action names to the provider-legal form §8.2 specifies', () => {
+        expect(sanitizeToolName('Run Ad-hoc Query')).toBe('run_ad_hoc_query');
+        expect(sanitizeToolName('Get Entity Details')).toBe('get_entity_details');
+        // Providers allow [a-zA-Z0-9_-] only, ≤64 chars.
+        for (const name of ACTION_FIXTURES.map((a) => a.Name)) {
+            const sanitized = sanitizeToolName(name);
+            expect(sanitized).toMatch(/^[a-z0-9_]+$/);
+            expect(sanitized.length).toBeLessThanOrEqual(64);
+        }
+    });
+
+    it('names collide-free across the fixture set, which §8.2 makes a hard error', () => {
+        const names = ACTION_FIXTURES.map((a) => sanitizeToolName(a.Name));
+        expect(new Set(names).size).toBe(names.length);
+    });
+
+    it('puts required params in required[] and leaves optional ones out', () => {
+        const tool = buildToolFromAction(query, 'string');
+        // Run Ad-hoc Query has exactly one required input: Query.
+        expect(tool.inputSchema.required).toEqual(['Query']);
+        expect(Object.keys(tool.inputSchema.properties as Record<string, unknown>).length).toBe(query.Params.length);
+    });
+
+    it('emits the plan\'s literal union type for Scalar under the union strategy', () => {
+        const props = buildToolFromAction(calc, 'union').inputSchema.properties as Record<string, Record<string, unknown>>;
+        expect(props.Expression.type).toEqual(['string', 'number', 'boolean']);
+    });
+
+    it('emits a plain string type for Scalar under the conservative strategy', () => {
+        const props = buildToolFromAction(calc, 'string').inputSchema.properties as Record<string, Record<string, unknown>>;
+        expect(props.Expression.type).toBe('string');
+    });
+
+    it("types a ValueType 'Other' param per the opaque strategy — the measured 60%-vs-100% choice", () => {
+        const asObject = buildToolFromAction(query, 'string', 'object').inputSchema.properties as Record<string, Record<string, unknown>>;
+        const asString = buildToolFromAction(query, 'string', 'string').inputSchema.properties as Record<string, Record<string, unknown>>;
+        expect(asObject.Query.type).toBe('object');
+        expect(asString.Query.type).toBe('string');
+    });
+
+    it('folds DefaultValue into the description, since the permissive mapping has nowhere else', () => {
+        const withDefault = query.Params.find((p) => p.DefaultValue);
+        expect(withDefault, 'fixture should contain a param with a DefaultValue').toBeDefined();
+        const props = buildToolFromAction(query, 'string').inputSchema.properties as Record<string, Record<string, unknown>>;
+        expect(String(props[withDefault!.Name].description)).toContain(`Default: ${withDefault!.DefaultValue}`);
+    });
+
+    it('phrases the tool description prescriptively, which §8.2 says improves should-call rates', () => {
+        expect(buildToolFromAction(calc, 'string').description).toMatch(/^Call this when/);
+    });
+
+    it('keeps every emitted schema inside the cross-provider common subset', () => {
+        const allowed = new Set(['type', 'description', 'enum', 'items', 'properties', 'required']);
+        for (const action of ACTION_FIXTURES) {
+            for (const scalar of ['union', 'string'] as const) {
+                const schema = buildToolFromAction(action, scalar).inputSchema;
+                expect(Object.keys(schema).every((k) => allowed.has(k))).toBe(true);
+                for (const prop of Object.values(schema.properties as Record<string, Record<string, unknown>>)) {
+                    expect(Object.keys(prop).every((k) => allowed.has(k))).toBe(true);
+                }
+            }
+        }
+    });
+
+    it('throws on an unknown Action rather than building an empty tool', () => {
+        expect(() => getActionFixture('No Such Action')).toThrow(/No action fixture named/);
+    });
+});
