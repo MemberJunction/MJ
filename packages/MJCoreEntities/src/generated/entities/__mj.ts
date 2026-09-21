@@ -41247,7 +41247,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     	if (this.NativeToolCallCount != null && this.NativeToolCallCount < 0) {
     		result.Errors.push(new ValidationErrorInfo(
     			"NativeToolCallCount",
-    			"Native Tool Call Count must be greater than or equal to 0.",
+    			"The native tool call count must be 0 or greater.",
     			this.NativeToolCallCount,
     			ValidationErrorType.Failure
     		));
