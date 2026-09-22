@@ -1,7 +1,7 @@
 import { AdvancedGenerationFeature, configInfo } from "../Config/config";
 import { EntityFieldExtendedType, FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { SafeJSONParse } from "@memberjunction/global";
-import { AIPromptRunner } from "@memberjunction/ai-prompts";
+import { AIPromptRunner, AIPromptTimeoutError } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -144,6 +144,45 @@ export type FormLayoutResult = {
     entityImportance?: EntityImportanceInfo;
 }
 
+/** Fallback ceiling when no `advancedGeneration` config section exists. Matches the schema default. */
+const DEFAULT_CALL_TIMEOUT_MS = 90_000;
+
+/** Fallback stall threshold when no `advancedGeneration` config section exists. Matches the schema. */
+const DEFAULT_STALL_CIRCUIT_THRESHOLD = 3;
+
+/**
+ * Provider-health error types: the provider was reached (or should have been) and could not serve the
+ * request. Distinct from RateLimit (transient, per-vendor, correctly handled by failover backoff) and
+ * from content/validation errors, which say nothing about whether the provider is healthy.
+ */
+const PROVIDER_HEALTH_ERROR_TYPES: ReadonlySet<string> = new Set([
+    'NetworkError', 'ServiceUnavailable', 'InternalServerError'
+]);
+
+/**
+ * The prompt runner advanced generation uses, with one behaviour added: every model call carries a
+ * wall-clock ceiling.
+ *
+ * `AIPromptRunner` documents `DefaultPromptTimeoutMS` as the extension point for exactly this — "a
+ * host application's runner subclass can override this to impose a global safety ceiling on every
+ * prompt call" — and returns `undefined` from it so that opting in is a caller's decision. CodeGen
+ * had never opted in, at any of the seven prompt sites below, so every advanced-generation call took
+ * the runner's explicitly-unbounded branch.
+ *
+ * Overriding the hook rather than assigning `params.timeoutMS` at each site is deliberate: the
+ * ceiling then also covers any prompt a future feature adds, and a caller that DOES pass an explicit
+ * `timeoutMS` still wins, because the runner resolves `params.timeoutMS ?? DefaultPromptTimeoutMS`.
+ */
+export class AdvancedGenerationPromptRunner extends AIPromptRunner {
+    protected override get DefaultPromptTimeoutMS(): number | undefined {
+        const configured = configInfo.advancedGeneration?.callTimeoutMS;
+        // A missing section (a workspace with no advancedGeneration config at all) must still get a
+        // bound — that is the case least likely to have been thought about. 0 is an explicit opt-out.
+        const ms = typeof configured === 'number' ? configured : DEFAULT_CALL_TIMEOUT_MS;
+        return ms > 0 ? ms : undefined;
+    }
+}
+
 /**
  * Enhanced Advanced Generation system using MJ's AI Prompts architecture.
  * All prompts are now stored in the database as AI Prompt entities with proper model configuration.
@@ -154,6 +193,10 @@ export class AdvancedGeneration {
 
     /** Consecutive AI credential/authentication failures this run; trips the circuit breaker. */
     private _consecutiveAuthFailures = 0;
+    /** Consecutive provider-health failures (stall/timeout, 5xx, unreachable) this run. */
+    private _consecutiveStallFailures = 0;
+    /** Total USD reported by the prompt runner for this run's advanced-generation calls. */
+    private _runCostUSD = 0;
     /** Once tripped, remaining advanced-generation LLM calls are skipped for the rest of this run. */
     private _aiCircuitOpen = false;
     /** Open the circuit after this many consecutive credential/authentication failures. */
@@ -161,7 +204,7 @@ export class AdvancedGeneration {
 
     constructor() {
         this._metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-        this._promptRunner = new AIPromptRunner();
+        this._promptRunner = new AdvancedGenerationPromptRunner();
     }
 
     public get enabled(): boolean {
@@ -169,11 +212,17 @@ export class AdvancedGeneration {
     }
 
     /**
-     * True once repeated AI credential/authentication failures have tripped the circuit breaker for
-     * this run. Callers should stop issuing advanced-generation calls when this is set, so a keyless
-     * or mis-credentialed environment fails fast — logging one clear message and skipping the rest —
-     * instead of attempting (and swallowing) a doomed LLM call for every entity. State is per-run: a
-     * fresh AdvancedGeneration instance is created each codegen run.
+     * True once this run has tripped the circuit breaker. Three things open it, and callers treat all
+     * three identically — stop issuing advanced-generation calls and generate deterministically:
+     *
+     *  - repeated AI credential/authentication failures (a keyless or mis-credentialed run);
+     *  - repeated provider-health failures (the provider stalled past `callTimeoutMS`, was
+     *    unreachable, or answered 5xx) — retrying it would only add load to something already failing;
+     *  - a configured `maxRunCostUSD` ceiling being reached.
+     *
+     * A keyless or mis-credentialed environment therefore fails fast — one clear message, then the
+     * rest skipped — instead of attempting (and swallowing) a doomed LLM call for every entity. State
+     * is per-run: a fresh AdvancedGeneration instance is created each codegen run.
      */
     public get AICircuitOpen(): boolean {
         return this._aiCircuitOpen;
@@ -224,6 +273,81 @@ export class AdvancedGeneration {
         }
     }
 
+    /**
+     * Configured consecutive-stall threshold. `0` (or a negative row) disables the check entirely;
+     * a MISSING config section falls back to the schema default rather than to "disabled", matching
+     * how `DefaultPromptTimeoutMS` treats the same absence — an unconfigured workspace should get the
+     * safety behaviour, not lose it.
+     */
+    private get stallCircuitThreshold(): number {
+        const configured = configInfo.advancedGeneration?.stallFailureCircuitThreshold;
+        const threshold = typeof configured === 'number' ? configured : DEFAULT_STALL_CIRCUIT_THRESHOLD;
+        return threshold > 0 ? threshold : 0;
+    }
+
+    /**
+     * True when a failure says the PROVIDER is unhealthy — it stalled past the call ceiling, was
+     * unreachable, or answered 5xx — as opposed to rejecting our content or our credentials.
+     *
+     * Classified structurally off `errorInfo.errorType` wherever the driver populated it, because
+     * matching provider prose is how you end up retrying a context-length error because its message
+     * happened to contain "500". The one string test is against our OWN timeout error, whose `name`
+     * is stable and which reaches us as a message when it has crossed the failover boundary.
+     */
+    private isProviderHealthFailure(err: unknown, errorType?: string | null): boolean {
+        if (errorType && PROVIDER_HEALTH_ERROR_TYPES.has(errorType)) {
+            return true;
+        }
+        if (err instanceof AIPromptTimeoutError) {
+            return true;
+        }
+        const name = (err as { name?: unknown })?.name;
+        if (name === 'AIPromptTimeoutError') {
+            return true;
+        }
+        const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+        return msg.includes('exceeded its configured TimeoutMS');
+    }
+
+    /**
+     * Increment the consecutive provider-health counter and open the circuit at the threshold.
+     *
+     * Opening the SAME circuit the credential path opens is the point: the caller already knows to
+     * stop asking when `AICircuitOpen` is set, and a run whose provider has gone away should degrade
+     * exactly the way a keyless run does rather than invent a second, differently-handled state.
+     */
+    private recordProviderHealthFailure(detail: unknown): void {
+        const threshold = this.stallCircuitThreshold;
+        if (threshold === 0) {
+            return;
+        }
+        this._consecutiveStallFailures++;
+        if (this._consecutiveStallFailures >= threshold && !this._aiCircuitOpen) {
+            this._aiCircuitOpen = true;
+            LogError(`AdvancedGeneration: opening AI circuit after ${this._consecutiveStallFailures} consecutive provider-side failures (${detail}) — remaining entities will skip AI enrichment this run. The AI provider is stalling or unavailable; retrying it would only add load. Raise advancedGeneration.callTimeoutMS if the provider is merely slow, or set advancedGeneration.enableAdvancedGeneration=false to generate deterministically.`);
+        }
+    }
+
+    /**
+     * Add one call's reported cost to the run total and open the circuit if a configured ceiling is
+     * now exceeded. Counted here because this is the one place every advanced-generation call is
+     * already accounted for; anywhere else would be an estimate.
+     */
+    private recordRunCost(costUSD: number): void {
+        if (!Number.isFinite(costUSD) || costUSD <= 0) {
+            return;
+        }
+        this._runCostUSD += costUSD;
+        const ceiling = configInfo.advancedGeneration?.maxRunCostUSD;
+        if (typeof ceiling !== 'number' || ceiling <= 0 || this._aiCircuitOpen) {
+            return;
+        }
+        if (this._runCostUSD >= ceiling) {
+            this._aiCircuitOpen = true;
+            LogError(`AdvancedGeneration: opening AI circuit — this run has spent $${this._runCostUSD.toFixed(4)}, at or above the configured advancedGeneration.maxRunCostUSD of $${ceiling}. Remaining entities will be generated deterministically. Raise or clear the ceiling to allow more spend.`);
+        }
+    }
+
     public features(): AdvancedGenerationFeature[] | undefined {
         return configInfo.advancedGeneration?.features;
     }
@@ -260,7 +384,7 @@ export class AdvancedGeneration {
         // Defense-in-depth: once the credential circuit is open, skip the round-trip entirely.
         // Callers should also gate on AICircuitOpen so an open circuit produces no call and no log.
         if (this._aiCircuitOpen) {
-            throw new Error('AdvancedGeneration: AI credential circuit is open — skipping this LLM call after repeated authentication failures this run.');
+            throw new Error('AdvancedGeneration: AI circuit is open — skipping this LLM call after repeated credential or provider failures this run.');
         }
         const startMs = Date.now();
         const promptName = params.prompt?.Name ?? 'unknown';
@@ -271,8 +395,15 @@ export class AdvancedGeneration {
             // them on the result and trip the breaker; only a genuinely successful call clears the counter.
             if (result.success) {
                 this._consecutiveAuthFailures = 0;
+                this._consecutiveStallFailures = 0;
             } else if (this.isCredentialFailureResult(result)) {
                 this.recordAuthFailure(result.errorMessage ?? result.chatResult?.errorInfo?.errorType ?? 'credential failure');
+            } else if (this.isProviderHealthFailure(result.errorMessage, result.chatResult?.errorInfo?.errorType)) {
+                // The failover walk one layer down has already tried every candidate it was allowed
+                // and every one was a provider-health failure. Asking again for the next entity would
+                // aim more load at a provider that is already failing, so count it and stop at the
+                // threshold instead.
+                this.recordProviderHealthFailure(result.errorMessage ?? result.chatResult?.errorInfo?.errorType ?? 'provider failure');
             }
             // Resilience: some models return the JSON payload as a raw string rather
             // than a parsed object (and Warn-mode validation lets it through with
@@ -300,12 +431,20 @@ export class AdvancedGeneration {
                 costUSD: result.cost ?? 0,
                 latencyMs: result.executionTimeMS ?? (Date.now() - startMs),
             });
+            // Accounted AFTER telemetry so the call that crosses the ceiling is still reported. The
+            // ceiling closes the circuit for the NEXT call rather than retroactively voiding this one.
+            this.recordRunCost(result.cost ?? 0);
             return result;
         } catch (error) {
             // A THROWN (rather than returned) credential/auth failure — trip the breaker here too,
             // as a safety net for providers/paths that do throw.
             if (this.isCredentialError(error)) {
                 this.recordAuthFailure(error);
+            } else if (this.isProviderHealthFailure(error)) {
+                // Reached when the timeout fires and nothing below converted it to a result: the
+                // runner aborts the model call with AIPromptTimeoutError, so this is the shape a
+                // genuine stall now takes instead of a promise that never settles.
+                this.recordProviderHealthFailure(error);
             }
             LogError(`AdvancedGeneration:Prompt execution failed: ${error}`);
             throw error;

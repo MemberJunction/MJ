@@ -242,6 +242,46 @@ const advancedGenerationSchema = z.object({
   /** Number of entities to process in parallel during advanced generation (default: 5).
    *  Higher values speed up processing but increase concurrent LLM API calls. */
   batchSize: z.number().min(1).default(5),
+  /** Wall-clock ceiling, in milliseconds, on EACH model call advanced generation makes — per
+   *  failover candidate, mirroring `AIPromptParams.timeoutMS` semantics. `0` restores the previous
+   *  behaviour of no bound at all.
+   *
+   *  Advanced generation had no per-call bound of any kind. `AIPromptRunner` has carried the
+   *  machinery for one since the `timeoutMS` / `DefaultPromptTimeoutMS` work — it composes the
+   *  timeout with any cancellation token into a single AbortSignal that reaches the provider SDK,
+   *  so the socket is torn down rather than abandoned — but it is off unless a caller opts in, and
+   *  CodeGen never did. The consequence was not slowness: a provider that accepts the connection
+   *  and then stalls on keep-alive frames produced a promise that never settled, and because a
+   *  stall raises no error, the failover machinery below was never even entered. The run simply
+   *  stopped making progress.
+   *
+   *  90s is chosen to sit above a legitimately slow reasoning response on the largest prompt in the
+   *  feature set (form-layout generation over a wide table) while still being a small fraction of
+   *  the multi-minute stalls that caused the incident. */
+  callTimeoutMS: z.number().min(0).default(90_000),
+  /** Consecutive provider-side failures (stall/timeout, service unavailable, internal server error)
+   *  after which advanced generation stops issuing LLM calls for the remainder of the run. `0`
+   *  disables the check.
+   *
+   *  This deliberately STOPS ASKING rather than retrying: a second request aimed at a provider that
+   *  is already failing makes its queue worse, and the failover walk one layer down is already
+   *  issuing the retries. Rate limits are excluded — they are transient and per-vendor, and
+   *  failover handles them correctly — as are content and validation errors, which say nothing
+   *  about provider health. Mirrors the existing credential circuit breaker, and trips the same
+   *  one, so a run whose provider has gone away degrades the way a keyless run already does:
+   *  one clear message, then deterministic generation for the remaining entities. */
+  stallFailureCircuitThreshold: z.number().min(0).default(3),
+  /** Optional ceiling on the total USD advanced generation may spend in one run, measured from the
+   *  per-call cost the prompt runner already reports. `0` (the default) means no ceiling, which is
+   *  the behaviour that shipped.
+   *
+   *  Left off by default on purpose: the feature set issues one call per entity, per field and per
+   *  form, so the right number is a function of schema size and model choice, and a surprise cap
+   *  that aborted a developer's legitimate large run mid-way would be a new failure mode. It exists
+   *  so an operator running CodeGen unattended — a runtime schema update, a scheduled re-generation
+   *  — can bound spend, and so that bound is enforced in the one place every call is already
+   *  counted rather than estimated after the fact. */
+  maxRunCostUSD: z.number().min(0).default(0),
   // NOTE: AIVendor and AIModel have been removed. Model configuration is now per-prompt
   // in the AI Prompts table via the MJ: AI Prompt Models relationship.
   features: advancedGenerationFeatureSchema.array().default([
@@ -994,6 +1034,12 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     enableAdvancedGeneration: true,
     allowFullTextSearchAutoUpdate: false,
     batchSize: 5,
+    // Kept in step with advancedGenerationSchema's own defaults. This literal is what a workspace
+    // with no advancedGeneration section gets, so a bound missing here is a bound that silently
+    // does not apply on exactly the config-less runs that most need it.
+    callTimeoutMS: 90_000,
+    stallFailureCircuitThreshold: 3,
+    maxRunCostUSD: 0,
     features: [
       {
         name: 'EntityNames',
