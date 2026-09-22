@@ -24,6 +24,8 @@ import {
 } from '@memberjunction/record-set-processor-base';
 import { RateLimiter } from './RateLimiter';
 import { GenericProcessRunTracker } from './trackers/GenericProcessRunTracker';
+import { WatermarkService, type WatermarkDecision } from './watermark/WatermarkService';
+import type { OutputMappingConfig } from './writeBack';
 
 /** Default batch size when none is supplied. */
 const DEFAULT_BATCH_SIZE = 100;
@@ -186,9 +188,123 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
     /** Processes one batch with bounded concurrency, isolating per-record failures. */
     private async processBatch(records: RecordRef[], ctx: BatchLoopContext): Promise<void> {
         const { options, counts } = ctx;
-        const recordContext = { contextUser: options.contextUser, provider: ctx.provider, processRunID: ctx.handle.ProcessRunID };
+        const recordContext = {
+            contextUser: options.contextUser,
+            provider: ctx.provider,
+            processRunID: ctx.handle.ProcessRunID,
+            recordProcessID: options.recordProcessID,
+            entityID: options.entityID,
+        };
+
+        // P1-7b Watermark check: batch-evaluate unchanged records when skipUnchanged is active
+        let watermarkDecisions: Map<string, WatermarkDecision> | undefined;
+        if (options.skipUnchanged && options.recordProcessID && options.entityID) {
+            try {
+                let writeBackFields: string[] | undefined;
+                const procWithWriteBack = options.processor as { getWriteBackFields?: () => string[]; OutputMapping?: OutputMappingConfig };
+                if (typeof procWithWriteBack.getWriteBackFields === 'function') {
+                    writeBackFields = procWithWriteBack.getWriteBackFields();
+                } else if (procWithWriteBack.OutputMapping?.fields) {
+                    writeBackFields = Object.keys(procWithWriteBack.OutputMapping.fields);
+                }
+
+                watermarkDecisions = await WatermarkService.Instance.CheckBatchWatermarks({
+                    recordProcessID: options.recordProcessID,
+                    entityID: options.entityID,
+                    records,
+                    strategy: options.watermarkStrategy ?? 'Checksum',
+                    skipUnchanged: options.skipUnchanged,
+                    lastRunAt: options.lastRunAt,
+                    processor: options.processor,
+                    contextUser: options.contextUser,
+                    provider: ctx.provider,
+                    processRunID: ctx.handle.ProcessRunID,
+                    maxConcurrency: ctx.maxConcurrency,
+                    excludeFields: writeBackFields,
+                });
+            } catch (e) {
+                LogError(`RecordSetProcessor: Watermark check failed (proceeding without skipping): ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+
+        const skippedRecords = records.filter((r) => watermarkDecisions?.get(r.RecordID)?.shouldSkip);
+        const eligibleRecords = records.filter((r) => !watermarkDecisions?.get(r.RecordID)?.shouldSkip);
+
+        for (const record of skippedRecords) {
+            counts.Processed++;
+            counts.Skipped++;
+            const skipResult: RecordResult = { Status: 'Skipped', DurationMs: 0 };
+            await ctx.tracker.RecordResult(ctx.handle, record, skipResult, options.contextUser, ctx.provider);
+        }
+
+        if (eligibleRecords.length === 0) {
+            return;
+        }
+
+        // P1-7c Two-phase batch execution seam (e.g. InferProcessor dedup across distinct keys)
+        if (typeof options.processor.ProcessBatch === 'function') {
+            const batchStarted = Date.now();
+            let batchResults: Map<string, RecordResult>;
+            try {
+                const rawBatchResults = await options.processor.ProcessBatch(eligibleRecords, recordContext);
+                if (rawBatchResults instanceof Map) {
+                    batchResults = rawBatchResults;
+                } else if (Array.isArray(rawBatchResults)) {
+                    batchResults = new Map();
+                    for (let i = 0; i < eligibleRecords.length; i++) {
+                        const res = rawBatchResults[i] ?? { Status: 'Failed', ErrorMessage: 'No result returned for record' };
+                        batchResults.set(eligibleRecords[i].RecordID, res);
+                    }
+                } else {
+                    batchResults = new Map();
+                }
+            } catch (e) {
+                const errMsg = e instanceof Error ? e.message : String(e);
+                batchResults = new Map();
+                for (const r of eligibleRecords) {
+                    batchResults.set(r.RecordID, { Status: 'Failed', ErrorMessage: errMsg });
+                }
+            }
+
+            const totalDuration = Date.now() - batchStarted;
+            const perRecordDuration = Math.round(totalDuration / Math.max(1, eligibleRecords.length));
+
+            for (const record of eligibleRecords) {
+                let result = batchResults.get(record.RecordID) ?? { Status: 'Failed', ErrorMessage: 'No result returned from batch processor' };
+                if (result.DurationMs == null) {
+                    result = { ...result, DurationMs: perRecordDuration };
+                }
+                counts.Processed++;
+                if (result.Status === 'Succeeded') {
+                    counts.Success++;
+                    const decision = watermarkDecisions?.get(record.RecordID);
+                    if (!options.dryRun && decision?.basisHash && options.recordProcessID && options.entityID) {
+                        try {
+                            await WatermarkService.Instance.UpdateWatermark({
+                                recordProcessID: options.recordProcessID,
+                                entityID: options.entityID,
+                                recordID: record.RecordID,
+                                basisHash: decision.basisHash,
+                                existingWatermark: decision.existingWatermark,
+                                contextUser: options.contextUser,
+                                provider: ctx.provider,
+                            });
+                        } catch (e) {
+                            LogError(`RecordSetProcessor: Failed to update watermark for record '${record.RecordID}': ${e instanceof Error ? e.message : String(e)}`);
+                        }
+                    }
+                } else if (result.Status === 'Skipped') {
+                    counts.Skipped++;
+                } else {
+                    counts.Error++;
+                }
+                await ctx.tracker.RecordResult(ctx.handle, record, result, options.contextUser, ctx.provider);
+            }
+            return;
+        }
 
         const worker = async (record: RecordRef): Promise<void> => {
+            const decision = watermarkDecisions?.get(record.RecordID);
             const started = Date.now();
             let result: RecordResult;
             try {
@@ -202,6 +318,22 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             counts.Processed++;
             if (result.Status === 'Succeeded') {
                 counts.Success++;
+                // Upsert watermark on success (if not dryRun and basisHash exists)
+                if (!options.dryRun && decision?.basisHash && options.recordProcessID && options.entityID) {
+                    try {
+                        await WatermarkService.Instance.UpdateWatermark({
+                            recordProcessID: options.recordProcessID,
+                            entityID: options.entityID,
+                            recordID: record.RecordID,
+                            basisHash: decision.basisHash,
+                            existingWatermark: decision.existingWatermark,
+                            contextUser: options.contextUser,
+                            provider: ctx.provider,
+                        });
+                    } catch (e) {
+                        LogError(`RecordSetProcessor: Failed to update watermark for record '${record.RecordID}': ${e instanceof Error ? e.message : String(e)}`);
+                    }
+                }
             } else if (result.Status === 'Skipped') {
                 counts.Skipped++;
             } else {
@@ -210,7 +342,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             await ctx.tracker.RecordResult(ctx.handle, record, result, options.contextUser, ctx.provider);
         };
 
-        await this.runWithConcurrency(records, ctx.maxConcurrency, worker);
+        await this.runWithConcurrency(eligibleRecords, ctx.maxConcurrency, worker);
     }
 
     /** Runs `worker` over `items` with at most `limit` in flight at once. */
