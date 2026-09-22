@@ -485,6 +485,28 @@ export class EntityMergeOptions {
 }
 
 /**
+ * Options for computing a deterministic content hash of an entity's field values.
+ */
+export interface ComputeContentHashOptions {
+    /**
+     * Explicit list of field names to include in the hash basis.
+     * When omitted, all loaded fields on the entity (and parent entity chain, if IS-A) are considered.
+     */
+    Fields?: string[];
+
+    /**
+     * Explicit list of field names to exclude from the hash basis (e.g. write-back target fields).
+     */
+    ExcludeFields?: string[];
+
+    /**
+     * Whether to exclude system columns (`__mj_` prefixed, such as `__mj_CreatedAt`, `__mj_UpdatedAt`)
+     * from the hash basis. Defaults to true.
+     */
+    ExcludeSystemFields?: boolean;
+}
+
+/**
  * Input parameters for retrieving entity record names.
  * Used for batch operations to get display names for multiple records.
  */
