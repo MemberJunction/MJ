@@ -96,10 +96,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   // and onTabShown can race to call loadTabContent, resulting in duplicate component rendering.
   private tabsCurrentlyLoading = new Set<string>();
 
-  // Record-tab shows GL fired while the records region was HIDDEN, keyed by
-  // tab id. Their content loads are deferred until the region is the visible
-  // surface — see the TabShown handler in wireRecordsLayoutEvents.
-  private pendingRecordShows = new Map<string, unknown>();
+  // Record-tab shows GL fired while the records region was HIDDEN, by tab id.
+  // Their content loads are deferred until the region is the visible surface —
+  // see the TabShown handler in wireRecordsLayoutEvents.
+  //
+  // A SET, not a map of containers: the replay deliberately re-resolves the live
+  // container via GetContainer(tabId), so a parked one would never be read — and
+  // holding it would retain a GL container, and its possibly-detached DOM, for as
+  // long as the region stays hidden. The type says the id is all that is kept.
+  private pendingRecordShows = new Set<string>();
 
   // NEW: Smart component cache for preserving state across tab switches
   private cacheManager: ComponentCacheManager;
@@ -508,7 +513,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     if (this.pendingRecordShows.size === 0) {
       return;
     }
-    const parked = [...this.pendingRecordShows.keys()];
+    const parked = [...this.pendingRecordShows];
     this.pendingRecordShows.clear();
     for (const tabId of parked) {
       if (this.recordsLayoutManager.IsTabLoaded(tabId)) {
@@ -803,7 +808,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         // requests, so the surface the user is looking at waits for records
         // they are not. Park the show; it is replayed when the region shows.
         if (!this.ShowRecordsRegion) {
-          this.pendingRecordShows.set(event.tabId, event.container);
+          this.pendingRecordShows.add(event.tabId);
           return;
         }
         this.pendingRecordShows.delete(event.tabId);

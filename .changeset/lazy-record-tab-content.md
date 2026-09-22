@@ -1,5 +1,5 @@
 ---
-"@memberjunction/ng-explorer-core": minor
+"@memberjunction/ng-explorer-core": patch
 ---
 
 Record tabs restored at boot no longer load their content until the records region is actually shown.
