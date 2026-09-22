@@ -361,16 +361,30 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(helper('Invalid API key provided')).toBe(true);
         });
 
-        it('classifies auth and credential failures as fatal', () => {
+        it('classifies configuration and credential failures as fatal', () => {
             const agent = new BaseAgent();
             const helper = (msg: string | null | undefined) =>
                 (agent as unknown as { isFatalActionError(m: string | null | undefined): boolean }).isFatalActionError(msg);
 
-            expect(helper('Request failed with status code 401: Unauthorized')).toBe(true);
-            expect(helper('HTTP 403: Forbidden - insufficient permissions')).toBe(true);
             expect(helper('Authentication failed for user service')).toBe(true);
+            expect(helper('Authentication failed')).toBe(true); // no status code needed
             expect(helper('Credentials not found in environment')).toBe(true);
             expect(helper('Action is not configured for this tenant')).toBe(true);
+        });
+
+        it('treats HTTP authorization statuses as recoverable so they flow into the attempt budget', () => {
+            // 401/403/unauthorized/forbidden are usually per-resource (one site blocking a fetch, one
+            // record the user cannot read) or transient (a provider using 403 as a rate limit). They
+            // must not lock the whole action out of the run.
+            const agent = new BaseAgent();
+            const helper = (msg: string | null | undefined) =>
+                (agent as unknown as { isFatalActionError(m: string | null | undefined): boolean }).isFatalActionError(msg);
+
+            expect(helper('Request failed with status code 401: Unauthorized')).toBe(false);
+            expect(helper('HTTP 403: Forbidden - insufficient permissions')).toBe(false);
+            expect(helper('Forbidden')).toBe(false);
+            expect(helper('Unauthorized access to record 12345 in entity Contacts')).toBe(false);
+            expect(helper('Rate limited (403) by search provider')).toBe(false);
         });
 
         it('classifies recoverable argument and transient errors as non-fatal', () => {
@@ -508,6 +522,104 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(res6.Success).toBe(false);
             expect(res6.Message).toContain('disabled for this run after 5 consecutive failures');
             expect(harness.runActionCallCount).toBe(5); // Still 5!
+        });
+
+        it('a 403 counts toward the attempt budget and is blocked on the sixth attempt, not the first', async () => {
+            const agent = new BaseAgent();
+            const actionEntity = { ID: ACTION_ID, Name: ACTION_NAME } as unknown as import('@memberjunction/actions-base').MJActionEntityExtended;
+            const params = makeParams();
+
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = 'HTTP 403: Forbidden';
+                ar.RunParams = new RunActionParams();
+                ar.RunParams.Action = actionEntity;
+                return ar;
+            };
+
+            // Five different URLs each 403 — every one must actually dispatch (no fatal lockout).
+            for (let i = 1; i <= 5; i++) {
+                const res = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { url: `https://site-${i}.example` } }, actionEntity);
+                expect(res.Success).toBe(false);
+                expect(res.Message).toBe('HTTP 403: Forbidden');
+                expect(harness.runActionCallCount).toBe(i);
+            }
+
+            // Sixth: the budget, not the fatal path, stops it.
+            const res6 = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { url: 'https://site-6.example' } }, actionEntity);
+            expect(res6.Success).toBe(false);
+            expect(res6.Message).toContain('disabled for this run after 5 consecutive failures');
+            expect(res6.Message).not.toContain('credential');
+            expect(harness.runActionCallCount).toBe(5);
+        });
+
+        it('skipCircuitBreaker: pipeline-originated calls are never short-circuited', async () => {
+            const agent = new BaseAgent();
+            const actionEntity = { ID: ACTION_ID, Name: ACTION_NAME } as unknown as import('@memberjunction/actions-base').MJActionEntityExtended;
+            const params = makeParams();
+
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = 'Perplexity API key not found'; // would be fatal on the LLM path
+                ar.RunParams = new RunActionParams();
+                ar.RunParams.Action = actionEntity;
+                return ar;
+            };
+
+            // Six identical failures, including a fatal-looking message: every one still dispatches.
+            for (let i = 1; i <= 6; i++) {
+                const res = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: 'same' } }, actionEntity, undefined, { skipCircuitBreaker: true });
+                expect(res.Success).toBe(false);
+                expect(res.Message).toBe('Perplexity API key not found');
+                expect(harness.runActionCallCount).toBe(i);
+            }
+        });
+
+        it('skipCircuitBreaker: pipeline outcomes neither increment nor reset the LLM-path failure history', async () => {
+            const agent = new BaseAgent();
+            const actionEntity = { ID: ACTION_ID, Name: ACTION_NAME } as unknown as import('@memberjunction/actions-base').MJActionEntityExtended;
+            const params = makeParams();
+
+            let nextSucceeds = false;
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = nextSucceeds;
+                ar.Message = nextSucceeds ? 'ok' : 'Query failed';
+                ar.RunParams = new RunActionParams();
+                ar.RunParams.Action = actionEntity;
+                return ar;
+            };
+
+            // (a) Five pipeline failures do not consume the LLM path's budget.
+            for (let i = 1; i <= 5; i++) {
+                await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { row: i } }, actionEntity, undefined, { skipCircuitBreaker: true });
+            }
+            const llmCall = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'first llm attempt' } }, actionEntity);
+            expect(llmCall.Message).toBe('Query failed'); // dispatched, not blocked
+            expect(harness.runActionCallCount).toBe(6);
+
+            // (b) Two identical LLM failures arm the identical-arguments rule...
+            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'stuck' } }, actionEntity);
+            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'stuck' } }, actionEntity);
+            expect(harness.runActionCallCount).toBe(8);
+
+            // ...a pipeline SUCCESS in between must not clear that record...
+            nextSucceeds = true;
+            const pipelineOk = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { row: 99 } }, actionEntity, undefined, { skipCircuitBreaker: true });
+            expect(pipelineOk.Success).toBe(true);
+            expect(harness.runActionCallCount).toBe(9);
+            nextSucceeds = false;
+
+            // ...so the third identical LLM call is still blocked.
+            const blocked = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'stuck' } }, actionEntity);
+            expect(blocked.Success).toBe(false);
+            expect(blocked.Message).toContain('identical arguments');
+            expect(harness.runActionCallCount).toBe(9);
         });
 
         it('resets consecutive failure count when an action succeeds', async () => {

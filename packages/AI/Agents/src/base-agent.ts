@@ -317,6 +317,23 @@ interface ParallelSubAgentDispatch {
 }
 
 /**
+ * Options for {@link BaseAgent.ExecuteSingleAction}.
+ */
+export interface ExecuteSingleActionOptions {
+    /**
+     * When true, the run-scoped action circuit breaker is bypassed for this call: none of the
+     * pre-execution checks (fatal lockout, identical-arguments rule, consecutive-attempt budget)
+     * apply, and the outcome neither increments nor resets the failure history.
+     *
+     * Set by the pipeline registry. The pipeline executor's `map` stage does its own per-element
+     * failure accounting and expects elements to be independent, and there is no model in that
+     * loop to act on the breaker's guidance, so counting those calls would let a run of bad
+     * elements block the rest of the batch.
+     */
+    skipCircuitBreaker?: boolean;
+}
+
+/**
  * The agent-invariant "base" catalog cached (process-wide) on AIEngine and reused across runs/steps.
  * Holds the resolved sub-agents + actions and their formatted markdown, plus the base merged
  * agent-type prompt params (with NO runtime overrides applied). Runtime `actionChanges` /
@@ -473,16 +490,60 @@ export class BaseAgent {
     }
 
     /**
-     * Detects whether an action error message represents a fatal configuration,
-     * credential, or authentication issue that cannot be resolved by retrying the
-     * action with different parameters.
+     * Detects whether an action error message represents a fatal configuration or credential
+     * problem: the tool cannot work in this environment no matter what arguments it is given,
+     * so retrying is pointless and the action is locked out for the rest of the run.
+     *
+     * Deliberately NOT fatal: HTTP 401/403, "unauthorized" and "forbidden". Those are usually
+     * per-resource (one site blocking a fetch, one record the user cannot read) or transient
+     * (a search provider using 403 as a rate limit), so they fall through to the parameter-aware
+     * failure history where the identical-arguments rule and the consecutive-attempt budget
+     * bound them without disabling the tool for every other resource.
      */
     protected isFatalActionError(message: string | null | undefined): boolean {
         if (!message) {
             return false;
         }
-        const fatalPattern = /(?:api[\s_-]?key\s+(?:is\s+)?(?:not\s+found|missing|required|invalid)|(?:missing|invalid)\s+api[\s_-]?key|not\s+configured|unauthorized|forbidden|credentials?\s+(?:not\s+found|missing)|authentication\s+failed|\b401\b|\b403\b|no\s+api[\s_-]?key)/i;
+        const fatalPattern = /(?:api[\s_-]?key\s+(?:is\s+)?(?:not\s+found|missing|required|invalid)|(?:missing|invalid)\s+api[\s_-]?key|no\s+api[\s_-]?key|not\s+configured|credentials?\s+(?:not\s+found|missing)|authentication\s+failed)/i;
         return fatalPattern.test(message);
+    }
+
+    /**
+     * Records a non-successful outcome for the run-scoped action circuit breaker. A fatal
+     * configuration error locks the action out for the rest of the run; any other failure
+     * updates the parameter-aware history behind the identical-arguments rule and the
+     * consecutive-attempt budget.
+     */
+    protected recordActionFailure(action: AgentAction, actionEntity: MJActionEntityExtended | undefined, message: string | null | undefined, normalizedParams: string): void {
+        if (this.isFatalActionError(message)) {
+            this._fatalActionFailures.add(action.name);
+            if (actionEntity?.Name) {
+                this._fatalActionFailures.add(actionEntity.Name);
+            }
+            return;
+        }
+        const existing = this._actionFailureHistory.get(action.name) || (actionEntity?.Name ? this._actionFailureHistory.get(actionEntity.Name) : undefined);
+        const isIdentical = existing !== undefined && existing.lastParamsString === normalizedParams;
+        const record = {
+            lastParamsString: normalizedParams,
+            identicalFailures: isIdentical && existing ? existing.identicalFailures + 1 : 1,
+            totalConsecutiveFailures: (existing?.totalConsecutiveFailures ?? 0) + 1
+        };
+        this._actionFailureHistory.set(action.name, record);
+        if (actionEntity?.Name) {
+            this._actionFailureHistory.set(actionEntity.Name, record);
+        }
+    }
+
+    /**
+     * Clears the parameter-aware failure history for an action after it succeeds, so the
+     * identical-arguments rule and the consecutive-attempt budget start over.
+     */
+    protected clearActionFailureRecord(action: AgentAction, actionEntity: MJActionEntityExtended | undefined): void {
+        this._actionFailureHistory.delete(action.name);
+        if (actionEntity?.Name) {
+            this._actionFailureHistory.delete(actionEntity.Name);
+        }
     }
 
     /**
@@ -7173,11 +7234,14 @@ The context is now within limits. Please retry your request with the recovered c
         // Operators (where/select/map/…) are pure code-defined verbs, not registry tools — only
         // capabilities (Actions + artifact tools) live here as pipeline sources/stages.
 
-        // Actions — each wrapped to run via the existing single-action execution path.
+        // Actions — each wrapped to run via the existing single-action execution path. The
+        // run-scoped circuit breaker is bypassed here: the pipeline executor's `map` stage does
+        // its own per-element failure accounting and expects elements to be independent, and
+        // there is no model in that loop to act on the breaker's guidance.
         this.getEffectiveActionsForValidation(params.agent.ID).forEach((actionEntity) =>
             register(
                 new ActionInvocable(actionEntity.Name, (p) =>
-                    this.ExecuteSingleAction(params, { name: actionEntity.Name, params: p }, actionEntity, params.contextUser),
+                    this.ExecuteSingleAction(params, { name: actionEntity.Name, params: p }, actionEntity, params.contextUser, { skipCircuitBreaker: true }),
                 ),
             ),
         );
@@ -7782,21 +7846,24 @@ The context is now within limits. Please retry your request with the recovered c
      * @param {ExecuteAgentParams} params - Parameters from agent execution for context passing
      * @param {AgentAction} action - Action to execute
      * @param {UserInfo} [contextUser] - Optional user context for permissions
+     * @param {ExecuteSingleActionOptions} [options] - `skipCircuitBreaker` bypasses the run-scoped
+     *   circuit breaker for callers that do their own failure accounting (the pipeline executor)
      * 
      * @returns {Promise<ActionResult>} ActionResult object from the action execution
      * 
      * @throws {Error} If the action fails to execute
      */
     public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended, 
-        contextUser?: UserInfo): Promise<ActionResult> {
+        contextUser?: UserInfo, options?: ExecuteSingleActionOptions): Promise<ActionResult> {
         
+        const skipBreaker = options?.skipCircuitBreaker === true;
         const normalizedParams = this.normalizeActionParams(action.params);
         const actionKey = action.name;
         const entityKey = actionEntity?.Name;
         const failureRecord = this._actionFailureHistory.get(actionKey) || (entityKey ? this._actionFailureHistory.get(entityKey) : undefined);
 
         // 1. Fatal configuration / credential error (0ms short-circuit)
-        if (this._fatalActionFailures.has(actionKey) || (entityKey && this._fatalActionFailures.has(entityKey))) {
+        if (!skipBreaker && (this._fatalActionFailures.has(actionKey) || (entityKey && this._fatalActionFailures.has(entityKey)))) {
             const blockedMessage = `Action '${action.name}' is disabled for this run because it previously failed with an unrecoverable configuration or credential error. You must select an alternative action.`;
             this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): ${blockedMessage}`, false, params);
             const blockedResult = new ActionResult();
@@ -7809,7 +7876,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // 2. Identical parameters repeated failure loop (threshold >= 2 failures with exact same params)
-        if (failureRecord && failureRecord.lastParamsString === normalizedParams && failureRecord.identicalFailures >= 2) {
+        if (!skipBreaker && failureRecord && failureRecord.lastParamsString === normalizedParams && failureRecord.identicalFailures >= 2) {
             const blockedMessage = `Action '${action.name}' is disabled for these inputs because it already failed ${failureRecord.identicalFailures} times with identical arguments. You must modify your parameters or select an alternative tool.`;
             this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited on identical retry loop (0ms)`, false, params);
             const blockedResult = new ActionResult();
@@ -7822,7 +7889,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // 3. Consecutive modified failure limit (threshold >= 5 attempts)
-        if (failureRecord && failureRecord.totalConsecutiveFailures >= 5) {
+        if (!skipBreaker && failureRecord && failureRecord.totalConsecutiveFailures >= 5) {
             const blockedMessage = `Action '${action.name}' is disabled for this run after 5 consecutive failures across parameter attempts. You must select an alternative tool or proceed with available data.`;
             this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited on max retry attempts (0ms)`, false, params);
             const blockedResult = new ActionResult();
@@ -7879,31 +7946,13 @@ The context is now within limits. Please retry your request with the recovered c
             
             if (result.Success) {
                 this.logStatus(`   ✅ Action '${action.name}' completed successfully`, true, params);
-                this._actionFailureHistory.delete(action.name);
-                if (actionEntity?.Name) {
-                    this._actionFailureHistory.delete(actionEntity.Name);
+                if (!skipBreaker) {
+                    this.clearActionFailureRecord(action, actionEntity);
                 }
             } else {
                 this.logStatus(`   ❌ Action '${action.name}' failed: ${result.Message || 'Unknown error'}`, false, params);
-                if (this.isFatalActionError(result.Message)) {
-                    this._fatalActionFailures.add(action.name);
-                    if (actionEntity?.Name) {
-                        this._fatalActionFailures.add(actionEntity.Name);
-                    }
-                } else {
-                    const existing = this._actionFailureHistory.get(action.name) || (actionEntity?.Name ? this._actionFailureHistory.get(actionEntity.Name) : undefined);
-                    const isIdentical = existing ? existing.lastParamsString === normalizedParams : false;
-                    const identicalCount = isIdentical ? (existing!.identicalFailures + 1) : 1;
-                    const totalCount = (existing?.totalConsecutiveFailures ?? 0) + 1;
-                    const record = {
-                        lastParamsString: normalizedParams,
-                        identicalFailures: identicalCount,
-                        totalConsecutiveFailures: totalCount
-                    };
-                    this._actionFailureHistory.set(action.name, record);
-                    if (actionEntity?.Name) {
-                        this._actionFailureHistory.set(actionEntity.Name, record);
-                    }
+                if (!skipBreaker) {
+                    this.recordActionFailure(action, actionEntity, result.Message, normalizedParams);
                 }
             }
             
@@ -7911,25 +7960,8 @@ The context is now within limits. Please retry your request with the recovered c
             
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            if (this.isFatalActionError(errorMsg)) {
-                this._fatalActionFailures.add(action.name);
-                if (actionEntity?.Name) {
-                    this._fatalActionFailures.add(actionEntity.Name);
-                }
-            } else {
-                const existing = this._actionFailureHistory.get(action.name) || (actionEntity?.Name ? this._actionFailureHistory.get(actionEntity.Name) : undefined);
-                const isIdentical = existing ? existing.lastParamsString === normalizedParams : false;
-                const identicalCount = isIdentical ? (existing!.identicalFailures + 1) : 1;
-                const totalCount = (existing?.totalConsecutiveFailures ?? 0) + 1;
-                const record = {
-                    lastParamsString: normalizedParams,
-                    identicalFailures: identicalCount,
-                    totalConsecutiveFailures: totalCount
-                };
-                this._actionFailureHistory.set(action.name, record);
-                if (actionEntity?.Name) {
-                    this._actionFailureHistory.set(actionEntity.Name, record);
-                }
+            if (!skipBreaker) {
+                this.recordActionFailure(action, actionEntity, errorMsg, normalizedParams);
             }
             this.logError(error, {
                 category: 'ActionExecution',
