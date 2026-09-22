@@ -48472,6 +48472,13 @@ export class MJEntityField_ {
     @Field({nullable: true, description: `Optional JSON configuration bag defining field-level policies and capabilities (shape = IEntityFieldConfiguration). Includes Hierarchy options (IsHierarchy, MaxDepth) to explicitly declare recursive tree hierarchies.`}) 
     Configuration?: string;
         
+    @Field({nullable: true, description: `Optional SQL WHERE fragment applied to every lookup on this foreign key (e.g. Status = 'Active'), AND-ed with whatever the user types, on both the browse list and the search path. Lets a picker be scoped from metadata rather than from every form template that renders the field. Authored by hand — CodeGen never derives or overwrites it. NULL means no filter, which is the pre-feature behaviour.`}) 
+    RelatedEntityFilter?: string;
+        
+    @Field({nullable: true, description: `Optional ORDER BY fragment for the empty-query browse list on this foreign key, e.g. [Name] or [LastActivityDate] DESC. Does not affect the typed-query path, which is ordered by search relevance. Authored by hand — CodeGen never derives or overwrites it. NULL means order by the related entity's name field.`}) 
+    @MaxLength(500)
+    RelatedEntityOrderBy?: string;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -48688,6 +48695,12 @@ export class CreateMJEntityFieldInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field({ nullable: true })
+    RelatedEntityFilter: string | null;
+
+    @Field({ nullable: true })
+    RelatedEntityOrderBy: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -48856,6 +48869,12 @@ export class UpdateMJEntityFieldInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field({ nullable: true })
+    RelatedEntityFilter?: string | null;
+
+    @Field({ nullable: true })
+    RelatedEntityOrderBy?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
