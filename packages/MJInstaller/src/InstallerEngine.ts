@@ -420,8 +420,10 @@ export class InstallerEngine {
    * Run diagnostics on an existing or target install directory.
    *
    * Performs preflight checks (Node version, disk space, SQL connectivity, etc.)
-   * and known-issue detection. Does **not** modify any files. Results are
-   * returned as a {@link Diagnostics} object and also emitted as `diagnostic` events.
+   * and known-issue detection. Creates `targetDir` if it does not already exist
+   * (preflight needs it to exist to probe the package manager from it), but
+   * changes nothing else. Results are returned as a {@link Diagnostics} object
+   * and also emitted as `diagnostic` events.
    *
    * @param targetDir - Absolute path to the directory to diagnose.
    * @param options - Optional doctor options (currently reserved for future use).
@@ -484,6 +486,20 @@ export class InstallerEngine {
       (check, status, message, suggestedFix) => this.emitDiagnostic(check, status, message, suggestedFix)
     );
     await claudePackDoctor.RunChecks(targetDir, diagnostics);
+
+    // Run runtime and AI provider configuration checks
+    await this.runRuntimeAndAIChecks(targetDir, diagnostics);
+
+    // Filter by scope if requested
+    if (options?.Scope) {
+      const rawScopes = Array.isArray(options.Scope) ? options.Scope : [options.Scope];
+      const requestedScopes = rawScopes.flatMap((s) => s.split(',')).map((s) => s.toLowerCase().trim()).filter(Boolean);
+      if (requestedScopes.length > 0) {
+        diagnostics.Checks = diagnostics.Checks.filter((c) =>
+          requestedScopes.includes((c.Scope ?? 'install').toLowerCase())
+        );
+      }
+    }
 
     // Generate diagnostic report if requested
     if (generateReport) {
@@ -1107,6 +1123,141 @@ export class InstallerEngine {
       Message: message,
       SuggestedFix: suggestedFix,
     });
+  }
+
+  /**
+   * Run runtime and AI configuration checks (encryption keys, AI provider credentials).
+   */
+  private async runRuntimeAndAIChecks(
+    targetDir: string,
+    diagnostics: Diagnostics
+  ): Promise<void> {
+    const fs = new FileSystemAdapter();
+    const envCandidates = [
+      path.join(targetDir, '.env'),
+      path.join(targetDir, 'packages', 'MJAPI', '.env'),
+      path.join(targetDir, 'apps', 'MJAPI', '.env'),
+    ];
+
+    let combinedEnv = '';
+    for (const envPath of envCandidates) {
+      if (await fs.FileExists(envPath)) {
+        try {
+          combinedEnv += '\n' + (await fs.ReadText(envPath));
+        } catch {
+          // Ignore read errors
+        }
+      }
+    }
+
+    // Helper to get variable from process.env or .env files
+    const getVar = (name: string): string => {
+      if (process.env[name]) return process.env[name]!;
+      const match = combinedEnv.match(new RegExp(`^\\s*${name}\\s*=\\s*["']?([^"'\\r\\n]+)["']?`, 'm'));
+      return match?.[1]?.trim() ?? '';
+    };
+
+    // 1. Encryption Key Check (Scope: 'runtime')
+    const encKey = getVar('MJ_BASE_ENCRYPTION_KEY');
+    if (!encKey) {
+      this.emitDiagnostic(
+        'Base encryption key',
+        'warn',
+        'MJ_BASE_ENCRYPTION_KEY is not configured. Sensitive fields cannot be encrypted.',
+        'Generate a 32-byte hex key and set MJ_BASE_ENCRYPTION_KEY in .env.'
+      );
+      diagnostics.AddCheck({
+        Name: 'Base encryption key',
+        Status: 'warn',
+        Message: 'MJ_BASE_ENCRYPTION_KEY is not configured in environment or .env.',
+        SuggestedFix: 'Generate a 32-byte hex key and set MJ_BASE_ENCRYPTION_KEY in .env.',
+        Code: 'ENCRYPTION_KEY_MISSING',
+        Scope: 'runtime',
+        Remediation: {
+          Type: 'manual',
+        },
+      });
+    } else if (encKey.length < 32) {
+      this.emitDiagnostic(
+        'Base encryption key',
+        'warn',
+        `MJ_BASE_ENCRYPTION_KEY is too short (${encKey.length} chars). Recommend 32+ characters or 64 hex characters.`,
+        'Provide a 32-byte key for AES-256.'
+      );
+      diagnostics.AddCheck({
+        Name: 'Base encryption key',
+        Status: 'warn',
+        Message: `MJ_BASE_ENCRYPTION_KEY is too short (${encKey.length} characters; expected 32+).`,
+        SuggestedFix: 'Use a 32-byte (64 hex characters) key.',
+        Code: 'ENCRYPTION_KEY_INVALID_LENGTH',
+        Scope: 'runtime',
+        Evidence: { Length: encKey.length },
+      });
+    } else {
+      this.emitDiagnostic(
+        'Base encryption key',
+        'pass',
+        'MJ_BASE_ENCRYPTION_KEY is configured with valid length.'
+      );
+      diagnostics.AddCheck({
+        Name: 'Base encryption key',
+        Status: 'pass',
+        Message: 'MJ_BASE_ENCRYPTION_KEY is configured with valid length.',
+        Code: 'ENCRYPTION_KEY_OK',
+        Scope: 'runtime',
+      });
+    }
+
+    // 2. AI Provider Credential Check (Scope: 'ai')
+    const aiProviders: { name: string; keyName: string }[] = [
+      { name: 'OpenAI', keyName: 'OPENAI_API_KEY' },
+      { name: 'Anthropic', keyName: 'ANTHROPIC_API_KEY' },
+      { name: 'Gemini', keyName: 'GEMINI_API_KEY' },
+      { name: 'Groq', keyName: 'GROQ_API_KEY' },
+      { name: 'Mistral', keyName: 'MISTRAL_API_KEY' },
+    ];
+
+    const configuredProviders: string[] = [];
+    for (const provider of aiProviders) {
+      const val = getVar(provider.keyName) || getVar(`AI_VENDOR_API_KEY__${provider.name}LLM`);
+      if (val && val.length > 5) {
+        configuredProviders.push(provider.name);
+      }
+    }
+
+    if (configuredProviders.length > 0) {
+      this.emitDiagnostic(
+        'AI provider credentials',
+        'pass',
+        `Active AI provider credentials detected: ${configuredProviders.join(', ')}.`
+      );
+      diagnostics.AddCheck({
+        Name: 'AI provider credentials',
+        Status: 'pass',
+        Message: `Active AI provider credentials detected: ${configuredProviders.join(', ')}.`,
+        Code: 'AI_CREDENTIAL_OK',
+        Scope: 'ai',
+        Evidence: { ConfiguredProviders: configuredProviders },
+      });
+    } else {
+      this.emitDiagnostic(
+        'AI provider credentials',
+        'warn',
+        'No AI provider credentials detected in environment or .env.',
+        'Add OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY to .env to execute AI agents.'
+      );
+      diagnostics.AddCheck({
+        Name: 'AI provider credentials',
+        Status: 'warn',
+        Message: 'No AI provider credentials detected in environment or .env.',
+        SuggestedFix: 'Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY in .env.',
+        Code: 'AI_CREDENTIAL_MISSING',
+        Scope: 'ai',
+        Remediation: {
+          Type: 'manual',
+        },
+      });
+    }
   }
 
   // -------------------------------------------------------------------------

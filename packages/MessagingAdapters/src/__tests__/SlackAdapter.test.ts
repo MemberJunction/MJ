@@ -4,7 +4,7 @@
  * Tests Slack-specific behavior: event mapping, @mention parsing,
  * typing indicator, streaming message reuse, and bot mention stripping.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SlackAdapter } from '../slack/SlackAdapter.js';
 import { MessagingAdapterSettings } from '../base/types.js';
 
@@ -291,6 +291,56 @@ describe('SlackAdapter', () => {
         });
     });
 
+    describe('thinking message TTL sweep', () => {
+        // storeThinkingMessageId (private) is the TTL/max-size-swept idiom mirroring
+        // TeamsAdapter.storeConversationRef — verifies an entry orphaned by an exception between
+        // the typing indicator and its consumption doesn't survive indefinitely.
+        type ThinkingMap = Map<string, { ts: string; timestamp: number }>;
+        const getMap = (a: SlackAdapter): ThinkingMap =>
+            (a as unknown as { thinkingMessageIds: ThinkingMap }).thinkingMessageIds;
+        const store = (a: SlackAdapter, key: string, ts: string): void =>
+            (a as unknown as { storeThinkingMessageId(key: string, ts: string): void }).storeThinkingMessageId(key, ts);
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        it('keeps an entry that is still within the TTL', async () => {
+            const adapter = await createInitializedAdapter();
+            vi.useFakeTimers();
+            store(adapter, 'C1:t1', 'ts-1');
+
+            vi.advanceTimersByTime(30 * 60 * 1000); // +30 min, TTL is 1 hour
+            store(adapter, 'C2:t2', 'ts-2'); // storing again re-runs the sweep
+
+            expect(getMap(adapter).get('C1:t1')?.ts).toBe('ts-1');
+        });
+
+        it('sweeps an entry that was never consumed past the TTL', async () => {
+            const adapter = await createInitializedAdapter();
+            vi.useFakeTimers();
+            store(adapter, 'C1:t1', 'ts-1');
+
+            vi.advanceTimersByTime(61 * 60 * 1000); // past the 1-hour TTL
+            store(adapter, 'C2:t2', 'ts-2'); // storing again re-runs the sweep
+
+            expect(getMap(adapter).has('C1:t1')).toBe(false);
+        });
+
+        it('only sweeps the stale entry, leaving an unrelated fresh entry intact', async () => {
+            const adapter = await createInitializedAdapter();
+            vi.useFakeTimers();
+            store(adapter, 'STALE:t1', 'ts-stale');
+
+            vi.advanceTimersByTime(61 * 60 * 1000);
+            store(adapter, 'FRESH:t2', 'ts-fresh');
+
+            const map = getMap(adapter);
+            expect(map.has('STALE:t1')).toBe(false);
+            expect(map.get('FRESH:t2')?.ts).toBe('ts-fresh');
+        });
+    });
+
     describe('user email lookup', () => {
         it('should call users.info to look up email', async () => {
             const adapter = await createInitializedAdapter();
@@ -399,7 +449,7 @@ describe('SlackAdapter', () => {
             const sent: Record<string, unknown>[] = [];
             const harness = Object.create(SlackAdapter.prototype) as SlackAdapter & {
                 client: unknown;
-                thinkingMessageIds: Map<string, string>;
+                thinkingMessageIds: Map<string, { ts: string; timestamp: number }>;
                 sendOrUpdateStreamingMessage: (m: unknown, c: string, id: string | null, a?: unknown) => Promise<string>;
             };
             (harness as { client: unknown }).client = {
@@ -408,7 +458,7 @@ describe('SlackAdapter', () => {
                     postMessage: async (args: Record<string, unknown>) => { sent.push(args); return { ok: true, ts: 'ts-1' }; },
                 },
             };
-            (harness as { thinkingMessageIds: Map<string, string> }).thinkingMessageIds = new Map();
+            (harness as { thinkingMessageIds: Map<string, { ts: string; timestamp: number }> }).thinkingMessageIds = new Map();
             return { harness, sent };
         }
 

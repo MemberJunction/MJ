@@ -15,11 +15,12 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey } from '@memberjunction/core';
+import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey, IsDateOnlySQLType, FormatDateOnly, EntityFieldTSType } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, canonicalizeColumnFields, computeFieldsList } from '../utils/record.util';
+import { AggregateField } from '../utils/aggregate-field.util';
 import {
   MJUserViewEntityExtended,
   ViewInfo,
@@ -1225,10 +1226,32 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         minimumFractionDigits: 0
       });
     }
+    // A date aggregate reaches the browser as an ISO string: the server JSON-stringifies the value
+    // and the client parses it back, which turns a Date into text. Resolve the column's type first
+    // so a `date` column renders as its stored day whether the value is a Date or that string.
+    if (typeof value !== 'boolean' && this.aggregateIsDateOnly(agg)) {
+      return FormatDateOnly(value);
+    }
     if (value instanceof Date) {
       return value.toLocaleDateString();
     }
+    // A timestamp aggregate arrives as the same ISO string. It names an instant, so it is rendered
+    // in local time, as a Date instance would be — not printed as the wire text.
+    if (typeof value === 'string' && AggregateField(agg, this._entityInfo)?.TSType === EntityFieldTSType.Date) {
+      const date = new Date(value);
+      if (!isNaN(date.getTime())) return date.toLocaleDateString();
+    }
     return String(value);
+  }
+
+  /**
+   * Whether an aggregate summarises a date-only column. An aggregate carries no field metadata of
+   * its own, so the column is read from a single-field expression such as `MIN(IntakeDate)` or
+   * from the column the aggregate is pinned under. A `date` column is a calendar day and must not
+   * be shifted into the reader's zone (MJ#4210).
+   */
+  private aggregateIsDateOnly(agg: ViewGridAggregate): boolean {
+    return IsDateOnlySQLType(AggregateField(agg, this._entityInfo)?.Type);
   }
 
   // ========================================
@@ -2452,8 +2475,25 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // ========================================
 
   private buildAgColumnDefs(): void {
-    if (this._gridState?.columnSettings?.length && this._entityInfo) {
-      this.agColumnDefs = this.buildAgColumnDefsFromGridState(this._gridState.columnSettings);
+    // A grid state whose settings name NONE of this entity's fields is not a column preference —
+    // it is evidence the state belongs to a different entity. `_gridState` outlives an entity
+    // change when one viewer is rebound from entity A to entity B (`EntityName` is a rebindable
+    // input), every setting is then dropped for naming a field B does not have, and taking that
+    // empty array as the answer rendered a grid with no header and no cells while the rows loaded
+    // and the row count read correctly — no error, no warning. So treat an empty result as NO
+    // usable state and fall through to the sources that describe the entity actually in hand.
+    // This is the floor `generateAgColumnDefs()` already has for an entity with no DefaultInView
+    // fields; the grid-state branch was the one path without one.
+    //
+    // Only a TOTAL miss is treated this way. One surviving setting is a real preference — a saved
+    // view whose entity has since lost a field — and discarding it would throw away the user's
+    // columns to guess at state that is legitimately theirs.
+    const fromGridState = (this._gridState?.columnSettings?.length && this._entityInfo)
+      ? this.buildAgColumnDefsFromGridState(this._gridState.columnSettings)
+      : [];
+
+    if (fromGridState.length > 0) {
+      this.agColumnDefs = fromGridState;
     } else if (this._columns.length > 0) {
       this.agColumnDefs = this._columns.map(col => this.mapColumnConfigToColDef(col));
     } else if (this._entityInfo) {
@@ -2986,7 +3026,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
       if (useCustomFormat) {
         // Use custom formatting
-        displayValue = this.formatValueWithCustomFormat(params.value, customFormat);
+        displayValue = this.formatValueWithCustomFormat(params.value, customFormat, field);
         // Check if formatCustomBoolean returned HTML (icon or checkbox)
         if (customFormat.type === 'boolean' &&
             (customFormat.booleanDisplay === 'icon' || customFormat.booleanDisplay === 'checkbox')) {
@@ -3008,18 +3048,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         }
         // Date formatting
         else if (fieldType === 'Date') {
-          const date = params.value instanceof Date ? params.value : new Date(params.value as string);
-          if (isNaN(date.getTime())) {
-            displayValue = String(params.value);
-          } else if (vc.friendlyDates) {
-            displayValue = date.toLocaleDateString(undefined, {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric'
-            });
-          } else {
-            displayValue = date.toISOString().split('T')[0];
-          }
+          displayValue = this.formatDefaultDate(params.value, field, !!vc.friendlyDates);
         }
         // Currency formatting
         else if (fieldType === 'number' && isCurrency) {
@@ -3134,7 +3163,20 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   /**
    * Format a value using custom ColumnFormat settings
    */
-  private formatValueWithCustomFormat(value: unknown, format: ColumnFormat): string {
+  /**
+   * Default rendering of a date-family cell. A `date` column is a calendar day that arrives as UTC
+   * midnight; a local-zone formatter would land on the previous day for every reader west of
+   * Greenwich (MJ#4210). A timestamp names an instant and stays in local time.
+   */
+  private formatDefaultDate(value: unknown, field: EntityFieldInfo, friendlyDates: boolean): string {
+    const date = value instanceof Date ? value : new Date(value as string);
+    if (isNaN(date.getTime())) return String(value);
+    if (!friendlyDates) return date.toISOString().split('T')[0];
+    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    return IsDateOnlySQLType(field.Type) ? FormatDateOnly(date, options) : date.toLocaleDateString(undefined, options);
+  }
+
+  private formatValueWithCustomFormat(value: unknown, format: ColumnFormat, field: EntityFieldInfo): string {
     if (value == null) return '—';
 
     switch (format.type) {
@@ -3146,7 +3188,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         return this.formatCustomPercent(value as number, format);
       case 'date':
       case 'datetime':
-        return this.formatCustomDate(value, format);
+        return this.formatCustomDate(value, format, IsDateOnlySQLType(field.Type));
       case 'boolean':
         return this.formatCustomBoolean(value as boolean, format);
       default:
@@ -3192,7 +3234,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return new Intl.NumberFormat('en-US', options).format(num / 100);
   }
 
-  private formatCustomDate(value: unknown, format: ColumnFormat): string {
+  /**
+   * @param dateOnly The column is a SQL `date`: a calendar day at UTC midnight with no time to show.
+   * It is rendered in UTC so the day does not shift west of Greenwich, and a `datetime` column
+   * format cannot add a time of day to it (MJ#4210). A timestamp column keeps local rendering.
+   */
+  private formatCustomDate(value: unknown, format: ColumnFormat, dateOnly: boolean): string {
     const date = value instanceof Date ? value : new Date(value as string);
     if (isNaN(date.getTime())) return String(value);
 
@@ -3200,6 +3247,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     const formatStr = format.dateFormat || 'medium';
     const includeWeekday = formatStr.includes('-weekday');
     const baseFormat = formatStr.replace('-weekday', '') as 'short' | 'medium' | 'long';
+    const withTime = format.type === 'datetime' && !dateOnly;
 
     let options: Intl.DateTimeFormatOptions;
 
@@ -3214,7 +3262,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         // medium
         options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
       }
-      if (format.type === 'datetime') {
+      if (withTime) {
         options.hour = 'numeric';
         options.minute = '2-digit';
       }
@@ -3223,12 +3271,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       options = {
         dateStyle: baseFormat === 'short' ? 'short' : baseFormat === 'long' ? 'long' : 'medium'
       };
-      if (format.type === 'datetime') {
+      if (withTime) {
         options.timeStyle = 'short';
       }
     }
 
-    return new Intl.DateTimeFormat('en-US', options).format(date);
+    return dateOnly ? FormatDateOnly(date, options, 'en-US') : new Intl.DateTimeFormat('en-US', options).format(date);
   }
 
   private formatCustomBoolean(value: boolean, format: ColumnFormat): string {

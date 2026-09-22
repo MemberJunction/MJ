@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderComponentFixture, query, queryAll, text, capture, click, attr } from '@memberjunction/ng-test-utils';
 import { ChannelOnboardingPanelComponent } from './channels/channel-onboarding-panel.component';
-import type { ChannelOnboardingDetails } from './channels/base-realtime-channel-client';
+import type { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 
 /**
  * DOM spec for <mj-channel-onboarding-panel> — the generic first-run channel intro

@@ -1,51 +1,51 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-    prefsStorage,
+    PrefsStorage,
     PrefKeys,
     APPEARANCE_CYCLE,
-    getAppearance,
-    cycleAppearance,
-    setDefaultAgent,
-    getDefaultAgentId,
-    getDefaultAgentName,
+    GetAppearance,
+    CycleAppearance,
+    SetDefaultAgent,
+    GetDefaultAgentId,
+    GetDefaultAgentName,
 } from '@/data/preferences';
 
-// prefsStorage is the in-memory MMKV stub from setup.ts; reset between tests.
+// PrefsStorage is the in-memory MMKV stub from setup.ts; reset between tests.
 beforeEach(() => {
-    prefsStorage.clearAll();
+    PrefsStorage.clearAll();
 });
 
 describe('preferences (MMKV-backed)', () => {
-    describe('getAppearance', () => {
+    describe('GetAppearance', () => {
         it('defaults to "system" when unset', () => {
-            expect(getAppearance()).toBe('system');
+            expect(GetAppearance()).toBe('system');
         });
 
         it('returns a persisted valid value', () => {
-            prefsStorage.set(PrefKeys.appearance, 'dark');
-            expect(getAppearance()).toBe('dark');
+            PrefsStorage.set(PrefKeys.appearance, 'dark');
+            expect(GetAppearance()).toBe('dark');
         });
 
         it('falls back to "system" for an invalid persisted value', () => {
-            prefsStorage.set(PrefKeys.appearance, 'chartreuse');
-            expect(getAppearance()).toBe('system');
+            PrefsStorage.set(PrefKeys.appearance, 'chartreuse');
+            expect(GetAppearance()).toBe('system');
         });
     });
 
-    describe('cycleAppearance', () => {
+    describe('CycleAppearance', () => {
         it('advances System -> Light -> Dark -> System and persists each step', () => {
-            expect(getAppearance()).toBe('system');
-            expect(cycleAppearance()).toBe('light');
-            expect(getAppearance()).toBe('light');
-            expect(cycleAppearance()).toBe('dark');
-            expect(getAppearance()).toBe('dark');
-            expect(cycleAppearance()).toBe('system');
-            expect(getAppearance()).toBe('system');
+            expect(GetAppearance()).toBe('system');
+            expect(CycleAppearance()).toBe('light');
+            expect(GetAppearance()).toBe('light');
+            expect(CycleAppearance()).toBe('dark');
+            expect(GetAppearance()).toBe('dark');
+            expect(CycleAppearance()).toBe('system');
+            expect(GetAppearance()).toBe('system');
         });
 
         it('follows the declared APPEARANCE_CYCLE order', () => {
-            const seen: string[] = [getAppearance()];
-            for (let i = 0; i < APPEARANCE_CYCLE.length; i++) seen.push(cycleAppearance());
+            const seen: string[] = [GetAppearance()];
+            for (let i = 0; i < APPEARANCE_CYCLE.length; i++) seen.push(CycleAppearance());
             // After a full cycle we should be back to the start.
             expect(seen[0]).toBe(seen[seen.length - 1]);
             expect(new Set(seen)).toEqual(new Set(APPEARANCE_CYCLE));
@@ -54,21 +54,21 @@ describe('preferences (MMKV-backed)', () => {
 
     describe('default agent', () => {
         it('returns undefined for both id and name when unset', () => {
-            expect(getDefaultAgentId()).toBeUndefined();
-            expect(getDefaultAgentName()).toBeUndefined();
+            expect(GetDefaultAgentId()).toBeUndefined();
+            expect(GetDefaultAgentName()).toBeUndefined();
         });
 
         it('persists and reads back the default agent id + name', () => {
-            setDefaultAgent('agent-123', 'Sage');
-            expect(getDefaultAgentId()).toBe('agent-123');
-            expect(getDefaultAgentName()).toBe('Sage');
+            SetDefaultAgent('agent-123', 'Sage');
+            expect(GetDefaultAgentId()).toBe('agent-123');
+            expect(GetDefaultAgentName()).toBe('Sage');
         });
 
         it('overwrites a previously set default agent', () => {
-            setDefaultAgent('agent-123', 'Sage');
-            setDefaultAgent('agent-456', 'Research');
-            expect(getDefaultAgentId()).toBe('agent-456');
-            expect(getDefaultAgentName()).toBe('Research');
+            SetDefaultAgent('agent-123', 'Sage');
+            SetDefaultAgent('agent-456', 'Research');
+            expect(GetDefaultAgentId()).toBe('agent-456');
+            expect(GetDefaultAgentName()).toBe('Research');
         });
     });
 });

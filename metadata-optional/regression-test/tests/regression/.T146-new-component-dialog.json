@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T146 - New Component Dialog",
+    "Description": "Exercises the new-component-dialog reactive form (type-card selection + required-field validation gating the Create button) \u2014 a bespoke creation flow distinct from generic entity create.",
+    "InputDefinition": "{\n  \"goal\": \"In the Component Studio app (Components section), click the 'New Component' button. Verify the 'Create New Component' dialog opens showing a Name field (marked required), a Type selection rendered as a card grid, a Title field, and a Description textarea. Confirm the 'Create' button is DISABLED while Name is empty, then type a name and verify 'Create' becomes enabled. Pages can take 10-30s to load \u2014 wait, don't navigate away. Seeing the dialog render with its fields and the Create button gating on the required Name is success \u2014 you do NOT need to actually create the component (you may Cancel).\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"Clicking 'New Component' opens a 'Create New Component' dialog with a required Name field, a Type card grid, Title, and Description\",\n    \"The 'Create' button is disabled with an empty Name and becomes enabled after a name is entered\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,component-studio",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "1AEF9642-3364-428D-B805-0480F27CF90B"
+  }
+}

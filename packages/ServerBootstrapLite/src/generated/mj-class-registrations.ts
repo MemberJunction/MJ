@@ -189,7 +189,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (415 classes)
+// @memberjunction/core-entities (418 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -429,6 +429,8 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeatureValueCacheEntity,
+    MJFeatureValueEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -602,6 +604,7 @@ import {
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWebSearchProviderEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -863,7 +866,12 @@ import {
     MJScheduledJobEntityExtended,
 } from '@memberjunction/scheduling-engine-base';
 
-// @memberjunction/search-engine (14 classes)
+// @memberjunction/tag-engine-base (1 classes)
+import {
+    TagEngineBase,
+} from '@memberjunction/tag-engine-base';
+
+// @memberjunction/search-engine (15 classes)
 import {
     AzureAISearchProvider,
     BGEReRanker,
@@ -876,15 +884,11 @@ import {
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
+    TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
 } from '@memberjunction/search-engine';
-
-// @memberjunction/tag-engine-base (1 classes)
-import {
-    TagEngineBase,
-} from '@memberjunction/tag-engine-base';
 
 // @memberjunction/templates (3 classes)
 import {
@@ -1074,7 +1078,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (147 classes)
+// @memberjunction/core-actions (148 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1084,6 +1088,7 @@ import {
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -1235,9 +1240,10 @@ import {
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
 
-// @memberjunction/testing-engine (1 classes)
+// @memberjunction/testing-engine (2 classes)
 import {
     AgentEvalDriver,
+    PromptEvalDriver,
 } from '@memberjunction/testing-engine';
 
 /**
@@ -1541,6 +1547,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeatureValueCacheEntity,
+    MJFeatureValueEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -1651,12 +1659,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
-    MJSearchScopeProviderEntity,
-    MJSearchScopeStorageAccountEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopeProviderEntity,
+    MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
     MJSignatureProviderEntity,
@@ -1718,6 +1726,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWebSearchProviderEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1854,13 +1863,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     HootSuiteBulkSchedulePostsAction,
     HootSuiteCreateScheduledPostAction,
     HootSuiteDeleteScheduledPostAction,
-    HootSuiteGetAnalyticsAction,
-    HootSuiteGetScheduledPostsAction,
-    HootSuiteGetSocialProfilesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HootSuiteGetAnalyticsAction,
+    HootSuiteGetScheduledPostsAction,
+    HootSuiteGetSocialProfilesAction,
     HootSuiteSearchPostsAction,
     HootSuiteUpdateScheduledPostAction,
     InstagramCreatePostAction,
@@ -1909,6 +1918,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DatabaseWellKnownUserSource,
     RecordComparisonCompareServerOperation,
     MJScheduledJobEntityExtended,
+    TagEngineBase,
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
@@ -1920,10 +1930,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
+    TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
-    TagEngineBase,
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
@@ -2057,14 +2067,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJUserEntityServer,
     MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
-    MJUserRoutineRecipientEntityServer,
-    MJUserViewEntityServer,
-    MJVectorIndexEntityServer,
-    APIRateLimiterAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJUserRoutineRecipientEntityServer,
+    MJUserViewEntityServer,
+    MJVectorIndexEntityServer,
+    APIRateLimiterAction,
     ActionSmithAgent,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
@@ -2072,6 +2082,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -2218,6 +2229,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
+    PromptEvalDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2233,7 +2245,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 953;
+export const CLASS_REGISTRATIONS_COUNT = 959;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2288,8 +2300,8 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/generic-database-provider',
     '@memberjunction/record-comparison',
     '@memberjunction/scheduling-engine-base',
-    '@memberjunction/search-engine',
     '@memberjunction/tag-engine-base',
+    '@memberjunction/search-engine',
     '@memberjunction/templates',
     '@memberjunction/ai-prompts',
     '@memberjunction/ai-reranker',

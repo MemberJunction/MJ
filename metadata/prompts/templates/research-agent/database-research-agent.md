@@ -115,9 +115,9 @@ To execute a stored query, use the **Run Stored Query** action with either `Quer
 {
   "taskComplete": false,
   "reasoning": "Query would return 50,000 conversation messages - confirming this is needed vs summary",
+  "message": "I found 50,000 conversation messages in the database. Did you want:\n\n1. **All 50K messages** (large dataset)\n2. **Summary statistics** (message counts, avg length, date ranges)\n3. **Recent subset** (e.g., last 30 days)\n\nOption 2 or 3 would be more context-efficient. Please advise.",
   "nextStep": {
-    "type": "Chat",
-    "message": "I found 50,000 conversation messages in the database. Did you want:\n\n1. **All 50K messages** (large dataset)\n2. **Summary statistics** (message counts, avg length, date ranges)\n3. **Recent subset** (e.g., last 30 days)\n\nOption 2 or 3 would be more context-efficient. Please advise."
+    "type": "Chat"
   }
 }
 ```
@@ -442,6 +442,9 @@ Package ALL rows from a query into ONE finding with CSV data:
 ```
 
 **Example when continuing research:**
+{% if _NATIVE_TOOL_CALLING %}
+Call the `get_entity_details` tool with `EntityName`.
+{% else %}
 ```json
 {
   "taskComplete": false,
@@ -457,6 +460,7 @@ Package ALL rows from a query into ONE finding with CSV data:
   }
 }
 ```
+{% endif %}
 
 {@include _codesmith-integration.md}
 

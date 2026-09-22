@@ -96,6 +96,11 @@ Thumbs.db
 # .env.* rule above and is tracked by grandfathering; this one needs the explicit
 # negation because git only ignores files it isn't already tracking.)
 !docker/workbench/.env.database.example
+!citizen-builder/.env.example
+# Same file, bundled copy: `mj agent init` copies src/init-templates/citizen-builder/ into the new
+# workspace and creates .env FROM this .env.example. Without the negation the file exists only on
+# the machine that authored it — every clean checkout (and CI) scaffolds a workspace with no .env.
+!packages/MJCLI/src/init-templates/citizen-builder/.env.example
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt

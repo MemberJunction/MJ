@@ -1,0 +1,471 @@
+<div class="ps-pred-grid-host" [style.height]="height">
+  <!-- ───────── TOOLBAR ───────── -->
+  <div class="pg-toolbar">
+    <div class="pg-toolbar-left">
+      <div class="pg-search-box">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input
+          type="text"
+          class="pg-search-input"
+          placeholder="Filter records, outcome, factors..."
+          [value]="searchText"
+          (input)="onSearchInput($event)" />
+        @if (searchText) {
+          <button type="button" class="pg-search-clear" (click)="clearSearch()" title="Clear filter">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        }
+      </div>
+
+      <div class="pg-tier-filters">
+        <button
+          type="button"
+          class="pg-tier-btn"
+          [class.active]="selectedTier === 'all'"
+          (click)="setTier('all')">
+          All <span class="pg-count-pill">({{ allRows.length | number }})</span>
+        </button>
+        @for (b of visibleBands; track b.key) {
+          <button
+            type="button"
+            class="pg-tier-btn"
+            [class.active]="selectedTier === b.key"
+            (click)="setTier(b.key)">
+            {{ b.label }} <span class="pg-count-pill">({{ b.count | number }})</span>
+          </button>
+        }
+
+        @if (selectedDecileIndex !== null) {
+          <div class="pg-decile-pill">
+            <i class="fa-solid fa-filter"></i>
+            <span>Decile {{ selectedDecileLabel }}</span>
+            <button type="button" (click)="clearDecileFilter()" title="Clear decile filter"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        }
+      </div>
+    </div>
+
+    <div class="pg-toolbar-right">
+      <mj-view-toggle
+        [Options]="viewOptions"
+        [ActiveKey]="activeView"
+        (KeyChange)="onViewToggle($event)">
+      </mj-view-toggle>
+
+      <button
+        mjButton
+        variant="secondary"
+        size="sm"
+        [disabled]="allRows.length === 0"
+        (click)="exportCSV()">
+        <i class="fa-solid fa-file-export"></i> Export
+      </button>
+    </div>
+  </div>
+
+  <!-- ───────── MAIN VIEW CONTAINER ───────── -->
+  <div class="pg-view-container">
+    @if (isLoading) {
+      <mj-loading text="Loading predictions..." size="medium"></mj-loading>
+    } @else if (loadError) {
+      <div class="ps-load-error" role="alert">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div class="ps-load-error-text">
+          <strong>Couldn't load predictions</strong>
+          <span class="ps-load-error-detail">{{ loadError }}</span>
+        </div>
+        <button mjButton variant="secondary" size="sm" (click)="reload()"><i class="fa-solid fa-rotate-right"></i> Try again</button>
+      </div>
+    } @else if (allRows.length === 0) {
+      <div class="ps-empty" style="padding: 32px">
+        <span class="ps-empty-ico"><i class="fa-solid fa-chart-line"></i></span>
+        <h3>No predictions available</h3>
+        <p>Run this model from Models in Production or wait for the scheduled job to produce predictions.</p>
+      </div>
+    } @else {
+      <!-- GRID VIEW -->
+      @if (activeView === 'grid') {
+        <ag-grid-angular
+          class="pg-grid"
+          [theme]="Theme"
+          [columnDefs]="columnDefs"
+          [defaultColDef]="defaultColDef"
+          [gridOptions]="GridOptions"
+          [rowData]="filteredRows"
+          (gridReady)="onGridReady($event)"
+          (rowClicked)="onRowClicked($event)"
+          (cellClicked)="onCellClicked($event)">
+        </ag-grid-angular>
+
+        <div class="pg-footer">
+          <span>Showing <strong>{{ filteredRows.length }}</strong> of {{ allRows.length }} predictions</span>
+          @if (selectedTier !== 'all' || searchText) {
+            <span class="ps-muted">Filtered by {{ selectedTier !== 'all' ? selectedTier + ' risk' : '' }}{{ searchText ? ' query "' + searchText + '"' : '' }}</span>
+          }
+          <span class="ps-muted">Click any row to inspect details & score history</span>
+        </div>
+      }
+
+      <!-- CHART VIEW -->
+      @if (activeView === 'chart') {
+        <div class="pg-chart-container">
+          <!-- KPI Summary Cards -->
+          <div class="pg-chart-cards">
+            <div class="pg-chart-card total">
+              <span class="pg-chart-card-lbl"><i class="fa-solid fa-users ps-muted"></i> Scored Cohort</span>
+              <span class="pg-chart-card-val">{{ allRows.length | number }}</span>
+              <span class="pg-chart-card-sub">Total records</span>
+            </div>
+            @for (b of visibleBands; track b.key) {
+              <div class="pg-chart-card" [class]="'tier-' + b.key" (click)="setTierAndGrid(b.key)">
+                <span class="pg-chart-card-lbl">
+                  @if (b.icon) {
+                    <i class="fa-solid {{ b.icon }}" [style.color]="getBadgeColorVar(b.badgeColor)"></i>
+                  }
+                  {{ b.label }}
+                </span>
+                <span class="pg-chart-card-val" [style.color]="getBadgeColorVar(b.badgeColor)">
+                  {{ b.count | number }}
+                </span>
+                <span class="pg-chart-card-sub">{{ b.pct }}% of cohort (avg {{ b.avgScoreFormatted }} {{ outcomeConfig.ScoreLabel }})</span>
+              </div>
+            }
+          </div>
+
+          <!-- Score Distribution Histogram -->
+          <div class="pg-chart-section">
+            <div class="pg-chart-section-title">
+              <div style="display:flex;align-items:center;gap:8px">
+                <i class="fa-solid fa-chart-simple ps-muted"></i>
+                <span>{{ outcomeConfig.ScoreLabel }} Distribution (10 Bins)</span>
+              </div>
+              <div class="pg-chart-meta">
+                <span class="ps-small ps-muted">Cohort Mean: <strong>{{ meanScoreFormatted }}</strong></span>
+                @if (selectedDecileIndex !== null) {
+                  <button type="button" class="pg-clear-decile-btn" (click)="clearDecileFilter()">
+                    <i class="fa-solid fa-xmark"></i> Clear Decile Filter
+                  </button>
+                }
+              </div>
+            </div>
+
+            <!-- Modern Interactive Flex Histogram -->
+            <div class="pg-histogram">
+              <div class="pg-h-columns">
+                @for (b of histogramBins; track b.label) {
+                  <div
+                    class="pg-h-col"
+                    [class.active]="selectedDecileIndex === b.idx"
+                    [class.empty]="b.count === 0"
+                    (click)="selectDecile(b.idx)">
+
+                    <!-- Count label above bar -->
+                    <span class="pg-h-count" [title]="b.count + ' records'">
+                      {{ b.count > 0 ? (b.count | number) : '0' }}
+                    </span>
+
+                    <!-- Bar track & fill -->
+                    <div class="pg-h-bar-track">
+                      <div
+                        class="pg-h-bar"
+                        [style.height.px]="b.height"
+                        [style.background]="b.color">
+                      </div>
+                    </div>
+
+                    <!-- Footer labels -->
+                    <div class="pg-h-footer">
+                      <span class="pg-h-range">{{ b.shortLabel }}</span>
+                      <span class="pg-h-pct">{{ b.pctFormatted }}</span>
+                    </div>
+
+                    <!-- Tooltip card -->
+                    <div class="pg-h-tooltip">
+                      <div class="pg-h-tt-head">{{ b.label }} {{ outcomeConfig.ScoreLabel }}</div>
+                      <div class="pg-h-tt-row">
+                        <span class="pg-h-tt-val">{{ b.count | number }} records</span>
+                        <span class="pg-h-tt-pct">({{ b.pctFormatted }} of cohort)</span>
+                      </div>
+                      <div class="pg-h-tt-badge" [style.color]="b.color">{{ b.riskLabel }}</div>
+                      <div class="pg-h-tt-hint">{{ selectedDecileIndex === b.idx ? 'Click to clear filter' : 'Click to filter grid' }}</div>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- Predicted Class Breakdown (for Classification) -->
+          @if (classBreakdown.length > 0) {
+            <div class="pg-chart-section">
+              <div class="pg-chart-section-title">
+                <span><i class="fa-solid fa-layer-group ps-muted"></i> Predicted Outcome Classes</span>
+              </div>
+              <div style="display:flex;height:24px;border-radius:var(--mj-radius-full);overflow:hidden;background:var(--mj-bg-surface-sunken);margin-bottom:8px">
+                @for (c of classBreakdown; track c.name) {
+                  <div
+                    [style.width.%]="c.pct"
+                    [style.background]="c.color"
+                    [title]="c.name + ': ' + c.count + ' (' + c.pct + '%)'">
+                  </div>
+                }
+              </div>
+              <div style="display:flex;gap:16px;flex-wrap:wrap">
+                @for (c of classBreakdown; track c.name) {
+                  <div style="display:flex;align-items:center;gap:6px;font-size:var(--mj-text-xs)">
+                    <span [style.background]="c.color" style="width:10px;height:10px;border-radius:2px;display:inline-block"></span>
+                    <strong>{{ c.name }}</strong>
+                    <span class="ps-muted">{{ c.count }} ({{ c.pct }}%)</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Segment Drilldown Grid Section — Only shown when a decile segment is selected -->
+          @if (selectedDecileIndex !== null) {
+            <div id="pg-drilldown-anchor" class="pg-chart-section pg-chart-drilldown-section">
+              <div class="pg-chart-section-title">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <i class="fa-solid fa-table-list ps-muted"></i>
+                  <span>
+                    Decile Drill-Down:
+                    <strong style="color:var(--mj-brand-primary)">{{ selectedDecileLabel }}</strong>
+                    {{ outcomeConfig.ScoreLabel }}
+                    @if (histogramBins[selectedDecileIndex]) {
+                      <span class="ps-badge" [style.color]="histogramBins[selectedDecileIndex].color" style="margin-left:6px">
+                        {{ histogramBins[selectedDecileIndex].riskLabel }}
+                      </span>
+                    }
+                  </span>
+                </div>
+                <div class="pg-chart-meta">
+                  <span class="ps-small ps-muted">
+                    Showing <strong>{{ filteredRows.length | number }}</strong> of {{ allRows.length | number }} records
+                  </span>
+                  <button type="button" class="pg-clear-decile-btn" (click)="clearDecileFilter()">
+                    <i class="fa-solid fa-xmark"></i> Show All Deciles
+                  </button>
+                </div>
+              </div>
+
+              <!-- Drill-Down AG Grid -->
+              <div class="pg-chart-grid-host">
+                <ag-grid-angular
+                  class="pg-grid pg-chart-ag-grid"
+                  [theme]="Theme"
+                  [columnDefs]="columnDefs"
+                  [defaultColDef]="defaultColDef"
+                  [gridOptions]="chartGridOptions"
+                  [rowData]="filteredRows"
+                  (gridReady)="onChartGridReady($event)"
+                  (rowClicked)="onRowClicked($event)"
+                  (cellClicked)="onCellClicked($event)">
+                </ag-grid-angular>
+              </div>
+
+              <div class="pg-drilldown-footer">
+                <span class="ps-muted">Click any row to inspect explainability drivers and score history in the slide-in drawer</span>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    }
+  </div>
+
+  <!-- ───────── SLIDE-IN DETAIL PANEL ───────── -->
+  @if (detailOpen && selectedRow) {
+    <mj-slide-panel
+      Mode="slide"
+      Title="Record Prediction & Score History"
+      [Resizable]="true"
+      [WidthPx]="drawerWidthPx"
+      (WidthChanged)="onDrawerWidthChanged($event)"
+      (Closed)="closeDetail()">
+
+      <div class="pg-detail-body">
+        <!-- Record header -->
+        <div class="pg-detail-record-head">
+          <div class="pg-detail-record-info">
+            <h3>{{ selectedRow.recordName || selectedRow.recordId }}</h3>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="ps-badge blue">{{ entityDisplayName || 'Entity Record' }}</span>
+              <span class="ps-mono ps-small ps-muted">{{ selectedRow.recordId }}</span>
+            </div>
+          </div>
+          <div class="pg-detail-record-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button
+              mjButton
+              variant="primary"
+              size="sm"
+              (click)="drillThrough(selectedRow)"
+              title="Open record in Explorer">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Open {{ entityDisplayName || 'Record' }}
+            </button>
+            @if (subjectEntityName && subjectRecordId) {
+              <button
+                mjButton
+                variant="secondary"
+                size="sm"
+                (click)="openSubjectRecord()"
+                title="Open subject record (e.g. Person, Account) in Explorer">
+                <i class="fa-solid fa-user"></i> Open {{ subjectEntityName.replace('MJ_BizApps_Common: ', '').replace('MJ_BizApps_', '') }} ({{ subjectRecordName || 'Profile' }})
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- Prediction Summary Card -->
+        <div class="pg-detail-pred-card">
+          <div class="pg-detail-score-circle" [class]="'badge-' + (selectedRow.badgeColor || 'gray')">
+            {{ selectedRow.scoreFormatted }}
+          </div>
+          <div class="pg-detail-meta">
+            <div class="pg-detail-meta-line">
+              <strong>{{ outcomeConfig.StatusLabel }}:</strong>
+              <span class="ps-badge" [class]="selectedRow.badgeColor || 'gray'" style="margin-left:6px">
+                @if (selectedRow.icon) {
+                  <i class="fa-solid {{ selectedRow.icon }}"></i>
+                }
+                {{ selectedRow.status || selectedRow.band }}
+              </span>
+            </div>
+            @if (selectedRow.class) {
+              <div class="pg-detail-meta-line">
+                <strong>Predicted Outcome:</strong>
+                <span class="ps-badge" [class]="getOutcomeBadgeClass(selectedRow.class)">
+                  {{ selectedRow.class }}
+                </span>
+              </div>
+            }
+            <div class="pg-detail-meta-line">
+              <strong>{{ outcomeConfig.ScoreLabel }}:</strong>
+              <span style="font-weight:700;color:var(--mj-text-primary)">{{ selectedRow.scoreFormatted }}</span>
+            </div>
+            <div class="pg-detail-meta-sub">
+              Scored: {{ selectedRow.scoredAtDate ? (selectedRow.scoredAtDate | date:'medium') : '—' }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Explainability: Local Feature Drivers -->
+        <div class="pg-detail-drivers-wrap">
+          <div class="ps-section-title">
+            <i class="fa-solid fa-lightbulb" style="color:var(--mj-status-warning)"></i> Key Decision Drivers (Explainability)
+          </div>
+          @if (!selectedRow.drivers || selectedRow.drivers.length === 0) {
+            <div class="ps-small ps-muted">No individual driver breakdown was recorded for this row.</div>
+          } @else {
+            <div class="pg-detail-drivers-list">
+              @for (d of selectedRow.drivers; track d.label) {
+                <div class="pg-detail-driver-item">
+                  <div class="pg-detail-driver-label">
+                    <i class="fa-solid" [class.fa-arrow-up]="d.up" [class.fa-arrow-down]="!d.up" [style.color]="d.up ? 'var(--mj-status-error)' : 'var(--mj-status-success)'"></i>
+                    {{ d.label }}
+                  </div>
+                  <span class="ps-badge" [class]="d.up ? 'red' : 'green'">
+                    {{ d.up ? 'Increases Risk' : 'Lowers Risk' }}
+                  </span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Historical Trendline across Runs -->
+        <div class="pg-trendline-wrap">
+          <div class="ps-section-title" style="display:flex;align-items:center;justify-content:space-between">
+            <span><i class="fa-solid fa-clock-rotate-left ps-muted"></i> Historical Score Trendline</span>
+            <span class="ps-small ps-muted">{{ historyPoints.length }} run{{ historyPoints.length === 1 ? '' : 's' }} recorded</span>
+          </div>
+
+          @if (historyLoading) {
+            <mj-loading text="Loading score history..." size="small"></mj-loading>
+          } @else if (historyPoints.length > 1) {
+            <!-- Interactive SVG Trendline -->
+            <svg class="pg-trendline-svg" viewBox="0 0 540 160" preserveAspectRatio="none">
+              <!-- Background grid lines -->
+              <line x1="40" y1="20" x2="520" y2="20" stroke="var(--mj-border-subtle)" stroke-dasharray="3,3" />
+              <line x1="40" y1="75" x2="520" y2="75" stroke="var(--mj-border-subtle)" stroke-dasharray="3,3" />
+              <line x1="40" y1="130" x2="520" y2="130" stroke="var(--mj-border-default)" />
+
+              <!-- Y-axis labels -->
+              <text x="32" y="24" font-size="10" text-anchor="end" fill="var(--mj-text-muted)">100%</text>
+              <text x="32" y="79" font-size="10" text-anchor="end" fill="var(--mj-text-muted)">50%</text>
+              <text x="32" y="134" font-size="10" text-anchor="end" fill="var(--mj-text-muted)">0%</text>
+
+              <!-- Filled area under curve -->
+              <polygon [attr.points]="trendlineAreaPoints" fill="color-mix(in srgb, var(--mj-brand-primary) 12%, transparent)" />
+
+              <!-- Trend line path -->
+              <polyline [attr.points]="trendlineLinePoints" fill="none" stroke="var(--mj-brand-primary)" stroke-width="2.5" />
+
+              <!-- Data points -->
+              @for (p of trendlinePlotPoints; track p.runId) {
+                <circle
+                  [attr.cx]="p.x"
+                  [attr.cy]="p.y"
+                  r="5"
+                  [attr.fill]="p.color"
+                  stroke="var(--mj-bg-surface)"
+                  stroke-width="2">
+                  <title>{{ p.dateStr }}: {{ p.scoreFormatted }} ({{ p.class || 'No class' }})</title>
+                </circle>
+                <text
+                  [attr.cx]="p.x"
+                  [attr.cy]="p.y - 9"
+                  font-size="10"
+                  font-weight="700"
+                  text-anchor="middle"
+                  fill="var(--mj-text-primary)">
+                  {{ p.scoreFormatted }}
+                </text>
+              }
+            </svg>
+
+            <!-- Runs Table -->
+            <table class="pg-history-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Status</th>
+                  <th>Score</th>
+                  <th>Change</th>
+                  <th>Class</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (pt of historyPoints; track pt.runId) {
+                  <tr>
+                    <td>{{ pt.runDate | date:'short' }}</td>
+                    <td><span class="ps-badge" [class]="pt.status === 'Succeeded' ? 'green' : 'gray'">{{ pt.status }}</span></td>
+                    <td><strong class="ps-mono">{{ pt.scoreFormatted }}</strong></td>
+                    <td>
+                      @if (pt.delta == null) {
+                        <span class="pg-delta-pill neutral">Baseline</span>
+                      } @else if (pt.delta > 0.005) {
+                        <span class="pg-delta-pill up"><i class="fa-solid fa-arrow-up"></i> +{{ (pt.delta * 100).toFixed(1) }}%</span>
+                      } @else if (pt.delta < -0.005) {
+                        <span class="pg-delta-pill down"><i class="fa-solid fa-arrow-down"></i> {{ (pt.delta * 100).toFixed(1) }}%</span>
+                      } @else {
+                        <span class="pg-delta-pill neutral">0%</span>
+                      }
+                    </td>
+                    <td>{{ pt.class || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          } @else if (historyPoints.length === 1) {
+            <div class="ps-small ps-muted">
+              This record has been scored once so far ({{ historyPoints[0].runDate | date:'medium' }}). As more runs occur over time, the score trendline will track changes here.
+            </div>
+          } @else {
+            <div class="ps-small ps-muted">No historical runs found for this record.</div>
+          }
+        </div>
+      </div>
+    </mj-slide-panel>
+  }
+</div>

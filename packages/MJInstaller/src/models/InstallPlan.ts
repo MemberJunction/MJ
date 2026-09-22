@@ -145,6 +145,10 @@ export interface DoctorOptions {
    * Implies `Report: true`.
    */
   ReportExtended?: boolean;
+  /** Filter checks to specific diagnostic scope(s) (e.g. 'install', 'runtime', 'ai', 'metadata', 'agent'). */
+  Scope?: string | string[];
+  /** Output format (e.g. 'json', 'compact', 'text'). */
+  Format?: string;
 }
 
 /**

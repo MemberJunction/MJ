@@ -375,7 +375,7 @@ interface CategoryNode {
               <div
                 class="dropdown-item"
                 (mousedown)="selectEntity(entity); $event.preventDefault()">
-                {{entity.Name}}
+                {{entity.DisplayName}}
               </div>
             }
             @if (filteredEntities.length === 0) {
@@ -1068,8 +1068,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   categories: MJListCategoryEntity[] = [];
   categoryTree: CategoryNode[] = [];
   flatCategories: Array<{ ID: string | null; displayName: string }> = [];
-  availableEntities: Array<{ ID: string; Name: string }> = [];
-  filteredEntities: Array<{ ID: string; Name: string }> = [];
+  availableEntities: Array<{ ID: string; Name: string; DisplayName: string }> = [];
+  filteredEntities: Array<{ ID: string; Name: string; DisplayName: string }> = [];
 
   // Context menu
   showContextMenu = false;
@@ -1324,8 +1324,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       // Build available entities for dropdown
       this.availableEntities = entities
         .filter(e => e.IncludeInAPI)
-        .map(e => ({ ID: e.ID, Name: e.Name }))
-        .sort((a, b) => a.Name.localeCompare(b.Name));
+        .map(e => ({ ID: e.ID, Name: e.Name, DisplayName: e.DisplayNameOrName }))
+        .sort((a, b) => a.DisplayName.localeCompare(b.DisplayName));
       this.filteredEntities = [...this.availableEntities];
 
       // Build flat categories for dropdown
@@ -1538,15 +1538,16 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.closeContextMenu();
   }
 
-  selectEntity(entity: { ID: string; Name: string }) {
+  selectEntity(entity: { ID: string; Name: string; DisplayName: string }) {
     this.selectedEntityId = entity.ID;
-    this.entitySearchTerm = entity.Name;
+    this.entitySearchTerm = entity.DisplayName;
     this.showEntityDropdown = false;
   }
 
   filterEntities(term: string) {
     const lowerTerm = term.toLowerCase();
     this.filteredEntities = this.availableEntities.filter(e =>
+      e.DisplayName.toLowerCase().includes(lowerTerm) ||
       e.Name.toLowerCase().includes(lowerTerm)
     );
     // Ensure dropdown is visible while typing

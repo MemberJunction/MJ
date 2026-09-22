@@ -12,11 +12,15 @@
  */
 
 import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity } from '@memberjunction/core-entities';
+import { buildActionToolSet, filterDeclarableActions, sanitizeToolName } from './native-tools/action-tool-builder';
+import { buildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
+import { buildAssistantToolCallTurn, buildToolResultTurn, compactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
+import { looksLikeLoopEnvelope } from './native-tools/dual-channel';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
-import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
+import { AIPromptRunner, GetToolCallingDecision } from '@memberjunction/ai-prompts';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
@@ -107,7 +111,7 @@ import {
     SkillAvailabilityPurpose,
     ArtifactDirective
 } from '@memberjunction/ai-core-plus';
-import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
+import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
@@ -463,6 +467,18 @@ export class BaseAgent {
      * Current agent run entity.
      * @private
      */
+    /**
+     * System-wide safety net on prompt iterations, overridable per run via
+     * `ExecuteAgentParams.absoluteMaxIterations`.
+     *
+     * A static rather than a local const because two places now depend on the same number: the
+     * limit check that STOPS a run, and {@link isFinalPermittedIteration}, which has to predict
+     * that stop one turn ahead. Two copies of 5000 would be a silent mismatch the moment either
+     * moved — the gate would force `tool_choice: 'none'` on the wrong turn, or fail to force it
+     * on the right one, and neither shows up as an error.
+     */
+    protected static readonly DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
+
     private _agentRun: MJAIAgentRunEntityExtended | null = null;
 
     /**
@@ -947,6 +963,16 @@ export class BaseAgent {
      * Allows agents to explore input artifacts on demand.
      */
     private _artifactToolManager: ArtifactToolManager = new ArtifactToolManager();
+    /**
+     * Reverse map from sanitized tool name back to Action, for the turn currently being prepared.
+     *
+     * Set whenever this run declares Actions as native tools (plan §8.1) and read when the turn's
+     * response comes back, because a tool call names `run_ad_hoc_query` and the dispatcher needs
+     * "Run Ad-hoc Query". Left undefined on the envelope path so the loop can tell the two apart.
+     */
+    protected _nativeToolBindings: ReadonlyMap<string, NativeToolBinding> | undefined;
+    /** the model turn whose assistant call message has already been replayed into history (by reference). */
+    private _lastNativeTurnAppended: BaseAgentNextStep['nativeTurn'] | undefined;
 
     /**
      * Manages conversation-history retrieval tools for the current agent run.
@@ -3594,6 +3620,315 @@ export class BaseAgent {
      * @returns {Promise<AIPromptParams>} Configured prompt parameters
      * @protected
      */
+    /**
+     * Declares the agent's Actions as native tools on the outgoing request (plan §8.1/§8.3).
+     *
+     * **Supplying tools does not turn native mode on.** It satisfies one of three gate terms; the
+     * prompt runner still requires the model to declare the capability and the configuration to
+     * want it (`ResolveNativeToolCalling`). Because no catalog row declares the capability today,
+     * this is inert — the tools are built, the gate says no, and the run takes the envelope path
+     * exactly as before. That is deliberate: the switch is a metadata change, not a code change.
+     *
+     * `tool_choice` is `'auto'` on a normal turn. §8.3 also specifies `'none'` when the framework
+     * needs a control-flow decision rather than an action — the model must produce the envelope
+     * then, and forcing it is the only way to be sure it can.
+     */
+    /**
+     * Stamps the step with which tool-calling path it took and how much the model used it (§8.5).
+     *
+     * The mode is derivable through `TargetLogID` -> `AIPromptRun.ToolCallingMode`, but only for
+     * steps whose target is a prompt run and only through a join that returns nothing for every
+     * other step type. The call count is not derivable at all — it lives in the provider response,
+     * which is not persisted per step. Both are recorded here so a comparison of the two paths can
+     * group by them directly instead of reconstructing its own independent variable.
+     *
+     * Instrumentation must never fail a run, so every field is best-effort.
+     */
+    protected recordToolCallingInstrumentation(stepEntity: MJAIAgentRunStepEntityExtended, promptResult: AIPromptRunResult): void {
+        try {
+            const mode = promptResult?.promptRun?.ToolCallingMode;
+            if (mode) {
+                stepEntity.ToolCallingMode = mode;
+            }
+            // Counted only on the native path: null means "envelope", which is different from a
+            // native turn where the model chose not to call anything (0).
+            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit') {
+                const message = promptResult?.chatResult?.data?.choices?.[0]?.message;
+                const callCount = message?.toolCalls?.length ?? 0;
+                stepEntity.NativeToolCallCount = callCount;
+                // A tool call wins, but a turn that ALSO carried a valid
+                // envelope gave two answers, and the one we discard has to be counted somewhere.
+                stepEntity.NativeDualChannel = callCount > 0 ? looksLikeLoopEnvelope(message?.content) : null;
+                // whether this step's results went back as native tool-result turns.
+                stepEntity.NativeToolResultsSent = GetToolCallingDecision(promptResult?.chatResult)?.toolResults === true;
+                if (stepEntity.NativeDualChannel) {
+                    LogStatus(`Agent step answered on both channels: ${callCount} tool call(s) plus a JSON envelope; the envelope was discarded (tool call wins).`);
+                }
+            }
+            if (mode) {
+                this.queueStepSave(stepEntity, (st) => {
+                    st.ToolCallingMode = stepEntity.ToolCallingMode;
+                    st.NativeToolCallCount = stepEntity.NativeToolCallCount;
+                    st.NativeDualChannel = stepEntity.NativeDualChannel;
+                    st.NativeToolResultsSent = stepEntity.NativeToolResultsSent;
+                });
+            }
+        } catch (error) {
+            LogError(`Could not record tool-calling instrumentation on agent run step: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * replays the model's own tool-call turn into history once per turn, so the tool-result
+     * turns that follow have a call to answer (every provider requires it; BaseLLM validates it).
+     * A no-op when the turn's results go back as the markdown user message.
+     */
+    protected appendNativeAssistantTurn(params: ExecuteAgentParams, step: BaseAgentNextStep): void {
+        const turn = step.nativeTurn;
+        if (!turn?.sendResultsNatively || this._lastNativeTurnAppended === turn) {
+            return;
+        }
+        params.conversationMessages.push(buildAssistantToolCallTurn(turn) as AgentChatMessage);
+        this._lastNativeTurnAppended = turn;
+    }
+
+    /**
+     * The tool_result answering a `payload_change_request` the model made on the SAME turn as its
+     * actions or its delegation.
+     *
+     * The framework applies that change before the rest of the turn runs, so its call has to be
+     * answered alongside them — and inside the same tool turn, since Anthropic requires every
+     * tool_result for an assistant turn to sit in the one message that follows it. Returns an empty
+     * array when the step carried no payload call, so callers can always spread it.
+     */
+    private payloadToolResult(previousDecision: BaseAgentNextStep | undefined): NativeToolResult[] {
+        if (!previousDecision?.payloadToolCallId) {
+            return [];
+        }
+        return [{
+            toolCallId: previousDecision.payloadToolCallId,
+            toolName: 'payload_change_request',
+            content: 'Payload change applied.',
+            isError: false
+        }];
+    }
+
+    /**
+     * action results as ONE tool turn — a tool_result block per call, paired by id — when the
+     * turn's results go back natively; otherwise the markdown user message as before. An action that
+     * cannot be paired with a call id keeps the markdown message for itself.
+     */
+    protected appendActionResults(
+        params: ExecuteAgentParams,
+        summaries: ActionResultSummary[],
+        resultsMessage: string,
+        metadata: AgentChatMessageMetadata | undefined,
+        previousDecision: BaseAgentNextStep
+    ): void {
+        if (!previousDecision.nativeTurn?.sendResultsNatively) {
+            params.conversationMessages.push({ role: 'user', content: resultsMessage, metadata } as AgentChatMessage);
+            return;
+        }
+        const unpaired = [...(previousDecision.actions ?? [])];
+        const results: NativeToolResult[] = [...this.payloadToolResult(previousDecision)];
+        const orphans: ActionResultSummary[] = [];
+        for (const summary of summaries) {
+            const at = unpaired.findIndex((a) => a.name === summary.actionName && !!a.toolCallId);
+            const action = at >= 0 ? unpaired.splice(at, 1)[0] : undefined;
+            if (!action?.toolCallId) {
+                orphans.push(summary);
+                continue;
+            }
+            results.push({
+                toolCallId: action.toolCallId,
+                toolName: sanitizeToolName(summary.actionName),
+                content: this.formatActionResultsAsMarkdown([summary]),
+                isError: !summary.success
+            });
+        }
+        if (results.length > 0) {
+            params.conversationMessages.push(buildToolResultTurn(results, metadata) as AgentChatMessage);
+        }
+        if (orphans.length > 0) {
+            params.conversationMessages.push({ role: 'user', content: `Action results:\n${this.formatActionResultsAsMarkdown(orphans)}`, metadata } as AgentChatMessage);
+        }
+    }
+
+    /**
+     * Answers any tool call the turn's own result path left dangling, immediately before the
+     * history goes back to the model.
+     *
+     * `appendNativeAssistantTurn` replays the model's call turn for EVERY step that carries one,
+     * but only Actions, Sub-Agents and the payload-only Retry append results for it. An
+     * unknown-tool Retry, a protocol-violation Retry, an `ask_user` Chat, or a parallel dispatch
+     * that could not pair one of its ids therefore leaves calls unanswered — which Anthropic
+     * ("Each `tool_use` block must have a corresponding `tool_result` block in the next message"),
+     * OpenAI ("an assistant message with `tool_calls` must be followed by tool messages
+     * responding to each `tool_call_id`") and Gemini all reject outright. `validateToolConversation`
+     * in BaseLLM cannot catch it: it validates results→calls, never calls→results.
+     *
+     * Reconciling here rather than in each branch means a new step type cannot reintroduce the bug.
+     * The synthetic result states only that the call did not run; the reason travels in whatever
+     * message the branch itself appended (the retry instructions, the chat question).
+     */
+    protected reconcileUnansweredToolCalls(params: ExecuteAgentParams): void {
+        const messages = params.conversationMessages;
+        if (!messages?.length) {
+            return;
+        }
+        // Only the most recent assistant call turn can still be open — anything earlier was
+        // answered by its own branch or closed by a previous pass through here.
+        let at = -1;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const candidate = messages[i] as AgentChatMessage;
+            if (candidate.role === 'assistant' && candidate.toolCalls?.length) {
+                at = i;
+                break;
+            }
+        }
+        if (at < 0) {
+            return;
+        }
+        const answered = new Set<string>();
+        for (let i = at + 1; i < messages.length; i++) {
+            const content = messages[i].content;
+            if (!Array.isArray(content)) {
+                continue;
+            }
+            for (const block of content) {
+                if (block.type === 'tool_result' && block.toolCallId) {
+                    answered.add(block.toolCallId);
+                }
+            }
+        }
+        // A call with no id cannot be paired by any provider, so it cannot be answered here
+        // either — `extractOpenAICompatibleToolCalls` substitutes '' when a host omits the id.
+        const unanswered = ((messages[at] as AgentChatMessage).toolCalls ?? [])
+            .filter((call) => !!call.id && !answered.has(call.id));
+        if (unanswered.length === 0) {
+            return;
+        }
+        params.conversationMessages.push(buildToolResultTurn(
+            unanswered.map((call) => ({
+                toolCallId: call.id,
+                toolName: call.name,
+                content: 'Not executed — the agent did not run this call on this turn. See the message that follows.',
+                isError: true
+            })),
+            { turnAdded: this._promptTurnCount, messageType: 'action-result' }
+        ) as AgentChatMessage);
+    }
+
+    /**
+     * a tool turn can never be REMOVED from history — that orphans the assistant call it
+     * answers, which every provider rejects. Expiry and recovery stub its blocks instead.
+     */
+    private stubToolTurn(message: AgentChatMessage, note: string): AgentChatMessage {
+        return compactToolResultContent(message, () => note);
+    }
+
+    protected applyNativeTools(promptParams: AIPromptParams, params: ExecuteAgentParams): void {
+        this._nativeToolBindings = undefined;
+        // Only a type that can read the call back may be offered tools — see
+        // BaseAgentType.SupportsNativeToolCalls for what goes wrong otherwise. With no declarations
+        // the gate's `toolsProvided` term is false and the run takes the envelope path unchanged,
+        // whatever the catalog or prompt asked for.
+        if (!this._agentTypeInstance?.SupportsNativeToolCalls) {
+            return;
+        }
+        // A per-AGENT gate on declaration, one level below the agent-type
+        // gate above. A coordinator whose prompt says it never does work itself keeps its Actions in
+        // the prose catalog; with nothing declared the runner's gate resolves Envelope for this run.
+        if (params.agent?.DeclareActionsAsNativeTools === false) {
+            return;
+        }
+        // ...and a per-agent-ACTION gate: rows that opt out are removed before the tool set is built.
+        const actions = filterDeclarableActions(
+            this.getEffectiveActionsForValidation(params.agent.ID),
+            AIEngine.Instance.AgentActions.filter((aa) => UUIDsEqual(aa.AgentID, params.agent.ID))
+        );
+        const subAgents = this.getEffectiveSubAgentsForValidation(params.agent.ID);
+        if (actions.length === 0 && subAgents.length === 0) {
+            return;
+        }
+        try {
+            const actionSet = buildActionToolSet(actions, new Map(actions.map((a) => [a.ID, a.Params.Items])));
+            // Under implicit control flow the agent cannot know which model will answer, so it declares the full
+            // set — Actions plus the control-flow tools (one per sub-agent, payload_change_request,
+            // ask_user) — and NAMES the control ones. The runner keeps them only when the selected
+            // model's LLM.NativeControlFlow resolves to 'implicit'; a hybrid model never sees them.
+            const toolSet = buildNativeToolSet(actionSet, subAgents);
+            promptParams.tools = toolSet.tools;
+            promptParams.controlFlowToolNames = toolSet.controlToolNames;
+            promptParams.toolChoice = this.resolveToolChoiceForTurn(params);
+            this._nativeToolBindings = toolSet.byToolName;
+        } catch (error) {
+            // A tool-name collision is a metadata problem and a hard error at build time — but it
+            // must not take down a run that would otherwise work on the envelope path, which every
+            // agent still does today. Surface it loudly and continue without tools.
+            LogError(`Agent '${params.agent.Name}': could not declare native tools — ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * The `tool_choice` for this turn (§8.3).
+     *
+     * `'auto'` normally, `'none'` on the last turn this run will be allowed.
+     *
+     * **Why the final turn is special.** A tool call is a request to continue: the framework runs
+     * the action, feeds the result back, and the model decides again. On the last permitted
+     * iteration there is no "again" — the limit check fires the moment the turn returns, so the
+     * action is executed, paid for, and its result discarded, and the run ends with no answer for
+     * the user because the model spent its last turn asking a question instead of answering one.
+     * Forcing `'none'` converts that turn into what the framework actually needs from it: a
+     * terminal envelope.
+     *
+     * **What this does NOT fix.** Models call a tool on a measurable share of turns whose right
+     * answer was chat, completion or delegation. Those are not predictable
+     * from framework state — only the model knows the task is finished — so no `tool_choice` can
+     * address them. That belongs to the prompt, and is why the native-mode Actions section names
+     * the cases explicitly.
+     *
+     * Subclasses may narrow this further; the base contract is that a forced `'none'` must never be
+     * relaxed to `'auto'` on a turn the framework has already decided is terminal.
+     *
+     * @param params The run parameters, for the per-run iteration override
+     * @returns `'none'` on the final permitted iteration, otherwise `'auto'`
+     */
+    protected resolveToolChoiceForTurn(params: ExecuteAgentParams): ChatToolChoice {
+        return this.isFinalPermittedIteration(params) ? 'none' : 'auto';
+    }
+
+    /**
+     * Whether the turn currently being prepared is the last one this run will be allowed.
+     *
+     * Reads `TotalPromptIterations`, which the loop increments immediately BEFORE composing the
+     * prompt — so by the time this runs the counter already includes the turn about to go out, and
+     * `iterations >= limit` means "this turn is the last", not "the last one already happened".
+     * That off-by-one is the whole subtlety and is why this lives beside the limit check it mirrors.
+     *
+     * Returns false when no run is in flight: the eval harness composes parameters through
+     * `BaseAgent` without executing a loop, and a composed-but-never-run turn has no iteration
+     * budget to be at the end of.
+     *
+     * Only the ITERATION limits are predicted. Cost, token and time limits also stop a run, but
+     * none can be known before the turn that crosses them — guessing would force `'none'` on turns
+     * that had budget left, which silently disables native tool calling rather than bounding it.
+     *
+     * @param params The run parameters, for `absoluteMaxIterations`
+     * @returns true when the framework will stop the run after this turn
+     */
+    protected isFinalPermittedIteration(params: ExecuteAgentParams): boolean {
+        const iterations = this._agentRun?.TotalPromptIterations;
+        if (!iterations) {
+            return false;
+        }
+        const perAgent = params.agent?.MaxIterationsPerRun;
+        const absolute = params.absoluteMaxIterations ?? BaseAgent.DEFAULT_ABSOLUTE_MAX_ITERATIONS;
+        return (typeof perAgent === 'number' && perAgent > 0 && iterations >= perAgent)
+            || (absolute > 0 && iterations >= absolute);
+    }
+
     protected async preparePromptParams<P>(
         config: AgentConfiguration,
         payload: P,
@@ -3630,8 +3965,12 @@ export class BaseAgent {
         
         promptParams.data = promptTemplateData;
         promptParams.contextUser = params.contextUser;
+        // Last gate before the history goes back to the model: no tool call may be left dangling.
+        this.reconcileUnansweredToolCalls(params);
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.verbose = params.verbose; // Pass through verbose flag
+
+        this.applyNativeTools(promptParams, params);
 
         // Apply effortLevel with precedence hierarchy
         // 1. params.effortLevel (ExecuteAgentParams - highest priority)
@@ -3869,7 +4208,7 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         // Let the agent type determine the next step
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this.AgentTypeState);
+        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this.AgentTypeState, this._nativeToolBindings);
         return nextStep;
     }
 
@@ -4809,8 +5148,7 @@ export class BaseAgent {
         }
 
         // Check absolute maximum iterations (safety net to prevent infinite loops)
-        const DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
-        const absoluteMaxIterations = params.absoluteMaxIterations ?? DEFAULT_ABSOLUTE_MAX_ITERATIONS;
+        const absoluteMaxIterations = params.absoluteMaxIterations ?? BaseAgent.DEFAULT_ABSOLUTE_MAX_ITERATIONS;
 
         if (agentRun.TotalPromptIterations && agentRun.TotalPromptIterations >= absoluteMaxIterations) {
             return {
@@ -5310,6 +5648,20 @@ export class BaseAgent {
 
         // Remove in reverse order to maintain indices
         removedIndices.sort((a, b) => b - a).forEach(index => {
+            const target = params.conversationMessages[index] as AgentChatMessage;
+            if (target.role === 'tool') {
+                // a tool turn cannot be removed without orphaning the call it answers; stub it.
+                params.conversationMessages[index] = this.stubToolTurn(target, '[result expired — stubbed to recover context]');
+                this.emitMessageLifecycleEvent({
+                    type: 'message-compacted',
+                    turn: currentStepCount,
+                    messageIndex: index,
+                    message: params.conversationMessages[index] as AgentChatMessage,
+                    reason: 'Context recovery - tool turn stubbed (a tool turn cannot be removed)',
+                    tokensSaved: this.estimateTokens(target.content)
+                });
+                return;
+            }
             const removed = params.conversationMessages.splice(index, 1)[0];
 
             // Emit lifecycle event
@@ -5372,6 +5724,21 @@ export class BaseAgent {
             const originalContent = typeof originalMessage.content === 'string'
                 ? originalMessage.content
                 : JSON.stringify(originalMessage.content);
+
+            if (originalMessage.role === 'tool') {
+                // compact each tool_result block's text; the block structure is what the provider needs.
+                const compacted = compactToolResultContent(originalMessage, (t) => (t.length > 500 ? `${t.slice(0, 500)}… [compacted from ${t.length} chars]` : t));
+                const saved = originalTokens - this.estimateTokens(compacted.content);
+                if (saved > 0) {
+                    params.conversationMessages[candidate.index] = {
+                        ...compacted,
+                        metadata: { ...originalMessage.metadata, wasCompacted: true, originalLength: originalContent.length, tokensSaved: saved }
+                    };
+                    tokensSaved += saved;
+                    compactedCount++;
+                }
+                continue;
+            }
 
             // Use smart trim (faster than AI summary, no API cost)
             const compactedContent = await this.compactMessage(
@@ -5706,8 +6073,19 @@ The context is now within limits. Please retry your request with the recovered c
         
         this.logStatus(`📌 Next step determined: ${guardrailCheckedStep.step}${guardrailCheckedStep.terminate ? ' (terminating)' : ''}`, true, params);
 
+        // the model's own call turn goes into history before anything answers it.
+        this.appendNativeAssistantTurn(params, guardrailCheckedStep);
+
         // if we need to retry make sure we add the retry message to the conversation messages
-        if (guardrailCheckedStep.step === 'Retry' && (guardrailCheckedStep.message || guardrailCheckedStep.errorMessage || guardrailCheckedStep.retryInstructions)) {
+        if (guardrailCheckedStep.step === 'Retry' && guardrailCheckedStep.payloadToolCallId && guardrailCheckedStep.nativeTurn?.sendResultsNatively) {
+            // the payload-only turn is answered as a tool result for the payload_change_request call.
+            params.conversationMessages.push(buildToolResultTurn([{
+                toolCallId: guardrailCheckedStep.payloadToolCallId,
+                toolName: 'payload_change_request',
+                content: guardrailCheckedStep.retryInstructions || 'Payload change applied.',
+                isError: false
+            }], { turnAdded: this._promptTurnCount, messageType: 'action-result' }) as AgentChatMessage);
+        } else if (guardrailCheckedStep.step === 'Retry' && (guardrailCheckedStep.message || guardrailCheckedStep.errorMessage || guardrailCheckedStep.retryInstructions)) {
             params.conversationMessages.push({
                 role: 'user',
                 content: `Retrying due to: ${guardrailCheckedStep.retryInstructions || guardrailCheckedStep.message || guardrailCheckedStep.errorMessage}`
@@ -6995,6 +7373,35 @@ The context is now within limits. Please retry your request with the recovered c
 
 
     /**
+     * Whether THIS action may use the run's runtime API key for THIS driver class. The default is
+     * yes: the run was started on those keys, and an action that calls a vendor on the user's behalf
+     * (Generate Image) is doing what the prompts do. Override to narrow it — an agent that knows
+     * which of its actions talk to which vendor can refuse everything else, and a refusal costs the
+     * action nothing but the customer's key: it falls back to the platform key as if the run had none.
+     */
+    protected actionMayUseRuntimeAPIKey(action: MJActionEntityExtended, driverClass: string, params: ExecuteAgentParams): boolean {
+        return true;
+    }
+
+    /**
+     * The {@link RuntimeAPIKeyResolver} handed to one action dispatch: one driver class in, one key
+     * out, the list itself never leaves this closure. Every answer is logged by action and driver
+     * class (never the key), so a run's log shows which action drew which credential.
+     */
+    private buildRuntimeAPIKeyResolver(params: ExecuteAgentParams, actionEntity: MJActionEntityExtended): RuntimeAPIKeyResolver {
+        const runKeys = params.apiKeys;
+        return (driverClass: string): string | undefined => {
+            if (!this.actionMayUseRuntimeAPIKey(actionEntity, driverClass, params)) {
+                this.logStatus(`🔑 Runtime API key for '${driverClass}' refused to action '${actionEntity.Name}' by policy — platform key applies`, true, params);
+                return undefined;
+            }
+            const key = GetAIAPIKey(driverClass, runKeys);
+            this.logStatus(`🔑 Action '${actionEntity.Name}' resolved an API key for '${driverClass}' (${runKeys?.some((k) => k.driverClass === driverClass) ? 'run' : 'platform'})`, true, params);
+            return key || undefined;
+        };
+    }
+
+    /**
      * This method executes one action using the MemberJunction Actions framework.
      * The full ActionResult objects are returned, allowing the caller to access result codes, output parameters,
      * and other execution details.
@@ -7036,7 +7443,6 @@ The context is now within limits. Please retry your request with the recovered c
             if (this._resolvedStorageAccountId) {
                 (actionContext as Record<string, unknown>).__resolvedStorageAccountId = this._resolvedStorageAccountId;
             }
-
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({
                 Action: actionEntity,
@@ -7044,7 +7450,14 @@ The context is now within limits. Please retry your request with the recovered c
                 ContextUser: contextUser,
                 Filters: [],
                 SkipActionLog: false,
-                Context: actionContext
+                Context: actionContext,
+                // The run's RUNTIME API KEYS, as a RESOLVER bound to this one action — see
+                // buildRuntimeAPIKeyResolver(). Per dispatch on purpose: actionContext IS params.context,
+                // shared by every action in the run (parallel ones included) and copied into sub-agent
+                // runs, so anything stamped there would name the wrong action under parallel dispatch
+                // and travel further than the action it was meant for. Absent when the run has no keys,
+                // so the action uses GetAIAPIKey(driverClass) exactly as before.
+                RuntimeAPIKeyResolver: params.apiKeys && params.apiKeys.length > 0 ? this.buildRuntimeAPIKeyResolver(params, actionEntity) : undefined,
             });
             
             if (result.Success) {
@@ -7065,6 +7478,58 @@ The context is now within limits. Please retry your request with the recovered c
             });
             throw new Error(`Error executing actions: ${error.message}`);
         }
+    }
+
+    /**
+     * Makes a SLICED conversation window safe to send on its own.
+     *
+     * A tool turn is only valid immediately after the assistant turn that declared its call ids, so
+     * cutting the parent's history at an arbitrary index can strand either half of a pair. Keeping
+     * the result half throws in `validateToolConversation` before the request is even built; keeping
+     * the call half is accepted there but rejected by every provider. Both halves are repaired here
+     * so the caller's window is internally consistent whatever index it happened to cut on:
+     * an unpairable tool turn is dropped, and an assistant turn whose calls nothing in the window
+     * answers keeps its prose but loses the calls.
+     *
+     * Only the slicing modes need this — 'All' is self-consistent by construction.
+     */
+    protected makeToolTurnsSelfConsistent(window: ChatMessage[]): ChatMessage[] {
+        const declared = new Set<string>();
+        const resolved = new Set<string>();
+        for (const message of window) {
+            const typed = message as AgentChatMessage;
+            if (typed.role === 'assistant') {
+                for (const call of typed.toolCalls ?? []) {
+                    if (call.id) declared.add(call.id);
+                }
+            }
+            if (typed.role === 'tool' && Array.isArray(typed.content)) {
+                for (const block of typed.content) {
+                    if (block.type === 'tool_result' && block.toolCallId) resolved.add(block.toolCallId);
+                }
+            }
+        }
+        const kept: ChatMessage[] = [];
+        for (const message of window) {
+            const typed = message as AgentChatMessage;
+            if (typed.role === 'tool') {
+                const blocks = Array.isArray(typed.content) ? typed.content : [];
+                // Its assistant turn was cut away — nothing in this window declares these calls.
+                const pairable = blocks.some((b) => b.type === 'tool_result' && b.toolCallId && declared.has(b.toolCallId));
+                if (!pairable) continue;
+            }
+            if (typed.role === 'assistant' && typed.toolCalls?.length) {
+                const answered = typed.toolCalls.every((call) => call.id && resolved.has(call.id));
+                if (!answered) {
+                    // Demote to prose rather than send a call this window never answers.
+                    const { toolCalls: _dropped, ...rest } = typed;
+                    kept.push({ ...rest, content: typed.content || '[tool call omitted for context management]' } as ChatMessage);
+                    continue;
+                }
+            }
+            kept.push(message);
+        }
+        return kept;
     }
 
     /**
@@ -7127,7 +7592,7 @@ The context is now within limits. Please retry your request with the recovered c
             case 'Latest':
                 // Pass most recent N messages
                 if (maxMessages && maxMessages > 0) {
-                    messages = params.conversationMessages.slice(-maxMessages);
+                    messages = this.makeToolTurnsSelfConsistent(params.conversationMessages.slice(-maxMessages));
                 } else {
                     messages = [...params.conversationMessages];
                 }
@@ -7140,14 +7605,14 @@ The context is now within limits. Please retry your request with the recovered c
                     const remaining = params.conversationMessages.slice(-(maxMessages - 2));
                     const omittedCount = params.conversationMessages.length - maxMessages;
 
-                    messages = [
+                    messages = this.makeToolTurnsSelfConsistent([
                         ...firstTwo,
                         {
                             role: 'system',
                             content: `[${omittedCount} messages omitted for context management]`
                         },
                         ...remaining
-                    ];
+                    ]);
                 } else {
                     messages = [...params.conversationMessages];
                 }
@@ -8421,7 +8886,7 @@ The context is now within limits. Please retry your request with the recovered c
             AgentRunID: this._agentRun!.ID,
             StepNumber: stepNumber,
             StepType: params.stepType,
-            StepName: this.formatHierarchicalMessage(params.stepName),  // include hierarchy breadcrumb
+            StepName: this.fitStepName(stepEntity, this.formatHierarchicalMessage(params.stepName)),  // breadcrumb, trimmed to the column
             TargetID: params.targetId,
             TargetLogID: params.targetLogId,
             ParentID: params.parentId,  // Link to parent step (e.g., loop step)
@@ -8675,6 +9140,22 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Trims a step name to what `AIAgentRunStep.StepName` can hold. Step names are built from free
+     * text — a termination message quoting a provider's error, a tool name with its arguments, the
+     * hierarchy breadcrumb in front of either — and one longer than the column made the whole row
+     * unsaveable, so the step vanished from the run ("2 step record save(s) failed" — a
+     * 327-character failure reason). The width comes from the entity's field metadata
+     * when the instance carries it, else the column's declared 255 characters.
+     *
+     * @protected
+     */
+    protected fitStepName(stepEntity: MJAIAgentRunStepEntityExtended, name: string): string {
+        const declared = stepEntity.EntityInfo?.Fields?.find((f) => f.Name === 'StepName')?.MaxLength;
+        const limit = declared && declared > 0 ? declared : 255;
+        return name.length > limit ? `${name.slice(0, limit - 1)}…` : name;
+    }
+
+    /**
      * Builds hierarchical step string from parent and current step counts.
      *
      * Examples:
@@ -8759,7 +9240,8 @@ The context is now within limits. Please retry your request with the recovered c
         if (!previousDecision) {
             // First execution - ask the agent type what to do
             const initialStep = await this.AgentTypeInstance.DetermineInitialStep<P>(params, params.payload, this.AgentTypeState);
-            
+            await this.recordExecutionRouting(params);
+
             if (initialStep) {
                 // Agent type provided an initial step
                 return initialStep;
@@ -8961,6 +9443,28 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Writes the agent type's execution routing to the run as a completed `Decision` step.
+     *
+     * Only agent types that can run an agent more than one way report anything (see
+     * {@link BaseAgentType.DescribeExecutionRouting}). Recorded on the run rather than only logged,
+     * because "which engine ran this?" is asked long after the process logs are gone.
+     *
+     * @private
+     */
+    private async recordExecutionRouting(params: ExecuteAgentParams): Promise<void> {
+        const routing = this.AgentTypeInstance.DescribeExecutionRouting(this.AgentTypeState);
+        if (!routing) return;
+
+        this.logStatus(`🧭 ${routing.StepName}: ${routing.Reason}`, true, params);
+        await this.createStepEntity({
+            stepType: 'Decision',
+            stepName: routing.StepName,
+            contextUser: params.contextUser,
+            completed: { success: true, outputData: { ...routing.Detail, reason: routing.Reason } }
+        });
+    }
+
+    /**
      * Executes a prompt step and tracks it.
      * 
      * @private
@@ -9070,6 +9574,8 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
+
+            this.recordToolCallingInstrumentation(stepEntity, promptResult);
 
             // Increment prompt-specific turn counter (used for expiration age calculations)
             this._promptTurnCount++;
@@ -9572,10 +10078,14 @@ The context is now within limits. Please retry your request with the recovered c
         // reason as the action record above: the model's real output is the JSON envelope, and
         // storing framework prose as an `assistant` turn trains strong in-context models to imitate
         // the prose and drift off the required JSON format. See the note at the action-record push.
-        params.conversationMessages.push({
-            role: 'user',
-            content: `[You delegated this task to the "${subAgentRequest.name}" agent. Reason: ${subAgentRequest.message}]`
-        });
+        // a natively-called delegate_to_* is already in the history as the assistant's call turn and
+        // will be answered by a `tool` turn; a user turn in between violates the provider contracts.
+        if (!(previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId)) {
+            params.conversationMessages.push({
+                role: 'user',
+                content: `[You delegated this task to the "${subAgentRequest.name}" agent. Reason: ${subAgentRequest.message}]`
+            });
+        }
         
         
         // Prepare input data for the step
@@ -9852,11 +10362,17 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            params.conversationMessages.push({
-                role: 'user',
-                content: resultMessage,
-                metadata: subAgentMetadata
-            } as AgentChatMessage);
+            if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
+                // the delegate_to_* call is answered as a tool result.
+                params.conversationMessages.push(buildToolResultTurn([...this.payloadToolResult(previousDecision), {
+                    toolCallId: subAgentRequest.toolCallId,
+                    toolName: `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(subAgentRequest.name)}`,
+                    content: resultMessage,
+                    isError: !subAgentResult.success
+                }], subAgentMetadata) as AgentChatMessage);
+            } else {
+                params.conversationMessages.push({ role: 'user', content: resultMessage, metadata: subAgentMetadata } as AgentChatMessage);
+            }
 
             // Set PayloadAtEnd with the merged payload
             if (stepEntity) {
@@ -10101,7 +10617,8 @@ The context is now within limits. Please retry your request with the recovered c
     private prepareParallelSubAgentDispatch<SC>(
         params: ExecuteAgentParams<SC>,
         request: AgentSubAgentRequest<SC>,
-        stepCount: number
+        stepCount: number,
+        nativeResults: boolean = false
     ): ParallelSubAgentDispatch | undefined {
         const resolved = this.resolveSubAgentByName(params, request.name);
         if (!resolved) {
@@ -10127,10 +10644,14 @@ The context is now within limits. Please retry your request with the recovered c
         });
         // `user`-role environment annotation (not an `assistant` turn) — see the note on the
         // single-delegation push above for why framework prose must not be stored as assistant turns.
-        params.conversationMessages.push({
-            role: 'user',
-            content: `[You delegated this task to the parallel sub-agent "${request.name}". Reason: ${request.message}]`
-        });
+        // skipped when the call is natively recorded and will be answered by a tool result (see the
+        // single-delegation push for why a user turn between call and result must not be inserted).
+        if (!(nativeResults && request.toolCallId)) {
+            params.conversationMessages.push({
+                role: 'user',
+                content: `[You delegated this task to the parallel sub-agent "${request.name}". Reason: ${request.message}]`
+            });
+        }
 
         return { request: request as AgentSubAgentRequest<unknown>, subAgentEntity, relationship };
     }
@@ -10469,8 +10990,9 @@ The context is now within limits. Please retry your request with the recovered c
         const currentPayload = previousDecision.newPayload;
 
         // Synchronous pre-flight — order-stable transcript + progress events.
+        const nativeResults = previousDecision.nativeTurn?.sendResultsNatively === true;
         const dispatches = subAgentRequests.map(req =>
-            this.prepareParallelSubAgentDispatch(params, req, stepCount)
+            this.prepareParallelSubAgentDispatch(params, req, stepCount, nativeResults)
         );
 
         // Bounded parallel dispatch.
@@ -10487,11 +11009,32 @@ The context is now within limits. Please retry your request with the recovered c
             params, subAgentRequests, executions, currentPayload
         );
 
-        // Aggregated summary appended to the parent transcript.
-        params.conversationMessages.push({
-            role: 'user',
-            content: `Parallel Sub-Agents Completed:\n\n${this.buildParallelSubAgentSummary(allExecutions)}`
-        });
+        // Aggregated summary appended to the parent transcript — or, with native tool results, one `tool` turn whose
+        // tool_result blocks answer each delegate_to_* call by id (every provider requires every call
+        // of an assistant turn to be answered before the next turn).
+        // Pair per execution rather than all-or-nothing: one dispatch that lost its id must not
+        // discard the pairing for the calls that have one, or those calls go unanswered and the
+        // reconciler has to report completed sub-agents as "not executed". Anything unpairable
+        // keeps the markdown user message for itself, as the Actions path already does.
+        const pairable = nativeResults ? allExecutions.filter((e) => !!e.request.toolCallId) : [];
+        const unpairable = allExecutions.filter((e) => !pairable.includes(e));
+        if (pairable.length > 0) {
+            params.conversationMessages.push(buildToolResultTurn([
+                ...this.payloadToolResult(previousDecision),
+                ...pairable.map((e) => ({
+                    toolCallId: e.request.toolCallId as string,
+                    toolName: `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(e.request.name)}`,
+                    content: this.buildParallelSubAgentSummary([e]),
+                    isError: !e.result.success
+                }))
+            ], undefined) as AgentChatMessage);
+        }
+        if (unpairable.length > 0) {
+            params.conversationMessages.push({
+                role: 'user',
+                content: `Parallel Sub-Agents Completed:\n\n${this.buildParallelSubAgentSummary(unpairable)}`
+            });
+        }
 
         // Termination semantics: matches the single sub-agent path —
         // `terminateAfter` triggers parent termination regardless of the child's
@@ -10552,10 +11095,14 @@ The context is now within limits. Please retry your request with the recovered c
         // reason as the action record above: the model's real output is the JSON envelope, and
         // storing framework prose as an `assistant` turn trains strong in-context models to imitate
         // the prose and drift off the required JSON format. See the note at the action-record push.
-        params.conversationMessages.push({
-            role: 'user',
-            content: `[You delegated this task to the "${subAgentRequest.name}" agent. Reason: ${subAgentRequest.message}]`
-        });
+        // a natively-called delegate_to_* is already in the history as the assistant's call turn and
+        // will be answered by a `tool` turn; a user turn in between violates the provider contracts.
+        if (!(previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId)) {
+            params.conversationMessages.push({
+                role: 'user',
+                content: `[You delegated this task to the "${subAgentRequest.name}" agent. Reason: ${subAgentRequest.message}]`
+            });
+        }
 
         // Prepare input data for the step
         const inputData = {
@@ -10766,11 +11313,21 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            params.conversationMessages.push({
-                role: 'user',
-                content: relatedResultMessage,
-                metadata: relatedMetadata
-            } as AgentChatMessage);
+            if (previousDecision.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
+                // the delegate_to_* call is answered as a tool result (same as the child path).
+                params.conversationMessages.push(buildToolResultTurn([...this.payloadToolResult(previousDecision), {
+                    toolCallId: subAgentRequest.toolCallId,
+                    toolName: `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(subAgentRequest.name)}`,
+                    content: relatedResultMessage,
+                    isError: !subAgentResult.success
+                }], relatedMetadata) as AgentChatMessage);
+            } else {
+                params.conversationMessages.push({
+                    role: 'user',
+                    content: relatedResultMessage,
+                    metadata: relatedMetadata
+                } as AgentChatMessage);
+            }
 
             // Update the agent run's current payload
             if (this._agentRun) {
@@ -11177,10 +11734,17 @@ The context is now within limits. Please retry your request with the recovered c
             if (addConversationMessage) {
                 // Record as a `user`-role environment annotation (no metadata - permanent record).
                 // See the note above on why this is NOT an `assistant` turn.
-                params.conversationMessages.push({
-                    role: 'user',
-                    content: actionMessage
-                });
+                //
+                // Exception: when the model's own tool-call turn is already in the history (native
+                // tool results), the call and its arguments are the record, and a user turn between that
+                // call and its `tool` result breaks the OpenAI and Anthropic contracts — results must
+                // immediately follow the call. Skip it there.
+                if (!previousDecision.nativeTurn?.sendResultsNatively) {
+                    params.conversationMessages.push({
+                        role: 'user',
+                        content: actionMessage
+                    });
+                }
             }
 
             const actionEngine = ActionEngineServer.Instance;
@@ -11364,11 +11928,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (addConversationMessage) {
                 // Add user message with results and optional metadata
-                params.conversationMessages.push({
-                    role: 'user',
-                    content: resultsMessage,
-                    metadata: metadata
-                } as AgentChatMessage);
+                this.appendActionResults(params, actionSummaries, resultsMessage, metadata, previousDecision); // results as a tool turn or the markdown user message
 
                 // Surface explicit AI directives from action results as a separate instruction message.
                 // Actions that need the AI to follow specific instructions (not just acknowledge data)
@@ -14115,7 +14675,17 @@ The context is now within limits. Please retry your request with the recovered c
 
                 msg.metadata.isExpired = true;
 
-                if (msg.metadata.expirationMode === 'Remove') {
+                if (msg.metadata.expirationMode === 'Remove' && msg.role === 'tool') {
+                    // a tool turn cannot be removed (it answers an assistant call); stub its blocks.
+                    params.conversationMessages[i] = this.stubToolTurn(msg, `[result expired after ${turnsAlive} turns]`);
+                    this.emitMessageLifecycleEvent({
+                        type: 'message-expired',
+                        turn: currentTurn,
+                        messageIndex: i,
+                        message: params.conversationMessages[i] as AgentChatMessage,
+                        reason: `Expired after ${turnsAlive} turns (limit: ${msg.metadata.expirationTurns}); tool turn stubbed, not removed`
+                    });
+                } else if (msg.metadata.expirationMode === 'Remove') {
                     messagesToRemove.push(i);
 
                     this.emitMessageLifecycleEvent({
@@ -14150,6 +14720,25 @@ The context is now within limits. Please retry your request with the recovered c
 
         for (const item of messagesToCompact) {
             const originalContent = item.message.content;
+            if (item.message.role === 'tool') {
+                // compact per block so the tool turn keeps answering its call.
+                const limit = item.metadata.compactLength || 500;
+                const compactedTurn = compactToolResultContent(item.message, (t) => (t.length > limit ? `${t.slice(0, limit)}… [compacted from ${t.length} chars]` : t));
+                const saved = this.estimateTokens(originalContent) - this.estimateTokens(compactedTurn.content);
+                params.conversationMessages[item.index] = {
+                    ...compactedTurn,
+                    metadata: { ...item.message.metadata, wasCompacted: true, originalContent: preserveOriginal ? originalContent : undefined, originalLength: item.metadata.originalLength, tokensSaved: saved, canExpand: preserveOriginal }
+                };
+                this.emitMessageLifecycleEvent({
+                    type: 'message-compacted',
+                    turn: currentTurn,
+                    messageIndex: item.index,
+                    message: params.conversationMessages[item.index] as AgentChatMessage,
+                    reason: `Compacted tool turn per block (saved ${saved} tokens)`,
+                    tokensSaved: saved
+                });
+                continue;
+            }
             const compacted = await this.compactMessage(
                 item.message,
                 item.metadata,

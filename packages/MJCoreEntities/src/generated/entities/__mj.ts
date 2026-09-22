@@ -143,6 +143,12 @@ export const MJAIAgentActionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Optional override for AI summarization prompt when CompactMode=AISummary. Lookup hierarchy: this field -> Action.DefaultCompactPromptID -> system default. Allows agent-specific summarization focus (e.g., technical vs. marketing perspective).`),
+    DeclareAsNativeTool: z.boolean().describe(`
+        * * Field Name: DeclareAsNativeTool
+        * * Display Name: Declare As Native Tool
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this Action may be declared as a native tool for this agent (1, default). 0 keeps it out of the tool set on native turns; because the prose catalog is not rendered in native mode, the action is then unavailable on those turns. Use for actions an agent holds but should rarely reach for on its own.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -2383,6 +2389,32 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: Array<MJAIAgentRunStepEntity_AgentSkillInvocation>
         * * Description: JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).`),
+    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit')]).nullable().describe(`
+        * * Field Name: ToolCallingMode
+        * * Display Name: Tool Calling Mode
+        * * SQL Data Type: nvarchar(25)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Envelope
+    *   * Native
+    *   * NativeFallback
+    *   * NativeImplicit
+        * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.`),
+    NativeToolCallCount: z.number().nullable().describe(`
+        * * Field Name: NativeToolCallCount
+        * * Display Name: Native Tool Call Count
+        * * SQL Data Type: int
+        * * Description: How many native tool calls the model made on this step. 0 on a native-mode step where the model chose to answer with the envelope instead; NULL when the step took the envelope path or never reached a model call.`),
+    NativeDualChannel: z.boolean().nullable().describe(`
+        * * Field Name: NativeDualChannel
+        * * Display Name: Native Dual Channel
+        * * SQL Data Type: bit
+        * * Description: On a native-mode step where the model made tool calls: 1 when the same turn also carried a parseable JSON Loop envelope (the model answered on both channels; the loop dispatched the tool call and discarded the envelope), 0 when the tool calls came alone. NULL when the step made no tool calls or took the envelope path.`),
+    NativeToolResultsSent: z.boolean().nullable().describe(`
+        * * Field Name: NativeToolResultsSent
+        * * Display Name: Native Tool Results Sent
+        * * SQL Data Type: bit
+        * * Description: For native tool-calling steps: 1 = the results of this step's tool calls were returned to the model as native tool-result turns, 0 = as the markdown action-results user message. NULL for envelope steps and for rows predating the feature.`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run Context
@@ -4295,6 +4327,12 @@ if this limit is exceeded.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value.`),
+    DeclareActionsAsNativeTools: z.boolean().describe(`
+        * * Field Name: DeclareActionsAsNativeTools
+        * * Display Name: Declare Actions As Native Tools
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When native tool calling is in effect for a run, whether this agent's Actions are declared as native tools (1, default) or withheld so the agent runs on the envelope path with the prose action catalog (0). Set 0 for coordinator agents whose prompt forbids doing work themselves. Controls supply only: capability and preference on the model and prompt still decide whether declared tools are used.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -6164,6 +6202,12 @@ export const MJAIPromptModelSchema = z.object({
         * * Display Name: Effort Level
         * * SQL Data Type: int
         * * Description: Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.`),
+    PromptConfiguration: z.any().nullable().describe(`
+        * * Field Name: PromptConfiguration
+        * * Display Name: Prompt Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIPromptModelEntity_IAIPromptModelConfiguration
+        * * Description: Most-specific layer of the prompt configuration bag (JSON, IAIPromptModelConfiguration shape) — configuration for THIS prompt on THIS model. Deep-merges per key over the AIPrompt layer, which in turn sits above the model-catalog ModelConfiguration cascade. NULL = inherit the merged configuration unchanged.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -6778,6 +6822,17 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
         * * Description: The base measure this run's quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NULL means token-billed, which is what every row predating this column is; it is read as Tokens at one seam in MJAIPromptRunEntityServer, and becomes NOT NULL in the release after the AI Usage Types seed ships.`),
+    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit')]).nullable().describe(`
+        * * Field Name: ToolCallingMode
+        * * Display Name: Tool Calling Mode
+        * * SQL Data Type: nvarchar(25)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Envelope
+    *   * Native
+    *   * NativeFallback
+    *   * NativeImplicit
+        * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -7275,6 +7330,12 @@ export const MJAIPromptSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`),
+    PromptConfiguration: z.any().nullable().describe(`
+        * * Field Name: PromptConfiguration
+        * * Display Name: Prompt Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIPromptEntity_IAIPromptConfiguration
+        * * Description: Per-prompt call-time configuration bag (JSON, IAIPromptConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the prompt Configuration cascade — AIPromptModel rows inherit from it per key and may override — and itself layered on top of the resolved AIModel/AIModelVendor ModelConfiguration. NULL = contributes nothing.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -18377,7 +18438,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
-    VectorDatabaseID: z.string().describe(`
+    VectorDatabaseID: z.string().nullable().describe(`
         * * Field Name: VectorDatabaseID
         * * Display Name: Vector Database
         * * SQL Data Type: uniqueidentifier
@@ -18396,7 +18457,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Display Name: Template
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)`),
-    AIModelID: z.string().describe(`
+    AIModelID: z.string().nullable().describe(`
         * * Field Name: AIModelID
         * * Display Name: AI Model
         * * SQL Data Type: uniqueidentifier
@@ -18486,7 +18547,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
-    VectorDatabase: z.string().describe(`
+    VectorDatabase: z.string().nullable().describe(`
         * * Field Name: VectorDatabase
         * * Display Name: Vector Database Name
         * * SQL Data Type: nvarchar(100)`),
@@ -18494,7 +18555,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Field Name: Template
         * * Display Name: Template Name
         * * SQL Data Type: nvarchar(255)`),
-    AIModel: z.string().describe(`
+    AIModel: z.string().nullable().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model Name
         * * SQL Data Type: nvarchar(50)`),
@@ -20535,6 +20596,262 @@ export const MJExternalDataSourceSchema = z.object({
 });
 
 export type MJExternalDataSourceEntityType = z.infer<typeof MJExternalDataSourceSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Feature Value Caches
+ */
+export const MJFeatureValueCacheSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for this feature value cache entry.`),
+    RecordProcessID: z.string().nullable().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+        * * Description: Optional reference to the RecordProcess that produced this cache entry. When NULL, the cached result is scoped by PromptID only and shared across pipelines using the same prompt.`),
+    PromptID: z.string().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: Reference to the AI Prompt used to compute this cached entry.`),
+    PromptVersionHash: z.string().describe(`
+        * * Field Name: PromptVersionHash
+        * * Display Name: Prompt Version Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 content hash of the rendered prompt template, output schema, and constraint instructions at execution time.`),
+    ConstraintHash: z.string().describe(`
+        * * Field Name: ConstraintHash
+        * * Display Name: Constraint Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the output value constraint definitions. Changes to allowed enum values or ranges invalidate cached results.`),
+    KeyHash: z.string().describe(`
+        * * Field Name: KeyHash
+        * * Display Name: Key Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash over the canonicalized JSON key field values. The primary lookup key.`),
+    KeyDisplay: z.string().nullable().describe(`
+        * * Field Name: KeyDisplay
+        * * Display Name: Key Display
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Human-readable plain text display of the key (e.g. "Senior Director, Field Marketing"). Makes this table legible as reference data.`),
+    KeyJSON: z.string().describe(`
+        * * Field Name: KeyJSON
+        * * Display Name: Key JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Full JSON representation of the input key fields and their values.`),
+    OutputsJSON: z.string().describe(`
+        * * Field Name: OutputsJSON
+        * * Display Name: Outputs JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Cached computed outputs JSON fragment. Stored directly so archival of AI Prompt Runs does not lose cached values.`),
+    Reasoning: z.string().nullable().describe(`
+        * * Field Name: Reasoning
+        * * Display Name: Reasoning
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional model reasoning or rationale captured from the prompt execution.`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Soft reference to the AI Prompt Run that first computed and populated this cached result.`),
+    HitCount: z.number().describe(`
+        * * Field Name: HitCount
+        * * Display Name: Hit Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total number of times this cached result has been served to skip an LLM invocation.`),
+    LastHitAt: z.date().nullable().describe(`
+        * * Field Name: LastHitAt
+        * * Display Name: Last Hit At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when this cached entry was last read and served.`),
+    ComputedAt: z.date().describe(`
+        * * Field Name: ComputedAt
+        * * Display Name: Computed At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: Timestamp when this cached entry was originally computed.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional expiration timestamp for time-to-live invalidation. NULL means no expiration.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: Timestamp when this record was created.`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: Timestamp when this record was last updated.`),
+    RecordProcess: z.string().nullable().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process Name
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJFeatureValueCacheEntityType = z.infer<typeof MJFeatureValueCacheSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Feature Values
+ */
+export const MJFeatureValueSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for this feature value history record.`),
+    RecordProcessID: z.string().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+        * * Description: The Record Process (Feature Pipeline) that computed this feature value.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The entity of the record this feature was computed for.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(900)
+        * * Description: Serialized primary key of the record this feature was computed for. Matches ProcessRunDetail.RecordID.`),
+    FeatureName: z.string().describe(`
+        * * Field Name: FeatureName
+        * * Display Name: Feature Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the feature, matching DataFeatureOutput.Name.`),
+    ValueText: z.string().nullable().describe(`
+        * * Field Name: ValueText
+        * * Display Name: Value (Text)
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Computed value as text, for text and categorical features.`),
+    ValueNumeric: z.number().nullable().describe(`
+        * * Field Name: ValueNumeric
+        * * Display Name: Value (Numeric)
+        * * SQL Data Type: float(53)
+        * * Description: Computed value as floating-point numeric, for numeric and score features.`),
+    ValueDate: z.date().nullable().describe(`
+        * * Field Name: ValueDate
+        * * Display Name: Value (Date)
+        * * SQL Data Type: datetimeoffset
+        * * Description: Computed value as datetimeoffset, for date and timestamp features.`),
+    ValueBoolean: z.boolean().nullable().describe(`
+        * * Field Name: ValueBoolean
+        * * Display Name: Value (Boolean)
+        * * SQL Data Type: bit
+        * * Description: Computed value as boolean bit flag.`),
+    ValueJSON: z.string().nullable().describe(`
+        * * Field Name: ValueJSON
+        * * Display Name: Value (JSON)
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Computed value as raw JSON string, for array or complex object features.`),
+    Reasoning: z.string().nullable().describe(`
+        * * Field Name: Reasoning
+        * * Display Name: Reasoning
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional model reasoning or rationale captured from the prompt execution.`),
+    Confidence: z.number().nullable().describe(`
+        * * Field Name: Confidence
+        * * Display Name: Confidence
+        * * SQL Data Type: float(53)
+        * * Description: Optional confidence score associated with this computed value.`),
+    PromptID: z.string().nullable().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: Reference to the AI Prompt used to compute this feature value.`),
+    PromptVersionHash: z.string().nullable().describe(`
+        * * Field Name: PromptVersionHash
+        * * Display Name: Prompt Version Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 content hash of the rendered prompt template and instructions at execution time.`),
+    ConstraintHash: z.string().nullable().describe(`
+        * * Field Name: ConstraintHash
+        * * Display Name: Constraint Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the value constraint definitions in effect when this feature was computed.`),
+    ProcessRunID: z.string().nullable().describe(`
+        * * Field Name: ProcessRunID
+        * * Display Name: Process Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+        * * Description: Reference to the Process Run during which this feature was computed.`),
+    ProcessRunDetailID: z.string().nullable().describe(`
+        * * Field Name: ProcessRunDetailID
+        * * Display Name: Process Run Detail
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Process Run Details (vwProcessRunDetails.ID)
+        * * Description: Reference to the specific Process Run Detail row for this record execution.`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Soft reference to the AI Prompt Run that computed this value.`),
+    FeatureValueCacheID: z.string().nullable().describe(`
+        * * Field Name: FeatureValueCacheID
+        * * Display Name: Feature Value Cache
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Feature Value Caches (vwFeatureValueCaches.ID)
+        * * Description: Optional reference to the FeatureValueCache entry if this value was served from cache.`),
+    ComputedAt: z.date().describe(`
+        * * Field Name: ComputedAt
+        * * Display Name: Computed At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: Timestamp when this feature value was computed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: Timestamp when this record was created.`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: Timestamp when this record was last updated.`),
+    RecordProcess: z.string().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().nullable().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt
+        * * SQL Data Type: nvarchar(255)`),
+    ProcessRunDetail: z.string().nullable().describe(`
+        * * Field Name: ProcessRunDetail
+        * * Display Name: Process Run Detail
+        * * SQL Data Type: nvarchar(450)`),
+    FeatureValueCache: z.string().nullable().describe(`
+        * * Field Name: FeatureValueCache
+        * * Display Name: Feature Value Cache
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJFeatureValueEntityType = z.infer<typeof MJFeatureValueSchema>;
 
 /**
  * zod schema definition for the entity MJ: File Categories
@@ -25829,6 +26146,12 @@ export const MJQuerySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Author's declared intent that this Query should be materialized. CodeGen scans for IsMaterialized = 1 and, if the query qualifies (§9/§10), materializes it. The authoritative state lives on the linked MJ: Materialized Results row (found via the MaterializedResultQuery join table).`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJQueryEntity_IQueryConfiguration
+        * * Description: Optional JSON configuration bag defining query-level policies and semantic capabilities (shape = IQueryConfiguration). Includes Priority (1-100) for ground-truth ranking in the semantic layer, LogExecution to control query execution logging, AlternativeQuestions for multi-phrasing vector recall, UsageGuidance and WhenNotToUse bounds for AI agents, and DomainScope.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -32437,10 +32760,11 @@ export const MJTestSchema = z.object({
         * * Display Name: Expected Outcomes
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object defining what success looks like. Structure varies by test type (e.g., for Agent Eval: {toolCalls, outputFormat, semanticGoals, dataAssertions})`),
-    Configuration: z.string().nullable().describe(`
+    Configuration: z.any().nullable().describe(`
         * * Field Name: Configuration
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJTestEntity_ITestConfiguration
         * * Description: JSON object for test-specific configuration (e.g., oracles to use, rubrics, retry policies, timeout settings)`),
     Tags: z.string().nullable().describe(`
         * * Field Name: Tags
@@ -34497,6 +34821,102 @@ export const MJViewTypeSchema = z.object({
 export type MJViewTypeEntityType = z.infer<typeof MJViewTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Web Search Providers
+ */
+export const MJWebSearchProviderSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Administrator-facing name for this provider, e.g. "Brave" or "Tavily". Unique, and usable as the Provider value when a caller pins a search to one vendor.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What this provider searches, what it costs, and when it is the right choice.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(500)
+        * * Description: ClassFactory key used with @RegisterClass(BaseWebSearchProvider, DriverClass) to instantiate the driver at runtime, e.g. "BraveWebSearchProvider". A value with no matching registration leaves the provider unavailable and is logged at engine startup.`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Terminated')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Terminated
+        * * Description: Provider lifecycle status: Pending (configured but not yet in use), Active (participates in searches), Terminated (disabled). Only Active providers are loaded. Matches the vocabulary used by SearchProvider.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Failover order: LOWER values are tried FIRST. The engine serves a search from the first available provider in this order, moving on only when one fails transiently. Must be >= 0.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+        * * Description: Optional FK to the Credential record holding this provider's API key. When NULL the driver falls back to its documented environment variable, so a host that has not yet migrated its secrets into the Credential store keeps working.`),
+    ProviderConfig: z.string().nullable().describe(`
+        * * Field Name: ProviderConfig
+        * * Display Name: Provider Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON blob of non-secret, driver-specific settings (endpoint overrides, tier flags, answer model). Schema is defined by each driver; invalid JSON is logged and ignored rather than disabling the provider.`),
+    MaxResultsOverride: z.number().nullable().describe(`
+        * * Field Name: MaxResultsOverride
+        * * Display Name: Max Results Override
+        * * SQL Data Type: int
+        * * Description: Optional per-provider cap on results per request, for pay-per-query vendors. The effective cap is the smallest of the caller's request, this value, and the vendor's own hard limit. NULL means the driver's own limit applies.`),
+    AllowResultCaching: z.boolean().describe(`
+        * * Field Name: AllowResultCaching
+        * * Display Name: Allow Result Caching
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this vendor's terms permit storing returned results. Defaults to 0 (deny), because caching rights differ sharply between vendors and violating them is silent: some sell storage rights as a plan tier, others forbid persistent caching outright. Nothing in the engine caches today; this column exists so the first caching layer reads a per-provider gate instead of inventing one.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: UI display name shown in admin surfaces and result attribution. When NULL, falls back to the Name column.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(200)
+        * * Description: CSS icon class for UI display, e.g. "fa-brands fa-brave". Supports any CSS-based icon library. When NULL a default icon is used.`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form administrator notes, e.g. contract terms, billing owner, or why this provider sits at its priority.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJWebSearchProviderEntityType = z.infer<typeof MJWebSearchProviderSchema>;
+
+/**
  * zod schema definition for the entity MJ: Workspace Items
  */
 export const MJWorkspaceItemSchema = z.object({
@@ -35103,6 +35523,20 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
     }
     set CompactPromptID(value: string | null) {
         this.Set('CompactPromptID', value);
+    }
+
+    /**
+    * * Field Name: DeclareAsNativeTool
+    * * Display Name: Declare As Native Tool
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this Action may be declared as a native tool for this agent (1, default). 0 keeps it out of the tool set on native turns; because the prose catalog is not rendered in native mode, the action is then unavailable on those turns. Use for actions an agent holds but should rarely reach for on its own.
+    */
+    get DeclareAsNativeTool(): boolean {
+        return this.Get('DeclareAsNativeTool');
+    }
+    set DeclareAsNativeTool(value: boolean) {
+        this.Set('DeclareAsNativeTool', value);
     }
 
     /**
@@ -40767,6 +41201,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * FinalPayloadValidationResult: The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
+    * * NativeToolCallCount: The native tool call count must be greater than or equal to zero, if it is specified.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -40775,6 +41210,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateFinalPayloadValidationResultStatus(result);
+        this.ValidateNativeToolCallCountGreaterThanOrEqualToZero(result);
         this.ValidateStepNumberGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
@@ -40798,6 +41234,23 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     				ValidationErrorType.Failure
     			));
     		}
+    	}
+    }
+
+    /**
+    * The native tool call count must be greater than or equal to zero, if it is specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNativeToolCallCountGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.NativeToolCallCount != null && this.NativeToolCallCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"NativeToolCallCount",
+    			"The native tool call count must be 0 or greater.",
+    			this.NativeToolCallCount,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -41166,6 +41619,64 @@ detailed information about what validation rules failed.
         this.Skills = raw;
         this._SkillsObject_cached = value;
         this._SkillsObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: ToolCallingMode
+    * * Display Name: Tool Calling Mode
+    * * SQL Data Type: nvarchar(25)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Envelope
+    *   * Native
+    *   * NativeFallback
+    *   * NativeImplicit
+    * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.
+    */
+    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null {
+        return this.Get('ToolCallingMode');
+    }
+    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null) {
+        this.Set('ToolCallingMode', value);
+    }
+
+    /**
+    * * Field Name: NativeToolCallCount
+    * * Display Name: Native Tool Call Count
+    * * SQL Data Type: int
+    * * Description: How many native tool calls the model made on this step. 0 on a native-mode step where the model chose to answer with the envelope instead; NULL when the step took the envelope path or never reached a model call.
+    */
+    get NativeToolCallCount(): number | null {
+        return this.Get('NativeToolCallCount');
+    }
+    set NativeToolCallCount(value: number | null) {
+        this.Set('NativeToolCallCount', value);
+    }
+
+    /**
+    * * Field Name: NativeDualChannel
+    * * Display Name: Native Dual Channel
+    * * SQL Data Type: bit
+    * * Description: On a native-mode step where the model made tool calls: 1 when the same turn also carried a parseable JSON Loop envelope (the model answered on both channels; the loop dispatched the tool call and discarded the envelope), 0 when the tool calls came alone. NULL when the step made no tool calls or took the envelope path.
+    */
+    get NativeDualChannel(): boolean | null {
+        return this.Get('NativeDualChannel');
+    }
+    set NativeDualChannel(value: boolean | null) {
+        this.Set('NativeDualChannel', value);
+    }
+
+    /**
+    * * Field Name: NativeToolResultsSent
+    * * Display Name: Native Tool Results Sent
+    * * SQL Data Type: bit
+    * * Description: For native tool-calling steps: 1 = the results of this step's tool calls were returned to the model as native tool-result turns, 0 = as the markdown action-results user message. NULL for envelope steps and for rows predating the feature.
+    */
+    get NativeToolResultsSent(): boolean | null {
+        return this.Get('NativeToolResultsSent');
+    }
+    set NativeToolResultsSent(value: boolean | null) {
+        this.Set('NativeToolResultsSent', value);
     }
 
     /**
@@ -46334,6 +46845,20 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: DeclareActionsAsNativeTools
+    * * Display Name: Declare Actions As Native Tools
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When native tool calling is in effect for a run, whether this agent's Actions are declared as native tools (1, default) or withheld so the agent runs on the envelope path with the prose action catalog (0). Set 0 for coordinator agents whose prompt forbids doing work themselves. Controls supply only: capability and preference on the model and prompt still decide whether declared tools are used.
+    */
+    get DeclareActionsAsNativeTools(): boolean {
+        return this.Get('DeclareActionsAsNativeTools');
+    }
+    set DeclareActionsAsNativeTools(value: boolean) {
+        this.Set('DeclareActionsAsNativeTools', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -49773,93 +50298,229 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
 
 
 /**
- * The per-modality model-configuration bag, stored as JSON in the `ModelConfiguration` column of
- * THREE catalog entities — the same type at every level, forming an inherit-with-override cascade
- * resolved base-first (deep-merged per key by `ResolveEffectiveModelConfiguration` in
- * `@memberjunction/ai`):
+ * The AI stack's per-modality configuration bags — ONE source of truth for every layer.
+ *
+ * Two kinds of type live here, and the distinction is the whole point of the file:
+ *
+ * 1. **Shared modality sections** (`MJAIModelTypeEntity_LLMConfigurationSettings`, `MJAIModelTypeEntity_RealtimeConfigurationSettings`,
+ *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    MEANS, defined once and reused by every layer that carries a configuration bag.
+ * 2. **Per-table outer types** (`MJAIModelTypeEntity_IAIModelConfiguration`, `MJAIModelTypeEntity_IAIPromptConfiguration`,
+ *    `MJAIModelTypeEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
+ *    though they compose the same sections.
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
  *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *
+ * MJ: AI Prompts . PromptConfiguration        (per-prompt)
+ *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
  * ```
  *
- * CodeGen emits a strongly-typed `ModelConfigurationObject` accessor on all three generated
- * entities from this definition.
+ * The catalog cascade is resolved base-first with per-key deep merge by
+ * `ResolveEffectiveModelConfiguration` in `@memberjunction/ai`; the prompt cascade is resolved by
+ * the prompt runner, which layers the prompt bags ON TOP of the catalog result.
+ *
+ * **Why one file**: `EntityField.JSONTypeDefinition` stores this text VERBATIM, and CodeGen emits
+ * it inline above each entity class with every top-level name prefixed (`MJAIModelEntity_…`). It
+ * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
+ * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
+ * type in ONE file is what makes a shared section possible at all; the cost is that each of the
+ * five entities emits the full (prefixed) set, including outer types it does not use.
  *
  * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
- * `AIModelConfiguration` in `@memberjunction/ai` (`packages/AI/Core/src/generic/modelConfiguration.ts`),
- * which runtime code compiles against. Keep the two in step when adding a section or property —
- * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
+ * compiles against. Keep the two in step when adding a section or property — the same pact
+ * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
  *
- * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN
- * (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag);
- * anything a driver consumes at session/call time belongs HERE. New capability knobs go in this
- * bag — do not add a new capability column per knob.
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
+ * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
+ * or runner consumes at call time belongs HERE. New capability knobs go in the bag — do not add a
+ * capability column per knob. A knob graduates to a real column when it needs a foreign key or
+ * becomes a first-class thing the platform reasons about.
+ */
+
+// =============================================================================
+// Shared modality sections — defined once, composed by every outer type below
+// =============================================================================
+
+/**
+ * Text-generation knobs, consumed by the LLM drivers and the prompt runner at call time.
+ *
+ * Every flag is TRI-STATE (`boolean | null | absent`) and the three differ: the cascade REPLACES on
+ * any explicit value (including `null`) and only skips a layer that OMITS the property. So absent
+ * means "inherit", while an explicit value at a higher layer overrides a lower one even when false.
+ *
+ * Properties are marked with the layers that HONOR them. A property set at a layer that does not
+ * honor it is inert, not an error — that tolerance is deliberate, so a knob can move between layers
+ * without a schema change.
+ */
+export interface MJAIModelTypeEntity_LLMConfigurationSettings {
+    /**
+     * **Catalog layers only** (model type / model / model vendor). Whether this model — or this
+     * vendor's serving of it — supports native tool/function calling.
+     *
+     * CAPABILITY flag, and a hard gate: no policy or preference at any layer can force tools onto a
+     * (model, vendor) whose resolved value is not true. Set `false` only for a model or serving path
+     * verified NOT to support tools; leave absent when support is unknown, because absent is the
+     * honest value and it inherits.
+     */
+    SupportsNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether prompts run against this model default to native tool calling
+     * when they express no preference of their own. POLICY flag — subordinate to
+     * {@link MJAIModelTypeEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    DefaultToNativeToolCalling?: boolean | null;
+
+    /**
+     * **Prompt layers only** (prompt / prompt model). Whether THIS prompt asks for native tool
+     * calling. PREFERENCE — it outranks the catalog's `DefaultToNativeToolCalling`, and is still
+     * subordinate to the capability gate. Absent means "no preference; fall through to the model's
+     * default".
+     */
+    UseNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How control flow is expressed when a request resolves to native tool
+     * calling. `'envelope'` (the default when absent) is the hybrid: Actions are tools, everything
+     * else — completion, chat, delegation, payload changes — is the JSON envelope. `'implicit'` is the
+     * implicit protocol: sub-agents, `payload_change_request` and `ask_user` are tools too, a tool call
+     * continues the loop, and plain text with no call ends the turn as task completion. Consulted only
+     * when the gate resolves native; subordinate to {@link MJAIModelTypeEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    NativeControlFlow?: 'envelope' | 'implicit' | null;
+
+    /**
+     * **Catalog layers only.** Whether action results are returned to the model as native tool-result
+     * turns instead of a markdown "Action results" user message. Absent means `false`. Consulted
+     * only when the gate resolves native.
+     */
+    NativeToolResults?: boolean | null;
+}
+
+/**
+ * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
+ * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
+ * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
+ * default — a wrong inherited value degrades safely, it never rejects a session.
+ */
+export interface MJAIModelTypeEntity_RealtimeTurnDetectionSettings {
+    /**
+     * - `'default'` — let the provider profile decide (today's behavior).
+     * - `'serverVad'` — classic silence-based server VAD.
+     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+     *   to; the forward slot for full-duplex reasoning voice models.
+     */
+    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    Eagerness?: 'low' | 'auto' | 'high' | null;
+    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    Threshold?: number | null;
+    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    SilenceDurationMs?: number | null;
+}
+
+/**
+ * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
+ * `'local'`.
+ */
+export interface MJAIModelTypeEntity_RealtimeReasoningSettings {
+    /**
+     * Which plane handles reasoning:
+     * - `'local'` — application/agent loop (default).
+     * - `'remote'` — delegated to remote model or hosted agent.
+     */
+    Plane?: 'local' | 'remote' | null;
+    /** Remote reasoning target configuration. */
+    Remote?: {
+        Kind?: 'model' | 'hostedAgent' | null;
+        Ref?: string | null;
+        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+        MaxOutputTokens?: number | null;
+    } | null;
+}
+
+/** Realtime (speech-to-speech) knobs. */
+export interface MJAIModelTypeEntity_RealtimeConfigurationSettings {
+    /**
+     * Catalog-level turn-detection default for this model. Folded into the realtime session Config
+     * bag as the `turnDetection` key BELOW the agent/app config cascade
+     * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+     * default, agents/apps/callers refine it.
+     */
+    TurnDetection?: MJAIModelTypeEntity_RealtimeTurnDetectionSettings | null;
+
+    /**
+     * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
+     */
+    Reasoning?: MJAIModelTypeEntity_RealtimeReasoningSettings | null;
+}
+
+/** Vision knobs. Reserved — no consumers yet. */
+export interface MJAIModelTypeEntity_VisionConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
+export interface MJAIModelTypeEntity_AudioConfigurationSettings {
+    [key: string]: unknown;
+}
+
+// =============================================================================
+// Per-table outer types — one per JSONType, composing the sections above
+// =============================================================================
+
+/**
+ * The `ModelConfiguration` column on the three MODEL-CATALOG entities (`MJ: AI Model Types`,
+ * `MJ: AI Models`, `MJ: AI Model Vendors`), which form an inherit-with-override cascade. Sections
+ * are per-modality so one catalog row can configure everything its model does.
  */
 export interface MJAIModelTypeEntity_IAIModelConfiguration {
-    /**
-     * Text-generation knobs. Reserved — no consumers yet. Candidate contents: per-model
-     * effort-level defaults, response-format quirks, tool-calling behavior flags. Existing
-     * capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating here —
-     * new knobs only.
-     */
-    LLM?: Record<string, unknown> | null;
-
-    /** Realtime (speech-to-speech) knobs — the first live section. */
-    Realtime?: {
-        /**
-         * Catalog-level turn-detection default for this model. Folded into the realtime session
-         * Config bag as the `turnDetection` key BELOW the agent/app config cascade
-         * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
-         * default, agents/apps/callers refine it. Provider profiles translate the normalized
-         * vocabulary to their native wire block; an unsupported Mode is diag-logged and falls back
-         * to the profile default (never rejects a session).
-         */
-        TurnDetection?: {
-            /**
-             * - 'default' — let the provider profile decide (today's behavior).
-             * - 'serverVad' — classic silence-based server VAD.
-             * - 'semanticVad' — semantic end-of-utterance detection (OpenAI `semantic_vad`).
-             * - 'native' — this model's smartest documented turn/duplex mode, whatever the profile
-             *   maps it to; the forward slot for full-duplex reasoning voice models (e.g. the
-             *   Grok Voice Think Fast family).
-             */
-            Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
-            /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
-            Eagerness?: 'low' | 'auto' | 'high' | null;
-            /** Server-VAD activation threshold (0–1); ignored without a mapping. */
-            Threshold?: number | null;
-            /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
-            SilenceDurationMs?: number | null;
-        } | null;
-
-        /**
-         * Reasoning plane settings — dual delegation configuration.
-         * Absent defaults to 'local'.
-         */
-        Reasoning?: {
-            /**
-             * Which plane handles reasoning:
-             * - 'local' — application/agent loop (default).
-             * - 'remote' — delegated to remote model or hosted agent.
-             */
-            Plane?: 'local' | 'remote' | null;
-            /** Remote reasoning target configuration. */
-            Remote?: {
-                Kind?: 'model' | 'hostedAgent' | null;
-                Ref?: string | null;
-                Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
-                MaxOutputTokens?: number | null;
-            } | null;
-        } | null;
-    } | null;
-
+    /** Text-generation knobs. Honors the catalog-layer properties. */
+    LLM?: MJAIModelTypeEntity_LLMConfigurationSettings | null;
+    /** Realtime (speech-to-speech) knobs. */
+    Realtime?: MJAIModelTypeEntity_RealtimeConfigurationSettings | null;
     /** Vision knobs. Reserved. */
-    Vision?: Record<string, unknown> | null;
-
+    Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
-    Audio?: Record<string, unknown> | null;
+    Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompts` — per-prompt call-time knobs, layered ON TOP of the
+ * resolved model-catalog configuration by the prompt runner.
+ *
+ * The same anti-widening argument that produced `ModelConfiguration` applies here with more force:
+ * `AIPrompt` already carries fifty-odd columns. New per-prompt call-time knobs land here.
+ */
+export interface MJAIModelTypeEntity_IAIPromptConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIModelTypeEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIModelTypeEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompt Models` — the most specific layer, overriding both
+ * the prompt's own bag and the model catalog for this one (prompt, model) pairing.
+ */
+export interface MJAIModelTypeEntity_IAIPromptModelConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIModelTypeEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIModelTypeEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
 }
 
 /**
@@ -50060,93 +50721,229 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
 
 
 /**
- * The per-modality model-configuration bag, stored as JSON in the `ModelConfiguration` column of
- * THREE catalog entities — the same type at every level, forming an inherit-with-override cascade
- * resolved base-first (deep-merged per key by `ResolveEffectiveModelConfiguration` in
- * `@memberjunction/ai`):
+ * The AI stack's per-modality configuration bags — ONE source of truth for every layer.
+ *
+ * Two kinds of type live here, and the distinction is the whole point of the file:
+ *
+ * 1. **Shared modality sections** (`MJAIModelVendorEntity_LLMConfigurationSettings`, `MJAIModelVendorEntity_RealtimeConfigurationSettings`,
+ *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    MEANS, defined once and reused by every layer that carries a configuration bag.
+ * 2. **Per-table outer types** (`MJAIModelVendorEntity_IAIModelConfiguration`, `MJAIModelVendorEntity_IAIPromptConfiguration`,
+ *    `MJAIModelVendorEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
+ *    though they compose the same sections.
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
  *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *
+ * MJ: AI Prompts . PromptConfiguration        (per-prompt)
+ *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
  * ```
  *
- * CodeGen emits a strongly-typed `ModelConfigurationObject` accessor on all three generated
- * entities from this definition.
+ * The catalog cascade is resolved base-first with per-key deep merge by
+ * `ResolveEffectiveModelConfiguration` in `@memberjunction/ai`; the prompt cascade is resolved by
+ * the prompt runner, which layers the prompt bags ON TOP of the catalog result.
+ *
+ * **Why one file**: `EntityField.JSONTypeDefinition` stores this text VERBATIM, and CodeGen emits
+ * it inline above each entity class with every top-level name prefixed (`MJAIModelEntity_…`). It
+ * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
+ * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
+ * type in ONE file is what makes a shared section possible at all; the cost is that each of the
+ * five entities emits the full (prefixed) set, including outer types it does not use.
  *
  * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
- * `AIModelConfiguration` in `@memberjunction/ai` (`packages/AI/Core/src/generic/modelConfiguration.ts`),
- * which runtime code compiles against. Keep the two in step when adding a section or property —
- * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
+ * compiles against. Keep the two in step when adding a section or property — the same pact
+ * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
  *
- * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN
- * (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag);
- * anything a driver consumes at session/call time belongs HERE. New capability knobs go in this
- * bag — do not add a new capability column per knob.
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
+ * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
+ * or runner consumes at call time belongs HERE. New capability knobs go in the bag — do not add a
+ * capability column per knob. A knob graduates to a real column when it needs a foreign key or
+ * becomes a first-class thing the platform reasons about.
+ */
+
+// =============================================================================
+// Shared modality sections — defined once, composed by every outer type below
+// =============================================================================
+
+/**
+ * Text-generation knobs, consumed by the LLM drivers and the prompt runner at call time.
+ *
+ * Every flag is TRI-STATE (`boolean | null | absent`) and the three differ: the cascade REPLACES on
+ * any explicit value (including `null`) and only skips a layer that OMITS the property. So absent
+ * means "inherit", while an explicit value at a higher layer overrides a lower one even when false.
+ *
+ * Properties are marked with the layers that HONOR them. A property set at a layer that does not
+ * honor it is inert, not an error — that tolerance is deliberate, so a knob can move between layers
+ * without a schema change.
+ */
+export interface MJAIModelVendorEntity_LLMConfigurationSettings {
+    /**
+     * **Catalog layers only** (model type / model / model vendor). Whether this model — or this
+     * vendor's serving of it — supports native tool/function calling.
+     *
+     * CAPABILITY flag, and a hard gate: no policy or preference at any layer can force tools onto a
+     * (model, vendor) whose resolved value is not true. Set `false` only for a model or serving path
+     * verified NOT to support tools; leave absent when support is unknown, because absent is the
+     * honest value and it inherits.
+     */
+    SupportsNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether prompts run against this model default to native tool calling
+     * when they express no preference of their own. POLICY flag — subordinate to
+     * {@link MJAIModelVendorEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    DefaultToNativeToolCalling?: boolean | null;
+
+    /**
+     * **Prompt layers only** (prompt / prompt model). Whether THIS prompt asks for native tool
+     * calling. PREFERENCE — it outranks the catalog's `DefaultToNativeToolCalling`, and is still
+     * subordinate to the capability gate. Absent means "no preference; fall through to the model's
+     * default".
+     */
+    UseNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How control flow is expressed when a request resolves to native tool
+     * calling. `'envelope'` (the default when absent) is the hybrid: Actions are tools, everything
+     * else — completion, chat, delegation, payload changes — is the JSON envelope. `'implicit'` is the
+     * implicit protocol: sub-agents, `payload_change_request` and `ask_user` are tools too, a tool call
+     * continues the loop, and plain text with no call ends the turn as task completion. Consulted only
+     * when the gate resolves native; subordinate to {@link MJAIModelVendorEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    NativeControlFlow?: 'envelope' | 'implicit' | null;
+
+    /**
+     * **Catalog layers only.** Whether action results are returned to the model as native tool-result
+     * turns instead of a markdown "Action results" user message. Absent means `false`. Consulted
+     * only when the gate resolves native.
+     */
+    NativeToolResults?: boolean | null;
+}
+
+/**
+ * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
+ * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
+ * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
+ * default — a wrong inherited value degrades safely, it never rejects a session.
+ */
+export interface MJAIModelVendorEntity_RealtimeTurnDetectionSettings {
+    /**
+     * - `'default'` — let the provider profile decide (today's behavior).
+     * - `'serverVad'` — classic silence-based server VAD.
+     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+     *   to; the forward slot for full-duplex reasoning voice models.
+     */
+    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    Eagerness?: 'low' | 'auto' | 'high' | null;
+    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    Threshold?: number | null;
+    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    SilenceDurationMs?: number | null;
+}
+
+/**
+ * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
+ * `'local'`.
+ */
+export interface MJAIModelVendorEntity_RealtimeReasoningSettings {
+    /**
+     * Which plane handles reasoning:
+     * - `'local'` — application/agent loop (default).
+     * - `'remote'` — delegated to remote model or hosted agent.
+     */
+    Plane?: 'local' | 'remote' | null;
+    /** Remote reasoning target configuration. */
+    Remote?: {
+        Kind?: 'model' | 'hostedAgent' | null;
+        Ref?: string | null;
+        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+        MaxOutputTokens?: number | null;
+    } | null;
+}
+
+/** Realtime (speech-to-speech) knobs. */
+export interface MJAIModelVendorEntity_RealtimeConfigurationSettings {
+    /**
+     * Catalog-level turn-detection default for this model. Folded into the realtime session Config
+     * bag as the `turnDetection` key BELOW the agent/app config cascade
+     * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+     * default, agents/apps/callers refine it.
+     */
+    TurnDetection?: MJAIModelVendorEntity_RealtimeTurnDetectionSettings | null;
+
+    /**
+     * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
+     */
+    Reasoning?: MJAIModelVendorEntity_RealtimeReasoningSettings | null;
+}
+
+/** Vision knobs. Reserved — no consumers yet. */
+export interface MJAIModelVendorEntity_VisionConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
+export interface MJAIModelVendorEntity_AudioConfigurationSettings {
+    [key: string]: unknown;
+}
+
+// =============================================================================
+// Per-table outer types — one per JSONType, composing the sections above
+// =============================================================================
+
+/**
+ * The `ModelConfiguration` column on the three MODEL-CATALOG entities (`MJ: AI Model Types`,
+ * `MJ: AI Models`, `MJ: AI Model Vendors`), which form an inherit-with-override cascade. Sections
+ * are per-modality so one catalog row can configure everything its model does.
  */
 export interface MJAIModelVendorEntity_IAIModelConfiguration {
-    /**
-     * Text-generation knobs. Reserved — no consumers yet. Candidate contents: per-model
-     * effort-level defaults, response-format quirks, tool-calling behavior flags. Existing
-     * capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating here —
-     * new knobs only.
-     */
-    LLM?: Record<string, unknown> | null;
-
-    /** Realtime (speech-to-speech) knobs — the first live section. */
-    Realtime?: {
-        /**
-         * Catalog-level turn-detection default for this model. Folded into the realtime session
-         * Config bag as the `turnDetection` key BELOW the agent/app config cascade
-         * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
-         * default, agents/apps/callers refine it. Provider profiles translate the normalized
-         * vocabulary to their native wire block; an unsupported Mode is diag-logged and falls back
-         * to the profile default (never rejects a session).
-         */
-        TurnDetection?: {
-            /**
-             * - 'default' — let the provider profile decide (today's behavior).
-             * - 'serverVad' — classic silence-based server VAD.
-             * - 'semanticVad' — semantic end-of-utterance detection (OpenAI `semantic_vad`).
-             * - 'native' — this model's smartest documented turn/duplex mode, whatever the profile
-             *   maps it to; the forward slot for full-duplex reasoning voice models (e.g. the
-             *   Grok Voice Think Fast family).
-             */
-            Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
-            /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
-            Eagerness?: 'low' | 'auto' | 'high' | null;
-            /** Server-VAD activation threshold (0–1); ignored without a mapping. */
-            Threshold?: number | null;
-            /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
-            SilenceDurationMs?: number | null;
-        } | null;
-
-        /**
-         * Reasoning plane settings — dual delegation configuration.
-         * Absent defaults to 'local'.
-         */
-        Reasoning?: {
-            /**
-             * Which plane handles reasoning:
-             * - 'local' — application/agent loop (default).
-             * - 'remote' — delegated to remote model or hosted agent.
-             */
-            Plane?: 'local' | 'remote' | null;
-            /** Remote reasoning target configuration. */
-            Remote?: {
-                Kind?: 'model' | 'hostedAgent' | null;
-                Ref?: string | null;
-                Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
-                MaxOutputTokens?: number | null;
-            } | null;
-        } | null;
-    } | null;
-
+    /** Text-generation knobs. Honors the catalog-layer properties. */
+    LLM?: MJAIModelVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime (speech-to-speech) knobs. */
+    Realtime?: MJAIModelVendorEntity_RealtimeConfigurationSettings | null;
     /** Vision knobs. Reserved. */
-    Vision?: Record<string, unknown> | null;
-
+    Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
-    Audio?: Record<string, unknown> | null;
+    Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompts` — per-prompt call-time knobs, layered ON TOP of the
+ * resolved model-catalog configuration by the prompt runner.
+ *
+ * The same anti-widening argument that produced `ModelConfiguration` applies here with more force:
+ * `AIPrompt` already carries fifty-odd columns. New per-prompt call-time knobs land here.
+ */
+export interface MJAIModelVendorEntity_IAIPromptConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIModelVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIModelVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompt Models` — the most specific layer, overriding both
+ * the prompt's own bag and the model catalog for this one (prompt, model) pairing.
+ */
+export interface MJAIModelVendorEntity_IAIPromptModelConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIModelVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIModelVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
 }
 
 /**
@@ -50539,93 +51336,229 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
 
 /**
- * The per-modality model-configuration bag, stored as JSON in the `ModelConfiguration` column of
- * THREE catalog entities — the same type at every level, forming an inherit-with-override cascade
- * resolved base-first (deep-merged per key by `ResolveEffectiveModelConfiguration` in
- * `@memberjunction/ai`):
+ * The AI stack's per-modality configuration bags — ONE source of truth for every layer.
+ *
+ * Two kinds of type live here, and the distinction is the whole point of the file:
+ *
+ * 1. **Shared modality sections** (`MJAIModelEntity_LLMConfigurationSettings`, `MJAIModelEntity_RealtimeConfigurationSettings`,
+ *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    MEANS, defined once and reused by every layer that carries a configuration bag.
+ * 2. **Per-table outer types** (`MJAIModelEntity_IAIModelConfiguration`, `MJAIModelEntity_IAIPromptConfiguration`,
+ *    `MJAIModelEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
+ *    though they compose the same sections.
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
  *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *
+ * MJ: AI Prompts . PromptConfiguration        (per-prompt)
+ *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
  * ```
  *
- * CodeGen emits a strongly-typed `ModelConfigurationObject` accessor on all three generated
- * entities from this definition.
+ * The catalog cascade is resolved base-first with per-key deep merge by
+ * `ResolveEffectiveModelConfiguration` in `@memberjunction/ai`; the prompt cascade is resolved by
+ * the prompt runner, which layers the prompt bags ON TOP of the catalog result.
+ *
+ * **Why one file**: `EntityField.JSONTypeDefinition` stores this text VERBATIM, and CodeGen emits
+ * it inline above each entity class with every top-level name prefixed (`MJAIModelEntity_…`). It
+ * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
+ * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
+ * type in ONE file is what makes a shared section possible at all; the cost is that each of the
+ * five entities emits the full (prefixed) set, including outer types it does not use.
  *
  * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
- * `AIModelConfiguration` in `@memberjunction/ai` (`packages/AI/Core/src/generic/modelConfiguration.ts`),
- * which runtime code compiles against. Keep the two in step when adding a section or property —
- * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
+ * compiles against. Keep the two in step when adding a section or property — the same pact
+ * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
  *
- * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN
- * (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag);
- * anything a driver consumes at session/call time belongs HERE. New capability knobs go in this
- * bag — do not add a new capability column per knob.
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
+ * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
+ * or runner consumes at call time belongs HERE. New capability knobs go in the bag — do not add a
+ * capability column per knob. A knob graduates to a real column when it needs a foreign key or
+ * becomes a first-class thing the platform reasons about.
+ */
+
+// =============================================================================
+// Shared modality sections — defined once, composed by every outer type below
+// =============================================================================
+
+/**
+ * Text-generation knobs, consumed by the LLM drivers and the prompt runner at call time.
+ *
+ * Every flag is TRI-STATE (`boolean | null | absent`) and the three differ: the cascade REPLACES on
+ * any explicit value (including `null`) and only skips a layer that OMITS the property. So absent
+ * means "inherit", while an explicit value at a higher layer overrides a lower one even when false.
+ *
+ * Properties are marked with the layers that HONOR them. A property set at a layer that does not
+ * honor it is inert, not an error — that tolerance is deliberate, so a knob can move between layers
+ * without a schema change.
+ */
+export interface MJAIModelEntity_LLMConfigurationSettings {
+    /**
+     * **Catalog layers only** (model type / model / model vendor). Whether this model — or this
+     * vendor's serving of it — supports native tool/function calling.
+     *
+     * CAPABILITY flag, and a hard gate: no policy or preference at any layer can force tools onto a
+     * (model, vendor) whose resolved value is not true. Set `false` only for a model or serving path
+     * verified NOT to support tools; leave absent when support is unknown, because absent is the
+     * honest value and it inherits.
+     */
+    SupportsNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether prompts run against this model default to native tool calling
+     * when they express no preference of their own. POLICY flag — subordinate to
+     * {@link MJAIModelEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    DefaultToNativeToolCalling?: boolean | null;
+
+    /**
+     * **Prompt layers only** (prompt / prompt model). Whether THIS prompt asks for native tool
+     * calling. PREFERENCE — it outranks the catalog's `DefaultToNativeToolCalling`, and is still
+     * subordinate to the capability gate. Absent means "no preference; fall through to the model's
+     * default".
+     */
+    UseNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How control flow is expressed when a request resolves to native tool
+     * calling. `'envelope'` (the default when absent) is the hybrid: Actions are tools, everything
+     * else — completion, chat, delegation, payload changes — is the JSON envelope. `'implicit'` is the
+     * implicit protocol: sub-agents, `payload_change_request` and `ask_user` are tools too, a tool call
+     * continues the loop, and plain text with no call ends the turn as task completion. Consulted only
+     * when the gate resolves native; subordinate to {@link MJAIModelEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    NativeControlFlow?: 'envelope' | 'implicit' | null;
+
+    /**
+     * **Catalog layers only.** Whether action results are returned to the model as native tool-result
+     * turns instead of a markdown "Action results" user message. Absent means `false`. Consulted
+     * only when the gate resolves native.
+     */
+    NativeToolResults?: boolean | null;
+}
+
+/**
+ * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
+ * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
+ * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
+ * default — a wrong inherited value degrades safely, it never rejects a session.
+ */
+export interface MJAIModelEntity_RealtimeTurnDetectionSettings {
+    /**
+     * - `'default'` — let the provider profile decide (today's behavior).
+     * - `'serverVad'` — classic silence-based server VAD.
+     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+     *   to; the forward slot for full-duplex reasoning voice models.
+     */
+    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    Eagerness?: 'low' | 'auto' | 'high' | null;
+    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    Threshold?: number | null;
+    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    SilenceDurationMs?: number | null;
+}
+
+/**
+ * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
+ * `'local'`.
+ */
+export interface MJAIModelEntity_RealtimeReasoningSettings {
+    /**
+     * Which plane handles reasoning:
+     * - `'local'` — application/agent loop (default).
+     * - `'remote'` — delegated to remote model or hosted agent.
+     */
+    Plane?: 'local' | 'remote' | null;
+    /** Remote reasoning target configuration. */
+    Remote?: {
+        Kind?: 'model' | 'hostedAgent' | null;
+        Ref?: string | null;
+        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+        MaxOutputTokens?: number | null;
+    } | null;
+}
+
+/** Realtime (speech-to-speech) knobs. */
+export interface MJAIModelEntity_RealtimeConfigurationSettings {
+    /**
+     * Catalog-level turn-detection default for this model. Folded into the realtime session Config
+     * bag as the `turnDetection` key BELOW the agent/app config cascade
+     * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+     * default, agents/apps/callers refine it.
+     */
+    TurnDetection?: MJAIModelEntity_RealtimeTurnDetectionSettings | null;
+
+    /**
+     * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
+     */
+    Reasoning?: MJAIModelEntity_RealtimeReasoningSettings | null;
+}
+
+/** Vision knobs. Reserved — no consumers yet. */
+export interface MJAIModelEntity_VisionConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
+export interface MJAIModelEntity_AudioConfigurationSettings {
+    [key: string]: unknown;
+}
+
+// =============================================================================
+// Per-table outer types — one per JSONType, composing the sections above
+// =============================================================================
+
+/**
+ * The `ModelConfiguration` column on the three MODEL-CATALOG entities (`MJ: AI Model Types`,
+ * `MJ: AI Models`, `MJ: AI Model Vendors`), which form an inherit-with-override cascade. Sections
+ * are per-modality so one catalog row can configure everything its model does.
  */
 export interface MJAIModelEntity_IAIModelConfiguration {
-    /**
-     * Text-generation knobs. Reserved — no consumers yet. Candidate contents: per-model
-     * effort-level defaults, response-format quirks, tool-calling behavior flags. Existing
-     * capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating here —
-     * new knobs only.
-     */
-    LLM?: Record<string, unknown> | null;
-
-    /** Realtime (speech-to-speech) knobs — the first live section. */
-    Realtime?: {
-        /**
-         * Catalog-level turn-detection default for this model. Folded into the realtime session
-         * Config bag as the `turnDetection` key BELOW the agent/app config cascade
-         * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
-         * default, agents/apps/callers refine it. Provider profiles translate the normalized
-         * vocabulary to their native wire block; an unsupported Mode is diag-logged and falls back
-         * to the profile default (never rejects a session).
-         */
-        TurnDetection?: {
-            /**
-             * - 'default' — let the provider profile decide (today's behavior).
-             * - 'serverVad' — classic silence-based server VAD.
-             * - 'semanticVad' — semantic end-of-utterance detection (OpenAI `semantic_vad`).
-             * - 'native' — this model's smartest documented turn/duplex mode, whatever the profile
-             *   maps it to; the forward slot for full-duplex reasoning voice models (e.g. the
-             *   Grok Voice Think Fast family).
-             */
-            Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
-            /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
-            Eagerness?: 'low' | 'auto' | 'high' | null;
-            /** Server-VAD activation threshold (0–1); ignored without a mapping. */
-            Threshold?: number | null;
-            /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
-            SilenceDurationMs?: number | null;
-        } | null;
-
-        /**
-         * Reasoning plane settings — dual delegation configuration.
-         * Absent defaults to 'local'.
-         */
-        Reasoning?: {
-            /**
-             * Which plane handles reasoning:
-             * - 'local' — application/agent loop (default).
-             * - 'remote' — delegated to remote model or hosted agent.
-             */
-            Plane?: 'local' | 'remote' | null;
-            /** Remote reasoning target configuration. */
-            Remote?: {
-                Kind?: 'model' | 'hostedAgent' | null;
-                Ref?: string | null;
-                Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
-                MaxOutputTokens?: number | null;
-            } | null;
-        } | null;
-    } | null;
-
+    /** Text-generation knobs. Honors the catalog-layer properties. */
+    LLM?: MJAIModelEntity_LLMConfigurationSettings | null;
+    /** Realtime (speech-to-speech) knobs. */
+    Realtime?: MJAIModelEntity_RealtimeConfigurationSettings | null;
     /** Vision knobs. Reserved. */
-    Vision?: Record<string, unknown> | null;
-
+    Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
-    Audio?: Record<string, unknown> | null;
+    Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompts` — per-prompt call-time knobs, layered ON TOP of the
+ * resolved model-catalog configuration by the prompt runner.
+ *
+ * The same anti-widening argument that produced `ModelConfiguration` applies here with more force:
+ * `AIPrompt` already carries fifty-odd columns. New per-prompt call-time knobs land here.
+ */
+export interface MJAIModelEntity_IAIPromptConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIModelEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIModelEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompt Models` — the most specific layer, overriding both
+ * the prompt's own bag and the model catalog for this one (prompt, model) pairing.
+ */
+export interface MJAIModelEntity_IAIPromptModelConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIModelEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIModelEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
 }
 
 /**
@@ -51722,6 +52655,232 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
 
 
 /**
+ * The AI stack's per-modality configuration bags — ONE source of truth for every layer.
+ *
+ * Two kinds of type live here, and the distinction is the whole point of the file:
+ *
+ * 1. **Shared modality sections** (`MJAIPromptModelEntity_LLMConfigurationSettings`, `MJAIPromptModelEntity_RealtimeConfigurationSettings`,
+ *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    MEANS, defined once and reused by every layer that carries a configuration bag.
+ * 2. **Per-table outer types** (`MJAIPromptModelEntity_IAIModelConfiguration`, `MJAIPromptModelEntity_IAIPromptConfiguration`,
+ *    `MJAIPromptModelEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
+ *    though they compose the same sections.
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *
+ * MJ: AI Prompts . PromptConfiguration        (per-prompt)
+ *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
+ * ```
+ *
+ * The catalog cascade is resolved base-first with per-key deep merge by
+ * `ResolveEffectiveModelConfiguration` in `@memberjunction/ai`; the prompt cascade is resolved by
+ * the prompt runner, which layers the prompt bags ON TOP of the catalog result.
+ *
+ * **Why one file**: `EntityField.JSONTypeDefinition` stores this text VERBATIM, and CodeGen emits
+ * it inline above each entity class with every top-level name prefixed (`MJAIModelEntity_…`). It
+ * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
+ * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
+ * type in ONE file is what makes a shared section possible at all; the cost is that each of the
+ * five entities emits the full (prefixed) set, including outer types it does not use.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
+ * compiles against. Keep the two in step when adding a section or property — the same pact
+ * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
+ * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
+ * or runner consumes at call time belongs HERE. New capability knobs go in the bag — do not add a
+ * capability column per knob. A knob graduates to a real column when it needs a foreign key or
+ * becomes a first-class thing the platform reasons about.
+ */
+
+// =============================================================================
+// Shared modality sections — defined once, composed by every outer type below
+// =============================================================================
+
+/**
+ * Text-generation knobs, consumed by the LLM drivers and the prompt runner at call time.
+ *
+ * Every flag is TRI-STATE (`boolean | null | absent`) and the three differ: the cascade REPLACES on
+ * any explicit value (including `null`) and only skips a layer that OMITS the property. So absent
+ * means "inherit", while an explicit value at a higher layer overrides a lower one even when false.
+ *
+ * Properties are marked with the layers that HONOR them. A property set at a layer that does not
+ * honor it is inert, not an error — that tolerance is deliberate, so a knob can move between layers
+ * without a schema change.
+ */
+export interface MJAIPromptModelEntity_LLMConfigurationSettings {
+    /**
+     * **Catalog layers only** (model type / model / model vendor). Whether this model — or this
+     * vendor's serving of it — supports native tool/function calling.
+     *
+     * CAPABILITY flag, and a hard gate: no policy or preference at any layer can force tools onto a
+     * (model, vendor) whose resolved value is not true. Set `false` only for a model or serving path
+     * verified NOT to support tools; leave absent when support is unknown, because absent is the
+     * honest value and it inherits.
+     */
+    SupportsNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether prompts run against this model default to native tool calling
+     * when they express no preference of their own. POLICY flag — subordinate to
+     * {@link MJAIPromptModelEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    DefaultToNativeToolCalling?: boolean | null;
+
+    /**
+     * **Prompt layers only** (prompt / prompt model). Whether THIS prompt asks for native tool
+     * calling. PREFERENCE — it outranks the catalog's `DefaultToNativeToolCalling`, and is still
+     * subordinate to the capability gate. Absent means "no preference; fall through to the model's
+     * default".
+     */
+    UseNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How control flow is expressed when a request resolves to native tool
+     * calling. `'envelope'` (the default when absent) is the hybrid: Actions are tools, everything
+     * else — completion, chat, delegation, payload changes — is the JSON envelope. `'implicit'` is the
+     * implicit protocol: sub-agents, `payload_change_request` and `ask_user` are tools too, a tool call
+     * continues the loop, and plain text with no call ends the turn as task completion. Consulted only
+     * when the gate resolves native; subordinate to {@link MJAIPromptModelEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    NativeControlFlow?: 'envelope' | 'implicit' | null;
+
+    /**
+     * **Catalog layers only.** Whether action results are returned to the model as native tool-result
+     * turns instead of a markdown "Action results" user message. Absent means `false`. Consulted
+     * only when the gate resolves native.
+     */
+    NativeToolResults?: boolean | null;
+}
+
+/**
+ * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
+ * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
+ * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
+ * default — a wrong inherited value degrades safely, it never rejects a session.
+ */
+export interface MJAIPromptModelEntity_RealtimeTurnDetectionSettings {
+    /**
+     * - `'default'` — let the provider profile decide (today's behavior).
+     * - `'serverVad'` — classic silence-based server VAD.
+     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+     *   to; the forward slot for full-duplex reasoning voice models.
+     */
+    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    Eagerness?: 'low' | 'auto' | 'high' | null;
+    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    Threshold?: number | null;
+    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    SilenceDurationMs?: number | null;
+}
+
+/**
+ * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
+ * `'local'`.
+ */
+export interface MJAIPromptModelEntity_RealtimeReasoningSettings {
+    /**
+     * Which plane handles reasoning:
+     * - `'local'` — application/agent loop (default).
+     * - `'remote'` — delegated to remote model or hosted agent.
+     */
+    Plane?: 'local' | 'remote' | null;
+    /** Remote reasoning target configuration. */
+    Remote?: {
+        Kind?: 'model' | 'hostedAgent' | null;
+        Ref?: string | null;
+        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+        MaxOutputTokens?: number | null;
+    } | null;
+}
+
+/** Realtime (speech-to-speech) knobs. */
+export interface MJAIPromptModelEntity_RealtimeConfigurationSettings {
+    /**
+     * Catalog-level turn-detection default for this model. Folded into the realtime session Config
+     * bag as the `turnDetection` key BELOW the agent/app config cascade
+     * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+     * default, agents/apps/callers refine it.
+     */
+    TurnDetection?: MJAIPromptModelEntity_RealtimeTurnDetectionSettings | null;
+
+    /**
+     * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
+     */
+    Reasoning?: MJAIPromptModelEntity_RealtimeReasoningSettings | null;
+}
+
+/** Vision knobs. Reserved — no consumers yet. */
+export interface MJAIPromptModelEntity_VisionConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
+export interface MJAIPromptModelEntity_AudioConfigurationSettings {
+    [key: string]: unknown;
+}
+
+// =============================================================================
+// Per-table outer types — one per JSONType, composing the sections above
+// =============================================================================
+
+/**
+ * The `ModelConfiguration` column on the three MODEL-CATALOG entities (`MJ: AI Model Types`,
+ * `MJ: AI Models`, `MJ: AI Model Vendors`), which form an inherit-with-override cascade. Sections
+ * are per-modality so one catalog row can configure everything its model does.
+ */
+export interface MJAIPromptModelEntity_IAIModelConfiguration {
+    /** Text-generation knobs. Honors the catalog-layer properties. */
+    LLM?: MJAIPromptModelEntity_LLMConfigurationSettings | null;
+    /** Realtime (speech-to-speech) knobs. */
+    Realtime?: MJAIPromptModelEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompts` — per-prompt call-time knobs, layered ON TOP of the
+ * resolved model-catalog configuration by the prompt runner.
+ *
+ * The same anti-widening argument that produced `ModelConfiguration` applies here with more force:
+ * `AIPrompt` already carries fifty-odd columns. New per-prompt call-time knobs land here.
+ */
+export interface MJAIPromptModelEntity_IAIPromptConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIPromptModelEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIPromptModelEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompt Models` — the most specific layer, overriding both
+ * the prompt's own bag and the model catalog for this one (prompt, model) pairing.
+ */
+export interface MJAIPromptModelEntity_IAIPromptModelConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIPromptModelEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIPromptModelEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+}
+
+/**
  * MJ: AI Prompt Models - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIPromptModel
@@ -52053,6 +53212,41 @@ export class MJAIPromptModelEntity extends BaseEntity<MJAIPromptModelEntityType>
     }
     set EffortLevel(value: number | null) {
         this.Set('EffortLevel', value);
+    }
+
+    /**
+    * * Field Name: PromptConfiguration
+    * * Display Name: Prompt Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIPromptModelEntity_IAIPromptModelConfiguration
+    * * Description: Most-specific layer of the prompt configuration bag (JSON, IAIPromptModelConfiguration shape) — configuration for THIS prompt on THIS model. Deep-merges per key over the AIPrompt layer, which in turn sits above the model-catalog ModelConfiguration cascade. NULL = inherit the merged configuration unchanged.
+    */
+    get PromptConfiguration(): string | null {
+        return this.Get('PromptConfiguration');
+    }
+    set PromptConfiguration(value: string | null) {
+        this.Set('PromptConfiguration', value);
+    }
+
+    private _PromptConfigurationObject_cached: MJAIPromptModelEntity_IAIPromptModelConfiguration | null | undefined = undefined;
+    private _PromptConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for PromptConfiguration — returns parsed JSON as MJAIPromptModelEntity_IAIPromptModelConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get PromptConfigurationObject(): MJAIPromptModelEntity_IAIPromptModelConfiguration | null {
+        const raw = this.PromptConfiguration;
+        if (raw !== this._PromptConfigurationObject_lastRaw) {
+            this._PromptConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._PromptConfigurationObject_lastRaw = raw;
+        }
+        return this._PromptConfigurationObject_cached!;
+    }
+    set PromptConfigurationObject(value: MJAIPromptModelEntity_IAIPromptModelConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.PromptConfiguration = raw;
+        this._PromptConfigurationObject_cached = value;
+        this._PromptConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -53736,6 +54930,25 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: ToolCallingMode
+    * * Display Name: Tool Calling Mode
+    * * SQL Data Type: nvarchar(25)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Envelope
+    *   * Native
+    *   * NativeFallback
+    *   * NativeImplicit
+    * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.
+    */
+    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null {
+        return this.Get('ToolCallingMode');
+    }
+    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null) {
+        this.Set('ToolCallingMode', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -53978,6 +55191,232 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
     }
 }
 
+
+/**
+ * The AI stack's per-modality configuration bags — ONE source of truth for every layer.
+ *
+ * Two kinds of type live here, and the distinction is the whole point of the file:
+ *
+ * 1. **Shared modality sections** (`MJAIPromptEntity_LLMConfigurationSettings`, `MJAIPromptEntity_RealtimeConfigurationSettings`,
+ *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    MEANS, defined once and reused by every layer that carries a configuration bag.
+ * 2. **Per-table outer types** (`MJAIPromptEntity_IAIModelConfiguration`, `MJAIPromptEntity_IAIPromptConfiguration`,
+ *    `MJAIPromptEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
+ *    though they compose the same sections.
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *
+ * MJ: AI Prompts . PromptConfiguration        (per-prompt)
+ *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
+ * ```
+ *
+ * The catalog cascade is resolved base-first with per-key deep merge by
+ * `ResolveEffectiveModelConfiguration` in `@memberjunction/ai`; the prompt cascade is resolved by
+ * the prompt runner, which layers the prompt bags ON TOP of the catalog result.
+ *
+ * **Why one file**: `EntityField.JSONTypeDefinition` stores this text VERBATIM, and CodeGen emits
+ * it inline above each entity class with every top-level name prefixed (`MJAIModelEntity_…`). It
+ * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
+ * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
+ * type in ONE file is what makes a shared section possible at all; the cost is that each of the
+ * five entities emits the full (prefixed) set, including outer types it does not use.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
+ * compiles against. Keep the two in step when adding a section or property — the same pact
+ * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
+ * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
+ * or runner consumes at call time belongs HERE. New capability knobs go in the bag — do not add a
+ * capability column per knob. A knob graduates to a real column when it needs a foreign key or
+ * becomes a first-class thing the platform reasons about.
+ */
+
+// =============================================================================
+// Shared modality sections — defined once, composed by every outer type below
+// =============================================================================
+
+/**
+ * Text-generation knobs, consumed by the LLM drivers and the prompt runner at call time.
+ *
+ * Every flag is TRI-STATE (`boolean | null | absent`) and the three differ: the cascade REPLACES on
+ * any explicit value (including `null`) and only skips a layer that OMITS the property. So absent
+ * means "inherit", while an explicit value at a higher layer overrides a lower one even when false.
+ *
+ * Properties are marked with the layers that HONOR them. A property set at a layer that does not
+ * honor it is inert, not an error — that tolerance is deliberate, so a knob can move between layers
+ * without a schema change.
+ */
+export interface MJAIPromptEntity_LLMConfigurationSettings {
+    /**
+     * **Catalog layers only** (model type / model / model vendor). Whether this model — or this
+     * vendor's serving of it — supports native tool/function calling.
+     *
+     * CAPABILITY flag, and a hard gate: no policy or preference at any layer can force tools onto a
+     * (model, vendor) whose resolved value is not true. Set `false` only for a model or serving path
+     * verified NOT to support tools; leave absent when support is unknown, because absent is the
+     * honest value and it inherits.
+     */
+    SupportsNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether prompts run against this model default to native tool calling
+     * when they express no preference of their own. POLICY flag — subordinate to
+     * {@link MJAIPromptEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    DefaultToNativeToolCalling?: boolean | null;
+
+    /**
+     * **Prompt layers only** (prompt / prompt model). Whether THIS prompt asks for native tool
+     * calling. PREFERENCE — it outranks the catalog's `DefaultToNativeToolCalling`, and is still
+     * subordinate to the capability gate. Absent means "no preference; fall through to the model's
+     * default".
+     */
+    UseNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How control flow is expressed when a request resolves to native tool
+     * calling. `'envelope'` (the default when absent) is the hybrid: Actions are tools, everything
+     * else — completion, chat, delegation, payload changes — is the JSON envelope. `'implicit'` is the
+     * implicit protocol: sub-agents, `payload_change_request` and `ask_user` are tools too, a tool call
+     * continues the loop, and plain text with no call ends the turn as task completion. Consulted only
+     * when the gate resolves native; subordinate to {@link MJAIPromptEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    NativeControlFlow?: 'envelope' | 'implicit' | null;
+
+    /**
+     * **Catalog layers only.** Whether action results are returned to the model as native tool-result
+     * turns instead of a markdown "Action results" user message. Absent means `false`. Consulted
+     * only when the gate resolves native.
+     */
+    NativeToolResults?: boolean | null;
+}
+
+/**
+ * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
+ * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
+ * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
+ * default — a wrong inherited value degrades safely, it never rejects a session.
+ */
+export interface MJAIPromptEntity_RealtimeTurnDetectionSettings {
+    /**
+     * - `'default'` — let the provider profile decide (today's behavior).
+     * - `'serverVad'` — classic silence-based server VAD.
+     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+     *   to; the forward slot for full-duplex reasoning voice models.
+     */
+    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    Eagerness?: 'low' | 'auto' | 'high' | null;
+    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    Threshold?: number | null;
+    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    SilenceDurationMs?: number | null;
+}
+
+/**
+ * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
+ * `'local'`.
+ */
+export interface MJAIPromptEntity_RealtimeReasoningSettings {
+    /**
+     * Which plane handles reasoning:
+     * - `'local'` — application/agent loop (default).
+     * - `'remote'` — delegated to remote model or hosted agent.
+     */
+    Plane?: 'local' | 'remote' | null;
+    /** Remote reasoning target configuration. */
+    Remote?: {
+        Kind?: 'model' | 'hostedAgent' | null;
+        Ref?: string | null;
+        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+        MaxOutputTokens?: number | null;
+    } | null;
+}
+
+/** Realtime (speech-to-speech) knobs. */
+export interface MJAIPromptEntity_RealtimeConfigurationSettings {
+    /**
+     * Catalog-level turn-detection default for this model. Folded into the realtime session Config
+     * bag as the `turnDetection` key BELOW the agent/app config cascade
+     * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+     * default, agents/apps/callers refine it.
+     */
+    TurnDetection?: MJAIPromptEntity_RealtimeTurnDetectionSettings | null;
+
+    /**
+     * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
+     */
+    Reasoning?: MJAIPromptEntity_RealtimeReasoningSettings | null;
+}
+
+/** Vision knobs. Reserved — no consumers yet. */
+export interface MJAIPromptEntity_VisionConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
+export interface MJAIPromptEntity_AudioConfigurationSettings {
+    [key: string]: unknown;
+}
+
+// =============================================================================
+// Per-table outer types — one per JSONType, composing the sections above
+// =============================================================================
+
+/**
+ * The `ModelConfiguration` column on the three MODEL-CATALOG entities (`MJ: AI Model Types`,
+ * `MJ: AI Models`, `MJ: AI Model Vendors`), which form an inherit-with-override cascade. Sections
+ * are per-modality so one catalog row can configure everything its model does.
+ */
+export interface MJAIPromptEntity_IAIModelConfiguration {
+    /** Text-generation knobs. Honors the catalog-layer properties. */
+    LLM?: MJAIPromptEntity_LLMConfigurationSettings | null;
+    /** Realtime (speech-to-speech) knobs. */
+    Realtime?: MJAIPromptEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompts` — per-prompt call-time knobs, layered ON TOP of the
+ * resolved model-catalog configuration by the prompt runner.
+ *
+ * The same anti-widening argument that produced `ModelConfiguration` applies here with more force:
+ * `AIPrompt` already carries fifty-odd columns. New per-prompt call-time knobs land here.
+ */
+export interface MJAIPromptEntity_IAIPromptConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIPromptEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIPromptEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompt Models` — the most specific layer, overriding both
+ * the prompt's own bag and the model catalog for this one (prompt, model) pairing.
+ */
+export interface MJAIPromptEntity_IAIPromptModelConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIPromptEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIPromptEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+}
 
 /**
  * MJ: AI Prompts - strongly typed entity sub-class
@@ -55010,6 +56449,41 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
     set RequireSpecificModels(value: boolean) {
         this.Set('RequireSpecificModels', value);
+    }
+
+    /**
+    * * Field Name: PromptConfiguration
+    * * Display Name: Prompt Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIPromptEntity_IAIPromptConfiguration
+    * * Description: Per-prompt call-time configuration bag (JSON, IAIPromptConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the prompt Configuration cascade — AIPromptModel rows inherit from it per key and may override — and itself layered on top of the resolved AIModel/AIModelVendor ModelConfiguration. NULL = contributes nothing.
+    */
+    get PromptConfiguration(): string | null {
+        return this.Get('PromptConfiguration');
+    }
+    set PromptConfiguration(value: string | null) {
+        this.Set('PromptConfiguration', value);
+    }
+
+    private _PromptConfigurationObject_cached: MJAIPromptEntity_IAIPromptConfiguration | null | undefined = undefined;
+    private _PromptConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for PromptConfiguration — returns parsed JSON as MJAIPromptEntity_IAIPromptConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get PromptConfigurationObject(): MJAIPromptEntity_IAIPromptConfiguration | null {
+        const raw = this.PromptConfiguration;
+        if (raw !== this._PromptConfigurationObject_lastRaw) {
+            this._PromptConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._PromptConfigurationObject_lastRaw = raw;
+        }
+        return this._PromptConfigurationObject_cached!;
+    }
+    set PromptConfigurationObject(value: MJAIPromptEntity_IAIPromptConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.PromptConfiguration = raw;
+        this._PromptConfigurationObject_cached = value;
+        this._PromptConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -84695,10 +86169,10 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)
     */
-    get VectorDatabaseID(): string {
+    get VectorDatabaseID(): string | null {
         return this.Get('VectorDatabaseID');
     }
-    set VectorDatabaseID(value: string) {
+    set VectorDatabaseID(value: string | null) {
         this.Set('VectorDatabaseID', value);
     }
 
@@ -84738,10 +86212,10 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
-    get AIModelID(): string {
+    get AIModelID(): string | null {
         return this.Get('AIModelID');
     }
-    set AIModelID(value: string) {
+    set AIModelID(value: string | null) {
         this.Set('AIModelID', value);
     }
 
@@ -84935,7 +86409,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Display Name: Vector Database Name
     * * SQL Data Type: nvarchar(100)
     */
-    get VectorDatabase(): string {
+    get VectorDatabase(): string | null {
         return this.Get('VectorDatabase');
     }
 
@@ -84953,7 +86427,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Display Name: AI Model Name
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {
+    get AIModel(): string | null {
         return this.Get('AIModel');
     }
 
@@ -90345,6 +91819,645 @@ export class MJExternalDataSourceEntity extends BaseEntity<MJExternalDataSourceE
     */
     get Credential(): string | null {
         return this.Get('Credential');
+    }
+}
+
+
+/**
+ * MJ: Feature Value Caches - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FeatureValueCache
+ * * Base View: vwFeatureValueCaches
+ * * @description Dedup dictionary table for Feature Pipelines. Caches computed outputs by canonical input key hash, prompt version, and constraint hash. Distinct input strings (e.g. unique job titles) are computed once and reused across all matching records.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Feature Value Caches')
+export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEntityType> {
+    /**
+    * Loads the MJ: Feature Value Caches record from the database
+    * @param ID: string - primary key value to load the MJ: Feature Value Caches record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFeatureValueCacheEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this feature value cache entry.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    * * Description: Optional reference to the RecordProcess that produced this cache entry. When NULL, the cached result is scoped by PromptID only and shared across pipelines using the same prompt.
+    */
+    get RecordProcessID(): string | null {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string | null) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: Reference to the AI Prompt used to compute this cached entry.
+    */
+    get PromptID(): string {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: PromptVersionHash
+    * * Display Name: Prompt Version Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 content hash of the rendered prompt template, output schema, and constraint instructions at execution time.
+    */
+    get PromptVersionHash(): string {
+        return this.Get('PromptVersionHash');
+    }
+    set PromptVersionHash(value: string) {
+        this.Set('PromptVersionHash', value);
+    }
+
+    /**
+    * * Field Name: ConstraintHash
+    * * Display Name: Constraint Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the output value constraint definitions. Changes to allowed enum values or ranges invalidate cached results.
+    */
+    get ConstraintHash(): string {
+        return this.Get('ConstraintHash');
+    }
+    set ConstraintHash(value: string) {
+        this.Set('ConstraintHash', value);
+    }
+
+    /**
+    * * Field Name: KeyHash
+    * * Display Name: Key Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash over the canonicalized JSON key field values. The primary lookup key.
+    */
+    get KeyHash(): string {
+        return this.Get('KeyHash');
+    }
+    set KeyHash(value: string) {
+        this.Set('KeyHash', value);
+    }
+
+    /**
+    * * Field Name: KeyDisplay
+    * * Display Name: Key Display
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Human-readable plain text display of the key (e.g. "Senior Director, Field Marketing"). Makes this table legible as reference data.
+    */
+    get KeyDisplay(): string | null {
+        return this.Get('KeyDisplay');
+    }
+    set KeyDisplay(value: string | null) {
+        this.Set('KeyDisplay', value);
+    }
+
+    /**
+    * * Field Name: KeyJSON
+    * * Display Name: Key JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Full JSON representation of the input key fields and their values.
+    */
+    get KeyJSON(): string {
+        return this.Get('KeyJSON');
+    }
+    set KeyJSON(value: string) {
+        this.Set('KeyJSON', value);
+    }
+
+    /**
+    * * Field Name: OutputsJSON
+    * * Display Name: Outputs JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Cached computed outputs JSON fragment. Stored directly so archival of AI Prompt Runs does not lose cached values.
+    */
+    get OutputsJSON(): string {
+        return this.Get('OutputsJSON');
+    }
+    set OutputsJSON(value: string) {
+        this.Set('OutputsJSON', value);
+    }
+
+    /**
+    * * Field Name: Reasoning
+    * * Display Name: Reasoning
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional model reasoning or rationale captured from the prompt execution.
+    */
+    get Reasoning(): string | null {
+        return this.Get('Reasoning');
+    }
+    set Reasoning(value: string | null) {
+        this.Set('Reasoning', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Soft reference to the AI Prompt Run that first computed and populated this cached result.
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: HitCount
+    * * Display Name: Hit Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total number of times this cached result has been served to skip an LLM invocation.
+    */
+    get HitCount(): number {
+        return this.Get('HitCount');
+    }
+    set HitCount(value: number) {
+        this.Set('HitCount', value);
+    }
+
+    /**
+    * * Field Name: LastHitAt
+    * * Display Name: Last Hit At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this cached entry was last read and served.
+    */
+    get LastHitAt(): Date | null {
+        return this.Get('LastHitAt');
+    }
+    set LastHitAt(value: Date | null) {
+        this.Set('LastHitAt', value);
+    }
+
+    /**
+    * * Field Name: ComputedAt
+    * * Display Name: Computed At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this cached entry was originally computed.
+    */
+    get ComputedAt(): Date {
+        return this.Get('ComputedAt');
+    }
+    set ComputedAt(value: Date) {
+        this.Set('ComputedAt', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional expiration timestamp for time-to-live invalidation. NULL means no expiration.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: Timestamp when this record was created.
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: Timestamp when this record was last updated.
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string | null {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string {
+        return this.Get('Prompt');
+    }
+}
+
+
+/**
+ * MJ: Feature Values - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FeatureValue
+ * * Base View: vwFeatureValues
+ * * @description Complete historical audit table for Feature Pipelines. Records every feature value ever computed per entity record, with full provenance, model reasoning, and run back-links.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Feature Values')
+export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
+    /**
+    * Loads the MJ: Feature Values record from the database
+    * @param ID: string - primary key value to load the MJ: Feature Values record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFeatureValueEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this feature value history record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    * * Description: The Record Process (Feature Pipeline) that computed this feature value.
+    */
+    get RecordProcessID(): string {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The entity of the record this feature was computed for.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(900)
+    * * Description: Serialized primary key of the record this feature was computed for. Matches ProcessRunDetail.RecordID.
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: FeatureName
+    * * Display Name: Feature Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the feature, matching DataFeatureOutput.Name.
+    */
+    get FeatureName(): string {
+        return this.Get('FeatureName');
+    }
+    set FeatureName(value: string) {
+        this.Set('FeatureName', value);
+    }
+
+    /**
+    * * Field Name: ValueText
+    * * Display Name: Value (Text)
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Computed value as text, for text and categorical features.
+    */
+    get ValueText(): string | null {
+        return this.Get('ValueText');
+    }
+    set ValueText(value: string | null) {
+        this.Set('ValueText', value);
+    }
+
+    /**
+    * * Field Name: ValueNumeric
+    * * Display Name: Value (Numeric)
+    * * SQL Data Type: float(53)
+    * * Description: Computed value as floating-point numeric, for numeric and score features.
+    */
+    get ValueNumeric(): number | null {
+        return this.Get('ValueNumeric');
+    }
+    set ValueNumeric(value: number | null) {
+        this.Set('ValueNumeric', value);
+    }
+
+    /**
+    * * Field Name: ValueDate
+    * * Display Name: Value (Date)
+    * * SQL Data Type: datetimeoffset
+    * * Description: Computed value as datetimeoffset, for date and timestamp features.
+    */
+    get ValueDate(): Date | null {
+        return this.Get('ValueDate');
+    }
+    set ValueDate(value: Date | null) {
+        this.Set('ValueDate', value);
+    }
+
+    /**
+    * * Field Name: ValueBoolean
+    * * Display Name: Value (Boolean)
+    * * SQL Data Type: bit
+    * * Description: Computed value as boolean bit flag.
+    */
+    get ValueBoolean(): boolean | null {
+        return this.Get('ValueBoolean');
+    }
+    set ValueBoolean(value: boolean | null) {
+        this.Set('ValueBoolean', value);
+    }
+
+    /**
+    * * Field Name: ValueJSON
+    * * Display Name: Value (JSON)
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Computed value as raw JSON string, for array or complex object features.
+    */
+    get ValueJSON(): string | null {
+        return this.Get('ValueJSON');
+    }
+    set ValueJSON(value: string | null) {
+        this.Set('ValueJSON', value);
+    }
+
+    /**
+    * * Field Name: Reasoning
+    * * Display Name: Reasoning
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional model reasoning or rationale captured from the prompt execution.
+    */
+    get Reasoning(): string | null {
+        return this.Get('Reasoning');
+    }
+    set Reasoning(value: string | null) {
+        this.Set('Reasoning', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: float(53)
+    * * Description: Optional confidence score associated with this computed value.
+    */
+    get Confidence(): number | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: number | null) {
+        this.Set('Confidence', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: Reference to the AI Prompt used to compute this feature value.
+    */
+    get PromptID(): string | null {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string | null) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: PromptVersionHash
+    * * Display Name: Prompt Version Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 content hash of the rendered prompt template and instructions at execution time.
+    */
+    get PromptVersionHash(): string | null {
+        return this.Get('PromptVersionHash');
+    }
+    set PromptVersionHash(value: string | null) {
+        this.Set('PromptVersionHash', value);
+    }
+
+    /**
+    * * Field Name: ConstraintHash
+    * * Display Name: Constraint Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the value constraint definitions in effect when this feature was computed.
+    */
+    get ConstraintHash(): string | null {
+        return this.Get('ConstraintHash');
+    }
+    set ConstraintHash(value: string | null) {
+        this.Set('ConstraintHash', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunID
+    * * Display Name: Process Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+    * * Description: Reference to the Process Run during which this feature was computed.
+    */
+    get ProcessRunID(): string | null {
+        return this.Get('ProcessRunID');
+    }
+    set ProcessRunID(value: string | null) {
+        this.Set('ProcessRunID', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunDetailID
+    * * Display Name: Process Run Detail
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Run Details (vwProcessRunDetails.ID)
+    * * Description: Reference to the specific Process Run Detail row for this record execution.
+    */
+    get ProcessRunDetailID(): string | null {
+        return this.Get('ProcessRunDetailID');
+    }
+    set ProcessRunDetailID(value: string | null) {
+        this.Set('ProcessRunDetailID', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Soft reference to the AI Prompt Run that computed this value.
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: FeatureValueCacheID
+    * * Display Name: Feature Value Cache
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Feature Value Caches (vwFeatureValueCaches.ID)
+    * * Description: Optional reference to the FeatureValueCache entry if this value was served from cache.
+    */
+    get FeatureValueCacheID(): string | null {
+        return this.Get('FeatureValueCacheID');
+    }
+    set FeatureValueCacheID(value: string | null) {
+        this.Set('FeatureValueCacheID', value);
+    }
+
+    /**
+    * * Field Name: ComputedAt
+    * * Display Name: Computed At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this feature value was computed.
+    */
+    get ComputedAt(): Date {
+        return this.Get('ComputedAt');
+    }
+    set ComputedAt(value: Date) {
+        this.Set('ComputedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: Timestamp when this record was created.
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: Timestamp when this record was last updated.
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string | null {
+        return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: ProcessRunDetail
+    * * Display Name: Process Run Detail
+    * * SQL Data Type: nvarchar(450)
+    */
+    get ProcessRunDetail(): string | null {
+        return this.Get('ProcessRunDetail');
+    }
+
+    /**
+    * * Field Name: FeatureValueCache
+    * * Display Name: Feature Value Cache
+    * * SQL Data Type: nvarchar(500)
+    */
+    get FeatureValueCache(): string | null {
+        return this.Get('FeatureValueCache');
     }
 }
 
@@ -103430,6 +105543,68 @@ export class MJPublicLinkEntity extends BaseEntity<MJPublicLinkEntityType> {
 
 
 /**
+ * Optional per-query configuration bag.
+ *
+ * Stored as JSON in `MJ: Queries.Configuration`. CodeGen emits a typed
+ * `ConfigurationObject` accessor on `MJQueryEntity` that returns
+ * `MJQueryEntity_IQueryConfiguration | null`.
+ *
+ * Expand by adding a property here — no schema migration. Anything the engine
+ * filters, sorts, or joins on stays a column on `Query`. Semantic layer options,
+ * execution logging policies, and AI agent bounds belong in this bag.
+ */
+export interface MJQueryEntity_IQueryConfiguration {
+    /**
+     * Relative ranking / ground-truth priority for semantic query selection (1-100).
+     * High values (e.g. 90-100) mark authoritative, enterprise-certified ground truth queries
+     * that should be preferred when multiple similar queries match an agent's request.
+     * Default: 50.
+     */
+    Priority?: number;
+
+    /**
+     * Controls execution logging for this query.
+     * When true (default), executions are logged to `MJ: Query Execution Logs`.
+     * Set to false to opt out of execution logging (useful for high-frequency health checks,
+     * internal pollers, or sensitive data queries).
+     * Default: true.
+     */
+    LogExecution?: boolean;
+
+    /**
+     * Explicit flag indicating this query is an enterprise ground-truth / canonical query
+     * for its domain or question type. Agents can filter or prioritize canonical queries.
+     * Default: false.
+     */
+    IsCanonical?: boolean;
+
+    /**
+     * Alternative questions, natural language phrasings, and query aliases.
+     * Included in composite embeddings and semantic search indexing to boost vector recall
+     * across varied phrasing without diluting the primary description.
+     */
+    AlternativeQuestions?: string[];
+
+    /**
+     * Usage guidance for AI agents and callers. Provides prescriptive context on when
+     * this query should be chosen and how its results should be interpreted.
+     */
+    UsageGuidance?: string;
+
+    /**
+     * Explicit negative bounding / anti-patterns for AI agents.
+     * E.g. "Do NOT use for unbilled orders; use 'Unbilled Orders by Region' instead."
+     */
+    WhenNotToUse?: string;
+
+    /**
+     * Operational domain or persona scopes where this query applies
+     * (e.g. ['Sales', 'Finance', 'Executive']).
+     */
+    DomainScope?: string[];
+}
+
+/**
  * MJ: Queries - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Query
@@ -103837,6 +106012,41 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
     set IsMaterialized(value: boolean) {
         this.Set('IsMaterialized', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJQueryEntity_IQueryConfiguration
+    * * Description: Optional JSON configuration bag defining query-level policies and semantic capabilities (shape = IQueryConfiguration). Includes Priority (1-100) for ground-truth ranking in the semantic layer, LogExecution to control query execution logging, AlternativeQuestions for multi-phrasing vector recall, UsageGuidance and WhenNotToUse bounds for AI agents, and DomainScope.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJQueryEntity_IQueryConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJQueryEntity_IQueryConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJQueryEntity_IQueryConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJQueryEntity_IQueryConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -121059,6 +123269,205 @@ export class MJTestTypeEntity extends BaseEntity<MJTestTypeEntityType> {
 
 
 /**
+ * Shape of the `Configuration` column on `MJ: Tests`.
+ *
+ * The column is shared by every test type, and each driver parses its own shape
+ * out of it — so the named properties here are the ones the *framework*
+ * understands and the index signature carries the rest through untouched. Adding
+ * a framework-level option is an edit to this interface plus `mj sync push`,
+ * never a migration.
+ *
+ * @see plans/regression-testing/dom-selection-and-replay-design.md
+ */
+export interface MJTestEntity_ITestConfiguration {
+    /**
+     * The recorded, replayable trajectory for this test — written by a passing
+     * agent-driven run, replayed by later runs with no model calls. Absent until
+     * the first run records one. Held structurally identical to `ComputerUseTrace`
+     * by compile-time assertions in `@memberjunction/computer-use-engine`.
+     */
+    ReplayScript?: MJTestEntity_IReplayScript;
+
+    /**
+     * A newly recorded script awaiting review, written when a run re-derives a
+     * test that already had a {@link ReplayScript}. Replay always uses the
+     * promoted script, never this one, so a UI change never takes effect until
+     * someone has seen the diff and promoted it (`mj test scripts`).
+     *
+     * A test's *first* script skips this and lands in {@link ReplayScript}
+     * directly — there is no baseline to diff it against, and the run that
+     * produced it already passed the judge and every gating oracle.
+     */
+    PendingReplayScript?: MJTestEntity_IReplayScript;
+
+    /**
+     * Whether a failed replay may fall back to the agent and re-derive the goal.
+     * Defaults to **true**. Set `false` to pin a test to deterministic execution,
+     * wherever a silent re-derivation could paper over the regression the test
+     * exists to catch.
+     *
+     * A green fallback records to {@link PendingReplayScript}, not
+     * {@link ReplayScript} — replacing a promoted script is always a reviewed act.
+     * This governs the whole goal; to stop a single STEP being repaired during
+     * replay, use the driver's `replayHeal`.
+     */
+    AllowLLMFallback?: boolean;
+
+    /** Driver-specific configuration, passed through untouched. */
+    [key: string]: unknown;
+}
+
+/**
+ * A recorded, replayable trajectory for one test. An exact `AppBuildHash` match
+ * replays with no healing expected; any mismatch replays with healing; a changed
+ * `GoalHash` falls back to the agent, the script no longer describing what the
+ * test asks for.
+ */
+export interface MJTestEntity_IReplayScript {
+    /** Stable per-test identifier the script is keyed by. */
+    TestId: string;
+    /** Opaque build identity at record time. Compared, never parsed; empty when unknown. */
+    AppBuildHash: string;
+    /** Opaque app/package version at record time. Compared, never parsed. */
+    AppVersion: string;
+    /** Hash of the frozen goal text — a goal edit invalidates the script. */
+    GoalHash: string;
+    /** ISO-8601 timestamp when this script was recorded. */
+    RecordedAt: string;
+    /** Viewport at record time; replay must match it for coordinate-era guards. */
+    Viewport: MJTestEntity_IReplayScriptViewport;
+    /**
+     * Names of the variables the test declares. Values are never stored: recording
+     * leaves `%name%` tokens in step text and URLs, and replay substitutes fresh
+     * values in.
+     */
+    Variables: string[];
+    /** The resolved, ordered replay steps. */
+    Steps: MJTestEntity_IReplayScriptStep[];
+    /** Final goal-level deterministic assertions. */
+    GoalPostconditions: MJTestEntity_IReplayScriptGoalPostcondition[];
+}
+
+/** Viewport at record time. */
+export interface MJTestEntity_IReplayScriptViewport {
+    Width: number;
+    Height: number;
+}
+
+/** One recorded, replayable step. */
+export interface MJTestEntity_IReplayScriptStep {
+    /** Human-readable intent, carried from the agent's own reasoning. */
+    Instruction: string;
+    /** Normalized URL at the start of this step. */
+    UrlBefore: string;
+    Action: MJTestEntity_IReplayScriptAction;
+    Precondition: MJTestEntity_IReplayScriptPrecondition;
+    Postcondition?: MJTestEntity_IReplayScriptPostcondition;
+}
+
+/** The deterministic subset of browser actions a step can record — elements, never pixels. */
+export type MJTestEntity_IReplayScriptActionMethod =
+    | 'click'
+    | 'type'
+    | 'navigate'
+    | 'keypress'
+    | 'scroll'
+    | 'wait'
+    | 'goBack'
+    | 'goForward'
+    | 'refresh';
+
+/** Only the fields relevant to {@link MJTestEntity_IReplayScriptAction.Method} are populated. */
+export interface MJTestEntity_IReplayScriptAction {
+    Method: MJTestEntity_IReplayScriptActionMethod;
+    /** Target for click / type / scroll actions. */
+    Target?: MJTestEntity_IReplayScriptTarget;
+    /** Text to type, possibly with `%placeholder%` variable tokens. */
+    Text?: string;
+    /** Key or chord to press. */
+    Key?: string;
+    /** Destination, normalized and variable-tokenized. */
+    Url?: string;
+    /** Press Enter after typing. */
+    PressEnter?: boolean;
+    /** 1 = single click, 2 = double. */
+    ClickCount?: number;
+    Button?: 'left' | 'right' | 'middle';
+    /** Wait duration in ms. */
+    DurationMs?: number;
+}
+
+/**
+ * A multi-signal locator. `Selector` is primary; `Role` + `Name` are the heal
+ * fallback, re-resolved from a fresh element list when the selector stops
+ * matching; `Scope` disambiguates same-named twins by the region they live in;
+ * `BoundingBox` is weakest, kept only for pre-grounding recordings.
+ */
+export interface MJTestEntity_IReplayScriptTarget {
+    Role?: string;
+    Name?: string;
+    Selector?: string;
+    /**
+     * Nearest labeled ancestor region as `role:name` (e.g.
+     * `group:All applications`). Role + name are not always a unique identity —
+     * an app launcher lists each app under both a usage-ordered "Recent" grid
+     * and an alphabetical "All" grid — and the region is what tells the twins
+     * apart. Absent on recordings made before regions were captured.
+     */
+    Scope?: string;
+    BoundingBox?: MJTestEntity_IReplayScriptBoundingBox;
+}
+
+/** Rendered position of a target at record time. */
+export interface MJTestEntity_IReplayScriptBoundingBox {
+    XMin: number;
+    YMin: number;
+    XMax: number;
+    YMax: number;
+}
+
+/**
+ * Guard evaluated BEFORE a step. Fail-fast by contract: a target that never becomes
+ * attached and visible fails the step — replay never proceeds anyway.
+ */
+export interface MJTestEntity_IReplayScriptPrecondition {
+    /** Wait for the action's target to be attached and visible before acting. */
+    WaitForTarget: boolean;
+    /** Expected normalized URL pattern at the start of this step. */
+    UrlPattern?: string;
+    /** Require the app's readiness beacon before acting. */
+    ReadyBeacon: boolean;
+}
+
+/**
+ * Guard evaluated AFTER a step, confirming it advanced the page as the recording
+ * did. Failing one marks the step diverged and starts the heal ladder.
+ */
+export interface MJTestEntity_IReplayScriptPostcondition {
+    /** Expected normalized URL pattern after the step's action ran. */
+    UrlPattern?: string;
+    /** An element expected to be visible after the step. */
+    ExpectVisible?: MJTestEntity_IReplayScriptTarget;
+}
+
+/**
+ * A goal-level assertion distilled from a passing run. Replay scores by executing
+ * these, so the model-based judge runs only on the agent tier.
+ */
+export interface MJTestEntity_IReplayScriptGoalPostcondition {
+    /**
+     * - `'url'` — the final URL matches `UrlPattern`.
+     * - `'visible'` — `Target` is present in the end state.
+     * - `'absent'` — `Target` is not present (no error toast, say).
+     */
+    Kind: 'url' | 'visible' | 'absent';
+    UrlPattern?: string;
+    Target?: MJTestEntity_IReplayScriptTarget;
+    /** Provenance — the validation criterion this was distilled from. */
+    Description?: string;
+}
+
+/**
  * MJ: Tests - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Test
@@ -121223,6 +123632,7 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
     * * Field Name: Configuration
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTestEntity_ITestConfiguration
     * * Description: JSON object for test-specific configuration (e.g., oracles to use, rubrics, retry policies, timeout settings)
     */
     get Configuration(): string | null {
@@ -121230,6 +123640,27 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
     }
     set Configuration(value: string | null) {
         this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJTestEntity_ITestConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJTestEntity_ITestConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJTestEntity_ITestConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJTestEntity_ITestConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -126970,6 +129401,296 @@ export class MJViewTypeEntity extends BaseEntity<MJViewTypeEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Web Search Providers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WebSearchProvider
+ * * Base View: vwWebSearchProviders
+ * * @description Registry of external web search vendors available to @memberjunction/web-search-engine. Each row configures one driver: whether it is active, its position in the failover order, and where its credential lives. Provider capabilities (answer synthesis, domain filtering, freshness) are declared by the driver class, not stored here.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Web Search Providers')
+export class MJWebSearchProviderEntity extends BaseEntity<MJWebSearchProviderEntityType> {
+    /**
+    * Loads the MJ: Web Search Providers record from the database
+    * @param ID: string - primary key value to load the MJ: Web Search Providers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWebSearchProviderEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Web Search Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MaxResultsOverride: The maximum results override must be greater than 0 if it is specified.
+    * * Priority: The priority value must be a non-negative number (0 or greater) to ensure correct ordering and scheduling.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMaxResultsOverrideGreaterThanZero(result);
+        this.ValidatePriorityMinVal(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The maximum results override must be greater than 0 if it is specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxResultsOverrideGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxResultsOverride != null && this.MaxResultsOverride <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MaxResultsOverride",
+    			"The maximum results override must be greater than 0 if it is specified.",
+    			this.MaxResultsOverride,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The priority value must be a non-negative number (0 or greater) to ensure correct ordering and scheduling.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityMinVal(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Priority",
+    			"Priority must be greater than or equal to 0.",
+    			this.Priority,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Administrator-facing name for this provider, e.g. "Brave" or "Tavily". Unique, and usable as the Provider value when a caller pins a search to one vendor.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What this provider searches, what it costs, and when it is the right choice.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(500)
+    * * Description: ClassFactory key used with @RegisterClass(BaseWebSearchProvider, DriverClass) to instantiate the driver at runtime, e.g. "BraveWebSearchProvider". A value with no matching registration leaves the provider unavailable and is logged at engine startup.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Terminated
+    * * Description: Provider lifecycle status: Pending (configured but not yet in use), Active (participates in searches), Terminated (disabled). Only Active providers are loaded. Matches the vocabulary used by SearchProvider.
+    */
+    get Status(): 'Active' | 'Pending' | 'Terminated' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Terminated') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Failover order: LOWER values are tried FIRST. The engine serves a search from the first available provider in this order, moving on only when one fails transiently. Must be >= 0.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    * * Description: Optional FK to the Credential record holding this provider's API key. When NULL the driver falls back to its documented environment variable, so a host that has not yet migrated its secrets into the Credential store keeps working.
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: ProviderConfig
+    * * Display Name: Provider Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON blob of non-secret, driver-specific settings (endpoint overrides, tier flags, answer model). Schema is defined by each driver; invalid JSON is logged and ignored rather than disabling the provider.
+    */
+    get ProviderConfig(): string | null {
+        return this.Get('ProviderConfig');
+    }
+    set ProviderConfig(value: string | null) {
+        this.Set('ProviderConfig', value);
+    }
+
+    /**
+    * * Field Name: MaxResultsOverride
+    * * Display Name: Max Results Override
+    * * SQL Data Type: int
+    * * Description: Optional per-provider cap on results per request, for pay-per-query vendors. The effective cap is the smallest of the caller's request, this value, and the vendor's own hard limit. NULL means the driver's own limit applies.
+    */
+    get MaxResultsOverride(): number | null {
+        return this.Get('MaxResultsOverride');
+    }
+    set MaxResultsOverride(value: number | null) {
+        this.Set('MaxResultsOverride', value);
+    }
+
+    /**
+    * * Field Name: AllowResultCaching
+    * * Display Name: Allow Result Caching
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this vendor's terms permit storing returned results. Defaults to 0 (deny), because caching rights differ sharply between vendors and violating them is silent: some sell storage rights as a plan tier, others forbid persistent caching outright. Nothing in the engine caches today; this column exists so the first caching layer reads a per-provider gate instead of inventing one.
+    */
+    get AllowResultCaching(): boolean {
+        return this.Get('AllowResultCaching');
+    }
+    set AllowResultCaching(value: boolean) {
+        this.Set('AllowResultCaching', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: UI display name shown in admin surfaces and result attribution. When NULL, falls back to the Name column.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(200)
+    * * Description: CSS icon class for UI display, e.g. "fa-brands fa-brave". Supports any CSS-based icon library. When NULL a default icon is used.
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form administrator notes, e.g. contract terms, billing owner, or why this provider sits at its priority.
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
     }
 }
 
