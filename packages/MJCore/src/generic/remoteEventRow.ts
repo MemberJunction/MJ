@@ -68,6 +68,26 @@ export async function ResolveEntityEventRow(
  * discloses nothing a client cannot already derive and it is what every consumer needs to know
  * *which* record changed. Prefer this over reading an id out of the row.
  */
+/**
+ * Can this event's row be obtained WITHOUT a provider round-trip?
+ *
+ * True for a local event — the row IS the live entity — and for a remote event whose payload
+ * already carries `recordData`, because the entity is on the server's broadcast allowlist.
+ *
+ * Callers that skip hydration to avoid a read must ask this FIRST. A free row is never worth
+ * skipping, and skipping one is indistinguishable, downstream, from a row that could not be read:
+ * the handler receives `null` and reads every field as `undefined`. Whether a handler *would* use
+ * the row and whether obtaining it *costs* anything are two different questions, and only the
+ * second justifies skipping.
+ */
+export function EntityEventRowIsFree(event: BaseEntityEvent): boolean {
+    if (event.baseEntity) {
+        return true;
+    }
+    const payload = event.payload as RemoteInvalidatePayload | undefined;
+    return !!payload?.recordData;
+}
+
 export function ResolveEntityEventKey(event: BaseEntityEvent): CompositeKey | null {
     if (event.baseEntity) {
         return event.baseEntity.PrimaryKey ?? null;
