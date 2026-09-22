@@ -126,10 +126,14 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
         if (fields.size === 0) return [];
         const all = CollectFormContributionRegistrations(
             this.Record?.EntityInfo ?? null, this.FormComponent?.ProviderToUse ?? null);
+        // A claim belongs to this section when any of its fields is one this section draws.
+        // Any, not every: a claim naming a field the form stopped drawing still belongs
+        // where its remaining fields are, and dropping it there would leave the panel
+        // nowhere while its other fields stayed hidden.
         const matching = all.filter((reg) => {
             if (!FormContributionEntityMatches(reg.Metadata?.entity, this.Entity)) return false;
-            const field = reg.Metadata?.replacesFieldName?.trim();
-            return !!field && fields.has(field);
+            const claimed = reg.Metadata?.replacesFieldNames ?? [];
+            return claimed.some((name) => fields.has(name.trim()));
         });
         const collapsed = CollapseFormPanelRegistrations(matching);
         collapsed.sort((a, b) => {

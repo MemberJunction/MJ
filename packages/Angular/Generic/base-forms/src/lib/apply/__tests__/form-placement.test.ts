@@ -17,8 +17,11 @@ import {
     ReplaceableRailTabs,
     DefaultRailKeyFor,
     TargetRailItem,
-    ReplaceableFields,
+    ChosenFieldNames,
+    DescribeFieldList,
+    FieldsInSection,
     SectionHoldingField,
+    SectionsWithFields,
     type FormPlacementContext,
 } from '../form-placement';
 
@@ -601,24 +604,34 @@ describe('PlacementStateFromContribution', () => {
 });
 
 /**
- * Standing in for one FIELD rather than a whole group.
+ * Standing in for FIELDS rather than a whole group.
  *
  * The smallest claim, and the one where placement stops being the user's to choose: the
- * panel renders at the top of the section holding the field, so the slot they picked does
- * not apply. Every assertion below guards a value that reaches `ReplacesFieldName`.
+ * panel renders at the top of the section holding the fields, so the slot they picked does
+ * not apply. Every assertion below guards a value that reaches `ReplacesFieldNames`.
  */
-describe('replacing one field', () => {
-    it('offers every field the form draws, named with its section', () => {
-        expect(ReplaceableFields(CONTEXT)).toEqual([
-            { Name: 'Name', Label: 'Name', SectionKey: 'details', SectionTitle: 'Details' },
-            { Name: 'Description', Label: 'Description', SectionKey: 'details', SectionTitle: 'Details' },
-            { Name: 'SeatLimit', Label: 'Seat Limit', SectionKey: 'scheduleCapacity', SectionTitle: 'Schedule & Capacity' },
-        ]);
+describe('replacing fields inside one group', () => {
+    /** A claim on two fields of Details, as the dialog would build it. */
+    function claim(sectionKey: string, names: string[]) {
+        return {
+            ...InitialPlacementState(PROPOSAL, CONTEXT),
+            ReplaceMode: 'field' as const,
+            ReplaceFieldSectionKey: sectionKey,
+            ReplaceFieldNames: names,
+        };
+    }
+
+    it('offers only sections that draw fields', () => {
+        expect(SectionsWithFields(CONTEXT).map((s) => s.Key)).toEqual(['details', 'scheduleCapacity']);
     });
 
     it('offers none when the targets were derived rather than read from a form', () => {
-        const derived: FormPlacementContext = { ...CONTEXT, TargetsVerified: false };
-        expect(ReplaceableFields(derived)).toEqual([]);
+        expect(SectionsWithFields({ ...CONTEXT, TargetsVerified: false })).toEqual([]);
+    });
+
+    it('lists the fields of one section', () => {
+        expect(FieldsInSection(CONTEXT, 'details').map((f) => f.Name)).toEqual(['Name', 'Description']);
+        expect(FieldsInSection(CONTEXT, 'notASection')).toEqual([]);
     });
 
     it('finds the section holding a field, and nothing for a field the form does not draw', () => {
@@ -626,35 +639,65 @@ describe('replacing one field', () => {
         expect(SectionHoldingField(CONTEXT, 'NotOnTheForm')).toBeNull();
     });
 
-    it('writes the field name and nothing else it could be confused with', () => {
-        const state = { ...InitialPlacementState(PROPOSAL, CONTEXT), ReplaceMode: 'field' as const, ReplaceFieldName: 'SeatLimit' };
-        const { Contribution } = ResolvePlacementDecision(state, CONTEXT, PROPOSAL);
-        expect(Contribution.replacesFieldName).toBe('SeatLimit');
+    it('keeps only the fields the chosen section really draws', () => {
+        // SeatLimit belongs to the other section; a stale pick must not reach the row.
+        const state = claim('details', ['Name', 'SeatLimit', 'Description']);
+        expect(ChosenFieldNames(state, CONTEXT)).toEqual(['Name', 'Description']);
+    });
+
+    it('writes every chosen field and nothing it could be confused with', () => {
+        const { Contribution } = ResolvePlacementDecision(claim('details', ['Name', 'Description']), CONTEXT, PROPOSAL);
+        expect(Contribution.replacesFieldNames).toEqual(['Name', 'Description']);
         expect(Contribution.replacesSectionKey).toBeUndefined();
         expect(Contribution.relatedEntity).toBeUndefined();
     });
 
-    it('reads its own earlier choice back', () => {
+    it('writes no claim at all when no field is chosen', () => {
+        const { Contribution } = ResolvePlacementDecision(claim('details', []), CONTEXT, PROPOSAL);
+        expect(Contribution.replacesFieldNames).toBeUndefined();
+    });
+
+    it('reads its own earlier choice back, section and all', () => {
         const spec: FormContributionSpec = {
-            slot: 'after-fields', presentation: 'panel', title: 'Seats', replacesFieldName: 'SeatLimit',
+            slot: 'after-fields', presentation: 'panel', title: 'Identity',
+            replacesFieldNames: ['Name', 'Description'],
         };
         const state = PlacementStateFromContribution(spec, CONTEXT, true);
         expect(state.ReplaceMode).toBe('field');
-        expect(state.ReplaceFieldName).toBe('SeatLimit');
+        expect(state.ReplaceFieldSectionKey).toBe('details');
+        expect(state.ReplaceFieldNames).toEqual(['Name', 'Description']);
     });
 
-    it('falls back to no claim when the field has left the form', () => {
+    it('keeps the fields that survive when one has left the form', () => {
         const spec: FormContributionSpec = {
-            slot: 'after-fields', presentation: 'panel', title: 'Seats', replacesFieldName: 'Retired',
+            slot: 'after-fields', presentation: 'panel', title: 'Identity',
+            replacesFieldNames: ['Name', 'Retired'],
+        };
+        const state = PlacementStateFromContribution(spec, CONTEXT, true);
+        expect(state.ReplaceMode).toBe('field');
+        expect(state.ReplaceFieldNames).toEqual(['Name']);
+    });
+
+    it('falls back to no claim when every field has left the form', () => {
+        const spec: FormContributionSpec = {
+            slot: 'after-fields', presentation: 'panel', title: 'Identity',
+            replacesFieldNames: ['Retired', 'AlsoGone'],
         };
         expect(PlacementStateFromContribution(spec, CONTEXT, true).ReplaceMode).toBe('none');
     });
 
     it('says where the panel actually lands, not which slot was picked', () => {
-        const state = { ...InitialPlacementState(null, CONTEXT), ReplaceMode: 'field' as const, ReplaceFieldName: 'SeatLimit' };
-        const summary = SummarizePlacement(state, CONTEXT);
+        const summary = SummarizePlacement(claim('scheduleCapacity', ['SeatLimit']), CONTEXT);
+        expect(summary).toContain('the Seat Limit field');
         expect(summary).toContain('at the top of the Schedule & Capacity section');
         expect(summary).toContain('The chosen position does not apply');
         expect(summary).not.toContain('at after-fields');
+    });
+
+    it('names the fields in the summary, and counts them past three', () => {
+        expect(DescribeFieldList(['A'])).toBe('the A field');
+        expect(DescribeFieldList(['A', 'B'])).toBe('the A and B fields');
+        expect(DescribeFieldList(['A', 'B', 'C'])).toBe('the A, B and C fields');
+        expect(DescribeFieldList(['A', 'B', 'C', 'D'])).toBe('4 fields, starting with A');
     });
 });

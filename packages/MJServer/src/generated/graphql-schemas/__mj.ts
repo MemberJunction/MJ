@@ -49058,9 +49058,8 @@ export class MJEntityFormContribution_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: `Field this contribution stands in for. The panel renders at the top of the section holding that field, and the field is not drawn. Mutually exclusive with ReplacesSectionKey and RelatedEntityID.`}) 
-    @MaxLength(255)
-    ReplacesFieldName?: string;
+    @Field({nullable: true, description: `JSON array of field names this contribution stands in for, all within one section. The panel renders at the top of that section and the named fields are not drawn. Mutually exclusive with ReplacesSectionKey and RelatedEntityID.`}) 
+    ReplacesFieldNames?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -49162,7 +49161,7 @@ export class CreateMJEntityFormContributionInput {
     Notes: string | null;
 
     @Field({ nullable: true })
-    ReplacesFieldName: string | null;
+    ReplacesFieldNames: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -49244,7 +49243,7 @@ export class UpdateMJEntityFormContributionInput {
     Notes?: string | null;
 
     @Field({ nullable: true })
-    ReplacesFieldName?: string | null;
+    ReplacesFieldNames?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

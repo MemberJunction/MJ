@@ -341,7 +341,7 @@ Related section keys use the same camelCase as CodeGen (`FormSectionCamelCase` /
 
 A row carries the same registration bag this document describes for the compiled metadata object —
 `Slot`, `SortKey`, `ContributionKey`, `RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`,
-`ReplacesFieldName`, `Inclusion`, `ChromeGroup`, `Presentation` — plus `Title`, `Icon`, a free-form
+`ReplacesFieldNames`, `Inclusion`, `ChromeGroup`, `Presentation` — plus `Title`, `Icon`, a free-form
 `Configuration` JSON blob handed to the component, and scope (`User` / `Role` / `Global`) with
 status (`Active` / `Pending` / `Inactive`).
 
@@ -354,13 +354,17 @@ enforces that, because replacing a section and one field inside it describes two
 |---|---|---|---|
 | A whole rail tab | `ReplacesSectionKey` = a rail key | every panel filed under that tab | as that tab |
 | One field section | `ReplacesSectionKey` = a section key | that section's card | where the card was |
-| One field | `ReplacesFieldName` | that one input | at the top of the section that held it |
+| Fields in one section | `ReplacesFieldNames` | those inputs | at the top of the section that held them |
 | A related grid | `RelatedEntityID` (+ `RelatedJoinField`) | the stock grid | as that grid's section |
 
+`ReplacesFieldNames` is a JSON array, the same shape as `FormChromeRule.JoinFields`, and every
+name in it must belong to **one** section — the panel has one place to draw, so a claim spread
+over two sections has no single top to sit at.
+
 A field claim is the only one whose position is not the panel's to choose: it belongs inside the
-section that drew the field, so the `Slot` on the row does not apply. `<mj-collapsible-panel>`
-hosts it — the section is the only thing that knows which fields it draws — and the field itself
-stops rendering through `FormContext.claimedFieldNames`.
+section that drew those fields, so the `Slot` on the row does not apply. `<mj-collapsible-panel>`
+hosts it — the section is the only thing that knows which fields it draws — and the fields
+themselves stop rendering through `FormContext.claimedFieldNames`.
 
 **You do not need to do anything to support this.** `CollectFormContributionRegistrations` merges
 rows and class registrations into one list before the composer runs, so a compiled panel competes
@@ -369,7 +373,7 @@ highest rank wins, and a compiled registration wins a tie.
 
 What a panel author should know:
 
-- **A compiled panel can make the same claims.** `replacesFieldName` sits on the registration
+- **A compiled panel can make the same claims.** `replacesFieldNames` sits on the registration
   metadata beside `replacesSectionKey`, and the slot host passes the whole bag to the panel as
   `RegistrationMetadata`, which is what `BaseFormPanel.DisplayOrder` reads. Pass that getter as
   `[Order]` on your own `mj-collapsible-panel` or the form draws your panel last whatever slot it

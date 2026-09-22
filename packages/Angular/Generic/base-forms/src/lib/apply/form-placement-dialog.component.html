@@ -210,23 +210,42 @@
             <input type="radio" name="mj-replace" value="field"
                    [disabled]="!CanReplaceField" [(ngModel)]="State.ReplaceMode">
             <span class="mj-placement-row-text">
-              Replace <strong>one field</strong>
-              @if (ChosenField && State.ReplaceMode === 'field') {
-                <span class="mj-placement-row-note--quiet">your panel renders at the top of {{ ChosenField.SectionTitle }}, in the field's place</span>
-              } @else {
-                <span class="mj-placement-row-note--quiet">your panel renders at the top of the section holding it</span>
-              }
+              Replace <strong>fields</strong> inside one group
+              <span class="mj-placement-row-note--quiet">your panel renders at the top of that group, in their place</span>
               @if (!CanReplaceField) {
                 <span class="mj-placement-row-note">this form's fields could not be read</span>
               }
             </span>
-            <select class="mj-placement-select" aria-label="Which field to stand in for"
-                    [disabled]="State.ReplaceMode !== 'field'" [(ngModel)]="State.ReplaceFieldName" name="mj-field">
-              @for (field of ReplaceableFieldChoices; track field.Name) {
-                <option [value]="field.Name">{{ field.SectionTitle }} &rsaquo; {{ field.Label }}</option>
+            <select class="mj-placement-select" aria-label="Which group to take fields from"
+                    [disabled]="State.ReplaceMode !== 'field'"
+                    [ngModel]="State.ReplaceFieldSectionKey" (ngModelChange)="SetFieldSection($event)"
+                    name="mj-field-section">
+              @for (section of FieldSections; track section.Key) {
+                <option [value]="section.Key">{{ section.Title }}</option>
               }
             </select>
           </label>
+
+          @if (State.ReplaceMode === 'field') {
+            <!-- One group at a time: the panel renders at the top of a single section, so
+                 fields from two of them would describe a panel with two places to be. -->
+            <fieldset class="mj-placement-fieldpick">
+              <legend class="mj-placement-fieldpick-legend">Fields your panel takes the place of</legend>
+              <div class="mj-placement-fieldpick-grid">
+                @for (field of FieldChoices; track field.Name) {
+                  <label class="mj-placement-fieldpick-item" [class.is-on]="IsFieldChosen(field.Name)">
+                    <input type="checkbox"
+                           [checked]="IsFieldChosen(field.Name)"
+                           (change)="ToggleField(field.Name, $any($event.target).checked)">
+                    <span class="mj-placement-fieldpick-name">{{ field.Label }}</span>
+                  </label>
+                }
+              </div>
+              @if (FieldClaimIsEmpty) {
+                <p class="mj-placement-warn">Pick at least one field, or this panel stands in for nothing.</p>
+              }
+            </fieldset>
+          }
 
           <label class="mj-placement-row" [class.is-on]="State.ReplaceMode === 'related'"
                  [class.is-off]="!CanReplaceRelated">
@@ -289,7 +308,7 @@
   </div>
 
   <div class="mj-placement-foot">
-    <button type="button" mjButton variant="primary" (click)="OnApply()">Add to the form</button>
+    <button type="button" mjButton variant="primary" [disabled]="FieldClaimIsEmpty" (click)="OnApply()">Add to the form</button>
     <button type="button" mjButton (click)="OnCancel()">Cancel</button>
     <span class="mj-placement-spacer"></span>
     <span class="mj-placement-summary">{{ Summary }}</span>
@@ -331,7 +350,7 @@
   <div class="mj-placement-slot-card mj-placement-slot-card--in-section">
     <span class="mj-placement-slot-card-name">{{ State.Title || ComponentName || 'Your panel' }}</span>
     <span class="mj-placement-slot-card-hint">
-      at the top of this section, in place of {{ ChosenField?.Label || 'the field' }}
+      at the top of this section, in place of {{ ChosenFieldSummary }}
     </span>
   </div>
 </ng-template>

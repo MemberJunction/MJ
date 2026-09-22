@@ -2,7 +2,10 @@ import { Injectable } from '@angular/core';
 import { LogError, Metadata, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { InteractiveFormsEngine, type MJEntityFormContributionEntity } from '@memberjunction/core-entities';
-import { InvalidateFormContributionRegistrationCache } from '../panel-slot/collect-form-contribution-registrations';
+import {
+    InvalidateFormContributionRegistrationCache,
+    ParseClaimedFieldNames,
+} from '../panel-slot/collect-form-contribution-registrations';
 import { DEFAULT_FORM_CONTRIBUTION_SLOT, type FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
 import type { FormPanelContributionRow } from './form-panel-inventory';
 
@@ -78,7 +81,9 @@ export class FormPanelAdminService {
             row.Title = contribution.title;
             row.Icon = contribution.icon ?? null;
             row.ReplacesSectionKey = contribution.replacesSectionKey ?? null;
-            row.ReplacesFieldName = contribution.replacesFieldName ?? null;
+            row.ReplacesFieldNames = contribution.replacesFieldNames?.length
+                ? JSON.stringify(contribution.replacesFieldNames)
+                : null;
             row.ChromeGroup = contribution.chromeGroup ?? null;
             row.RelatedJoinField = contribution.relatedJoinField ?? null;
             row.Status = activeNow ? 'Active' : 'Pending';
@@ -140,7 +145,7 @@ export class FormPanelAdminService {
             Status: row.Status,
             Scope: row.Scope,
             ReplacesSectionKey: row.ReplacesSectionKey,
-            ReplacesFieldName: row.ReplacesFieldName,
+            ReplacesFieldNames: ParseClaimedFieldNames(row.ReplacesFieldNames),
             RelatedEntity: row.RelatedEntity,
             ChromeGroup: row.ChromeGroup,
             ContributionKey: row.ContributionKey,

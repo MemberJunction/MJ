@@ -417,3 +417,53 @@
   margin-left: var(--mj-space-4);
   margin-top: calc(var(--mj-space-1) * -1);
 }
+
+/* The field picker sits under its radio row, indented to read as part of that choice. */
+.mj-placement-fieldpick {
+  margin: 0 0 0 var(--mj-space-6);
+  padding: var(--mj-space-3);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-subtle);
+}
+
+.mj-placement-fieldpick-legend {
+  padding: 0 var(--mj-space-2);
+  font-size: var(--mj-font-size-xs);
+  font-weight: var(--mj-font-weight-semibold);
+  color: var(--mj-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mj-placement-fieldpick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--mj-space-1) var(--mj-space-3);
+}
+
+.mj-placement-fieldpick-item {
+  display: flex;
+  gap: var(--mj-space-2);
+  align-items: center;
+  min-width: 0;
+  padding: var(--mj-space-1) var(--mj-space-2);
+  border-radius: var(--mj-radius-sm);
+  cursor: pointer;
+}
+
+.mj-placement-fieldpick-item:hover {
+  background: var(--mj-bg-hover);
+}
+
+.mj-placement-fieldpick-item.is-on {
+  background: var(--mj-bg-selected);
+  color: var(--mj-text-primary);
+}
+
+.mj-placement-fieldpick-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

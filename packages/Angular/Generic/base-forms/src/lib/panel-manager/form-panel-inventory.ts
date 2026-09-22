@@ -60,7 +60,7 @@ export interface FormPanelContributionRow {
     Status: string;
     Scope: string;
     ReplacesSectionKey: string | null;
-    ReplacesFieldName: string | null;
+    ReplacesFieldNames: readonly string[];
     RelatedEntity: string | null;
     ChromeGroup: string | null;
     ContributionKey: string | null;
@@ -106,14 +106,15 @@ const MORE_TAB_KEY = '__mj_form_more';
  * things the user never typed.
  */
 export function DescribeReplacement(
-    row: Pick<FormPanelContributionRow, 'ReplacesSectionKey' | 'ReplacesFieldName' | 'RelatedEntity'>,
+    row: Pick<FormPanelContributionRow, 'ReplacesSectionKey' | 'ReplacesFieldNames' | 'RelatedEntity'>,
     titleByKey?: ReadonlyMap<string, string>,
 ): string {
     const related = (row.RelatedEntity ?? '').trim();
     if (related) return `the ${related} grid`;
 
-    const field = (row.ReplacesFieldName ?? '').trim();
-    if (field) return `the ${titleByKey?.get(field) ?? field} field`;
+    const fields = row.ReplacesFieldNames ?? [];
+    if (fields.length === 1) return `the ${titleByKey?.get(fields[0]) ?? fields[0]} field`;
+    if (fields.length > 1) return `${fields.length} fields`;
 
     const key = (row.ReplacesSectionKey ?? '').trim();
     if (!key) return '';

@@ -88,11 +88,11 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      */
     replacesSectionKey?: string;
     /**
-     * A single field this contribution stands in for. The panel renders at the top of the
-     * section holding that field, and the field is not drawn. Use instead of
-     * `replacesSectionKey` when the panel replaces one input rather than a whole group.
+     * Fields this contribution stands in for, all within one section. The panel renders at
+     * the top of that section and the named fields are not drawn. Use instead of
+     * `replacesSectionKey` when the panel replaces some inputs rather than a whole group.
      */
-    replacesFieldName?: string;
+    replacesFieldNames?: readonly string[];
     /**
      * Pin this contribution to a chrome bucket instead of its own rail item.
      * `'details'` — leftover own-fields group. `'more'` — overflow folder.

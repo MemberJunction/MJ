@@ -668,3 +668,83 @@ describe('MjFormPlacementDialogComponent (DOM) — a form that shows no rail', (
         expect(options).toEqual(['Certification Details', 'Configuration']);
     });
 });
+
+/**
+ * A panel usually stands in for a group of inputs, not one. The picker is therefore a set
+ * of checkboxes over ONE section: the panel renders at the top of a single section, so
+ * fields from two of them would describe a panel with two places to be.
+ */
+describe('MjFormPlacementDialogComponent (DOM) — standing in for fields', () => {
+    const withFields: FormPlacementContext = {
+        ...CONTEXT,
+        Sections: [
+            {
+                Key: 'details', Title: 'Details',
+                Fields: [
+                    { Name: 'Name', Label: 'Name' },
+                    { Name: 'Description', Label: 'Description' },
+                ],
+            },
+            {
+                Key: 'scheduleCapacity', Title: 'Schedule & Capacity',
+                Fields: [{ Name: 'SeatLimit', Label: 'Seat Limit' }],
+            },
+        ],
+    };
+
+    /** Render with the field mode already on, so the picker is in the first pass. */
+    function renderPicking(context: FormPlacementContext = withFields) {
+        return renderComponentFixture(MjFormPlacementDialogComponent, {
+            imports: [CommonModule, FormsModule, AlertStub, ButtonStub],
+            declarations: [MjFormPlacementDialogComponent],
+            inputs: { ProbeForm: false, Context: context, Proposal: null, ComponentName: 'Identity Card' },
+            setup: (c: MjFormPlacementDialogComponent) => {
+                c.State.ReplaceMode = 'field';
+            },
+        });
+    }
+
+    it('shows a checkbox per field of the chosen section, and none of the others', () => {
+        const f = renderPicking();
+        const labels = Array.from(
+            (f.nativeElement as HTMLElement).querySelectorAll('.mj-placement-fieldpick-name'),
+        ).map((n) => n.textContent?.trim());
+        expect(labels).toEqual(['Name', 'Description']);
+    });
+
+    it('collects several fields into one claim', () => {
+        const f = renderPicking();
+        f.componentInstance.ToggleField('Name', true);
+        f.componentInstance.ToggleField('Description', true);
+        expect(f.componentInstance.ChosenFields).toEqual(['Name', 'Description']);
+    });
+
+    it('drops a field when it is unticked', () => {
+        const f = renderPicking();
+        f.componentInstance.ToggleField('Name', true);
+        f.componentInstance.ToggleField('Description', true);
+        f.componentInstance.ToggleField('Name', false);
+        expect(f.componentInstance.ChosenFields).toEqual(['Description']);
+    });
+
+    it('clears the picks when the section changes, so a claim never spans two', () => {
+        const f = renderPicking();
+        f.componentInstance.ToggleField('Name', true);
+        f.componentInstance.SetFieldSection('scheduleCapacity');
+        expect(f.componentInstance.ChosenFields).toEqual([]);
+        expect(f.componentInstance.FieldChoices.map((x) => x.Name)).toEqual(['SeatLimit']);
+    });
+
+    it('refuses to apply a claim that names no field', () => {
+        const f = renderPicking();
+        expect(f.componentInstance.FieldClaimIsEmpty).toBe(true);
+        f.componentInstance.ToggleField('Name', true);
+        expect(f.componentInstance.FieldClaimIsEmpty).toBe(false);
+    });
+
+    it('does not offer the mode when the form\'s fields could not be read', () => {
+        const derived: FormPlacementContext = { ...withFields, TargetsVerified: false };
+        const f = render(derived, null);
+        expect(f.componentInstance.CanReplaceField).toBe(false);
+    });
+});

@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
 import type { MJEntityFormContributionEntity } from "@memberjunction/core-entities";
-import { addOutput, failure, getStringParam } from "./_shared";
+import { ParseClaimedFieldNames, addOutput, failure, getStringParam } from "./_shared";
 
 /** One contribution row, flattened for an agent or an apply flow to reason about. */
 export interface FormContributionSummary {
@@ -20,7 +20,7 @@ export interface FormContributionSummary {
     RelatedEntity: string | null;
     RelatedJoinField: string | null;
     ReplacesSectionKey: string | null;
-    ReplacesFieldName: string | null;
+    ReplacesFieldNames: string[];
     Inclusion: string | null;
     Presentation: string;
     Title: string | null;
@@ -72,7 +72,7 @@ export class GetFormContributionsForEntityAction extends BaseAction {
                         Name: r.Name, Scope: r.Scope, Status: r.Status, Precedence: r.Precedence ?? 0, Slot: r.Slot,
                         ContributionKey: r.ContributionKey, RelatedEntity: r.RelatedEntity,
                         RelatedJoinField: r.RelatedJoinField, ReplacesSectionKey: r.ReplacesSectionKey,
-                        ReplacesFieldName: r.ReplacesFieldName,
+                        ReplacesFieldNames: ParseClaimedFieldNames(r.ReplacesFieldNames),
                         Inclusion: r.Inclusion, Presentation: r.Presentation, Title: r.Title,
                     };
                 });

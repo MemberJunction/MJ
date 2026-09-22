@@ -19366,11 +19366,11 @@ export const MJEntityFormContributionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ReplacesFieldName: z.string().nullable().describe(`
-        * * Field Name: ReplacesFieldName
-        * * Display Name: Replaces Field Name
-        * * SQL Data Type: nvarchar(255)
-        * * Description: Field this contribution stands in for. The panel renders at the top of the section holding that field, and the field is not drawn. Mutually exclusive with ReplacesSectionKey and RelatedEntityID.`),
+    ReplacesFieldNames: z.string().nullable().describe(`
+        * * Field Name: ReplacesFieldNames
+        * * Display Name: Replaced Field Names
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of field names this contribution stands in for, all within one section. The panel renders at the top of that section and the named fields are not drawn. Mutually exclusive with ReplacesSectionKey and RelatedEntityID.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -87880,32 +87880,70 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
 
     /**
     * Validate() method override for MJ: Entity Form Contributions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: At most one of Replaces Section Key, Related Entity ID, or Replaces Field Name can be specified. These fields are mutually exclusive to ensure clear configuration mapping.
-    * * Table-Level: If the presentation is set to 'bare', then both the inclusion and chrome group fields must be empty.
-    * * Table-Level: If a Related Join Field is specified, a Related Entity must also be selected to ensure the relationship is properly defined.
-    * * Table-Level: Ensures that the Scope matches the provided identifiers: 'User' scope requires a UserID and no RoleID, 'Role' scope requires a RoleID and no UserID, and 'Global' scope requires both identifiers to be empty.
+    * * ReplacesFieldNames: If Replaces Field Names is provided, it must be a valid, non-empty JSON array to ensure that a structured list of field overrides is correctly defined.
+    * * Table-Level: At most one of the following fields can be configured for a component: Replaces Section Key, Related Entity ID, or Replaces Field Names. This ensures that the component does not have conflicting replacement or relation behaviors defined simultaneously.
+    * * Table-Level: If the presentation style is set to 'bare', then both inclusion and chrome group must be empty.
+    * * Table-Level: If a related join field is specified, a related entity must also be provided to ensure the join relationship is fully defined.
+    * * Table-Level: Ensures that the User ID and Role ID fields are correctly populated or left empty based on the selected Scope: 'User' scope requires a User ID and no Role ID, 'Role' scope requires a Role ID and no User ID, and 'Global' scope requires both fields to be empty.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateMutuallyExclusiveReplacementFields(result);
+        this.ValidateReplacesFieldNamesIsNonEmptyJsonArray(result);
+        this.ValidateMutuallyExclusiveReplacementAndRelationFields(result);
         this.ValidatePresentationBareExcludesInclusionAndChromeGroup(result);
         this.ValidateRelatedJoinFieldRequiresRelatedEntity(result);
-        this.ValidateScopeAndIdentifiers(result);
+        this.ValidateScopeUserRoleRelationship(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * At most one of Replaces Section Key, Related Entity ID, or Replaces Field Name can be specified. These fields are mutually exclusive to ensure clear configuration mapping.
+    * If Replaces Field Names is provided, it must be a valid, non-empty JSON array to ensure that a structured list of field overrides is correctly defined.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateMutuallyExclusiveReplacementFields(result: ValidationResult) {
+    public ValidateReplacesFieldNamesIsNonEmptyJsonArray(result: ValidationResult) {
+    	if (this.ReplacesFieldNames != null && this.ReplacesFieldNames.trim() !== "") {
+    		try {
+    			const parsed = JSON.parse(this.ReplacesFieldNames);
+    			if (!Array.isArray(parsed)) {
+    				result.Errors.push(new ValidationErrorInfo(
+    					"ReplacesFieldNames",
+    					"Replaces Field Names must be a valid JSON array starting with '['.",
+    					this.ReplacesFieldNames,
+    					ValidationErrorType.Failure
+    				));
+    			} else if (parsed.length === 0) {
+    				result.Errors.push(new ValidationErrorInfo(
+    					"ReplacesFieldNames",
+    					"Replaces Field Names cannot be an empty array.",
+    					this.ReplacesFieldNames,
+    					ValidationErrorType.Failure
+    				));
+    			}
+    		} catch (e) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ReplacesFieldNames",
+    				"Replaces Field Names must be a valid JSON string.",
+    				this.ReplacesFieldNames,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * At most one of the following fields can be configured for a component: Replaces Section Key, Related Entity ID, or Replaces Field Names. This ensures that the component does not have conflicting replacement or relation behaviors defined simultaneously.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMutuallyExclusiveReplacementAndRelationFields(result: ValidationResult) {
     	let count = 0;
     	if (this.ReplacesSectionKey != null) {
     		count++;
@@ -87913,109 +87951,124 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
     	if (this.RelatedEntityID != null) {
     		count++;
     	}
-    	if (this.ReplacesFieldName != null) {
+    	if (this.ReplacesFieldNames != null) {
     		count++;
     	}
     
     	if (count > 1) {
-    		const errorMessage = "Only one of Replaces Section Key, Related Entity ID, or Replaces Field Name can be provided.";
-    		if (this.ReplacesSectionKey != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"ReplacesSectionKey",
-    				errorMessage,
-    				this.ReplacesSectionKey,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    		if (this.RelatedEntityID != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"RelatedEntityID",
-    				errorMessage,
-    				this.RelatedEntityID,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    		if (this.ReplacesFieldName != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"ReplacesFieldName",
-    				errorMessage,
-    				this.ReplacesFieldName,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	}
-    }
-
-    /**
-    * If the presentation is set to 'bare', then both the inclusion and chrome group fields must be empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidatePresentationBareExcludesInclusionAndChromeGroup(result: ValidationResult) {
-    	if (this.Presentation === "bare") {
-    		if (this.Inclusion != null || this.ChromeGroup != null) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"Presentation",
-    				"When Presentation is set to 'bare', both Inclusion and ChromeGroup must be empty.",
-    				this.Presentation,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	}
-    }
-
-    /**
-    * If a Related Join Field is specified, a Related Entity must also be selected to ensure the relationship is properly defined.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRelatedJoinFieldRequiresRelatedEntity(result: ValidationResult) {
-    	if (this.RelatedJoinField != null && this.RelatedJoinField.trim() !== "" && this.RelatedEntityID == null) {
+    		const errorMessage = "Only one of Replaces Section Key, Related Entity ID, or Replaces Field Names can be configured at a time.";
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ReplacesSectionKey",
+    			errorMessage,
+    			this.ReplacesSectionKey,
+    			ValidationErrorType.Failure
+    		));
     		result.Errors.push(new ValidationErrorInfo(
     			"RelatedEntityID",
-    			"A Related Entity must be specified when a Related Join Field is provided.",
+    			errorMessage,
     			this.RelatedEntityID,
+    			ValidationErrorType.Failure
+    		));
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ReplacesFieldNames",
+    			errorMessage,
+    			this.ReplacesFieldNames,
     			ValidationErrorType.Failure
     		));
     	}
     }
 
     /**
-    * Ensures that the Scope matches the provided identifiers: 'User' scope requires a UserID and no RoleID, 'Role' scope requires a RoleID and no UserID, and 'Global' scope requires both identifiers to be empty.
+    * If the presentation style is set to 'bare', then both inclusion and chrome group must be empty.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateScopeAndIdentifiers(result: ValidationResult) {
-    	const hasUser = this.UserID != null;
-    	const hasRole = this.RoleID != null;
-    
+    public ValidatePresentationBareExcludesInclusionAndChromeGroup(result: ValidationResult) {
+        if (this.Presentation === "bare") {
+            if (this.Inclusion != null || this.ChromeGroup != null) {
+                result.Errors.push(new ValidationErrorInfo(
+                    "Presentation",
+                    "When Presentation is set to 'bare', both Inclusion and ChromeGroup must be empty.",
+                    this.Presentation,
+                    ValidationErrorType.Failure
+                ));
+            }
+        }
+    }
+
+    /**
+    * If a related join field is specified, a related entity must also be provided to ensure the join relationship is fully defined.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateRelatedJoinFieldRequiresRelatedEntity(result: ValidationResult) {
+    		if (this.RelatedJoinField != null && this.RelatedJoinField !== "" && this.RelatedEntityID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RelatedEntityID",
+    				"A Related Entity must be specified when a Related Join Field is provided.",
+    				this.RelatedEntityID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+
+    /**
+    * Ensures that the User ID and Role ID fields are correctly populated or left empty based on the selected Scope: 'User' scope requires a User ID and no Role ID, 'Role' scope requires a Role ID and no User ID, and 'Global' scope requires both fields to be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeUserRoleRelationship(result: ValidationResult) {
     	if (this.Scope === "User") {
-    		if (!hasUser || hasRole) {
+    		if (this.UserID == null) {
     			result.Errors.push(new ValidationErrorInfo(
     				"UserID",
-    				"When Scope is 'User', UserID must be specified and RoleID must be empty.",
+    				"User ID is required when Scope is set to 'User'.",
     				this.UserID,
     				ValidationErrorType.Failure
     			));
     		}
-    	} else if (this.Scope === "Role") {
-    		if (!hasRole || hasUser) {
+    		if (this.RoleID != null) {
     			result.Errors.push(new ValidationErrorInfo(
     				"RoleID",
-    				"When Scope is 'Role', RoleID must be specified and UserID must be empty.",
+    				"Role ID must be empty when Scope is set to 'User'.",
     				this.RoleID,
     				ValidationErrorType.Failure
     			));
     		}
-    	} else if (this.Scope === "Global") {
-    		if (hasUser || hasRole) {
+    	} else if (this.Scope === "Role") {
+    		if (this.RoleID == null) {
     			result.Errors.push(new ValidationErrorInfo(
-    				"Scope",
-    				"When Scope is 'Global', both UserID and RoleID must be empty.",
-    				this.Scope,
+    				"RoleID",
+    				"Role ID is required when Scope is set to 'Role'.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"User ID must be empty when Scope is set to 'Role'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === "Global") {
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"User ID must be empty when Scope is set to 'Global'.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"Role ID must be empty when Scope is set to 'Global'.",
+    				this.RoleID,
     				ValidationErrorType.Failure
     			));
     		}
@@ -88379,16 +88432,16 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
     }
 
     /**
-    * * Field Name: ReplacesFieldName
-    * * Display Name: Replaces Field Name
-    * * SQL Data Type: nvarchar(255)
-    * * Description: Field this contribution stands in for. The panel renders at the top of the section holding that field, and the field is not drawn. Mutually exclusive with ReplacesSectionKey and RelatedEntityID.
+    * * Field Name: ReplacesFieldNames
+    * * Display Name: Replaced Field Names
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of field names this contribution stands in for, all within one section. The panel renders at the top of that section and the named fields are not drawn. Mutually exclusive with ReplacesSectionKey and RelatedEntityID.
     */
-    get ReplacesFieldName(): string | null {
-        return this.Get('ReplacesFieldName');
+    get ReplacesFieldNames(): string | null {
+        return this.Get('ReplacesFieldNames');
     }
-    set ReplacesFieldName(value: string | null) {
-        this.Set('ReplacesFieldName', value);
+    set ReplacesFieldNames(value: string | null) {
+        this.Set('ReplacesFieldNames', value);
     }
 
     /**

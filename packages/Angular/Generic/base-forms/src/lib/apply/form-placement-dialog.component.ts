@@ -8,9 +8,12 @@ import {
     TargetRailItem,
     ReplaceableRailTabs,
     DefaultRailKeyFor,
-    ReplaceableFields,
+    ChosenFieldNames,
+    DefaultFieldSectionKey,
+    DescribeFieldList,
+    FieldsInSection,
     ReplacedPreviewKeys,
-    SectionHoldingField,
+    SectionsWithFields,
     ShowsRail,
     SlotIsOnForm,
     InitialPlacementState,
@@ -19,7 +22,7 @@ import {
     type FormPlacementContext,
     type FormPlacementDecision,
     type FormPlacementSection,
-    type FormPlacementFieldChoice,
+    type FormPlacementField,
     type FormPlacementRailItem,
     type FormPlacementReplaceMode,
     type FormPlacementSlotChoice,
@@ -161,36 +164,73 @@ export class MjFormPlacementDialogComponent {
         return this._context.Sections.length > 0;
     }
 
-    /** Every field a panel could stand in for, in form order. */
-    public get ReplaceableFieldChoices(): readonly FormPlacementFieldChoice[] {
-        return ReplaceableFields(this._context);
+    /** Sections whose fields a panel could stand in for. */
+    public get FieldSections(): readonly FormPlacementSection[] {
+        return SectionsWithFields(this._context);
+    }
+
+    /** The fields of the section the user is choosing from. */
+    public get FieldChoices(): readonly FormPlacementField[] {
+        return FieldsInSection(this._context, this.State.ReplaceFieldSectionKey);
     }
 
     /**
-     * Whether standing in for one field is offered.
+     * Whether standing in for fields is offered.
      *
      * Only when the fields were read off a real form. Derived targets name the entity's
      * fields rather than the ones this form draws, and a claim on a field the form does
      * not draw hides nothing while still reading as applied.
      */
     public get CanReplaceField(): boolean {
-        return this.ReplaceableFieldChoices.length > 0;
+        return this.FieldSections.length > 0;
     }
 
-    /** The section a field claim will render at the top of, for the preview. */
-    public get FieldTargetSectionKey(): string {
-        if (this.State.ReplaceMode !== 'field') return '';
-        return SectionHoldingField(this._context, this.State.ReplaceFieldName)?.Key ?? '';
+    /** The names the claim will carry, kept to fields the chosen section really draws. */
+    public get ChosenFields(): readonly string[] {
+        return ChosenFieldNames(this.State, this._context);
+    }
+
+    /** Whether this field is in the claim. */
+    public IsFieldChosen(fieldName: string): boolean {
+        return this.State.ReplaceFieldNames.includes(fieldName);
+    }
+
+    /** Add or remove one field from the claim. */
+    public ToggleField(fieldName: string, chosen: boolean): void {
+        const without = this.State.ReplaceFieldNames.filter((n) => n !== fieldName);
+        this.State.ReplaceFieldNames = chosen ? [...without, fieldName] : without;
+    }
+
+    /**
+     * Switch which section the claim draws from, dropping the fields chosen in the old one.
+     *
+     * A claim renders at the top of ONE section, so fields from two of them describe a
+     * panel with two places to be. Clearing on switch makes that impossible to express
+     * rather than something the dialog has to refuse later.
+     */
+    public SetFieldSection(sectionKey: string): void {
+        this.State.ReplaceFieldSectionKey = sectionKey;
+        this.State.ReplaceFieldNames = [];
     }
 
     /** Whether this preview block is the one a field claim lands inside. */
     public HostsFieldPanel(sectionKey: string): boolean {
-        return !!sectionKey && this.FieldTargetSectionKey === sectionKey;
+        return this.State.ReplaceMode === 'field'
+            && !!sectionKey
+            && this.State.ReplaceFieldSectionKey === sectionKey;
     }
 
-    /** The chosen field, for the note beside the choice. */
-    public get ChosenField(): FormPlacementFieldChoice | undefined {
-        return this.ReplaceableFieldChoices.find((f) => f.Name === this.State.ReplaceFieldName);
+    /** The chosen fields named in a line, for the note beside the choice. */
+    public get ChosenFieldSummary(): string {
+        const section = this._context.Sections.find((s) => s.Key === this.State.ReplaceFieldSectionKey);
+        const labels = this.ChosenFields
+            .map((name) => (section?.Fields ?? []).find((f) => f.Name === name)?.Label || name);
+        return DescribeFieldList(labels);
+    }
+
+    /** A field claim that names no field claims nothing, so Apply would be a lie. */
+    public get FieldClaimIsEmpty(): boolean {
+        return this.State.ReplaceMode === 'field' && this.ChosenFields.length === 0;
     }
 
     /**
@@ -342,14 +382,15 @@ export class MjFormPlacementDialogComponent {
             if (!SlotIsOnForm(this._context, this.State.Slot)) {
                 this.State = { ...this.State, Slot: DefaultSlotFor(this._context) };
             }
-            // The fields were unknown before the probe, so the chosen one was not either.
-            const fields = ReplaceableFields(this._context);
-            if (!fields.some((f) => f.Name === this.State.ReplaceFieldName)) {
+            // The fields were unknown before the probe, so the chosen section was not either.
+            const fieldSections = SectionsWithFields(this._context);
+            if (!fieldSections.some((section) => section.Key === this.State.ReplaceFieldSectionKey)) {
                 this.State = {
                     ...this.State,
-                    ReplaceFieldName: fields[0]?.Name ?? '',
-                    ReplaceMode: fields.length > 0 || this.State.ReplaceMode !== 'field'
-                        ? this.State.ReplaceMode : 'none',
+                    ReplaceFieldSectionKey: DefaultFieldSectionKey(this._context),
+                    ReplaceFieldNames: [],
+                    ReplaceMode: fieldSections.length === 0 && this.State.ReplaceMode === 'field'
+                        ? 'none' : this.State.ReplaceMode,
                 };
             }
             // The previously selected section may not be one the form draws.

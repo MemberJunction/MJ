@@ -235,6 +235,39 @@ export function SectionHoldingField(
     return context.Sections.find((s) => (s.Fields ?? []).some((f) => f.Name === name)) ?? null;
 }
 
+/** Sections that draw at least one field, so there is something to choose from. */
+export function SectionsWithFields(context: FormPlacementContext): readonly FormPlacementSection[] {
+    if (!context.TargetsVerified) return [];
+    return context.Sections.filter((s) => (s.Fields ?? []).length > 0);
+}
+
+/** The fields of one section, by key. Empty for a section the form does not draw. */
+export function FieldsInSection(
+    context: FormPlacementContext,
+    sectionKey: string,
+): readonly FormPlacementField[] {
+    const key = (sectionKey ?? '').trim();
+    if (!key) return [];
+    return context.Sections.find((s) => s.Key === key)?.Fields ?? [];
+}
+
+/**
+ * The chosen field names, kept to the ones the chosen section really draws.
+ *
+ * The section and the names are held apart in the state, so switching section leaves a
+ * stale set behind. Filtering here rather than on every change keeps the state simple and
+ * means a section the form stopped drawing cannot smuggle a claim through.
+ */
+export function ChosenFieldNames(state: FormPlacementState, context: FormPlacementContext): string[] {
+    const available = FieldsInSection(context, state.ReplaceFieldSectionKey);
+    return state.ReplaceFieldNames.filter((name) => available.some((f) => f.Name === name));
+}
+
+/** The section a field claim starts on: the first one with fields to offer. */
+export function DefaultFieldSectionKey(context: FormPlacementContext): string {
+    return SectionsWithFields(context)[0]?.Key ?? '';
+}
+
 /** Tabs a panel may stand in for — every rail item, on a form that shows a rail. */
 export function ReplaceableRailTabs(context: FormPlacementContext): readonly FormPlacementRailItem[] {
     return ShowsRail(context) ? context.Rail : [];
@@ -267,8 +300,7 @@ export function TargetRailItem(
     }
     if (state.ReplaceMode === 'section') return holding(state.ReplaceSectionKey);
     if (state.ReplaceMode === 'field') {
-        const section = SectionHoldingField(context, state.ReplaceFieldName);
-        return section ? holding(section.Key) : null;
+        return state.ReplaceFieldSectionKey ? holding(state.ReplaceFieldSectionKey) : null;
     }
     if (state.ReplaceMode === 'related') {
         const target = context.Related[state.ReplaceRelatedIndex];
@@ -324,8 +356,10 @@ export interface FormPlacementState {
     /** Key of the rail tab to stand in for, when the mode is `rail-tab`. */
     ReplaceRailKey: string;
     ReplaceSectionKey: string;
-    /** Entity field name to stand in for, when the mode is `field`. */
-    ReplaceFieldName: string;
+    /** Section whose fields the `field` mode chooses from. */
+    ReplaceFieldSectionKey: string;
+    /** Entity field names to stand in for, all inside {@link ReplaceFieldSectionKey}. */
+    ReplaceFieldNames: string[];
     ReplaceRelatedIndex: number;
     ReplaceContributionIndex: number;
     ActivateNow: boolean;
@@ -412,7 +446,8 @@ export function InitialPlacementState(
         ReplaceMode: 'none',
         ReplaceRailKey: DefaultRailKeyFor(context),
         ReplaceSectionKey: context.Sections[0]?.Key ?? '',
-        ReplaceFieldName: ReplaceableFields(context)[0]?.Name ?? '',
+        ReplaceFieldSectionKey: DefaultFieldSectionKey(context),
+        ReplaceFieldNames: [],
         ReplaceRelatedIndex: 0,
         ReplaceContributionIndex: 0,
         ActivateNow: !context.FullCustomForm,
@@ -437,9 +472,16 @@ export function PlacementStateFromContribution(
     const isRailTab = !!railKey && !sectionKey
         && ReplaceableRailTabs(context).some((tab) => tab.Key === railKey);
 
-    const fields = ReplaceableFields(context);
-    const claimedField = (spec.replacesFieldName ?? '').trim();
-    const fieldName = fields.some((f) => f.Name === claimedField) ? claimedField : '';
+    // A claim is read back against the section holding the first field the form still
+    // draws. A claim whose fields have all gone is dropped rather than shown against a
+    // section it no longer touches.
+    const claimedFields = (spec.replacesFieldNames ?? []).map((n) => n.trim()).filter((n) => n.length > 0);
+    const fieldSection = claimedFields
+        .map((name) => SectionHoldingField(context, name))
+        .find((section): section is FormPlacementSection => section != null) ?? null;
+    const keptFields = fieldSection
+        ? claimedFields.filter((name) => (fieldSection.Fields ?? []).some((f) => f.Name === name))
+        : [];
 
     const relatedIndex = spec.relatedEntity
         ? context.Related.findIndex((r) => r.Entity === spec.relatedEntity)
@@ -451,7 +493,7 @@ export function PlacementStateFromContribution(
     let mode: FormPlacementReplaceMode = 'none';
     if (isRailTab) mode = 'rail-tab';
     else if (sectionKey) mode = 'section';
-    else if (fieldName) mode = 'field';
+    else if (keptFields.length > 0) mode = 'field';
     else if (relatedIndex >= 0) mode = 'related';
     else if (contributionIndex >= 0) mode = 'contribution';
 
@@ -463,7 +505,8 @@ export function PlacementStateFromContribution(
         ReplaceMode: mode,
         ReplaceRailKey: isRailTab ? railKey : DefaultRailKeyFor(context),
         ReplaceSectionKey: sectionKey || context.Sections[0]?.Key || '',
-        ReplaceFieldName: fieldName || fields[0]?.Name || '',
+        ReplaceFieldSectionKey: fieldSection?.Key || DefaultFieldSectionKey(context),
+        ReplaceFieldNames: keptFields,
         ReplaceRelatedIndex: relatedIndex >= 0 ? relatedIndex : 0,
         ReplaceContributionIndex: contributionIndex >= 0 ? contributionIndex : 0,
         ActivateNow: activeNow,
@@ -511,8 +554,8 @@ export function ResolvePlacementDecision(
         const key = state.ReplaceSectionKey.trim();
         if (key) contribution.replacesSectionKey = key;
     } else if (state.ReplaceMode === 'field') {
-        const name = state.ReplaceFieldName.trim();
-        if (name) contribution.replacesFieldName = name;
+        const names = ChosenFieldNames(state, context);
+        if (names.length > 0) contribution.replacesFieldNames = names;
     } else if (state.ReplaceMode === 'related') {
         const target = context.Related[state.ReplaceRelatedIndex];
         if (target) {
@@ -525,6 +568,20 @@ export function ResolvePlacementDecision(
     }
 
     return { Contribution: contribution, ActivateNow: state.ActivateNow };
+}
+
+/**
+ * A readable list of field labels: one name, two joined by "and", the rest counted.
+ *
+ * Counted past three because the sentence is one line beside the buttons, and a panel
+ * standing in for eight fields would push the rest of it off the end.
+ */
+export function DescribeFieldList(labels: readonly string[]): string {
+    if (labels.length === 0) return 'nothing';
+    if (labels.length === 1) return `the ${labels[0]} field`;
+    if (labels.length === 2) return `the ${labels[0]} and ${labels[1]} fields`;
+    if (labels.length === 3) return `the ${labels[0]}, ${labels[1]} and ${labels[2]} fields`;
+    return `${labels.length} fields, starting with ${labels[0]}`;
 }
 
 /**
@@ -551,10 +608,13 @@ export function SummarizePlacement(state: FormPlacementState, context: FormPlace
             parts.push(`standing in for the ${section.Title} section`);
         }
     } else if (state.ReplaceMode === 'field') {
-        const field = ReplaceableFields(context).find((f) => f.Name === state.ReplaceFieldName);
-        parts.push(field
-            ? `standing in for the ${field.Label} field, at the top of the ${field.SectionTitle} section`
-            : 'standing in for one field, at the top of the section holding it');
+        const names = ChosenFieldNames(state, context);
+        const section = context.Sections.find((s) => s.Key === state.ReplaceFieldSectionKey);
+        const labels = names
+            .map((name) => (section?.Fields ?? []).find((f) => f.Name === name)?.Label || name);
+        parts.push(labels.length > 0 && section
+            ? `standing in for ${DescribeFieldList(labels)} at the top of the ${section.Title} section`
+            : 'standing in for no field yet — pick at least one');
     } else if (state.ReplaceMode === 'related') {
         const related = context.Related[state.ReplaceRelatedIndex];
         if (related) parts.push(`taking over the ${related.DisplayName} grid`);

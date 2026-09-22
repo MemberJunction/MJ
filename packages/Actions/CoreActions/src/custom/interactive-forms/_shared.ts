@@ -6,7 +6,7 @@
  */
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import {
     MJComponentEntity,
     MJEntityFormContributionEntity,
@@ -544,6 +544,35 @@ export function ResolveWriteContributionKey(
  * `panel:<component name>`, with characters {@link CONTRIBUTION_KEY_PATTERN} rejects
  * folded to `-`. Null when the name carries nothing usable.
  */
+/**
+ * Field names as the `ReplacesFieldNames` column stores them: a JSON array, or null.
+ *
+ * The same shape as `FormChromeRule.JoinFields`. Null for an empty list, because a claim
+ * that names no field is one the runtime can never match — the column's CHECK constraint
+ * refuses an empty array for the same reason.
+ */
+export function SerializeClaimedFieldNames(names: readonly string[] | undefined): string | null {
+    const cleaned: string[] = [];
+    for (const raw of names ?? []) {
+        const name = typeof raw === 'string' ? raw.trim() : '';
+        if (name.length > 0 && !cleaned.includes(name)) cleaned.push(name);
+    }
+    return cleaned.length > 0 ? JSON.stringify(cleaned) : null;
+}
+
+/** The field names in a `ReplacesFieldNames` cell. Inverse of {@link SerializeClaimedFieldNames}. */
+export function ParseClaimedFieldNames(raw: string | null | undefined): string[] {
+    if (!raw || raw.trim().length === 0) return [];
+    const parsed = SafeJSONParse<string[]>(raw, false);
+    if (!Array.isArray(parsed)) return [];
+    const out: string[] = [];
+    for (const item of parsed) {
+        const name = typeof item === 'string' ? item.trim() : '';
+        if (name.length > 0 && !out.includes(name)) out.push(name);
+    }
+    return out;
+}
+
 export function PanelContributionKey(componentName: string | null | undefined): string | null {
     const slug = (componentName ?? '')
         .trim()
@@ -599,7 +628,7 @@ export async function insertContribution(opts: {
     row.RelatedEntityID = relatedEntityID;
     row.RelatedJoinField = contribution.relatedJoinField ?? null;
     row.ReplacesSectionKey = contribution.replacesSectionKey ?? null;
-    row.ReplacesFieldName = contribution.replacesFieldName ?? null;
+    row.ReplacesFieldNames = SerializeClaimedFieldNames(contribution.replacesFieldNames);
     row.Inclusion = contribution.inclusion ?? null;
     row.ChromeGroup = contribution.chromeGroup ?? null;
     row.Presentation = contribution.presentation;

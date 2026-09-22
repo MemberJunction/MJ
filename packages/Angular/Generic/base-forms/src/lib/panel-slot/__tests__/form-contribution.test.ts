@@ -452,12 +452,25 @@ describe('FormContributionEntityMatches', () => {
  * function that merged them would take a section off the form for a claim on one field.
  */
 describe('ContributionClaimedFieldNames', () => {
-    it('names the field a winner stands in for', () => {
+    it('names every field a winner stands in for', () => {
         const names = ContributionClaimedFieldNames(
             PEOPLE, [], [],
-            [reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldName: 'LifetimeValue' })],
+            [reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldNames: ['LifetimeValue'] })],
         );
         expect(names).toEqual(['LifetimeValue']);
+    });
+
+    it('names a whole group of fields, de-duplicated across winners', () => {
+        const names = ContributionClaimedFieldNames(
+            PEOPLE, [], [],
+            [
+                reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'addr',
+                      replacesFieldNames: ['Street', 'City', 'PostalCode'] }),
+                reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv',
+                      replacesFieldNames: ['City', 'LifetimeValue'] }),
+            ],
+        );
+        expect(names).toEqual(['Street', 'City', 'PostalCode', 'LifetimeValue']);
     });
 
     it('reports nothing for a contribution that claims a section instead', () => {
@@ -470,7 +483,7 @@ describe('ContributionClaimedFieldNames', () => {
 
     it('does not hide the section the claimed field lives in', () => {
         const registrations = [reg({
-            entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldName: 'LifetimeValue',
+            entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldNames: ['LifetimeValue'],
         })];
         expect(ContributionHiddenSectionKeys(PEOPLE, [], [], registrations)).toEqual([]);
     });

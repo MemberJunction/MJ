@@ -102,6 +102,25 @@ export function CollectClassFormPanelRegistrations(): FormContributionRegistrati
     }));
 }
 
+/**
+ * The field names in a `ReplacesFieldNames` cell.
+ *
+ * Stored as a JSON array, the same shape and for the same reason as
+ * `FormChromeRule.JoinFields`. A cell that is not an array of names yields none, so a
+ * malformed row claims nothing rather than hiding something arbitrary.
+ */
+export function ParseClaimedFieldNames(raw: string | null | undefined): string[] {
+    if (!raw || raw.trim().length === 0) return [];
+    const parsed = SafeJSONParse<string[]>(raw, false);
+    if (!Array.isArray(parsed)) return [];
+    const out: string[] = [];
+    for (const item of parsed) {
+        const name = typeof item === 'string' ? item.trim() : '';
+        if (name.length > 0 && !out.includes(name)) out.push(name);
+    }
+    return out;
+}
+
 /** Project one `MJ: Entity Form Contributions` row onto the compiled metadata shape. */
 export function MetadataContributionToRegistration(row: MJEntityFormContributionEntity): FormContributionRegistration {
     const metadata: FormPanelRegistrationMetadata = {
@@ -114,7 +133,8 @@ export function MetadataContributionToRegistration(row: MJEntityFormContribution
     if (row.RelatedEntity) metadata.relatedEntity = row.RelatedEntity;
     if (row.RelatedJoinField) metadata.relatedJoinField = row.RelatedJoinField;
     if (row.ReplacesSectionKey) metadata.replacesSectionKey = row.ReplacesSectionKey;
-    if (row.ReplacesFieldName) metadata.replacesFieldName = row.ReplacesFieldName;
+    const claimedFields = ParseClaimedFieldNames(row.ReplacesFieldNames);
+    if (claimedFields.length > 0) metadata.replacesFieldNames = claimedFields;
     if (row.Inclusion) metadata.inclusion = row.Inclusion;
     if (row.ChromeGroup) metadata.chromeGroup = row.ChromeGroup;
     return {

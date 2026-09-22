@@ -79,8 +79,8 @@ export interface FormContributionWinner {
     RelatedJoinField?: string;
     /** Field/other section this registered winner asked to hide. */
     ReplacesSectionKey?: string;
-    /** Single field this registered winner stands in for, so the field is not drawn. */
-    ReplacesFieldName?: string;
+    /** Fields this registered winner stands in for, so they are not drawn. */
+    ReplacesFieldNames?: readonly string[];
     BakedSectionKey: string;
     DisplayName: string;
 
@@ -285,7 +285,7 @@ function registeredWinner(
         RelatedEntity: meta.relatedEntity,
         RelatedJoinField: meta.relatedJoinField ? StripJoinFieldBrackets(meta.relatedJoinField) : undefined,
         ReplacesSectionKey: meta.replacesSectionKey?.trim() || undefined,
-        ReplacesFieldName: meta.replacesFieldName?.trim() || undefined,
+        ReplacesFieldNames: meta.replacesFieldNames?.length ? [...meta.replacesFieldNames] : undefined,
         BakedSectionKey: sectionKey,
         DisplayName: displayName,
         Source: reg.Source,
@@ -409,12 +409,12 @@ export function ClaimedRelatedSectionKeys(
 }
 
 /**
- * Field names a winning contribution stands in for, so the form stops drawing them.
+ * Field names the winning contributions stand in for, so the form stops drawing them.
  *
  * Separate from {@link ContributionHiddenSectionKeys} because the two hide different
  * things: a section key removes a whole card, a field name removes one input from inside
- * one. The panel that made the claim renders at the top of the section that held the field,
- * which is the collapsible panel's job — this only says which fields are spoken for.
+ * one. The panel that made the claim renders at the top of the section that held those
+ * fields, which is the collapsible panel's job — this only says which fields are spoken for.
  */
 export function ContributionClaimedFieldNames(
     entityName: string,
@@ -433,7 +433,9 @@ export function ContributionClaimedFieldNames(
     const names: string[] = [];
     for (const winner of resolved.Winners) {
         if (winner.Kind !== 'registered') continue;
-        if (winner.ReplacesFieldName) names.push(winner.ReplacesFieldName);
+        for (const name of winner.ReplacesFieldNames ?? []) {
+            if (!names.includes(name)) names.push(name);
+        }
     }
     return names;
 }

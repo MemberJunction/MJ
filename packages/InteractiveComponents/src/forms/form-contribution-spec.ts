@@ -46,11 +46,14 @@ export interface FormContributionSpec {
     relatedJoinField?: string;
     replacesSectionKey?: string;
     /**
-     * A single field the panel stands in for. The panel renders at the top of the section
-     * holding that field, and the field itself is not drawn. Set instead of
+     * Fields the panel stands in for, all within one section. The panel renders at the top
+     * of that section and the named fields are not drawn. Set instead of
      * `replacesSectionKey` or `relatedEntity`, never alongside either.
+     *
+     * One section, because the panel has one place to draw: a claim spread over two
+     * sections has no single top to sit at.
      */
-    replacesFieldName?: string;
+    replacesFieldNames?: string[];
     inclusion?: FormContributionInclusion;
     chromeGroup?: FormContributionChromeGroup;
     presentation: FormContributionPresentation;
@@ -69,6 +72,17 @@ export function isFormPanelRole(spec: Pick<ComponentSpec, 'componentRole'>): boo
 
 function isSlot(value: unknown): value is FormContributionSlot {
     return typeof value === 'string' && (FORM_CONTRIBUTION_SLOTS as readonly string[]).includes(value);
+}
+
+/** A list of non-empty trimmed strings, de-duplicated, or undefined when there are none. */
+function cleanStringList(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) return undefined;
+    const out: string[] = [];
+    for (const item of value) {
+        const name = cleanString(item);
+        if (name && !out.includes(name)) out.push(name);
+    }
+    return out.length > 0 ? out : undefined;
 }
 
 function cleanString(value: unknown): string | undefined {
@@ -104,8 +118,8 @@ export function getDeclaredFormContribution(
     if (join) out.relatedJoinField = join;
     const replaces = cleanString(raw.replacesSectionKey);
     if (replaces) out.replacesSectionKey = replaces;
-    const replacesField = cleanString(raw.replacesFieldName);
-    if (replacesField) out.replacesFieldName = replacesField;
+    const replacedFields = cleanStringList(raw.replacesFieldNames);
+    if (replacedFields) out.replacesFieldNames = replacedFields;
     if (raw.inclusion === 'Primary' || raw.inclusion === 'More' || raw.inclusion === 'None') out.inclusion = raw.inclusion;
     if (raw.chromeGroup === 'details' || raw.chromeGroup === 'more') out.chromeGroup = raw.chromeGroup;
     const icon = cleanString(raw.icon);
