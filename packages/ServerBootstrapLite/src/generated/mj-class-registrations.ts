@@ -194,7 +194,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (416 classes)
+// @memberjunction/core-entities (418 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -434,6 +434,8 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeatureValueCacheEntity,
+    MJFeatureValueEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -1551,6 +1553,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeatureValueCacheEntity,
+    MJFeatureValueEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -1660,12 +1664,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
-    MJSearchScopePermissionEntity,
-    MJSearchScopeProviderEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopePermissionEntity,
+    MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
@@ -1864,12 +1868,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetVideoAnalyticsAction,
     HootSuiteBulkSchedulePostsAction,
     HootSuiteCreateScheduledPostAction,
-    HootSuiteDeleteScheduledPostAction,
-    HootSuiteGetAnalyticsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HootSuiteDeleteScheduledPostAction,
+    HootSuiteGetAnalyticsAction,
     HootSuiteGetScheduledPostsAction,
     HootSuiteGetSocialProfilesAction,
     HootSuiteSearchPostsAction,
@@ -2068,12 +2072,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJTemplateContentEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
-    MJUserRoutineEntityServer,
-    MJUserRoutineRecipientEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJUserRoutineEntityServer,
+    MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
     APIRateLimiterAction,
@@ -2247,7 +2251,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 958;
+export const CLASS_REGISTRATIONS_COUNT = 960;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

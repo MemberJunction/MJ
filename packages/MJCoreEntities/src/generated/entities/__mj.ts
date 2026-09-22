@@ -18438,7 +18438,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
-    VectorDatabaseID: z.string().describe(`
+    VectorDatabaseID: z.string().nullable().describe(`
         * * Field Name: VectorDatabaseID
         * * Display Name: Vector Database
         * * SQL Data Type: uniqueidentifier
@@ -18457,7 +18457,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Display Name: Template
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)`),
-    AIModelID: z.string().describe(`
+    AIModelID: z.string().nullable().describe(`
         * * Field Name: AIModelID
         * * Display Name: AI Model
         * * SQL Data Type: uniqueidentifier
@@ -18547,7 +18547,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Field Name: Entity
         * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
-    VectorDatabase: z.string().describe(`
+    VectorDatabase: z.string().nullable().describe(`
         * * Field Name: VectorDatabase
         * * Display Name: Vector Database Name
         * * SQL Data Type: nvarchar(100)`),
@@ -18555,7 +18555,7 @@ export const MJEntityDocumentSchema = z.object({
         * * Field Name: Template
         * * Display Name: Template Name
         * * SQL Data Type: nvarchar(255)`),
-    AIModel: z.string().describe(`
+    AIModel: z.string().nullable().describe(`
         * * Field Name: AIModel
         * * Display Name: AI Model Name
         * * SQL Data Type: nvarchar(50)`),
@@ -20596,6 +20596,262 @@ export const MJExternalDataSourceSchema = z.object({
 });
 
 export type MJExternalDataSourceEntityType = z.infer<typeof MJExternalDataSourceSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Feature Value Caches
+ */
+export const MJFeatureValueCacheSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for this feature value cache entry.`),
+    RecordProcessID: z.string().nullable().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+        * * Description: Optional reference to the RecordProcess that produced this cache entry. When NULL, the cached result is scoped by PromptID only and shared across pipelines using the same prompt.`),
+    PromptID: z.string().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: Reference to the AI Prompt used to compute this cached entry.`),
+    PromptVersionHash: z.string().describe(`
+        * * Field Name: PromptVersionHash
+        * * Display Name: Prompt Version Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 content hash of the rendered prompt template, output schema, and constraint instructions at execution time.`),
+    ConstraintHash: z.string().describe(`
+        * * Field Name: ConstraintHash
+        * * Display Name: Constraint Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the output value constraint definitions. Changes to allowed enum values or ranges invalidate cached results.`),
+    KeyHash: z.string().describe(`
+        * * Field Name: KeyHash
+        * * Display Name: Key Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash over the canonicalized JSON key field values. The primary lookup key.`),
+    KeyDisplay: z.string().nullable().describe(`
+        * * Field Name: KeyDisplay
+        * * Display Name: Key Display
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Human-readable plain text display of the key (e.g. "Senior Director, Field Marketing"). Makes this table legible as reference data.`),
+    KeyJSON: z.string().describe(`
+        * * Field Name: KeyJSON
+        * * Display Name: Key JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Full JSON representation of the input key fields and their values.`),
+    OutputsJSON: z.string().describe(`
+        * * Field Name: OutputsJSON
+        * * Display Name: Outputs JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Cached computed outputs JSON fragment. Stored directly so archival of AI Prompt Runs does not lose cached values.`),
+    Reasoning: z.string().nullable().describe(`
+        * * Field Name: Reasoning
+        * * Display Name: Reasoning
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional model reasoning or rationale captured from the prompt execution.`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Soft reference to the AI Prompt Run that first computed and populated this cached result.`),
+    HitCount: z.number().describe(`
+        * * Field Name: HitCount
+        * * Display Name: Hit Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total number of times this cached result has been served to skip an LLM invocation.`),
+    LastHitAt: z.date().nullable().describe(`
+        * * Field Name: LastHitAt
+        * * Display Name: Last Hit At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when this cached entry was last read and served.`),
+    ComputedAt: z.date().describe(`
+        * * Field Name: ComputedAt
+        * * Display Name: Computed At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: Timestamp when this cached entry was originally computed.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional expiration timestamp for time-to-live invalidation. NULL means no expiration.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: Timestamp when this record was created.`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: Timestamp when this record was last updated.`),
+    RecordProcess: z.string().nullable().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process Name
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJFeatureValueCacheEntityType = z.infer<typeof MJFeatureValueCacheSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Feature Values
+ */
+export const MJFeatureValueSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for this feature value history record.`),
+    RecordProcessID: z.string().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+        * * Description: The Record Process (Feature Pipeline) that computed this feature value.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The entity of the record this feature was computed for.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(900)
+        * * Description: Serialized primary key of the record this feature was computed for. Matches ProcessRunDetail.RecordID.`),
+    FeatureName: z.string().describe(`
+        * * Field Name: FeatureName
+        * * Display Name: Feature Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the feature, matching DataFeatureOutput.Name.`),
+    ValueText: z.string().nullable().describe(`
+        * * Field Name: ValueText
+        * * Display Name: Value (Text)
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Computed value as text, for text and categorical features.`),
+    ValueNumeric: z.number().nullable().describe(`
+        * * Field Name: ValueNumeric
+        * * Display Name: Value (Numeric)
+        * * SQL Data Type: float(53)
+        * * Description: Computed value as floating-point numeric, for numeric and score features.`),
+    ValueDate: z.date().nullable().describe(`
+        * * Field Name: ValueDate
+        * * Display Name: Value (Date)
+        * * SQL Data Type: datetimeoffset
+        * * Description: Computed value as datetimeoffset, for date and timestamp features.`),
+    ValueBoolean: z.boolean().nullable().describe(`
+        * * Field Name: ValueBoolean
+        * * Display Name: Value (Boolean)
+        * * SQL Data Type: bit
+        * * Description: Computed value as boolean bit flag.`),
+    ValueJSON: z.string().nullable().describe(`
+        * * Field Name: ValueJSON
+        * * Display Name: Value (JSON)
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Computed value as raw JSON string, for array or complex object features.`),
+    Reasoning: z.string().nullable().describe(`
+        * * Field Name: Reasoning
+        * * Display Name: Reasoning
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional model reasoning or rationale captured from the prompt execution.`),
+    Confidence: z.number().nullable().describe(`
+        * * Field Name: Confidence
+        * * Display Name: Confidence
+        * * SQL Data Type: float(53)
+        * * Description: Optional confidence score associated with this computed value.`),
+    PromptID: z.string().nullable().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: Reference to the AI Prompt used to compute this feature value.`),
+    PromptVersionHash: z.string().nullable().describe(`
+        * * Field Name: PromptVersionHash
+        * * Display Name: Prompt Version Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 content hash of the rendered prompt template and instructions at execution time.`),
+    ConstraintHash: z.string().nullable().describe(`
+        * * Field Name: ConstraintHash
+        * * Display Name: Constraint Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the value constraint definitions in effect when this feature was computed.`),
+    ProcessRunID: z.string().nullable().describe(`
+        * * Field Name: ProcessRunID
+        * * Display Name: Process Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+        * * Description: Reference to the Process Run during which this feature was computed.`),
+    ProcessRunDetailID: z.string().nullable().describe(`
+        * * Field Name: ProcessRunDetailID
+        * * Display Name: Process Run Detail
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Process Run Details (vwProcessRunDetails.ID)
+        * * Description: Reference to the specific Process Run Detail row for this record execution.`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Soft reference to the AI Prompt Run that computed this value.`),
+    FeatureValueCacheID: z.string().nullable().describe(`
+        * * Field Name: FeatureValueCacheID
+        * * Display Name: Feature Value Cache
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Feature Value Caches (vwFeatureValueCaches.ID)
+        * * Description: Optional reference to the FeatureValueCache entry if this value was served from cache.`),
+    ComputedAt: z.date().describe(`
+        * * Field Name: ComputedAt
+        * * Display Name: Computed At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: Timestamp when this feature value was computed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: Timestamp when this record was created.`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: Timestamp when this record was last updated.`),
+    RecordProcess: z.string().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().nullable().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt
+        * * SQL Data Type: nvarchar(255)`),
+    ProcessRunDetail: z.string().nullable().describe(`
+        * * Field Name: ProcessRunDetail
+        * * Display Name: Process Run Detail
+        * * SQL Data Type: nvarchar(450)`),
+    FeatureValueCache: z.string().nullable().describe(`
+        * * Field Name: FeatureValueCache
+        * * Display Name: Feature Value Cache
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJFeatureValueEntityType = z.infer<typeof MJFeatureValueSchema>;
 
 /**
  * zod schema definition for the entity MJ: File Categories
@@ -40945,7 +41201,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * FinalPayloadValidationResult: The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
-    * * NativeToolCallCount: The native tool call count must be greater than or equal to zero, if it is specified.
+    * * NativeToolCallCount: The native tool call count must be a non-negative number if it is provided.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -40982,21 +41238,21 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     }
 
     /**
-    * The native tool call count must be greater than or equal to zero, if it is specified.
+    * The native tool call count must be a non-negative number if it is provided.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    	public ValidateNativeToolCallCountGreaterThanOrEqualToZero(result: ValidationResult) {
-    		if (this.NativeToolCallCount != null && this.NativeToolCallCount < 0) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"NativeToolCallCount",
-    				"The native tool call count must be 0 or greater.",
-    				this.NativeToolCallCount,
-    				ValidationErrorType.Failure
-    			));
-    		}
+    public ValidateNativeToolCallCountGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.NativeToolCallCount != null && this.NativeToolCallCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"NativeToolCallCount",
+    			"The native tool call count must be 0 or greater.",
+    			this.NativeToolCallCount,
+    			ValidationErrorType.Failure
+    		));
     	}
+    }
 
     /**
     * This rule ensures that the step number must be greater than zero.
@@ -85913,10 +86169,10 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)
     */
-    get VectorDatabaseID(): string {
+    get VectorDatabaseID(): string | null {
         return this.Get('VectorDatabaseID');
     }
-    set VectorDatabaseID(value: string) {
+    set VectorDatabaseID(value: string | null) {
         this.Set('VectorDatabaseID', value);
     }
 
@@ -85956,10 +86212,10 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
-    get AIModelID(): string {
+    get AIModelID(): string | null {
         return this.Get('AIModelID');
     }
-    set AIModelID(value: string) {
+    set AIModelID(value: string | null) {
         this.Set('AIModelID', value);
     }
 
@@ -86153,7 +86409,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Display Name: Vector Database Name
     * * SQL Data Type: nvarchar(100)
     */
-    get VectorDatabase(): string {
+    get VectorDatabase(): string | null {
         return this.Get('VectorDatabase');
     }
 
@@ -86171,7 +86427,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Display Name: AI Model Name
     * * SQL Data Type: nvarchar(50)
     */
-    get AIModel(): string {
+    get AIModel(): string | null {
         return this.Get('AIModel');
     }
 
@@ -91563,6 +91819,645 @@ export class MJExternalDataSourceEntity extends BaseEntity<MJExternalDataSourceE
     */
     get Credential(): string | null {
         return this.Get('Credential');
+    }
+}
+
+
+/**
+ * MJ: Feature Value Caches - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FeatureValueCache
+ * * Base View: vwFeatureValueCaches
+ * * @description Dedup dictionary table for Feature Pipelines. Caches computed outputs by canonical input key hash, prompt version, and constraint hash. Distinct input strings (e.g. unique job titles) are computed once and reused across all matching records.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Feature Value Caches')
+export class MJFeatureValueCacheEntity extends BaseEntity<MJFeatureValueCacheEntityType> {
+    /**
+    * Loads the MJ: Feature Value Caches record from the database
+    * @param ID: string - primary key value to load the MJ: Feature Value Caches record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFeatureValueCacheEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this feature value cache entry.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    * * Description: Optional reference to the RecordProcess that produced this cache entry. When NULL, the cached result is scoped by PromptID only and shared across pipelines using the same prompt.
+    */
+    get RecordProcessID(): string | null {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string | null) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: Reference to the AI Prompt used to compute this cached entry.
+    */
+    get PromptID(): string {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: PromptVersionHash
+    * * Display Name: Prompt Version Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 content hash of the rendered prompt template, output schema, and constraint instructions at execution time.
+    */
+    get PromptVersionHash(): string {
+        return this.Get('PromptVersionHash');
+    }
+    set PromptVersionHash(value: string) {
+        this.Set('PromptVersionHash', value);
+    }
+
+    /**
+    * * Field Name: ConstraintHash
+    * * Display Name: Constraint Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the output value constraint definitions. Changes to allowed enum values or ranges invalidate cached results.
+    */
+    get ConstraintHash(): string {
+        return this.Get('ConstraintHash');
+    }
+    set ConstraintHash(value: string) {
+        this.Set('ConstraintHash', value);
+    }
+
+    /**
+    * * Field Name: KeyHash
+    * * Display Name: Key Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash over the canonicalized JSON key field values. The primary lookup key.
+    */
+    get KeyHash(): string {
+        return this.Get('KeyHash');
+    }
+    set KeyHash(value: string) {
+        this.Set('KeyHash', value);
+    }
+
+    /**
+    * * Field Name: KeyDisplay
+    * * Display Name: Key Display
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Human-readable plain text display of the key (e.g. "Senior Director, Field Marketing"). Makes this table legible as reference data.
+    */
+    get KeyDisplay(): string | null {
+        return this.Get('KeyDisplay');
+    }
+    set KeyDisplay(value: string | null) {
+        this.Set('KeyDisplay', value);
+    }
+
+    /**
+    * * Field Name: KeyJSON
+    * * Display Name: Key JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Full JSON representation of the input key fields and their values.
+    */
+    get KeyJSON(): string {
+        return this.Get('KeyJSON');
+    }
+    set KeyJSON(value: string) {
+        this.Set('KeyJSON', value);
+    }
+
+    /**
+    * * Field Name: OutputsJSON
+    * * Display Name: Outputs JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Cached computed outputs JSON fragment. Stored directly so archival of AI Prompt Runs does not lose cached values.
+    */
+    get OutputsJSON(): string {
+        return this.Get('OutputsJSON');
+    }
+    set OutputsJSON(value: string) {
+        this.Set('OutputsJSON', value);
+    }
+
+    /**
+    * * Field Name: Reasoning
+    * * Display Name: Reasoning
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional model reasoning or rationale captured from the prompt execution.
+    */
+    get Reasoning(): string | null {
+        return this.Get('Reasoning');
+    }
+    set Reasoning(value: string | null) {
+        this.Set('Reasoning', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Soft reference to the AI Prompt Run that first computed and populated this cached result.
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: HitCount
+    * * Display Name: Hit Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total number of times this cached result has been served to skip an LLM invocation.
+    */
+    get HitCount(): number {
+        return this.Get('HitCount');
+    }
+    set HitCount(value: number) {
+        this.Set('HitCount', value);
+    }
+
+    /**
+    * * Field Name: LastHitAt
+    * * Display Name: Last Hit At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this cached entry was last read and served.
+    */
+    get LastHitAt(): Date | null {
+        return this.Get('LastHitAt');
+    }
+    set LastHitAt(value: Date | null) {
+        this.Set('LastHitAt', value);
+    }
+
+    /**
+    * * Field Name: ComputedAt
+    * * Display Name: Computed At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this cached entry was originally computed.
+    */
+    get ComputedAt(): Date {
+        return this.Get('ComputedAt');
+    }
+    set ComputedAt(value: Date) {
+        this.Set('ComputedAt', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional expiration timestamp for time-to-live invalidation. NULL means no expiration.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: Timestamp when this record was created.
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: Timestamp when this record was last updated.
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string | null {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string {
+        return this.Get('Prompt');
+    }
+}
+
+
+/**
+ * MJ: Feature Values - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FeatureValue
+ * * Base View: vwFeatureValues
+ * * @description Complete historical audit table for Feature Pipelines. Records every feature value ever computed per entity record, with full provenance, model reasoning, and run back-links.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Feature Values')
+export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
+    /**
+    * Loads the MJ: Feature Values record from the database
+    * @param ID: string - primary key value to load the MJ: Feature Values record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFeatureValueEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for this feature value history record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    * * Description: The Record Process (Feature Pipeline) that computed this feature value.
+    */
+    get RecordProcessID(): string {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The entity of the record this feature was computed for.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(900)
+    * * Description: Serialized primary key of the record this feature was computed for. Matches ProcessRunDetail.RecordID.
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: FeatureName
+    * * Display Name: Feature Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the feature, matching DataFeatureOutput.Name.
+    */
+    get FeatureName(): string {
+        return this.Get('FeatureName');
+    }
+    set FeatureName(value: string) {
+        this.Set('FeatureName', value);
+    }
+
+    /**
+    * * Field Name: ValueText
+    * * Display Name: Value (Text)
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Computed value as text, for text and categorical features.
+    */
+    get ValueText(): string | null {
+        return this.Get('ValueText');
+    }
+    set ValueText(value: string | null) {
+        this.Set('ValueText', value);
+    }
+
+    /**
+    * * Field Name: ValueNumeric
+    * * Display Name: Value (Numeric)
+    * * SQL Data Type: float(53)
+    * * Description: Computed value as floating-point numeric, for numeric and score features.
+    */
+    get ValueNumeric(): number | null {
+        return this.Get('ValueNumeric');
+    }
+    set ValueNumeric(value: number | null) {
+        this.Set('ValueNumeric', value);
+    }
+
+    /**
+    * * Field Name: ValueDate
+    * * Display Name: Value (Date)
+    * * SQL Data Type: datetimeoffset
+    * * Description: Computed value as datetimeoffset, for date and timestamp features.
+    */
+    get ValueDate(): Date | null {
+        return this.Get('ValueDate');
+    }
+    set ValueDate(value: Date | null) {
+        this.Set('ValueDate', value);
+    }
+
+    /**
+    * * Field Name: ValueBoolean
+    * * Display Name: Value (Boolean)
+    * * SQL Data Type: bit
+    * * Description: Computed value as boolean bit flag.
+    */
+    get ValueBoolean(): boolean | null {
+        return this.Get('ValueBoolean');
+    }
+    set ValueBoolean(value: boolean | null) {
+        this.Set('ValueBoolean', value);
+    }
+
+    /**
+    * * Field Name: ValueJSON
+    * * Display Name: Value (JSON)
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Computed value as raw JSON string, for array or complex object features.
+    */
+    get ValueJSON(): string | null {
+        return this.Get('ValueJSON');
+    }
+    set ValueJSON(value: string | null) {
+        this.Set('ValueJSON', value);
+    }
+
+    /**
+    * * Field Name: Reasoning
+    * * Display Name: Reasoning
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional model reasoning or rationale captured from the prompt execution.
+    */
+    get Reasoning(): string | null {
+        return this.Get('Reasoning');
+    }
+    set Reasoning(value: string | null) {
+        this.Set('Reasoning', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: float(53)
+    * * Description: Optional confidence score associated with this computed value.
+    */
+    get Confidence(): number | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: number | null) {
+        this.Set('Confidence', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: Reference to the AI Prompt used to compute this feature value.
+    */
+    get PromptID(): string | null {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string | null) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: PromptVersionHash
+    * * Display Name: Prompt Version Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 content hash of the rendered prompt template and instructions at execution time.
+    */
+    get PromptVersionHash(): string | null {
+        return this.Get('PromptVersionHash');
+    }
+    set PromptVersionHash(value: string | null) {
+        this.Set('PromptVersionHash', value);
+    }
+
+    /**
+    * * Field Name: ConstraintHash
+    * * Display Name: Constraint Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the value constraint definitions in effect when this feature was computed.
+    */
+    get ConstraintHash(): string | null {
+        return this.Get('ConstraintHash');
+    }
+    set ConstraintHash(value: string | null) {
+        this.Set('ConstraintHash', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunID
+    * * Display Name: Process Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+    * * Description: Reference to the Process Run during which this feature was computed.
+    */
+    get ProcessRunID(): string | null {
+        return this.Get('ProcessRunID');
+    }
+    set ProcessRunID(value: string | null) {
+        this.Set('ProcessRunID', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunDetailID
+    * * Display Name: Process Run Detail
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Run Details (vwProcessRunDetails.ID)
+    * * Description: Reference to the specific Process Run Detail row for this record execution.
+    */
+    get ProcessRunDetailID(): string | null {
+        return this.Get('ProcessRunDetailID');
+    }
+    set ProcessRunDetailID(value: string | null) {
+        this.Set('ProcessRunDetailID', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Soft reference to the AI Prompt Run that computed this value.
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: FeatureValueCacheID
+    * * Display Name: Feature Value Cache
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Feature Value Caches (vwFeatureValueCaches.ID)
+    * * Description: Optional reference to the FeatureValueCache entry if this value was served from cache.
+    */
+    get FeatureValueCacheID(): string | null {
+        return this.Get('FeatureValueCacheID');
+    }
+    set FeatureValueCacheID(value: string | null) {
+        this.Set('FeatureValueCacheID', value);
+    }
+
+    /**
+    * * Field Name: ComputedAt
+    * * Display Name: Computed At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this feature value was computed.
+    */
+    get ComputedAt(): Date {
+        return this.Get('ComputedAt');
+    }
+    set ComputedAt(value: Date) {
+        this.Set('ComputedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: Timestamp when this record was created.
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: Timestamp when this record was last updated.
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string | null {
+        return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: ProcessRunDetail
+    * * Display Name: Process Run Detail
+    * * SQL Data Type: nvarchar(450)
+    */
+    get ProcessRunDetail(): string | null {
+        return this.Get('ProcessRunDetail');
+    }
+
+    /**
+    * * Field Name: FeatureValueCache
+    * * Display Name: Feature Value Cache
+    * * SQL Data Type: nvarchar(500)
+    */
+    get FeatureValueCache(): string | null {
+        return this.Get('FeatureValueCache');
     }
 }
 
@@ -128538,6 +129433,57 @@ export class MJWebSearchProviderEntity extends BaseEntity<MJWebSearchProviderEnt
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Web Search Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MaxResultsOverride: The maximum results override must be greater than 0 if it is specified.
+    * * Priority: The priority value must be a non-negative number (0 or greater) to ensure correct ordering and scheduling.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMaxResultsOverrideGreaterThanZero(result);
+        this.ValidatePriorityMinVal(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The maximum results override must be greater than 0 if it is specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxResultsOverrideGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxResultsOverride != null && this.MaxResultsOverride <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MaxResultsOverride",
+    			"The maximum results override must be greater than 0 if it is specified.",
+    			this.MaxResultsOverride,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The priority value must be a non-negative number (0 or greater) to ensure correct ordering and scheduling.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityMinVal(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Priority",
+    			"Priority must be greater than or equal to 0.",
+    			this.Priority,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
