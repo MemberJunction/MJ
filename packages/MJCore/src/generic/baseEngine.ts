@@ -15,6 +15,7 @@ import { BaseEngineRegistry } from "./baseEngineRegistry";
 import { IStartupSink } from "./RegisterForStartup";
 import { CacheChangedEvent, LocalCacheManager } from "./localCacheManager";
 import { ProviderBase } from "./providerBase";
+import { DatabaseProviderBase } from "./databaseProviderBase";
 import { TransformSimpleObjectToEntityObject } from "./util";
 import { WellKnownUserSource } from "./wellKnownUserSource";
 /**
@@ -263,6 +264,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _provider: IMetadataProvider;
     private _dataChange$ = new Subject<EngineDataChangeEvent>();
     private _cacheChangeUnsubscribers: (() => void)[] = [];
+
+    /**
+     * Tail of the derived-state rebuild queue for this engine. See {@link RebuildDerivedState}.
+     */
+    private _derivedStateRebuild: Promise<void> = Promise.resolve();
+
+    /**
+     * Rebuilds derived state after a cache-change event, one rebuild at a time and without
+     * letting a failure escape.
+     *
+     * `AdditionalLoading` is subclass-supplied and may perform database I/O — some overrides
+     * call `Config()` on another engine, which issues queries. Cache-change events are
+     * dispatched per fingerprint from a fire-and-forget pub/sub callback, so a burst of them
+     * would otherwise run several of those overlapping on the same connection. Serializing
+     * them keeps the rebuild off the critical path of whatever else that connection is doing.
+     *
+     * Failures are logged rather than propagated: this runs from an event callback with no
+     * caller able to handle them, an unhandled rejection there would be lost anyway, and one
+     * engine's rebuild failing must not stop the next event from being applied.
+     */
+    protected RebuildDerivedState(contextUser?: UserInfo): Promise<void> {
+        this._derivedStateRebuild = this._derivedStateRebuild
+            .catch(() => undefined)
+            .then(async () => {
+                try {
+                    await this.AdditionalLoading(contextUser);
+                } catch (e) {
+                    LogError(
+                        `${this.constructor.name}: derived-state rebuild after a cache change failed — ` +
+                        `${e instanceof Error ? e.message : String(e)}`
+                    );
+                }
+            });
+        return this._derivedStateRebuild;
+    }
     private _propertySubjects: Map<string, BehaviorSubject<BaseEntity[]>> = new Map();
     private _isPermissionConstrained: boolean = false;
     private _deniedEntityNames: string[] = [];
@@ -846,11 +882,34 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config));
 
                 if (allCanUseImmediate) {
-                    // Process immediately without debounce - mutation requires await because the
-                    // entity must be cloned (with its provider rebound) before being cached
-                    for (const config of matchingConfigs) {
-                        await this.applyImmediateMutation(config, event);
+                    const applyAll = async (): Promise<void> => {
+                        // mutation requires await because the entity must be cloned (with its
+                        // provider rebound) before being cached
+                        for (const config of matchingConfigs) {
+                            await this.applyImmediateMutation(config, event);
+                        }
+                    };
+                    // The entity raises save/delete as soon as its own write returns, while an
+                    // enclosing transaction may still be open. Mutating the cache now would keep a
+                    // rolled-back row cached for the life of the process, so follow the transaction:
+                    // apply on commit, drop on rollback. The token must be captured before the first
+                    // await — this runs synchronously inside the save that raised the event.
+                    const provider = event.baseEntity.ProviderToUse;
+                    if (provider instanceof DatabaseProviderBase && provider.TransactionDepth > 0) {
+                        const token = provider.CapturePostCommitToken();
+                        // By commit, the same object may have been deleted and reset by NewRecord()
+                        // (new key, blank fields). Cloning it then would cache a blank row, so a save
+                        // whose object no longer carries the saved key is superseded — the later
+                        // event on that object (queued behind this one) is the one that counts.
+                        const savedKey = event.type === 'save' ? event.baseEntity.PrimaryKey.ToString() : null;
+                        const applyIfCurrent = async (): Promise<void> => {
+                            if (savedKey !== null && event.baseEntity.PrimaryKey.ToString() !== savedKey) return;
+                            await applyAll();
+                        };
+                        provider.RunAfterCommit(applyIfCurrent, `BaseEngine cache mutation for ${eName}`, token);
+                        return true;
                     }
+                    await applyAll();
                     return true;
                 } else {
                     // At least one config requires full refresh, use debouncing
@@ -1263,23 +1322,31 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (!currentData) {
             return false;
         }
+        return this.indexOfEntityByRefOrKey(currentData, entity, preDeleteValues) >= 0;
+    }
 
-        // First check by object reference
-        if (currentData.indexOf(entity) >= 0) {
-            return true;
+    /**
+     * Index of `entity` in `currentData` by reference, else by primary key. When `preDeleteValues`
+     * carries a complete key it is the ONLY key used: after a delete the live entity's key has
+     * been regenerated by NewRecord(), so it can never match the deleted row (see
+     * {@link isEntityInArrayByRefOrKey}).
+     */
+    private indexOfEntityByRefOrKey(currentData: BaseEntity[], entity: BaseEntity, preDeleteValues?: Record<string, unknown>): number {
+        const byRef = currentData.indexOf(entity);
+        if (byRef >= 0) {
+            return byRef;
         }
 
-        // Preferred by-key check: build the key from the pre-delete snapshot
         if (preDeleteValues) {
             const key = new CompositeKey();
             key.LoadFromEntityInfoAndRecord(entity.EntityInfo, preDeleteValues);
             if (key.KeyValuePairs.length > 0 && !key.KeyValuePairs.some(kv => kv.Value == null)) {
-                return currentData.some(e => e.PrimaryKey.Equals(key));
+                return currentData.findIndex(e => e.PrimaryKey.Equals(key));
             }
         }
 
-        // Fallback: check by the entity's current primary key
-        return this.findEntityIndexByPrimaryKeys(currentData, entity) >= 0;
+        // Fallback: the entity's current primary key
+        return this.findEntityIndexByPrimaryKeys(currentData, entity);
     }
 
     /**
@@ -1527,12 +1594,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 }
             }
         } else if (event.type === 'delete') {
-            // For delete, first try to find by object reference
-            let index = currentData.indexOf(entity);
-            if (index < 0) {
-                // Not found by reference, search by composite primary key
-                index = this.findEntityIndexByPrimaryKeys(currentData, entity);
-            }
+            // Match on the pre-delete snapshot: when this runs deferred (after the enclosing
+            // transaction commits), NewRecord() has already given `entity` a new primary key.
+            const oldValues = (event.payload as { OldValues?: Record<string, unknown> } | undefined)?.OldValues;
+            const index = this.indexOfEntityByRefOrKey(currentData, entity, oldValues);
 
             if (index >= 0) {
                 currentData.splice(index, 1);
@@ -2148,6 +2213,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                             ErrorMessage: '',
                             UserViewRunID: '',
                         });
+                        // HandleSingleViewResult replaces the property with newly materialized
+                        // entity objects, so anything a subclass derived from the previous
+                        // objects in AdditionalLoading — grouped child collections, memoized
+                        // lookups — now refers to instances this engine has discarded and must
+                        // be rebuilt. Every other path that replaces a property does this;
+                        // omitting it leaves an engine whose arrays are complete and correct
+                        // while its derived state is stale or empty, which is invisible to any
+                        // row-count check and is not repaired by EnsureLoaded()/Config() because
+                        // the config is still marked loaded.
+                        await this.RebuildDerivedState(this._contextUser);
+                        // Emit after the rebuild, never before, so subscribers cannot observe
+                        // the property before its derived state is attached.
+                        this.emitPropertyChange(config.PropertyName);
                         return;
                     }
                     // rows === null → cannot safely materialize; fall through to a full reload
@@ -2160,8 +2238,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 LogStatus(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`);
             }
         }
-        // Fallback: reload this config from the database
+        // Fallback: reload this config from the database. This also replaces the property,
+        // so the derived state has to be rebuilt here too.
         await this.LoadSingleConfig(config, this._contextUser);
+        await this.RebuildDerivedState(this._contextUser);
     }
 
     /**

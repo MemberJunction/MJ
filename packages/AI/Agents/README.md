@@ -142,13 +142,14 @@ Conversational agent that runs in a loop: prompt -> decide -> act -> repeat. Bes
 
 Step-based agent that follows a predefined flow graph — steps with explicit conditional paths between them. Best for deterministic workflows where the execution path is known in advance.
 
-**A Flow agent no longer walks its own graph.** `DetermineInitialStep` compiles the agent's `AIAgentStep` + `AIAgentStepPath` rows into a `TaskGraphSpec` and returns a `Tasks` step; `BaseAgent.executeTasksStep` submits it and detaches. From that point the workflow is `Task` rows owned by the durable dispatcher in [`@memberjunction/task-graph`](../../TaskGraph/README.md), with the same claiming, conditions, skip cascade, retry and failure semantics as any other graph — one traversal engine, one set of rules, one place a bug can be fixed.
+**A top-level Flow agent no longer walks its own graph.** `DetermineInitialStep` compiles the agent's `AIAgentStep` + `AIAgentStepPath` rows into a `TaskGraphSpec` and returns a `Tasks` step; `BaseAgent.executeTasksStep` submits it and detaches. From that point the workflow is `Task` rows owned by the durable dispatcher in [`@memberjunction/task-graph`](../../TaskGraph/README.md), with the same claiming, conditions, skip cascade, retry and failure semantics as any other graph — one traversal engine, one set of rules, one place a bug can be fixed.
 
-Three consequences worth knowing before you debug one:
+Consequences worth knowing before you debug one:
 
-- **The run ends at submission.** It returns a handle ("Started — 4 tasks running"), not a result. Per-step detail lives in `Task` rows, not in `AIAgentRunStep`, and cost arrives afterwards via `TotalCostRollup` (see the guide).
-- **The in-run walker is retained but refused.** It stays compiled as the reference implementation the compiler is checked against, and throws at its single choke point if anything reaches it — so a workflow that runs at all provably ran on the dispatcher.
-- **A `Sub-Agent` node starts a new root `AIAgentRun`**, linked from `Task.AgentRunID` rather than nested under the submitting run.
+- **A dispatched run ends at submission.** It returns a handle ("Started — 4 tasks running"), not a result, and parks as `Paused` until the dispatcher settles the graph. Per-step detail lives in `Task` rows, not in `AIAgentRunStep`, and cost arrives afterwards via `TotalCostRollup` (see the guide).
+- **A run that needs the result walks the flow in-process.** A sub-agent run (one with `parentRun`) does this automatically, and a top-level caller opts in with `agentTypeParams.executionMode: 'inRun'` (`FlowAgentExecuteParams`). The run returns the flow's final payload, as in 5.x, and `startAtStep` works. A dispatched run that reaches the walker by mistake is refused at its choke point.
+- **The mode is on the run.** A completed `Decision` step named "Workflow runs in this run" or "Workflow runs on the task-graph dispatcher" records which engine ran it and why.
+- **A dispatched `Sub-Agent` node starts its own `AIAgentRun`**, linked from `Task.AgentRunID` and parented to the submitting run. If that sub-agent is itself a Flow agent, it runs in-process and returns its result to the task.
 
 See the **[Workflows and Task Graphs Guide](../../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md)** for the full model: node kinds, exclusive groups, payload mappings, loops, failure semantics, observability, and a worked configuration example.
 

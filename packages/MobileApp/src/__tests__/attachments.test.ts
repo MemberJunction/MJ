@@ -19,10 +19,15 @@ const state = vi.hoisted(() => ({
     docResult: { canceled: false, assets: [{ uri: 'file:///docs/report.pdf', name: 'report.pdf', mimeType: 'application/pdf', size: 4096 }] } as PickerResult,
     base64: 'Zm9vYmFy',
     base64Throws: false,
-    storageProviders: [{ ID: 'prov-1' }] as { ID: string }[],
-    runViewSuccess: true,
-    saveResult: true,
-    lastSavedFile: null as { Name: string; ProviderID: string; ContentType: string | null; Status: string } | null,
+    lastAttachCall: null as unknown[] | null,
+    attachResult: { ok: true, attachmentId: 'ca-1', storedInline: true } as Record<string, unknown>,
+}));
+
+vi.mock('@/data/services/attachment-storage', () => ({
+    AttachCapturedFileToMessage: (...args: unknown[]) => {
+        state.lastAttachCall = args;
+        return Promise.resolve(state.attachResult);
+    },
 }));
 
 vi.mock('expo-image-picker', () => ({
@@ -48,44 +53,16 @@ vi.mock('expo-file-system', () => ({
     },
 }));
 
-vi.mock('@memberjunction/core', () => {
-    class FakeFile {
-        ID = 'file-1';
-        Name = '';
-        ProviderID = '';
-        ContentType: string | null = null;
-        Status = '';
-        LatestResult = { CompleteMessage: 'err' };
-        NewRecord(): void {}
-        async Save(): Promise<boolean> {
-            state.lastSavedFile = { Name: this.Name, ProviderID: this.ProviderID, ContentType: this.ContentType, Status: this.Status };
-            return state.saveResult;
-        }
-    }
-    class Metadata {
-        get CurrentUser(): { ID: string } {
-            return { ID: 'user-1' };
-        }
-        async GetEntityObject(): Promise<FakeFile> {
-            return new FakeFile();
-        }
-    }
-    class RunView {
-        async RunView(): Promise<{ Success: boolean; Results: unknown[] }> {
-            return { Success: state.runViewSuccess, Results: state.storageProviders };
-        }
-    }
-    return { Metadata, RunView };
-});
+
 
 import {
-    capturePhoto,
-    composeMessageWithAttachment,
-    describeAttachment,
-    persistAttachment,
-    pickDocument,
-    pickImageFromLibrary,
-    readAttachmentBase64,
+    CapturePhoto,
+    ComposeMessageWithAttachment,
+    DescribeAttachment,
+    AttachCapturedFile,
+    PickDocument,
+    PickImageFromLibrary,
+    ReadAttachmentBase64,
     type CapturedAttachment,
 } from '@/data/services/attachments';
 
@@ -98,15 +75,13 @@ beforeEach(() => {
     state.docResult = { canceled: false, assets: [{ uri: 'file:///docs/report.pdf', name: 'report.pdf', mimeType: 'application/pdf', size: 4096 }] };
     state.base64 = 'Zm9vYmFy';
     state.base64Throws = false;
-    state.storageProviders = [{ ID: 'prov-1' }];
-    state.runViewSuccess = true;
-    state.saveResult = true;
-    state.lastSavedFile = null;
+    state.lastAttachCall = null;
+    state.attachResult = { ok: true, attachmentId: 'ca-1', storedInline: true };
 });
 
-describe('pickImageFromLibrary', () => {
+describe('PickImageFromLibrary', () => {
     it('maps a picked asset to a CapturedAttachment', async () => {
-        const att = await pickImageFromLibrary();
+        const att = await PickImageFromLibrary();
         expect(att).toEqual<CapturedAttachment>({
             uri: 'file:///lib/IMG.jpg',
             name: 'IMG.jpg',
@@ -118,48 +93,48 @@ describe('pickImageFromLibrary', () => {
 
     it('returns null (no throw) when the user cancels', async () => {
         state.imageResult = { canceled: true, assets: null };
-        expect(await pickImageFromLibrary()).toBeNull();
+        expect(await PickImageFromLibrary()).toBeNull();
     });
 
     it('returns null when library permission is permanently denied (no re-prompt)', async () => {
         state.libraryPerm = { granted: false, canAskAgain: false };
-        expect(await pickImageFromLibrary()).toBeNull();
+        expect(await PickImageFromLibrary()).toBeNull();
     });
 
     it('prompts and honors the request when the permission is askable', async () => {
         state.libraryPerm = { granted: false, canAskAgain: true };
         state.requestResult = { granted: true };
-        const att = await pickImageFromLibrary();
+        const att = await PickImageFromLibrary();
         expect(att?.name).toBe('IMG.jpg');
     });
 
     it('falls back to a derived name + default mime when the asset omits them', async () => {
         state.imageResult = { canceled: false, assets: [{ uri: 'file:///lib/snap.png' }] };
-        const att = await pickImageFromLibrary();
+        const att = await PickImageFromLibrary();
         expect(att).toMatchObject({ name: 'snap.png', mimeType: 'image/jpeg', kind: 'image' });
     });
 });
 
-describe('capturePhoto', () => {
+describe('CapturePhoto', () => {
     it('maps a captured photo to a CapturedAttachment', async () => {
-        const att = await capturePhoto();
+        const att = await CapturePhoto();
         expect(att).toMatchObject({ kind: 'image', mimeType: 'image/jpeg' });
     });
 
     it('returns null when camera permission is denied', async () => {
         state.cameraPerm = { granted: false, canAskAgain: false };
-        expect(await capturePhoto()).toBeNull();
+        expect(await CapturePhoto()).toBeNull();
     });
 
     it('degrades gracefully (null, no throw) when there is no camera (simulator)', async () => {
         state.cameraThrows = true;
-        expect(await capturePhoto()).toBeNull();
+        expect(await CapturePhoto()).toBeNull();
     });
 });
 
-describe('pickDocument', () => {
+describe('PickDocument', () => {
     it('maps a picked document to a CapturedAttachment', async () => {
-        const att = await pickDocument();
+        const att = await PickDocument();
         expect(att).toEqual<CapturedAttachment>({
             uri: 'file:///docs/report.pdf',
             name: 'report.pdf',
@@ -171,75 +146,76 @@ describe('pickDocument', () => {
 
     it('returns null when the user cancels', async () => {
         state.docResult = { canceled: true, assets: null };
-        expect(await pickDocument()).toBeNull();
+        expect(await PickDocument()).toBeNull();
     });
 
     it('falls back to octet-stream when mimeType is missing', async () => {
         state.docResult = { canceled: false, assets: [{ uri: 'file:///docs/data.bin', name: 'data.bin' }] };
-        const att = await pickDocument();
+        const att = await PickDocument();
         expect(att?.mimeType).toBe('application/octet-stream');
     });
 });
 
-describe('readAttachmentBase64', () => {
+describe('ReadAttachmentBase64', () => {
     const att: CapturedAttachment = { uri: 'file:///lib/IMG.jpg', name: 'IMG.jpg', mimeType: 'image/jpeg', kind: 'image' };
 
     it('returns the base64 contents', async () => {
-        expect(await readAttachmentBase64(att)).toBe('Zm9vYmFy');
+        expect(await ReadAttachmentBase64(att)).toBe('Zm9vYmFy');
     });
 
     it('returns null (no throw) when the file cannot be read', async () => {
         state.base64Throws = true;
-        expect(await readAttachmentBase64(att)).toBeNull();
+        expect(await ReadAttachmentBase64(att)).toBeNull();
     });
 });
 
-describe('describeAttachment / composeMessageWithAttachment', () => {
+describe('DescribeAttachment / ComposeMessageWithAttachment', () => {
     const image: CapturedAttachment = { uri: 'u', name: 'IMG.jpg', mimeType: 'image/jpeg', size: 2048, kind: 'image' };
     const doc: CapturedAttachment = { uri: 'u', name: 'report.pdf', mimeType: 'application/pdf', kind: 'document' };
 
     it('describes an image with a formatted size', () => {
-        expect(describeAttachment(image)).toBe('[Attached image: IMG.jpg (image/jpeg, 2 KB)]');
+        expect(DescribeAttachment(image)).toBe('[Attached image: IMG.jpg (image/jpeg, 2 KB)]');
     });
 
     it('describes a document without a size when unknown', () => {
-        expect(describeAttachment(doc)).toBe('[Attached file: report.pdf (application/pdf)]');
+        expect(DescribeAttachment(doc)).toBe('[Attached file: report.pdf (application/pdf)]');
     });
 
     it('returns trimmed text unchanged when there is no attachment', () => {
-        expect(composeMessageWithAttachment('  hi  ', null)).toBe('hi');
+        expect(ComposeMessageWithAttachment('  hi  ', null)).toBe('hi');
     });
 
     it('appends the note under the text when both are present', () => {
-        expect(composeMessageWithAttachment('look', image)).toBe('look\n\n[Attached image: IMG.jpg (image/jpeg, 2 KB)]');
+        expect(ComposeMessageWithAttachment('look', image)).toBe('look\n\n[Attached image: IMG.jpg (image/jpeg, 2 KB)]');
     });
 
     it('uses only the note when the text is empty', () => {
-        expect(composeMessageWithAttachment('', doc)).toBe('[Attached file: report.pdf (application/pdf)]');
+        expect(ComposeMessageWithAttachment('', doc)).toBe('[Attached file: report.pdf (application/pdf)]');
     });
 });
 
-describe('persistAttachment', () => {
-    const att: CapturedAttachment = { uri: 'u', name: 'report.pdf', mimeType: 'application/pdf', kind: 'document' };
+describe('AttachCapturedFile', () => {
+    const att: CapturedAttachment = { uri: 'file:///x.png', name: 'x.png', mimeType: 'image/png', size: 68, kind: 'image' };
 
-    it('creates an MJ: Files catalog record and returns its id', async () => {
-        const result = await persistAttachment(att);
-        expect(result).toEqual({ id: 'file-1' });
-        expect(state.lastSavedFile).toMatchObject({
-            Name: 'report.pdf',
-            ProviderID: 'prov-1',
-            ContentType: 'application/pdf',
-            Status: 'Pending',
-        });
+    it('reads the bytes on-device, then delegates the storage decision to MJ', async () => {
+        const result = await AttachCapturedFile(att, 'detail-1');
+        expect(result).toEqual({ ok: true, attachmentId: 'ca-1', storedInline: true });
+        // The device reads; the Expo-free storage module decides and persists.
+        expect(state.lastAttachCall?.[0]).toBe('detail-1');
+        expect(state.lastAttachCall?.[2]).toBe('Zm9vYmFy');
     });
 
-    it('returns null when no storage provider is configured', async () => {
-        state.storageProviders = [];
-        expect(await persistAttachment(att)).toBeNull();
+    it('fails with an actionable reason when the file cannot be read', async () => {
+        state.base64Throws = true;
+        const result = await AttachCapturedFile(att, 'detail-1');
+        expect(result).toMatchObject({ ok: false, reason: 'invalid' });
+        // Nothing should reach storage when there are no bytes to store.
+        expect(state.lastAttachCall).toBeNull();
     });
 
-    it('returns null when the save fails', async () => {
-        state.saveResult = false;
-        expect(await persistAttachment(att)).toBeNull();
+    it('passes a storage refusal straight through to the caller', async () => {
+        state.attachResult = { ok: false, reason: 'too-large', message: 'too big' };
+        const result = await AttachCapturedFile(att, 'detail-1');
+        expect(result).toMatchObject({ ok: false, reason: 'too-large' });
     });
 });
