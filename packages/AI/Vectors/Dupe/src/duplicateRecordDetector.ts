@@ -70,6 +70,21 @@ const DEFAULT_BATCH_SIZE = 500;
  */
 const VECTOR_QUERY_BATCH_SIZE = 100;
 
+/**
+ * Upper bound on how many per-record results {@link DuplicateRecordDetector.GetDuplicateRecords}
+ * keeps in memory for the returned response.
+ *
+ * The run itself is batched, but the RESULTS were previously accumulated for its whole duration —
+ * O(records), not O(batch). On a 61,671-record entity that alone exhausted an 8 GB heap and the
+ * process died before the run could finish, so whole-entity detection could not complete at all.
+ *
+ * Retaining them was never load-bearing: every result is already persisted per batch as
+ * `Duplicate Run Detail` / `Duplicate Run Detail Match` rows, so the array is a second copy of
+ * durable data. It is capped rather than removed so small runs keep returning what they always
+ * did; past the cap, `ResultsTruncated` says so and the database is the source of truth.
+ */
+const MAX_RETAINED_RESULTS = 1000;
+
 /** Default batch size for parallel database saves */
 const SAVE_BATCH_SIZE = 20;
 
@@ -236,6 +251,12 @@ export class DuplicateRecordDetector extends VectorBase {
             LogStatus(`Duplicate detection: resuming from offset ${resumeOffset}`);
         }
 
+        // Carried across batches instead of the full result set. The queue holds only candidates
+        // that can actually auto-merge; the counter keeps the response's total honest once
+        // PotentialDuplicateResult is capped.
+        const autoMergeQueue: PotentialDuplicateResult[] = [];
+        let totalRecordsWithDuplicates = 0;
+
         for (let offset = resumeOffset; offset < recordIDs.length; offset += batchSize) {
             // Check for cancellation between batches
             await duplicateRun.Load(duplicateRun.ID);
@@ -253,7 +274,25 @@ export class DuplicateRecordDetector extends VectorBase {
                 batchIDs, entityInfo, entityDocument, templateParser, duplicateRun.ID,
                 topK, concurrency, options, startTime, recordIDs.length, offset, totalMatchesFound, contextUser
             );
-            response.PotentialDuplicateResult.push(...batchResults.Results);
+            // Retain a bounded sample for the response, and collect the auto-merge queue.
+            // Everything in batchResults.Results is already persisted (ProcessBatch writes the
+            // Detail and Detail Match rows), so dropping the overflow loses no data — only the
+            // in-memory copy that used to grow for the whole run.
+            totalRecordsWithDuplicates += batchResults.Results.length;
+            for (const result of batchResults.Results) {
+                if (response.PotentialDuplicateResult.length < MAX_RETAINED_RESULTS) {
+                    response.PotentialDuplicateResult.push(result);
+                } else {
+                    response.ResultsTruncated = true;
+                }
+                // Auto-merge still runs AFTER the full pass (below), so detection continues to
+                // see the pre-merge dataset exactly as before. Only the eligible candidates are
+                // carried, which is a small fraction of results by definition — they must clear
+                // the absolute threshold.
+                if (this.resultHasAutoMergeCandidate(result, entityDocument, options)) {
+                    autoMergeQueue.push(result);
+                }
+            }
             totalMatchesFound += batchResults.MatchesFound;
 
             // Update cursor for resume support
@@ -272,7 +311,8 @@ export class DuplicateRecordDetector extends VectorBase {
 
         // Step 8: Auto-merge high-confidence matches
         this.reportProgress(options, 'Merging', recordIDs.length, recordIDs.length, totalMatchesFound, startTime);
-        await this.ProcessAutoMerges(response, entityDocument, options);
+        response.TotalRecordsWithDuplicates = totalRecordsWithDuplicates;
+        await this.ProcessAutoMerges(autoMergeQueue, entityDocument, options);
 
         response.Status = 'Success';
         LogStatus(`Duplicate detection complete: ${recordIDs.length} records checked, ${totalMatchesFound} matches found`);
@@ -1624,7 +1664,7 @@ export class DuplicateRecordDetector extends VectorBase {
      * Automatically merge records that meet the absolute match threshold.
      */
     protected async ProcessAutoMerges(
-        response: PotentialDuplicateResponse,
+        results: PotentialDuplicateResult[],
         entityDocument: MJEntityDocumentEntity,
         options: DuplicateDetectionOptions = {}
     ): Promise<void> {
@@ -1639,7 +1679,7 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
-        for (const dupeResult of response.PotentialDuplicateResult) {
+        for (const dupeResult of results) {
             for (const [index, dupe] of dupeResult.Duplicates.entries()) {
                 if (!this.IsAutoMergeEligible(dupe, dupeResult, entityDocument, absoluteThreshold)) {
                     continue;
@@ -1647,6 +1687,29 @@ export class DuplicateRecordDetector extends VectorBase {
                 await this.executeAutoMerge(dupe, dupeResult, entityDocument, index);
             }
         }
+    }
+
+    /**
+     * True when a result carries at least one candidate that {@link ProcessAutoMerges} could act
+     * on. Used to decide what the run must carry across batches: results with no eligible
+     * candidate are already persisted and are never read again, so holding them only grows the
+     * heap.
+     *
+     * Deliberately reuses {@link IsAutoMergeEligible}, so a subclass that narrows eligibility
+     * narrows what is retained too, and the two can never disagree.
+     */
+    protected resultHasAutoMergeCandidate(
+        result: PotentialDuplicateResult,
+        entityDocument: MJEntityDocumentEntity,
+        options: DuplicateDetectionOptions = {}
+    ): boolean {
+        const entityInfo = this.Metadata.EntityByName(entityDocument.Entity);
+        if (entityInfo && !entityInfo.AllowRecordMerge) {
+            return false;
+        }
+        const absoluteThreshold = options.AbsoluteMatchThreshold ?? entityDocument.AbsoluteMatchThreshold;
+        return result.Duplicates.some((dupe) =>
+            this.IsAutoMergeEligible(dupe, result, entityDocument, absoluteThreshold));
     }
 
     /**
