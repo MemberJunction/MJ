@@ -15,6 +15,7 @@ import { BaseEngineRegistry } from "./baseEngineRegistry";
 import { IStartupSink } from "./RegisterForStartup";
 import { CacheChangedEvent, LocalCacheManager } from "./localCacheManager";
 import { ProviderBase } from "./providerBase";
+import { DatabaseProviderBase } from "./databaseProviderBase";
 import { TransformSimpleObjectToEntityObject } from "./util";
 import { WellKnownUserSource } from "./wellKnownUserSource";
 /**
@@ -881,11 +882,25 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config));
 
                 if (allCanUseImmediate) {
-                    // Process immediately without debounce - mutation requires await because the
-                    // entity must be cloned (with its provider rebound) before being cached
-                    for (const config of matchingConfigs) {
-                        await this.applyImmediateMutation(config, event);
+                    const applyAll = async (): Promise<void> => {
+                        // mutation requires await because the entity must be cloned (with its
+                        // provider rebound) before being cached
+                        for (const config of matchingConfigs) {
+                            await this.applyImmediateMutation(config, event);
+                        }
+                    };
+                    // The entity raises save/delete as soon as its own write returns, while an
+                    // enclosing transaction may still be open. Mutating the cache now would keep a
+                    // rolled-back row cached for the life of the process, so follow the transaction:
+                    // apply on commit, drop on rollback. The token must be captured before the first
+                    // await — this runs synchronously inside the save that raised the event.
+                    const provider = event.baseEntity.ProviderToUse;
+                    if (provider instanceof DatabaseProviderBase && provider.TransactionDepth > 0) {
+                        const token = provider.CapturePostCommitToken();
+                        provider.RunAfterCommit(applyAll, `BaseEngine cache mutation for ${eName}`, token);
+                        return true;
                     }
+                    await applyAll();
                     return true;
                 } else {
                     // At least one config requires full refresh, use debouncing
