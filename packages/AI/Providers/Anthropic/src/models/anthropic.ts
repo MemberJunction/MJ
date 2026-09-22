@@ -345,11 +345,11 @@ export class AnthropicLLM extends BaseLLM {
     /**
      * Checks if a message represents a trailing volatile runtime-state or agent-specialization fragment.
      */
-    protected isTrailingStateFragment(message?: ChatMessage): boolean {
+    protected isTrailingStateFragment(message?: ChatMessage<{ volatileState?: boolean }>): boolean {
         if (!message) {
             return false;
         }
-        if ((message as any).metadata?.volatileState === true) {
+        if (message.metadata?.volatileState === true) {
             return true;
         }
         if (typeof message.content === 'string') {

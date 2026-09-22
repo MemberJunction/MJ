@@ -442,7 +442,9 @@ describe('AnthropicLLM', () => {
     });
 
     describe('formatMessagesWithCaching', () => {
-        const callMethod = (messages: Array<{ role: string; content: unknown }>, enableCaching: boolean = true): unknown[] => {
+        interface FormattedBlock { type: string; text?: string; cache_control?: { type: string } }
+        interface FormattedMessage { role: string; content: FormattedBlock[] }
+        const callMethod = (messages: Array<{ role: string; content: unknown; metadata?: { volatileState?: boolean } }>, enableCaching: boolean = true): FormattedMessage[] => {
             return (instance as ReturnType<typeof Object.create>)['formatMessagesWithCaching'](messages, enableCaching);
         };
 
@@ -473,7 +475,7 @@ describe('AnthropicLLM', () => {
                 { role: 'assistant' as const, content: 'Assistant response' },
                 { role: 'user' as const, content: '<mj-runtime-state>\nDate: 2026-09-21\n</mj-runtime-state>', metadata: { volatileState: true } }
             ];
-            const result = callMethod(messages, true) as any[];
+            const result = callMethod(messages, true);
             // Roles: user -> assistant -> user (no filler needed between assistant and user)
             expect(result).toHaveLength(3);
             // Penultimate message (assistant response) should have cache_control
@@ -491,7 +493,7 @@ describe('AnthropicLLM', () => {
                 { role: 'user' as const, content: 'Initial user turn' },
                 { role: 'user' as const, content: '<mj-runtime-state>\nDate: 2026-09-21\n</mj-runtime-state>', metadata: { volatileState: true } }
             ];
-            const result = callMethod(messages, true) as any[];
+            const result = callMethod(messages, true);
             // user -> assistant OK -> user fragment
             expect(result).toHaveLength(3);
             expect(result[0].role).toBe('user');
@@ -511,7 +513,7 @@ describe('AnthropicLLM', () => {
                 { role: 'user' as const, content: 'Initial user turn' },
                 { role: 'user' as const, content: '<mj-runtime-state>\nSome state\n</mj-runtime-state>' }
             ];
-            const result = callMethod(messages, true) as any[];
+            const result = callMethod(messages, true);
             expect(result).toHaveLength(3);
             expect(result[0].content[0].cache_control).toEqual({ type: 'ephemeral' });
             expect(result[2].content[0].cache_control).toBeUndefined();
@@ -522,7 +524,7 @@ describe('AnthropicLLM', () => {
                 { role: 'user' as const, content: 'Initial user turn' },
                 { role: 'user' as const, content: '<mj-runtime-state>\nSome state\n</mj-runtime-state>', metadata: { volatileState: true } }
             ];
-            const result = callMethod(messages, false) as any[];
+            const result = callMethod(messages, false);
             expect(result[0].content[0].cache_control).toBeUndefined();
             expect(result[result.length - 1].content[0].cache_control).toBeUndefined();
         });

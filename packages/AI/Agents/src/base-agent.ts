@@ -4298,7 +4298,7 @@ export class BaseAgent {
         // Check previous turn's model selection info
         if (this._lastModelSelectionInfo?.vendorSelected) {
             const v = this._lastModelSelectionInfo.vendorSelected;
-            if (v.Name?.toLowerCase().includes('openai') || (v as any).DriverClass?.toLowerCase().includes('openai')) {
+            if (v.Name?.toLowerCase().includes('openai')) {
                 return true;
             }
         }
