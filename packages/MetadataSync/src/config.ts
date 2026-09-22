@@ -12,6 +12,7 @@
 
 import path from 'path';
 import fs from 'fs-extra';
+import type { SqlSchemaPlaceholder } from '@memberjunction/generic-database-provider';
 import { configManager } from './lib/config-manager';
 
 /**
@@ -148,6 +149,22 @@ export interface SyncConfig {
      * while avoiding one GO per statement. Defaults to 200. Set to 0 for legacy per-statement behavior.
      */
     variableBatchThreshold?: number;
+    /**
+     * Schema-to-placeholder mappings used when `formatAsMigration` is on. Optional — when omitted,
+     * `SQLOutput.schemaPlaceholders` from mj.config.cjs is used, so a repo that already declares the
+     * mapping for CodeGen gets a correct captured migration with no extra configuration.
+     *
+     * An Open App needs this because Skyway binds `${flyway:defaultSchema}` to the APP schema, not
+     * to MJ core. Declare the specific app schema and core separately:
+     *
+     * ```json
+     * "schemaPlaceholders": [
+     *   { "schema": "__mj_BizAppsAccounting", "placeholder": "${flyway:defaultSchema}" },
+     *   { "schema": "__mj",                   "placeholder": "${mjSchema}" }
+     * ]
+     * ```
+     */
+    schemaPlaceholders?: SqlSchemaPlaceholder[];
   };
   /** Watch command configuration */
   watch?: {
@@ -400,6 +417,26 @@ export interface FolderConfig {
  */
 export function loadMJConfig(): MJConfig | null {
   return configManager.loadMJConfig();
+}
+
+/**
+ * Resolve the schema-to-placeholder mappings to use when capturing a migration-formatted SQL log.
+ *
+ * Precedence: an explicit `sqlLogging.schemaPlaceholders` in .mj-sync.json, else
+ * `SQLOutput.schemaPlaceholders` from mj.config.cjs (the same array CodeGen reads). Returns
+ * undefined when neither is declared, which leaves the logger on its historical single-schema
+ * behaviour — correct for MJ's own repo, where `${flyway:defaultSchema}` IS the core schema.
+ *
+ * @param syncConfig - the loaded root .mj-sync.json, if any
+ */
+export function resolveSqlLoggingSchemaPlaceholders(syncConfig: SyncConfig | null): SqlSchemaPlaceholder[] | undefined {
+  const fromSyncConfig = syncConfig?.sqlLogging?.schemaPlaceholders;
+  if (fromSyncConfig && fromSyncConfig.length > 0) {
+    return fromSyncConfig;
+  }
+
+  const fromMJConfig = loadMJConfig()?.SQLOutput?.schemaPlaceholders as SqlSchemaPlaceholder[] | undefined;
+  return fromMJConfig && fromMJConfig.length > 0 ? fromMJConfig : undefined;
 }
 
 /**

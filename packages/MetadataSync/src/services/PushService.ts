@@ -8,7 +8,7 @@ import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
 import { SyncMetadataEngine } from '../lib/sync-metadata-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
-import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
+import { loadEntityConfig, loadSyncConfig, resolveSqlLoggingSchemaPlaceholders, EntityConfig, SyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
 import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
@@ -590,6 +590,10 @@ export class PushService {
           filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
           filterType: this.syncConfig?.sqlLogging?.filterType,
           verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
+          // Without these the logger rewrites the CORE schema to ${flyway:defaultSchema}, which
+          // Skyway binds to the APP schema in an Open App — see MJ#3618. Undefined in MJ's own
+          // repo, where the single-schema default is already correct.
+          schemaPlaceholders: resolveSqlLoggingSchemaPlaceholders(this.syncConfig),
         });
         
         if (options.verbose) {
