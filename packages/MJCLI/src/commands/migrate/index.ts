@@ -8,6 +8,8 @@ import { fetchMigrationSlice, resolveGitRef, type MigrationFetchResult } from '.
 import { verifyDatabaseConnection } from '../../lib/db-preflight';
 import { readCurrentDbVersion } from '../../lib/db-version';
 import { executeOpenAppMetadataRefresh, isOpenAppSchema } from '@memberjunction/open-app-engine';
+import { DiagnoseCollision } from '../../lib/collision-diagnosis';
+import { FormatCollisionGuidance } from '../../lib/collision-guidance';
 
 /** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
 const HISTORY_TABLE = 'flyway_schema_history';
@@ -223,7 +225,7 @@ export default class Migrate extends Command {
           this.logToStderr(`    Version: ${detail.Migration.Version ?? '(repeatable)'}`);
           this.logToStderr(`    Description: ${detail.Migration.Description}`);
           if (detail.Error) {
-            this.printMigrationError(detail.Error);
+            this.printMigrationError(detail.Error, detail.Migration.Filename);
           }
         }
       } else {
@@ -286,8 +288,18 @@ export default class Migrate extends Command {
    * Everything here is defensive: `BatchInfo` is optional on the error type, and a reporting path
    * must never throw while reporting a failure.
    */
-  private printMigrationError(error: Error): void {
+  private printMigrationError(error: Error, migrationFilename: string): void {
     this.logToStderr(`    Error: ${error.message}`);
+
+    // MJ#4503: a primary-key collision here usually means a row was created
+    // ahead of the migration chain. Say which row, and how to clear it.
+    // DiagnoseCollision returns null unless it is certain — see its docblock.
+    const collision = DiagnoseCollision(error.message);
+    if (collision) {
+      for (const line of FormatCollisionGuidance(collision, migrationFilename)) {
+        this.logToStderr(line);
+      }
+    }
 
     const batch = (error as { BatchInfo?: {
       BatchNumber?: number;
@@ -346,7 +358,7 @@ export default class Migrate extends Command {
         this.logToStderr(`    Version: ${detail.Migration.Version ?? '(repeatable)'}`);
         this.logToStderr(`    Description: ${detail.Migration.Description}`);
         if (detail.Error) {
-          this.printMigrationError(detail.Error);
+          this.printMigrationError(detail.Error, detail.Migration.Filename);
         }
       }
     } else if (lastMigrationStarted) {
