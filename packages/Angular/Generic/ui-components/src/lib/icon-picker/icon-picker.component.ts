@@ -13,10 +13,12 @@ import {
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 import {
+    CountIconsByStyle,
     DEFAULT_ICON_STYLE,
     FilterIcons,
     IconNameOf,
     NormalizeIconClass,
+    ShortStyleName,
     type FontAwesomeIcon,
 } from './font-awesome-icons';
 import { IconCatalogueService } from './icon-catalogue.service';
@@ -138,6 +140,19 @@ export class MjIconPickerComponent implements ControlValueAccessor {
 
     /** True while the icon fonts are being fetched so their glyphs can be measured. */
     public IsLoading = false;
+
+    /**
+     * What the catalogue is made of, per style, for the note under the grid.
+     *
+     * The one number that says whether detection worked: a catalogue that is all one
+     * style means the other fonts were never measured, which is otherwise invisible until
+     * a user searches for an icon that is not there.
+     */
+    public get CatalogueSummary(): string {
+        const counts = CountIconsByStyle(this.Icons);
+        if (counts.length === 0) return '';
+        return counts.map((c) => `${c.Count} ${ShortStyleName(c.Style)}`).join(' · ');
+    }
 
     private get ownerDocument(): Document {
         return this.host.nativeElement.ownerDocument ?? document;

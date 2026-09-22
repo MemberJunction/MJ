@@ -248,3 +248,24 @@ export function FilterIcons(icons: readonly FontAwesomeIcon[], search: string, l
     }
     return [...starts, ...contains].slice(0, limit);
 }
+
+/**
+ * How many icons each style contributed, in the order the styles were tried.
+ *
+ * Shown under the grid because it is the one number that says whether detection worked.
+ * A catalogue that is all one style means the other fonts were never measured — which is
+ * what a user sees as "half the icons are broken" or "a ton of icons are missing", and it
+ * is otherwise invisible until they search for one that is not there.
+ */
+export function CountIconsByStyle(icons: readonly FontAwesomeIcon[]): Array<{ Style: string; Count: number }> {
+    const counts = new Map<string, number>();
+    for (const icon of icons) counts.set(icon.Style, (counts.get(icon.Style) ?? 0) + 1);
+    return [...counts.entries()]
+        .map(([Style, Count]) => ({ Style, Count }))
+        .sort((a, b) => b.Count - a.Count);
+}
+
+/** The style's own word — `fa-brands` reads as "brands". */
+export function ShortStyleName(style: string): string {
+    return style.replace(/^fa-/, '');
+}

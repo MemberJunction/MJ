@@ -96,13 +96,18 @@ export class IconCatalogueService {
     }
 
     /**
-     * A test for whether a font really has a glyph, by measuring it twice.
+     * A test for whether a font really has a glyph, by measuring it.
      *
-     * A character the font lacks is drawn by the fallback instead, so it measures exactly
-     * as it does with no Font Awesome in the stack at all. Comparing the two widths is
-     * what separates "this font has the icon" from "the browser drew a box" — and it is
-     * the only signal available, because the stylesheet never says which font holds which
-     * icon.
+     * The family is named ALONE, with no fallback behind it, and the glyph's width is
+     * compared against a codepoint no icon font defines. A glyph the font lacks is drawn
+     * by the browser's last-resort font, exactly as the control is, so the two measure the
+     * same — while a glyph it has measures at the icon's own advance width.
+     *
+     * Comparing against the same family instead of against a second font stack is what
+     * makes this sound. Font Awesome Free ships two faces under ONE family name, solid at
+     * weight 900 and regular at 400, so a glyph missing from the requested weight is drawn
+     * from the other one before any fallback is reached — and a comparison that assumed
+     * the fallback had been reached read that as a hit.
      *
      * Returns null where there is no canvas to measure with, in which case the caller
      * falls back rather than offering every icon in every style.
@@ -123,11 +128,17 @@ export class IconCatalogueService {
         };
         return (glyph: string, font: IconStyleFont): boolean => {
             if (!glyph) return false;
-            // The same size and weight either way, so only the family differs.
-            const size = font.FontWeight + ' 48px';
-            const withFont = measure(glyph, size + ' ' + font.FontFamily + ', monospace');
-            const withoutFont = measure(glyph, size + ' monospace');
-            return withFont > 0 && withFont !== withoutFont;
+            const face = font.FontWeight + ' 48px ' + font.FontFamily;
+            const width = measure(glyph, face);
+            return width > 0 && width !== measure(ABSENT_GLYPH, face);
         };
     }
 }
+
+/**
+ * A codepoint no icon font defines, for measuring what "missing" looks like.
+ *
+ * Plane 16's private-use area, which Font Awesome does not reach into — its own icons sit
+ * in the basic-plane private-use area — so every font draws this as its last-resort box.
+ */
+const ABSENT_GLYPH = String.fromCodePoint(0x10FFFD);

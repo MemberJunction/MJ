@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { IconCatalogueService } from '../lib/icon-picker/icon-catalogue.service';
-import { FALLBACK_ICONS } from '../lib/icon-picker/font-awesome-icons';
+import { CountIconsByStyle, FALLBACK_ICONS, ShortStyleName } from '../lib/icon-picker/font-awesome-icons';
 
 /**
  * A style has to be FETCHED before its glyphs can be measured. A browser loads a web font
@@ -31,8 +31,9 @@ function fakeDocument(options: { loadable?: string[]; rules?: Array<[string, str
         font: '',
         measureText(text: string) {
             const family = familyOf(this.font);
-            // A glyph the family holds measures wider; anything else falls back to the
-            // control width, which is what the real comparison detects.
+            // A glyph the family holds measures at the icon width; anything it lacks —
+            // the control codepoint included — measures at the last-resort box width,
+            // which is the equality the real comparison detects.
             const has = family && loadable.includes(family) && GLYPHS[family]?.includes(text);
             return { width: has ? 48 : 10 };
         },
@@ -114,5 +115,65 @@ describe('IconCatalogueService', () => {
         expect(service.Icons()).toEqual([]);
         const icons = await service.Load(fakeDocument({ loadable: ['"Font Awesome 6 Free"'] }));
         expect(icons.map((i) => i.Name)).toEqual(['user']);
+    });
+});
+
+/**
+ * Font Awesome Free ships TWO faces under one family name — solid at weight 900 and
+ * regular at 400. A glyph missing from the requested weight is drawn from the other face
+ * before any fallback is reached, so a test that compared against a second font stack read
+ * that as a hit and filed regular icons under solid.
+ */
+describe('IconCatalogueService — telling the styles apart', () => {
+    it('does not put an icon under a style whose font lacks it', async () => {
+        const icons = await new IconCatalogueService().Load(fakeDocument());
+        const brand = icons.find((i) => i.Name === 'accusoft');
+        expect(brand?.Style).toBe('fa-brands');
+    });
+
+    it('measures each family on its own, with no fallback family behind it', async () => {
+        const seen: string[] = [];
+        const doc = fakeDocument();
+        const original = doc.createElement.bind(doc) as (tag: string) => unknown;
+        (doc as unknown as { createElement: (tag: string) => unknown }).createElement = (tag: string) => {
+            const made = original(tag) as { getContext?: () => { font: string } };
+            if (tag !== 'canvas' || !made.getContext) return made;
+            const context = made.getContext();
+            return {
+                getContext: () => new Proxy(context, {
+                    set(target, prop, value) {
+                        if (prop === 'font') seen.push(String(value));
+                        return Reflect.set(target, prop, value);
+                    },
+                }),
+            };
+        };
+        await new IconCatalogueService().Load(doc);
+        expect(seen.length).toBeGreaterThan(0);
+        expect(seen.every((font) => !font.includes(','))).toBe(true);
+    });
+});
+
+describe('CountIconsByStyle', () => {
+    it('counts each style, commonest first', () => {
+        expect(CountIconsByStyle([
+            { Name: 'a', Style: 'fa-solid' },
+            { Name: 'b', Style: 'fa-brands' },
+            { Name: 'c', Style: 'fa-solid' },
+        ])).toEqual([
+            { Style: 'fa-solid', Count: 2 },
+            { Style: 'fa-brands', Count: 1 },
+        ]);
+    });
+
+    it('counts nothing for nothing', () => {
+        expect(CountIconsByStyle([])).toEqual([]);
+    });
+});
+
+describe('ShortStyleName', () => {
+    it('reads the style as its own word', () => {
+        expect(ShortStyleName('fa-brands')).toBe('brands');
+        expect(ShortStyleName('fa-solid')).toBe('solid');
     });
 });
