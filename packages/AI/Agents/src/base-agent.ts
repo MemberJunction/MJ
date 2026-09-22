@@ -432,11 +432,45 @@ export class BaseAgent {
     private _fatalActionFailures: Set<string> = new Set();
 
     /**
-     * Consecutive failure counts per action name for the current agent run.
-     * Reset when an action succeeds. Actions reaching 2 consecutive failures are flagged as fatal.
+     * Parameter-aware failure tracking per action name for the current agent run.
+     * Differentiates identical retries (which trip quickly) from parameter modifications (which allow self-correction).
      * @private
      */
-    private _consecutiveActionFailures: Map<string, number> = new Map();
+    private _actionFailureHistory: Map<string, {
+        lastParamsString: string;
+        identicalFailures: number;
+        totalConsecutiveFailures: number;
+    }> = new Map();
+
+    /**
+     * Normalizes action parameters into a deterministic, key-sorted JSON string
+     * to accurately detect identical repeat calls regardless of object key order.
+     */
+    protected normalizeActionParams(params: Record<string, unknown> | null | undefined): string {
+        if (!params || typeof params !== 'object') {
+            return '';
+        }
+        try {
+            const sortedKeys = Object.keys(params).sort();
+            const normalizedObj: Record<string, unknown> = {};
+            for (const key of sortedKeys) {
+                const val = params[key];
+                if (val && typeof val === 'object' && !Array.isArray(val)) {
+                    const innerKeys = Object.keys(val as Record<string, unknown>).sort();
+                    const innerObj: Record<string, unknown> = {};
+                    for (const ik of innerKeys) {
+                        innerObj[ik] = (val as Record<string, unknown>)[ik];
+                    }
+                    normalizedObj[key] = innerObj;
+                } else {
+                    normalizedObj[key] = val;
+                }
+            }
+            return JSON.stringify(normalizedObj);
+        } catch {
+            return JSON.stringify(params);
+        }
+    }
 
     /**
      * Detects whether an action error message represents a fatal configuration,
@@ -1563,7 +1597,7 @@ export class BaseAgent {
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
             this._fatalActionFailures.clear();
-            this._consecutiveActionFailures.clear();
+            this._actionFailureHistory.clear();
 
             // Convert UI markup in conversation messages to plain text if requested (default: true)
             if (params.convertUIMarkupToPlainText !== false) {
@@ -7756,10 +7790,41 @@ The context is now within limits. Please retry your request with the recovered c
     public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended, 
         contextUser?: UserInfo): Promise<ActionResult> {
         
-        // Circuit breaker: if this action already failed fatally or unrecoverably in this run, short-circuit immediately.
-        if (this._fatalActionFailures.has(action.name) || (actionEntity?.Name && this._fatalActionFailures.has(actionEntity.Name))) {
+        const normalizedParams = this.normalizeActionParams(action.params);
+        const actionKey = action.name;
+        const entityKey = actionEntity?.Name;
+        const failureRecord = this._actionFailureHistory.get(actionKey) || (entityKey ? this._actionFailureHistory.get(entityKey) : undefined);
+
+        // 1. Fatal configuration / credential error (0ms short-circuit)
+        if (this._fatalActionFailures.has(actionKey) || (entityKey && this._fatalActionFailures.has(entityKey))) {
             const blockedMessage = `Action '${action.name}' is disabled for this run because it previously failed with an unrecoverable configuration or credential error. You must select an alternative action.`;
             this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): ${blockedMessage}`, false, params);
+            const blockedResult = new ActionResult();
+            blockedResult.Success = false;
+            blockedResult.Message = blockedMessage;
+            blockedResult.Params = [];
+            blockedResult.RunParams = new RunActionParams();
+            blockedResult.RunParams.Action = actionEntity;
+            return blockedResult;
+        }
+
+        // 2. Identical parameters repeated failure loop (threshold >= 2 failures with exact same params)
+        if (failureRecord && failureRecord.lastParamsString === normalizedParams && failureRecord.identicalFailures >= 2) {
+            const blockedMessage = `Action '${action.name}' is disabled for these inputs because it already failed ${failureRecord.identicalFailures} times with identical arguments. You must modify your parameters or select an alternative tool.`;
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited on identical retry loop (0ms)`, false, params);
+            const blockedResult = new ActionResult();
+            blockedResult.Success = false;
+            blockedResult.Message = blockedMessage;
+            blockedResult.Params = [];
+            blockedResult.RunParams = new RunActionParams();
+            blockedResult.RunParams.Action = actionEntity;
+            return blockedResult;
+        }
+
+        // 3. Consecutive modified failure limit (threshold >= 5 attempts)
+        if (failureRecord && failureRecord.totalConsecutiveFailures >= 5) {
+            const blockedMessage = `Action '${action.name}' is disabled for this run after 5 consecutive failures across parameter attempts. You must select an alternative tool or proceed with available data.`;
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited on max retry attempts (0ms)`, false, params);
             const blockedResult = new ActionResult();
             blockedResult.Success = false;
             blockedResult.Message = blockedMessage;
@@ -7814,18 +7879,30 @@ The context is now within limits. Please retry your request with the recovered c
             
             if (result.Success) {
                 this.logStatus(`   ✅ Action '${action.name}' completed successfully`, true, params);
-                this._consecutiveActionFailures.delete(action.name);
+                this._actionFailureHistory.delete(action.name);
                 if (actionEntity?.Name) {
-                    this._consecutiveActionFailures.delete(actionEntity.Name);
+                    this._actionFailureHistory.delete(actionEntity.Name);
                 }
             } else {
                 this.logStatus(`   ❌ Action '${action.name}' failed: ${result.Message || 'Unknown error'}`, false, params);
-                const failures = (this._consecutiveActionFailures.get(action.name) ?? 0) + 1;
-                this._consecutiveActionFailures.set(action.name, failures);
-                if (this.isFatalActionError(result.Message) || failures >= 2) {
+                if (this.isFatalActionError(result.Message)) {
                     this._fatalActionFailures.add(action.name);
                     if (actionEntity?.Name) {
                         this._fatalActionFailures.add(actionEntity.Name);
+                    }
+                } else {
+                    const existing = this._actionFailureHistory.get(action.name) || (actionEntity?.Name ? this._actionFailureHistory.get(actionEntity.Name) : undefined);
+                    const isIdentical = existing ? existing.lastParamsString === normalizedParams : false;
+                    const identicalCount = isIdentical ? (existing!.identicalFailures + 1) : 1;
+                    const totalCount = (existing?.totalConsecutiveFailures ?? 0) + 1;
+                    const record = {
+                        lastParamsString: normalizedParams,
+                        identicalFailures: identicalCount,
+                        totalConsecutiveFailures: totalCount
+                    };
+                    this._actionFailureHistory.set(action.name, record);
+                    if (actionEntity?.Name) {
+                        this._actionFailureHistory.set(actionEntity.Name, record);
                     }
                 }
             }
@@ -7834,12 +7911,24 @@ The context is now within limits. Please retry your request with the recovered c
             
         } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            const failures = (this._consecutiveActionFailures.get(action.name) ?? 0) + 1;
-            this._consecutiveActionFailures.set(action.name, failures);
-            if (this.isFatalActionError(errorMsg) || failures >= 2) {
+            if (this.isFatalActionError(errorMsg)) {
                 this._fatalActionFailures.add(action.name);
                 if (actionEntity?.Name) {
                     this._fatalActionFailures.add(actionEntity.Name);
+                }
+            } else {
+                const existing = this._actionFailureHistory.get(action.name) || (actionEntity?.Name ? this._actionFailureHistory.get(actionEntity.Name) : undefined);
+                const isIdentical = existing ? existing.lastParamsString === normalizedParams : false;
+                const identicalCount = isIdentical ? (existing!.identicalFailures + 1) : 1;
+                const totalCount = (existing?.totalConsecutiveFailures ?? 0) + 1;
+                const record = {
+                    lastParamsString: normalizedParams,
+                    identicalFailures: identicalCount,
+                    totalConsecutiveFailures: totalCount
+                };
+                this._actionFailureHistory.set(action.name, record);
+                if (actionEntity?.Name) {
+                    this._actionFailureHistory.set(actionEntity.Name, record);
                 }
             }
             this.logError(error, {
@@ -8456,7 +8545,14 @@ The context is now within limits. Please retry your request with the recovered c
                 if (isFatal) {
                     lines.push(`**Guidance:** Action '${a.actionName}' is unavailable (fatal configuration/credential error). Do NOT retry this action. Choose an alternative action.`);
                 } else {
-                    lines.push(`**Guidance:** Action '${a.actionName}' failed. Do NOT retry with identical inputs.`);
+                    const record = this._actionFailureHistory.get(a.actionName);
+                    if (record && record.identicalFailures >= 2) {
+                        lines.push(`**Guidance:** Action '${a.actionName}' failed with identical inputs. Do NOT retry with the same arguments.`);
+                    } else if (record && record.totalConsecutiveFailures >= 5) {
+                        lines.push(`**Guidance:** Action '${a.actionName}' retry limit reached (5 attempts). Pivot to an alternative action.`);
+                    } else {
+                        lines.push(`**Guidance:** Action '${a.actionName}' failed. You may adjust inputs to resolve the error.`);
+                    }
                 }
             }
 
@@ -12335,8 +12431,16 @@ The context is now within limits. Please retry your request with the recovered c
                         const isFatal = this.isFatalActionError(f.message) || this._fatalActionFailures.has(f.actionName);
                         if (isFatal) {
                             return `[CRITICAL/ACTION_UNAVAILABLE] Action '${f.actionName}' failed with an unrecoverable configuration or credential error: "${f.message}". This action cannot execute in this environment. DO NOT call '${f.actionName}' again during this run. You MUST select an alternative tool or proceed with available data.`;
+                        }
+
+                        const record = this._actionFailureHistory.get(f.actionName);
+                        if (record && record.identicalFailures >= 2) {
+                            return `[CRITICAL/REPEATED_IDENTICAL_CALL] Action '${f.actionName}' failed again with the EXACT SAME arguments: "${f.message}". Calling '${f.actionName}' with these parameters will not work. You MUST either adjust your parameters or pivot to an alternative tool.`;
+                        } else if (record && record.totalConsecutiveFailures >= 5) {
+                            return `[CRITICAL/ATTEMPTS_EXHAUSTED] Action '${f.actionName}' has failed ${record.totalConsecutiveFailures} consecutive times: "${f.message}". Retries for this action are exhausted. You MUST pivot to an alternative tool or continue with available data.`;
                         } else {
-                            return `[WARNING/ACTION_FAILURE] Action '${f.actionName}' failed: "${f.message}". DO NOT retry calling '${f.actionName}' with identical arguments. You must either adjust your inputs to resolve the error or pivot to an alternative tool.`;
+                            const attemptCount = record?.totalConsecutiveFailures ?? 1;
+                            return `[WARNING/ACTION_FAILURE] Action '${f.actionName}' failed: "${f.message}". Review the error and adjust your input parameters (attempt ${attemptCount} of 5). DO NOT retry calling '${f.actionName}' with identical arguments.`;
                         }
                     }).join('\n\n');
 

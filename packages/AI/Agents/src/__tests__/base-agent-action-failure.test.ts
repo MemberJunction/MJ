@@ -416,7 +416,7 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(harness.runActionCallCount).toBe(1); // Call count DID NOT increment!
         });
 
-        it('short-circuits an action after 2 consecutive non-fatal failures', async () => {
+        it('short-circuits an action after 2 consecutive identical failures', async () => {
             const agent = new BaseAgent();
             const actionEntity = { ID: ACTION_ID, Name: ACTION_NAME } as unknown as import('@memberjunction/actions-base').MJActionEntityExtended;
             const params = makeParams();
@@ -432,19 +432,82 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
                 return ar;
             };
 
-            // Attempt 1: fails, not yet tripped
-            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: {} }, actionEntity);
+            // Attempt 1: fails with params { query: 'test' }, not yet tripped
+            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'test' } }, actionEntity);
             expect(harness.runActionCallCount).toBe(1);
 
-            // Attempt 2: fails, trips circuit breaker
-            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: {} }, actionEntity);
+            // Attempt 2: fails with identical params, reaches threshold of 2 identical failures
+            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'test' } }, actionEntity);
             expect(harness.runActionCallCount).toBe(2);
 
             // Attempt 3: short-circuited by breaker without dispatching
-            const thirdResult = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: {} }, actionEntity);
+            const thirdResult = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'test' } }, actionEntity);
             expect(thirdResult.Success).toBe(false);
-            expect(thirdResult.Message).toContain('disabled for this run');
+            expect(thirdResult.Message).toContain('disabled for these inputs because it already failed 2 times with identical arguments');
             expect(harness.runActionCallCount).toBe(2); // Still 2!
+        });
+
+        it('allows self-correction when parameters are modified across attempts', async () => {
+            const agent = new BaseAgent();
+            const actionEntity = { ID: ACTION_ID, Name: ACTION_NAME } as unknown as import('@memberjunction/actions-base').MJActionEntityExtended;
+            const params = makeParams();
+
+            let attempt = 0;
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                attempt++;
+                const ar = new ActionResult();
+                // Attempts 1 and 2 fail, attempt 3 succeeds
+                ar.Success = attempt >= 3;
+                ar.Message = attempt >= 3 ? 'success' : `Syntax error on attempt ${attempt}`;
+                ar.RunParams = new RunActionParams();
+                ar.RunParams.Action = actionEntity;
+                return ar;
+            };
+
+            // Attempt 1: fails with query A
+            const r1 = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'bad syntax A' } }, actionEntity);
+            expect(r1.Success).toBe(false);
+            expect(harness.runActionCallCount).toBe(1);
+
+            // Attempt 2: fails with query B (MODIFIED arguments: NOT blocked by circuit breaker!)
+            const r2 = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'bad syntax B' } }, actionEntity);
+            expect(r2.Success).toBe(false);
+            expect(harness.runActionCallCount).toBe(2); // Dispatched! Not blocked!
+
+            // Attempt 3: succeeds with query C
+            const r3 = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'correct syntax C' } }, actionEntity);
+            expect(r3.Success).toBe(true);
+            expect(harness.runActionCallCount).toBe(3); // Successfully self-corrected!
+        });
+
+        it('short-circuits after 5 consecutive failures even with modified parameters (budget exhausted)', async () => {
+            const agent = new BaseAgent();
+            const actionEntity = { ID: ACTION_ID, Name: ACTION_NAME } as unknown as import('@memberjunction/actions-base').MJActionEntityExtended;
+            const params = makeParams();
+
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = 'Query failed';
+                ar.RunParams = new RunActionParams();
+                ar.RunParams.Action = actionEntity;
+                return ar;
+            };
+
+            // Run 5 attempts with different parameters — all 5 should dispatch
+            for (let i = 1; i <= 5; i++) {
+                const res = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: `attempt_${i}` } }, actionEntity);
+                expect(res.Success).toBe(false);
+                expect(harness.runActionCallCount).toBe(i);
+            }
+
+            // Attempt 6: should be short-circuited in 0ms (budget of 5 exhausted)
+            const res6 = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { query: 'attempt_6' } }, actionEntity);
+            expect(res6.Success).toBe(false);
+            expect(res6.Message).toContain('disabled for this run after 5 consecutive failures');
+            expect(harness.runActionCallCount).toBe(5); // Still 5!
         });
 
         it('resets consecutive failure count when an action succeeds', async () => {
@@ -463,22 +526,28 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
                 return ar;
             };
 
-            // Attempt 1: fail (count = 1)
-            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: {} }, actionEntity);
+            // Attempt 1: fail
+            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: '1' } }, actionEntity);
             expect(harness.runActionCallCount).toBe(1);
 
-            // Attempt 2: succeed (resets count to 0)
+            // Attempt 2: succeed (resets failure history)
             shouldSucceed = true;
-            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: {} }, actionEntity);
+            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: '1' } }, actionEntity);
             expect(harness.runActionCallCount).toBe(2);
 
-            // Attempt 3: fail (count = 1 again, NOT 2, so breaker should NOT trip)
+            // Attempt 3: fail
             shouldSucceed = false;
-            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: {} }, actionEntity);
+            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: '1' } }, actionEntity);
             expect(harness.runActionCallCount).toBe(3);
 
-            // Attempt 4: dispatches normally (count reaches 2 here)
-            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: {} }, actionEntity);
+            // Attempt 4: fails again with identical params (identical count = 2)
+            await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: '1' } }, actionEntity);
+            expect(harness.runActionCallCount).toBe(4);
+
+            // Attempt 5: short-circuited!
+            const r5 = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: '1' } }, actionEntity);
+            expect(r5.Success).toBe(false);
+            expect(r5.Message).toContain('disabled for these inputs');
             expect(harness.runActionCallCount).toBe(4);
         });
     });
@@ -513,7 +582,7 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(guidanceMsg).toContain("You MUST select an alternative tool");
         });
 
-        it('injects [WARNING/ACTION_FAILURE] directive for recoverable errors', async () => {
+        it('injects [WARNING/ACTION_FAILURE] directive for recoverable errors with attempt count', async () => {
             harness.runAction = () => {
                 const ar = new ActionResult();
                 ar.Success = false;
@@ -533,14 +602,14 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
 
             expect(result.success).toBe(true);
 
-            // Verify conversation messages contain the warning failure guidance
+            // Verify conversation messages contain the warning failure guidance with attempt info
             const contents = params.conversationMessages.map(m => typeof m.content === 'string' ? m.content : '');
             const guidanceMsg = contents.find(c => c.includes('[WARNING/ACTION_FAILURE]'));
 
             expect(guidanceMsg).toBeDefined();
             expect(guidanceMsg).toContain('Parameter "query" cannot be empty');
+            expect(guidanceMsg).toContain('(attempt 1 of 5)');
             expect(guidanceMsg).toContain("DO NOT retry calling 'Perplexity Search' with identical arguments");
-            expect(guidanceMsg).toContain("You must either adjust your inputs to resolve the error or pivot");
         });
 
         it('does NOT inject failure directives when all actions succeed', async () => {
