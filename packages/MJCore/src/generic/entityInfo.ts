@@ -1018,6 +1018,25 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
+
+    /**
+    * * Field Name: RelatedEntityFilter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional SQL WHERE fragment applied to every lookup on this foreign key
+    *   (e.g. `Status = 'Active'`), AND-ed with whatever the user types. Scopes a picker from
+    *   metadata rather than from every form template that renders the field. Authored, not
+    *   derived from the catalog.
+    */
+    RelatedEntityFilter: string = null
+
+    /**
+    * * Field Name: RelatedEntityOrderBy
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional ORDER BY fragment for the empty-query browse list on this foreign
+    *   key. Defaults to the related entity's name field.
+    */
+    RelatedEntityOrderBy: string = null
+
     EntityIDFieldName: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null

@@ -2362,6 +2362,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         if (!e || !e.AllowRecordMerge)
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
 
+        // IS-A records: the dependency pass below re-points only the foreign keys that target this
+        // entity, and BaseEntity.Delete follows the shared key into the loser's subtype and parent
+        // rows, whose own references never moved. Refuse rather than half-merge.
+        if (e.ParentID)
+            throw new Error(`Entity ${request.EntityName} is an IS-A subtype; merging subtype records is not supported yet`);
+        if (e.ChildEntities.length > 0) {
+            for (const key of [request.SurvivingRecordCompositeKey, ...request.RecordsToMerge]) {
+                const child = await this.FindISAChildEntity(e, key.Values(), contextUser);
+                if (child)
+                    throw new Error(`Record ${key.ToString()} of ${request.EntityName} has a ${child.ChildEntityName} subtype row; merging records another entity extends is not supported yet`);
+            }
+        }
+
         const result: RecordMergeResult = {
             Success: false,
             RecordMergeLogID: null,
