@@ -56,27 +56,46 @@ without touching a shipped migration.
 the `printCallbackErrors` fallback) funnel through it, and it already receives the migration's
 filename, version and description.
 
-It augments the output only when **all** of the following hold:
+It augments the output when **all** of the following hold:
 
 - the error is a primary-key violation
-- the failing migration matches `*__Metadata_Sync*.sql`
-- a fixed GUID is recoverable from the error text or the failing statement
+- the duplicate key value parses as a single GUID
+- the object name in the error resolves to a known entity
 
-Anything short of that prints the raw error exactly as today.
+**The failing migration's filename is NOT a gate.** An earlier draft required
+`*__Metadata_Sync*.sql`. That was too narrow: the same collision arises in any migration that
+replays a fixed-GUID create, and several non-`Metadata_Sync` migrations do exactly that. The
+filename is reported, not required.
 
-The GUID is recoverable because SQL Server includes it. Confirmed from a real captured error in
-`plans/complete/metadata-sync-constraint-error-diagnostics.md`:
+Widening costs precision, so the message is phrased **conditionally** — "if this row was planted by
+`mj sync push` ahead of the migration chain, the repair is …" — rather than asserting a cause it
+cannot know. `repair` still refuses anything it cannot justify, so a wrong guess here costs a
+misleading sentence, not a deleted row.
+
+### The error string, confirmed
+
+Captured from the real CDP failure (MJ#4503) and reproduced independently on a live SQL Server by
+MJ#4524's arm B, which its author describes as byte-identical to the CDP failure:
 
 ```
-Violation of UNIQUE KEY constraint 'UQ_AIPromptModel_Prompt_Model_Vendor_ConfigID'.
-Cannot insert duplicate key in object '__mj.AIPromptModel'.
-The duplicate key value is (d7ffc613-4b45-4c55-a8b9-d3cd246ca7fe, ...).
+Migration: migrations/v6/V202608080752__v6.1.x__Metadata_Sync.sql
+Failed at batch 1 of 102 (lines 1-35)
+
+Violation of PRIMARY KEY constraint 'PK__Credenti__3214EC27...'.
+Cannot insert duplicate key in object '__mj.CredentialType'.
+The duplicate key value is (82dff26b-2abb-4a69-8718-1fe550b60816).
 ```
 
-`The duplicate key value is (...)` is the field the recognizer reads. That capture is a UNIQUE
-violation from `mj sync push` rather than the PK violation from `mj migrate`, so the exact string
-must be re-confirmed against a real failure during implementation — but the shape, and the fact that
-SQL Server names the offending value at all, is established.
+Two fields are load-bearing and both are present:
+
+| field | value | use |
+|---|---|---|
+| `Cannot insert duplicate key in object '…'` | `__mj.CredentialType` | schema-qualified table → entity |
+| `The duplicate key value is (…)` | `82dff26b-…` | the row to repair |
+
+This is SQL Server error 2627, whose message template is fixed, so the recognizer parses a documented
+shape rather than an incidental one. No further confirmation is needed before implementation; the
+CI lane remains the end-to-end proof.
 
 **The asymmetry is deliberate.** A missed recognition costs a confusing error message. A false one
 tells an operator to delete a row they should keep. It fails toward silence.
@@ -86,6 +105,12 @@ This is the only change to the migrate path, and it is additive — migration ex
 **2. `mj migrate repair` — `packages/MJCLI/src/commands/migrate/repair.ts`**
 
 A new subcommand alongside the four that exist (`convert`, `create`, `rebake`, `usage`).
+
+**The explicit form is deliberate.** The alternative considered was an argument-less `mj migrate
+repair` that re-runs the migration, catches the same collision and repairs what it finds — less
+typing, no transcription error. The explicit form was chosen because it makes the operator state
+which row they are deleting. For an irreversible operation, having to name the target is the point,
+not friction to be removed.
 
 - deletes the named row, prints what it deleted, and says to re-run `mj migrate`
 - prompts before deleting, with `--yes` to skip for scripted use — the command is the consent, but
