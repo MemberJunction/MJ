@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
@@ -2430,12 +2430,21 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * row, so skipping the read changes nothing a caller can observe.
      */
     private eventNeedsRow(event: BaseEntityEvent, normalizedName: string, effectiveType: string): boolean {
-        // Local event: the row IS the live entity, already in hand. Nothing to save by skipping.
-        if (event.baseEntity) {
+        // A row that costs nothing is never worth skipping. Free for a local event (the row IS the
+        // live entity) and for a remote event whose payload already carries `recordData`, because
+        // the entity is on the server's broadcast allowlist.
+        //
+        // This has to come first, and the per-entity reasoning below has to be read as being about
+        // THE READ. Applying it to a free row is what dropped a remote project save: the save
+        // branch uses EnvironmentID and IsArchived off the row, and with the row nulled it read
+        // them as undefined/false, concluded the project was outside the loaded environment, and
+        // filtered it out of the list — for exactly the sessions displaying it.
+        if (EntityEventRowIsFree(event)) {
             return true;
         }
 
-        // Projects are keyed by ID for both save and delete, and ID is the primary key.
+        // Projects: a DELETE needs only the id, and hydrating one would cost a read. A save that
+        // got this far has no row on the payload either, so there is nothing to merge regardless.
         if (normalizedName === 'mj: projects') {
             return false;
         }

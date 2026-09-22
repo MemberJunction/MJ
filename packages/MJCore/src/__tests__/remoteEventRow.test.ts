@@ -7,7 +7,7 @@
  * and gets `null` — not someone else's data, and not an exception — when it may not have it.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { ResolveEntityEventRow, ResolveEntityEventKey } from '../generic/remoteEventRow';
+import { ResolveEntityEventRow, ResolveEntityEventKey, EntityEventRowIsFree } from '../generic/remoteEventRow';
 import { CompositeKey } from '../generic/compositeKey';
 import type { BaseEntityEvent } from '../generic/baseEntity';
 import type { IMetadataProvider } from '../generic/interfaces';
@@ -112,5 +112,35 @@ describe('ResolveEntityEventKey', () => {
 
     it('returns null when the event carries no key', () => {
         expect(ResolveEntityEventKey(remoteEvent({}))).toBeNull();
+    });
+});
+
+/**
+ * The question a consumer must ask BEFORE deciding to skip hydration: does this row cost anything?
+ * "Would I use the row" and "does obtaining it cost a read" are different questions, and only the
+ * second justifies skipping — conflating them is how a save handler ends up reading every field
+ * as `undefined` and acting on it.
+ */
+describe('EntityEventRowIsFree', () => {
+    it('is true for a local event — the row IS the live entity', () => {
+        expect(EntityEventRowIsFree({ baseEntity: { GetAll: () => ({}) } } as unknown as BaseEntityEvent)).toBe(true);
+    });
+
+    it('is true when the server sent recordData, because the entity is allowlisted', () => {
+        expect(EntityEventRowIsFree(remoteEvent({ primaryKeyValues: KEY_JSON, recordData: '{"ID":"abc-123"}' }))).toBe(true);
+    });
+
+    it('is false when the row was withheld — obtaining it would cost a keyed read', () => {
+        expect(EntityEventRowIsFree(remoteEvent({ primaryKeyValues: KEY_JSON }))).toBe(false);
+    });
+
+    it('is false for an explicit null recordData, not merely an absent one', () => {
+        expect(EntityEventRowIsFree(remoteEvent({ primaryKeyValues: KEY_JSON, recordData: null }))).toBe(false);
+    });
+
+    it('agrees with ResolveEntityEventRow: free means resolvable with no provider at all', async () => {
+        const free = remoteEvent({ primaryKeyValues: KEY_JSON, recordData: '{"ID":"abc-123"}' });
+        expect(EntityEventRowIsFree(free)).toBe(true);
+        await expect(ResolveEntityEventRow(free)).resolves.toEqual({ ID: 'abc-123' });
     });
 });
