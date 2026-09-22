@@ -737,6 +737,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // the DOM yet when we first look, so retry across a few frames until it renders.
     // (The async DB path lands here post-render, so it succeeds on the first try.)
     const tryPortal = (retriesLeft: number): void => {
+      // The portal runs a tick after the open. If the field was destroyed or the panel
+      // dismissed in between, moving the node to <body> now would orphan it there: a destroyed
+      // component has no ngOnDestroy left to remove it, and a closed panel's @if has already
+      // let go of it.
+      if (this._destroyed || !this.ShowFKDropdown) return;
       const host = this.hostRef?.nativeElement;
       if (!host) return;
       const dropdown = host.querySelector('.mj-fk-dropdown') as HTMLElement | null;
@@ -754,6 +759,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Tracks a dropdown element we relocated to body so we can drop the reference on close. */
   private _portaledDropdownEl: HTMLElement | null = null;
+
+  /** Set in ngOnDestroy so deferred work (the portal microtask) knows not to touch the DOM. */
+  private _destroyed = false;
 
   /**
    * Arm the listeners that dismiss an open dropdown from outside the field: an ancestor scroll,
@@ -1673,10 +1681,20 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * Enter selects it, Escape closes the dropdown.
    */
   OnFKKeydown(event: KeyboardEvent): void {
-    if (!this.ShowFKDropdown || this.FKSuggestions.length === 0) {
-      if (event.key === 'Escape') { this.closeFKDropdown(); this.cdr.markForCheck(); }
+    if (event.key === 'Escape') {
+      // Escape closes the panel and is consumed: the same key reaching the document would
+      // also close a dialog hosting the form (mj-dialog listens for document Escape), and
+      // dismissing a picker must not take the whole form with it. With no panel open the key
+      // is left alone, so it still closes the dialog when that is what the user means.
+      if (this.ShowFKDropdown) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeFKDropdown();
+        this.cdr.markForCheck();
+      }
       return;
     }
+    if (!this.ShowFKDropdown || this.FKSuggestions.length === 0) return;
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -1698,11 +1716,6 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         }
         break;
       }
-      case 'Escape':
-        event.preventDefault();
-        this.closeFKDropdown();
-        this.cdr.markForCheck();
-        break;
     }
   }
 
@@ -1820,7 +1833,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       this.Record.Set(nameFieldMap, '');
     }
 
-    // Re-open the full list — clearing almost always precedes picking something else.
+    // Re-open the full list — clearing almost always precedes picking something else. A blur
+    // still inside its grace period must not close the list this just opened.
+    this.cancelPendingFKBlur();
     this.showInitialFKSuggestions();
     this.cdr.markForCheck();
   }
@@ -2232,6 +2247,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         this._fkColWidths = {};
         this._fkPrefKey = null; // force prefs reload for the new field
         this._portaledDropdownEl = null;
+        // A lookup still out for the previous record must not land on this one.
+        this.cancelPendingFKSearch();
+        this.stopScrollListener();
         this._fkColumnPlan = null;
         this._resolvedFKName = undefined;
         this._resolvedFKValue = undefined;
@@ -2258,9 +2276,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   ngOnDestroy(): void {
-    if (this._fkSearchTimeout) {
-      clearTimeout(this._fkSearchTimeout);
-    }
+    this._destroyed = true;
+    // Retire the sequence too, not just the debounce: a lookup still in flight would otherwise
+    // land on a destroyed component, reopen the panel and re-arm document listeners with no
+    // owner left to remove them.
+    this.cancelPendingFKSearch();
     this.cancelPendingFKBlur();
     this.teardownFKResizeListeners();
     this.stopScrollListener();
