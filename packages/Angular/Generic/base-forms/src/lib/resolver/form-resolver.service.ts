@@ -4,6 +4,10 @@ import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '../base-form-component';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import {
+    FORM_VARIANT_EXPLICIT_DEFAULT,
+    FORM_VARIANT_SETTING_PREFIX,
+} from '@memberjunction/interactive-component-types/forms';
 
 /**
  * Slim row shape for an `EntityFormOverride` lookup. Resolution doesn't need
@@ -44,7 +48,7 @@ export type FormResolution =
  *     the CodeGen Angular fallback explicitly; resolver skips all overrides
  *   - (key absent) → no preference, apply auto-pick rules
  */
-const VARIANT_SETTING_PREFIX = 'mj.formVariant.';
+const VARIANT_SETTING_PREFIX = FORM_VARIANT_SETTING_PREFIX;
 
 /**
  * Picks the form to render for an entity record and exposes the full list of
@@ -120,7 +124,7 @@ export class FormResolverService {
      * Format: a leading `__` makes it visually distinct from a UUID and
      * impossible to collide with one (UUIDs don't contain underscores).
      */
-    public static readonly EXPLICIT_DEFAULT_SENTINEL = '__codegen-default__';
+    public static readonly EXPLICIT_DEFAULT_SENTINEL = FORM_VARIANT_EXPLICIT_DEFAULT;
 
     /**
      * Build the per-entity setting key. Lowercased so case variants of

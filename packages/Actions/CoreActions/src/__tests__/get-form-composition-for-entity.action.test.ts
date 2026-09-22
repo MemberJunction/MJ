@@ -137,7 +137,7 @@ describe('GetFormCompositionForEntityAction', () => {
  */
 describe('GetFormCompositionForEntityAction — full custom form override', () => {
     it('reports no sections, slots or contributions, and says why', async () => {
-        runViewResults['MJ: Entity Form Overrides'] = [{ ID: 'o1' }];
+        runViewResults['MJ: Entity Form Overrides'] = [{ ID: 'o1', Status: 'Active' }];
         try {
             const payload = JSON.parse((await run()).Message ?? '{}');
             expect(payload.FullCustomForm).toBe(true);
@@ -151,7 +151,7 @@ describe('GetFormCompositionForEntityAction — full custom form override', () =
     });
 
     it('reports no related grids either, since the fill-in is off for such a form', async () => {
-        runViewResults['MJ: Entity Form Overrides'] = [{ ID: 'o1' }];
+        runViewResults['MJ: Entity Form Overrides'] = [{ ID: 'o1', Status: 'Active' }];
         try {
             expect(JSON.parse((await run()).Message ?? '{}').Related).toEqual([]);
         } finally {
@@ -163,5 +163,67 @@ describe('GetFormCompositionForEntityAction — full custom form override', () =
         const payload = JSON.parse((await run()).Message ?? '{}');
         expect(payload.FullCustomForm).toBe(false);
         expect(payload.Contributions).toHaveLength(1);
+    });
+});
+
+/**
+ * One Active override does not mean the caller sees that form. They can pick any of the
+ * forms on offer, the generated one included, and that pick is a per-user setting. Reading
+ * only the override rows answered for a form the user may have switched away from — and
+ * refused a panel on the very form they were looking at.
+ */
+describe('GetFormCompositionForEntityAction — which form the caller actually sees', () => {
+    /** Run with an Active override present and a stored form choice for the caller. */
+    async function runWithPreference(value: string | null) {
+        runViewResults['MJ: Entity Form Overrides'] = [
+            { ID: 'o1', Status: 'Active' },
+            { ID: 'o2', Status: 'Inactive' },
+        ];
+        runViewResults['MJ: User Settings'] = value === null ? [] : [{ Value: value }];
+        try {
+            return JSON.parse((await run()).Message ?? '{}');
+        } finally {
+            delete runViewResults['MJ: Entity Form Overrides'];
+            delete runViewResults['MJ: User Settings'];
+        }
+    }
+
+    it('reports the generated form when the user explicitly picked it', async () => {
+        const payload = await runWithPreference('__codegen-default__');
+        expect(payload.FullCustomForm).toBe(false);
+        expect(payload.SlotsPresent).toEqual(['before-fields', 'after-fields', 'after-related', 'after-everything']);
+        expect(payload.Sections.length).toBeGreaterThan(0);
+    });
+
+    it('reports a full custom form when the user picked one', async () => {
+        expect((await runWithPreference('o1')).FullCustomForm).toBe(true);
+    });
+
+    it('honours a pick of a form set aside by a later apply', async () => {
+        // Status Inactive, but the user chose it, and the resolver renders what they chose.
+        expect((await runWithPreference('o2')).FullCustomForm).toBe(true);
+    });
+
+    it('falls back to the first Active form when the pick names one that has gone', async () => {
+        expect((await runWithPreference('deleted-override')).FullCustomForm).toBe(true);
+    });
+
+    it('falls back to the first Active form when there is no pick at all', async () => {
+        expect((await runWithPreference(null)).FullCustomForm).toBe(true);
+    });
+
+    it('asks only for this user\'s setting for this entity', async () => {
+        await runWithPreference('__codegen-default__');
+        expect(capturedFilters['MJ: User Settings'])
+            .toBe("UserID='U1' AND Setting='mj.formVariant.mj_bizapps_common: people'");
+    });
+
+    it('leaves a form with no override alone, whatever the setting says', async () => {
+        runViewResults['MJ: User Settings'] = [{ Value: '__codegen-default__' }];
+        try {
+            expect(JSON.parse((await run()).Message ?? '{}').FullCustomForm).toBe(false);
+        } finally {
+            delete runViewResults['MJ: User Settings'];
+        }
     });
 });

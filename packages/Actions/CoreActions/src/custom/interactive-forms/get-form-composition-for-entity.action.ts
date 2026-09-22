@@ -3,6 +3,10 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView, ReadRelationshipInclusion, type EntityInfo, type EntityRelationshipInfo } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { addOutput, failure, getStringParam, ContributionScopeFilter } from "./_shared";
+import {
+    FORM_VARIANT_EXPLICIT_DEFAULT,
+    FormVariantSettingKey,
+} from "@memberjunction/interactive-component-types/forms";
 
 /**
  * Byte-compatible with CodeGenLib `angular-codegen.ts` camelCase and ng-base-forms
@@ -38,6 +42,12 @@ function stripBrackets(join: string | null | undefined): string {
  */
 const GENERATED_FORM_SLOTS = ['before-fields', 'after-fields', 'after-related', 'after-everything'] as const;
 
+/** An override row, as far as the rendered-form question needs it. */
+interface OverrideRow {
+    ID: string;
+    Status: string;
+}
+
 /** One field section as this action derives it, with the inputs it would draw. */
 interface DerivedFormSection {
     Key: string;
@@ -57,10 +67,12 @@ const SERVER_DERIVATION_NOTE =
     'is authoritative when present.';
 
 const FULL_CUSTOM_FORM_NOTE =
-    'A full custom entity form is active for this entity and renders the whole body: no field ' +
-    'sections, no related grids, no panel contribution and no slot. Propose a new version of the ' +
-    'full form rather than a panel. The container still supplies the toolbar, Save/Delete, History ' +
-    'and Record Changes, so the form body does not implement those.';
+    'A full custom entity form is the one THIS USER sees for this entity, and it renders the whole ' +
+    'body: no field sections, no related grids, no panel contribution and no slot. Propose a new ' +
+    'version of the full form rather than a panel. The container still supplies the toolbar, ' +
+    'Save/Delete, History and Record Changes, so the form body does not implement those. The user ' +
+    'can switch to the generated form from the form picker in the toolbar, and a panel becomes ' +
+    'possible again the moment they do.';
 
 /**
  * Server-side composition of an entity's form, for agents with no browser snapshot.
@@ -97,7 +109,7 @@ export class GetFormCompositionForEntityAction extends BaseAction {
 
             const rv = RunView.FromMetadataProvider(provider);
             const scope = ContributionScopeFilter(entity.ID, user);
-            const [rules, rows, overrides] = await Promise.all([
+            const [rules, rows, overrides, preference] = await Promise.all([
                 rv.RunView<{ ID: string }>({
                     EntityName: "MJ: Form Chrome Rules",
                     ExtraFilter: `EntityID='${EscapeSQLString(entity.ID)}'`,
@@ -110,17 +122,27 @@ export class GetFormCompositionForEntityAction extends BaseAction {
                     Fields: ['ID', 'ContributionKey', 'Slot', 'Title', 'Name', 'Presentation', 'Precedence', 'Inclusion'],
                     ResultType: 'simple',
                 }, user),
-                rv.RunView<{ ID: string }>({
+                rv.RunView<OverrideRow>({
                     EntityName: "MJ: Entity Form Overrides",
-                    ExtraFilter: `${scope} AND Status='Active'`,
-                    Fields: ['ID'],
+                    ExtraFilter: `${scope} AND Status<>'Pending'`,
+                    Fields: ['ID', 'Status'],
+                    ResultType: 'simple',
+                }, user),
+                rv.RunView<{ Value: string | null }>({
+                    EntityName: "MJ: User Settings",
+                    ExtraFilter: `UserID='${EscapeSQLString(user.ID)}' AND Setting='${EscapeSQLString(FormVariantSettingKey(entity.Name))}'`,
+                    Fields: ['Value'],
                     ResultType: 'simple',
                 }, user),
             ]);
 
-            // An active override replaces the form body, so the sections, slots and
-            // contributions this action would otherwise derive describe a form nobody sees.
-            const fullCustomForm = (overrides.Results ?? []).length > 0;
+            // Which form the CALLER sees, not merely whether a custom one exists. They can
+            // pick any form on offer, the generated one included, and that pick is a
+            // per-user setting — reading only the override rows answered for a form the
+            // user may have switched away from, and refused a panel on the form they were
+            // looking at.
+            const fullCustomForm = this.rendersFullCustomForm(
+                overrides.Results ?? [], (preference.Results ?? [])[0]?.Value ?? null);
 
             const payload = {
                 Entity: entity.Name,
@@ -149,6 +171,23 @@ export class GetFormCompositionForEntityAction extends BaseAction {
             LogError(`GetFormCompositionForEntityAction: ${message}`);
             return failure("UNEXPECTED_ERROR", message);
         }
+    }
+
+    /**
+     * Whether a full custom form renders for this caller.
+     *
+     * Mirrors `FormResolverService.pickActive` in the browser, which is what actually
+     * decides. A stored pick wins whatever its status — a form set aside by a later apply
+     * is still a form the user may choose — and the explicit-default sentinel means they
+     * asked for the generated form, so no custom form renders at all. With no pick, or a
+     * pick naming a form that has since gone, the auto-pick rule applies: the first Active
+     * override, if there is one.
+     */
+    private rendersFullCustomForm(overrides: readonly OverrideRow[], preference: string | null): boolean {
+        const selected = (preference ?? '').trim();
+        if (selected === FORM_VARIANT_EXPLICIT_DEFAULT) return false;
+        if (selected && overrides.some(o => o.ID?.toLowerCase() === selected.toLowerCase())) return true;
+        return overrides.some(o => o.Status === 'Active');
     }
 
     private readLayout(entity: EntityInfo): 'accordion' | 'left-nav' {
