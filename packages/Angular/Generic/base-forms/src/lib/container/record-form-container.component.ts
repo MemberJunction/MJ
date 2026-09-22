@@ -36,6 +36,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListManagementResult } from '@memberjunction/ng-list-management';
 import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
 import { BuildFormCompositionSnapshot } from '../chrome/form-composition-snapshot';
+import { FormPanelAdminService } from '../panel-manager/form-panel-admin.service';
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
@@ -136,6 +137,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private chrome = inject(FormChromeCoordinator);
   private sectionIndicators = inject(FormSectionIndicatorCoordinator);
   private slots = inject(FormSlotCoordinator);
+  private panelAdmin = inject(FormPanelAdminService);
   private recordRefresh = inject(FormRecordRefreshCoordinator);
   private host = inject(ElementRef<HTMLElement>);
   private destroy$ = new Subject<void>();
@@ -2311,13 +2313,17 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /**
    * Whether this form has anything the panel manager could act on.
    *
-   * The entry point appears only when it would do something. A form with no
-   * contributions has nothing to switch or remove, and a button that opens an empty
-   * drawer teaches the user the feature is not for them.
+   * Read from every contribution row on the entity, not from the ones currently
+   * rendering. Turning a panel off is a thing the manager does, so gating the way back in
+   * on a panel being on made the door lock behind the user: the last panel switched off
+   * took the button with it and there was no way to switch it on again.
+   *
+   * Still gated rather than always shown. A form that has never carried a contribution
+   * has nothing to switch or remove, and a button that opens an empty drawer teaches the
+   * user the feature is not for them.
    */
   get HasManageablePanels(): boolean {
-    return this.formContributionRegistrations()
-      .some((reg) => reg.Source === 'metadata' && reg.Metadata?.entity === this.EffectiveEntityInfo?.Name);
+    return this.panelAdmin.HasRowsForEntity(this.EffectiveEntityInfo);
   }
 
   /** Compiled panels on this form, listed by the manager but not changeable there. */

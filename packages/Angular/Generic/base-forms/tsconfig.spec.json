@@ -10,6 +10,7 @@
     "src/lib/panel-manager/panel-manager.component.ts",
     "src/lib/panel-manager/panel-manager.component.dom.test.ts",
     "src/lib/panel-manager/form-panel-admin.service.ts",
+    "src/lib/panel-manager/__tests__/form-panel-admin.rows.test.ts",
     "src/lib/panel-manager/form-panel-inventory.ts",
     "src/lib/panel/collapsible-panel.component.ts",
     "src/lib/panel/collapsible-panel.component.dom.test.ts",

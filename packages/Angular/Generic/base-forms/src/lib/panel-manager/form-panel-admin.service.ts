@@ -47,6 +47,24 @@ export class FormPanelAdminService {
         }
     }
 
+    /**
+     * Whether the entity carries any contribution row at all, whatever its status.
+     *
+     * Separate from {@link RowsForEntity} because the container asks this on every
+     * change-detection pass to decide whether to offer the manager, and projecting every
+     * row to answer a yes-or-no question allocates on the hottest path in the form runtime.
+     */
+    public HasRowsForEntity(entity: EntityInfo | null | undefined): boolean {
+        if (!entity?.ID) return false;
+        try {
+            return InteractiveFormsEngine.Instance.Contributions
+                .some((row) => row.EntityID && UUIDsEqual(row.EntityID, entity.ID));
+        } catch {
+            // No engine in this context — nothing to manage.
+            return false;
+        }
+    }
+
     /** Switches a row on or off. Off leaves the row in place, rendering for nobody. */
     public async SetActive(
         rowID: string,
