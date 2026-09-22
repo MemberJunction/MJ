@@ -1583,7 +1583,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       case 'onehot': return { ...base, Kind: 'onehot', Column: '' };
       case 'bin': return { ...base, Kind: 'bin', Column: '', Bins: 5 };
       case 'embedding': return { ...base, Kind: 'embedding', Entity: '', EmbeddingModelRef: '', Dims: 384 };
-      case 'llm-derived': return { ...base, Kind: 'llm-derived', FeaturePipelineRef: '' };
+      case 'llm-derived': return { ...base, Kind: 'llm-derived', FeaturePipelineRef: '', Columns: [] };
       case 'flow-agent': return { ...base, Kind: 'flow-agent', FlowAgentRef: '', InputMapping: {}, OutputMapping: {} };
       case 'vision-llm': return { ...base, Kind: 'vision-llm', ImageColumn: '', Prompt: { InlinePrompt: '' }, Output: { FeatureName: '', Kind: 'category' } };
     }

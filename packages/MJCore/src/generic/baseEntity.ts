@@ -1,10 +1,10 @@
-import { ClassFactory, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { ClassFactory, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
 import { BaseEngineRegistry } from './baseEngineRegistry';
 import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
-import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
+import { ComputeContentHashOptions, EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
@@ -3632,6 +3632,53 @@ export abstract class BaseEntity<T = unknown> {
      */
     public GetChangesSinceLastSave(): Partial<T> {
         return this.GetAll(false, true);
+    }
+
+    /**
+     * Computes a deterministic SHA-256 content hash of the entity's field values using
+     * the canonicalizer and Web Crypto API from `@memberjunction/global`.
+     *
+     * By default, hashes all loaded non-system fields (excluding `__mj_*` columns).
+     * The result is byte-for-byte identical across client and server tiers.
+     *
+     * @param options Optional configuration specifying subset of fields and/or whether to exclude system fields.
+     */
+    public async ComputeContentHash(options?: ComputeContentHashOptions): Promise<string> {
+        const excludeSystem = options?.ExcludeSystemFields ?? true;
+        const allData = this.GetAll(false, false) as Record<string, unknown>;
+
+        // If specific fields are requested, validate each exists (case-insensitively) and resolve canonical name
+        let targetFieldNames: string[];
+        if (options?.Fields && options.Fields.length > 0) {
+            targetFieldNames = options.Fields.map((req) => {
+                const fieldInfo = this.GetFieldByName(req);
+                if (!fieldInfo) {
+                    throw new Error(`ComputeContentHash: field '${req}' does not exist on entity '${this.EntityInfo.Name}'`);
+                }
+                return fieldInfo.Name;
+            });
+        } else {
+            targetFieldNames = Object.keys(allData);
+        }
+
+        const excludeSet = new Set((options?.ExcludeFields ?? []).map((f) => f.trim().toLowerCase()));
+
+        const data: Record<string, unknown> = {};
+        for (const name of targetFieldNames) {
+            if (excludeSystem && name.startsWith('__mj_')) continue;
+            if (excludeSet.has(name.toLowerCase())) continue;
+
+            const val = allData[name];
+            if (val !== undefined) {
+                data[name] = val;
+            }
+        }
+
+        if (Object.keys(data).length === 0) {
+            throw new Error(`ComputeContentHash: cannot compute content hash on empty basis for entity '${this.EntityInfo.Name}'`);
+        }
+
+        return ComputeContentHashAsync(data);
     }
 
     /**

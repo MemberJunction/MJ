@@ -26,8 +26,9 @@
     "@memberjunction/ai-vector-sync": "6.1.0",
     "@memberjunction/aiengine": "6.1.0",
     "@memberjunction/core": "6.1.0",
-    "@memberjunction/global": "6.1.0",
     "@memberjunction/core-entities": "6.1.0",
+    "@memberjunction/entity-documents": "6.1.0",
+    "@memberjunction/global": "6.1.0",
     "@memberjunction/record-comparison": "6.1.0",
     "dotenv": "^17.2.4"
   },
