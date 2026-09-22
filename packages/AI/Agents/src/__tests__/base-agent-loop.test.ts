@@ -943,13 +943,12 @@ describe('BaseAgent.Execute — failure finalization', () => {
         expect(result.success).toBe(true);
         expect(harness.run.Status).toBe('Completed');
 
-        // Surprising-but-real behavior: only actions that THROW count toward the
-        // "N of M action(s) failed" header — a returned Success=false still renders
-        // under the plain "Action results:" header (with its FAILED result code).
+        // When an action returns Success=false, it correctly counts toward the
+        // failed actions header and generates failure guidance for the model.
         const contents = params.conversationMessages.map((m) => (typeof m.content === 'string' ? m.content : ''));
-        const resultsMessage = contents.find((c) => c.includes('Action results:'));
+        const resultsMessage = contents.find((c) => c.includes('action(s) failed:'));
         expect(resultsMessage).toBeDefined();
-        expect(contents.some((c) => c.includes('action(s) failed'))).toBe(false);
+        expect(contents.some((c) => c.includes('Action Execution Failure Guidance'))).toBe(true);
     });
 });
 

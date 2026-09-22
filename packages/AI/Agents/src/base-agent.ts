@@ -112,7 +112,7 @@ import {
     ArtifactDirective,
     SystemPlaceholderManager
 } from '@memberjunction/ai-core-plus';
-import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver } from '@memberjunction/actions-base';
+import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams } from '@memberjunction/actions-base';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage } from './runtime-state-fragment';
 import { ResolveSpecializationPlacement } from './volatile-child-prompt';
@@ -423,6 +423,33 @@ export class BaseAgent {
      * @private
      */
     private _lastVolatileStateMessage: AgentChatMessage | undefined;
+
+    /**
+     * Actions that have failed fatally (e.g., missing API key, unauthorized, or repeated unrecoverable errors)
+     * during the current agent run. Subsequent attempts to execute these actions are short-circuited in 0ms.
+     * @private
+     */
+    private _fatalActionFailures: Set<string> = new Set();
+
+    /**
+     * Consecutive failure counts per action name for the current agent run.
+     * Reset when an action succeeds. Actions reaching 2 consecutive failures are flagged as fatal.
+     * @private
+     */
+    private _consecutiveActionFailures: Map<string, number> = new Map();
+
+    /**
+     * Detects whether an action error message represents a fatal configuration,
+     * credential, or authentication issue that cannot be resolved by retrying the
+     * action with different parameters.
+     */
+    protected isFatalActionError(message: string | null | undefined): boolean {
+        if (!message) {
+            return false;
+        }
+        const fatalPattern = /(?:api[\s_-]?key\s+(?:is\s+)?(?:not\s+found|missing|required|invalid)|(?:missing|invalid)\s+api[\s_-]?key|not\s+configured|unauthorized|forbidden|credentials?\s+(?:not\s+found|missing)|authentication\s+failed|\b401\b|\b403\b|no\s+api[\s_-]?key)/i;
+        return fatalPattern.test(message);
+    }
 
     /**
      * Returns the active metadata provider for this agent run. Subclasses MUST
@@ -1535,6 +1562,8 @@ export class BaseAgent {
             this._agentConfig = undefined;
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
+            this._fatalActionFailures.clear();
+            this._consecutiveActionFailures.clear();
 
             // Convert UI markup in conversation messages to plain text if requested (default: true)
             if (params.convertUIMarkupToPlainText !== false) {
@@ -7727,6 +7756,19 @@ The context is now within limits. Please retry your request with the recovered c
     public async ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended, 
         contextUser?: UserInfo): Promise<ActionResult> {
         
+        // Circuit breaker: if this action already failed fatally or unrecoverably in this run, short-circuit immediately.
+        if (this._fatalActionFailures.has(action.name) || (actionEntity?.Name && this._fatalActionFailures.has(actionEntity.Name))) {
+            const blockedMessage = `Action '${action.name}' is disabled for this run because it previously failed with an unrecoverable configuration or credential error. You must select an alternative action.`;
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): ${blockedMessage}`, false, params);
+            const blockedResult = new ActionResult();
+            blockedResult.Success = false;
+            blockedResult.Message = blockedMessage;
+            blockedResult.Params = [];
+            blockedResult.RunParams = new RunActionParams();
+            blockedResult.RunParams.Action = actionEntity;
+            return blockedResult;
+        }
+
         try {
             const actionEngine = ActionEngineServer.Instance;
 
@@ -7772,13 +7814,34 @@ The context is now within limits. Please retry your request with the recovered c
             
             if (result.Success) {
                 this.logStatus(`   ✅ Action '${action.name}' completed successfully`, true, params);
+                this._consecutiveActionFailures.delete(action.name);
+                if (actionEntity?.Name) {
+                    this._consecutiveActionFailures.delete(actionEntity.Name);
+                }
             } else {
                 this.logStatus(`   ❌ Action '${action.name}' failed: ${result.Message || 'Unknown error'}`, false, params);
+                const failures = (this._consecutiveActionFailures.get(action.name) ?? 0) + 1;
+                this._consecutiveActionFailures.set(action.name, failures);
+                if (this.isFatalActionError(result.Message) || failures >= 2) {
+                    this._fatalActionFailures.add(action.name);
+                    if (actionEntity?.Name) {
+                        this._fatalActionFailures.add(actionEntity.Name);
+                    }
+                }
             }
             
             return result;
             
         } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            const failures = (this._consecutiveActionFailures.get(action.name) ?? 0) + 1;
+            this._consecutiveActionFailures.set(action.name, failures);
+            if (this.isFatalActionError(errorMsg) || failures >= 2) {
+                this._fatalActionFailures.add(action.name);
+                if (actionEntity?.Name) {
+                    this._fatalActionFailures.add(actionEntity.Name);
+                }
+            }
             this.logError(error, {
                 category: 'ActionExecution',
                 metadata: {
@@ -8385,6 +8448,15 @@ The context is now within limits. Please retry your request with the recovered c
                 lines.push('**Output:**');
                 for (const p of a.params) {
                     lines.push(`• \`${p.Name}\`: ${this.formatParamValueForResult(p.Value)}`);
+                }
+            }
+
+            if (!a.success) {
+                const isFatal = this.isFatalActionError(a.message) || this._fatalActionFailures.has(a.actionName);
+                if (isFatal) {
+                    lines.push(`**Guidance:** Action '${a.actionName}' is unavailable (fatal configuration/credential error). Do NOT retry this action. Choose an alternative action.`);
+                } else {
+                    lines.push(`**Guidance:** Action '${a.actionName}' failed. Do NOT retry with identical inputs.`);
                 }
             }
 
@@ -12118,7 +12190,7 @@ The context is now within limits. Please retry your request with the recovered c
                     await this.finalizeStepEntity(stepEntity, actionResult.Success, 
                         actionResult.Success ? undefined : actionResult.Message, outputData);
                     
-                    return { success: true, result: actionResult, action: aa, actionEntity, stepEntity };
+                    return { success: actionResult.Success, result: actionResult, action: aa, actionEntity, stepEntity, error: actionResult.Success ? undefined : actionResult.Message };
                     
                 } catch (error) {
                     await this.finalizeStepEntity(stepEntity, false, error.message);
@@ -12138,10 +12210,11 @@ The context is now within limits. Please retry your request with the recovered c
             // Build a clean summary of action results
             // Apply large binary content interception to prevent context overflow
             const actionSummaries: ActionResultSummary[] = actionResults.map(result => {
-                const actionResult = result.success ? result.result : null;
+                const actionResult = result.result;
+                const isActionSuccess = Boolean(result.success && (actionResult ? actionResult.Success : true));
 
                 // Filter to output params only
-                const outputParams = result.result?.Params?.filter(p => p.Type === 'Both' || p.Type === 'Output') || [];
+                const outputParams = actionResult?.Params?.filter(p => p.Type === 'Both' || p.Type === 'Output') || [];
 
                 // Intercept large media content (images, audio, video) and replace with placeholders
                 // This prevents context overflow from base64 data (~700K tokens per 1024x1024 image)
@@ -12154,11 +12227,11 @@ The context is now within limits. Please retry your request with the recovered c
 
                 return {
                     actionName: result.action.name,
-                    success: result.success,
+                    success: isActionSuccess,
                     params: sanitizedParams,
-                    resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
-                    message: result.success ? actionResult?.Message || 'Action completed' : result.error || 'Unknown error',
-                    aiDirectives: result.success ? actionResult?.AIDirectives : undefined
+                    resultCode: actionResult?.Result?.ResultCode || (isActionSuccess ? 'SUCCESS' : 'ERROR'),
+                    message: actionResult?.Message || (isActionSuccess ? 'Action completed' : result.error || 'Unknown error'),
+                    aiDirectives: isActionSuccess ? actionResult?.AIDirectives : undefined
                 };
             });
             
@@ -12230,6 +12303,23 @@ The context is now within limits. Please retry your request with the recovered c
                     params.conversationMessages.push({
                         role: 'user',
                         content: `IMPORTANT — Follow these directives from the action results:\n\n${directiveText}`
+                    });
+                }
+
+                // Surface failure guidance for failed actions so the model does not repeatedly loop on broken tools
+                if (failedActions.length > 0) {
+                    const failureText = failedActions.map(f => {
+                        const isFatal = this.isFatalActionError(f.message) || this._fatalActionFailures.has(f.actionName);
+                        if (isFatal) {
+                            return `[CRITICAL/ACTION_UNAVAILABLE] Action '${f.actionName}' failed with an unrecoverable configuration or credential error: "${f.message}". This action cannot execute in this environment. DO NOT call '${f.actionName}' again during this run. You MUST select an alternative tool or proceed with available data.`;
+                        } else {
+                            return `[WARNING/ACTION_FAILURE] Action '${f.actionName}' failed: "${f.message}". DO NOT retry calling '${f.actionName}' with identical arguments. You must either adjust your inputs to resolve the error or pivot to an alternative tool.`;
+                        }
+                    }).join('\n\n');
+
+                    params.conversationMessages.push({
+                        role: 'user',
+                        content: `IMPORTANT — Action Execution Failure Guidance:\n\n${failureText}`
                     });
                 }
             }
