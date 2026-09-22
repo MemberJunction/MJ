@@ -1,4 +1,4 @@
-<div class="mj-iconpick">
+<div class="mj-iconpick" cdkOverlayOrigin #origin="cdkOverlayOrigin">
   <span class="mj-iconpick-preview" [class.is-empty]="!Preview" aria-hidden="true">
     @if (Preview) {
       <i [class]="Preview"></i>
@@ -35,43 +35,57 @@
           (click)="Toggle()">
     <i class="fa-solid fa-icons" aria-hidden="true"></i>
   </button>
-
-  @if (IsOpen) {
-    <div class="mj-iconpick-pop" role="dialog" aria-label="Choose an icon">
-      <input #search
-             class="mj-iconpick-search"
-             type="text"
-             placeholder="Search icons"
-             aria-label="Search icons"
-             [value]="Search"
-             (input)="Search = $any($event.target).value">
-
-      @if (Results.length === 0) {
-        <p class="mj-iconpick-empty">No icon matches &ldquo;{{ Search }}&rdquo;.</p>
-      } @else {
-        <div class="mj-iconpick-grid">
-          @for (name of Results; track name) {
-            <button type="button"
-                    class="mj-iconpick-cell"
-                    [class.is-on]="name === SelectedName"
-                    [title]="name"
-                    [attr.aria-label]="name"
-                    [attr.aria-pressed]="name === SelectedName"
-                    (click)="Choose(name)">
-              <i [class]="Style + ' fa-' + name" aria-hidden="true"></i>
-            </button>
-          }
-        </div>
-      }
-
-      <p class="mj-iconpick-note">
-        @if (IsFallbackCatalogue) {
-          The icon stylesheet could not be read, so this is a short list. Any other name can
-          still be typed.
-        } @else {
-          {{ Icons.length }} icons this page can draw.
-        }
-      </p>
-    </div>
-  }
 </div>
+
+<!--
+  In an overlay rather than inside the field. Anchored in the field it sat in whatever
+  scrolling box the host had, widened that box, and left the surrounding panel scrolling
+  sideways — a picker must not resize the form it is part of.
+-->
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="origin"
+  [cdkConnectedOverlayOpen]="IsOpen"
+  [cdkConnectedOverlayPositions]="Positions"
+  [cdkConnectedOverlayWidth]="GridWidth"
+  [cdkConnectedOverlayHasBackdrop]="true"
+  cdkConnectedOverlayBackdropClass="mj-iconpick-backdrop"
+  (backdropClick)="Close()"
+  (detach)="Close()">
+  <div class="mj-iconpick-pop" role="dialog" aria-label="Choose an icon">
+    <input #search
+           class="mj-iconpick-search"
+           type="text"
+           placeholder="Search icons"
+           aria-label="Search icons"
+           [value]="Search"
+           (input)="Search = $any($event.target).value">
+
+    @if (Results.length === 0) {
+      <p class="mj-iconpick-empty">No icon matches &ldquo;{{ Search }}&rdquo;.</p>
+    } @else {
+      <div class="mj-iconpick-grid">
+        @for (icon of Results; track icon.Name) {
+          <button type="button"
+                  class="mj-iconpick-cell"
+                  [class.is-on]="icon.Name === SelectedName"
+                  [title]="icon.Name"
+                  [attr.aria-label]="icon.Name"
+                  [attr.aria-pressed]="icon.Name === SelectedName"
+                  (click)="Choose(icon)">
+            <i [class]="ClassFor(icon)" aria-hidden="true"></i>
+          </button>
+        }
+      </div>
+    }
+
+    <p class="mj-iconpick-note">
+      @if (IsFallbackCatalogue) {
+        The icon stylesheet could not be read, so this is a short list. Any other name can
+        still be typed.
+      } @else {
+        {{ Icons.length }} icons this page can draw.
+      }
+    </p>
+  </div>
+</ng-template>

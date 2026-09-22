@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
-    FALLBACK_ICON_NAMES,
-    FilterIconNames,
+    FALLBACK_ICONS,
+    FilterIcons,
+    GlyphFromContent,
     IconNameOf,
     NormalizeIconClass,
-    ScanLoadedIconNames,
+    ProbeIconStyleFonts,
+    ResolveIconStyles,
+    ScanLoadedIconRules,
+    type IconStyleFont,
 } from '../lib/icon-picker/font-awesome-icons';
 
 /**
@@ -61,23 +65,41 @@ describe('IconNameOf', () => {
     });
 });
 
-describe('FilterIconNames', () => {
-    const names = ['chart-bar', 'chart-column', 'bar-chart-alt', 'user', 'users'];
+describe('GlyphFromContent', () => {
+    it('reads the character out of a CSS escape, which is how Font Awesome writes it', () => {
+        expect(GlyphFromContent('"\\f007"')).toBe(String.fromCodePoint(0xf007));
+    });
+
+    it('takes a literal single character', () => {
+        expect(GlyphFromContent('"A"')).toBe('A');
+    });
+
+    it('yields nothing for a value that names no character', () => {
+        expect(GlyphFromContent('none')).toBe('');
+        expect(GlyphFromContent('"ab"')).toBe('');
+        expect(GlyphFromContent('var(--fa-user)')).toBe('');
+    });
+});
+
+describe('FilterIcons', () => {
+    const icons = ['chart-bar', 'chart-column', 'bar-chart-alt', 'user', 'users']
+        .map((Name) => ({ Name, Style: 'fa-solid' }));
 
     it('puts names that start with the search first', () => {
-        expect(FilterIconNames(names, 'chart')).toEqual(['chart-bar', 'chart-column', 'bar-chart-alt']);
+        expect(FilterIcons(icons, 'chart').map((i) => i.Name))
+            .toEqual(['chart-bar', 'chart-column', 'bar-chart-alt']);
     });
 
     it('ignores a typed fa- prefix, since that is what the user sees elsewhere', () => {
-        expect(FilterIconNames(names, 'fa-user')).toEqual(['user', 'users']);
+        expect(FilterIcons(icons, 'fa-user').map((i) => i.Name)).toEqual(['user', 'users']);
     });
 
     it('returns everything for an empty search', () => {
-        expect(FilterIconNames(names, '  ')).toEqual(names);
+        expect(FilterIcons(icons, '  ')).toHaveLength(icons.length);
     });
 
     it('caps the result, because the grid renders every one it is given', () => {
-        expect(FilterIconNames(names, '', 2)).toHaveLength(2);
+        expect(FilterIcons(icons, '', 2)).toHaveLength(2);
     });
 });
 
@@ -86,7 +108,7 @@ describe('FilterIconNames', () => {
  * Awesome the host actually loaded. A stylesheet served without CORS headers throws on
  * `cssRules`, which must not take the picker down with it.
  */
-describe('ScanLoadedIconNames', () => {
+describe('ScanLoadedIconRules', () => {
     function docWith(sheets: unknown[]): Document {
         return { styleSheets: sheets } as unknown as Document;
     }
@@ -95,34 +117,118 @@ describe('ScanLoadedIconNames', () => {
         return { selectorText, style: { getPropertyValue: () => content ?? '' } };
     }
 
-    it('finds the icons a stylesheet defines', () => {
+    it('finds the icons a stylesheet defines, with their glyphs', () => {
         const doc = docWith([{ cssRules: [rule('.fa-user::before', '"\\f007"'), rule('.fa-star:before', '"\\f005"')] }]);
-        expect(ScanLoadedIconNames(doc)).toEqual(['star', 'user']);
+        expect(ScanLoadedIconRules(doc)).toEqual([
+            { Name: 'star', Glyph: String.fromCodePoint(0xf005) },
+            { Name: 'user', Glyph: String.fromCodePoint(0xf007) },
+        ]);
     });
 
     it('leaves out the sizing and animation helpers, which draw nothing', () => {
-        const doc = docWith([{ cssRules: [rule('.fa-spin::before', '"x"'), rule('.fa-2x::before', '"x"'), rule('.fa-user::before', '"\\f007"')] }]);
-        expect(ScanLoadedIconNames(doc)).toEqual(['user']);
+        const doc = docWith([{ cssRules: [rule('.fa-spin::before', '"\\f110"'), rule('.fa-2x::before', '"\\f110"'), rule('.fa-user::before', '"\\f007"')] }]);
+        expect(ScanLoadedIconRules(doc).map((r) => r.Name)).toEqual(['user']);
     });
 
     it('leaves out a rule that sets no glyph', () => {
         const doc = docWith([{ cssRules: [rule('.fa-user::before', null)] }]);
-        expect(ScanLoadedIconNames(doc)).toEqual([]);
+        expect(ScanLoadedIconRules(doc)).toEqual([]);
     });
 
     it('reads a rule that lists several selectors', () => {
         const doc = docWith([{ cssRules: [rule('.fa-user:before, .fa-person::before', '"\\f007"')] }]);
-        expect(ScanLoadedIconNames(doc)).toEqual(['person', 'user']);
+        expect(ScanLoadedIconRules(doc).map((r) => r.Name)).toEqual(['person', 'user']);
     });
 
     it('skips a stylesheet it may not read, and keeps the ones it may', () => {
         const blocked = { get cssRules(): never { throw new DOMException('cross-origin'); } };
         const doc = docWith([blocked, { cssRules: [rule('.fa-user::before', '"\\f007"')] }]);
-        expect(ScanLoadedIconNames(doc)).toEqual(['user']);
+        expect(ScanLoadedIconRules(doc).map((r) => r.Name)).toEqual(['user']);
     });
 
     it('finds nothing in a document with no stylesheets, which is what the fallback is for', () => {
-        expect(ScanLoadedIconNames(docWith([]))).toEqual([]);
-        expect(FALLBACK_ICON_NAMES.length).toBeGreaterThan(0);
+        expect(ScanLoadedIconRules(docWith([]))).toEqual([]);
+        expect(FALLBACK_ICONS.length).toBeGreaterThan(0);
+    });
+});
+
+/**
+ * Knowing an icon's NAME is not enough. Font Awesome splits its icons across several
+ * fonts and the stylesheet gives them all the same kind of rule, so a brands icon drawn
+ * as solid renders as a missing-glyph box — which is what a user sees as "half the icons
+ * are broken". Which font holds a glyph is measured, because nothing says it.
+ */
+describe('ResolveIconStyles', () => {
+    const SOLID: IconStyleFont = { Style: 'fa-solid', FontFamily: '"Font Awesome 6 Free"', FontWeight: '900' };
+    const BRANDS: IconStyleFont = { Style: 'fa-brands', FontFamily: '"Font Awesome 6 Brands"', FontWeight: '400' };
+
+    const rules = [
+        { Name: 'user', Glyph: 'A' },
+        { Name: 'github', Glyph: 'B' },
+        { Name: 'ghost-icon', Glyph: 'C' },
+    ];
+
+    /** A stand-in for the canvas measurement: solid has A, brands has B, nobody has C. */
+    const hasGlyph = (glyph: string, font: IconStyleFont): boolean =>
+        (glyph === 'A' && font.Style === 'fa-solid') || (glyph === 'B' && font.Style === 'fa-brands');
+
+    it('reports each icon under the style that actually draws it', () => {
+        expect(ResolveIconStyles(rules, [SOLID, BRANDS], hasGlyph)).toEqual([
+            { Name: 'user', Style: 'fa-solid' },
+            { Name: 'github', Style: 'fa-brands' },
+        ]);
+    });
+
+    it('drops an icon no loaded font has, rather than offering a blank square', () => {
+        const names = ResolveIconStyles(rules, [SOLID, BRANDS], hasGlyph).map((i) => i.Name);
+        expect(names).not.toContain('ghost-icon');
+    });
+
+    it('reports an icon present in two styles under the first one tried', () => {
+        const inBoth = (): boolean => true;
+        expect(ResolveIconStyles([rules[0]], [SOLID, BRANDS], inBoth)).toEqual([{ Name: 'user', Style: 'fa-solid' }]);
+    });
+
+    it('resolves nothing when no style is loaded', () => {
+        expect(ResolveIconStyles(rules, [], hasGlyph)).toEqual([]);
+    });
+});
+
+describe('ProbeIconStyleFonts', () => {
+    /** A document double: every probe resolves to whatever `families` says for its class. */
+    function docWith(families: Record<string, string>): Document {
+        const body = { appendChild: () => undefined, removeChild: () => undefined };
+        return {
+            body,
+            createElement: () => ({ className: '', style: {}, setAttribute: () => undefined }),
+            defaultView: {
+                getComputedStyle: (el: { className: string }) => ({
+                    fontFamily: families[el.className] ?? '',
+                    fontWeight: el.className === 'fa-solid' ? '900' : '400',
+                }),
+            },
+        } as unknown as Document;
+    }
+
+    it('reports the family and weight the browser resolves for each style', () => {
+        const doc = docWith({
+            'fa-solid': '"Font Awesome 6 Free"',
+            'fa-regular': '"Font Awesome 6 Free"',
+            'fa-brands': '"Font Awesome 6 Brands"',
+        });
+        expect(ProbeIconStyleFonts(doc)).toEqual([
+            { Style: 'fa-solid', FontFamily: '"Font Awesome 6 Free"', FontWeight: '900' },
+            { Style: 'fa-regular', FontFamily: '"Font Awesome 6 Free"', FontWeight: '400' },
+            { Style: 'fa-brands', FontFamily: '"Font Awesome 6 Brands"', FontWeight: '400' },
+        ]);
+    });
+
+    it('leaves out a style whose family does not resolve, because it is not loaded', () => {
+        const doc = docWith({ 'fa-solid': '"Font Awesome 6 Free"', 'fa-brands': 'sans-serif' });
+        expect(ProbeIconStyleFonts(doc).map((f) => f.Style)).toEqual(['fa-solid']);
+    });
+
+    it('reports none for a page with no Font Awesome at all', () => {
+        expect(ProbeIconStyleFonts(docWith({}))).toEqual([]);
     });
 });

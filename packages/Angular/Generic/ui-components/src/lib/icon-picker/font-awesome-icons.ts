@@ -1,13 +1,15 @@
 /**
- * What Font Awesome icons this page can actually draw.
+ * What Font Awesome icons this page can actually draw, and in which style.
  *
  * Read from the loaded stylesheet rather than from a list shipped here, so the catalogue
  * is whatever the host really loaded — Free, Pro, or a pinned older version. A list in
  * source would drift from it silently and offer icons that render as blank squares.
  *
- * The scan can fail: a stylesheet served without CORS headers throws on `cssRules`, and a
- * host may load Font Awesome by some means this cannot see. {@link FALLBACK_ICON_NAMES}
- * covers that, so the picker always has something to show.
+ * Knowing the NAME is not enough. Font Awesome splits its icons across several fonts, and
+ * the stylesheet gives every icon the same kind of rule whichever font holds it — so a
+ * name drawn in the wrong style renders as a missing-glyph box. Which font has a given
+ * glyph is not written down anywhere in the CSS, so it is measured: a glyph the font does
+ * not have falls back and measures exactly as it does with no Font Awesome at all.
  */
 
 /**
@@ -18,6 +20,9 @@
  * blanks for most names.
  */
 export const DEFAULT_ICON_STYLE = 'fa-solid';
+
+/** The styles worth probing, widest set first so a solid icon is reported as solid. */
+export const ICON_STYLES: readonly string[] = ['fa-solid', 'fa-regular', 'fa-brands'];
 
 /** Style prefixes an icon value may already carry, so normalization leaves it alone. */
 const STYLE_PREFIXES = ['fa-solid', 'fa-regular', 'fa-brands', 'fa-light', 'fa-thin', 'fa-duotone', 'fas', 'far', 'fab', 'fal', 'fat', 'fad', 'fa'];
@@ -37,13 +42,35 @@ const NON_ICON_CLASSES = new Set([
     'fa-8x', 'fa-9x', 'fa-10x', 'fa-2xs', 'fa-swap-opacity', 'fa-width-auto',
 ]);
 
+/** One icon the page can draw, with the style that actually draws it. */
+export interface FontAwesomeIcon {
+    /** The bare name, e.g. `chart-column`. */
+    Name: string;
+    /** The style class that has the glyph, e.g. `fa-solid`. */
+    Style: string;
+}
+
+/** An icon name and the character its stylesheet rule assigns it. */
+export interface IconGlyphRule {
+    Name: string;
+    /** The character from the rule's `content`, which is what gets measured. */
+    Glyph: string;
+}
+
+/** How one style renders, as the browser resolves it. */
+export interface IconStyleFont {
+    Style: string;
+    FontFamily: string;
+    FontWeight: string;
+}
+
 /**
  * A small, dependable set for when the stylesheet cannot be read.
  *
- * Chosen to cover the things a form panel is usually about rather than to be exhaustive:
- * a user who needs something else can still type its name.
+ * Solid-only, and chosen to cover the things a form panel is usually about rather than to
+ * be exhaustive: a user who needs something else can still type its name.
  */
-export const FALLBACK_ICON_NAMES: readonly string[] = [
+export const FALLBACK_ICONS: readonly FontAwesomeIcon[] = [
     'address-card', 'bell', 'bolt', 'book', 'bookmark', 'box', 'briefcase', 'building',
     'bullseye', 'calendar', 'calendar-check', 'certificate', 'chart-bar', 'chart-column',
     'chart-line', 'chart-pie', 'check', 'circle-check', 'circle-info', 'clipboard',
@@ -57,7 +84,7 @@ export const FALLBACK_ICON_NAMES: readonly string[] = [
     'rocket', 'ruler', 'screwdriver-wrench', 'shield', 'sitemap', 'sliders', 'star',
     'table', 'table-cells', 'tag', 'tags', 'thumbtack', 'ticket', 'timeline', 'trophy',
     'truck', 'user', 'user-group', 'users', 'wand-magic-sparkles', 'warehouse', 'wrench',
-];
+].map((Name) => ({ Name, Style: DEFAULT_ICON_STYLE }));
 
 /** Whether this value already names a Font Awesome style. */
 function hasStylePrefix(value: string): boolean {
@@ -92,14 +119,14 @@ export function IconNameOf(value: string | null | undefined): string {
 }
 
 /**
- * Icon names the loaded stylesheets define, or an empty list when none can be read.
+ * Icon names and glyphs the loaded stylesheets define.
  *
  * A rule qualifies when it styles `.fa-<name>` with `::before` content, which is how Font
  * Awesome attaches a glyph — the sizing and animation helpers share the prefix but set no
  * content, so this tells the two apart without a list to maintain.
  */
-export function ScanLoadedIconNames(doc: Document): string[] {
-    const found = new Set<string>();
+export function ScanLoadedIconRules(doc: Document): IconGlyphRule[] {
+    const found = new Map<string, string>();
     for (const sheet of Array.from(doc.styleSheets)) {
         let rules: CSSRuleList | null = null;
         try {
@@ -109,36 +136,115 @@ export function ScanLoadedIconNames(doc: Document): string[] {
             continue;
         }
         if (!rules) continue;
-        for (const rule of Array.from(rules)) {
-            collectFromRule(rule, found);
-        }
+        for (const rule of Array.from(rules)) collectFromRule(rule, found);
     }
-    return [...found].sort();
+    return [...found.entries()]
+        .map(([Name, Glyph]) => ({ Name, Glyph }))
+        .sort((a, b) => a.Name.localeCompare(b.Name));
 }
 
-function collectFromRule(rule: CSSRule, found: Set<string>): void {
+function collectFromRule(rule: CSSRule, found: Map<string, string>): void {
     const style = rule as CSSStyleRule;
     const selector = typeof style.selectorText === 'string' ? style.selectorText : '';
-    if (!selector || !selector.includes('::before') && !selector.includes(':before')) return;
-    if (!style.style?.getPropertyValue('content')) return;
+    if (!selector || (!selector.includes('::before') && !selector.includes(':before'))) return;
+    const content = style.style?.getPropertyValue('content');
+    if (!content) return;
+    const glyph = GlyphFromContent(content);
+    if (!glyph) return;
     for (const part of selector.split(',')) {
         const match = part.trim().match(/^\.(fa-[a-z0-9-]+)::?before$/);
         if (!match) continue;
         const cls = match[1];
         if (NON_ICON_CLASSES.has(cls)) continue;
-        found.add(cls.slice(3));
+        found.set(cls.slice(3), glyph);
     }
 }
 
-/** Icon names matching a search, most-relevant first. An empty search returns them all. */
-export function FilterIconNames(names: readonly string[], search: string, limit = 240): string[] {
+/**
+ * The character a `content` value names.
+ *
+ * Font Awesome writes it as a CSS escape — `content: "\f007"` — which reaches script with
+ * the quotes and the escape intact. A value naming anything else (a keyword, a counter,
+ * a var it could not resolve) yields nothing, so it is skipped rather than measured.
+ */
+export function GlyphFromContent(content: string): string {
+    const body = content.trim().replace(/^["']|["']$/g, '');
+    const escaped = body.match(/^\\([0-9a-fA-F]{1,6})$/);
+    if (escaped) return String.fromCodePoint(parseInt(escaped[1], 16));
+    return body.length === 1 || [...body].length === 1 ? body : '';
+}
+
+/**
+ * How each style renders, as the browser resolves it on this page.
+ *
+ * Probed rather than assumed: the font family carries the major version in its name
+ * (`Font Awesome 6 Free`), and a host on another version, or on a kit, names it something
+ * else. A style whose family does not resolve is left out — it is not loaded.
+ */
+export function ProbeIconStyleFonts(doc: Document, styles: readonly string[] = ICON_STYLES): IconStyleFont[] {
+    const out: IconStyleFont[] = [];
+    const host = doc.body ?? doc.documentElement;
+    if (!host) return out;
+    for (const style of styles) {
+        const probe = doc.createElement('i');
+        probe.className = style;
+        probe.setAttribute('aria-hidden', 'true');
+        probe.style.position = 'absolute';
+        probe.style.left = '-99999px';
+        host.appendChild(probe);
+        try {
+            const computed = doc.defaultView?.getComputedStyle(probe);
+            const family = (computed?.fontFamily ?? '').trim();
+            if (family && /font\s*awesome/i.test(family)) {
+                out.push({ Style: style, FontFamily: family, FontWeight: (computed?.fontWeight ?? '400').trim() });
+            }
+        } finally {
+            host.removeChild(probe);
+        }
+    }
+    return out;
+}
+
+/**
+ * Whether a font has a glyph, decided by measuring it.
+ *
+ * Implemented by the caller so this module stays free of canvas and testable without one.
+ * Returns true when `glyph` renders from `font` rather than falling back.
+ */
+export type GlyphPresenceTest = (glyph: string, font: IconStyleFont) => boolean;
+
+/**
+ * Each icon paired with the style that actually draws it.
+ *
+ * The stylesheet says which icons exist but not which font holds each one, and drawing a
+ * brands icon as solid produces a missing-glyph box — which is what a user sees as "half
+ * the icons are broken". Styles are tried in order, so an icon present in several is
+ * reported under the first, and an icon no loaded font has is dropped rather than offered
+ * as a blank square.
+ */
+export function ResolveIconStyles(
+    rules: readonly IconGlyphRule[],
+    fonts: readonly IconStyleFont[],
+    hasGlyph: GlyphPresenceTest,
+): FontAwesomeIcon[] {
+    if (fonts.length === 0) return [];
+    const out: FontAwesomeIcon[] = [];
+    for (const rule of rules) {
+        const font = fonts.find((f) => hasGlyph(rule.Glyph, f));
+        if (font) out.push({ Name: rule.Name, Style: font.Style });
+    }
+    return out;
+}
+
+/** Icons matching a search, most-relevant first. An empty search returns them all. */
+export function FilterIcons(icons: readonly FontAwesomeIcon[], search: string, limit = 240): FontAwesomeIcon[] {
     const needle = search.trim().toLowerCase().replace(/^fa-/, '');
-    if (needle.length === 0) return names.slice(0, limit);
-    const starts: string[] = [];
-    const contains: string[] = [];
-    for (const name of names) {
-        if (name.startsWith(needle)) starts.push(name);
-        else if (name.includes(needle)) contains.push(name);
+    if (needle.length === 0) return icons.slice(0, limit);
+    const starts: FontAwesomeIcon[] = [];
+    const contains: FontAwesomeIcon[] = [];
+    for (const icon of icons) {
+        if (icon.Name.startsWith(needle)) starts.push(icon);
+        else if (icon.Name.includes(needle)) contains.push(icon);
     }
     return [...starts, ...contains].slice(0, limit);
 }

@@ -1,6 +1,5 @@
 :host {
   display: block;
-  position: relative;
 }
 
 .mj-iconpick {
@@ -73,15 +72,10 @@
   opacity: 0.5;
 }
 
-/* Anchored to the field and above the surrounding chrome, because the picker is often
-   used inside a dialog whose own body scrolls. */
+/* Sized by the overlay, which places it outside the host's scrolling box — so nothing
+   here may set a width or a position. */
 .mj-iconpick-pop {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% + var(--mj-space-1));
-  right: 0;
-  left: 0;
-  min-width: 260px;
+  box-sizing: border-box;
   padding: var(--mj-space-2);
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-md);
