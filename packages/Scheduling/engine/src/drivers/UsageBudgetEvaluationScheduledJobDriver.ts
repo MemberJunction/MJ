@@ -3,7 +3,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { ValidationResult, RunView, RunQuery, IMetadataProvider, IRunViewProvider, IRunQueryProvider } from '@memberjunction/core';
 import { MJUsageBudgetEntity, MJUsageBudgetEventEntity } from '@memberjunction/core-entities';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
@@ -213,7 +213,17 @@ export class UsageBudgetEvaluationScheduledJobDriver extends BaseScheduledJob {
                 }
 
                 if (breachedThreshold != null && breachAction != null) {
-                    const eventFilter = `BudgetID = '${budget.ID}' AND PeriodStart >= '${periodStart.toISOString()}' AND ThresholdPercent = ${breachedThreshold}`;
+                    // Escaped, not trusted for its shape. Both values are platform-sourced — a
+                    // budget's primary key and a timestamp this method computed — so the exposure
+                    // today is low, which is exactly why it is easy to leave as the one raw
+                    // interpolation in a branch that parameterises everywhere else. The rule is
+                    // about the site, not the current value: the next person to reuse this filter
+                    // shape inherits whatever discipline they find here. `breachedThreshold` is a
+                    // number this method assigned from two literals, so it is interpolated bare.
+                    const eventFilter =
+                        `BudgetID = '${EscapeSQLString(budget.ID)}' `
+                        + `AND PeriodStart >= '${EscapeSQLString(periodStart.toISOString())}' `
+                        + `AND ThresholdPercent = ${breachedThreshold}`;
                     const existingEventCheck = await rv.RunView<MJUsageBudgetEventEntity>(
                         {
                             EntityName: 'MJ: Usage Budget Events',

@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockRunViewQueue: Array<{ Success: boolean; Results?: unknown[]; ErrorMessage?: string }> = [];
+
+/** Every RunView param object the driver sent, in call order — lets a test assert the SQL it built. */
+const mockRunViewParams: Array<Record<string, unknown>> = [];
 const mockRunQueryQueue: Array<{ Success: boolean; Results?: unknown[]; ErrorMessage?: string }> = [];
 
 vi.mock('@memberjunction/global', () => ({
@@ -8,6 +11,12 @@ vi.mock('@memberjunction/global', () => ({
     SafeJSONParse: (str: string) => {
         try { return JSON.parse(str); } catch { return null; }
     },
+    // Faithful to the real one (util.ts): null-byte strip, then ANSI quote doubling, and a
+    // missing value becomes the empty string rather than throwing. This mock replaces the
+    // module WHOLESALE, so anything the driver imports and does not find here is `undefined`
+    // at runtime — which is a TypeError on the first call, in whichever branch calls it.
+    EscapeSQLString: (value: string | null | undefined): string =>
+        value == null ? '' : String(value).replace(/\0/g, '').replace(/'/g, "''"),
 }));
 
 vi.mock('@memberjunction/core', () => {
@@ -17,7 +26,8 @@ vi.mock('@memberjunction/core', () => {
             Errors: Array<{ Source: string; Message: string }> = [];
         },
         RunView: class {
-            async RunView(): Promise<unknown> {
+            async RunView(params: Record<string, unknown>): Promise<unknown> {
+                mockRunViewParams.push(params);
                 return mockRunViewQueue.shift() ?? { Success: true, Results: [] };
             }
         },
@@ -69,6 +79,7 @@ describe('UsageBudgetEvaluationScheduledJobDriver', () => {
     beforeEach(() => {
         driver = new UsageBudgetEvaluationScheduledJobDriver();
         mockRunViewQueue.length = 0;
+        mockRunViewParams.length = 0;
         mockRunQueryQueue.length = 0;
         vi.clearAllMocks();
     });
@@ -325,6 +336,27 @@ describe('UsageBudgetEvaluationScheduledJobDriver', () => {
             expect(result.Details).toMatchObject({ EvaluatedCount: 1, FailedCount: 0 });
             expect(mockBudget.LastObservedAmount).toBe(0);
             expect(mockBudget.Save).toHaveBeenCalled();
+        });
+
+        // The dedupe filter is the one predicate this driver builds by interpolation rather than
+        // by parameter. Both values are platform-sourced today, so the escaping cannot be proven
+        // by a live exploit — what it can be proven by is that the SITE escapes, which is what
+        // survives the next person reusing this filter shape with a value that is not.
+        it('escapes the values it interpolates into the dedupe filter', async () => {
+            const mockBudget = measurableBudget({ ID: "budget-o'brien", LastObservedAmount: null });
+            mockRunViewQueue.push({ Success: true, Results: [mockBudget] });           // load budgets
+            mockRunQueryQueue.push({ Success: true, Results: [{ TotalSpend: 150 }] }); // over limit
+            mockRunViewQueue.push({ Success: true, Results: [] });                     // dedupe read
+
+            await driver.Execute(mockContext());
+
+            const dedupe = mockRunViewParams.find(p => p['EntityName'] === 'MJ: Usage Budget Events');
+            expect(dedupe).toBeDefined();
+            const filter = String(dedupe!['ExtraFilter']);
+            // Doubled, so the quote stays INSIDE the literal instead of closing it early.
+            expect(filter).toContain("BudgetID = 'budget-o''brien'");
+            // And the predicate is still one whole clause, not truncated at the quote.
+            expect(filter).toMatch(/AND ThresholdPercent = \d+$/);
         });
 
         it('fails the evaluation when a breach is detected but the dedupe lookup fails', async () => {
