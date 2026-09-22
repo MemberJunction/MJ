@@ -142,8 +142,16 @@ export default class Migrate extends Command {
     );
   }
 
-  /** Runs Skyway against the prepared config and reports the outcome. */
-  private async executeMigration(config: MJConfig, flags: { verbose: boolean; tag?: string }, skywayConfig: SkywayConfig): Promise<void> {
+  /**
+   * Runs Skyway against the prepared config and reports the outcome.
+   *
+   * `protected` (not `private`) so `src/__tests__/migrate-collision-wiring.test.ts` can drive it
+   * directly through a subclass — this method is where all three of MJ#4503's failure paths
+   * (thrown error, empty-`Details` `ErrorMessage`, per-migration `detail.Error`) live, and a
+   * mocked `Skyway` is the only way to prove the recognizer is actually wired to each one rather
+   * than merely correct in isolation. No behavior changes with the visibility.
+   */
+  protected async executeMigration(config: MJConfig, flags: { verbose: boolean; tag?: string }, skywayConfig: SkywayConfig): Promise<void> {
     const targetSchema = skywayConfig.Migrations.DefaultSchema;
     const skyway = new Skyway(skywayConfig);
 
