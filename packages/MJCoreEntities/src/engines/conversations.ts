@@ -463,6 +463,59 @@ function mergeArtifactJSON(
 }
 
 /**
+ * The row filter that decides which folders a user may see: SHARED ones (no owner)
+ * plus their OWN.
+ *
+ * Exported and used by every list read of 'MJ: Projects', because the rule being in
+ * one place is the point. It first shipped inline in LoadProjects, and review caught
+ * ProjectSelectorComponent running its own RunView with no ownership clause at all —
+ * so personal folder names were still listed in the chat area's Assign Project modal,
+ * which is precisely the exposure OwnerUserID exists to close. Gating one reader never
+ * gates the others; a second copy of a predicate is a second place to forget it.
+ *
+ * NOT for the Explorer entity-admin surfaces (the Projects record view and its
+ * hierarchy panel). Those are the raw entity browser, where an admin sees every row of
+ * every entity, and narrowing them here would be inconsistent with how MJ treats
+ * entity administration generally.
+ *
+ * A missing user gets SHARED ONLY, never every personal folder in the environment:
+ * without an identity there is nobody to be the owner of, and widening on absent input
+ * is how a personal folder reaches a stranger's list.
+ */
+export function BuildProjectVisibilityFilter(userId: string | null | undefined): string {
+    return userId && String(userId).trim().length > 0
+        ? `(OwnerUserID IS NULL OR OwnerUserID='${String(userId).trim()}')`
+        : `OwnerUserID IS NULL`;
+}
+
+/**
+ * Turns a failed folder delete into something the person reading it can act on.
+ *
+ * `Project.ParentID` and `Conversation.ProjectID` are RESTRICT foreign keys, so the delete
+ * fails while anything still points at the row. `DeleteProject` clears everything it can
+ * reach first, which leaves exactly one interesting residue: a referencing row the caller
+ * is not permitted to read, and therefore could not reparent. The raw message for that is a
+ * constraint name, about a record whose existence is deliberately hidden from them.
+ *
+ * The constraint name is the signal, and it is kept in the text — a support engineer needs
+ * it — but it is no longer the whole message.
+ */
+export function ExplainProjectDeleteFailure(dbMessage: string | null | undefined): string {
+    const raw = (dbMessage ?? '').trim();
+    if (!raw) {
+        return 'Failed to delete folder.';
+    }
+    const blockedByTree = /FK_Project_Parent/i.test(raw);
+    const blockedByConversation = /FK_Conversation_Project|ProjectID/i.test(raw);
+    if (blockedByTree || blockedByConversation) {
+        const what = blockedByTree ? 'subfolders' : 'conversations';
+        return `This folder still contains ${what} that you do not have access to, so it cannot be deleted. `
+            + `Ask someone who can see them to move or remove them first. (${raw})`;
+    }
+    return raw;
+}
+
+/**
  * ConversationEngine provides centralized, reactive caching for conversations,
  * conversation details (messages), and peripheral data (agent runs, artifacts).
  *
@@ -491,32 +544,6 @@ function mergeArtifactJSON(
  * const cached = ConversationEngine.Instance.GetCachedDetails('conv-id');
  * ```
  */
-/**
- * The row filter that decides which folders a user may see: SHARED ones (no owner)
- * plus their OWN.
- *
- * Exported and used by every list read of 'MJ: Projects', because the rule being in
- * one place is the point. It first shipped inline in LoadProjects, and review caught
- * ProjectSelectorComponent running its own RunView with no ownership clause at all —
- * so personal folder names were still listed in the chat area's Assign Project modal,
- * which is precisely the exposure OwnerUserID exists to close. Gating one reader never
- * gates the others; a second copy of a predicate is a second place to forget it.
- *
- * NOT for the Explorer entity-admin surfaces (the Projects record view and its
- * hierarchy panel). Those are the raw entity browser, where an admin sees every row of
- * every entity, and narrowing them here would be inconsistent with how MJ treats
- * entity administration generally.
- *
- * A missing user gets SHARED ONLY, never every personal folder in the environment:
- * without an identity there is nobody to be the owner of, and widening on absent input
- * is how a personal folder reaches a stranger's list.
- */
-export function BuildProjectVisibilityFilter(userId: string | null | undefined): string {
-    return userId && String(userId).trim().length > 0
-        ? `(OwnerUserID IS NULL OR OwnerUserID='${String(userId).trim()}')`
-        : `OwnerUserID IS NULL`;
-}
-
 export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there is only
@@ -919,6 +946,19 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public async DeleteProject(id: string, contextUser: UserInfo): Promise<boolean> {
         const md = this.ProviderToUse;
 
+        // 0. Resolve the folder itself FIRST. Its ParentID is where the children go, and the
+        // cached copy may not be there at all — the cache is narrowed by ownership, and a
+        // principal allowed to delete a folder is not necessarily one whose sidebar lists it.
+        let project = this._projects$.value.find(p => UUIDsEqual(p.ID, id));
+        if (!project) {
+            project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', contextUser);
+            const loaded = await project.Load(id);
+            if (!loaded) {
+                throw new Error('Folder not found');
+            }
+        }
+        const newParentId = project.ParentID ?? null;
+
         // 1. Unassign conversations directly in this folder
         const directConversations = this._conversations$.value.filter(
             c => c.ProjectID && UUIDsEqual(c.ProjectID, id)
@@ -927,12 +967,24 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             await this.SaveConversation(conv.ID, { ProjectID: null }, contextUser);
         }
 
-        // 2. Reparent direct child folders to this folder's parent
-        const target = this._projects$.value.find(p => UUIDsEqual(p.ID, id));
-        const newParentId = target?.ParentID ?? null;
-        const childFolders = this._projects$.value.filter(
-            p => p.ParentID && UUIDsEqual(p.ParentID, id)
-        );
+        // 2. Reparent direct child folders one level up.
+        //
+        // The child set comes from a READ keyed on ParentID, never from `_projects$`. That
+        // cache is narrowed to shared-plus-mine by BuildProjectVisibilityFilter, and a
+        // structural operation on the tree cannot be driven by a view of the tree that is
+        // missing rows. Someone else's personal folder under a shared parent does not appear
+        // in the cache, so it would never be reparented — and `Project.ParentID` is a
+        // RESTRICT foreign key with no ON DELETE clause, so the delete below would then fail
+        // with a raw constraint message, about a row the user is not allowed to know exists.
+        //
+        // The read carries NO ownership clause, deliberately. Deleting a folder needs
+        // CanDelete on the entity, which the UI role does not hold; the roles that do also
+        // hold unfiltered read, which makes them exempt from the row-level filter — so this
+        // read returns the complete child set for every principal that can actually reach
+        // here. Should a deployment grant delete to a filtered role anyway, the server still
+        // narrows the read, and step 3's guard turns the resulting FK failure into something
+        // legible rather than "Failed to save project".
+        const childFolders = await this.readChildFolders(id, contextUser);
         if (childFolders.length > 0) {
             this._selfMutating = true;
             try {
@@ -946,20 +998,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             } finally {
                 this._selfMutating = false;
             }
-            // Children were mutated in place — re-emit so subscribers re-read the tree
+            // Children were mutated in place — re-emit so subscribers re-read the tree.
+            // Reparented children the caller cannot see are not in `_projects$` and stay out
+            // of it; the emit is for the ones that are.
             this._projects$.next([...this._projects$.value]);
         }
 
-        // 3. Delete the now-unreferenced folder
-        let project = target;
-        if (!project) {
-            project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', contextUser);
-            const loaded = await project.Load(id);
-            if (!loaded) {
-                throw new Error('Folder not found');
-            }
-        }
-
+        // 3. Delete the now-unreferenced folder.
+        //
         // Remove from the cached list BEFORE calling Delete(). BaseEntity.Delete() calls
         // NewRecord() which wipes the entity's fields — including ID — so filtering the list
         // by ID *after* the delete wouldn't match the (now-blank) cached entity and the folder
@@ -979,10 +1025,35 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (!deleted) {
             // Restore the list on failure (the entity wasn't deleted, so its fields are intact)
             this._projects$.next(projectsBeforeDelete);
-            throw new Error(project.LatestResult?.CompleteMessage || 'Failed to delete folder');
+            throw new Error(ExplainProjectDeleteFailure(project.LatestResult?.CompleteMessage));
         }
 
         return true;
+    }
+
+    /**
+     * Every direct child of a folder, read by ParentID with no ownership clause.
+     *
+     * Separate from `LoadProjects` on purpose: that one answers "what may this user SEE",
+     * and this one answers "what actually REFERENCES this row". Only the second is a safe
+     * basis for a delete, because an unseen child still holds the foreign key.
+     */
+    private async readChildFolders(parentId: string, contextUser: UserInfo): Promise<MJProjectEntity[]> {
+        const rv = new RunView();
+        const result = await rv.RunView<MJProjectEntity>(
+            {
+                EntityName: 'MJ: Projects',
+                ExtraFilter: `ParentID='${parentId}'`,
+                ResultType: 'entity_object'
+            },
+            contextUser
+        );
+        if (!result.Success) {
+            throw new Error(
+                `Could not read the folder's subfolders, so it cannot be safely deleted: ${result.ErrorMessage}`
+            );
+        }
+        return result.Results || [];
     }
 
     /**
@@ -2586,21 +2657,39 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return true;
         }
 
-        // save — only track projects in the loaded environment; drop archived ones
+        // save — the cached list holds folders that are in the loaded environment, not
+        // archived, AND visible to this user. All three are conditions the save can change,
+        // so all three are re-evaluated here rather than only the first two.
         const environmentId = data?.['EnvironmentID'] as string | undefined;
         const isArchived = data?.['IsArchived'] === true;
         const inLoadedEnvironment =
             !this._lastProjectsEnvironmentId ||
             (environmentId != null && UUIDsEqual(environmentId, this._lastProjectsEnvironmentId));
 
+        // Ownership, the third condition, and the one the folder dialog's confirm promises.
+        // When someone makes a shared folder personal, every OTHER session holding it must
+        // drop it — merging and keeping would leave the folder in their sidebar until reload,
+        // which is the opposite of what that confirm just told the user would happen.
+        // Mirrors BuildProjectVisibilityFilter: no owner is shared, my id is mine, anything
+        // else is someone else's. An unknown viewer sees shared only, never every personal
+        // folder in the environment — widening on absent input is the failure mode worth
+        // avoiding, and it is the same rule the read path applies.
+        const ownerUserId = data?.['OwnerUserID'] as string | null | undefined;
+        const isVisibleToViewer =
+            ownerUserId == null || ownerUserId === ''
+                ? true
+                : !!this._lastProjectsUserId && UUIDsEqual(ownerUserId, this._lastProjectsUserId);
+
+        const belongsInList = !isArchived && inLoadedEnvironment && isVisibleToViewer;
+
         if (existingIdx >= 0) {
-            if (isArchived || !inLoadedEnvironment) {
+            if (!belongsInList) {
                 this._projects$.next(current.filter(p => !UUIDsEqual(p.ID, id)));
             } else {
                 this.mergeDataOntoRecord(current[existingIdx], data);
                 this._projects$.next([...current]);
             }
-        } else if (event.baseEntity && !isArchived && inLoadedEnvironment) {
+        } else if (event.baseEntity && belongsInList) {
             // New folder from a local event — append the entity object
             this._projects$.next([...current, event.baseEntity as MJProjectEntity]);
         }
