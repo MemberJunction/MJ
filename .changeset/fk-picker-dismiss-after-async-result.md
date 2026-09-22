@@ -8,4 +8,6 @@ Escape and leaving the field closed the panel, but a lookup still in flight reop
 
 - Every dismiss retires the lookup sequence and cancels the debounce, so nothing started before it can reopen the panel. This also covers a row picked while a lookup was still loading.
 - While a dropdown is open, a mouse press anywhere outside the field and its body-portaled panel closes it, whether or not the input has focus.
-- A blur whose grace period is interrupted by a refocus no longer closes the panel that refocus opened.
+- A blur whose grace period is interrupted by a refocus, or by clearing the value, no longer closes the panel that just opened.
+- Escape that closes the panel is consumed, so it no longer also closes a dialog, slide panel or window hosting the form. With no panel open the key is left alone.
+- Destroying the field or rebinding it to another record also retires in-flight work: late rows no longer reopen the panel, re-arm document listeners with no owner, or land on the next record. The body portal likewise skips a field that was destroyed or dismissed before it ran, which used to leave an orphaned panel in the page.

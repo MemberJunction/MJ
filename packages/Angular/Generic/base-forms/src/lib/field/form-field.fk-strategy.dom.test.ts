@@ -555,6 +555,93 @@ describe('mj-form-field FK lookup strategy', () => {
       expect(f.componentInstance.ShowFKDropdown).toBe(true);
     });
 
+    it('rows that land after the field is destroyed neither reopen it nor re-arm document listeners', async () => {
+      const held = holdLookup();
+      const addListener = vi.spyOn(document, 'addEventListener');
+      try {
+        const f = renderFK();
+        fkInput(f).dispatchEvent(new FocusEvent('focus'));
+        f.detectChanges();
+        f.destroy();
+        addListener.mockClear();
+
+        held.release();
+        await sleep(10);
+        // The rows were dropped: nothing was applied, nothing was armed, nothing was portaled.
+        expect(f.componentInstance.FKSuggestions).toEqual([]);
+        expect(addListener.mock.calls.map(c => c[0])).not.toContain('mousedown');
+        // TestBed leaves the destroyed host element in the document, so look only at <body>'s
+        // own children: a panel there would be one the portal orphaned after destroy.
+        expect(document.querySelector('body > .mj-fk-dropdown')).toBeNull();
+      } finally {
+        addListener.mockRestore();
+        held.restore();
+      }
+    });
+
+    it('rows looked up for the previous record do not open the panel on the next one', async () => {
+      const held = holdLookup();
+      try {
+        const f = renderFK();
+        fkInput(f).dispatchEvent(new FocusEvent('focus'));
+        f.detectChanges();
+
+        f.componentRef.setInput('Record', makeOrder({ ID: '22222222-2222-3333-4444-555555555555' }));
+        f.detectChanges();
+        expect(f.componentInstance.ShowFKDropdown).toBe(false);
+
+        held.release();
+        await settle(f);
+        expectClosed(f);
+      } finally {
+        held.restore();
+      }
+    });
+
+    it('Escape that closes the panel is consumed; Escape with no panel open is not', async () => {
+      const reached: string[] = [];
+      const onDocumentKeydown = (e: KeyboardEvent): void => {
+        reached.push(e.key);
+      };
+      document.addEventListener('keydown', onDocumentKeydown);
+      try {
+        const f = renderFK();
+        await openDropdown(f);
+        const input = fkInput(f);
+
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        f.detectChanges();
+        expect(f.componentInstance.ShowFKDropdown).toBe(false);
+        // A dialog hosting the form listens for Escape on the document; it must not hear this one.
+        expect(reached).toEqual([]);
+
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        expect(reached).toEqual(['Escape']);
+      } finally {
+        document.removeEventListener('keydown', onDocumentKeydown);
+      }
+    });
+
+    it('clearing the value inside the blur grace period keeps the reopened list open', async () => {
+      const f = renderFK({ Record: makeOrder({ PartyID: CUSTOMER_ID }) });
+      await f.whenStable();
+      f.detectChanges();
+      await openDropdown(f);
+
+      fkInput(f).dispatchEvent(new Event('blur'));
+      await sleep(50);
+      const clear = query(f, '.mj-fk-clear');
+      if (!clear) throw new Error('no clear button rendered for the linked value');
+      clear.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      await settle(f);
+      expect(f.componentInstance.Value).toBeNull();
+      expect(f.componentInstance.ShowFKDropdown).toBe(true);
+
+      await sleep(250); // the blur's close would have fired by now
+      f.detectChanges();
+      expect(f.componentInstance.ShowFKDropdown).toBe(true);
+    });
+
     it('focus regained inside the blur grace period keeps the panel open', async () => {
       const f = renderFK();
       await openDropdown(f);
