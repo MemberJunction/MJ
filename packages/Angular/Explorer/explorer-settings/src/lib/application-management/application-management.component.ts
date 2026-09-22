@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, NgZone, OnDestroy } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { RunView, Metadata } from '@memberjunction/core';
+import { RunView, Metadata, EntityInfo } from '@memberjunction/core';
 import { MJApplicationEntity, MJApplicationEntityEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
@@ -280,7 +280,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
     return this.appEntities.get(appId) || [];
   }
   
-  public getEntityInfo(entityId: string): any {
+  public getEntityInfo(entityId: string): EntityInfo | undefined {
     return this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
   }
   

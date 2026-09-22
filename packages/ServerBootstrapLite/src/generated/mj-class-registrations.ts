@@ -189,7 +189,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (415 classes)
+// @memberjunction/core-entities (418 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -429,6 +429,8 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeatureValueCacheEntity,
+    MJFeatureValueEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -602,6 +604,7 @@ import {
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWebSearchProviderEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1075,7 +1078,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (147 classes)
+// @memberjunction/core-actions (148 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1085,6 +1088,7 @@ import {
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -1543,6 +1547,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeatureValueCacheEntity,
+    MJFeatureValueEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -1653,12 +1659,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
-    MJSearchScopeProviderEntity,
-    MJSearchScopeStorageAccountEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopeProviderEntity,
+    MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
     MJSignatureProviderEntity,
@@ -1720,6 +1726,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWebSearchProviderEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1856,13 +1863,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     HootSuiteBulkSchedulePostsAction,
     HootSuiteCreateScheduledPostAction,
     HootSuiteDeleteScheduledPostAction,
-    HootSuiteGetAnalyticsAction,
-    HootSuiteGetScheduledPostsAction,
-    HootSuiteGetSocialProfilesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HootSuiteGetAnalyticsAction,
+    HootSuiteGetScheduledPostsAction,
+    HootSuiteGetSocialProfilesAction,
     HootSuiteSearchPostsAction,
     HootSuiteUpdateScheduledPostAction,
     InstagramCreatePostAction,
@@ -2060,13 +2067,13 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJUserEntityServer,
     MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
-    MJUserRoutineRecipientEntityServer,
-    MJUserViewEntityServer,
-    MJVectorIndexEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJUserRoutineRecipientEntityServer,
+    MJUserViewEntityServer,
+    MJVectorIndexEntityServer,
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateInteractiveFormVersionAction,
@@ -2075,6 +2082,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -2237,7 +2245,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 955;
+export const CLASS_REGISTRATIONS_COUNT = 959;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

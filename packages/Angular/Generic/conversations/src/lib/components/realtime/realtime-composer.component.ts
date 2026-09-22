@@ -80,7 +80,7 @@ export class RealtimeComposerComponent {
    */
   @Input() IsMuted = false;
 
-  @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement | HTMLTextAreaElement>;
 
   private realtime = inject(RealtimeSessionService);
 
@@ -147,6 +147,17 @@ export class RealtimeComposerComponent {
       el.value = this.Draft;
       el.focus();
       el.setSelectionRange(this.Draft.length, this.Draft.length);
+      this.AutoResize();
+    }
+  }
+
+  /** Auto-resizes the textarea up to 140px height as text grows or contracts. */
+  public AutoResize(): void {
+    const el = this.dockInput?.nativeElement;
+    if (el && el instanceof HTMLTextAreaElement) {
+      el.style.height = 'auto';
+      const newHeight = Math.max(24, Math.min(el.scrollHeight, 140));
+      el.style.height = `${newHeight}px`;
     }
   }
 
@@ -157,9 +168,13 @@ export class RealtimeComposerComponent {
     }
     this.realtime.SendText(this.Draft);
     this.Draft = '';
+    const el = this.dockInput?.nativeElement;
+    if (el && el instanceof HTMLTextAreaElement) {
+      el.style.height = 'auto';
+    }
   }
 
-  /** Enter sends (Shift+Enter is free for future multiline if the input becomes a textarea). */
+  /** Enter sends (Shift+Enter inserts a newline in textarea). */
   public OnKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
