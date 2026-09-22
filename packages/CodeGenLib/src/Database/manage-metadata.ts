@@ -7958,11 +7958,11 @@ export class ManageMetadataBase {
       // The eligibility predicate here mirrors `isFieldEligibleForUserSearch` (and the runtime
       // `isTextSearchableType` it was written against): not the primary key, a bounded text
       // column. A name field that is neither is left alone rather than flagged uselessly.
-      const seedSQL = `
-         UPDATE ${entityField}
-         SET ${this.qi('IncludeInUserSearchAPI')} = ${yes},
-             ${this.qi('UserSearchPredicateAPI')} = '${seedPredicate}'
-         WHERE ${this.qi('ID')} IN (
+      // The candidate SELECTs are built once and used twice: once as the UPDATE's subquery, once
+      // as the probe `applySearchFlagHygiene` runs to decide whether to emit the UPDATE at all.
+      // Sharing the text is the point — a probe whose predicates could drift from the statement
+      // it guards would either suppress a needed write or emit a no-op one.
+      const seedCandidateSQL = `
             SELECT ranked.${this.qi('ID')} FROM (
                SELECT f.${this.qi('ID')},
                       ROW_NUMBER() OVER (
@@ -7985,13 +7985,9 @@ export class ManageMetadataBase {
                  ${schemaFilter}
                  AND ${noSearchableField}
             ) ranked
-            WHERE ranked.rn <= ${MAX_SEARCHABLE_FIELDS_PER_ENTITY}
-         )`;
+            WHERE ranked.rn <= ${MAX_SEARCHABLE_FIELDS_PER_ENTITY}`;
 
-      const clearSQL = `
-         UPDATE ${entity}
-         SET ${this.qi('AllowUserSearchAPI')} = ${no}
-         WHERE ${this.qi('ID')} IN (
+      const clearCandidateSQL = `
             SELECT e.${this.qi('ID')}
             FROM ${entity} e
             WHERE e.${this.qi('AllowUserSearchAPI')} = ${yes}
@@ -7999,10 +7995,30 @@ export class ManageMetadataBase {
               AND e.${this.qi('VirtualEntity')} = ${no}
               ${notFullText}
               ${schemaFilter}
-              AND ${noSearchableField}
+              AND ${noSearchableField}`;
+
+      const seedSQL = `
+         UPDATE ${entityField}
+         SET ${this.qi('IncludeInUserSearchAPI')} = ${yes},
+             ${this.qi('UserSearchPredicateAPI')} = '${seedPredicate}'
+         WHERE ${this.qi('ID')} IN (${seedCandidateSQL}
          )`;
 
-      return { seedSQL, clearSQL };
+      const clearSQL = `
+         UPDATE ${entity}
+         SET ${this.qi('AllowUserSearchAPI')} = ${no}
+         WHERE ${this.qi('ID')} IN (${clearCandidateSQL}
+         )`;
+
+      // Derived-table alias is required by T-SQL and accepted by PostgreSQL, so one form serves
+      // both. COUNT(*) rather than EXISTS because the count also feeds the status line.
+      const seedProbeSQL = `SELECT COUNT(*) AS ${this.qi('Cnt')} FROM (${seedCandidateSQL}
+         ) probe`;
+
+      const clearProbeSQL = `SELECT COUNT(*) AS ${this.qi('Cnt')} FROM (${clearCandidateSQL}
+         ) probe`;
+
+      return { seedSQL, clearSQL, seedProbeSQL, clearProbeSQL };
    }
 
    /**
@@ -8013,24 +8029,65 @@ export class ManageMetadataBase {
     * created under that default is exactly the one that needs this. Ordered after it so the
     * model's choices, when it did run, are already in place and the seed only fills a real gap.
     *
-    * Idempotent: a second pass matches nothing, because the first pass made
-    * `noSearchableField` false for every row it touched.
+    * COMPARE FIRST, then write — the T20 contract every-run config writers are held to (see
+    * `__tests__/idempotency/config-writers-compare-first.test.ts`). The two UPDATEs converge on
+    * their own, because the first pass makes `noSearchableField` false for every row it touches,
+    * so re-running them changes nothing. That is not sufficient: `LogSQLBatchAndExecute` writes
+    * whatever it is handed into the run's `CodeGen_Run_*.sql` capture whether or not a row moves,
+    * and the drift gate's warm-twice stage fails on ANY capture surviving a second run. Emitting
+    * unconditionally therefore reddened the gate on every PR while the data was perfectly
+    * idempotent — the data converged, the log did not. So each statement is emitted only when its
+    * own candidate probe finds work.
     */
    protected async applySearchFlagHygiene(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try {
-         const { seedSQL, clearSQL } = this.buildSearchFlagHygieneSQL(excludeSchemas);
+         const { seedSQL, clearSQL, seedProbeSQL, clearProbeSQL } = this.buildSearchFlagHygieneSQL(excludeSchemas);
+
          // Order matters: seeding first means an entity whose name field was just flagged is no
          // longer a candidate for having its AllowUserSearchAPI cleared. Reversed, the pass would
          // disable search on an entity it was about to make searchable.
+         //
          // 4th arg is `isRecurringScript`, NOT a throw flag — passing `false` here is the default
          // and is spelled out only to make the intent explicit. Errors are caught below.
-         await this.LogSQLBatchAndExecute(pool, [seedSQL, clearSQL], 'Deterministic search-flag hygiene', false);
+         const seedCount = await this.searchFlagHygieneCandidateCount(pool, seedProbeSQL);
+         if (seedCount > 0) {
+            logStatus(`         Search-flag hygiene: seeding ${seedCount} name field(s)`);
+            await this.LogSQLBatchAndExecute(pool, [seedSQL], 'Deterministic search-flag hygiene — seed name fields', false);
+         }
+
+         // Probed AFTER the seed has run, not alongside it. Seeding changes which entities still
+         // have nothing searchable, so a clear probe taken before it would count entities the seed
+         // was about to repair and emit a statement that then matched nothing — reintroducing the
+         // stray capture file this is here to avoid.
+         const clearCount = await this.searchFlagHygieneCandidateCount(pool, clearProbeSQL);
+         if (clearCount > 0) {
+            logStatus(`         Search-flag hygiene: clearing AllowUserSearchAPI on ${clearCount} entity(ies)`);
+            await this.LogSQLBatchAndExecute(pool, [clearSQL], 'Deterministic search-flag hygiene — clear AllowUserSearchAPI', false);
+         }
+
          return true;
       }
       catch (ex) {
          logError('Error applying search flag hygiene', ex);
          return false;
       }
+   }
+
+   /**
+    * Row count for one of the search-flag hygiene probes (see {@link applySearchFlagHygiene}).
+    *
+    * Reads the first column of the first row positionally rather than by name, because the alias
+    * comes back cased differently across drivers. A probe that returns nothing is treated as no
+    * work, which is the safe direction: the statement is skipped rather than emitted blind.
+    */
+   private async searchFlagHygieneCandidateCount(pool: CodeGenConnection, probeSQL: string): Promise<number> {
+      const result = await this.runQuery(pool, probeSQL);
+      const row = result?.recordset?.[0];
+      if (!row) {
+         return 0;
+      }
+      const count = Number(Object.values(row)[0]);
+      return Number.isFinite(count) ? count : 0;
    }
 
    /**

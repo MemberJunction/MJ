@@ -19,6 +19,8 @@ import { CodeGenConnection, CodeGenQueryResult } from '../Database/codeGenDataba
 
 class TestableManageMetadata extends ManageMetadataBase {
    public executedSql: string[] = [];
+   /** Ordered log of probes and executes, shared with the fake connection. */
+   public events: string[] = [];
 
    protected override async LogSQLBatchAndExecute(
       _pool: CodeGenConnection,
@@ -26,6 +28,9 @@ class TestableManageMetadata extends ManageMetadataBase {
       _description: string,
       _throwError: boolean = false
    ): Promise<void> {
+      for (const sql of sqlBatch) {
+         this.events.push(/ROW_NUMBER/i.test(sql) ? 'exec:seed' : 'exec:clear');
+      }
       this.executedSql.push(...sqlBatch);
    }
 
@@ -41,6 +46,25 @@ class TestableManageMetadata extends ManageMetadataBase {
 function createDummyConnection(): CodeGenConnection {
    return {
       query: async () => ({ recordset: [] } as CodeGenQueryResult),
+      queryWithParams: async () => ({ recordset: [] } as CodeGenQueryResult),
+      beginTransaction: async () => ({ commit: async () => {}, rollback: async () => {} }),
+   };
+}
+
+/**
+ * A connection whose COUNT probes report outstanding work, plus a log of what was asked of it.
+ *
+ * `applySearchFlagHygiene` probes before each statement, so a test that expects the statements to
+ * be emitted has to say there is something to do. The seed probe is the one carrying ROW_NUMBER;
+ * the clear probe is the other.
+ */
+function createProbeConnection(seedCount: number, clearCount: number, calls: string[] = []): CodeGenConnection {
+   return {
+      query: async (sql: string) => {
+         const isSeedProbe = /ROW_NUMBER/i.test(sql);
+         calls.push(isSeedProbe ? 'probe:seed' : 'probe:clear');
+         return { recordset: [{ Cnt: isSeedProbe ? seedCount : clearCount }] } as unknown as CodeGenQueryResult;
+      },
       queryWithParams: async () => ({ recordset: [] } as CodeGenQueryResult),
       beginTransaction: async () => ({ commit: async () => {}, rollback: async () => {} }),
    };
@@ -198,7 +222,7 @@ describe('search-flag hygiene — scope and ordering', () => {
    it('seeds before it clears, so it never disables an entity it just fixed', async () => {
       // Reversed, the clear would fire against an entity whose name field the seed was about to
       // flag — turning search off on exactly the entities this pass exists to repair.
-      const ok = await mm.testApply(createDummyConnection(), []);
+      const ok = await mm.testApply(createProbeConnection(3, 2, mm.events), []);
       expect(ok).toBe(true);
       expect(mm.executedSql).toHaveLength(2);
       expect(mm.executedSql[0]).toContain('IncludeInUserSearchAPI');
@@ -209,11 +233,62 @@ describe('search-flag hygiene — scope and ordering', () => {
       // CodeGen emits against both SQL Server and PostgreSQL; `UPDATE x SET ... FROM y JOIN z`
       // is T-SQL-only and would not run on PG. The subquery's own FROM is fine — only the OUTER
       // statement matters, so look at the text between SET and the outer WHERE and nothing else.
-      for (const sql of Object.values(mm.testBuild([]))) {
+      //
+      // Only the two UPDATEs: testBuild also returns the COUNT probes, which have no SET clause.
+      const { seedSQL, clearSQL } = mm.testBuild([]);
+      for (const sql of [seedSQL, clearSQL]) {
          const outer = flat(sql);
          const setToWhere = outer.slice(outer.indexOf(' SET '), outer.indexOf(' WHERE '));
          expect(setToWhere).not.toMatch(/\sFROM\s/i);
          expect(outer).toMatch(/ WHERE \[ID\] IN \(/i);
       }
+   });
+});
+
+/**
+ * T20 — every-run config writers compare first and stay silent when there is nothing to do.
+ *
+ * This pass runs on EVERY CodeGen run. `LogSQLBatchAndExecute` writes whatever it is handed into
+ * the run's `CodeGen_Run_*.sql` capture whether or not a row moves, and the drift gate's
+ * warm-twice stage fails on any capture surviving a second run. So "the UPDATEs converge" is not
+ * enough — the pass has to emit nothing once the database is already hygienic. It previously
+ * emitted both statements unconditionally, which reddened the gate on every PR
+ * (`❌ Surviving CodeGen_Run_*.sql found after run 2`) while the data was perfectly idempotent.
+ */
+describe('search-flag hygiene — compare-first (T20)', () => {
+   let mm: TestableManageMetadata;
+   beforeEach(() => { mm = new TestableManageMetadata(); });
+
+   it('captures nothing when every entity is already hygienic', async () => {
+      const ok = await mm.testApply(createProbeConnection(0, 0, mm.events), []);
+      expect(ok).toBe(true);
+      expect(mm.executedSql).toHaveLength(0);
+   });
+
+   it('emits only the seed when only the seed has work', async () => {
+      await mm.testApply(createProbeConnection(2, 0, mm.events), []);
+      expect(mm.executedSql).toHaveLength(1);
+      expect(mm.executedSql[0]).toContain('[IncludeInUserSearchAPI] = 1');
+   });
+
+   it('emits only the clear when only the clear has work', async () => {
+      await mm.testApply(createProbeConnection(0, 5, mm.events), []);
+      expect(mm.executedSql).toHaveLength(1);
+      expect(mm.executedSql[0]).toContain('[AllowUserSearchAPI] = 0');
+   });
+
+   it('probes the clear AFTER the seed has run, not alongside it', async () => {
+      // Seeding changes which entities still have nothing searchable. A clear probe taken before
+      // the seed would count entities the seed was about to repair and emit a statement that then
+      // matched nothing — putting the stray capture file straight back.
+      await mm.testApply(createProbeConnection(1, 1, mm.events), []);
+      expect(mm.events).toEqual(['probe:seed', 'exec:seed', 'probe:clear', 'exec:clear']);
+   });
+
+   it('treats a probe that returns no rows as no work', async () => {
+      // Skipping is the safe direction: the statement is withheld rather than emitted blind.
+      const ok = await mm.testApply(createDummyConnection(), []);
+      expect(ok).toBe(true);
+      expect(mm.executedSql).toHaveLength(0);
    });
 });
