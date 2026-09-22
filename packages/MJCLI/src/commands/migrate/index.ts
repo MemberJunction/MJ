@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { Command, Flags } from '@oclif/core';
 import { Skyway } from '@memberjunction/skyway-core';
@@ -9,7 +10,8 @@ import { verifyDatabaseConnection } from '../../lib/db-preflight';
 import { readCurrentDbVersion } from '../../lib/db-version';
 import { executeOpenAppMetadataRefresh, isOpenAppSchema } from '@memberjunction/open-app-engine';
 import { DiagnoseCollision } from '../../lib/collision-diagnosis';
-import { FormatCollisionGuidance } from '../../lib/collision-guidance';
+import { FormatCollisionGuidance, type MigrationScopeCheck } from '../../lib/collision-guidance';
+import { MigrationMentionsId } from '../../lib/repair-target';
 
 /** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
 const HISTORY_TABLE = 'flyway_schema_history';
@@ -189,7 +191,7 @@ export default class Migrate extends Command {
       // When Migrate() throws, the SQL text is in the thrown message and nowhere
       // else — no per-migration detail is ever built — so the recognizer has to
       // be run here too or MJ#4503's whole point is lost on this path.
-      this.printCollisionGuidance(message, lastMigrationStarted?.Filename);
+      this.printCollisionGuidance(message, lastMigrationStarted?.Filename, lastMigrationStarted?.FilePath);
       this.error('Migrations failed');
     } finally {
       await skyway.Close();
@@ -229,7 +231,7 @@ export default class Migrate extends Command {
           this.logToStderr(`    Version: ${detail.Migration.Version ?? '(repeatable)'}`);
           this.logToStderr(`    Description: ${detail.Migration.Description}`);
           if (detail.Error) {
-            this.printMigrationError(detail.Error, detail.Migration.Filename);
+            this.printMigrationError(detail.Error, detail.Migration.Filename, detail.Migration.FilePath);
           }
         }
       } else {
@@ -241,7 +243,7 @@ export default class Migrate extends Command {
       // Details can be empty (or carry no Error), leaving result.ErrorMessage as
       // the only copy of the SQL text. Deduped against the per-migration pass
       // above, so the common case still prints exactly once.
-      this.printCollisionGuidance(result.ErrorMessage, lastMigrationStarted?.Filename);
+      this.printCollisionGuidance(result.ErrorMessage, lastMigrationStarted?.Filename, lastMigrationStarted?.FilePath);
 
       this.error('Migrations failed');
     }
@@ -297,12 +299,12 @@ export default class Migrate extends Command {
    * Everything here is defensive: `BatchInfo` is optional on the error type, and a reporting path
    * must never throw while reporting a failure.
    */
-  private printMigrationError(error: Error, migrationFilename: string): void {
+  private printMigrationError(error: Error, migrationFilename: string, migrationPath: string | undefined): void {
     this.logToStderr(`    Error: ${error.message}`);
 
     // MJ#4503: a primary-key collision here usually means a row was created
     // ahead of the migration chain. Say which row, and how to clear it.
-    this.printCollisionGuidance(error.message, migrationFilename);
+    this.printCollisionGuidance(error.message, migrationFilename, migrationPath);
 
     const batch = (error as { BatchInfo?: {
       BatchNumber?: number;
@@ -365,8 +367,17 @@ export default class Migrate extends Command {
    * Collisions are deduped by table + row so a message that reaches two routes
    * prints one block of guidance, not two. `DiagnoseCollision` returns null
    * unless it is certain — see its docblock.
+   *
+   * `migrationPath` is the on-disk script (`FilePath`, printed above as `Script:`)
+   * as opposed to `migrationFilename`, which is what goes in the printed command.
+   * It is what `checkMigrationScope` reads; when a failure path has no path, the
+   * check reports itself as not run rather than silently passing.
    */
-  private printCollisionGuidance(errorText: string | undefined, migrationFilename: string | undefined): void {
+  private printCollisionGuidance(
+    errorText: string | undefined,
+    migrationFilename: string | undefined,
+    migrationPath: string | undefined,
+  ): void {
     if (!errorText) return;
 
     const collision = DiagnoseCollision(errorText);
@@ -376,8 +387,39 @@ export default class Migrate extends Command {
     if (this.reportedCollisions.has(key)) return;
     this.reportedCollisions.add(key);
 
-    for (const line of FormatCollisionGuidance(collision, migrationFilename)) {
+    const scope = this.checkMigrationScope(migrationPath, collision.RowID);
+    for (const line of FormatCollisionGuidance(collision, migrationFilename, scope)) {
       this.logToStderr(line);
+    }
+  }
+
+  /**
+   * MJ#4503's third refusal, applied where the answer is actually knowable.
+   *
+   * The spec requires that a row in an entity the failing migration does not
+   * touch is refused rather than repaired. `repair --migration` can only enforce
+   * that when the operator still has the migration file and remembers to pass the
+   * flag — and for any install driven by `mjRepoVersion` or `--tag` the fetched
+   * slice is deleted by `cleanup()` as soon as `migrate` returns. Here, though,
+   * the file is still on disk: `cleanup()` runs in the `finally` that wraps
+   * `executeMigration`, so it has not run yet at the moment this output is built.
+   *
+   * So the check happens here, once, on every failure path — and its three
+   * outcomes are all explicit, because a check that quietly does not run is worse
+   * than no check at all. The mention predicate is `MigrationMentionsId`, the same
+   * one `repair --migration` uses, so the two can never disagree.
+   */
+  private checkMigrationScope(migrationPath: string | undefined, rowID: string): MigrationScopeCheck {
+    if (!migrationPath) {
+      return { Kind: 'Unchecked', Reason: 'this failure path did not report the migration file' };
+    }
+
+    try {
+      const migrationSql = fs.readFileSync(migrationPath, 'utf8');
+      return MigrationMentionsId(migrationSql, rowID) ? { Kind: 'InMigration' } : { Kind: 'NotInMigration' };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { Kind: 'Unchecked', Reason: `${migrationPath} could not be read (${message})` };
     }
   }
 
@@ -394,7 +436,7 @@ export default class Migrate extends Command {
         this.logToStderr(`    Version: ${detail.Migration.Version ?? '(repeatable)'}`);
         this.logToStderr(`    Description: ${detail.Migration.Description}`);
         if (detail.Error) {
-          this.printMigrationError(detail.Error, detail.Migration.Filename);
+          this.printMigrationError(detail.Error, detail.Migration.Filename, detail.Migration.FilePath);
         }
       }
     } else if (lastMigrationStarted) {
