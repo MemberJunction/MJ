@@ -53,6 +53,8 @@ export * from './lib/form-record-refresh.coordinator';
 export * from './lib/toolbar/form-toolbar.component';
 export * from './lib/field/form-field.component';
 export * from './lib/field/fk-search-utils';
+export * from './lib/field/fk-lookup-strategy';
+export * from './lib/field/default-fk-lookup-strategy';
 export * from './lib/field/linked-field-options';
 export * from './lib/panel/collapsible-panel.component';
 export * from './lib/container/record-form-container.component';
