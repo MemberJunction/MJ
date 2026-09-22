@@ -978,6 +978,12 @@ describe('ConversationEngine', () => {
                 expect(filter).toContain("EnvironmentID='env-1'");
             });
 
+            it('escapes the user id rather than pasting it into SQL', () => {
+                // A UserInfo.ID is a uuid today; the filter is a SQL string either way, and the
+                // one place the rule lives is the one place it has to hold.
+                expect(BuildProjectVisibilityFilter("o'brien")).toBe("(OwnerUserID IS NULL OR OwnerUserID='o''brien')");
+            });
+
             it('a missing user gets SHARED ONLY, never every personal folder in the environment', () => {
                 // Widening on absent input is how a personal folder reaches a stranger's list.
                 expect(BuildProjectVisibilityFilter(undefined)).toBe('OwnerUserID IS NULL');
@@ -1095,6 +1101,28 @@ describe('ConversationEngine', () => {
                 expect(unseenChild['Save']).toHaveBeenCalled();
             });
 
+            it('does not let the entity\'s own MaxRows truncate a completeness-critical read', async () => {
+                // One child left out is one foreign key left pointing at the row. Omitting
+                // MaxRows is not enough: the entity's UserViewMaxRows would then apply.
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+                runViewResultQueue.push({ Success: true, Results: [] });
+
+                await engine.DeleteProject('p1', contextUser);
+
+                const childRead = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects').at(-1)!;
+                expect(childRead['IgnoreMaxRows']).toBe(true);
+            });
+
+            it('refuses to read children without an id, instead of answering "none"', async () => {
+                // EscapeSQLString would turn an empty id into ParentID = '', which matches
+                // nothing — and "no children" reads as permission to delete.
+                const read = (engine as unknown as {
+                    readChildFolders(id: string, u: UserInfo): Promise<unknown[]>;
+                }).readChildFolders('   ', contextUser);
+                await expect(read).rejects.toThrow(/without a folder id/i);
+            });
+
             it('refuses to delete when the child read fails, rather than deleting blind', async () => {
                 runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
                 await engine.LoadProjects('env-1', contextUser);
@@ -1116,6 +1144,19 @@ describe('ConversationEngine', () => {
 
             it('passes an unrelated database error through untouched', () => {
                 expect(ExplainProjectDeleteFailure('Login timeout expired')).toBe('Login timeout expired');
+            });
+
+            it('does not claim a permissions problem just because a message mentions ProjectID', () => {
+                // Answering "conversations you do not have access to" to a schema error would be
+                // worse than saying nothing: it sends the reader after a cause that is not there.
+                const raw = "Invalid column name 'ProjectID'.";
+                expect(ExplainProjectDeleteFailure(raw)).toBe(raw);
+            });
+
+            it('explains an FK failure on conversations by its constraint name', () => {
+                const msg = ExplainProjectDeleteFailure(
+                    'The DELETE statement conflicted with the REFERENCE constraint "FK_Conversation_Project".');
+                expect(msg).toMatch(/conversations that you do not have access to/i);
             });
 
             it('has something to say when the provider gave no message at all', () => {

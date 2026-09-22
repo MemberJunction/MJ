@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
-import { NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
     MJConversationEntity,
@@ -483,8 +483,9 @@ function mergeArtifactJSON(
  * is how a personal folder reaches a stranger's list.
  */
 export function BuildProjectVisibilityFilter(userId: string | null | undefined): string {
-    return userId && String(userId).trim().length > 0
-        ? `(OwnerUserID IS NULL OR OwnerUserID='${String(userId).trim()}')`
+    const id = String(userId ?? '').trim();
+    return id.length > 0
+        ? `(OwnerUserID IS NULL OR OwnerUserID='${EscapeSQLString(id)}')`
         : `OwnerUserID IS NULL`;
 }
 
@@ -506,7 +507,10 @@ export function ExplainProjectDeleteFailure(dbMessage: string | null | undefined
         return 'Failed to delete folder.';
     }
     const blockedByTree = /FK_Project_Parent/i.test(raw);
-    const blockedByConversation = /FK_Conversation_Project|ProjectID/i.test(raw);
+    // Constraint names only. A bare /ProjectID/ also matched things like "Invalid column
+    // name 'ProjectID'", and answering an unrelated error with "conversations you do not
+    // have access to" is worse than passing the raw message through.
+    const blockedByConversation = /FK_Conversation_Project/i.test(raw);
     if (blockedByTree || blockedByConversation) {
         const what = blockedByTree ? 'subfolders' : 'conversations';
         return `This folder still contains ${what} that you do not have access to, so it cannot be deleted. `
@@ -1039,11 +1043,23 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * basis for a delete, because an unseen child still holds the foreign key.
      */
     private async readChildFolders(parentId: string, contextUser: UserInfo): Promise<MJProjectEntity[]> {
+        // Validated rather than escaped-and-hoped: EscapeSQLString turns an empty value into
+        // `ParentID = ''`, which matches nothing — and "no children" is precisely the wrong
+        // answer here, because it reads as permission to delete.
+        const id = (parentId ?? '').trim();
+        if (!id) {
+            throw new Error('Cannot read subfolders without a folder id.');
+        }
+
         const rv = new RunView();
         const result = await rv.RunView<MJProjectEntity>(
             {
                 EntityName: 'MJ: Projects',
-                ExtraFilter: `ParentID='${parentId}'`,
+                ExtraFilter: `ParentID='${EscapeSQLString(id)}'`,
+                // This read has to be COMPLETE, not merely representative: one child left out
+                // is one FK left pointing at the row. Omitting MaxRows is not enough — the
+                // entity's own UserViewMaxRows would then apply and truncate silently.
+                IgnoreMaxRows: true,
                 ResultType: 'entity_object'
             },
             contextUser
