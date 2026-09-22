@@ -172,6 +172,7 @@ const LOOP_AGENT_TYPE_SCHEMA = JSON.stringify({
         "includePayloadInPrompt": { "type": "boolean", "default": true, "description": "Include current payload state in prompt." },
         "includeDateTimeInPrompt": { "type": "boolean", "default": true, "description": "Include current date/time in prompt." },
         "specializationPlacement": { "type": "string", "enum": ["auto", "systemPrompt", "trailingMessage"], "default": "auto", "description": "Where the child prompt goes under trailingMessage placement." },
+        "trailingStateMode": { "type": "string", "enum": ["auto", "appendOnly", "replace"], "default": "auto", "description": "How the trailing runtime-state message is carried across iterations." },
         "maxSubAgentsInPrompt": { "type": "integer", "default": -1, "description": "Max sub-agents to include in prompt." },
         "maxActionsInPrompt": { "type": "integer", "default": -1, "description": "Max actions to include in prompt." }
     }
@@ -375,6 +376,7 @@ describe('DEFAULT_LOOP_AGENT_PROMPT_PARAMS', () => {
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includePayloadInPrompt).toBe(schemaDefaults.includePayloadInPrompt);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.includeDateTimeInPrompt).toBe(schemaDefaults.includeDateTimeInPrompt);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.specializationPlacement).toBe(schemaDefaults.specializationPlacement);
+        expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.trailingStateMode).toBe(schemaDefaults.trailingStateMode);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.maxSubAgentsInPrompt).toBe(schemaDefaults.maxSubAgentsInPrompt);
         expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.maxActionsInPrompt).toBe(schemaDefaults.maxActionsInPrompt);
     });

@@ -22,6 +22,7 @@ import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
+import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
@@ -4365,7 +4366,9 @@ export class BaseAgent {
      */
     protected shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean {
         const data = promptParams.data ?? {};
-        const agentTypePromptParams = data.__agentTypePromptParams as Record<string, unknown> | undefined;
+        // An explicit trailingStateMode wins; 'auto' (the default) or an absent key falls through to
+        // vendor/model detection below. See TrailingStateMode for when to force either mode.
+        const agentTypePromptParams = data.__agentTypePromptParams as Partial<LoopAgentTypePromptParams> | undefined;
         if (agentTypePromptParams?.trailingStateMode === 'appendOnly') {
             return true;
         }

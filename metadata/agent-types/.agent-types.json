@@ -104,6 +104,12 @@
             "default": "auto",
             "description": "Where the agent's child prompt (specialization) is placed. 'auto' relocates it into the trailing message only if its template references a volatile placeholder (_CURRENT_DATE*, _CURRENT_TIME*, _CURRENT_PAYLOAD, _SCRATCHPAD_*) — a volatile child prompt mutates the system prompt every iteration ahead of the catalogs and history, so the runtime-state relocation alone recovers nothing for it. 'systemPrompt' never relocates; 'trailingMessage' always does. Decided once per run."
           },
+          "trailingStateMode": {
+            "type": "string",
+            "enum": ["auto", "appendOnly", "replace"],
+            "default": "auto",
+            "description": "How the trailing runtime-state message is carried across iterations. OpenAI's automatic prompt cache only reuses a request whose entire prompt is a byte prefix of the new one, so replacing the fragment each iteration caps caching at the system prompt; retaining prior fragments and appending the new one keeps each request a prefix extension of the last. 'auto' appends when the resolved vendor or model is OpenAI (vendor/model name or driver class mentions OpenAI, or the model name contains GPT) and replaces otherwise. 'appendOnly' forces append — use for OpenAI-compatible endpoints auto-detection cannot see. 'replace' forces replace-in-place to keep context compact."
+          },
           "enableTaskGraphs": {
             "type": "boolean",
             "default": false,

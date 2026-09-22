@@ -208,6 +208,32 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
  */
 export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage';
 
+/**
+ * How the trailing runtime-state message is carried across loop iterations.
+ *
+ * Background: the fragment described under {@link SpecializationPlacement} is rebuilt every
+ * iteration. Providers with block-level or sliding prefix caches (Anthropic, Gemini, Cerebras) are
+ * happiest when the previous iteration's fragment is REPLACED, so the history stays compact.
+ * OpenAI's automatic cache is different: it reuses a prior request only when that request's
+ * entire prompt is a byte prefix of the new one, so replacing the fragment breaks the prefix
+ * right after the system prompt and caps the cached share at the system prompt (~22% measured).
+ * Retaining prior fragments and APPENDING the new one makes each request an exact prefix
+ * extension of the last (~93% measured).
+ *
+ * - `'auto'` (default): append-only when the resolved vendor or model is OpenAI (vendor name,
+ *   model name or model driver class contains "openai", or the model name contains "gpt"),
+ *   otherwise replace-in-place. Detection looks at the runtime override, the previous
+ *   iteration's model selection, and the prompt's bound models, in that order.
+ * - `'appendOnly'`: always retain prior fragments. Use this when auto-detection cannot see the
+ *   vendor — an OpenAI-compatible endpoint or deployment whose vendor and model names do not
+ *   mention OpenAI or GPT.
+ * - `'replace'`: always replace. Use this to keep context compact on a provider auto-detection
+ *   wrongly classifies as OpenAI.
+ *
+ * Resolved by `BaseAgent.shouldUseAppendOnlyTrailingState`.
+ */
+export type TrailingStateMode = 'auto' | 'appendOnly' | 'replace';
+
 export interface LoopAgentTypePromptParams {
     // === Section Inclusion Flags ===
 
@@ -312,6 +338,14 @@ export interface LoopAgentTypePromptParams {
     specializationPlacement?: SpecializationPlacement;
 
     /**
+     * How the trailing runtime-state message is carried across iterations: `'auto'` appends for
+     * OpenAI and replaces otherwise; `'appendOnly'` and `'replace'` force one behaviour.
+     * See {@link TrailingStateMode}.
+     * @default 'auto'
+     */
+    trailingStateMode?: TrailingStateMode;
+
+    /**
      * Maximum number of tasks allowed in the scratchpad task list.
      * When exceeded, completed tasks are auto-pruned oldest first.
      * @default 50
@@ -402,6 +436,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeDateTimeInPrompt: true,
     includeScratchpadDocs: true,
     specializationPlacement: 'auto',
+    trailingStateMode: 'auto',
     scratchpadMaxTasks: 50,
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
