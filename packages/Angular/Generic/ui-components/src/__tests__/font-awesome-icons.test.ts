@@ -27,6 +27,9 @@ describe('NormalizeIconClass', () => {
 
     it('leaves a value that already names a style alone', () => {
         expect(NormalizeIconClass('fa-regular fa-star')).toBe('fa-regular fa-star');
+    });
+
+    it('still renders a brands class, which the picker no longer offers but may be stored', () => {
         expect(NormalizeIconClass('fa-brands fa-github')).toBe('fa-brands fa-github');
     });
 
@@ -219,12 +222,28 @@ describe('ProbeIconStyleFonts', () => {
         expect(ProbeIconStyleFonts(doc)).toEqual([
             { Style: 'fa-solid', FontFamily: '"Font Awesome 6 Free"', FontWeight: '900' },
             { Style: 'fa-regular', FontFamily: '"Font Awesome 6 Free"', FontWeight: '400' },
-            { Style: 'fa-brands', FontFamily: '"Font Awesome 6 Brands"', FontWeight: '400' },
         ]);
     });
 
+    /**
+     * Brands icons are company logos. A section header is not a place for one, and six
+     * hundred of them bury the icons that do belong behind names nobody searches for.
+     */
+    it('does not probe brands, so its icons are never offered', () => {
+        const doc = docWith({
+            'fa-solid': '"Font Awesome 6 Free"',
+            'fa-brands': '"Font Awesome 6 Brands"',
+        });
+        expect(ProbeIconStyleFonts(doc).map((f) => f.Style)).not.toContain('fa-brands');
+    });
+
+    it('still probes a style a caller names explicitly', () => {
+        const doc = docWith({ 'fa-brands': '"Font Awesome 6 Brands"' });
+        expect(ProbeIconStyleFonts(doc, ['fa-brands']).map((f) => f.Style)).toEqual(['fa-brands']);
+    });
+
     it('leaves out a style whose family does not resolve, because it is not loaded', () => {
-        const doc = docWith({ 'fa-solid': '"Font Awesome 6 Free"', 'fa-brands': 'sans-serif' });
+        const doc = docWith({ 'fa-solid': '"Font Awesome 6 Free"', 'fa-regular': 'sans-serif' });
         expect(ProbeIconStyleFonts(doc).map((f) => f.Style)).toEqual(['fa-solid']);
     });
 

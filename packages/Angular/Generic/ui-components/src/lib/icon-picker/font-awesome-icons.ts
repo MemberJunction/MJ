@@ -21,8 +21,18 @@
  */
 export const DEFAULT_ICON_STYLE = 'fa-solid';
 
-/** The styles worth probing, widest set first so a solid icon is reported as solid. */
-export const ICON_STYLES: readonly string[] = ['fa-solid', 'fa-regular', 'fa-brands'];
+/**
+ * The styles the picker offers, widest set first so a solid icon is reported as solid.
+ *
+ * Brands is deliberately absent. Those icons are company logos — Angular, Apple, Amazon
+ * Pay — and a section header or a rail label is not a place for one; offering six hundred
+ * of them buries the icons that do belong behind names nobody is searching for.
+ *
+ * Excluded from what is OFFERED, not from what renders: `fa-brands` stays a style
+ * {@link NormalizeIconClass} leaves alone, so a brands class already stored, or typed by
+ * hand, still draws.
+ */
+export const ICON_STYLES: readonly string[] = ['fa-solid', 'fa-regular'];
 
 /** Style prefixes an icon value may already carry, so normalization leaves it alone. */
 const STYLE_PREFIXES = ['fa-solid', 'fa-regular', 'fa-brands', 'fa-light', 'fa-thin', 'fa-duotone', 'fas', 'far', 'fab', 'fal', 'fat', 'fad', 'fa'];
@@ -247,25 +257,4 @@ export function FilterIcons(icons: readonly FontAwesomeIcon[], search: string, l
         else if (icon.Name.includes(needle)) contains.push(icon);
     }
     return [...starts, ...contains].slice(0, limit);
-}
-
-/**
- * How many icons each style contributed, in the order the styles were tried.
- *
- * Shown under the grid because it is the one number that says whether detection worked.
- * A catalogue that is all one style means the other fonts were never measured — which is
- * what a user sees as "half the icons are broken" or "a ton of icons are missing", and it
- * is otherwise invisible until they search for one that is not there.
- */
-export function CountIconsByStyle(icons: readonly FontAwesomeIcon[]): Array<{ Style: string; Count: number }> {
-    const counts = new Map<string, number>();
-    for (const icon of icons) counts.set(icon.Style, (counts.get(icon.Style) ?? 0) + 1);
-    return [...counts.entries()]
-        .map(([Style, Count]) => ({ Style, Count }))
-        .sort((a, b) => b.Count - a.Count);
-}
-
-/** The style's own word — `fa-brands` reads as "brands". */
-export function ShortStyleName(style: string): string {
-    return style.replace(/^fa-/, '');
 }

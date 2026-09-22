@@ -81,15 +81,13 @@
       </div>
     }
 
-    <p class="mj-iconpick-note">
-      @if (IsLoading) {
-        Fetching the icon fonts, so only the ones this page can really draw are offered.
-      } @else if (IsFallbackCatalogue) {
+    <!-- Only the fallback is worth saying. A count of what loaded correctly is noise on
+         every open; that it did NOT is why a name the user expects is absent. -->
+    @if (IsFallbackCatalogue) {
+      <p class="mj-iconpick-note">
         The icon stylesheet could not be read, so this is a short list. Any other name can
         still be typed.
-      } @else {
-        {{ Icons.length }} icons this page can draw &mdash; {{ CatalogueSummary }}.
-      }
-    </p>
+      </p>
+    }
   </div>
 </ng-template>

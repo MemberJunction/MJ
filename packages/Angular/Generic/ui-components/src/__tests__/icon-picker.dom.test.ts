@@ -12,7 +12,6 @@ const ICONS: FontAwesomeIcon[] = [
   { Name: 'chart-column', Style: 'fa-solid' },
   { Name: 'chart-line', Style: 'fa-solid' },
   { Name: 'star', Style: 'fa-regular' },
-  { Name: 'github', Style: 'fa-brands' },
 ];
 
 class StubCatalogue {
@@ -89,18 +88,20 @@ describe('MjIconPickerComponent (DOM)', () => {
     const f = render({ Value: '' });
     f.componentInstance.Toggle();
     f.detectChanges();
-    const classes = cells().map((b) => b.querySelector('i')?.className);
-    expect(classes).toContain('fa-brands fa-github');
-    expect(classes).toContain('fa-regular fa-star');
+    // Angular does not guarantee the order of a bound class attribute, so membership.
+    const styleOf = (name: string): DOMTokenList | undefined =>
+      cells().find((b) => b.getAttribute('aria-label') === name)?.querySelector('i')?.classList;
+    expect(styleOf('star')).toContain('fa-regular');
+    expect(styleOf('chart-column')).toContain('fa-solid');
   });
 
   it('writes the chosen icon in its own style, not the field default, and closes', () => {
     const f = render({ Value: '' });
     let emitted = '';
     f.componentInstance.ValueChange.subscribe((v: string) => { emitted = v; });
-    f.componentInstance.Choose({ Name: 'github', Style: 'fa-brands' });
+    f.componentInstance.Choose({ Name: 'star', Style: 'fa-regular' });
     f.detectChanges();
-    expect(emitted).toBe('fa-brands fa-github');
+    expect(emitted).toBe('fa-regular fa-star');
     expect(f.componentInstance.IsOpen).toBe(false);
   });
 
