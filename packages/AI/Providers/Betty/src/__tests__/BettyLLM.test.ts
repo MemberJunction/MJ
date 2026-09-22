@@ -1,10 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { HttpPost, IsHttpError, IsCancellationError } from '@memberjunction/network-utils';
-import { ChatParams, ChatMessageRole } from '@memberjunction/ai';
+import { HttpPost, HttpError } from '@memberjunction/network-utils';
+import { ChatParams, ChatMessageRole, ChatMessageContent } from '@memberjunction/ai';
 import { BettyLLM } from '../models/BettyLLM';
 import { BettyEndpoint } from '../config';
 
-vi.mock('@memberjunction/network-utils');
+// PARTIAL mock: only the network call is faked. Automocking the whole module also stubs
+// `IsHttpError` / `IsCancellationError` to return undefined, so `describe()` and `isCancellation()`
+// silently take their fallback branches and the real error-shape handling is never executed — which
+// is exactly how an empty error message survived review.
+vi.mock('@memberjunction/network-utils', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/network-utils')>()),
+    HttpPost: vi.fn(),
+}));
 
 const BASE = 'https://betty.example.com/betty/v1';
 
@@ -15,7 +22,7 @@ function run(llm: BettyLLM, params: ChatParams) {
     }).nonStreamingChatCompletion(params);
 }
 
-function paramsWith(messages: Array<{ role: ChatMessageRole; content: string }>): ChatParams {
+function paramsWith(messages: Array<{ role: ChatMessageRole; content: ChatMessageContent }>): ChatParams {
     const p = new ChatParams();
     p.model = 'betty';
     p.messages = messages;
@@ -101,6 +108,74 @@ describe('BettyLLM', () => {
         });
     });
 
+    describe('message shapes that used to break it', () => {
+        it('extracts text from block content instead of stringifying the array', async () => {
+            // AIPromptRunner rewrites the last user message into blocks whenever the prompt carries
+            // file inputs. String(blocks) posts "[object Object]" and Betty answers a question
+            // nobody asked, with no error to show for it.
+            vi.mocked(HttpPost).mockResolvedValue(reply());
+
+            await run(new BettyLLM('key'), paramsWith([{
+                role: ChatMessageRole.user,
+                content: [
+                    { type: 'text', content: 'What is in this image?' },
+                    { type: 'image_url', content: 'data:image/png;base64,AAAA' },
+                ] as unknown as ChatMessageContent,
+            }]));
+
+            const body = vi.mocked(HttpPost).mock.calls[0][1] as { message: string };
+            expect(body.message).toContain('What is in this image?');
+            expect(body.message).not.toContain('[object Object]');
+        });
+
+        it('splits at the latest USER turn even when an assistant turn follows it', async () => {
+            // slice(0, -1) only lines up when the user turn is last. With a trailing assistant
+            // reply the question appeared twice and the assistant's last answer was dropped.
+            vi.mocked(HttpPost).mockResolvedValue(reply());
+
+            await run(new BettyLLM('key'), paramsWith([
+                { role: ChatMessageRole.user, content: 'Q1' },
+                { role: ChatMessageRole.assistant, content: 'A1' },
+                { role: ChatMessageRole.user, content: 'Q2' },
+                { role: ChatMessageRole.assistant, content: 'A2' },
+            ]));
+
+            const body = vi.mocked(HttpPost).mock.calls[0][1] as { message: string; context?: { text: string } };
+            expect(body.message).toBe('Q2');
+            expect(body.context?.text).toContain('Assistant: A2');      // no longer dropped
+            expect(body.context?.text).not.toContain('User: Q2');       // not duplicated
+        });
+
+        it('labels a tool result as a tool result, not as the user', async () => {
+            vi.mocked(HttpPost).mockResolvedValue(reply());
+
+            await run(new BettyLLM('key'), paramsWith([
+                { role: ChatMessageRole.user, content: 'Q1' },
+                { role: ChatMessageRole.tool, content: 'lookup returned 42' },
+                { role: ChatMessageRole.user, content: 'Q2' },
+            ]));
+
+            const body = vi.mocked(HttpPost).mock.calls[0][1] as { context?: { text: string } };
+            expect(body.context?.text).toContain('Tool result: lookup returned 42');
+        });
+
+        it('keeps every system message, not just the first', async () => {
+            // System turns are filtered out of the transcript, so a second one used to appear
+            // nowhere at all — neither preamble nor history.
+            vi.mocked(HttpPost).mockResolvedValue(reply());
+
+            await run(new BettyLLM('key'), paramsWith([
+                { role: ChatMessageRole.system, content: 'Answer briefly.' },
+                { role: ChatMessageRole.system, content: 'Cite your sources.' },
+                { role: ChatMessageRole.user, content: 'Hello' },
+            ]));
+
+            const body = vi.mocked(HttpPost).mock.calls[0][1] as { context?: { text: string } };
+            expect(body.context?.text).toContain('Answer briefly.');
+            expect(body.context?.text).toContain('Cite your sources.');
+        });
+    });
+
     describe('the result it returns', () => {
         it('puts the answer in the first choice', async () => {
             vi.mocked(HttpPost).mockResolvedValue(reply({ response: 'Cheese is aged.' }));
@@ -155,19 +230,99 @@ describe('BettyLLM', () => {
         });
 
         it("surfaces the server's own error message and status", async () => {
-            const err = Object.assign(new Error('Request failed'), {
-                Status: 403,
-                StatusText: 'Forbidden',
+            vi.mocked(HttpPost).mockRejectedValue(new HttpError('Request failed', {
+                Url: `${BASE}/messages`, Method: 'POST', Status: 403, StatusText: 'Forbidden',
                 Data: { error: { message: 'Key lacks betty:chat scope' } },
-            });
-            vi.mocked(IsHttpError).mockReturnValue(true);
-            vi.mocked(HttpPost).mockRejectedValue(err);
+            }));
 
             const result = await run(new BettyLLM('key'), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
 
             expect(result.success).toBe(false);
             expect(result.errorMessage).toContain('403');
             expect(result.errorMessage).toContain('Key lacks betty:chat scope');
+        });
+    });
+
+    describe('error reporting', () => {
+        it('says a timeout timed out, and keeps the underlying detail', async () => {
+            vi.mocked(HttpPost).mockRejectedValue(new HttpError(
+                `Request to ${BASE}/messages timed out after 120000ms`,
+                { Url: `${BASE}/messages`, Method: 'POST', IsTimeout: true },
+            ));
+
+            const result = await run(new BettyLLM('key'), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
+
+            expect(result.errorMessage).toContain('timed out');
+            expect(result.errorMessage).not.toMatch(/:\s*$/);   // no trailing colon with nothing after it
+        });
+
+        it('hands the ORIGINAL error to the failover analyzer, not a rebuilt one', async () => {
+            // AIPromptRunner does `result.exception || new Error(result.errorMessage)`; leaving
+            // exception unset loses status, headers and retry-after before anything decides to retry.
+            const err = new HttpError('Request failed', {
+                Url: `${BASE}/messages`, Method: 'POST', Status: 500, StatusText: 'Server Error',
+            });
+            vi.mocked(HttpPost).mockRejectedValue(err);
+
+            const result = await run(new BettyLLM('key'), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
+
+            expect(result.exception).toBe(err);
+        });
+
+        it('classifies a 401 as an auth failure rather than something retryable', async () => {
+            // ErrorAnalyzer probes lower-case `status`; network-utils exposes `Status`. Without the
+            // alias every Betty error came back Unknown/Transient and a bad key was retried.
+            vi.mocked(HttpPost).mockRejectedValue(new HttpError('Request failed', {
+                Url: `${BASE}/messages`, Method: 'POST', Status: 401, StatusText: 'Unauthorized',
+            }));
+
+            const result = await run(new BettyLLM('key'), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
+
+            // canFailover stays TRUE by MJ policy — "different vendor may have valid API key"
+            // (errorAnalyzer.canFailoverForError). What matters is that it is no longer `Unknown`.
+            expect(result.errorInfo?.errorType).toBe('Authentication');
+        });
+
+        it('classifies a 429 as rate limiting', async () => {
+            vi.mocked(HttpPost).mockRejectedValue(new HttpError('Request failed', {
+                Url: `${BASE}/messages`, Method: 'POST', Status: 429, StatusText: 'Too Many Requests',
+            }));
+
+            const result = await run(new BettyLLM('key'), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
+
+            expect(result.errorInfo?.errorType).toBe('RateLimit');
+        });
+
+        it('does not leave lower-cased aliases on the error it hands back', async () => {
+            const err = new HttpError('Request failed', {
+                Url: `${BASE}/messages`, Method: 'POST', Status: 500, StatusText: 'Server Error',
+            });
+            vi.mocked(HttpPost).mockRejectedValue(err);
+
+            await run(new BettyLLM('key'), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
+
+            expect((err as unknown as Record<string, unknown>).status).toBeUndefined();
+        });
+    });
+
+    describe('refusing a turn it cannot ask', () => {
+        it('fails locally when the latest user turn has no text', async () => {
+            const result = await run(new BettyLLM('key'), paramsWith([
+                { role: ChatMessageRole.user, content: '   ' },
+            ]));
+
+            expect(result.success).toBe(false);
+            expect(result.errorMessage).toContain('no text');
+            expect(vi.mocked(HttpPost)).not.toHaveBeenCalled();
+        });
+
+        it('treats a 200 with no answer text as a failure, not an empty success', async () => {
+            vi.mocked(HttpPost).mockResolvedValue(reply({ response: '' }));
+
+            const result = await run(new BettyLLM('key'), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
+
+            expect(result.success).toBe(false);
+            expect(result.errorMessage).toContain('no answer text');
         });
     });
 
@@ -185,7 +340,6 @@ describe('BettyLLM', () => {
         it('reports an abort as cancelled, not as a Betty failure', async () => {
             // Marked non-failover so no layer retries a request the caller gave up on.
             const controller = new AbortController();
-            vi.mocked(IsCancellationError).mockReturnValue(true);
             vi.mocked(HttpPost).mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
 
             const p = paramsWith([{ role: ChatMessageRole.user, content: 'q' }]);

@@ -51,8 +51,10 @@ const BETTY_REQUEST_TIMEOUT_MS = 120_000;
  */
 @RegisterClass(BaseLLM, 'BettyLLM')
 export class BettyLLM extends BaseLLM {
-    // No constructor and no key field: `BaseLLM` stores the key, rejects an empty one, and exposes
-    // it as `protected get apiKey()`.
+    // No constructor and no key field: `BaseLLM` stores the key and exposes it as
+    // `protected get apiKey()`. Note it only WARNS on an empty key rather than rejecting it, so an
+    // unset `AI_VENDOR_API_KEY__BETTYLLM` reaches Betty as `Authorization: Bearer ` and comes back
+    // as a 401 — which `describe()` now reports verbatim.
 
     /**
      * The API supports SSE when the request sets `Accept: text/event-stream`, but this provider
@@ -78,6 +80,12 @@ export class BettyLLM extends BaseLLM {
 
         const body = this.buildRequest(params);
         if (!body) return this.failure(startTime, 'No user message was supplied.');
+        // `message` is documented as required and non-empty. A user turn carrying only an image,
+        // or an empty string, reaches here with nothing to ask — fail locally and say so rather
+        // than spending a round trip to be told the same thing by a 400.
+        if (!body.message.trim()) {
+            return this.failure(startTime, 'The latest user message has no text for Betty to answer.');
+        }
 
         // Forward the cancellation token so an abort tears down the underlying HTTP socket rather
         // than merely abandoning this promise.
@@ -90,6 +98,13 @@ export class BettyLLM extends BaseLLM {
         try {
             const res = await HttpPost<BettyChatResponse>(BettyEndpoint(baseURL, 'messages'), body, config);
             if (!res?.Data) return this.failure(startTime, 'Betty returned an empty response.');
+            // A 200 carrying no answer text would otherwise record a SUCCESSFUL run with empty
+            // output — every consumer downstream optional-chains and `|| ''`s it, so nothing
+            // crashes and nothing complains. A silent empty success is far harder to diagnose
+            // later than a failure here.
+            if (typeof res.Data.response !== 'string' || !res.Data.response.trim()) {
+                return this.failure(startTime, 'Betty returned a response with no answer text.');
+            }
             return this.toChatResult(res.Data, startTime);
         } catch (ex) {
             // A caller-initiated abort (or an AIPromptRunner timeout) is not a Betty failure —
@@ -136,9 +151,16 @@ export class BettyLLM extends BaseLLM {
             .filter((m, i) => i !== latestIndex && m.role !== ChatMessageRole.system)
             .map((m) => `${this.speakerFor(m.role)}: ${getTextFromContent(m.content ?? '')}`);
 
-        const system = params.messages.find((m) => m.role === ChatMessageRole.system);
-        const preamble = system
-            ? [`Instructions from the calling application: ${getTextFromContent(system.content ?? '')}`]
+        // EVERY system message, not the first. `.find()` here would be the same first-match defect
+        // this class criticises the legacy provider for — and worse, because the filter above
+        // removes system turns from `prior`, a second one would appear in neither the preamble nor
+        // the transcript and would vanish without trace.
+        const system = params.messages
+            .filter((m) => m.role === ChatMessageRole.system)
+            .map((m) => getTextFromContent(m.content ?? ''))
+            .filter((text) => text.length > 0);
+        const preamble = system.length
+            ? [`Instructions from the calling application: ${system.join('\n\n')}`]
             : [];
         const lines = [...preamble, ...(prior.length ? ['Earlier in this conversation:', ...prior] : [])];
 
@@ -214,6 +236,9 @@ export class BettyLLM extends BaseLLM {
             // all (timeout, DNS failure, connection refused), and '' is not nullish — `??` would
             // stop there and discard `ex.message`, the only part that says what actually happened.
             const detail = payload?.error?.message || payload?.message || ex.StatusText || ex.message;
+            // A timeout is neither a Betty answer nor an unreachable host, and saying so plainly
+            // saves the reader guessing which of the two `Status: 0` meant.
+            if (ex.IsTimeout) return `Betty timed out: ${detail}`;
             return ex.Status ? `Betty returned ${ex.Status}: ${detail}` : `Could not reach Betty: ${detail}`;
         }
         return ex instanceof Error ? ex.message : 'Unknown error calling Betty.';
@@ -243,8 +268,35 @@ export class BettyLLM extends BaseLLM {
         result.statusText = 'error';
         result.errorMessage = message;
         result.data = { choices: [], usage: new ModelUsage(0, 0) };
-        if (ex !== undefined) result.errorInfo = ErrorAnalyzer.analyzeError(ex, 'Betty');
+        // The ORIGINAL error, not just its message. `AIPromptRunner` does
+        // `lastError = result.exception || new Error(result.errorMessage)`, so leaving this unset
+        // hands the failover analyzer a synthetic Error built from a string — status, headers and
+        // retry-after are gone by the time anything decides whether to retry.
+        result.exception = ex ?? null;
+        if (ex !== undefined) result.errorInfo = ErrorAnalyzer.analyzeError(this.forAnalyzer(ex), 'Betty');
         return result;
+    }
+
+    /**
+     * Give `ErrorAnalyzer` a status code it can actually find.
+     *
+     * `extractHttpStatusCode` probes `status`, `statusCode`, `response.status`, `response.statusCode`
+     * and `code`. `@memberjunction/network-utils` exposes PascalCase `Status`, so none of them match
+     * and EVERY Betty HTTP failure classifies as `Unknown` → `Transient` → `canFailover: true`. A 429
+     * then never reaches the rate-limit backoff and a 401 never stops failover; the key is simply
+     * retried against the same endpoint until the attempts run out.
+     *
+     * The message-text fallback does not rescue it either — it greps for `timeout` while
+     * network-utils says `timed out`.
+     *
+     * A COPY, never a mutation: `ex` is also handed to `result.exception` above and to the caller's
+     * own logging, and neither should acquire lower-cased aliases as a side effect of analysis.
+     */
+    private forAnalyzer(ex: unknown): unknown {
+        if (!IsHttpError(ex)) return ex;
+        const alias = Object.create(Object.getPrototypeOf(ex) as object) as Record<string, unknown>;
+        Object.assign(alias, ex, { status: ex.Status, statusCode: ex.Status, message: ex.message });
+        return alias;
     }
 
     // Streaming is declared unsupported above, so BaseLLM never calls these.
