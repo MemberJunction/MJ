@@ -234,6 +234,8 @@ import { MJExperimentSessionIterationFormComponent } from "./Entities/MJExperime
 import { MJExplorerNavigationItemFormComponent } from "./Entities/MJExplorerNavigationItem/mjexplorernavigationitem.form.component";
 import { MJExternalDataSourceFormComponent } from "./Entities/MJExternalDataSource/mjexternaldatasource.form.component";
 import { MJExternalDataSourceTypeFormComponent } from "./Entities/MJExternalDataSourceType/mjexternaldatasourcetype.form.component";
+import { MJFeatureValueCacheFormComponent } from "./Entities/MJFeatureValueCache/mjfeaturevaluecache.form.component";
+import { MJFeatureValueFormComponent } from "./Entities/MJFeatureValue/mjfeaturevalue.form.component";
 import { MJFileCategoryFormComponent } from "./Entities/MJFileCategory/mjfilecategory.form.component";
 import { MJFileEntityRecordLinkFormComponent } from "./Entities/MJFileEntityRecordLink/mjfileentityrecordlink.form.component";
 import { MJFileFormComponent } from "./Entities/MJFile/mjfile.form.component";
@@ -816,6 +818,7 @@ declarations: [
     MJConversationDetailAttachmentFormComponent,
     MJConversationDetailRatingFormComponent,
     MJDashboardPermissionFormComponent,
+    MJFeatureValueCacheFormComponent,
     MJLibraryFormComponent,
     MJMCPServerConnectionFormComponent,
     MJQueryEntityFormComponent,
@@ -1292,6 +1295,7 @@ declarations: [
     MJAISkillFormComponent,
     MJEntityActionFilterFormComponent,
     MJExperimentFormComponent,
+    MJFeatureValueFormComponent,
     MJListShareFormComponent,
     MJQueueTypeFormComponent,
     MJRecommendationFormComponent,

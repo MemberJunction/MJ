@@ -15,7 +15,7 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
-import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@memberjunction/predictive-studio-core';
+import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { modelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
@@ -72,6 +72,8 @@ export interface BuildPredictionResult {
   pipeline?: MJMLTrainingPipelineEntity;
   /** Leaderboard iterations produced during the tournament. */
   leaderboard?: MLLeaderboardEntryPayload[];
+  /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
+  warnings?: FeatureStepWarning[];
 }
 
 /** Extract a representative score for tournament comparison (R² for regression, AUC/accuracy for classification). */
@@ -126,6 +128,19 @@ export class PredictiveStudioPipelineBuilder {
    */
   public async build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const { spec, provider, user, autoPublish = true, sidecarVersion = 'predictive-studio-agent' } = input;
+    const collectedWarnings: FeatureStepWarning[] = [];
+    const seenWarningKeys = new Set<string>();
+
+    const recordWarnings = (warnings: FeatureStepWarning[]) => {
+      for (const w of warnings) {
+        const key = `${w.FeatureName}:${w.Kind}`;
+        if (!seenWarningKeys.has(key)) {
+          seenWarningKeys.add(key);
+          collectedWarnings.push(w);
+        }
+      }
+    };
+
     try {
       const experiments = (spec.ProposedExperiments && spec.ProposedExperiments.length > 0)
         ? [...spec.ProposedExperiments].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))
@@ -133,6 +148,7 @@ export class PredictiveStudioPipelineBuilder {
 
       if (experiments.length <= 1) {
         const config = modelingPlanToPipelineConfig(spec);
+        recordWarnings(config.warnings);
         const pipeline = await this.createPipeline(config, provider, user);
         const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
         const model = trainResult.model;
@@ -164,6 +180,7 @@ export class PredictiveStudioPipelineBuilder {
           heldReason,
           errorMessage: null,
           leaderboard: [singleRow],
+          warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
         };
       }
 
@@ -184,6 +201,7 @@ export class PredictiveStudioPipelineBuilder {
         const exp = candidatesToRun[i];
         try {
           const config = modelingPlanToPipelineConfig(spec, i);
+          recordWarnings(config.warnings);
           const pipeline = await this.createPipeline(config, provider, user);
           const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
           const model = trainResult.model;
@@ -240,11 +258,19 @@ export class PredictiveStudioPipelineBuilder {
         heldReason,
         errorMessage: null,
         leaderboard,
+        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilder.build failed: ${errorMessage}`);
-      return { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
+      return {
+        success: false,
+        published: false,
+        leakageFlagged: false,
+        heldReason: null,
+        errorMessage,
+        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
+      };
     }
   }
 
