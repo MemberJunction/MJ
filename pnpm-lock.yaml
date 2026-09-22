@@ -4367,6 +4367,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0
         version: link:../../../MJCoreEntities
+      '@memberjunction/feature-pipelines':
+        specifier: 6.1.0
+        version: link:../../../AI/Knowledge/FeaturePipelines
       '@memberjunction/global':
         specifier: 6.1.0
         version: link:../../../MJGlobal
