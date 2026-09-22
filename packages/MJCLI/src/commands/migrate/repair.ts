@@ -2,6 +2,8 @@ import { Command, Flags } from '@oclif/core';
 import sql from 'mssql';
 import { confirm } from '@inquirer/prompts';
 import { getValidatedConfig } from '../../config';
+import { IsValidRepairId, ParseEntityRef } from '../../lib/repair-target';
+import { FormatRowPreview } from '../../lib/row-preview';
 
 /**
  * Deletes ONE row that is blocking a migration (MJ#4503).
@@ -27,20 +29,18 @@ export default class MigrateRepair extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(MigrateRepair);
 
-    const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!GUID.test(flags.id)) {
+    if (!IsValidRepairId(flags.id)) {
       this.error(`--id must be a GUID; got '${flags.id}'`);
     }
-    const parts = flags.entity.split('.');
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
-      this.error(`--entity must be schema-qualified, e.g. __mj.CredentialType; got '${flags.entity}'`);
-    }
+
     // Identifiers cannot be parameterised, so they are validated instead.
-    const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-    const [schema, table] = parts;
-    if (!IDENT.test(schema) || !IDENT.test(table)) {
-      this.error(`--entity must name a plain schema and table; got '${flags.entity}'`);
+    const ref = ParseEntityRef(flags.entity);
+    if (!ref) {
+      this.error(
+        `--entity must be schema-qualified using plain identifiers, e.g. __mj.CredentialType; got '${flags.entity}'`,
+      );
     }
+    const { Schema: schema, Table: table } = ref;
 
     const config = getValidatedConfig();
     const pool = new sql.ConnectionPool({
@@ -61,11 +61,20 @@ export default class MigrateRepair extends Command {
       const existing = await pool
         .request()
         .input('id', sql.UniqueIdentifier, flags.id)
-        .query(`SELECT 1 AS Found FROM [${schema}].[${table}] WHERE [ID] = @id`);
+        .query<Record<string, unknown>>(`SELECT * FROM [${schema}].[${table}] WHERE [ID] = @id`);
 
       if (existing.recordset.length === 0) {
         this.log(`No row with ID ${flags.id} in ${schema}.${table} — nothing to repair.`);
         return;
+      }
+
+      // So the operator has something to recognise beyond the GUID they just
+      // pasted from Task 2's guidance — see "If you do not recognise this
+      // row, do NOT delete it" in FormatCollisionGuidance.
+      const preview = FormatRowPreview(existing.recordset[0], existing.recordset.columns);
+      this.log(`Row found in ${schema}.${table}:`);
+      for (const line of preview) {
+        this.log(`  ${line}`);
       }
 
       // @inquirer/prompts errors in a non-TTY, which is why --yes exists and why
