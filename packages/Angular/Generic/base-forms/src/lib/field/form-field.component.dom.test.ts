@@ -939,6 +939,25 @@ describe('MjFormFieldComponent — declaring itself to its section', () => {
     expect(host.NotifyFieldChanged).toHaveBeenLastCalledWith(f.componentInstance);
   });
 
+  it('stays quiet when only the FormContext object identity changes, since the form rebuilds it every pass', () => {
+    const host = spyHost();
+    const f = renderComponentFixture(MjFormFieldComponent, {
+      declarations: [MjFormFieldComponent],
+      imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
+      providers: [{ provide: FORM_SECTION_FIELD_HOST, useValue: host }],
+      inputs: { Record: makeWidget(), FieldName: 'Name', Type: 'textbox', FormContext: { showValidation: false, validationRevision: 0 } },
+    });
+    const afterRender = vi.mocked(host.NotifyFieldChanged).mock.calls.length;
+
+    f.componentRef.setInput('FormContext', { showValidation: false, validationRevision: 0 });
+    f.detectChanges();
+    expect(vi.mocked(host.NotifyFieldChanged).mock.calls.length, 'same content, new object').toBe(afterRender);
+
+    f.componentRef.setInput('FormContext', { showValidation: true, validationRevision: 1 });
+    f.detectChanges();
+    expect(vi.mocked(host.NotifyFieldChanged).mock.calls.length, 'a failed save publishes').toBe(afterRender + 1);
+  });
+
   it('withdraws on destroy', () => {
     const host = spyHost();
     const f = renderComponentFixture(MjFormFieldComponent, {

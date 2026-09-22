@@ -5,7 +5,7 @@ import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
-import { FORM_SECTION_FIELD_HOST } from '../section-indicators/form-section-field-host';
+import { FORM_SECTION_FIELD_HOST, SectionRelevantFormContextChanged } from '../section-indicators/form-section-field-host';
 import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
 import {
@@ -191,6 +191,18 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** This component's host element — what a section uses to confirm the field is inside it. */
   public get HostElement(): HTMLElement {
     return this.hostRef.nativeElement;
+  }
+
+  private _inputsBound = false;
+
+  /**
+   * False until the first `ngOnChanges`, i.e. until `Record`, `FieldName`, `EditMode` and the
+   * rest have been bound. A section must not read a field before then: with no inputs a field
+   * reports itself hidden (read mode, empty value) and not required-and-empty, which would hide
+   * a section whose fields all sit behind a view boundary before they ever bind.
+   */
+  public get InputsBound(): boolean {
+    return this._inputsBound;
   }
 
   /** The entity record containing this field */
@@ -2503,8 +2515,18 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   ngOnChanges(changes: SimpleChanges): void {
     // Everything the section derives from this field (required-and-empty, dirty, hidden, which
     // errors it owns) follows from these inputs, and the section may already have been checked
-    // this pass — see FormSectionFieldHost.NotifyFieldChanged.
-    this.sectionHost?.NotifyFieldChanged(this);
+    // this pass — see FormSectionFieldHost.NotifyFieldChanged. Guarded, because `[FormContext]`
+    // is bound to a getter that returns a fresh object every pass, so this hook runs every pass.
+    const firstBinding = !this._inputsBound;
+    this._inputsBound = true;
+    if (this.sectionHost) {
+      const context = changes['FormContext'];
+      const sectionRelevant = firstBinding
+        || !!changes['Record'] || !!changes['FieldName'] || !!changes['EditMode']
+        || !!changes['HideWhenEmptyInReadOnlyMode'] || !!changes['DisplayNameOverride']
+        || (!!context && SectionRelevantFormContextChanged(context.previousValue as FormContext | undefined, context.currentValue as FormContext | undefined));
+      if (sectionRelevant) this.sectionHost.NotifyFieldChanged(this);
+    }
     // Field security depends on both the record's entity and which field this is, so the
     // memoized answer has to be dropped whenever either changes.
     if (changes['Record'] || changes['FieldName']) {

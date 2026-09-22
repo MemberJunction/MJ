@@ -313,19 +313,32 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
 })
 class HostedFieldStub implements OnChanges {
   @Input() FieldName = '';
-  @Input() IsRequiredEmpty = false;
+  /** Bound by the widget AFTER the panel is first evaluated — exactly like the real field's inputs. */
+  @Input() EditMode = false;
+  @Input() Value: unknown = null;
   @Input() IsDirty = false;
-  EditMode = true;
   IsFieldReadOnly = false;
   ShowErrors = false;
   ShowWarnings = false;
   StoredDateIsUnreadable = false;
   IsFieldReadableByUser = true;
-  ShouldHideField = false;
+  /** False until ngOnChanges, mirroring MjFormFieldComponent.InputsBound. */
+  InputsBound = false;
   ValueChange = new EventEmitter<unknown>();
   Navigate = new EventEmitter<FormNavigationEvent>();
   get DisplayName(): string {
     return this.FieldName;
+  }
+  private get isEmpty(): boolean {
+    return this.Value === null || this.Value === undefined || this.Value === '';
+  }
+  /** The real rule: a required field, in edit mode, with nothing in it. */
+  get IsRequiredEmpty(): boolean {
+    return this.EditMode && this.isEmpty;
+  }
+  /** The real rule: hidden only in read mode when empty. Before inputs bind this is TRUE. */
+  get ShouldHideField(): boolean {
+    return !this.EditMode && this.isEmpty;
   }
   private readonly host = inject(FORM_SECTION_FIELD_HOST, { optional: true });
   private readonly el = inject(ElementRef<HTMLElement>);
@@ -336,6 +349,7 @@ class HostedFieldStub implements OnChanges {
     this.host?.RegisterField(this as unknown as MjFormFieldComponent);
   }
   ngOnChanges(): void {
+    this.InputsBound = true;
     this.host?.NotifyFieldChanged(this as unknown as MjFormFieldComponent);
   }
 }
@@ -347,13 +361,14 @@ class HostedFieldStub implements OnChanges {
   imports: [HostedFieldStub],
   template: `
     <div class="widget-shell">
-      <test-hosted-field FieldName="CompanyID" [IsRequiredEmpty]="RequiredEmpty"></test-hosted-field>
-      <test-hosted-field FieldName="RevenueRecognitionTypeID" [IsRequiredEmpty]="RequiredEmpty"></test-hosted-field>
+      <test-hosted-field FieldName="CompanyID" [EditMode]="EditMode" [Value]="Value"></test-hosted-field>
+      <test-hosted-field FieldName="RevenueRecognitionTypeID" [EditMode]="EditMode" [Value]="Value"></test-hosted-field>
     </div>
   `,
 })
 class WidgetStub {
-  @Input() RequiredEmpty = false;
+  @Input() EditMode = false;
+  @Input() Value: unknown = null;
 }
 
 @Component({
@@ -361,22 +376,24 @@ class WidgetStub {
   selector: 'test-form-with-widget-section',
   template: `
     <mj-collapsible-panel SectionKey="accounting" SectionName="Accounting" [Form]="Form">
-      <test-widget [RequiredEmpty]="RequiredEmpty"></test-widget>
+      <test-widget [EditMode]="EditMode" [Value]="Value"></test-widget>
     </mj-collapsible-panel>
   `,
 })
 class FormWithWidgetSection {
   Form = formStub(true);
-  /** An input so a test can flip it through `setInput`, which marks the view dirty for the zoneless TestBed. */
-  @Input() RequiredEmpty = true;
+  /** Inputs so a test can flip them through `setInput`, which marks the view dirty for the zoneless TestBed. */
+  @Input() EditMode = true;
+  @Input() Value: unknown = null;
 }
 
 describe('MjCollapsiblePanelComponent — fields behind a component view boundary', () => {
-  function renderWidgetSection() {
+  function renderWidgetSection(inputs: { EditMode?: boolean; Value?: unknown } = {}) {
     const f = renderComponentFixture(FormWithWidgetSection, {
       declarations: [FormWithWidgetSection, MjCollapsiblePanelComponent],
       imports: [CommonModule, WidgetStub],
       providers: [FormSectionIndicatorCoordinator],
+      inputs,
     });
     const panel = f.debugElement.children[0].componentInstance as MjCollapsiblePanelComponent;
     return { f, panel };
@@ -411,7 +428,7 @@ describe('MjCollapsiblePanelComponent — fields behind a component view boundar
     // field's NotifyFieldChanged this pass would end with the section still counting 2 and, in
     // dev mode, an ExpressionChangedAfterItHasBeenChecked error on data-error-count.
     const { f, panel } = renderWidgetSection();
-    f.componentRef.setInput('RequiredEmpty', false);
+    f.componentRef.setInput('Value', 'filled');
     f.detectChanges();
     expect(panel.SectionIndicators.ErrorCount).toBe(0);
     expect(query(f, 'mj-collapsible-panel')?.getAttribute('data-error-count')).toBe('0');
@@ -424,11 +441,39 @@ describe('MjCollapsiblePanelComponent — fields behind a component view boundar
     expect(panel.IsVisible).toBe(true);
   });
 
+  /**
+   * Review finding on this change: the panel first evaluates hide-when-empty in
+   * `ngAfterContentInit`, BEFORE a widget's view has bound its fields' inputs. An unbound field
+   * reports itself hidden (read mode, empty), so a section whose fields all sit behind the
+   * boundary latched `IsVisible = false` and never recovered. Two rules fix it: a hosted field is
+   * not read until its inputs are bound, and a change to the hosted set recomputes visibility.
+   */
+  it('is not hidden by its own fields before they have bound their inputs', () => {
+    const { f, panel } = renderWidgetSection();
+    f.detectChanges();
+    f.detectChanges();
+    expect(panel.IsVisible).toBe(true);
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-panel-empty')).toBe(false);
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-search-hidden')).toBe(false);
+  });
+
+  it('still hides when every hosted field is empty in read mode, and comes back when editing starts', () => {
+    const { f, panel } = renderWidgetSection({ EditMode: false });
+    expect(panel.IsVisible).toBe(false);
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-panel-empty')).toBe(true);
+
+    f.componentRef.setInput('EditMode', true);
+    f.detectChanges();
+    expect(panel.IsVisible).toBe(true);
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-panel-empty')).toBe(false);
+    expect(panel.SectionIndicators.ErrorCount).toBe(2);
+  });
+
   it('ignores a registered field whose element is not inside the panel', () => {
     const { panel } = renderWidgetSection();
     const elsewhere = document.createElement('div');
     const stray = {
-      FieldName: 'Stray', DisplayName: 'Stray', EditMode: true, IsFieldReadOnly: false,
+      FieldName: 'Stray', DisplayName: 'Stray', EditMode: true, IsFieldReadOnly: false, InputsBound: true,
       Navigate: new EventEmitter<FormNavigationEvent>(),
       IsRequiredEmpty: true, ShowErrors: false, IsDirty: false, ShouldHideField: false,
       IsFieldReadableByUser: true, ValueChange: new EventEmitter<unknown>(), HostElement: elsewhere,

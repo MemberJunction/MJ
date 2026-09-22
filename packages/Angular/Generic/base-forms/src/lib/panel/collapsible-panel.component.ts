@@ -223,6 +223,15 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    */
   private readonly hostedFieldsVersion = signal(0);
 
+  /**
+   * Memo behind {@link allFields}. Every real `mj-form-field` reaches this panel through the
+   * injector — projected ones included — so the hosted set is the section's whole field list, and
+   * the union is read several times per change-detection pass (three host bindings, the header,
+   * hide-when-empty, the rail). Recomputed only when the hosted set or a hosted field's inputs
+   * change (the signal) or the content query is replaced or resized.
+   */
+  private fieldsMemo: { version: number; content: QueryList<MjFormFieldComponent> | undefined; contentLength: number; fields: MjFormFieldComponent[] } | null = null;
+
   // ---- State ----
 
   DisplayName = '';
@@ -381,6 +390,13 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   private onFieldSetChanged(): void {
     this.hostedFieldsVersion.update((v) => v + 1);
+    // Visibility is latched, not derived: hide-when-empty and the all-denied check are computed
+    // into IsVisible when the field set changes, so they have to be recomputed here too — a
+    // hosted field binds its inputs after content init, and a section evaluated before that
+    // would otherwise stay hidden (or visible) on the pre-binding answer.
+    if (this.FieldComponents) {
+      this.UpdateVisibilityAndHighlighting();
+    }
     this.cdr.markForCheck();
     this.indicators?.NotifyChanged();
   }
@@ -401,22 +417,32 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   /**
    * Every `mj-form-field` this section fronts: the projected ones the content query found, plus
-   * the injector-registered ones whose element is inside this panel right now. The containment
-   * check is what stops a field created in an overlay, with this panel's injector as its
-   * ancestor, from counting against a section it is not displayed in. Recomputed on every read —
-   * it is a short list, and caching it would need every registration path to invalidate it.
+   * the injector-registered ones that have bound their inputs and whose element is inside this
+   * panel. Unbound fields are left out because a field with no inputs reports itself hidden and
+   * not required-and-empty, which is not information about the section. The containment check
+   * is what stops a field created in an overlay, with this panel's injector as its ancestor, from
+   * counting against a section it is not displayed in. Memoized — see {@link fieldsMemo}.
    */
   private allFields(): MjFormFieldComponent[] {
-    this.hostedFieldsVersion(); // dependency, see the field's doc
-    const fields: MjFormFieldComponent[] = this.FieldComponents ? this.FieldComponents.toArray() : [];
-    if (this.hostedFields.size === 0) return fields;
-    const host = this.elementRef.nativeElement as HTMLElement | undefined;
-    const seen = new Set(fields);
-    for (const field of this.hostedFields.keys()) {
-      if (seen.has(field)) continue;
-      if (host && !host.contains(field.HostElement)) continue;
-      fields.push(field);
+    const version = this.hostedFieldsVersion(); // dependency, see the field's doc
+    const content = this.FieldComponents;
+    const contentLength = content?.length ?? 0;
+    const memo = this.fieldsMemo;
+    if (memo && memo.version === version && memo.content === content && memo.contentLength === contentLength) {
+      return memo.fields;
     }
+    const fields: MjFormFieldComponent[] = content ? content.toArray() : [];
+    if (this.hostedFields.size > 0) {
+      const host = this.elementRef.nativeElement as HTMLElement | undefined;
+      const seen = new Set(fields);
+      for (const field of this.hostedFields.keys()) {
+        if (seen.has(field)) continue;
+        if (!field.InputsBound) continue;
+        if (host && !host.contains(field.HostElement)) continue;
+        fields.push(field);
+      }
+    }
+    this.fieldsMemo = { version, content, contentLength, fields };
     return fields;
   }
 
@@ -554,6 +580,9 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     this.UpdateFieldNames();
     this.SubscribeToFieldNavigateEvents();
     this.FieldComponents.changes.subscribe(() => {
+      // Drop the field memo before anything below reads it: a replaced QueryList with the same
+      // length would otherwise be served from the previous result.
+      this.hostedFieldsVersion.update((v) => v + 1);
       this.UpdateFieldNames();
       this.SubscribeToFieldNavigateEvents();
       // The set of fields changed, so the section's counts (and which errors it

@@ -1,5 +1,6 @@
 import { InjectionToken } from '@angular/core';
 import type { MjFormFieldComponent } from '../field/form-field.component';
+import type { FormContext } from '../types/form-types';
 
 /**
  * The section a form field sits inside, reached through the element injector rather than a
@@ -40,3 +41,25 @@ export interface FormSectionFieldHost {
 }
 
 export const FORM_SECTION_FIELD_HOST = new InjectionToken<FormSectionFieldHost>('FORM_SECTION_FIELD_HOST');
+
+/**
+ * Whether a `FormContext` change alters anything a section derives from a field.
+ *
+ * `BaseFormComponent.formContext` is a getter that builds a fresh object on every access, so a
+ * field's `[FormContext]` input changes identity on every pass and `ngOnChanges` fires every pass.
+ * Notifying the section each time would dirty the panel and the rail after they were checked and
+ * force an extra refresh per tick with nothing changed. Only these members feed the section's
+ * counts: `showValidation` / `validationRevision` / `validationErrors` (whether a field paints an
+ * error) and `showEmptyFields` (whether an empty read-only field is hidden).
+ */
+export function SectionRelevantFormContextChanged(
+  previous: FormContext | null | undefined,
+  next: FormContext | null | undefined,
+): boolean {
+  if (previous === next) return false;
+  if (!previous || !next) return true;
+  return previous.showValidation !== next.showValidation
+    || previous.validationRevision !== next.validationRevision
+    || previous.validationErrors !== next.validationErrors
+    || previous.showEmptyFields !== next.showEmptyFields;
+}
