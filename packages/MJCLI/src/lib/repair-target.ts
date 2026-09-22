@@ -44,3 +44,30 @@ export function ParseEntityRef(entity: string): EntityRef | null {
 
   return { Schema: schema, Table: table };
 }
+
+/**
+ * True when `entity` is a name `mj migrate repair` can actually target — the
+ * same predicate `ParseEntityRef` applies, exposed as a boolean so the
+ * collision guidance can decide whether to print a paste-ready command without
+ * duplicating the rule. `DiagnoseCollision`'s object capture admits dots,
+ * brackets and whitespace (a temp table reports as `tempdb.dbo.#Foo`), so a
+ * guidance line built from it can name something `repair` will refuse; this
+ * shared check is what stops the two modules disagreeing.
+ */
+export function IsRepairableEntityRef(entity: string): boolean {
+  return ParseEntityRef(entity) !== null;
+}
+
+/**
+ * True when `migrationSql` mentions `id` — the spec's third refusal: an ID
+ * present in the database but in an entity the failing migration does not
+ * touch must be refused rather than deleted.
+ *
+ * A plain case-insensitive substring test, deliberately. The migration is a
+ * recording of `spCreate<X> @ID = '<fixed GUID>'` calls, so the GUID appears
+ * literally; parsing T-SQL to do better is exactly the general-purpose SQL
+ * parsing the spec rules out of scope.
+ */
+export function MigrationMentionsId(migrationSql: string, id: string): boolean {
+  return migrationSql.toLowerCase().includes(id.toLowerCase());
+}

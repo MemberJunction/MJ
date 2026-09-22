@@ -5,9 +5,10 @@
  * guidance, which they'd otherwise be confirming with nothing to recognise.
  *
  * Deliberately conservative — an identification aid, not a dump: skips null
- * values, binary payloads, and the large-object SQL types (TEXT, NTEXT,
- * IMAGE, XML, VARBINARY, BINARY, UDT, TVP, GEOGRAPHY, GEOMETRY, VARIANT),
- * and caps both how many columns are shown and how long each value is.
+ * values, binary payloads, the large-object SQL types (TEXT, NTEXT, IMAGE,
+ * XML, VARBINARY, BINARY, UDT, TVP, GEOGRAPHY, GEOMETRY, VARIANT), and any
+ * column whose name reads as a credential, and caps both how many columns are
+ * shown and how long each value is.
  */
 
 const MAX_COLUMNS = 6;
@@ -29,6 +30,12 @@ const SKIPPED_SQL_TYPES = new Set([
   'Geometry',
   'Variant',
 ]);
+
+// Columns whose VALUES are credentials. `__mj` carries [APIKey], [OwnerToken]
+// and [LockToken] among others, and this preview is printed to stdout — into a
+// CI workflow log, in the push-before-migrate lane. Nothing here identifies a
+// row to a human anyway, so there is no cost to skipping it.
+const SENSITIVE_COLUMN_NAME = /password|secret|token|apikey|privatekey/i;
 
 /**
  * The minimal shape this needs out of a driver's column-metadata entry. Real
@@ -80,6 +87,7 @@ export function FormatRowPreview(
     if (value === null || value === undefined) continue;
     if (!IsScalar(value)) continue; // Buffers, arrays, and other non-scalars
     if (SKIPPED_SQL_TYPES.has(SqlTypeName(columns[name].type))) continue;
+    if (SENSITIVE_COLUMN_NAME.test(name)) continue;
 
     const text = value instanceof Date ? value.toISOString() : String(value);
     lines.push(`${name}: ${Truncate(text)}`);

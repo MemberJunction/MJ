@@ -36,6 +36,31 @@ describe('FormatRowPreview', () => {
     expect(FormatRowPreview({ Blob: Buffer.from('x') }, columns)).toEqual([]);
   });
 
+  it('skips columns whose name reads as a credential', () => {
+    // This preview is printed to stdout — into the CI workflow log in the
+    // push-before-migrate lane. `__mj` carries [APIKey], [OwnerToken] and
+    // [LockToken]; none of them helps anyone recognise a row.
+    const columns = {
+      Name: typed('NVarChar'),
+      APIKey: typed('NVarChar'),
+      OwnerToken: typed('NVarChar'),
+      LockToken: typed('NVarChar'),
+      PasswordHash: typed('NVarChar'),
+      ClientSecret: typed('NVarChar'),
+      PrivateKeyPEM: typed('NVarChar'),
+    };
+    const row = {
+      Name: 'Anthropic Vertex Key',
+      APIKey: 'sk-live-should-never-print',
+      OwnerToken: 'owner-should-never-print',
+      LockToken: 'lock-should-never-print',
+      PasswordHash: 'hash-should-never-print',
+      ClientSecret: 'secret-should-never-print',
+      PrivateKeyPEM: 'pem-should-never-print',
+    };
+    expect(FormatRowPreview(row, columns)).toEqual(['Name: Anthropic Vertex Key']);
+  });
+
   it('skips a Buffer value regardless of its declared type', () => {
     // Defense in depth: even if the type name weren't in the skip set, a
     // non-scalar JS value must never be rendered.

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { IsValidRepairId, ParseEntityRef } from '../lib/repair-target';
+import {
+  IsRepairableEntityRef,
+  IsValidRepairId,
+  MigrationMentionsId,
+  ParseEntityRef,
+} from '../lib/repair-target';
 
 describe('IsValidRepairId', () => {
   it('accepts a well-formed GUID', () => {
@@ -70,5 +75,39 @@ describe('ParseEntityRef', () => {
 
   it('returns null when the table starts with a digit', () => {
     expect(ParseEntityRef('__mj.1CredentialType')).toBeNull();
+  });
+});
+
+describe('IsRepairableEntityRef', () => {
+  it('agrees with ParseEntityRef — it is the same predicate, shared', () => {
+    for (const candidate of [
+      '__mj.CredentialType',
+      'CredentialType',
+      'tempdb.dbo.#MigratedArtifacts',
+      '__mj.Credential]Type',
+      '__mj.',
+    ]) {
+      expect(IsRepairableEntityRef(candidate)).toBe(ParseEntityRef(candidate) !== null);
+    }
+  });
+});
+
+describe('MigrationMentionsId', () => {
+  const ID = '82dff26b-2abb-4a69-8718-1fe550b60816';
+  const MIGRATION = `EXEC [__mj].[spCreateCredentialType] @ID = '82DFF26B-2ABB-4A69-8718-1FE550B60816', @Name = 'x'`;
+
+  it('matches regardless of case, because migrations record GUIDs upper-cased', () => {
+    expect(MigrationMentionsId(MIGRATION, ID)).toBe(true);
+    expect(MigrationMentionsId(MIGRATION.toLowerCase(), ID.toUpperCase())).toBe(true);
+  });
+
+  it('is false when the migration does not touch that row', () => {
+    // The spec's third refusal: the recognizer fires on ANY single-GUID
+    // collision, so an operator can arrive holding an unrelated ID.
+    expect(MigrationMentionsId(MIGRATION, '00000000-0000-0000-0000-000000000000')).toBe(false);
+  });
+
+  it('is false for an empty migration', () => {
+    expect(MigrationMentionsId('', ID)).toBe(false);
   });
 });

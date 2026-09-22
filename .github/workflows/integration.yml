@@ -614,8 +614,14 @@ jobs:
 
       # The exact command the guidance above prints, run non-interactively: @inquirer/prompts
       # throws in a non-TTY (see repair.ts), which is why --yes exists and is required here.
+      #
+      # --migration is passed so the lane exercises the spec's third refusal end-to-end:
+      # repair reads that file and deletes nothing unless the ID appears in it. Its value
+      # must stay in step with COLLIDING_MIGRATION in the migrate step above.
       - name: Repair — delete the row the guidance named
-        run: node packages/MJCLI/bin/run.js migrate repair --id "${COLLIDING_RECORD_ID}" --entity "${ENTITY_REF}" --yes
+        env:
+          COLLIDING_MIGRATION: migrations/v6/V202608080752__v6.1.x__Metadata_Sync.sql
+        run: node packages/MJCLI/bin/run.js migrate repair --id "${COLLIDING_RECORD_ID}" --entity "${ENTITY_REF}" --migration "${COLLIDING_MIGRATION}" --yes
 
       # This is the assertion that recovery actually works: with the blocking row gone, the
       # same migration that just failed now takes its ordinary CREATE path and the chain

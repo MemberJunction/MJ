@@ -186,6 +186,10 @@ export default class Migrate extends Command {
       const message = err instanceof Error ? err.message : String(err);
       this.logToStderr(`\nMigration error: ${message}\n`);
       this.printCallbackErrors(failedMigrations, lastMigrationStarted, errorLog);
+      // When Migrate() throws, the SQL text is in the thrown message and nowhere
+      // else — no per-migration detail is ever built — so the recognizer has to
+      // be run here too or MJ#4503's whole point is lost on this path.
+      this.printCollisionGuidance(message, lastMigrationStarted?.Filename);
       this.error('Migrations failed');
     } finally {
       await skyway.Close();
@@ -233,6 +237,11 @@ export default class Migrate extends Command {
         // Fall back to errors captured by OnProgress callbacks.
         this.printCallbackErrors(failedMigrations, lastMigrationStarted, errorLog);
       }
+
+      // Details can be empty (or carry no Error), leaving result.ErrorMessage as
+      // the only copy of the SQL text. Deduped against the per-migration pass
+      // above, so the common case still prints exactly once.
+      this.printCollisionGuidance(result.ErrorMessage, lastMigrationStarted?.Filename);
 
       this.error('Migrations failed');
     }
@@ -293,13 +302,7 @@ export default class Migrate extends Command {
 
     // MJ#4503: a primary-key collision here usually means a row was created
     // ahead of the migration chain. Say which row, and how to clear it.
-    // DiagnoseCollision returns null unless it is certain — see its docblock.
-    const collision = DiagnoseCollision(error.message);
-    if (collision) {
-      for (const line of FormatCollisionGuidance(collision, migrationFilename)) {
-        this.logToStderr(line);
-      }
-    }
+    this.printCollisionGuidance(error.message, migrationFilename);
 
     const batch = (error as { BatchInfo?: {
       BatchNumber?: number;
@@ -342,6 +345,39 @@ export default class Migrate extends Command {
       if (batch.BatchSQL.split('\n').length > preview.length) {
         this.logToStderr('      ...');
       }
+    }
+  }
+
+  /** Collisions already reported this run, keyed `schema.table:rowid`. */
+  private readonly reportedCollisions = new Set<string>();
+
+  /**
+   * MJ#4503's recognizer, applied to whatever error text a failure path happens
+   * to carry.
+   *
+   * The SQL text arrives by three different routes — a per-migration
+   * `detail.Error`, a thrown `Migrate()` message, and `result.ErrorMessage` when
+   * `Details` is empty — and only the first has a migration filename attached to
+   * it, hence `migrationFilename` being optional. Scanning all three is the
+   * difference between the feature working in production and being inert with
+   * every unit test green.
+   *
+   * Collisions are deduped by table + row so a message that reaches two routes
+   * prints one block of guidance, not two. `DiagnoseCollision` returns null
+   * unless it is certain — see its docblock.
+   */
+  private printCollisionGuidance(errorText: string | undefined, migrationFilename: string | undefined): void {
+    if (!errorText) return;
+
+    const collision = DiagnoseCollision(errorText);
+    if (!collision) return;
+
+    const key = `${collision.Schema}.${collision.Table}:${collision.RowID}`;
+    if (this.reportedCollisions.has(key)) return;
+    this.reportedCollisions.add(key);
+
+    for (const line of FormatCollisionGuidance(collision, migrationFilename)) {
+      this.logToStderr(line);
     }
   }
 
