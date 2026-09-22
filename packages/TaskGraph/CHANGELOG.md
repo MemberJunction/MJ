@@ -1,5 +1,25 @@
 # @memberjunction/task-graph
 
+## 6.1.3
+
+### Patch Changes
+
+- e9a453e: The durable task-graph dispatcher works under a least-privilege login again (#4575). `TaskClaimStore`'s guarded writes moved from raw SQL against the `Task` and `AIAgentRun` base tables into dedicated stored procedures granted to `cdp_Developer` and `cdp_Integration`, and its two reads moved onto the `MJ: Tasks` entity. The guards, the rowcount arbitration and the single-clock rule are unchanged. A refused write is now reported as a failure rather than as a lost race, the dispatcher stops the wave and says so, and it probes for the EXECUTE grant at startup.
+- Updated dependencies [747a8f4]
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/ai-agents@6.1.3
+  - @memberjunction/core@6.1.3
+  - @memberjunction/actions-base@6.1.3
+  - @memberjunction/ai-core-plus@6.1.3
+  - @memberjunction/aiengine@6.1.3
+  - @memberjunction/ai-prompts@6.1.3
+  - @memberjunction/notifications@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/global@6.1.3
+  - @memberjunction/sql-dialect@6.1.3
+
 ## 6.1.2
 
 ### Patch Changes

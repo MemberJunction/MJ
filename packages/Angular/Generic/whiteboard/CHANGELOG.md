@@ -1,5 +1,14 @@
 # @memberjunction/ng-whiteboard
 
+## 6.1.3
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@6.1.3
+- @memberjunction/ng-markdown@6.1.3
+- @memberjunction/ng-ui-components@6.1.3
+- @memberjunction/global@6.1.3
+
 ## 6.1.2
 
 ### Patch Changes

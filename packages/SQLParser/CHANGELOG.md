@@ -1,5 +1,11 @@
 # @memberjunction/sql-parser
 
+## 6.1.3
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@6.1.3
+
 ## 6.1.2
 
 ### Patch Changes

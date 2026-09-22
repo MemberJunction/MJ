@@ -1,5 +1,42 @@
 # @memberjunction/ng-conversations
 
+## 6.1.3
+
+### Patch Changes
+
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/core@6.1.3
+  - @memberjunction/ai-engine-base@6.1.3
+  - @memberjunction/ai-agent-client@6.1.3
+  - @memberjunction/ai-core-plus@6.1.3
+  - @memberjunction/ng-testing@6.1.3
+  - @memberjunction/ng-artifacts@6.1.3
+  - @memberjunction/ng-base-types@6.1.3
+  - @memberjunction/ng-code-editor@6.1.3
+  - @memberjunction/ng-composer@6.1.3
+  - @memberjunction/ng-container-directives@6.1.3
+  - @memberjunction/ng-media-player@6.1.3
+  - @memberjunction/ng-notifications@6.1.3
+  - @memberjunction/ng-resource-permissions@6.1.3
+  - @memberjunction/ng-shared-generic@6.1.3
+  - @memberjunction/ng-task-graph-editor@6.1.3
+  - @memberjunction/ng-tasks@6.1.3
+  - @memberjunction/ng-user-routines@6.1.3
+  - @memberjunction/conversations-runtime@6.1.3
+  - @memberjunction/graphql-dataprovider@6.1.3
+  - @memberjunction/interactive-component-types@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/ng-agent-client@6.1.3
+  - @memberjunction/ng-forms@6.1.3
+  - @memberjunction/ng-whiteboard@6.1.3
+  - @memberjunction/ng-markdown@6.1.3
+  - @memberjunction/ng-ui-components@6.1.3
+  - @memberjunction/ai@6.1.3
+  - @memberjunction/ai-realtime-client@6.1.3
+  - @memberjunction/global@6.1.3
+
 ## 6.1.2
 
 ### Patch Changes

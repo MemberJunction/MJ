@@ -1,5 +1,31 @@
 # @memberjunction/ai-agents
 
+## 6.1.3
+
+### Patch Changes
+
+- 747a8f4: Flow agents can be sub-agents and return their result again (#4555). A Flow agent run with a `parentRun`, or with `agentTypeParams.executionMode: 'inRun'`, now walks its steps in-process and returns the final payload, including `startAtStep`. A top-level run with no option set is still dispatched to the task-graph dispatcher. Each run records which mode it used as a `Decision` step.
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/core@6.1.3
+  - @memberjunction/actions-base@6.1.3
+  - @memberjunction/actions@6.1.3
+  - @memberjunction/ai-engine-base@6.1.3
+  - @memberjunction/ai-core-plus@6.1.3
+  - @memberjunction/aiengine@6.1.3
+  - @memberjunction/ai-prompts@6.1.3
+  - @memberjunction/ai-reranker@6.1.3
+  - @memberjunction/ai-vector-dupe@6.1.3
+  - @memberjunction/ai-vector-sync@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/storage@6.1.3
+  - @memberjunction/search-engine@6.1.3
+  - @memberjunction/templates@6.1.3
+  - @memberjunction/context-crush@6.1.3
+  - @memberjunction/ai@6.1.3
+  - @memberjunction/global@6.1.3
+
 ## 6.1.2
 
 ### Patch Changes

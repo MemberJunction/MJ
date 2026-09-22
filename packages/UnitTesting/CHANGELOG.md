@@ -1,5 +1,12 @@
 # @memberjunction/unit-testing
 
+## 6.1.3
+
+### Patch Changes
+
+- @memberjunction/ai@6.1.3
+- @memberjunction/global@6.1.3
+
 ## 6.1.2
 
 ### Patch Changes

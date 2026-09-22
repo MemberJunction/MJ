@@ -1,5 +1,12 @@
 # @memberjunction/ng-graph-view
 
+## 6.1.3
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@6.1.3
+- @memberjunction/global@6.1.3
+
 ## 6.1.2
 
 ### Patch Changes

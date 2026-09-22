@@ -1,5 +1,21 @@
 # @memberjunction/database-designer-core
 
+## 6.1.3
+
+### Patch Changes
+
+- Updated dependencies [747a8f4]
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/ai-agents@6.1.3
+  - @memberjunction/core@6.1.3
+  - @memberjunction/ai-engine-base@6.1.3
+  - @memberjunction/ai-core-plus@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/schema-engine@6.1.3
+  - @memberjunction/global@6.1.3
+
 ## 6.1.2
 
 ### Patch Changes

@@ -1,5 +1,52 @@
 # @memberjunction/metadata-sync
 
+## 6.1.3
+
+### Patch Changes
+
+- 01b6c7b: `mj sync pull` no longer loses records when an entity's class isn't registered in the CLI process.
+
+  Pull read each record's primary key through the entity's typed property (`record.ID`). When the
+  entity's generated subclass isn't registered — an Open App whose server package didn't load, or
+  anything the CLI's class manifest doesn't cover — records arrive as a bare `BaseEntity` with no
+  typed properties, so every key read `undefined`. All records then shared one key and overwrote each
+  other in the write batch: a pull of N new records wrote exactly one, with an empty `primaryKey`
+  that was duplicated on the next pull, and existing records were never refreshed (#3415).
+  - Keys are now read through `BaseEntity.Get()`, which works with or without the subclass, and a
+    record whose key genuinely has no value stops the pull instead of overwriting others.
+  - `FileWriteBatch` refuses an array update for a record whose key has a field with no value. Real
+    key values that only look empty — an empty string, the text `null` — are accepted.
+  - The string pull matches records by is built in one place, and `|` inside a key value is escaped,
+    so a value containing the separator can no longer be mistaken for a different key.
+
+- 5e937c4: `mj sync push` is all-or-nothing again (#4550).
+  - **Atomic by default.** Every create, update and delete runs in one database transaction, one JSON-root graph at a time. A failure anywhere rolls back everything the push wrote and restores the metadata files. This also removes the push deadlocking against itself when an entity view reads other rows during the insert read-back (#4550).
+  - **Isolated transactions are opt-in, per entity.** `push.isolatedTransactions: true` in an entity's `.mj-sync.json` (or at the root as a default) keeps the 6.1.0 behavior for that directory: its graphs run in parallel on independent provider instances (`--parallel-batch-size`, default 10), and each create and update commits as it is saved. For an entity that manages its own transaction scopes and wants the parallelism. The CLI flags `--isolated-transactions` and `--no-isolated-transactions` override every file, in either direction, so one run can be forced without editing metadata. A push that mixes the two is all-or-nothing for its shared directories and best effort for its isolated ones, and says which is which.
+  - **Every record error stops the push**, including a record that fails without throwing (`status: 'error'`) and a deferred record that fails in Phase 2.5. The push transaction is never left open.
+  - **Messages are true.** "rolled back successfully" is printed only when nothing was committed. A failed non-atomic push lists the files and records that stayed in the database and keeps those files as written. The deletion banner matches the mode. A rejected COMMIT says so, and on PostgreSQL explains that deferred foreign keys are checked at commit. Deferred-record failures appear in the JSON `errors[]`.
+  - **Incremental state** is saved only after the push commits.
+  - The interactive "commit the successful changes?" prompt is removed: a failed push has already rolled back.
+  - A failed push still reports: the JSON result keeps its `data` block with the counts reached, the SQL log path, and how many records stayed committed.
+  - A file whose write was deferred (it contains deletions) is written after a failed push when its records were committed, so their primary keys are not lost and the next push does not duplicate them.
+  - A write is reported as committed the moment its save settles, so a graph rolling back leftover depth afterwards cannot hide a row that is in the database.
+
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/core@6.1.3
+  - @memberjunction/generic-database-provider@6.1.3
+  - @memberjunction/sqlserver-dataprovider@6.1.3
+  - @memberjunction/postgresql-dataprovider@6.1.3
+  - @memberjunction/server-bootstrap-lite@6.1.3
+  - @memberjunction/graphql-dataprovider@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/core-entities-server@6.1.3
+  - @memberjunction/cli-core@6.1.3
+  - @memberjunction/config@6.1.3
+  - @memberjunction/global@6.1.3
+  - @memberjunction/network-utils@6.1.3
+  - @memberjunction/sql-dialect@6.1.3
+
 ## 6.1.2
 
 ### Patch Changes

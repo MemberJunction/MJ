@@ -1,5 +1,23 @@
 # @memberjunction/query-gen
 
+## 6.1.3
+
+### Patch Changes
+
+- Updated dependencies [7cdf2cc]
+- Updated dependencies [3707f26]
+- Updated dependencies [5e937c4]
+  - @memberjunction/core@6.1.3
+  - @memberjunction/generic-database-provider@6.1.3
+  - @memberjunction/sqlserver-dataprovider@6.1.3
+  - @memberjunction/ai-core-plus@6.1.3
+  - @memberjunction/aiengine@6.1.3
+  - @memberjunction/ai-prompts@6.1.3
+  - @memberjunction/ai-vectors-memory@6.1.3
+  - @memberjunction/core-entities@6.1.3
+  - @memberjunction/ai@6.1.3
+  - @memberjunction/global@6.1.3
+
 ## 6.1.2
 
 ### Patch Changes
