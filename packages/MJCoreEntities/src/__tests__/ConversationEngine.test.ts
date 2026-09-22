@@ -103,6 +103,10 @@ vi.mock('@memberjunction/core', () => {
                 return null;
             }
         },
+        // Mirrors the real predicate: a row is free when the event carries the live entity, or
+        // when the server put `recordData` on the payload because the entity is allowlisted.
+        EntityEventRowIsFree: (event: { baseEntity?: unknown; payload?: { recordData?: string } }) =>
+            !!event?.baseEntity || !!event?.payload?.recordData,
         ResolveEntityEventRow: async (event: { baseEntity?: { GetAll(): unknown }; payload?: { recordData?: string } }) => {
             rowResolverCalls.count++;
             if (event?.baseEntity) return event.baseEntity.GetAll();
@@ -1254,6 +1258,105 @@ describe('ConversationEngine', () => {
 
             await dispatch(remote('MJ: Conversation Details', 'save', 'd-new'));
             expect(rowResolverCalls.count).toBe(1);
+        });
+    });
+
+    // ========================================================================
+    // A REMOTE PROJECT SAVE MUST NOT DELETE THE PROJECT FROM THE LIST
+    // ========================================================================
+    // `MJ: Projects` IS on the server's broadcast allowlist, so a remote save arrives with the
+    // row already on the payload. The dispatcher used to drop it anyway, on the reasoning that
+    // "projects are keyed by ID" — true of a DELETE, which needs only the id, and false of a
+    // SAVE, which reads EnvironmentID and IsArchived off the row. With the row nulled those read
+    // as undefined and false, `inLoadedEnvironment` comes out false, and the archive branch
+    // FILTERS THE PROJECT OUT of the folder list — in exactly the sessions that have it on
+    // screen. A rename broadcast from one browser made the folder vanish in every other one.
+    describe('remote project save (row present on the payload)', () => {
+        const projectSave = (id: string, row: Record<string, unknown>) => ({
+            type: 'remote-invalidate',
+            baseEntity: null,
+            entityName: 'MJ: Projects',
+            payload: {
+                action: 'save',
+                primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: id }]),
+                recordData: JSON.stringify(row),
+            },
+        });
+        const dispatch = (evt: Record<string, unknown>) =>
+            (engine as unknown as {
+                HandleIndividualBaseEntityEvent(e: Record<string, unknown>): Promise<boolean>;
+            }).HandleIndividualBaseEntityEvent(evt);
+
+        /** A loaded folder list — which is also what sets `_lastProjectsEnvironmentId`. */
+        async function loadOneProject() {
+            runViewResultQueue.push({ Success: true, Results: [
+                { ID: 'p1', Name: 'Work', EnvironmentID: 'env-1', IsArchived: false,
+                  Set: vi.fn(), GetAll: vi.fn().mockReturnValue({}) },
+            ] });
+            await engine.LoadProjects('env-1', contextUser);
+            expect(engine.Projects).toHaveLength(1);
+        }
+
+        it('keeps a project that someone else renamed — and applies the new name', async () => {
+            await loadOneProject();
+
+            await dispatch(projectSave('p1', {
+                ID: 'p1', Name: 'Work (renamed)', EnvironmentID: 'env-1', IsArchived: false,
+            }));
+
+            expect(engine.Projects).toHaveLength(1);
+            expect((engine.Projects[0] as unknown as { Name: string }).Name).toBe('Work (renamed)');
+        });
+
+        it('still drops one that was genuinely archived', async () => {
+            // The archive branch is correct behaviour — it just needs the real row to decide.
+            await loadOneProject();
+
+            await dispatch(projectSave('p1', {
+                ID: 'p1', Name: 'Work', EnvironmentID: 'env-1', IsArchived: true,
+            }));
+
+            expect(engine.Projects).toHaveLength(0);
+        });
+
+        it('still drops one that moved to another environment', async () => {
+            await loadOneProject();
+
+            await dispatch(projectSave('p1', {
+                ID: 'p1', Name: 'Work', EnvironmentID: 'env-2', IsArchived: false,
+            }));
+
+            expect(engine.Projects).toHaveLength(0);
+        });
+
+        it('costs no read — the row was already on the payload', async () => {
+            // The whole point of the allowlist. Taking the free row must not reintroduce the
+            // provider round trip the skip existed to avoid.
+            await loadOneProject();
+            rowResolverCalls.count = 0;
+
+            await dispatch(projectSave('p1', {
+                ID: 'p1', Name: 'Work', EnvironmentID: 'env-1', IsArchived: false,
+            }));
+
+            expect(rowResolverCalls.count).toBe(1);   // resolved from the payload, not re-read
+            expect(runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects')).toHaveLength(1);
+        });
+
+        it('a delete still needs no row at all', async () => {
+            // The original reasoning, kept: no recordData, nothing to hydrate, still removes it.
+            await loadOneProject();
+            rowResolverCalls.count = 0;
+
+            await dispatch({
+                type: 'remote-invalidate',
+                baseEntity: null,
+                entityName: 'MJ: Projects',
+                payload: { action: 'delete', primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'p1' }]) },
+            });
+
+            expect(engine.Projects).toHaveLength(0);
+            expect(rowResolverCalls.count).toBe(0);
         });
     });
 
