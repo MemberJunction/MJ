@@ -278,6 +278,9 @@ importers:
       '@memberjunction/ai-anthropic':
         specifier: 6.1.0
         version: link:../Providers/Anthropic
+      '@memberjunction/ai-betty':
+        specifier: 6.1.0
+        version: link:../Providers/Betty
       '@memberjunction/ai-betty-bot':
         specifier: 6.1.0
         version: link:../Providers/BettyBot
