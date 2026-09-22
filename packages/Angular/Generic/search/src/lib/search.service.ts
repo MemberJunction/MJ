@@ -29,18 +29,8 @@ import {
     RecentRecordItem
 } from './search-types';
 
-/**
- * Default minimum relevance score threshold (0-1). Results below this are filtered out.
- *
- * Must equal `DEFAULT_SEARCH_MIN_SCORE` in `@memberjunction/search-engine` and the Explorer
- * Search Results page's `MinScorePercent` default of 30. These are the floors the user-facing
- * search surfaces apply, and when they disagree the same query returns different results
- * depending on where it was typed. This package is browser-side and the engine is server-side,
- * so the value cannot be imported — it is kept equal by hand.
- *
- * Was 0.35, which made this service stricter than the results page it feeds.
- */
-const DEFAULT_MIN_SCORE = 0.3;
+/** Default minimum relevance score threshold (0-1). Results below this are filtered out. */
+const DEFAULT_MIN_SCORE = 0.35;
 
 /** Fallback icon mapping for source types (used when provider metadata is not available) */
 const FALLBACK_SOURCE_ICONS: Record<string, string> = {
