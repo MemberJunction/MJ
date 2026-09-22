@@ -554,6 +554,18 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     private _lastProjectsEnvironmentId: string | null = null;
 
     /**
+     * Monotonic ticket for conversation loads, to keep the newest ANSWER rather than the
+     * newest REQUEST.
+     *
+     * Bypassing dedup is what makes this necessary: two forced loads in quick succession used
+     * to collapse into one request, and now each fires. Without a guard, an out-of-order
+     * response leaves the sidebar showing the previous scope — a stale-cache failure traded
+     * for an ordering one. Rarer, since it needs two flips inside one response window, but
+     * this is the toggle case the bypass exists for, so it is exactly the caller that does it.
+     */
+    private _conversationsLoadGeneration = 0;
+
+    /**
      * For conversations the current user *received* via sharing, this map goes
      * from `conversationId` to the grantor's display info. Populated by
      * {@link LoadConversations} using the `SharedByUserID` column on the
@@ -628,6 +640,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         this._lastEnvironmentId = environmentId;
 
+        // Claim a ticket for this load. Anything published below is gated on still holding
+        // the newest one — see _conversationsLoadGeneration.
+        const generation = ++this._conversationsLoadGeneration;
+
         // Include conversations the user has been granted access to via
         // `MJ: Resource Permissions`. ResourcePermissionEngine caches the full
         // permission table; GetUserAvailableResources filters it to approved
@@ -659,10 +675,24 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 ExtraFilter: filter,
                 OrderBy: 'IsPinned DESC, __mj_UpdatedAt DESC',
                 MaxRows: 1000,
-                ResultType: 'entity_object'
+                ResultType: 'entity_object',
+                // A FORCED reload must reach the server. Without this, an identical
+                // RunView within the provider's dedup-linger window returns the
+                // previous result — so a caller forcing a reload because the
+                // server-side answer changed (a request header or session state
+                // the query text does not carry) gets the stale list back and no
+                // request goes out.
+                BypassCache: forceRefresh
             },
             contextUser
         );
+
+        // A response that has been overtaken must not publish. Checked here rather than at
+        // the top, because what matters is whether a NEWER load started while this one was
+        // in flight — and the peripheral work below is skipped for the same reason.
+        if (generation !== this._conversationsLoadGeneration) {
+            return;
+        }
 
         if (result.Success) {
             this._conversations$.next(result.Results || []);
@@ -778,7 +808,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 ExtraFilter: `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`,
                 OrderBy: 'Name ASC',
                 MaxRows: 1000,
-                ResultType: 'entity_object'
+                ResultType: 'entity_object',
+                // Same reason as LoadConversations, and the same call: LoadConversations
+                // ends by calling this with its own forceRefresh. Without it, the toggle
+                // that forces a reload got fresh conversations and the STALE folders they
+                // are grouped under, from an identical RunView inside the same linger
+                // window. Half a refresh is its own bug, and a confusing one.
+                BypassCache: forceRefresh
             },
             contextUser
         );
