@@ -191,6 +191,40 @@ are fixed. Equality-style filters are unaffected, but filters written in negatio
 the fix working, not a regression. Audit negation-form filters in advance if you need to
 know the blast radius.
 
+### Top-level Flow agents run on the task-graph dispatcher
+
+Since 6.1.0 a Flow agent compiles to a task graph, and the durable task-graph dispatcher runs its
+steps. A **top-level** run submits the graph and returns before any step has executed. It parks as
+`Paused`, and the dispatcher completes it when the graph settles. That keeps a workflow alive
+across page reloads and server restarts.
+
+A caller that needs the workflow's result has to run it in-process instead:
+
+- **Sub-agent runs do this automatically from 6.1.3.** Any Flow agent run with a `parentRun`
+  walks its steps in the calling process and returns its final payload, as in 5.x. On 6.1.0 to
+  6.1.2 these runs failed at once with:
+  > *'&lt;agent&gt;' is a workflow, and a workflow cannot be used as a sub-agent step yet. It returns
+  > as soon as its steps are scheduled, so the calling agent would continue before any of the work
+  > had happened.*
+- **Top-level callers that use the payload must opt in.** An API handler, a script or a test that
+  reads `result.payload` from a Flow agent run should pass
+  `agentTypeParams: { executionMode: 'inRun' }` (`FlowAgentExecuteParams`). Without it, the
+  run returns before the flow has produced anything.
+- **`startAtStep` needs in-process execution.** A dispatched run refuses it with a message that
+  says so.
+- **Scheduled jobs still refuse Flow agents.** A scheduled job cannot target a Flow agent yet.
+
+Each Flow agent run records which way it ran as a `Decision` step, "Workflow runs in this run" or
+"Workflow runs on the task-graph dispatcher", with the reason.
+
+**One path-selection change applies to both modes.** A path whose destination step is not
+`Active` is no longer followed. A flow whose only satisfied path leads to a disabled step now
+finishes with Success, where 5.x failed with *"No active steps found"*.
+
+**Migration:** add `executionMode: 'inRun'` to any top-level Flow agent call whose result you use.
+Sub-agent Flow agents need no change on 6.1.3 or later. See the
+[Workflows and Task Graphs Guide](guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md#when-a-flow-agent-runs-in-process-instead).
+
 ### Minor: ElevenLabs realtime session initiation
 
 `ElevenLabsRealtimeSession.SendInitiation` now takes the wire-shaped overrides object rather

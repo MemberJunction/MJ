@@ -12,6 +12,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 let runViewResultQueue: Array<{ Success: boolean; Results: unknown[]; ErrorMessage?: string }> = [];
 
 /**
+ * A seam for holding one RunView open, so a test can interleave two in-flight loads.
+ * `vi.hoisted` because `vi.mock` factories are lifted above ordinary declarations.
+ */
+const runViewHook = vi.hoisted(() => ({
+    firstSeen: false,
+    before: undefined as ((params: Record<string, unknown>) => Promise<void>) | undefined,
+}));
+
+/**
  * Queue of results that the RunQuery mock will return in order.
  */
 let runQueryResultQueue: Array<{ Success: boolean; Results: unknown[] | null; ErrorMessage?: string }> = [];
@@ -110,9 +119,15 @@ vi.mock('@memberjunction/core', () => {
             static FromMetadataProvider(_provider: unknown) {
                 return new MockRunView();
             }
-            RunView(params: Record<string, unknown>) {
+            async RunView(params: Record<string, unknown>) {
                 runViewParamsLog.push(params);
-                return Promise.resolve(nextRunViewResult());
+                // Claim this call's result BEFORE any awaiting, so a held-open call keeps the
+                // result queued for it rather than handing it to whoever resolves first.
+                const result = nextRunViewResult();
+                if (runViewHook.before) {
+                    await runViewHook.before(params);
+                }
+                return result;
             }
             // Drains one queued result per param, so a batch's results stay positional.
             RunViews(params: Array<Record<string, unknown>>) {
@@ -362,6 +377,83 @@ describe('ConversationEngine', () => {
             runViewResultQueue.push({ Success: true, Results: [] });
             await engine.LoadConversations('env-1', contextUser, true);
             expect(engine.Conversations).toHaveLength(0);
+        });
+
+        // The forced path must REACH THE SERVER, which the assertion above cannot see: an identical
+        // RunView inside the provider's 5s dedup-linger window returns the previous result and
+        // issues no request, so a caller forcing a reload because the server-side answer changed —
+        // a request header or session scope the query text does not carry — gets the stale list back
+        // and nothing surfaces it. The failure is silent: the load resolves successfully.
+        it('should send BypassCache on a forced reload, so it is not served from the dedup cache', async () => {
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await engine.LoadConversations('env-1', contextUser, true);
+
+            // Selected by entity, not position: LoadConversations issues more than one RunView and
+            // the conversations read is not the last of them.
+            const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Conversations').at(-1)!;
+            expect(params).toBeDefined();
+            expect(params['BypassCache']).toBe(true);
+        });
+
+        it('should NOT send BypassCache on an ordinary load, so dedup still does its job', async () => {
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Conversations').at(-1)!;
+            expect(params).toBeDefined();
+            expect(params['BypassCache']).toBe(false);
+        });
+
+        // Half a refresh is its own bug. LoadConversations ends by calling LoadProjects with
+        // the same forceRefresh, and that read sits in the same 5s linger window — so without
+        // this the toggle returned fresh conversations grouped under STALE folders.
+        it('forces the folder read too, not just the conversation read', async () => {
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await engine.LoadConversations('env-1', contextUser, true);
+
+            const projects = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects').at(-1)!;
+            expect(projects).toBeDefined();
+            expect(projects['BypassCache']).toBe(true);
+        });
+
+        it('leaves the folder read on the cache for an ordinary load', async () => {
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const projects = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects').at(-1)!;
+            expect(projects?.['BypassCache']).toBe(false);
+        });
+
+        // Bypassing dedup means two forced loads no longer collapse into one request, so the
+        // newest ANSWER has to win rather than the newest response to arrive. Otherwise the
+        // toggle this bypass exists for is exactly the caller that can leave the sidebar on
+        // the previous scope — a stale-cache failure traded for an ordering one.
+        it('an overtaken load does not publish its result', async () => {
+            // First load's RunView resolves only after the second has been issued and settled.
+            let releaseFirst: (() => void) | undefined;
+            const firstGate = new Promise<void>(resolve => { releaseFirst = resolve; });
+            const originalRunView = runViewHook.before;
+            runViewHook.before = async (params) => {
+                if (params['EntityName'] === 'MJ: Conversations' && !runViewHook.firstSeen) {
+                    runViewHook.firstSeen = true;
+                    await firstGate;
+                }
+            };
+
+            runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'stale' })] });
+            const first = engine.LoadConversations('env-1', contextUser, true);
+
+            runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'fresh' })] });
+            await engine.LoadConversations('env-1', contextUser, true);
+            expect(engine.Conversations.map(c => (c as unknown as { ID: string }).ID)).toEqual(['fresh']);
+
+            releaseFirst!();
+            await first;
+
+            // The overtaken load resolved LAST and must not have republished its rows.
+            expect(engine.Conversations.map(c => (c as unknown as { ID: string }).ID)).toEqual(['fresh']);
+            runViewHook.before = originalRunView;
+            runViewHook.firstSeen = false;
         });
     });
 

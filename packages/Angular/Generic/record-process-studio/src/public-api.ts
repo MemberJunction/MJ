@@ -2,10 +2,12 @@
 // Generic Bulk Operations studio — author, run, and audit Record Processes.
 
 export * from './lib/record-process-editor/record-process-editor.component';
+export * from './lib/feature-pipeline-builder/feature-pipeline-builder.component';
 export * from './lib/record-process-studio/record-process-studio.component';
 export * from './lib/record-process-history/record-process-history.component';
 
 import { RecordProcessEditorComponent } from './lib/record-process-editor/record-process-editor.component';
+import { FeaturePipelineBuilderComponent } from './lib/feature-pipeline-builder/feature-pipeline-builder.component';
 import { RecordProcessStudioComponent } from './lib/record-process-studio/record-process-studio.component';
 import { RecordProcessHistoryComponent } from './lib/record-process-history/record-process-history.component';
 
@@ -14,7 +16,7 @@ import { RecordProcessHistoryComponent } from './lib/record-process-history/reco
  * Call once from the consuming app's bootstrap.
  */
 export function LoadRecordProcessStudio(): void {
-    const _keep = [RecordProcessEditorComponent, RecordProcessStudioComponent, RecordProcessHistoryComponent];
+    const _keep = [RecordProcessEditorComponent, FeaturePipelineBuilderComponent, RecordProcessStudioComponent, RecordProcessHistoryComponent];
     if (_keep.length === 0) {
         throw new Error('unreachable');
     }
