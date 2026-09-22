@@ -37,7 +37,7 @@ export const ChartPalette: readonly string[] = [
 ] as const;
 
 /** Pick a palette color for the `index`-th series/slice (wraps around). */
-export function chartColorAt(index: number): string {
+export function ChartColorAt(index: number): string {
     return ChartPalette[index % ChartPalette.length];
 }
 
@@ -144,7 +144,7 @@ function extractData(obj: Record<string, unknown>, labels: string[]): ChartDatum
  * @param input Parsed JSON (object expected).
  * @returns A normalized `ChartSpec`, or `null` if not a chart payload.
  */
-export function parseChartSpec(input: unknown): ChartSpec | null {
+export function ParseChartSpec(input: unknown): ChartSpec | null {
     if (!isRecord(input)) return null;
 
     const kind = readKind(input);

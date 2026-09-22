@@ -312,7 +312,8 @@ this works on Linux too.
 ### Archive push fails with `LOOKUP FAILURE` on `MJ: Test Suites` or `MJ: Tests`
 
 The destination is missing prerequisite metadata. The current pre-seed pushes
-`metadata/tests` + `metadata/test-suites`, but won't help if the destination is
+`metadata/tests` + `metadata/test-suites` + `metadata-optional/regression-test`,
+but won't help if the destination is
 truly fresh (e.g., has not been seeded with the `Computer Use` `Test Type` row).
 Either:
 

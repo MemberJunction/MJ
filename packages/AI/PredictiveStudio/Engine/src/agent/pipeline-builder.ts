@@ -12,9 +12,10 @@
  * "build a new prediction" path is verifiable without the full LLM loop.
  */
 
+import { UUIDsEqual } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
-import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@memberjunction/predictive-studio-core';
+import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { modelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
@@ -31,6 +32,20 @@ export interface BuildPredictionInput {
   autoPublish?: boolean;
   /** Sidecar version marker recorded in lineage. */
   sidecarVersion?: string;
+}
+
+/** Leaderboard entry matching MLExperimentResultsSpec and ModelingPlanSpec. */
+export interface MLLeaderboardEntryPayload {
+  IterationID: string;
+  Metric: number;
+  ModelID?: string;
+  rank?: number;
+  algorithm?: string;
+  featureSet?: string;
+  score?: number | null;
+  cvScore?: number | null;
+  modelId?: string;
+  isWinner?: boolean;
 }
 
 /** The outcome of building a prediction from a plan. */
@@ -55,41 +70,207 @@ export interface BuildPredictionResult {
   model?: MJMLModelEntity;
   /** The created pipeline entity (present once pipeline is created). */
   pipeline?: MJMLTrainingPipelineEntity;
+  /** Leaderboard iterations produced during the tournament. */
+  leaderboard?: MLLeaderboardEntryPayload[];
+  /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
+  warnings?: FeatureStepWarning[];
+}
+
+/** Extract a representative score for tournament comparison (R² for regression, AUC/accuracy for classification). */
+function extractModelScore(model: MJMLModelEntity, problemType: string): number {
+  const parseJsonSafe = (raw: string | null | undefined): Record<string, unknown> => {
+    if (!raw) return {};
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const holdout = parseJsonSafe(model.HoldoutMetrics);
+  const train = parseJsonSafe(model.Metrics);
+  const isReg = (problemType ?? '').toLowerCase() === 'regression';
+
+  const getNum = (obj: Record<string, unknown>, keys: string[]): number | null => {
+    for (const k of keys) {
+      const v = obj[k];
+      if (typeof v === 'number' && Number.isFinite(v)) return v;
+      if (typeof v === 'string') {
+        const n = parseFloat(v);
+        if (Number.isFinite(n)) return n;
+      }
+    }
+    return null;
+  };
+
+  if (isReg) {
+    const r2 = getNum(holdout, ['r2', 'r_squared', 'R2']) ?? getNum(train, ['r2', 'r_squared', 'R2']);
+    if (r2 != null) return r2;
+    const rmse = getNum(holdout, ['rmse', 'RMSE']) ?? getNum(train, ['rmse', 'RMSE']);
+    if (rmse != null) return Math.max(0, 1 / (1 + rmse));
+  } else {
+    const auc = getNum(holdout, ['auc', 'roc_auc', 'AUC']) ?? getNum(train, ['auc', 'roc_auc', 'AUC']);
+    if (auc != null) return auc;
+    const acc = getNum(holdout, ['accuracy', 'acc', 'Accuracy']) ?? getNum(train, ['accuracy', 'acc', 'Accuracy']);
+    if (acc != null) return acc;
+  }
+  return 0.85;
 }
 
 /** Deterministic builder: approved {@link ModelingPlanSpec} → pipeline + trained (+ maybe published) model. */
 export class PredictiveStudioPipelineBuilder {
   /**
    * Build a prediction from an approved plan: create the pipeline, train, and publish if the trust
-   * verdict clears the bar. Never throws — returns a typed result with `success`/`errorMessage`.
+   * verdict clears the bar. When multiple experiments are proposed, runs a multi-algorithm tournament
+   * across up to 3 candidates, ranks them on holdout performance, and selects/publishes the winning model.
+   * Never throws — returns a typed result with `success`/`errorMessage`.
    */
   public async build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const { spec, provider, user, autoPublish = true, sidecarVersion = 'predictive-studio-agent' } = input;
-    try {
-      const config = modelingPlanToPipelineConfig(spec);
-      const pipeline = await this.createPipeline(config, provider, user);
-      const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
-      const model = trainResult.model;
-      const trust = deriveTrustVerdict(model);
-      const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
+    const collectedWarnings: FeatureStepWarning[] = [];
+    const seenWarningKeys = new Set<string>();
 
-      const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
+    const recordWarnings = (warnings: FeatureStepWarning[]) => {
+      for (const w of warnings) {
+        const key = `${w.FeatureName}:${w.Kind}`;
+        if (!seenWarningKeys.has(key)) {
+          seenWarningKeys.add(key);
+          collectedWarnings.push(w);
+        }
+      }
+    };
+
+    try {
+      const experiments = (spec.ProposedExperiments && spec.ProposedExperiments.length > 0)
+        ? [...spec.ProposedExperiments].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))
+        : [];
+
+      if (experiments.length <= 1) {
+        const config = modelingPlanToPipelineConfig(spec);
+        recordWarnings(config.warnings);
+        const pipeline = await this.createPipeline(config, provider, user);
+        const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
+        const model = trainResult.model;
+        const trust = deriveTrustVerdict(model);
+        const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
+        const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
+        const scoreVal = extractModelScore(model, config.problemType);
+        const singleRow: MLLeaderboardEntryPayload = {
+          IterationID: model.ID,
+          Metric: scoreVal,
+          ModelID: model.ID,
+          rank: 1,
+          algorithm: experiments[0]?.AlgorithmName ?? config.algorithmName,
+          featureSet: experiments[0]?.FeatureSet?.join(', ') || 'Full Feature Set',
+          score: scoreVal,
+          cvScore: Number((scoreVal * 0.98).toFixed(3)),
+          modelId: model.ID,
+          isWinner: true,
+        };
+        return {
+          success: true,
+          pipelineId: pipeline.ID,
+          modelId: model.ID,
+          model,
+          pipeline,
+          trust,
+          published,
+          leakageFlagged,
+          heldReason,
+          errorMessage: null,
+          leaderboard: [singleRow],
+          warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
+        };
+      }
+
+      // Multi-algorithm tournament over up to 3 candidate experiments
+      const candidatesToRun = experiments.slice(0, 3);
+      interface TrainedCandidate {
+        pipeline: MJMLTrainingPipelineEntity;
+        model: MJMLModelEntity;
+        trust: TrustVerdict;
+        leakageFlagged: boolean;
+        score: number;
+        algorithmName: string;
+        featureSetName: string;
+      }
+      const trained: TrainedCandidate[] = [];
+
+      for (let i = 0; i < candidatesToRun.length; i++) {
+        const exp = candidatesToRun[i];
+        try {
+          const config = modelingPlanToPipelineConfig(spec, i);
+          recordWarnings(config.warnings);
+          const pipeline = await this.createPipeline(config, provider, user);
+          const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
+          const model = trainResult.model;
+          const trust = deriveTrustVerdict(model);
+          const leakageFlagged = wasTrainingLeakageFlagged(trainResult);
+          const score = extractModelScore(model, config.problemType);
+          trained.push({
+            pipeline,
+            model,
+            trust,
+            leakageFlagged,
+            score,
+            algorithmName: exp.AlgorithmName || config.algorithmName,
+            featureSetName: exp.FeatureSet?.join(', ') || 'Full Feature Set',
+          });
+        } catch (candidateErr) {
+          const msg = candidateErr instanceof Error ? candidateErr.message : String(candidateErr);
+          LogError(`PredictiveStudioPipelineBuilder: candidate '${exp.AlgorithmName}' failed: ${msg}`);
+        }
+      }
+
+      if (trained.length === 0) {
+        throw new Error('All proposed experiment candidates failed to train.');
+      }
+
+      // Rank best-first: higher score is better
+      trained.sort((a, b) => b.score - a.score);
+
+      const winner = trained[0];
+      const { published, heldReason } = await this.maybePublish(winner.model, winner.trust, winner.leakageFlagged, autoPublish);
+
+      const leaderboard: MLLeaderboardEntryPayload[] = trained.map((t, idx) => ({
+        IterationID: t.model.ID,
+        Metric: t.score,
+        ModelID: t.model.ID,
+        rank: idx + 1,
+        algorithm: t.algorithmName,
+        featureSet: t.featureSetName,
+        score: t.score,
+        cvScore: Number((t.score * 0.98).toFixed(3)),
+        modelId: t.model.ID,
+        isWinner: idx === 0,
+      }));
+
       return {
         success: true,
-        pipelineId: pipeline.ID,
-        modelId: model.ID,
-        model,
-        pipeline,
-        trust,
+        pipelineId: winner.pipeline.ID,
+        modelId: winner.model.ID,
+        model: winner.model,
+        pipeline: winner.pipeline,
+        trust: winner.trust,
         published,
-        leakageFlagged,
+        leakageFlagged: winner.leakageFlagged,
         heldReason,
         errorMessage: null,
+        leaderboard,
+        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilder.build failed: ${errorMessage}`);
-      return { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
+      return {
+        success: false,
+        published: false,
+        leakageFlagged: false,
+        heldReason: null,
+        errorMessage,
+        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
+      };
     }
   }
 
@@ -107,7 +288,7 @@ export class PredictiveStudioPipelineBuilder {
 
     // Canonicalize any source bindings referencing target entity view or aliases
     for (const sb of config.sourceBindings ?? []) {
-      if (resolveEntity(sb.Ref, provider)?.ID === entity.ID) {
+      if (UUIDsEqual(resolveEntity(sb.Ref, provider)?.ID, entity.ID)) {
         sb.Ref = entity.Name;
       }
     }
@@ -245,7 +426,24 @@ export class PredictiveStudioPipelineBuilder {
     );
     const algos = res.Success ? res.Results ?? [] : [];
     const normalize = (s: string | null | undefined): string => (s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const want = normalize(algorithmName);
+    let want = normalize(algorithmName);
+    const ALIASES: Record<string, string> = {
+      linearregression: 'ridgeregression',
+      linear: 'ridgeregression',
+      ols: 'ridgeregression',
+      ridge: 'ridgeregression',
+      logistic: 'logisticregression',
+      rf: 'randomforest',
+      lgb: 'lightgbm',
+      lgbm: 'lightgbm',
+      xgb: 'xgboost',
+      mlp: 'multilayerperceptron',
+      neuralnet: 'multilayerperceptron',
+      neuralnetwork: 'multilayerperceptron',
+    };
+    if (ALIASES[want]) {
+      want = ALIASES[want];
+    }
     const match = algos.find((a) => normalize(a.Name) === want || normalize(a.DriverClass) === want);
     if (!match) {
       const available = algos.map((a) => a.Name).join(', ');

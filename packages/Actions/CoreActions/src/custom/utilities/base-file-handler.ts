@@ -3,7 +3,7 @@ import { RunActionParams } from "@memberjunction/actions-base";
 import { RunView } from "@memberjunction/core";
 import { MJFileEntity, MJFileStorageAccountEntity } from "@memberjunction/core-entities";
 import { FileStorageEngine } from "@memberjunction/storage";
-import { DrainResponseBody } from "@memberjunction/network-utils";
+import { DrainResponseBody, SafeFetch } from "@memberjunction/network-utils";
 
 /**
  * Base class for actions that handle file inputs from multiple sources
@@ -111,7 +111,9 @@ export abstract class BaseFileHandlerAction extends BaseAction {
                 throw new Error('Only HTTP and HTTPS URLs are supported');
             }
 
-            const response = await fetch(url);
+            // Route through the SSRF guard: the URL is caller-controlled, so private/loopback/
+            // link-local/reserved targets are blocked and every redirect hop is re-validated.
+            const response = await SafeFetch(url);
             if (!response.ok) {
                 await DrainResponseBody(response);
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);

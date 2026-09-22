@@ -17,9 +17,10 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import type { ModelingPlanSpec, TrustGrade } from '@memberjunction/predictive-studio-core';
+import type { ModelingPlanSpec, TrustGrade, FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
-import { PredictiveStudioPipelineBuilder, type BuildPredictionResult } from './pipeline-builder';
+import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
+export type { MLLeaderboardEntryPayload };
 
 /** The compact, payload-safe outcome the builder writes back so the agent can narrate the result. */
 export interface PredictiveStudioBuildOutcome {
@@ -33,21 +34,10 @@ export interface PredictiveStudioBuildOutcome {
   heldReason: string | null;
   /** A clean error message when the build failed; else null. */
   errorMessage: string | null;
+  /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
+  warnings?: FeatureStepWarning[];
 }
 
-/** Leaderboard entry matching MLExperimentResultsSpec and ModelingPlanSpec. */
-export interface MLLeaderboardEntryPayload {
-  IterationID: string;
-  Metric: number;
-  ModelID?: string;
-  rank?: number;
-  algorithm?: string;
-  featureSet?: string;
-  score?: number | null;
-  cvScore?: number | null;
-  modelId?: string;
-  isWinner?: boolean;
-}
 
 /** Feature importance entry matching MLExperimentResultsSpec. */
 export interface MLFeatureImportancePayload {
@@ -98,14 +88,21 @@ export function summarizeBuildResult(result: BuildPredictionResult): PredictiveS
     published: result.published,
     heldReason: result.heldReason,
     errorMessage: result.errorMessage,
+    warnings: result.warnings && result.warnings.length > 0 ? result.warnings : undefined,
   };
 }
 
 /** A plain, user-facing sentence describing what the build did (for the agent's reasoning/message). */
 export function buildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
-  if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.`;
-  if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.`;
-  return `I built and trained the prediction, but I'm holding it back: ${o.heldReason ?? 'it needs review before it can be published.'}`;
+  const warningText = o.warnings && o.warnings.length > 0
+    ? ` Note: ${o.warnings.length} candidate feature(s) could not be mapped to pipeline steps (${o.warnings.map(w => `${w.FeatureName}: ${w.Reason}`).join('; ')}).`
+    : '';
+  if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
+  if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.${warningText}`;
+  const heldMessage = o.heldReason
+    ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
+    : 'it needs review before it can be published.';
+  return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${warningText}`;
 }
 
 /** Parse raw feature importance off the trained MLModel entity. */
@@ -145,19 +142,32 @@ export function generateMarkdownReport(
   trustGrade: string,
   oneLiner: string,
   published: boolean,
-  features: MLFeatureImportancePayload[]
+  features: MLFeatureImportancePayload[],
+  leaderboard?: MLLeaderboardEntryPayload[],
 ): string {
   const topFeatures = features.slice(0, 8).map((f) => `- **${f.feature}**: ${(f.importance * 100).toFixed(1)}% weight`).join('\n');
+
+  let leaderboardSection = '';
+  if (leaderboard && leaderboard.length > 0) {
+    const rows = leaderboard
+      .map(
+        (r) =>
+          `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${r.score != null ? r.score.toFixed(3) : '—'} | ${r.isWinner ? '🏆 Winner (Selected)' : 'Evaluated'} |`,
+      )
+      .join('\n');
+    leaderboardSection = `\n## Tournament Leaderboard\n| Rank | Algorithm | Score (${targetMetric}) | Status |\n|---|---|---|---|\n${rows}\n`;
+  }
+
   return `# Model Development Results: ${name}
 
 ## Executive Summary
 ${oneLiner}
 
-## Model Performance
+## Winning Model Performance
 - **Target Variable**: \`${targetVar}\`
 - **Primary Metric**: **${targetMetric}** = **${score.toFixed(3)}**
 - **Trust Grade**: **${trustGrade}** (${published ? 'Published to Catalog' : 'Held for Review'})
-
+${leaderboardSection}
 ## Top Influential Features
 ${topFeatures || '- Features analyzed from source entity.'}
 
@@ -205,7 +215,8 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     if (result.success) {
       const targetVar = payload.TargetDefinition?.TargetVariable ?? 'Target';
       const name = payload.Name || `${targetVar} Prediction`;
-      const targetMetric = payload.TargetDefinition?.SuccessMetric ?? 'AUC';
+      const isReg = payload.TargetDefinition?.ProblemType === 'regression';
+      const targetMetric = payload.TargetDefinition?.SuccessMetric ?? (isReg ? 'R²' : 'AUC');
       const scoreVal = result.trust?.headlineMetric?.value ?? 0.85;
 
       let featureBars = parseFeatureImportance(result.model?.FeatureImportance);
@@ -217,20 +228,23 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       }
       featureBars.sort((a, b) => b.importance - a.importance);
 
-      const leaderboard: MLLeaderboardEntryPayload[] = [
-        {
-          IterationID: result.modelId ?? 'iteration-1',
-          Metric: scoreVal,
-          ModelID: result.modelId,
-          rank: 1,
-          algorithm: payload.ProposedExperiments?.[0]?.AlgorithmName ?? 'Winning Algorithm',
-          featureSet: 'Full Feature Set',
-          score: scoreVal,
-          cvScore: Number((scoreVal * 0.98).toFixed(3)),
-          modelId: result.modelId,
-          isWinner: true,
-        },
-      ];
+      const leaderboard: MLLeaderboardEntryPayload[] =
+        result.leaderboard && result.leaderboard.length > 0
+          ? result.leaderboard
+          : [
+              {
+                IterationID: result.modelId ?? 'iteration-1',
+                Metric: scoreVal,
+                ModelID: result.modelId,
+                rank: 1,
+                algorithm: payload.ProposedExperiments?.[0]?.AlgorithmName ?? 'Winning Algorithm',
+                featureSet: 'Full Feature Set',
+                score: scoreVal,
+                cvScore: Number((scoreVal * 0.98).toFixed(3)),
+                modelId: result.modelId,
+                isWinner: true,
+              },
+            ];
 
       const bestModelName = `${name} (v${result.model?.Version ?? 1})`;
       const summaryText = result.trust?.oneLiner ?? buildOutcomeMessage(outcome);
@@ -244,6 +258,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
         summaryText,
         result.published,
         featureBars,
+        leaderboard,
       );
 
       newPayloadObj = {
