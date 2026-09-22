@@ -138,35 +138,76 @@ export function StripSQLStringLiterals(sql: string): string {
 }
 
 /**
- * Safe SQL functions allowed in expressions, organized by category
+ * Safe SQL functions allowed in expressions, organized by category.
+ *
+ * WHY THIS IS A UNION RATHER THAN A PER-DIALECT TABLE
+ * ---------------------------------------------------
+ * This is a deny-by-default SAFETY list, not a dialect grammar. Its job is to
+ * stop a user-supplied expression from smuggling in something that is not a
+ * read-only scalar/aggregate call — it is not, and must not become, a
+ * per-platform parser. So it carries the union of every supported dialect's
+ * read-only vocabulary, and `checkFunctionNames` consults the flattened union.
+ *
+ * Keying the buckets off `ResolvePlatformKey` is the alternative, and it costs
+ * more than it buys: a PostgreSQL name that reaches a SQL Server tenant is
+ * rejected by the SQL Server parser on its own — `DATE_TRUNC(...)` simply never
+ * parses there. The union therefore cannot widen the blast radius past what the
+ * target server will already accept, whereas a dialect switch here would add a
+ * second independent place for the dialect to be resolved, and so a second place
+ * for it to be wrong.
+ *
+ * Before this list held the PostgreSQL names, a perfectly ordinary PG filter
+ * such as `DATE_TRUNC('month', CreatedAt)` was rejected outright with
+ * "Function 'DATE_TRUNC' is not allowed" on every PostgreSQL tenant.
+ *
+ * Every name here is read-only by construction. Anything that writes, escalates,
+ * or reaches outside the statement stays on {@link DANGEROUS_SQL_KEYWORDS}, which
+ * is checked FIRST (step 2 of `validate`) — a name added here can never unblock
+ * one that is denied there.
  */
 export const ALLOWED_SQL_FUNCTIONS = {
-  // Aggregate functions
-  aggregates: ['COUNT', 'COUNT_BIG', 'SUM', 'AVG', 'MIN', 'MAX', 'STDEV', 'STDEVP', 'VAR', 'VARP', 'STRING_AGG', 'CHECKSUM_AGG'],
+  // Aggregate functions. PG: ARRAY_AGG / JSONB_AGG / JSON_AGG / BOOL_AND / BOOL_OR /
+  // EVERY / PERCENTILE_* / MODE.
+  aggregates: ['COUNT', 'COUNT_BIG', 'SUM', 'AVG', 'MIN', 'MAX', 'STDEV', 'STDEVP', 'VAR', 'VARP', 'STRING_AGG', 'CHECKSUM_AGG',
+    'ARRAY_AGG', 'JSONB_AGG', 'JSON_AGG', 'BOOL_AND', 'BOOL_OR', 'EVERY', 'PERCENTILE_CONT', 'PERCENTILE_DISC', 'MODE'],
 
-  // Math functions
-  math: ['ABS', 'CEILING', 'FLOOR', 'ROUND', 'POWER', 'SQRT', 'LOG', 'LOG10', 'EXP', 'SIGN', 'RAND'],
+  // Math functions. PG: CEIL (vs CEILING), RANDOM (vs RAND), TRUNC, MOD, DIV,
+  // GREATEST, LEAST, WIDTH_BUCKET.
+  math: ['ABS', 'CEILING', 'FLOOR', 'ROUND', 'POWER', 'SQRT', 'LOG', 'LOG10', 'EXP', 'SIGN', 'RAND',
+    'CEIL', 'RANDOM', 'TRUNC', 'MOD', 'DIV', 'GREATEST', 'LEAST', 'WIDTH_BUCKET'],
 
-  // String functions (read-only)
-  string: ['LEN', 'LENGTH', 'UPPER', 'LOWER', 'LTRIM', 'RTRIM', 'TRIM', 'LEFT', 'RIGHT', 'SUBSTRING', 'CHARINDEX', 'REPLACE', 'CONCAT', 'STUFF'],
+  // String functions (read-only). PG: POSITION / STRPOS (vs CHARINDEX), SPLIT_PART,
+  // INITCAP, LPAD, RPAD, REPEAT, REVERSE, TRANSLATE, REGEXP_*, TO_CHAR, MD5, ASCII, CHR.
+  string: ['LEN', 'LENGTH', 'UPPER', 'LOWER', 'LTRIM', 'RTRIM', 'TRIM', 'LEFT', 'RIGHT', 'SUBSTRING', 'CHARINDEX', 'REPLACE', 'CONCAT', 'STUFF',
+    'POSITION', 'STRPOS', 'SPLIT_PART', 'INITCAP', 'LPAD', 'RPAD', 'REPEAT', 'REVERSE', 'TRANSLATE',
+    'REGEXP_REPLACE', 'REGEXP_MATCHES', 'REGEXP_SUBSTR', 'TO_CHAR', 'MD5', 'ASCII', 'CHR'],
 
-  // Date functions
-  date: ['DATEPART', 'DATEDIFF', 'DATEADD', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND', 'GETDATE', 'GETUTCDATE', 'SYSDATETIME', 'EOMONTH'],
+  // Date functions. PG: NOW / CURRENT_* / LOCALTIMESTAMP (vs GETDATE), DATE_TRUNC,
+  // DATE_PART / EXTRACT (vs DATEPART), AGE, TO_DATE, TO_TIMESTAMP, MAKE_*, JUSTIFY_DAYS.
+  date: ['DATEPART', 'DATEDIFF', 'DATEADD', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND', 'GETDATE', 'GETUTCDATE', 'SYSDATETIME', 'EOMONTH',
+    'NOW', 'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'LOCALTIMESTAMP', 'DATE_TRUNC', 'DATE_PART', 'EXTRACT', 'AGE',
+    'TO_DATE', 'TO_TIMESTAMP', 'MAKE_DATE', 'MAKE_TIMESTAMP', 'JUSTIFY_DAYS'],
 
-  // Type conversion (safe subset)
-  conversion: ['CAST', 'CONVERT', 'TRY_CAST', 'TRY_CONVERT', 'FORMAT'],
+  // Type conversion (safe subset). PG: TO_CHAR / TO_DATE / TO_NUMBER / TO_TIMESTAMP
+  // (vs CAST/CONVERT/FORMAT).
+  conversion: ['CAST', 'CONVERT', 'TRY_CAST', 'TRY_CONVERT', 'FORMAT', 'TO_CHAR', 'TO_DATE', 'TO_NUMBER', 'TO_TIMESTAMP'],
 
-  // Null handling
-  nullHandling: ['ISNULL', 'COALESCE', 'NULLIF', 'IIF'],
+  // Null handling. PG has no ISNULL/IIF; GREATEST/LEAST are its null-tolerant pickers.
+  nullHandling: ['ISNULL', 'COALESCE', 'NULLIF', 'IIF', 'GREATEST', 'LEAST'],
 
   // Case expressions
   conditional: ['CASE', 'WHEN', 'THEN', 'ELSE', 'END'],
 
-  // Logical operators (as keywords)
-  logical: ['AND', 'OR', 'NOT', 'IS', 'NULL', 'LIKE', 'BETWEEN', 'IN'],
+  // Logical operators (as keywords). PG: ILIKE, SIMILAR TO. ANY/ALL/SOME/EXISTS are
+  // listed so that the full-query context, which unblocks them from
+  // DANGEROUS_SQL_KEYWORDS via FULL_QUERY_ALLOWED_KEYWORDS, does not then trip over
+  // them here as unknown function-shaped tokens.
+  logical: ['AND', 'OR', 'NOT', 'IS', 'NULL', 'LIKE', 'BETWEEN', 'IN', 'ILIKE', 'SIMILAR', 'ANY', 'ALL', 'SOME', 'EXISTS'],
 
-  // Sort/order and windowing
-  ordering: ['ASC', 'ASCENDING', 'DESC', 'DESCENDING', 'OVER', 'PARTITION', 'BY', 'ORDER', 'ROWS', 'RANGE', 'UNBOUNDED', 'PRECEDING', 'FOLLOWING', 'CURRENT', 'ROW']
+  // Sort/order and windowing. PG: NULLS FIRST/LAST, aggregate FILTER (WHERE …),
+  // WITHIN GROUP, GROUPING.
+  ordering: ['ASC', 'ASCENDING', 'DESC', 'DESCENDING', 'OVER', 'PARTITION', 'BY', 'ORDER', 'ROWS', 'RANGE', 'UNBOUNDED', 'PRECEDING', 'FOLLOWING', 'CURRENT', 'ROW',
+    'NULLS', 'FIRST', 'LAST', 'FILTER', 'WITHIN', 'GROUPING']
 } as const;
 
 /**

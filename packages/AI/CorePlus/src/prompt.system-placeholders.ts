@@ -11,8 +11,42 @@
  */
 
 import { AIPromptParams } from './prompt.types';
+import {
+    DatabasePlatform,
+    DEFAULT_DATABASE_PLATFORM,
+    DescribeSQLDialectForPrompt,
+    DescribeSQLDialectName,
+    Metadata,
+    ResolvePlatformKey,
+} from '@memberjunction/core';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
+
+/**
+ * Resolves the database platform whose SQL this prompt execution should target.
+ *
+ * Order of preference:
+ *   1. `params.provider` — the per-request metadata provider. On a multi-tenant
+ *      server this is the ONLY correct source: the global provider may belong to
+ *      a different tenant on a different platform.
+ *   2. `Metadata.Provider` — the process-wide provider, for single-tenant hosts
+ *      and CLI/worker contexts that never set a per-request provider.
+ *   3. {@link DEFAULT_DATABASE_PLATFORM} — unchanged historical behaviour when
+ *      nothing is configured (e.g. rendering a prompt in a unit test).
+ *
+ * Never throws: `Metadata.Provider` throws when there is no global object store,
+ * and a prompt render must not fail because of that.
+ */
+function resolvePromptSQLPlatform(params: AIPromptParams): DatabasePlatform {
+    if (params?.provider) {
+        return ResolvePlatformKey(params.provider);
+    }
+    try {
+        return ResolvePlatformKey(Metadata.Provider); // global-provider-ok: deliberate last resort — `params.provider` is preferred immediately above and is the only correct source on a multi-tenant server; this branch serves single-tenant hosts and CLI/worker renders that never set one, and throwing here would fail a prompt render rather than pick a dialect
+    } catch {
+        return DEFAULT_DATABASE_PLATFORM;
+    }
+}
 
 /**
  * Defines a system placeholder that can be used in prompt templates.
@@ -82,6 +116,11 @@ export const SYSTEM_PLACEHOLDER_CATEGORIES: SystemPlaceholderCategory[] = [
         name: 'Environment',
         icon: 'fa-server',
         color: '#dc3545'
+    },
+    {
+        name: 'Data Platform',
+        icon: 'fa-database',
+        color: '#20c997'
     }
 ];
 
@@ -302,6 +341,39 @@ export const DEFAULT_SYSTEM_PLACEHOLDERS: SystemPlaceholder[] = [
         category: 'Execution Context',
         getValue: async (params: AIPromptParams) => {
             return params.skipValidation ? 'false' : 'true';
+        }
+    },
+
+    // Data platform placeholders
+    //
+    // These exist so that a template which asks an LLM for SQL can be
+    // parameterised by dialect WITHOUT being registered anywhere. Every prompt
+    // render resolves every system placeholder, so "which templates get the
+    // dialect?" is answered by a predicate — does the template reference the
+    // placeholder? — rather than by a hardcoded list of TemplateIDs that a later
+    // template inevitably fails to join.
+    {
+        name: '_SQL_DIALECT',
+        description: "Platform key of the database this tenant's SQL runs on ('sqlserver', 'postgresql')",
+        category: 'Data Platform',
+        getValue: async (params: AIPromptParams) => {
+            return resolvePromptSQLPlatform(params);
+        }
+    },
+    {
+        name: '_SQL_DIALECT_NAME',
+        description: "Human-readable name of the tenant's database platform, e.g. 'PostgreSQL'",
+        category: 'Data Platform',
+        getValue: async (params: AIPromptParams) => {
+            return DescribeSQLDialectName(resolvePromptSQLPlatform(params));
+        }
+    },
+    {
+        name: '_SQL_DIALECT_RULES',
+        description: "Syntax briefing for the tenant's database platform — quoting, row limits, null-coalescing, date math. Drop into any prompt that asks for SQL.",
+        category: 'Data Platform',
+        getValue: async (params: AIPromptParams) => {
+            return DescribeSQLDialectForPrompt(resolvePromptSQLPlatform(params));
         }
     }
 ];
