@@ -812,18 +812,24 @@ On the release PR:
    >
    > The step's model is that prep produces migrations and metadata, where that is harmless. It stops being harmless the moment a fix lands on the prep branch — v6.1.0-edge.2 carried TypeScript changes to four packages, and not one of them was CI-validated before merging to `main`.
    >
-   > **When the prep branch touches `packages/**`, run the gates locally against that exact tree and record the results on the PR:**
+   > **When the prep branch touches `packages/**`, run the gates locally against that exact tree — BEFORE opening the release PR — and record the results on the PR.** The first block is not a suggestion: it is, command for command, what `publish.yml` runs as its hard pre-publish gate (`release-validation` → `.github/workflows/release-test.yml`, job `Unit Tests (Vitest)`). Whatever fails here fails there, only after the merge to `main`.
    >
    > ```bash
-   > npx turbo run test:types            # test.yml's spec type-check gate
-   > npm test -- --concurrency=4         # test.yml's unit suite
-   > RUN_MUTATION_TESTS=1 pnpm run test:integration   # supersets integration.yml (see below)
-   > pnpm run build                      # build.yml
+   > # 1. publish.yml's pre-publish gate — release-test.yml, verbatim, over the WHOLE repo
+   > pnpm install --frozen-lockfile
+   > pnpm run build                      # also build.yml
+   > npx turbo run test:types            # spec type-check gate
+   > npm test -- --concurrency=4 --force # EVERY package's unit suite (root `test` = `turbo run test`)
+   >
+   > # 2. The integration tier CI never runs on a release branch
+   > RUN_MUTATION_TESTS=1 RUN_SEARCH_TESTS=1 pnpm run test:integration   # supersets integration.yml (see below)
    > ```
    >
-   > The local integration run is a **superset** of CI's: `integration.yml` omits `RUN_MUTATION_TESTS=1`, so every mutation-gated bundle is silently excluded there and has *never* run in CI. `IT74 - Task Graph Execution` is entirely mutation-gated — without the flag it reports `all 7 check(s) were gated out … verified NOTHING` and exits **0**.
+   > 🚨 **Run the full `npm test`, not just the suites of the packages you changed.** A fix is often correct and still breaks a *consumer's* test that pinned the old behaviour. On 6.2.0-edge.0 a `@memberjunction/sql-parser` fix passed all 684 of its own tests; `@memberjunction/core-entities-server` — which consumes the parser — had two tests asserting the old limitation, the merged release failed `publish.yml`'s gate, and shipping took a second release PR. `--force` is deliberate: turbo would otherwise replay cached passes for packages whose own sources did not change.
    >
-   > Everything does run on `next` after the back-merge, so a red check there is the release's problem arriving late rather than someone else's.
+   > The local integration run is a **superset** of CI's: `integration.yml` omits `RUN_MUTATION_TESTS=1`, so every mutation-gated bundle is silently excluded there and has *never* run in CI. `IT74 - Task Graph Execution` is entirely mutation-gated — without the flag it reports `all 7 check(s) were gated out … verified NOTHING` and exits **0**. `IT52 - Unified Search Seams` is likewise skipped (as a pass) unless `RUN_SEARCH_TESTS=1`.
+   >
+   > If `publish.yml`'s gate does fail after the merge, **nothing has been published** — the `Build and publish` job depends on it and is skipped, so there is no tag, no npm version and no back-merge. Fix it on the prep branch and merge a second release PR into `main`; re-running the failed job re-tests the same commit and cannot help.
 
    To read the advisory UUID scan when no PR comment appears (a clean scan *clears* its comment rather than posting one), check the job log — the step is `Check migration ID determinism (hard-coded UUIDs, not NEWID())`, and the following step being `Clear stale non-deterministic ID comment` is the clean outcome.
 
@@ -865,6 +871,7 @@ The push to `main` — from the merged release PR — triggers a chain of automa
 
 This workflow:
 1. Runs migration tests against a fresh SQL Server container
+   — and, in parallel, **validates the release commit with the full unit suite** (`release-validation` → `release-test.yml`: build, `test:types`, `npm test`). Publishing depends on both; if either fails, nothing below runs and nothing is published. Step 9's local gate is this same sequence — run it before the PR, not after the merge
 2. Validates all `@memberjunction/*` packages exist on npm (see Step 5) and carry `repository.url` for provenance
 3. Detects changesets pre-mode and versions accordingly — pre-mode yields the next `X.Y.0-edge.N`; the old migrations-mean-minor auto-detect applies only outside pre-mode
 4. **Guards the version grammar** — an unsuffixed version on this path is a hard error directing you to the LTS path in `publish.yml` (candidates and line builds never ship through `next → main`)
