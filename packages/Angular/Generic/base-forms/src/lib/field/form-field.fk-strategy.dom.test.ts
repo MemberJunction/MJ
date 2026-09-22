@@ -11,7 +11,7 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { Component, Input, Output, EventEmitter, Pipe, PipeTransform } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
-import { renderComponentFixture, query, queryAll, text, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, typeInto, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { BaseEntity, BaseEngineRegistry, EntityInfo, type IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 
@@ -418,5 +418,153 @@ describe('mj-form-field FK lookup strategy', () => {
     } finally {
       veto.mockRestore();
     }
+  });
+
+  /**
+   * The panel is portaled to <body> and opened by an async lookup, so "closed" has to survive two
+   * things landing late: the lookup's own rows and a keystroke's debounced search. A panel that
+   * reopens once nothing has focus has no blur to come and no focused input to hear Escape, so
+   * these pin down that a dismiss is final and that a press off the field always closes it.
+   */
+  describe('dismissal', () => {
+    const INPUT = 'input.mj-forms-field-input';
+    const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
+    function fkInput(f: ComponentFixture<MjFormFieldComponent>): HTMLInputElement {
+      const input = query(f, INPUT);
+      if (!input) throw new Error('no FK input rendered');
+      return input as HTMLInputElement;
+    }
+
+    /** A Lookup the test releases by hand, so the rows land exactly when the test says. */
+    function holdLookup(): { release: () => void; restore: () => void } {
+      let release!: () => void;
+      const rows: FKLookupGroup[] = [
+        { Key: 'customers', Label: 'Customers', Rows: [{ Values: { ID: CUSTOMER_ID, Name: 'Northwind Institute', City: 'Springfield' } }] },
+      ];
+      const pending = new Promise<FKLookupGroup[]>(resolve => {
+        release = () => resolve(rows);
+      });
+      const spy = vi.spyOn(GroupedTestStrategy.prototype, 'Lookup').mockReturnValue(pending);
+      return { release, restore: () => spy.mockRestore() };
+    }
+
+    /**
+     * Let a lookup released from outside the Angular zone finish landing: `whenStable` alone
+     * cannot see that continuation, and the panel's portal retries across timer ticks.
+     */
+    async function settle(f: ComponentFixture<MjFormFieldComponent>): Promise<void> {
+      await sleep(10);
+      await f.whenStable();
+      f.detectChanges();
+    }
+
+    function expectClosed(f: ComponentFixture<MjFormFieldComponent>): void {
+      expect(f.componentInstance.ShowFKDropdown).toBe(false);
+      expect(f.componentInstance.FKLoading).toBe(false);
+      expect(document.querySelector('.mj-fk-dropdown')).toBeNull();
+    }
+
+    beforeEach(() => {
+      // A panel a previous test left portaled would make "no panel in the document" ambiguous.
+      document.querySelectorAll('.mj-fk-dropdown').forEach(el => el.remove());
+    });
+
+    it('rows that land after Escape do not reopen the panel', async () => {
+      const held = holdLookup();
+      try {
+        const f = renderFK();
+        const input = fkInput(f);
+        input.dispatchEvent(new FocusEvent('focus'));
+        f.detectChanges();
+        // The panel opens at once, in its loading state, while the lookup is out.
+        expect(f.componentInstance.ShowFKDropdown).toBe(true);
+
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        f.detectChanges();
+        expect(f.componentInstance.ShowFKDropdown).toBe(false);
+
+        held.release();
+        await settle(f);
+        expectClosed(f);
+      } finally {
+        held.restore();
+      }
+    });
+
+    it('rows that land after the user has left the field do not reopen the panel', async () => {
+      const held = holdLookup();
+      try {
+        const f = renderFK();
+        const input = fkInput(f);
+        input.dispatchEvent(new FocusEvent('focus'));
+        f.detectChanges();
+        input.dispatchEvent(new Event('blur'));
+        await sleep(250); // past the 200 ms blur grace period
+        f.detectChanges();
+        expect(f.componentInstance.ShowFKDropdown).toBe(false);
+
+        held.release();
+        await settle(f);
+        expectClosed(f);
+      } finally {
+        held.restore();
+      }
+    });
+
+    it('a keystroke\'s debounced search does not run once the user has left the field', async () => {
+      const f = renderFK();
+      await openDropdown(f);
+      expect(GroupedTestStrategy.LastContext?.Query).toBe('');
+
+      typeInto(f, INPUT, 'nor'); // arms the 300 ms debounce
+      fkInput(f).dispatchEvent(new Event('blur'));
+      await sleep(250);
+      f.detectChanges();
+      expect(f.componentInstance.ShowFKDropdown).toBe(false);
+
+      await sleep(150); // the debounce would have fired by now
+      await f.whenStable();
+      f.detectChanges();
+      expect(GroupedTestStrategy.LastContext?.Query).toBe('');
+      expectClosed(f);
+    });
+
+    it('a press anywhere off the field closes the panel, focused or not', async () => {
+      const f = renderFK();
+      await openDropdown(f);
+      expect(f.componentInstance.ShowFKDropdown).toBe(true);
+
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      f.detectChanges();
+      expectClosed(f);
+    });
+
+    it('a press on the field or inside its panel leaves it open', async () => {
+      const f = renderFK();
+      await openDropdown(f);
+
+      fkInput(f).dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      f.detectChanges();
+      expect(f.componentInstance.ShowFKDropdown).toBe(true);
+
+      const panel = document.querySelector('.mj-fk-dropdown');
+      if (!panel) throw new Error('no panel rendered');
+      panel.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+      f.detectChanges();
+      expect(f.componentInstance.ShowFKDropdown).toBe(true);
+    });
+
+    it('focus regained inside the blur grace period keeps the panel open', async () => {
+      const f = renderFK();
+      await openDropdown(f);
+
+      fkInput(f).dispatchEvent(new Event('blur'));
+      await sleep(50);
+      await openDropdown(f); // refocus before the 200 ms close fires
+      await sleep(250);
+      f.detectChanges();
+      expect(f.componentInstance.ShowFKDropdown).toBe(true);
+    });
   });
 });

@@ -716,7 +716,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    */
   @Input() FKLookupOptions: Record<string, unknown> = {};
 
-  /** Cleanup function for scroll/resize listeners */
+  /** Cleanup function for the scroll/resize/outside-press listeners armed while a dropdown is open */
   private _scrollCleanup: (() => void) | null = null;
 
   /** Inline style for the fixed-position dropdown */
@@ -814,7 +814,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Tracks a dropdown element we relocated to body so we can drop the reference on close. */
   private _portaledDropdownEl: HTMLElement | null = null;
 
-  /** Start listening for scroll/resize to close dropdowns */
+  /**
+   * Arm the listeners that dismiss an open dropdown from outside the field: an ancestor scroll,
+   * a resize, and a pointer press anywhere but the field or its panel.
+   */
   private startScrollListener(): void {
     this.stopScrollListener();
 
@@ -832,12 +835,27 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       this.cdr.markForCheck();
     };
 
+    // A press outside the field and its panel dismisses, whether or not the input has focus.
+    // The input's blur covers the ordinary case, but the panel is portaled to <body> and must
+    // own its dismissal: a panel that is open while nothing has focus has no blur to come, and
+    // the input's Escape handler cannot hear a key it is not focused for.
+    const onPointerDown = (e: Event) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (this.hostRef.nativeElement.contains(target)) return;
+      if (this._portaledDropdownEl?.contains(target)) return;
+      this.closeAllDropdowns();
+      this.cdr.markForCheck();
+    };
+
     document.addEventListener('scroll', onScroll, true); // capture phase catches all scrollable ancestors
     window.addEventListener('resize', onResize);
+    document.addEventListener('mousedown', onPointerDown, true);
 
     this._scrollCleanup = () => {
       document.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('mousedown', onPointerDown, true);
     };
   }
 
@@ -858,7 +876,23 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this._portaledDropdownEl = null;
     this.ShowValueListDropdown = false;
     this.ShowSelectDropdown = false;
+    this.cancelPendingFKSearch();
     this.stopScrollListener();
+  }
+
+  /**
+   * Nothing started before a dismiss may reopen the panel. Retiring the sequence orphans a
+   * lookup still in flight (its result is dropped at the sequence check), and cancelling the
+   * debounce stops a keystroke's pending search from firing after the user has left the field.
+   * Without this, a lookup slower than the blur grace period reopened the list with nothing
+   * focused, and neither Escape nor clicking away could reach it — only picking a row could.
+   */
+  private cancelPendingFKSearch(): void {
+    this._fkSearchSeq++;
+    if (this._fkSearchTimeout) {
+      clearTimeout(this._fkSearchTimeout);
+      this._fkSearchTimeout = null;
+    }
   }
 
   // ============================================
@@ -963,10 +997,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Debounce timer for FK search */
   private _fkSearchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  /** The blur grace timer, so a refocus inside the grace window can cancel the close it scheduled. */
+  private _fkBlurTimeout: ReturnType<typeof setTimeout> | null = null;
+
   /** Last known FK input element for position recalculation */
   private _lastFKInputEl: HTMLElement | null = null;
 
-  /** Monotonic token so a slow DB response from a stale query can't clobber a newer one. */
+  /**
+   * Monotonic token so a slow lookup response cannot clobber a newer one — and, because every
+   * dismiss retires it, cannot reopen a panel the user has already closed.
+   */
   private _fkSearchSeq = 0;
 
   /** Cached column plan for the current related entity (rebuilt on demand). */
@@ -1762,6 +1802,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   OnFKFocus(event: FocusEvent): void {
     const input = event.target as HTMLInputElement;
     this._lastFKInputEl = input;
+    // Focus regained inside the blur grace window: that blur must not close the panel this
+    // focus is about to open, nor retire the lookup it starts.
+    this.cancelPendingFKBlur();
     this.FKFocused = true; // reveal the scope pill while focused
     // Select any pre-filled (linked) text so the first keystroke replaces it instead
     // of appending — matches how a searchable dropdown behaves.
@@ -1823,7 +1866,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Hide dropdown on blur, revert to matched name if user didn't select */
   OnFKBlur(): void {
     // Small delay so mousedown on dropdown items / scope menu fires first
-    setTimeout(() => {
+    this.cancelPendingFKBlur();
+    this._fkBlurTimeout = setTimeout(() => {
+      this._fkBlurTimeout = null;
       this.closeFKDropdown();
       this.FKShowScopeMenu = false;
       this.FKFocused = false; // hide the scope pill
@@ -1833,6 +1878,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       }
       this.cdr.markForCheck();
     }, 200);
+  }
+
+  private cancelPendingFKBlur(): void {
+    if (this._fkBlurTimeout) {
+      clearTimeout(this._fkBlurTimeout);
+      this._fkBlurTimeout = null;
+    }
   }
 
   /**
@@ -2048,6 +2100,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKActiveIndex = -1;
     this.FKSelectedSuggestion = null;
     this._portaledDropdownEl = null;
+    this.cancelPendingFKSearch();
     this.stopScrollListener();
   }
 
@@ -2093,6 +2146,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         query.trim() ? Promise.resolve<FKLookupRow[]>([]) : this.loadRecentPicks(context),
       ]);
     } catch (err) {
+      // Stale: a newer keystroke fired, or the panel was dismissed while this was in flight.
       if (seq !== this._fkSearchSeq) return;
       LogError(
         `FK lookup strategy failed for ${this.Record?.EntityInfo?.Name ?? '?'}.${this.FieldName}: ` +
@@ -2102,7 +2156,8 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       this.FKScopeLabels = null;
     }
 
-    // Ignore stale responses (a newer keystroke already fired).
+    // Stale: a newer keystroke fired, or the panel was dismissed while this was in flight. A
+    // dismissed panel stays dismissed — this result must not reopen it.
     if (seq !== this._fkSearchSeq) return;
     this.FKLoading = false;
 
@@ -2544,6 +2599,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (this._fkSearchTimeout) {
       clearTimeout(this._fkSearchTimeout);
     }
+    this.cancelPendingFKBlur();
     this.teardownFKResizeListeners();
     this.stopScrollListener();
     // If we relocated the dropdown to <body> and Angular tears us down while it's
