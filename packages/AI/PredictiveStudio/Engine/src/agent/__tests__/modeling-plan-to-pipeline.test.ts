@@ -77,4 +77,81 @@ describe('modelingPlanToPipelineConfig', () => {
     expect(() => modelingPlanToPipelineConfig(baseSpec({ TargetDefinition: { EntityName: '', TargetVariable: 'Status', ProblemType: 'classification', SuccessMetric: 'AUC' } }))).toThrow(/EntityName/);
     expect(() => modelingPlanToPipelineConfig(baseSpec({ ProposedExperiments: [] }))).toThrow(/ProposedExperiment/);
   });
+
+  it('emits structured warnings for llm-derived and embedding candidate features instead of dropping them silently', () => {
+    const spec = baseSpec({
+      CandidateFeatures: [
+        { Name: 'AutoRenew', SourceRef: 'Memberships', Kind: 'numeric', Why: 'renewal intent' },
+        { Name: 'JobTitleNormalized', SourceRef: 'Memberships', Kind: 'llm-derived', Why: 'job function from LLM' },
+        { Name: 'ProfileEmbedding', SourceRef: 'Memberships', Kind: 'embedding', Why: 'dense representation' },
+      ],
+      ProposedExperiments: [
+        { Label: 'All', AlgorithmName: 'random_forest', FeatureSet: [], Rationale: 'test warnings', Priority: 1 },
+      ],
+    });
+    const cfg = modelingPlanToPipelineConfig(spec);
+    expect(cfg.warnings).toHaveLength(2);
+    expect(cfg.warnings).toEqual([
+      {
+        FeatureName: 'JobTitleNormalized',
+        Kind: 'llm-derived',
+        Reason: expect.stringMatching(/upstream Feature Pipeline/),
+      },
+      {
+        FeatureName: 'ProfileEmbedding',
+        Kind: 'embedding',
+        Reason: expect.stringMatching(/dedicated vector embedding step/),
+      },
+    ]);
+  });
+
+  it('produces empty warnings array when all features are numeric or categorical', () => {
+    const cfg = modelingPlanToPipelineConfig(baseSpec());
+    expect(cfg.warnings).toEqual([]);
+  });
+
+  it('falls back gracefully to structured warning when an unknown kind arrives at runtime', () => {
+    const spec = baseSpec({
+      CandidateFeatures: [
+        { Name: 'AudioFeature', SourceRef: 'Memberships', Kind: 'audio' as unknown as 'numeric', Why: 'audio signal' },
+      ],
+      ProposedExperiments: [
+        { Label: 'All', AlgorithmName: 'random_forest', FeatureSet: [], Rationale: 'test', Priority: 1 },
+      ],
+    });
+    const cfg = modelingPlanToPipelineConfig(spec);
+    expect(cfg.warnings).toHaveLength(1);
+    expect(cfg.warnings[0]).toEqual({
+      FeatureName: 'AudioFeature',
+      Kind: 'audio',
+      Reason: expect.stringMatching(/cannot be automatically mapped to a pipeline step/),
+    });
+  });
+
+  it('resolves llm-derived candidate features referencing a FeaturePipeline source into an LLMDerivedFeatureStep with explicit Columns', () => {
+    const spec = baseSpec({
+      CandidateSources: [
+        { Kind: 'Entity', Ref: 'Memberships', Why: 'the membership records' },
+        { Kind: 'FeaturePipeline', Ref: 'JobFunctionSeniorityPipeline', Why: 'derived job function & seniority' },
+      ],
+      CandidateFeatures: [
+        { Name: 'AutoRenew', SourceRef: 'Memberships', Kind: 'numeric', Why: 'renewal intent' },
+        { Name: 'JobFunction', SourceRef: 'JobFunctionSeniorityPipeline', Kind: 'llm-derived', Why: 'normalized job function' },
+        { Name: 'SeniorityLevel', SourceRef: 'JobFunctionSeniorityPipeline', Kind: 'llm-derived', Why: 'seniority tier' },
+      ],
+      ProposedExperiments: [
+        { Label: 'All', AlgorithmName: 'random_forest', FeatureSet: [], Rationale: 'test llm-derived resolution', Priority: 1 },
+      ],
+    });
+    const cfg = modelingPlanToPipelineConfig(spec);
+    expect(cfg.warnings).toHaveLength(0);
+    const llmStep = cfg.featureSteps.Steps.find((s) => s.Kind === 'llm-derived');
+    expect(llmStep).toBeDefined();
+    expect(llmStep).toEqual({
+      Id: 'llm-derived-JobFunctionSeniorityPipeline',
+      Kind: 'llm-derived',
+      FeaturePipelineRef: 'JobFunctionSeniorityPipeline',
+      Columns: ['JobFunction', 'SeniorityLevel'],
+    });
+  });
 });
