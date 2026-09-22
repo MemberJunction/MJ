@@ -4472,7 +4472,14 @@ export class ManageMetadataBase {
       // the seed only fills a genuine gap. See buildSearchFlagHygieneSQL.
       if (!await this.applySearchFlagHygiene(pool, excludeSchemas)) {
          logError('Error applying search flag hygiene');
-         // Non-fatal, like advanced generation — a stale search flag is not worth failing a run over.
+         // FATAL, unlike advanced generation. This pass compares before it writes, so a failure
+         // means the probes could not run — and because nothing is written in that case, the pass
+         // failing is indistinguishable from the pass having nothing to do: no SQL, no artifact,
+         // every gate green. Advanced generation can degrade quietly because it only ever ADDS
+         // model-suggested metadata; this one turns search OFF on entities and is the only thing
+         // keeping AllowUserSearchAPI honest, so a run where it did not execute must not be
+         // reported as a clean run.
+         bSuccess = false;
       }
 
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
@@ -7914,7 +7921,7 @@ export class ManageMetadataBase {
       clearSQL: string;
       /** COUNT of the rows {@link seedSQL} would touch — see the compare-first note on the apply method. */
       seedProbeSQL: string;
-      /** COUNT of the rows {@link clearSQL} would touch, valid only AFTER the seed has run. */
+      /** NAMES of the entities {@link clearSQL} would disable. Valid only AFTER the seed has run. */
       clearProbeSQL: string;
    } {
       const coreSchema = mj_core_schema();
@@ -7942,13 +7949,35 @@ export class ManageMetadataBase {
          'Details', 'Detail', 'Lines', 'Line', 'Items', 'Item', 'Steps', 'Step',
          'Params', 'Param', 'Mappings', 'Mapping',
       ];
+
+      // WORD boundaries, not raw suffixes. `LIKE '%Lines'` is a case-insensitive endsWith under
+      // the default collation, so it matched `Pipelines`, `Guidelines`, `Timelines`, `Airlines`,
+      // `Deadlines` and `Baselines`; `LIKE '%Logs'` matched `Catalogs`, `Dialogs` and `Blogs`;
+      // `LIKE '%Audit%'` matched `Auditors`. MJ's own metadata was not exempt — `MJ: ML Training
+      // Pipelines` was caught by `'%Lines'`. Those entities were then excluded from the seed and
+      // swept up by the clear (which carries no shape filter, deliberately — see below), so a
+      // guardrail meaning "do not bother seeding these" silently turned search OFF on them.
+      //
+      // Matching the final WORD keeps every intended shape — `Order Details`, `Audit Logs`,
+      // `MJ: AI Agent Runs` — while `Catalogs`, `Pipelines` and `Auditors` fall through to the
+      // seed as ordinary entities.
+      const nameEndsWithWord = (word: string) =>
+         `(e.${this.qi('Name')} = '${word}' OR e.${this.qi('Name')} LIKE '% ${word}')`;
+      const nameContainsWord = (word: string) =>
+         `(e.${this.qi('Name')} = '${word}'`
+         + ` OR e.${this.qi('Name')} LIKE '${word} %'`
+         + ` OR e.${this.qi('Name')} LIKE '% ${word}'`
+         + ` OR e.${this.qi('Name')} LIKE '% ${word} %')`;
+
       const shapeClauses = shapeSuffixes
-         .map(sfx => `e.${this.qi('Name')} LIKE '%${sfx}'`)
-         .concat([`e.${this.qi('Name')} LIKE '%Audit%'`, `e.${this.qi('Name')} LIKE '%Record Change%'`])
+         .map(sfx => nameEndsWithWord(sfx))
+         .concat([nameContainsWord('Audit'), nameContainsWord('Record Change')])
          .join(' OR ');
       const entityShapeFilter = `AND NOT (${shapeClauses})`;
+      // Schema names are configuration, not literals we control: double any apostrophe rather
+      // than interpolating it straight into the statement.
       const schemaFilter = excludeSchemas.length > 0
-         ? `AND e.${this.qi('SchemaName')} NOT IN (${excludeSchemas.map(sc => `'${sc}'`).join(',')})`
+         ? `AND e.${this.qi('SchemaName')} NOT IN (${excludeSchemas.map(sc => `'${sc.replace(/'/g, "''")}'`).join(',')})`
          : '';
 
       // "This entity has nothing a user search can match." Mirrors
@@ -7994,15 +8023,26 @@ export class ManageMetadataBase {
             ) ranked
             WHERE ranked.rn <= ${MAX_SEARCHABLE_FIELDS_PER_ENTITY}`;
 
-      const clearCandidateSQL = `
-            SELECT e.${this.qi('ID')}
-            FROM ${entity} e
-            WHERE e.${this.qi('AllowUserSearchAPI')} = ${yes}
+      // The clear carries NO entity-shape filter, and that is deliberate rather than an
+      // oversight: a log / run / detail table is exactly what should drop out of the search
+      // fan-out, so the shapes the seed refuses to touch are meant to fall through to here.
+      //
+      // That composition is load-bearing and worth stating, because it means the shape list
+      // above does not merely withhold help — it DECIDES which entities get search turned off.
+      // A name wrongly matched there is not "left alone", it is disabled. Which is why the
+      // matching is word-boundary (see nameEndsWithWord) and why widening that list is a
+      // destructive change, not a conservative one.
+      const clearWhere = `e.${this.qi('AllowUserSearchAPI')} = ${yes}
               AND e.${this.qi('AutoUpdateAllowUserSearchAPI')} = ${yes}
               AND e.${this.qi('VirtualEntity')} = ${no}
               ${notFullText}
               ${schemaFilter}
               AND ${noSearchableField}`;
+
+      const clearCandidateSQL = `
+            SELECT e.${this.qi('ID')}
+            FROM ${entity} e
+            WHERE ${clearWhere}`;
 
       const seedSQL = `
          UPDATE ${entityField}
@@ -8022,8 +8062,17 @@ export class ManageMetadataBase {
       const seedProbeSQL = `SELECT COUNT(*) AS ${this.qi('Cnt')} FROM (${seedCandidateSQL}
          ) probe`;
 
-      const clearProbeSQL = `SELECT COUNT(*) AS ${this.qi('Cnt')} FROM (${clearCandidateSQL}
-         ) probe`;
+      // The clear probe returns NAMES, not a count. Disabling search is the destructive half of
+      // this pass and it is effectively one-way: getting it back means flagging a field by hand
+      // AND pinning AutoUpdateAllowUserSearchAPI = 0, or the next run undoes the repair. An
+      // operator told "cleared 14 entities" has no way to learn which 14 without going to the
+      // database; naming them in the run output is the difference between an auditable change
+      // and a silent one. Shares `clearWhere` with the UPDATE so the two cannot disagree.
+      const clearProbeSQL = `
+         SELECT e.${this.qi('Name')} AS ${this.qi('Name')}
+         FROM ${entity} e
+         WHERE ${clearWhere}
+         ORDER BY e.${this.qi('Name')}`;
 
       return { seedSQL, clearSQL, seedProbeSQL, clearProbeSQL };
    }
@@ -8066,16 +8115,27 @@ export class ManageMetadataBase {
          // have nothing searchable, so a clear probe taken before it would count entities the seed
          // was about to repair and emit a statement that then matched nothing — reintroducing the
          // stray capture file this is here to avoid.
-         const clearCount = await this.searchFlagHygieneCandidateCount(pool, clearProbeSQL);
-         if (clearCount > 0) {
-            logStatus(`         Search-flag hygiene: clearing AllowUserSearchAPI on ${clearCount} entity(ies)`);
+         const clearNames = await this.searchFlagHygieneClearCandidates(pool, clearProbeSQL);
+         if (clearNames.length > 0) {
+            // NAME them. This is the destructive half and it is effectively one-way for an
+            // operator who does not know it happened.
+            const shown = clearNames.slice(0, 25).join(', ');
+            const more = clearNames.length > 25 ? `, ... and ${clearNames.length - 25} more` : '';
+            logStatus(`         Search-flag hygiene: turning AllowUserSearchAPI OFF on ${clearNames.length} entity(ies): ${shown}${more}`);
             await this.LogSQLBatchAndExecute(pool, [clearSQL], 'Deterministic search-flag hygiene — clear AllowUserSearchAPI', false);
          }
 
          return true;
       }
       catch (ex) {
-         logError('Error applying search flag hygiene', ex);
+         // A probe that cannot run is NOT the same as "nothing to do", and must not be allowed to
+         // look like it. Before this pass compared first, a malformed statement was appended to
+         // the CodeGen_Run capture by SQLLogging BEFORE it was executed, so a broken pass left a
+         // surviving artifact and reddened the drift gate. Probing first removes that signal: the
+         // throw now happens before anything is written, so without a loud failure here the pass
+         // would silently do nothing while every gate stayed green — the exact silent no-op this
+         // whole change exists to eliminate, one level up in the fixer. The caller fails the run.
+         logError('Search-flag hygiene FAILED — search flags were NOT reconciled on this run', ex);
          return false;
       }
    }
@@ -8095,6 +8155,22 @@ export class ManageMetadataBase {
       }
       const count = Number(Object.values(row)[0]);
       return Number.isFinite(count) ? count : 0;
+   }
+
+   /**
+    * Names of the entities the clear would disable (see {@link applySearchFlagHygiene}).
+    *
+    * Valid only AFTER the seed has run, since seeding changes which entities still have nothing
+    * searchable. Names rather than a count because this is the destructive half: the run output
+    * is the only place an operator can see which entities lost search, and getting it back is
+    * manual.
+    */
+   private async searchFlagHygieneClearCandidates(pool: CodeGenConnection, probeSQL: string): Promise<string[]> {
+      const result = await this.runQuery(pool, probeSQL);
+      const rows = result?.recordset ?? [];
+      return rows
+         .map(r => String(Object.values(r)[0] ?? '').trim())
+         .filter(n => n.length > 0);
    }
 
    /**

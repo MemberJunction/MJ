@@ -58,13 +58,25 @@ function createDummyConnection(): CodeGenConnection {
  * be emitted has to say there is something to do. The seed probe is the one carrying ROW_NUMBER;
  * the clear probe is the other.
  */
-function createProbeConnection(seedCount: number, clearCount: number, calls: string[] = []): CodeGenConnection {
+function createProbeConnection(seedCount: number, clearNames: string[], calls: string[] = []): CodeGenConnection {
    return {
       query: async (sql: string) => {
          const isSeedProbe = /ROW_NUMBER/i.test(sql);
          calls.push(isSeedProbe ? 'probe:seed' : 'probe:clear');
-         return { recordset: [{ Cnt: isSeedProbe ? seedCount : clearCount }] } as unknown as CodeGenQueryResult;
+         // The seed probe counts; the clear probe returns the entity NAMES it would disable.
+         return {
+            recordset: isSeedProbe ? [{ Cnt: seedCount }] : clearNames.map(Name => ({ Name })),
+         } as unknown as CodeGenQueryResult;
       },
+      queryWithParams: async () => ({ recordset: [] } as CodeGenQueryResult),
+      beginTransaction: async () => ({ commit: async () => {}, rollback: async () => {} }),
+   };
+}
+
+/** A connection whose probes throw — the "cannot determine what I would do" case. */
+function createFailingProbeConnection(): CodeGenConnection {
+   return {
+      query: async () => { throw new Error('probe failed: invalid object name'); },
       queryWithParams: async () => ({ recordset: [] } as CodeGenQueryResult),
       beginTransaction: async () => ({ commit: async () => {}, rollback: async () => {} }),
    };
@@ -146,16 +158,34 @@ describe('search-flag hygiene — predicate and entity-shape guardrails', () => 
 
    it('refuses log / audit / run-history entity shapes', () => {
       const sql = flat(mm.testBuild([]).seedSQL);
-      expect(sql).toContain("LIKE '%Logs'");
-      expect(sql).toContain("LIKE '%Audit%'");
-      expect(sql).toContain("LIKE '%Runs'");
+      expect(sql).toContain("LIKE '% Logs'");
+      expect(sql).toContain("LIKE '% Audit'");
+      expect(sql).toContain("LIKE '% Runs'");
    });
 
    it('refuses detail / line-item / step / param child shapes', () => {
       const sql = flat(mm.testBuild([]).seedSQL);
-      for (const sfx of ['%Details', '%Lines', '%Items', '%Steps', '%Params', '%Mappings']) {
-         expect(sql).toContain(`LIKE '${sfx}'`);
+      for (const sfx of ['Details', 'Lines', 'Items', 'Steps', 'Params', 'Mappings']) {
+         expect(sql).toContain(`LIKE '% ${sfx}'`);
       }
+   });
+
+   it('matches the final WORD, never a bare suffix', () => {
+      // `LIKE '%Lines'` is a case-insensitive endsWith under the default collation, so it caught
+      // Pipelines, Guidelines, Timelines, Airlines, Deadlines and Baselines; `'%Logs'` caught
+      // Catalogs, Dialogs and Blogs; `'%Audit%'` caught Auditors. MJ's own `ML Training
+      // Pipelines` was among the casualties. Those entities were then skipped by the seed AND
+      // swept up by the clear, which carries no shape filter — so the guardrail did not merely
+      // withhold help, it turned search OFF on them.
+      const sql = flat(mm.testBuild([]).seedSQL);
+      for (const word of ['Logs', 'Lines', 'Items', 'Runs', 'Details']) {
+         // A space before the word, or the whole name being exactly that word.
+         expect(sql).toContain(`LIKE '% ${word}'`);
+         expect(sql).toContain(`e.[Name] = '${word}'`);
+         // The bare form is what produced the false positives.
+         expect(sql).not.toContain(`LIKE '%${word}'`);
+      }
+      expect(sql).not.toContain("LIKE '%Audit%'");
    });
 
    it('only seeds entities where search is actually enabled', () => {
@@ -222,7 +252,7 @@ describe('search-flag hygiene — scope and ordering', () => {
    it('seeds before it clears, so it never disables an entity it just fixed', async () => {
       // Reversed, the clear would fire against an entity whose name field the seed was about to
       // flag — turning search off on exactly the entities this pass exists to repair.
-      const ok = await mm.testApply(createProbeConnection(3, 2, mm.events), []);
+      const ok = await mm.testApply(createProbeConnection(3, ['Widgets', 'Gizmos'], mm.events), []);
       expect(ok).toBe(true);
       expect(mm.executedSql).toHaveLength(2);
       expect(mm.executedSql[0]).toContain('IncludeInUserSearchAPI');
@@ -260,19 +290,19 @@ describe('search-flag hygiene — compare-first (T20)', () => {
    beforeEach(() => { mm = new TestableManageMetadata(); });
 
    it('captures nothing when every entity is already hygienic', async () => {
-      const ok = await mm.testApply(createProbeConnection(0, 0, mm.events), []);
+      const ok = await mm.testApply(createProbeConnection(0, [], mm.events), []);
       expect(ok).toBe(true);
       expect(mm.executedSql).toHaveLength(0);
    });
 
    it('emits only the seed when only the seed has work', async () => {
-      await mm.testApply(createProbeConnection(2, 0, mm.events), []);
+      await mm.testApply(createProbeConnection(2, [], mm.events), []);
       expect(mm.executedSql).toHaveLength(1);
       expect(mm.executedSql[0]).toContain('[IncludeInUserSearchAPI] = 1');
    });
 
    it('emits only the clear when only the clear has work', async () => {
-      await mm.testApply(createProbeConnection(0, 5, mm.events), []);
+      await mm.testApply(createProbeConnection(0, ['A','B','C','D','E'], mm.events), []);
       expect(mm.executedSql).toHaveLength(1);
       expect(mm.executedSql[0]).toContain('[AllowUserSearchAPI] = 0');
    });
@@ -281,7 +311,7 @@ describe('search-flag hygiene — compare-first (T20)', () => {
       // Seeding changes which entities still have nothing searchable. A clear probe taken before
       // the seed would count entities the seed was about to repair and emit a statement that then
       // matched nothing — putting the stray capture file straight back.
-      await mm.testApply(createProbeConnection(1, 1, mm.events), []);
+      await mm.testApply(createProbeConnection(1, ['Widgets'], mm.events), []);
       expect(mm.events).toEqual(['probe:seed', 'exec:seed', 'probe:clear', 'exec:clear']);
    });
 
@@ -290,5 +320,66 @@ describe('search-flag hygiene — compare-first (T20)', () => {
       const ok = await mm.testApply(createDummyConnection(), []);
       expect(ok).toBe(true);
       expect(mm.executedSql).toHaveLength(0);
+   });
+});
+
+/**
+ * The seed and the clear compose into an outcome neither states on its own.
+ *
+ * The shape filter gates the SEED only; the clear deliberately carries none, because a genuine
+ * log / run / detail table is exactly what should drop out of the search fan-out. The consequence
+ * is that the shape list does not merely withhold help — it DECIDES which entities get search
+ * turned off. A name wrongly matched there is not "left alone", it is disabled. These pin that,
+ * so the next person to widen the list sees it is a destructive change rather than a cautious one.
+ */
+describe('search-flag hygiene — seed/clear composition', () => {
+   let mm: TestableManageMetadata;
+   beforeEach(() => { mm = new TestableManageMetadata(); });
+
+   it('the clear carries no entity-shape filter, on purpose', () => {
+      // If this ever starts failing, the shapes stopped being disabled and the fan-out no-op is
+      // back for log tables — which is the bug the clear exists to fix.
+      const clear = flat(mm.testBuild([]).clearSQL);
+      expect(clear).not.toContain("LIKE '% Logs'");
+      expect(clear).not.toContain("LIKE '% Runs'");
+   });
+
+   it('the clear probe selects names and shares the UPDATE predicate', () => {
+      const { clearSQL, clearProbeSQL } = mm.testBuild([]);
+      const probe = flat(clearProbeSQL);
+      expect(probe).toContain('SELECT e.[Name]');
+      // Every guard on the UPDATE has to be on the probe, or the two disagree about scope.
+      for (const guard of [
+         'e.[AllowUserSearchAPI] = 1',
+         'e.[AutoUpdateAllowUserSearchAPI] = 1',
+         'e.[VirtualEntity] = 0',
+      ]) {
+         expect(probe).toContain(guard);
+         expect(flat(clearSQL)).toContain(guard);
+      }
+   });
+});
+
+describe('search-flag hygiene — the destructive half is auditable and fails loudly', () => {
+   let mm: TestableManageMetadata;
+   beforeEach(() => { mm = new TestableManageMetadata(); });
+
+   it('a probe that throws is NOT reported as a clean run', async () => {
+      // This is the failure mode compare-first introduced. Before probing, SQLLogging appended the
+      // statement to the CodeGen_Run capture BEFORE executing it, so a broken pass left a
+      // surviving artifact and reddened the drift gate. Probing first removes that signal: the
+      // throw happens before anything is written, so a swallowed probe error would look exactly
+      // like "nothing to do" — no SQL, no artifact, every gate green, and search flags silently
+      // never reconciled. The caller turns this false into a failed run.
+      const ok = await mm.testApply(createFailingProbeConnection(), []);
+      expect(ok).toBe(false);
+      expect(mm.executedSql).toHaveLength(0);
+   });
+
+   it('a probe failure is distinguishable from having no work', async () => {
+      const failed = await mm.testApply(createFailingProbeConnection(), []);
+      const clean = await new TestableManageMetadata().testApply(createProbeConnection(0, []), []);
+      expect(failed).toBe(false);
+      expect(clean).toBe(true);
    });
 });
