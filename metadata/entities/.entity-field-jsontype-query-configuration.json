@@ -23,6 +23,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Queries&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-09-21T02:45:38.317Z",
+            "checksum": "34c5099fb6f988106cc29a103ac5c25b7c52ef0246fc02449f4763aca61d4b34"
           }
         }
       ]

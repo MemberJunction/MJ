@@ -17,7 +17,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import type { ModelingPlanSpec, TrustGrade } from '@memberjunction/predictive-studio-core';
+import type { ModelingPlanSpec, TrustGrade, FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
 export type { MLLeaderboardEntryPayload };
@@ -34,6 +34,8 @@ export interface PredictiveStudioBuildOutcome {
   heldReason: string | null;
   /** A clean error message when the build failed; else null. */
   errorMessage: string | null;
+  /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
+  warnings?: FeatureStepWarning[];
 }
 
 
@@ -86,14 +88,21 @@ export function summarizeBuildResult(result: BuildPredictionResult): PredictiveS
     published: result.published,
     heldReason: result.heldReason,
     errorMessage: result.errorMessage,
+    warnings: result.warnings && result.warnings.length > 0 ? result.warnings : undefined,
   };
 }
 
 /** A plain, user-facing sentence describing what the build did (for the agent's reasoning/message). */
 export function buildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
-  if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.`;
-  if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.`;
-  return `I built and trained the prediction, but I'm holding it back: ${o.heldReason ?? 'it needs review before it can be published.'}`;
+  const warningText = o.warnings && o.warnings.length > 0
+    ? ` Note: ${o.warnings.length} candidate feature(s) could not be mapped to pipeline steps (${o.warnings.map(w => `${w.FeatureName}: ${w.Reason}`).join('; ')}).`
+    : '';
+  if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
+  if (o.published) return `Done — I built and published your prediction (trust: ${o.trustGrade}). It's now in your Predictions.${warningText}`;
+  const heldMessage = o.heldReason
+    ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
+    : 'it needs review before it can be published.';
+  return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${warningText}`;
 }
 
 /** Parse raw feature importance off the trained MLModel entity. */
