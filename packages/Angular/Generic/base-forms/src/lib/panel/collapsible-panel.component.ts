@@ -170,7 +170,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
       this._hidden = value;
       // Recompute visibility if content has initialized (FieldComponents present).
       if (this.FieldComponents) {
-        this.UpdateVisibilityAndHighlighting();
+        this.updateVisibilityAndHighlighting();
       }
     }
   }
@@ -395,7 +395,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     // hosted field binds its inputs after content init, and a section evaluated before that
     // would otherwise stay hidden (or visible) on the pre-binding answer.
     if (this.FieldComponents) {
-      this.UpdateVisibilityAndHighlighting();
+      this.updateVisibilityAndHighlighting();
     }
     this.cdr.markForCheck();
     this.indicators?.NotifyChanged();
@@ -571,20 +571,20 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   ngOnInit(): void {
     this.DisplayName = this.SectionName;
     this.chrome?.Changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      this.UpdateVisibilityAndHighlighting();
+      this.updateVisibilityAndHighlighting();
     });
     this.registerIndicatorSource();
   }
 
   ngAfterContentInit(): void {
-    this.UpdateFieldNames();
-    this.SubscribeToFieldNavigateEvents();
+    this.updateFieldNames();
+    this.subscribeToFieldNavigateEvents();
     this.FieldComponents.changes.subscribe(() => {
       // Drop the field memo before anything below reads it: a replaced QueryList with the same
       // length would otherwise be served from the previous result.
       this.hostedFieldsVersion.update((v) => v + 1);
-      this.UpdateFieldNames();
-      this.SubscribeToFieldNavigateEvents();
+      this.updateFieldNames();
+      this.subscribeToFieldNavigateEvents();
       // The set of fields changed, so the section's counts (and which errors it
       // claims) may have too — let the rail re-read.
       this.indicators?.NotifyChanged();
@@ -599,7 +599,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
       this.registerIndicatorSource(changes['SectionKey'].previousValue as string | undefined);
     }
     if (changes['SectionName'] || changes['FormContext']) {
-      this.UpdateVisibilityAndHighlighting();
+      this.updateVisibilityAndHighlighting();
     }
     if (changes['FormContext'] && this.FieldComponents) {
       this.FieldComponents.forEach(field => {
@@ -609,7 +609,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   }
 
   ngAfterViewInit(): void {
-    this.SetupResizeObserver();
+    this.setupResizeObserver();
   }
 
   ngOnDestroy(): void {
@@ -690,7 +690,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
         SourceSectionKey: sourceSectionKey,
         TargetSectionKey: this.SectionKey
       });
-      this.ReorderSections(sourceSectionKey, this.SectionKey);
+      this.reorderSections(sourceSectionKey, this.SectionKey);
     }
   }
 
@@ -711,7 +711,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   // ---- Private Methods ----
 
-  private ReorderSections(sourceSectionKey: string, targetSectionKey: string): void {
+  private reorderSections(sourceSectionKey: string, targetSectionKey: string): void {
     const formRef = this.Form as {
       getSectionOrder?: () => string[];
       setSectionOrder?: (order: string[]) => void;
@@ -763,10 +763,10 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return !this.chrome.IsFirstClassSectionVisible(this.SectionKey);
   }
 
-  private UpdateFieldNames(): void {
+  private updateFieldNames(): void {
     if (this.FieldComponents) {
-      this.RefreshFieldNames();
-      this.UpdateVisibilityAndHighlighting();
+      this.refreshFieldNames();
+      this.updateVisibilityAndHighlighting();
     }
   }
 
@@ -776,7 +776,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * own view's first pass), so search also reads names live through {@link liveFieldNames}
    * rather than relying on this cache alone.
    */
-  private RefreshFieldNames(): void {
+  private refreshFieldNames(): void {
     const names: string[] = [];
     for (const field of this.allFields()) {
       if (field.DisplayName) {
@@ -792,7 +792,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * value edits so the section indicators (and the rail reading them) refresh
    * on the same tick as the keystroke rather than on the container's next poll.
    */
-  private SubscribeToFieldNavigateEvents(): void {
+  private subscribeToFieldNavigateEvents(): void {
     this.fieldNavReset$.next(); // tear down previous subscriptions
     this.FieldComponents.forEach(field => {
       field.Navigate.pipe(takeUntil(this.fieldNavReset$)).subscribe((event: FormNavigationEvent) => {
@@ -812,7 +812,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * Sets up a ResizeObserver on the panel content div for related-entity panels.
    * When the user drags the CSS resize handle, we persist the new height.
    */
-  private SetupResizeObserver(): void {
+  private setupResizeObserver(): void {
     if (this.Variant !== 'related-entity' || !this.panelContentRef) return;
 
     const el = this.panelContentRef.nativeElement;
@@ -836,7 +836,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
         if (!entry) return;
         const newHeight = Math.round(entry.contentRect.height);
         if (newHeight < 120) return;
-        this.DebouncePersistHeight(newHeight);
+        this.debouncePersistHeight(newHeight);
       });
       this.resizeObserver.observe(el);
     });
@@ -845,7 +845,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   /**
    * Debounces height persistence so we don't write to DB on every resize frame.
    */
-  private DebouncePersistHeight(height: number): void {
+  private debouncePersistHeight(height: number): void {
     if (this.resizeDebounceTimer) {
       clearTimeout(this.resizeDebounceTimer);
     }
@@ -864,7 +864,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * sections field security has nothing to say about. "No fields" and "no readable fields" are
    * different states and only the second one should hide the section.
    */
-  private get AllProjectedFieldsDenied(): boolean {
+  private get allProjectedFieldsDenied(): boolean {
     const fields = this.allFields();
     if (fields.length === 0) {
       return false;
@@ -872,7 +872,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return fields.every(f => !f.IsFieldReadableByUser);
   }
 
-  private UpdateVisibilityAndHighlighting(): void {
+  private updateVisibilityAndHighlighting(): void {
     // Hard hide takes precedence over search state. Driven by an explicit
     // `Hidden` input OR the form config's section-visibility rules carried on
     // FormContext (which also reach slot-injected BaseFormPanels, since every
@@ -887,7 +887,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     // A section whose every field is denied by field-level security renders as a heading over
     // nothing — the fields hide themselves individually, leaving an empty card that reads like a
     // broken screen rather than a permissions boundary. Hide the section instead.
-    if (this.AllProjectedFieldsDenied) {
+    if (this.allProjectedFieldsDenied) {
       this.IsVisible = false;
       this.DisplayName = EscapeHTML(this.SectionName);
       this.cdr.markForCheck();
