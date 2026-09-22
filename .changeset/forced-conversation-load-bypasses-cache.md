@@ -1,5 +1,5 @@
 ---
-"@memberjunction/core-entities": minor
+"@memberjunction/core-entities": patch
 ---
 
 `ConversationEngine.LoadConversations(…, forceRefresh: true)` now passes `BypassCache: true` on its RunView, so a forced reload actually reaches the server.

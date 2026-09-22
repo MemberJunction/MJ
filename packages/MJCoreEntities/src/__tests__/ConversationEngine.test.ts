@@ -363,6 +363,31 @@ describe('ConversationEngine', () => {
             await engine.LoadConversations('env-1', contextUser, true);
             expect(engine.Conversations).toHaveLength(0);
         });
+
+        // The forced path must REACH THE SERVER, which the assertion above cannot see: an identical
+        // RunView inside the provider's 5s dedup-linger window returns the previous result and
+        // issues no request, so a caller forcing a reload because the server-side answer changed —
+        // a request header or session scope the query text does not carry — gets the stale list back
+        // and nothing surfaces it. The failure is silent: the load resolves successfully.
+        it('should send BypassCache on a forced reload, so it is not served from the dedup cache', async () => {
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await engine.LoadConversations('env-1', contextUser, true);
+
+            // Selected by entity, not position: LoadConversations issues more than one RunView and
+            // the conversations read is not the last of them.
+            const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Conversations').at(-1)!;
+            expect(params).toBeDefined();
+            expect(params['BypassCache']).toBe(true);
+        });
+
+        it('should NOT send BypassCache on an ordinary load, so dedup still does its job', async () => {
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Conversations').at(-1)!;
+            expect(params).toBeDefined();
+            expect(params['BypassCache']).toBe(false);
+        });
     });
 
     // ========================================================================
