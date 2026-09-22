@@ -111,8 +111,8 @@
             "ID": "7FB4D724-6E63-47F0-B059-9A7C2754299A"
           },
           "sync": {
-            "lastModified": "2026-03-26T22:05:20.166Z",
-            "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+            "lastModified": "2026-09-21T02:45:36.694Z",
+            "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
           }
         },
         {
@@ -125,7 +125,8 @@
             "ID": "86C17097-6AE5-49AA-85BD-219475209C5F"
           },
           "deleteRecord": {
-            "delete": true
+            "delete": true,
+            "deletedAt": "2026-09-21T02:45:39.742Z"
           }
         }
       ]
@@ -134,8 +135,8 @@
       "ID": "55399C30-C59B-47D2-A856-640DA89C46E4"
     },
     "sync": {
-      "lastModified": "2026-09-12T15:03:56.944Z",
-      "checksum": "7ffff15e6c88985d97e6a2dbf3b433e392134f100b9e774aaa5d89659b77960c"
+      "lastModified": "2026-09-21T02:45:36.603Z",
+      "checksum": "0a13e69cea6c24df71a41547efa9fa82df5958f32940ce184f6cd06f8b49d716"
     }
   },
   {
@@ -265,8 +266,8 @@
             "ID": "8E73256D-4189-4B55-AF76-2C6DF7C2C832"
           },
           "sync": {
-            "lastModified": "2026-03-26T22:05:20.309Z",
-            "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+            "lastModified": "2026-09-21T02:45:36.709Z",
+            "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
           }
         },
         {
@@ -279,7 +280,8 @@
             "ID": "EE1105BD-90BC-4809-9835-1FA7A09F3CFA"
           },
           "deleteRecord": {
-            "delete": true
+            "delete": true,
+            "deletedAt": "2026-09-21T02:45:39.755Z"
           }
         }
       ]
@@ -288,8 +290,8 @@
       "ID": "2E081955-B2FD-4E13-81DF-5DC7C59126BE"
     },
     "sync": {
-      "lastModified": "2026-09-12T15:03:56.938Z",
-      "checksum": "acf0a1ec635a19a6a622eb6e5f4e8ad20dc634a33fcfcd1830eb81cb8d7f03d5"
+      "lastModified": "2026-09-21T02:45:36.635Z",
+      "checksum": "e70fc644256140be0612526db3cb97ba7fcadfd16903bd18b62d99bf5f163aa0"
     }
   },
   {
@@ -354,8 +356,8 @@
             "ID": "DBA4B3D9-19A3-4ECE-9F35-BC1B127CD045"
           },
           "sync": {
-            "lastModified": "2026-08-11T22:50:43.478Z",
-            "checksum": "eae05d20534f24b721747aac535609d74f62208f97a939a9645ea4f2656653ea"
+            "lastModified": "2026-09-21T02:45:36.744Z",
+            "checksum": "c2596673bd7cb83715702788b2acfac2bf8106b8aaeac93aae250d8d651ccebe"
           }
         },
         {
@@ -451,8 +453,8 @@
             "ID": "F28499A1-0B28-4AE5-B695-7F4B48C38C20"
           },
           "sync": {
-            "lastModified": "2026-06-26T21:32:06.361Z",
-            "checksum": "b3d169e312c95ecb0d3791eb3fdfa0f661ead1f3e3a7b489fb67dd72f9afdc31"
+            "lastModified": "2026-09-21T02:45:36.762Z",
+            "checksum": "ad2ba7437910d3ff4dfc54fd737ac668f9780270a9ff317396375d2fd6a9fedd"
           }
         },
         {
@@ -585,8 +587,8 @@
             "ID": "1065BCF3-54F1-46B8-AFA8-4FA2E05D9371"
           },
           "sync": {
-            "lastModified": "2026-03-26T22:05:20.506Z",
-            "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+            "lastModified": "2026-09-21T02:45:36.777Z",
+            "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
           }
         },
         {
@@ -599,7 +601,8 @@
             "ID": "990A4AE4-68EC-4512-ADE8-5870D24ABB03"
           },
           "deleteRecord": {
-            "delete": true
+            "delete": true,
+            "deletedAt": "2026-09-21T02:45:39.768Z"
           }
         }
       ]
@@ -608,8 +611,8 @@
       "ID": "9B89A9E8-2BBB-46DE-A51A-A548FA9796C3"
     },
     "sync": {
-      "lastModified": "2026-09-12T15:03:56.943Z",
-      "checksum": "7012e0dbf788340399978a6703f3af4255cf4469a152471e5ccd889d4531230e"
+      "lastModified": "2026-09-21T02:45:36.672Z",
+      "checksum": "53f4531a581f93acc666ca4a07fcb18994c3b1da4b1c401ce56524fc0ee7050b"
     }
   },
   {
@@ -709,8 +712,8 @@
                   "ID": "712792CB-3512-4323-BDAB-A8D98AA3CA2C"
                 },
                 "sync": {
-                  "lastModified": "2026-03-26T22:05:20.648Z",
-                  "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                  "lastModified": "2026-09-21T02:45:36.801Z",
+                  "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
                 }
               },
               {
@@ -793,7 +796,8 @@
                   "ID": "67C18238-9098-4739-B876-66752DC62A91"
                 },
                 "deleteRecord": {
-                  "delete": true
+                  "delete": true,
+                  "deletedAt": "2026-09-21T02:45:39.778Z"
                 }
               }
             ]
@@ -879,8 +883,8 @@
                   "ID": "F0AAE94A-FAC2-43B1-B1C7-A8AB02285E94"
                 },
                 "sync": {
-                  "lastModified": "2026-03-26T22:05:20.822Z",
-                  "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                  "lastModified": "2026-09-21T02:45:36.816Z",
+                  "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
                 }
               },
               {
@@ -907,7 +911,8 @@
                   "ID": "4C091053-1930-4699-84DF-05EAFD4A1611"
                 },
                 "deleteRecord": {
-                  "delete": true
+                  "delete": true,
+                  "deletedAt": "2026-09-21T02:45:39.791Z"
                 }
               }
             ]
@@ -1007,8 +1012,8 @@
                   "ID": "DC2BCD82-ED26-4127-BC3D-6BA5D981F388"
                 },
                 "sync": {
-                  "lastModified": "2026-03-26T22:05:20.827Z",
-                  "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                  "lastModified": "2026-09-21T02:45:36.830Z",
+                  "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
                 }
               },
               {
@@ -1035,7 +1040,8 @@
                   "ID": "778700FB-C6C6-44FA-B078-7ABB876DBEBE"
                 },
                 "deleteRecord": {
-                  "delete": true
+                  "delete": true,
+                  "deletedAt": "2026-09-21T02:45:39.803Z"
                 }
               }
             ]
