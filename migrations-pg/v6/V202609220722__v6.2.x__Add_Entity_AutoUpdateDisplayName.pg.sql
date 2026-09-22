@@ -18,7 +18,7 @@ SET standard_conforming_strings = on;
 -- =============================================================================
 --
 -- See the SQL Server counterpart
--- (migrations/v6/V202609210930__v6.2.x__Add_Entity_AutoUpdateDisplayName.sql)
+-- (migrations/v6/V202609220722__v6.2.x__Add_Entity_AutoUpdateDisplayName.sql)
 -- for the full rationale. In short: EntityField has carried this flag since
 -- v2.122 and CodeGen honours it when writing LLM-generated field display names;
 -- Entity has no equivalent, because nothing ever auto-updated an entity's
