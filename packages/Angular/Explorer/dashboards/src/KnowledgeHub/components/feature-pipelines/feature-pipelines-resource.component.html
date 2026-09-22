@@ -102,8 +102,8 @@
                   <i class="fa-solid fa-play"></i> Run
                 }
               </button>
-              <button mjButton variant="secondary" size="sm" (click)="OnEditPipeline(pipeline)">
-                <i class="fa-solid fa-sliders"></i> Edit
+              <button mjButton variant="secondary" size="sm" (click)="OnViewPipeline(pipeline)">
+                <i class="fa-solid fa-eye"></i> View
               </button>
             </div>
           </div>
@@ -112,13 +112,3 @@
     }
   </mj-page-body>
 </mj-page-layout>
-
-@if (ShowEditor) {
-  <mj-dialog [Visible]="ShowEditor" Title="Feature Pipeline" [Width]="900" (Close)="OnEditorCancelled()">
-    <mj-record-process-editor
-      [RecordProcessID]="EditingPipelineID"
-      (Saved)="OnEditorSaved($event)"
-      (Cancelled)="OnEditorCancelled()">
-    </mj-record-process-editor>
-  </mj-dialog>
-}
