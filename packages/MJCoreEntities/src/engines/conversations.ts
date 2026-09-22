@@ -659,7 +659,14 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 ExtraFilter: filter,
                 OrderBy: 'IsPinned DESC, __mj_UpdatedAt DESC',
                 MaxRows: 1000,
-                ResultType: 'entity_object'
+                ResultType: 'entity_object',
+                // A FORCED reload must reach the server. Without this, an identical
+                // RunView within the provider's dedup-linger window returns the
+                // previous result — so a caller forcing a reload because the
+                // server-side answer changed (a request header or session state
+                // the query text does not carry) gets the stale list back and no
+                // request goes out.
+                BypassCache: forceRefresh
             },
             contextUser
         );
