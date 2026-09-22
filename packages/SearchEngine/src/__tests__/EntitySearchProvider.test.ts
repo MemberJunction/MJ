@@ -738,6 +738,131 @@ describe('EntitySearchProvider', () => {
 });
 
 /**
+ * Fan-out contract — what the entity fan-out must be true of, regardless of HOW it runs.
+ *
+ * The fan-out is `Promise.all(scoped.map(...))` over every scoped entity. On a tenant with ~117
+ * searchable entities that is ~117 simultaneous `LIKE '%term%'` RunViews against one connection
+ * pool. They do not error — they QUEUE behind each other, each then exceeds its own
+ * `PerEntityTimeoutMS` budget, and the timeout wrapper resolves each to `[]`. The user sees a
+ * search that quietly returns nothing while every individual piece of the system reports success.
+ *
+ * BOUNDING that fan-out, and making a timed-out entity distinguishable from one with no matches,
+ * are implemented on the sibling branch `mjc/explorer-stops-misreporting` (a worker pool plus an
+ * `Incomplete` marker on each per-entity result). The pin for the bound itself lives with that
+ * implementation, because the bound is the only thing it can assert — there is no
+ * implementation-agnostic way to state "at most N at once" without naming N.
+ *
+ * What CAN be stated independently of the scheduling strategy is everything the fan-out must not
+ * break while it is being bounded, and that is what this block pins: every scoped entity is
+ * actually searched, and the results come back in ENTITY order rather than COMPLETION order. The
+ * relevance sort is stable, so insertion order is what breaks ties between equally-scored hits —
+ * any rescheduling that appends results as they settle would silently reorder equal-scoring hits.
+ * These tests pass against the current `Promise.all` and against a bounded worker pool alike; they
+ * were run unmodified against the sibling branch's pool implementation and pass there too.
+ */
+describe('EntitySearchProvider fan-out concurrency', () => {
+    const ENTITY_COUNT = 40;
+
+    let provider: EntitySearchProvider;
+    let contextUser: UserInfo;
+
+    /** Peak simultaneous RunView calls observed, and the order calls were issued in. */
+    let inFlight: number;
+    let peakInFlight: number;
+    let callOrder: string[];
+
+    /** Pushes `count` identically-shaped searchable entities named Entity00..Entity(count-1). */
+    function pushEntities(count: number): string[] {
+        const names: string[] = [];
+        for (let i = 0; i < count; i++) {
+            const name = `Entity${String(i).padStart(2, '0')}`;
+            names.push(name);
+            mockEntities.push({
+                Name: name,
+                AllowUserSearchAPI: true,
+                Fields: [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Name' },
+            });
+        }
+        return names;
+    }
+
+    beforeEach(() => {
+        provider = new EntitySearchProvider();
+        contextUser = createMockUser();
+        mockEntities.length = 0;
+        mockRunViewFn.mockReset();
+        inFlight = 0;
+        peakInFlight = 0;
+        callOrder = [];
+
+        // Every entity returns exactly ONE hit whose Name contains the query, so every hit scores
+        // identically (name-field match on the only searchable field). With all scores equal the
+        // relevance sort cannot reorder anything, and the final order IS the fan-out order — which
+        // is precisely what a rescheduled fan-out would corrupt.
+        //
+        // The delays deliberately DESCEND with the entity index, so later entities settle first.
+        // An implementation that appended results as they completed — rather than by position —
+        // would therefore produce a visibly different order. A fake that settled in request order
+        // would have pinned nothing.
+        mockRunViewFn.mockImplementation(async (params: { EntityName: string }) => {
+            const entityName = params.EntityName;
+            callOrder.push(entityName);
+            inFlight++;
+            peakInFlight = Math.max(peakInFlight, inFlight);
+            const index = Number(entityName.replace('Entity', ''));
+            await new Promise(resolve => setTimeout(resolve, (ENTITY_COUNT - index) % 5));
+            inFlight--;
+            return {
+                Success: true,
+                Results: [{ ID: `${entityName}-rec`, Name: 'Test Widget' }],
+            };
+        });
+    });
+
+    it('searches every scoped entity — none is dropped from the fan-out', async () => {
+        const names = pushEntities(ENTITY_COUNT);
+
+        const results = await provider.Search('Widget', 100, undefined, contextUser);
+
+        expect(mockRunViewFn).toHaveBeenCalledTimes(ENTITY_COUNT);
+        expect([...callOrder].sort()).toEqual([...names].sort());
+        expect(results).toHaveLength(ENTITY_COUNT);
+    });
+
+    it('returns results in ENTITY order, not completion order', async () => {
+        const names = pushEntities(ENTITY_COUNT);
+
+        const results = await provider.Search('Widget', 100, undefined, contextUser);
+
+        expect(results.map(r => r.EntityName)).toEqual(names);
+        expect(new Set(results.map(r => r.Score)).size, 'the fixture holds scores equal on purpose').toBe(1);
+    });
+
+    it('runs a small fan-out genuinely in parallel, still in entity order', async () => {
+        const names = pushEntities(5);
+
+        const results = await provider.Search('Widget', 100, undefined, contextUser);
+
+        // Five entities is below any plausible concurrency bound, so all five overlap either way.
+        // A fully serialized fan-out would show a peak of 1 and fail here.
+        expect(peakInFlight).toBe(5);
+        expect(results.map(r => r.EntityName)).toEqual(names);
+    });
+
+    it('leaves no entity unsearched at the tail of the fan-out', async () => {
+        // 16 entities: an exact multiple of the bound the sibling branch applies, which is where a
+        // batching loop with an off-by-one bound would silently drop the final group.
+        const names = pushEntities(16);
+
+        const results = await provider.Search('Widget', 100, undefined, contextUser);
+
+        expect(mockRunViewFn).toHaveBeenCalledTimes(16);
+        expect(results.map(r => r.EntityName)).toEqual(names);
+    });
+});
+
+/**
  * Restore an env var to a prior value, deleting it when it was previously unset.
  */
 function restoreEnv(key: string, priorValue: string | undefined): void {
