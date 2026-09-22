@@ -19144,6 +19144,16 @@ export const MJEntityFieldSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJEntityFieldEntity_IEntityFieldConfiguration
         * * Description: Optional JSON configuration bag defining field-level policies and capabilities (shape = IEntityFieldConfiguration). Includes Hierarchy options (IsHierarchy, MaxDepth) to explicitly declare recursive tree hierarchies.`),
+    RelatedEntityFilter: z.string().nullable().describe(`
+        * * Field Name: RelatedEntityFilter
+        * * Display Name: Related Entity Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional SQL WHERE fragment applied to every lookup on this foreign key (e.g. Status = 'Active'), AND-ed with whatever the user types, on both the browse list and the search path. Lets a picker be scoped from metadata rather than from every form template that renders the field. Authored by hand — CodeGen never derives or overwrites it. NULL means no filter, which is the pre-feature behaviour.`),
+    RelatedEntityOrderBy: z.string().nullable().describe(`
+        * * Field Name: RelatedEntityOrderBy
+        * * Display Name: Related Entity Order By
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional ORDER BY fragment for the empty-query browse list on this foreign key, e.g. [Name] or [LastActivityDate] DESC. Does not affect the typed-query path, which is ordered by search relevance. Authored by hand — CodeGen never derives or overwrites it. NULL means order by the related entity's name field.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -87901,6 +87911,32 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
         this.Configuration = raw;
         this._ConfigurationObject_cached = value;
         this._ConfigurationObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: RelatedEntityFilter
+    * * Display Name: Related Entity Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional SQL WHERE fragment applied to every lookup on this foreign key (e.g. Status = 'Active'), AND-ed with whatever the user types, on both the browse list and the search path. Lets a picker be scoped from metadata rather than from every form template that renders the field. Authored by hand — CodeGen never derives or overwrites it. NULL means no filter, which is the pre-feature behaviour.
+    */
+    get RelatedEntityFilter(): string | null {
+        return this.Get('RelatedEntityFilter');
+    }
+    set RelatedEntityFilter(value: string | null) {
+        this.Set('RelatedEntityFilter', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityOrderBy
+    * * Display Name: Related Entity Order By
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional ORDER BY fragment for the empty-query browse list on this foreign key, e.g. [Name] or [LastActivityDate] DESC. Does not affect the typed-query path, which is ordered by search relevance. Authored by hand — CodeGen never derives or overwrites it. NULL means order by the related entity's name field.
+    */
+    get RelatedEntityOrderBy(): string | null {
+        return this.Get('RelatedEntityOrderBy');
+    }
+    set RelatedEntityOrderBy(value: string | null) {
+        this.Set('RelatedEntityOrderBy', value);
     }
 
     /**
