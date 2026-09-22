@@ -1,0 +1,239 @@
+/* ==========================================================================
+   Record Process / Feature Pipeline Custom Form Styles
+   Uses standard MemberJunction design tokens for full light & dark mode support.
+   ========================================================================== */
+
+.rpf-overview-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 4px 0 12px 0;
+}
+
+/* Hero Header Card */
+.rpf-hero-card {
+    background: var(--mj-bg-surface-elevated, #ffffff);
+    border: 1px solid var(--mj-border-default, #e2e8f0);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.rpf-hero-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+}
+
+.rpf-hero-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+    color: var(--mj-brand-primary, #0284c7);
+    font-size: 22px;
+    flex-shrink: 0;
+}
+
+.rpf-hero-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.rpf-hero-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+
+.rpf-hero-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--mj-text-primary, #0f172a);
+    line-height: 1.3;
+}
+
+.rpf-hero-desc {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: var(--mj-text-secondary, #64748b);
+    line-height: 1.5;
+}
+
+.rpf-hero-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.rpf-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: var(--mj-bg-surface-sunken, #f8fafc);
+    border: 1px solid var(--mj-border-subtle, #e2e8f0);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mj-text-secondary, #475569);
+}
+
+.rpf-pill-feature {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+    color: var(--mj-brand-primary);
+    font-weight: 600;
+}
+
+/* Status Badges */
+.rpf-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.rpf-badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+.rpf-status-active {
+    background: var(--mj-status-success-bg, color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface)));
+    color: var(--mj-status-success-text, var(--mj-status-success));
+    border: 1px solid var(--mj-status-success-border, color-mix(in srgb, var(--mj-status-success) 30%, transparent));
+}
+.rpf-status-active .rpf-badge-dot {
+    background: var(--mj-status-success);
+}
+
+.rpf-status-draft {
+    background: var(--mj-status-warning-bg, color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface)));
+    color: var(--mj-status-warning-text, var(--mj-status-warning));
+    border: 1px solid var(--mj-status-warning-border, color-mix(in srgb, var(--mj-status-warning) 30%, transparent));
+}
+.rpf-status-draft .rpf-badge-dot {
+    background: var(--mj-status-warning);
+}
+
+.rpf-status-disabled {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    border: 1px solid var(--mj-border-subtle);
+}
+.rpf-status-disabled .rpf-badge-dot {
+    background: var(--mj-text-muted);
+}
+
+.rpf-status-default {
+    background: var(--mj-bg-surface-sunken, #f1f5f9);
+    color: var(--mj-text-secondary, #64748b);
+    border: 1px solid var(--mj-border-subtle, #cbd5e1);
+}
+.rpf-status-default .rpf-badge-dot {
+    background: var(--mj-text-secondary, #64748b);
+}
+
+/* KPI Grid */
+.rpf-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.rpf-kpi-card {
+    background: var(--mj-bg-surface-elevated, #ffffff);
+    border: 1px solid var(--mj-border-default, #e2e8f0);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.rpf-kpi-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--mj-text-muted, #94a3b8);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.rpf-kpi-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--mj-text-primary, #0f172a);
+}
+
+.rpf-kpi-sub {
+    font-size: 12px;
+    color: var(--mj-text-secondary, #64748b);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rpf-kpi-sub code {
+    font-family: var(--mj-font-mono, monospace);
+    font-size: 11px;
+    padding: 1px 4px;
+    background: var(--mj-bg-surface-sunken, #f1f5f9);
+    border-radius: 4px;
+}
+
+/* Wrappers for child components */
+.rpf-pipeline-builder-wrap {
+    padding: 8px 0;
+}
+
+.rpf-editor-wrap {
+    padding: 8px 0;
+}
+
+.rpf-history-wrap {
+    padding: 8px 0;
+}
+
+.rpf-notice-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: var(--mj-bg-surface-sunken, #f8fafc);
+    border: 1px solid var(--mj-border-subtle, #e2e8f0);
+    border-radius: 8px;
+    color: var(--mj-text-secondary, #64748b);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.rpf-notice-card i {
+    font-size: 16px;
+    color: var(--mj-brand-primary, #0284c7);
+    margin-top: 2px;
+}
+
+.rpf-notice-card strong {
+    display: block;
+    color: var(--mj-text-primary, #0f172a);
+    margin-bottom: 2px;
+}
+
+.rpf-notice-card p {
+    margin: 0;
+}

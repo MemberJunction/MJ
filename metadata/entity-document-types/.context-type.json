@@ -1,0 +1,11 @@
+[
+  {
+    "fields": {
+      "Name": "Context",
+      "Description": "Entity Document Type used for rendering dynamic context (e.g. for Feature Pipelines or AI prompts) without requiring vector database indexing or vector model configuration."
+    },
+    "primaryKey": {
+      "ID": "1D4CD3ED-4A5E-457B-ADE0-3606E34A81B4"
+    }
+  }
+]

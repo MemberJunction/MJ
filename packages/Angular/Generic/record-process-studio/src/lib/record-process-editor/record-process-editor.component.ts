@@ -15,6 +15,8 @@ import { SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { FieldRulesBuilderComponent, EntityActionUXHostComponent, type EntityActionUXContext, type EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { type DataFeatureSpec } from '@memberjunction/feature-pipelines';
+import { FeaturePipelineBuilderComponent } from '../feature-pipeline-builder/feature-pipeline-builder.component';
 
 type ScopeKind = 'Filter' | 'View' | 'List';
 
@@ -22,7 +24,7 @@ type ScopeKind = 'Filter' | 'View' | 'List';
     selector: 'mj-record-process-editor',
     standalone: true,
     changeDetection: ChangeDetectionStrategy.OnPush,
-    imports: [FieldRulesBuilderComponent, EntityActionUXHostComponent, MJButtonDirective],
+    imports: [FieldRulesBuilderComponent, FeaturePipelineBuilderComponent, EntityActionUXHostComponent, MJButtonDirective],
     template: `
         @if (!Record) {
             <div class="rpe-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading…</div>
@@ -59,6 +61,7 @@ type ScopeKind = 'Filter' | 'View' | 'List';
                         <div class="field"><label>Work type</label>
                             <select class="mj-input" [value]="Record.WorkType || 'FieldRules'" (change)="set('WorkType', $event)">
                                 <option value="FieldRules">Field Rules</option>
+                                <option value="Infer">Feature Pipeline (Infer)</option>
                             </select></div>
                     </div>
                     @if (Record.ScopeType === 'Filter') {
@@ -81,6 +84,23 @@ type ScopeKind = 'Filter' | 'View' | 'List';
                                 (ValueChange)="onRulesChange($event)"
                                 (ValidChange)="RulesValid = $event">
                             </mj-field-rules-builder>
+                        }
+                    </section>
+                }
+
+                <!-- FEATURE PIPELINE (INFER) -->
+                @if (Record.WorkType === 'Infer') {
+                    <section class="rpe-sec">
+                        <div class="rpe-sec-h"><span class="num">3</span><h3>Feature Pipeline Configuration</h3>
+                            @if (!SelectedEntityName) { <span class="muted rpe-h-note">choose an entity first</span> }
+                        </div>
+                        @if (SelectedEntityName) {
+                            <mj-feature-pipeline-builder
+                                [Record]="Record"
+                                [EntityID]="Record.EntityID"
+                                (ValidChange)="FeaturePipelineValid = $event"
+                                (SpecChange)="onFeaturePipelineSpecChange($event)">
+                            </mj-feature-pipeline-builder>
                         }
                     </section>
                 }
@@ -136,6 +156,10 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
     @Input() RecordProcessID: string | null = null;
     /** Default EntityID for a brand-new process (e.g. the grid the user came from). */
     @Input() DefaultEntityID: string | null = null;
+    /** Default WorkType for a brand-new process (e.g. 'Infer' when opened from Feature Pipelines). */
+    @Input() DefaultWorkType: MJRecordProcessEntity['WorkType'] | null = null;
+    /** Default CategoryID for a brand-new process (e.g. Feature Pipeline category ID). */
+    @Input() DefaultCategoryID: string | null = null;
     /** Show the built-in Save / Preview / Cancel toolbar. Set false when an outer form owns Save. */
     @Input() ShowToolbar = true;
 
@@ -148,12 +172,23 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
     public SelectedEntityName = '';
     public RuleSet: FieldRuleSet = { Rules: [] };
     public RulesValid = true;
+    public FeaturePipelineValid = true;
+    public FeaturePipelineSpec: DataFeatureSpec | null = null;
     public Saving = false;
     public ErrorMessage = '';
     public PreviewDriver: { DriverClass: string; Context: EntityActionUXContext } | null = null;
 
-    get CanSave(): boolean { return !!this.Record?.Name && !!this.Record?.EntityID && this.RulesValid; }
-    get CanPreview(): boolean { return this.CanSave && this.RuleSet.Rules.length > 0; }
+    get CanSave(): boolean {
+        if (!this.Record?.Name || !this.Record?.EntityID) return false;
+        if (this.Record.WorkType === 'FieldRules') return this.RulesValid;
+        if (this.Record.WorkType === 'Infer') return this.FeaturePipelineValid && !!this.Record.PromptID;
+        return true;
+    }
+    get CanPreview(): boolean {
+        if (this.Record?.WorkType === 'FieldRules') return this.CanSave && this.RuleSet.Rules.length > 0;
+        if (this.Record?.WorkType === 'Infer') return this.CanSave;
+        return false;
+    }
 
     async ngOnInit(): Promise<void> {
         const provider = this.ProviderToUse;
@@ -170,13 +205,18 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
                 await this.Record.Load(this.RecordProcessID);
             } else {
                 this.Record.NewRecord();
-                this.Record.WorkType = 'FieldRules';
+                this.Record.WorkType = this.DefaultWorkType ?? 'FieldRules';
                 this.Record.ScopeType = 'Filter';
                 this.Record.Status = 'Draft';
                 if (this.DefaultEntityID) this.Record.EntityID = this.DefaultEntityID;
+                if (this.DefaultCategoryID) this.Record.CategoryID = this.DefaultCategoryID;
             }
         }
-        this.RuleSet = this.Record.Configuration ? (SafeJSONParse<FieldRuleSet>(this.Record.Configuration) ?? { Rules: [] }) : { Rules: [] };
+        if (this.Record.WorkType === 'FieldRules') {
+            this.RuleSet = this.Record.Configuration ? (SafeJSONParse<FieldRuleSet>(this.Record.Configuration) ?? { Rules: [] }) : { Rules: [] };
+        } else if (this.Record.WorkType === 'Infer') {
+            this.FeaturePipelineSpec = this.Record.Configuration ? SafeJSONParse<DataFeatureSpec>(this.Record.Configuration) : null;
+        }
         this.resolveEntityName();
         this.cdr.detectChanges();
     }
@@ -210,11 +250,23 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
         this.cdr.detectChanges();
     }
 
+    onFeaturePipelineSpecChange(spec: DataFeatureSpec): void {
+        this.FeaturePipelineSpec = spec;
+        if (this.Record) {
+            this.Record.Configuration = JSON.stringify(spec);
+        }
+        this.cdr.detectChanges();
+    }
+
     /** Saves the record (and emits). Returns success. */
     async Save(): Promise<boolean> {
         if (!this.Record || !this.CanSave) return false;
         this.Saving = true; this.ErrorMessage = ''; this.cdr.detectChanges();
-        this.Record.Configuration = JSON.stringify(this.RuleSet);
+        if (this.Record.WorkType === 'FieldRules') {
+            this.Record.Configuration = JSON.stringify(this.RuleSet);
+        } else if (this.Record.WorkType === 'Infer' && this.FeaturePipelineSpec) {
+            this.Record.Configuration = JSON.stringify(this.FeaturePipelineSpec);
+        }
         const ok = await this.Record.Save();
         this.Saving = false;
         if (ok) {
