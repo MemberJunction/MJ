@@ -1,42 +1,52 @@
 import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
+import { EntityInfo } from '@memberjunction/core';
 import { RecordProcessFormPolicy } from '../record-process-form.component';
-import type { FormChromeContext, FormChromeSpec, FormChromeGroupSpec } from '@memberjunction/ng-base-forms';
+import type { FormChromeContext, FormChromeSpec, FormChromeGroup } from '@memberjunction/ng-base-forms';
 
 describe('RecordProcessFormPolicy', () => {
     it('decorates form chrome spec so processOverview sits as the lead group', () => {
         const policy = new RecordProcessFormPolicy();
-        const initialGroups: FormChromeGroupSpec[] = [
+        const initialGroups: FormChromeGroup[] = [
             {
                 Key: 'details',
                 Title: 'Details',
-                IsFolder: false,
-                Items: [],
+                Icon: 'fa fa-list',
+                SectionKeys: ['details'],
+                IsMore: false,
             },
             {
                 Key: 'processOverview',
                 Title: 'Overview & Status',
-                IsFolder: false,
-                Items: [],
+                Icon: 'fa fa-info-circle',
+                SectionKeys: ['processOverview'],
+                IsMore: false,
             },
             {
                 Key: 'processRuns',
                 Title: 'Prior Runs',
-                IsFolder: false,
-                Items: [],
+                Icon: 'fa fa-history',
+                SectionKeys: ['processRuns'],
+                IsMore: false,
             },
         ];
 
         const initialSpec: FormChromeSpec = {
-            EntityName: 'MJ: Record Processes',
+            Layout: 'left-nav',
             Groups: initialGroups,
-            Folders: [],
+            RelatedRoles: new Map(),
+            MoreSectionKeys: [],
         };
 
         const context: FormChromeContext = {
-            EntityName: 'MJ: Record Processes',
-            Record: null,
-            IsNew: false,
+            Entity: new EntityInfo(),
+            RelatedRoles: {
+                Policy: 'smart',
+                Budget: 0,
+                Assignments: [],
+            },
+            Panels: [],
+            PrimarySectionCount: 3,
         };
 
         const result = policy.DecorateChrome(initialSpec, context);
@@ -48,22 +58,29 @@ describe('RecordProcessFormPolicy', () => {
     it('returns spec unchanged if processOverview is not present', () => {
         const policy = new RecordProcessFormPolicy();
         const initialSpec: FormChromeSpec = {
-            EntityName: 'MJ: Record Processes',
+            Layout: 'left-nav',
             Groups: [
                 {
                     Key: 'details',
                     Title: 'Details',
-                    IsFolder: false,
-                    Items: [],
+                    Icon: 'fa fa-list',
+                    SectionKeys: ['details'],
+                    IsMore: false,
                 },
             ],
-            Folders: [],
+            RelatedRoles: new Map(),
+            MoreSectionKeys: [],
         };
 
         const context: FormChromeContext = {
-            EntityName: 'MJ: Record Processes',
-            Record: null,
-            IsNew: false,
+            Entity: new EntityInfo(),
+            RelatedRoles: {
+                Policy: 'smart',
+                Budget: 0,
+                Assignments: [],
+            },
+            Panels: [],
+            PrimarySectionCount: 1,
         };
 
         const result = policy.DecorateChrome(initialSpec, context);
