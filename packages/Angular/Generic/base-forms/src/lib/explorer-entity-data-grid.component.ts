@@ -52,6 +52,7 @@ import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid
             (AfterRowDoubleClick)="onRowDoubleClick($event)"
             (AfterRowClick)="onRowClick($event)"
             (AfterDataLoad)="onDataLoad($event)"
+            (MergeRecordsRequested)="MergeRecordsRequested.emit($event)"
             (NewRecordTabRequested)="onNewRecordTabRequested($event)">
         </mj-entity-data-grid>
     `,
@@ -119,6 +120,10 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() ShowExportButton: boolean = true;
     @Input() ShowDeleteButton: boolean = false;
     @Input() ShowCompareButton: boolean = false;
+    /**
+     * Shows the grid's Merge button. This wrapper only re-emits
+     * {@link MergeRecordsRequested} — turn it on only where something subscribes.
+     */
     @Input() ShowMergeButton: boolean = false;
     @Input() ShowAddToListButton: boolean = false;
     @Input() ShowDuplicateSearchButton: boolean = false;
@@ -277,6 +282,13 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Output() AfterRowDoubleClick = new EventEmitter<AfterRowDoubleClickEventArgs>();
     @Output() AfterRowClick = new EventEmitter<AfterRowClickEventArgs>();
     @Output() AfterDataLoad = new EventEmitter<AfterDataLoadEventArgs>();
+
+    /**
+     * Emitted when the user asks to merge the selected rows. This wrapper does not host a merge
+     * UI — setting `ShowMergeButton` without handling this leaves a button that does nothing, so
+     * a host that turns the button on must subscribe here.
+     */
+    @Output() MergeRecordsRequested = new EventEmitter<{ entityInfo: EntityInfo; records: Record<string, unknown>[] }>();
 
     /** Emitted when a row is double-clicked and NavigateOnDoubleClick is true */
     @Output() Navigate = new EventEmitter<FormNavigationEvent>();
