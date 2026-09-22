@@ -147,6 +147,41 @@
     <!-- Spacer pushes section controls to the right -->
     <div class="mj-forms-toolbar-spacer"></div>
 
+    <!--
+      Right-placed registered items. They sit with the section controls rather than with
+      the record actions: an item placed here acts on the form's chrome, not on the record.
+      Items registered for the overflow group land here too — this toolbar draws no
+      overflow menu, and an item that renders nowhere is worse than one in the wrong group.
+    -->
+    @if (ResolvedRightItems.length > 0) {
+      <div class="mj-forms-toolbar-group">
+        @for (item of ResolvedRightItems; track item.Key) {
+          <button class="mj-forms-btn"
+            [class.mj-forms-btn--primary]="item.Variant === 'primary'"
+            [class.mj-forms-btn--secondary]="item.Variant === 'secondary'"
+            [class.mj-forms-btn--accent]="item.Variant === 'accent'"
+            [class.mj-forms-btn--danger]="item.Variant === 'danger'"
+            [class.mj-forms-btn--ghost]="item.Variant === 'ghost'"
+            [class]="item.CssClass"
+            [disabled]="item.Disabled || item.IsLoading"
+            [title]="item.Description"
+            (click)="OnToolbarItemClick(item, $event)">
+            @if (item.IsLoading) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+            } @else if (item.Icon) {
+              <i [class]="item.Icon"></i>
+            }
+            @if (item.Text) {
+              <span class="mj-forms-btn-text">{{ item.Text }}</span>
+            }
+            @if (item.Badge != null) {
+              <span class="mj-list-count-badge">{{ item.Badge }}</span>
+            }
+          </button>
+        }
+      </div>
+    }
+
     <!-- Form-variant picker: right-side toolbar button. Opens a dropdown
          with the Default (CodeGen Angular) form + every variant the host
          supplied. Persists the user's pick via the host's resolver (which

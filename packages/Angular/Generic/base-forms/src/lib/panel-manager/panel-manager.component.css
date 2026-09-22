@@ -1,0 +1,284 @@
+/* Panel manager drawer — uses the global --mj-* design tokens. */
+:host { display: block; }
+
+.mj-pm-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--mj-bg-overlay);
+  z-index: 1000;
+}
+
+/* `fixed` also makes this the containing block for the placement dialog, which covers
+   the drawer while a panel is being re-placed. */
+.mj-pm-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 520px;
+  max-width: 94vw;
+  box-sizing: border-box;
+  background: var(--mj-bg-surface);
+  box-shadow: var(--mj-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mj-pm-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-4) var(--mj-space-5);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.mj-pm-heading { flex: 1 1 auto; min-width: 0; }
+
+.mj-pm-title {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin: 0;
+  font-size: var(--mj-text-base);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+.mj-pm-entity {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-pm-close {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+
+.mj-pm-banner {
+  margin: 0;
+  padding: var(--mj-space-3) var(--mj-space-5);
+  font-size: var(--mj-text-sm);
+  line-height: 1.45;
+  color: var(--mj-status-warning-text);
+  background: var(--mj-status-warning-bg);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.mj-pm-error {
+  margin: 0;
+  padding: var(--mj-space-3) var(--mj-space-5);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-status-error-text);
+  background: var(--mj-status-error-bg);
+}
+
+.mj-pm-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--mj-space-4) var(--mj-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-5);
+}
+
+/* ---- empty ---- */
+
+.mj-pm-empty {
+  margin: auto;
+  padding: var(--mj-space-6) 0;
+  text-align: center;
+  color: var(--mj-text-muted);
+}
+
+.mj-pm-empty > i { font-size: 28px; opacity: 0.4; }
+.mj-pm-empty-title { margin: var(--mj-space-3) 0 0; font-size: var(--mj-text-sm); color: var(--mj-text-secondary); }
+.mj-pm-empty-note { margin: var(--mj-space-1) 0 0; font-size: var(--mj-text-xs); }
+
+/* ---- groups ---- */
+
+.mj-pm-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2);
+  min-width: 0;
+}
+
+.mj-pm-group-head {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+}
+
+.mj-pm-group-title {
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mj-text-secondary);
+}
+
+.mj-pm-group-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-sunken);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+  text-align: center;
+}
+
+.mj-pm-group-note {
+  margin: 0;
+  font-size: var(--mj-text-xs);
+  line-height: 1.45;
+  color: var(--mj-text-muted);
+}
+
+/* ---- rows ---- */
+
+.mj-pm-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "icon main" ". actions";
+  gap: var(--mj-space-1) var(--mj-space-3);
+  align-items: start;
+  min-width: 0;
+  padding: var(--mj-space-3);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-card);
+}
+
+.mj-pm-row.is-quiet { background: var(--mj-bg-surface-sunken); }
+
+.mj-pm-row-icon {
+  grid-area: icon;
+  width: 20px;
+  margin-top: 2px;
+  text-align: center;
+  color: var(--mj-text-muted);
+}
+
+.mj-pm-row-main {
+  grid-area: main;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mj-pm-row-name {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-pm-row-sub { font-size: var(--mj-text-xs); color: var(--mj-text-muted); }
+
+.mj-pm-row-where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-1);
+  margin-top: var(--mj-space-1);
+}
+
+.mj-pm-chip {
+  padding: 1px var(--mj-space-2);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface-sunken);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}
+
+.mj-pm-row.is-quiet .mj-pm-chip { background: var(--mj-bg-surface); }
+
+.mj-pm-mono { font-family: var(--mj-font-family-mono); }
+
+.mj-pm-row-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-2);
+  margin-top: var(--mj-space-1);
+}
+
+.mj-pm-btn {
+  min-height: 32px;
+  padding: 0 var(--mj-space-3);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface);
+  font-family: inherit;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-primary);
+  cursor: pointer;
+}
+
+.mj-pm-btn[disabled] { opacity: 0.55; cursor: default; }
+
+.mj-pm-btn--primary {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+  font-weight: var(--mj-font-semibold);
+}
+
+.mj-pm-btn--danger { color: var(--mj-status-error-text); }
+
+.mj-pm-btn--danger.is-confirming {
+  border-color: var(--mj-status-error-text);
+  background: var(--mj-status-error-bg);
+  font-weight: var(--mj-font-semibold);
+}
+
+/* ---- the placement dialog, over the drawer ---- */
+
+/* The placement dialog opens over the whole window rather than inside the drawer. It is
+   the same dialog the add flow uses, and it needs the width to show the form preview
+   beside the answers; confined to the drawer it stacks into a single cramped column. */
+.mj-pm-edit {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--mj-space-5);
+  box-sizing: border-box;
+  background: var(--mj-bg-overlay);
+}
+
+.mj-pm-edit > * {
+  display: flex;
+  width: min(1100px, 100%);
+  height: min(760px, 100%);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--mj-radius-lg);
+  background: var(--mj-bg-surface);
+  box-shadow: var(--mj-shadow-lg);
+}
+
+.mj-pm-foot {
+  padding: var(--mj-space-3) var(--mj-space-5);
+  border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-sunken);
+}
+
+.mj-pm-summary { font-size: var(--mj-text-xs); color: var(--mj-text-muted); }

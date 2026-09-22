@@ -81,6 +81,17 @@
     <div class="mj-forms-panel-content"
          #panelContent
          [style.height.px]="PanelContentHeight">
+      <!-- A contribution that stands in for one of this section's fields draws here,
+           above the fields, in place of the one it claimed. -->
+      @if (HostsFieldPanels) {
+        <mj-form-field-panel-slot
+          [Entity]="FieldPanelEntity"
+          [FieldNames]="ClaimableFieldNames"
+          [Record]="FieldPanelForm!.record"
+          [FormComponent]="FieldPanelForm!"
+          [FormContext]="FormContext">
+        </mj-form-field-panel-slot>
+      }
       <ng-content></ng-content>
     </div>
   </div>

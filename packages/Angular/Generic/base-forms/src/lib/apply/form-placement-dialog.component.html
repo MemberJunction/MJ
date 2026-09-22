@@ -1,0 +1,337 @@
+<div class="mj-placement">
+
+  <div class="mj-placement-head">
+    <div class="mj-placement-head-text">
+      <div class="mj-placement-eyebrow">Add to a form</div>
+      <h2 class="mj-placement-title">{{ ComponentName || State.Title || 'Panel' }}</h2>
+    </div>
+  </div>
+
+  @if (Proposal) {
+    <div class="mj-placement-proposal">
+      <i class="fa-solid fa-wand-magic-sparkles"></i>
+      <span>Suggested as a {{ Proposal.presentation === 'bare' ? 'bare strip' : 'panel' }}. Where it goes is yours to choose &mdash; nothing is saved until you apply.</span>
+    </div>
+  }
+
+  @if (Context.FullCustomForm) {
+    <mj-alert Variant="warning" class="mj-placement-alert">
+      A full custom form is rendering {{ Context.EntityName }}. It draws its own body, so a panel
+      saved here will not appear until that form is turned off.
+    </mj-alert>
+  }
+
+  <div class="mj-placement-body">
+
+    <!-- Left: the form, with each slot as a target -->
+    <div class="mj-placement-preview">
+      <div class="mj-placement-label">Where it goes</div>
+      <p class="mj-placement-hint">
+        The <strong>{{ Context.EntityName }}</strong> form as it will look. Pick one of the positions
+        between the blocks that are already there.
+      </p>
+      @if (Probing) {
+        <p class="mj-placement-hint">Reading the positions this form offers&hellip;</p>
+      } @else if (SlotsAreAssumed) {
+        <p class="mj-placement-hint">
+          Positions shown are the ones generated forms offer. This form could not be read, so a
+          hand-written custom template may differ.
+        </p>
+      }
+
+      @for (choice of SlotsAbove; track choice.Slot) {
+        <ng-container *ngTemplateOutlet="slotRow; context: { $implicit: choice }"></ng-container>
+      }
+
+      @if (SectionsAreInDetailsTab) {
+        <div class="mj-placement-tab" [class.is-replaced]="IsWholeDetailsTabReplaced">
+          <div class="mj-placement-tab-head">
+            <i class="fa-solid fa-id-card" aria-hidden="true"></i>
+            <span class="mj-placement-tab-name">Details</span>
+            <span class="mj-placement-tab-kind">one rail tab &middot; {{ DetailsTabSectionCount }} field groups</span>
+          </div>
+          @for (section of Context.Sections; track section.Key) {
+            <div class="mj-placement-existing mj-placement-existing--nested"
+                 [class.is-replaced]="IsReplaced(section.Key)">
+              <span class="mj-placement-existing-name">{{ section.Title }}</span>
+              <span class="mj-placement-existing-kind">
+                {{ IsReplaced(section.Key) ? 'replaced' : 'field group' }}
+              </span>
+            </div>
+            @if (HostsFieldPanel(section.Key)) {
+              <ng-container *ngTemplateOutlet="fieldPanelCard"></ng-container>
+            }
+          }
+        </div>
+      } @else {
+        @for (section of Context.Sections; track section.Key) {
+          <div class="mj-placement-existing" [class.is-replaced]="IsReplaced(section.Key)">
+            <span class="mj-placement-existing-name">{{ section.Title }}</span>
+            <span class="mj-placement-existing-kind">
+              {{ IsReplaced(section.Key) ? 'replaced' : 'field group' }}
+            </span>
+          </div>
+          @if (HostsFieldPanel(section.Key)) {
+            <ng-container *ngTemplateOutlet="fieldPanelCard"></ng-container>
+          }
+        }
+      }
+
+      @if (SlotAfterFields) {
+        <ng-container *ngTemplateOutlet="slotRow; context: { $implicit: SlotAfterFields }"></ng-container>
+      }
+
+      @for (related of Context.Related; track related.Entity + related.JoinField; let i = $index) {
+        <div class="mj-placement-existing" [class.is-replaced]="IsRelatedReplaced(i)">
+          <span class="mj-placement-existing-name">{{ related.DisplayName }}</span>
+          <span class="mj-placement-existing-kind">
+            {{ IsRelatedReplaced(i) ? 'replaced' : 'auto grid' }}
+          </span>
+        </div>
+      }
+
+      @for (choice of SlotsBelow; track choice.Slot) {
+        <ng-container *ngTemplateOutlet="slotRow; context: { $implicit: choice }"></ng-container>
+      }
+
+      @if (HasRail) {
+        <p class="mj-placement-hint mj-placement-rail-note">
+          @if (AddsRailItem) {
+            Your panel gets a rail item of its own.
+          } @else if (TargetRail) {
+            Your panel appears under <strong>{{ TargetRail.Title }}</strong> in the rail.
+          } @else {
+            A bare strip has no rail item. It sits above every section.
+          }
+        </p>
+      }
+    </div>
+
+    <!-- Right: the answers -->
+    <div class="mj-placement-settings">
+
+      <section>
+        <div class="mj-placement-label">Applies to</div>
+        <div class="mj-placement-entity">
+          <strong>{{ Context.EntityName }}</strong>
+          <span>&middot; every record of this entity, visible to you only</span>
+        </div>
+      </section>
+
+      <section>
+        <div class="mj-placement-label">How it looks</div>
+        <div class="mj-placement-grid-2">
+          <label class="mj-placement-choice" [class.is-on]="State.Presentation === 'panel'">
+            <input type="radio" name="mj-presentation" value="panel" [(ngModel)]="State.Presentation">
+            <span>
+              <span class="mj-placement-choice-name">Panel</span>
+              <span class="mj-placement-choice-hint">Collapsible section with a header, and its own item in the side rail.</span>
+            </span>
+          </label>
+          <label class="mj-placement-choice" [class.is-on]="State.Presentation === 'bare'">
+            <input type="radio" name="mj-presentation" value="bare" [(ngModel)]="State.Presentation">
+            <span>
+              <span class="mj-placement-choice-name">Bare</span>
+              <span class="mj-placement-choice-hint">A strip with no chrome. No header, no rail item.</span>
+            </span>
+          </label>
+        </div>
+
+        @if (State.Presentation === 'panel') {
+          <div class="mj-placement-fields">
+            <div class="mj-placement-field">
+              <label for="mj-placement-title">Header and rail label</label>
+              <input id="mj-placement-title" type="text" class="mj-input" [(ngModel)]="State.Title" name="mj-title">
+            </div>
+            <div class="mj-placement-field mj-placement-field--icon">
+              <label for="mj-placement-icon">Icon</label>
+              <input id="mj-placement-icon" type="text" class="mj-input mj-placement-mono"
+                     placeholder="fa-chart-column" [(ngModel)]="State.Icon" name="mj-icon">
+            </div>
+          </div>
+          @if (!HasTitle) {
+            <p class="mj-placement-warn">A panel with no label shows an empty header and an unnamed rail item.</p>
+          }
+        }
+        @if (IsPersistentHero) {
+          <p class="mj-placement-warn">A bare strip has no rail item. On a form with a side rail it stays above every section rather than belonging to one.</p>
+        }
+      </section>
+
+      <section>
+        <div class="mj-placement-label">Does it replace anything?</div>
+        <div class="mj-placement-stack">
+          <label class="mj-placement-row" [class.is-on]="State.ReplaceMode === 'none'">
+            <input type="radio" name="mj-replace" value="none" [(ngModel)]="State.ReplaceMode">
+            <span class="mj-placement-row-text">No &mdash; add it alongside what is already there</span>
+          </label>
+
+          @if (CanReplaceRailTab) {
+            <label class="mj-placement-row" [class.is-on]="State.ReplaceMode === 'rail-tab'">
+              <input type="radio" name="mj-replace" value="rail-tab" [(ngModel)]="State.ReplaceMode">
+              <span class="mj-placement-row-text">
+                Replace a <strong>whole tab</strong>
+                <span class="mj-placement-row-note--quiet">all {{ ChosenRailTabSize }} blocks in it go and your panel becomes the tab</span>
+              </span>
+              <select class="mj-placement-select" aria-label="Which tab to stand in for"
+                      [disabled]="State.ReplaceMode !== 'rail-tab'" [(ngModel)]="State.ReplaceRailKey" name="mj-rail">
+                @for (tab of RailTabs; track tab.Key) {
+                  <option [value]="tab.Key">{{ tab.Title }}</option>
+                }
+              </select>
+            </label>
+          }
+
+          <label class="mj-placement-row" [class.is-on]="State.ReplaceMode === 'section'"
+                 [class.is-off]="!CanReplaceSection">
+            <input type="radio" name="mj-replace" value="section"
+                   [disabled]="!CanReplaceSection" [(ngModel)]="State.ReplaceMode">
+            <span class="mj-placement-row-text">
+              @if (SectionsAreInDetailsTab) {
+                Replace <strong>one block</strong> inside the Details tab
+                <span class="mj-placement-row-note--quiet">1 of {{ DetailsTabSectionCount }} &mdash; the tab and its other {{ DetailsTabSectionCount - 1 }} blocks stay</span>
+              } @else {
+                Replace <strong>one field group</strong>
+              }
+              @if (SectionTargetsAreDerived) {
+                <span class="mj-placement-row-note">from entity metadata &mdash; may not match this form</span>
+              }
+            </span>
+            <select class="mj-placement-select" aria-label="Which field group to replace"
+                    [disabled]="State.ReplaceMode !== 'section'" [(ngModel)]="State.ReplaceSectionKey" name="mj-section">
+              @for (section of Context.Sections; track section.Key) {
+                <option [value]="section.Key">{{ SectionLabel(section) }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="mj-placement-row" [class.is-on]="State.ReplaceMode === 'field'"
+                 [class.is-off]="!CanReplaceField">
+            <input type="radio" name="mj-replace" value="field"
+                   [disabled]="!CanReplaceField" [(ngModel)]="State.ReplaceMode">
+            <span class="mj-placement-row-text">
+              Replace <strong>one field</strong>
+              @if (ChosenField && State.ReplaceMode === 'field') {
+                <span class="mj-placement-row-note--quiet">your panel renders at the top of {{ ChosenField.SectionTitle }}, in the field's place</span>
+              } @else {
+                <span class="mj-placement-row-note--quiet">your panel renders at the top of the section holding it</span>
+              }
+              @if (!CanReplaceField) {
+                <span class="mj-placement-row-note">this form's fields could not be read</span>
+              }
+            </span>
+            <select class="mj-placement-select" aria-label="Which field to stand in for"
+                    [disabled]="State.ReplaceMode !== 'field'" [(ngModel)]="State.ReplaceFieldName" name="mj-field">
+              @for (field of ReplaceableFieldChoices; track field.Name) {
+                <option [value]="field.Name">{{ field.SectionTitle }} &rsaquo; {{ field.Label }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="mj-placement-row" [class.is-on]="State.ReplaceMode === 'related'"
+                 [class.is-off]="!CanReplaceRelated">
+            <input type="radio" name="mj-replace" value="related"
+                   [disabled]="!CanReplaceRelated" [(ngModel)]="State.ReplaceMode">
+            <span class="mj-placement-row-text">Replace a <strong>related grid</strong></span>
+            <select class="mj-placement-select" aria-label="Which related grid to take over"
+                    [disabled]="State.ReplaceMode !== 'related'" [(ngModel)]="State.ReplaceRelatedIndex" name="mj-related">
+              @for (related of Context.Related; track related.Entity + related.JoinField; let i = $index) {
+                <option [value]="i">{{ related.DisplayName }} via {{ related.JoinField }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="mj-placement-row" [class.is-on]="State.ReplaceMode === 'contribution'"
+                 [class.is-off]="!CanReplaceContribution">
+            <input type="radio" name="mj-replace" value="contribution"
+                   [disabled]="!CanReplaceContribution" [(ngModel)]="State.ReplaceMode">
+            <span class="mj-placement-row-text">Replace a <strong>panel already here</strong></span>
+            <select class="mj-placement-select" aria-label="Which panel to replace"
+                    [disabled]="State.ReplaceMode !== 'contribution'" [(ngModel)]="State.ReplaceContributionIndex" name="mj-existing">
+              @for (item of Context.Existing; track item.Key; let i = $index) {
+                <option [value]="i">{{ item.Title }}</option>
+              }
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <div class="mj-placement-label">When it starts</div>
+        <div class="mj-placement-stack">
+          <label class="mj-placement-row" [class.is-on]="State.ActivateNow">
+            <input type="radio" name="mj-status" [value]="true" [(ngModel)]="State.ActivateNow">
+            <span class="mj-placement-row-text">Right away</span>
+          </label>
+          <label class="mj-placement-row" [class.is-on]="!State.ActivateNow">
+            <input type="radio" name="mj-status" [value]="false" [(ngModel)]="State.ActivateNow">
+            <span class="mj-placement-row-text">Save as a draft</span>
+          </label>
+        </div>
+        <p class="mj-placement-hint">A draft is stored but rendered for nobody until you turn it on.</p>
+      </section>
+
+      @if (Context.Existing.length > 0) {
+        <section>
+          <div class="mj-placement-label">Already on this form</div>
+          <div class="mj-placement-stack">
+            @for (item of Context.Existing; track item.Key) {
+              <div class="mj-placement-existing mj-placement-existing--compact">
+                <span class="mj-placement-existing-name">{{ item.Title }}</span>
+                <span class="mj-placement-mono mj-placement-existing-kind">{{ item.Slot }}</span>
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+    </div>
+  </div>
+
+  <div class="mj-placement-foot">
+    <button type="button" mjButton variant="primary" (click)="OnApply()">Add to the form</button>
+    <button type="button" mjButton (click)="OnCancel()">Cancel</button>
+    <span class="mj-placement-spacer"></span>
+    <span class="mj-placement-summary">{{ Summary }}</span>
+  </div>
+
+</div>
+
+<!--
+  One position. Drawn as a gap between the blocks rather than as a block of its own: a
+  slot is a place to insert something, not another thing on the form, and boxing it like
+  the content made the two read as peers. Selected, the gap opens and holds the panel.
+-->
+<ng-template #slotRow let-choice>
+  <div class="mj-placement-gap" [class.is-on]="State.Slot === choice.Slot">
+    <label class="mj-placement-gap-pick">
+      <input type="radio" name="mj-slot" [value]="choice.Slot" [(ngModel)]="State.Slot">
+      <span class="mj-placement-gap-rule" aria-hidden="true"></span>
+      <span class="mj-placement-gap-text">
+        <span class="mj-placement-gap-name">{{ choice.Name }}</span>
+        <span class="mj-placement-mono mj-placement-gap-slot">{{ choice.Label }}</span>
+      </span>
+      <span class="mj-placement-gap-rule" aria-hidden="true"></span>
+    </label>
+    @if (State.Slot === choice.Slot) {
+      <div class="mj-placement-slot-card">
+        <span class="mj-placement-slot-card-name">{{ State.Title || ComponentName || 'Your panel' }}</span>
+        <span class="mj-placement-slot-card-hint">Your panel lands here</span>
+      </div>
+    }
+  </div>
+</ng-template>
+
+<!--
+  A panel standing in for a field belongs inside that field's section, at the top. Drawn
+  under the section block rather than as a slot gap, because the slot choice does not
+  apply to this claim.
+-->
+<ng-template #fieldPanelCard>
+  <div class="mj-placement-slot-card mj-placement-slot-card--in-section">
+    <span class="mj-placement-slot-card-name">{{ State.Title || ComponentName || 'Your panel' }}</span>
+    <span class="mj-placement-slot-card-hint">
+      at the top of this section, in place of {{ ChosenField?.Label || 'the field' }}
+    </span>
+  </div>
+</ng-template>

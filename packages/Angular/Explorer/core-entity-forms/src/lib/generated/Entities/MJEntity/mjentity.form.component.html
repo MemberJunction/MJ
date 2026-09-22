@@ -1938,6 +1938,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- MJ_BizApps_Common: Address Links Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsCommonAddressLinks"
+        SectionName="MJ_BizApps_Common: Address Links"
+        Icon="fa fa-link"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCommonAddressLinks')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Common: Address Links','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Common: Address Links','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCommonAddressLinks')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCommonAddressLinks', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Archive Configuration Entities Section -->
     <mj-collapsible-panel
         SectionKey="mJArchiveConfigurationEntities"
@@ -2732,6 +2757,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityFormContributionsRelatedEntityID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Activity Links Section -->
+    <mj-collapsible-panel
+        SectionKey="mJBizAppsCommonActivityLinks"
+        SectionName="Activity Links"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJBizAppsCommonActivityLinks')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Common: Activity Links','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ_BizApps_Common: Activity Links','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJBizAppsCommonActivityLinks')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCommonActivityLinks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import type { BaseEntity } from '@memberjunction/core';
 import { ReactBridgeService } from '@memberjunction/ng-react';
+import { By } from '@angular/platform-browser';
 import { renderComponentFixture, query, text } from '@memberjunction/ng-test-utils';
 import { InteractiveFormPanelComponent } from './interactive-form-panel.component';
 import type { FormContributionRegistration } from '../panel-slot/form-contribution';
@@ -20,7 +21,7 @@ class ReactStub { @Input() component: unknown; @Input() componentProps: unknown;
 @Component({ standalone: true, selector: 'mj-alert', template: '<ng-content></ng-content>' })
 class AlertStub { @Input() Variant = ''; }
 @Component({ standalone: true, selector: 'mj-collapsible-panel', template: '<section class="panel-stub" [attr.data-key]="SectionKey" [attr.data-name]="SectionName"><ng-content></ng-content></section>' })
-class PanelStub { @Input() SectionKey = ''; @Input() SectionName = ''; @Input() Icon = ''; @Input() Variant = ''; @Input() Form: unknown; @Input() FormContext: unknown; @Input() DefaultExpanded: unknown; }
+class PanelStub { @Input() SectionKey = ''; @Input() SectionName = ''; @Input() Icon = ''; @Input() Variant = ''; @Input() Form: unknown; @Input() FormContext: unknown; @Input() DefaultExpanded: unknown; @Input() Order: number | null = null; }
 
 const RECORD = { EntityInfo: { Name: 'MJ_BizApps_Common: People' }, Fields: [], GetAll: () => ({}), PrimaryKey: { HasValue: false } } as unknown as BaseEntity;
 const FORM = { EditMode: false, UserCanEdit: true, UserCanDelete: false, UserCanCreate: false, IsSectionExpanded: () => true, SetSectionRowCount: vi.fn(), formContext: {} } as unknown as BaseFormComponent;
@@ -90,5 +91,25 @@ describe('InteractiveFormPanelComponent (DOM)', () => {
     const f = render(contribution({ Metadata: { entity: 'MJ_BizApps_Common: People', slot: 'after-related', relatedEntity: 'MJ_BizApps_Orders: Event Order Lines' } }));
     expect(f.componentInstance.Variant).toBe('related-entity');
     expect(f.componentInstance.SectionKey).toBe('related:MJ_BizApps_Orders: Event Order Lines:');
+  });
+});
+
+
+/**
+ * A form sequences its panels with CSS `order` taken from its section order, and a
+ * contribution's key is never in that list — `getSectionDisplayOrder` answers with the
+ * section count, the highest order on the form, so the panel rendered last whatever slot it
+ * mounted in. The slot has to decide the order instead.
+ */
+describe('InteractiveFormPanelComponent (DOM) — order follows the slot', () => {
+  const at = (slot: string) => render(contribution({
+    Metadata: { entity: 'MJ_BizApps_Common: People', slot, contributionKey: 'skip:person-ltv' },
+  } as Partial<FormContributionRegistration>));
+
+  it('passes a slot-derived order to the panel rather than leaving it to the section lookup', () => {
+    const f = at('before-fields');
+    const stub = f.debugElement.query(By.directive(PanelStub)).componentInstance as PanelStub;
+    expect(stub.Order).toBe(f.componentInstance.DisplayOrder);
+    expect(stub.Order).toBeLessThan(0);
   });
 });

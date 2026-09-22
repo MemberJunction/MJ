@@ -1,9 +1,12 @@
 <!--
-  IsFieldReadableByUser is FIRST deliberately. BaseEntity.Get() throws for a field the user
-  cannot read, so every expression below — Value, ShouldHideField, the FK resolution — is only
-  safe once this has short-circuited. A denied field renders nothing at all.
+  IsFieldReadableByUser comes before every expression that touches the record. BaseEntity.Get()
+  throws for a field the user cannot read, so Value, ShouldHideField and the FK resolution are
+  only safe once it has short-circuited. A denied field renders nothing at all.
+
+  IsClaimedByContribution may precede it because it reads only the form context: a field a
+  panel stands in for is not drawn, in either mode.
 -->
-@if (IsFieldReadableByUser && Record && (Record.IsSaved || !IsFieldReadOnly)) {
+@if (!IsClaimedByContribution && IsFieldReadableByUser && Record && (Record.IsSaved || !IsFieldReadOnly)) {
   <!-- READ-ONLY MODE -->
   @if ((!EditMode || IsFieldReadOnly) && !ShouldHideField) {
     <div class="mj-forms-field" [class.mj-forms-field--readonly]="EditMode && IsFieldReadOnly" [class.mj-forms-field--dirty]="IsDirty">

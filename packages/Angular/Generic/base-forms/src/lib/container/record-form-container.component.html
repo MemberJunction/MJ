@@ -466,3 +466,19 @@
   (ResetRequested)="OnSectionManagerReset()"
   (Closed)="OnSectionManagerClosed()">
 </mj-section-manager>
+
+<!-- ============================================
+     PANEL MANAGER DRAWER — what is registered on this form, and the switches for it
+     ============================================ -->
+<mj-panel-manager
+  [Visible]="ShowPanelManager"
+  [Entity]="EffectiveEntityInfo"
+  [Compiled]="PanelManagerCompiled"
+  [StockGrids]="PanelManagerStockGrids"
+  [FullCustomForm]="!!fc?.OwnsEntireFormBody"
+  [TitleByKey]="PanelManagerTitles"
+  [Related]="PanelManagerRelated"
+  [Provider]="ProviderToUse"
+  (Changed)="OnPanelManagerChanged()"
+  (Closed)="OnPanelManagerClosed()">
+</mj-panel-manager>

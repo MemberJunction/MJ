@@ -38,7 +38,7 @@ import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArg
 import { CollectFormContributionRegistrations } from './panel-slot/collect-form-contribution-registrations';
 import type { FormContributionRegistration } from './panel-slot/form-contribution';
 import { FormContextsEqual } from './base-form-component-internals';
-import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
+import { ContributionClaimedFieldNames, ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -265,6 +265,22 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /** Layout the container resolved for this form. Set by `<mj-record-form-container>`; read by panel hosts. */
   public ChromeLayout: 'accordion' | 'left-nav' = 'accordion';
+
+  /**
+   * Whether this form renders its own body in full.
+   *
+   * A form that returns true accepts nothing the container would otherwise compose into
+   * it: no `BaseFormPanel` mounts, no contribution claims a section, and no stock grid is
+   * filled in for a `DisplayInForm` relationship. The composition snapshot reports none of
+   * them either. Container chrome that belongs to the *record* rather than to the body —
+   * the toolbar, Save/Delete, History, Record Changes — is unaffected.
+   *
+   * The fill-in reads an unbaked relationship as stale CodeGen and supplies the missing
+   * grid. A form that replaced the body bakes nothing by design, so without this flag
+   * every relationship reads as missing and the container composes a form the author
+   * never asked for.
+   */
+  public get OwnsEntireFormBody(): boolean { return false; }
 
   /**
    * Last composition snapshot the container published — what is actually on this form:
@@ -1025,6 +1041,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       enableRecordLinks: this.Config?.EnableRecordLinks,
       showRelatedEntities: this.Config?.ShowRelatedEntities,
       hiddenSectionKeys: this.resolveHiddenSectionKeys(),
+      claimedFieldNames: this.contributionClaimedFieldNames(),
       visibleSectionKeys: this.Config?.VisibleSectionKeys,
       allowSectionReorder: this.resolveAllowSectionReorder()
     };
@@ -1051,6 +1068,34 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     const merged = [...(configured ?? []), ...claimed];
     this._resolvedHiddenKeysMemo = { claimed, configured, merged };
     return merged;
+  }
+
+  /** Memo for {@link contributionClaimedFieldNames} — same reasoning as the hidden-keys memo. */
+  private _claimedFieldsMemo: { entity: EntityInfo; regs: readonly FormContributionRegistration[]; names: string[] } | null = null;
+
+  /**
+   * Field names a winning contribution stands in for, so no section draws them.
+   *
+   * Empty stays `undefined` rather than `[]`: `formContext` is compared by value on every
+   * change-detection pass, and a fresh empty array per pass would make every context look
+   * different from the last one.
+   */
+  private contributionClaimedFieldNames(): string[] | undefined {
+    const entity = this.record?.EntityInfo;
+    if (!entity) return undefined;
+    const regs = CollectFormContributionRegistrations(entity, this.ProviderToUse);
+    const memo = this._claimedFieldsMemo;
+    if (!(memo && memo.entity === entity && memo.regs === regs)) {
+      const names = ContributionClaimedFieldNames(
+        entity.Name,
+        entity.RelatedEntities,
+        entity.ChildEntities.map((child) => child.ID),
+        regs,
+      );
+      this._claimedFieldsMemo = { entity, regs, names };
+    }
+    const names = this._claimedFieldsMemo!.names;
+    return names.length > 0 ? names : undefined;
   }
 
   /** Memo for {@link contributionHiddenSectionKeys} — see the comment there. */
@@ -1403,6 +1448,19 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     const order = this.getSectionOrder();
     const index = order.indexOf(sectionKey);
     return index >= 0 ? index : this.sections.length;
+  }
+
+  /**
+   * Where this key sits in the section order, or null when it is not in it at all.
+   *
+   * {@link getSectionDisplayOrder} cannot answer that: it returns the section count for
+   * an unknown key, which is indistinguishable from a real last position. A contribution
+   * panel is not in the form's declared sections, so a caller has to be able to tell
+   * "the user placed this here" from "nobody has said where this goes".
+   */
+  public getSectionOrderIndex(sectionKey: string): number | null {
+    const index = this.getSectionOrder().indexOf(sectionKey);
+    return index >= 0 ? index : null;
   }
 
   // #endregion

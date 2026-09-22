@@ -7,6 +7,10 @@
     "src/lib/types/**/*.ts",
     "src/lib/section-manager/section-manager.component.ts",
     "src/lib/section-manager/section-manager.component.dom.test.ts",
+    "src/lib/panel-manager/panel-manager.component.ts",
+    "src/lib/panel-manager/panel-manager.component.dom.test.ts",
+    "src/lib/panel-manager/form-panel-admin.service.ts",
+    "src/lib/panel-manager/form-panel-inventory.ts",
     "src/lib/panel/collapsible-panel.component.ts",
     "src/lib/panel/collapsible-panel.component.dom.test.ts",
     "src/lib/field/form-field.component.ts",
@@ -31,7 +35,13 @@
     "src/lib/interactive-form/interactive-form.component.dom.test.ts",
     "src/lib/interactive-form/interactive-form-panel.component.ts",
     "src/lib/interactive-form/interactive-form-panel.component.dom.test.ts",
-    "src/lib/resolver/form-resolver.service.ts"
+    "src/lib/resolver/form-resolver.service.ts",
+    "src/lib/resolver/form-variants.ts",
+    "src/lib/panel-slot/form-field-panel-slot.component.ts",
+    "src/lib/apply/form-placement.ts",
+    "src/lib/apply/form-slot-probe.service.ts",
+    "src/lib/apply/form-placement-dialog.component.ts",
+    "src/lib/apply/form-placement-dialog.component.dom.test.ts"
   ],
   "exclude": [
     "node_modules",

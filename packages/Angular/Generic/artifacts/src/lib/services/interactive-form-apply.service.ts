@@ -23,9 +23,13 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
-    getDeclaredFormContribution, isFormPanelRole, type FormContributionSpec,
+    getDeclaredFormContribution, isFormPanelRole,
+    type FormContributionSlot, type FormContributionSpec,
 } from '@memberjunction/interactive-component-types/forms';
-import type { FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
+import {
+    ApplyDecisionToSpec, MjFormPlacementDialogComponent,
+    type FormCompositionSnapshot, type FormPlacementContext, type FormPlacementDecision,
+} from '@memberjunction/ng-base-forms';
 
 /** Result of an apply attempt — surfaced to the caller for any post-apply UI. */
 export interface InteractiveFormApplyResult {
@@ -108,23 +112,20 @@ export class InteractiveFormApplyService {
             ?? null;
         const hasExistingOverride = !!existingOverride?.OverrideID;
 
-        // Step 2: confirm with the user.
-        const proceed = await this.confirm(hasExistingOverride, entityName, existingOverride?.ComponentVersion);
+        // Step 2: confirm with the user. A form carrying the incumbent's own name is a
+        // new version of it; any other form is a different form, and applying it swaps
+        // which one the user sees rather than merging the two.
+        const formName = (spec as unknown as { name?: string }).name ?? 'Custom Form';
+        const isNewVersion = hasExistingOverride && !!existingOverride!.ComponentName
+            && existingOverride!.ComponentName === formName;
+        const proceed = await this.confirm(
+            hasExistingOverride, isNewVersion, entityName, existingOverride?.ComponentVersion);
         if (!proceed) {
             return { Success: false, Kind: 'form', Message: 'Cancelled by user.' };
         }
 
         // Step 3: run Create or Modify.
-        const formName = (spec as unknown as { name?: string }).name ?? 'Custom Form';
-        if (hasExistingOverride) {
-            // MJ's Modify operates on a Component *lineage* keyed by Name — the spec
-            // name must match the existing Component across versions. A freshly
-            // generated form usually has a different name, so align it to the existing
-            // lineage (spec.name + the root `function` declaration the linter checks)
-            // before modifying.
-            if (existingOverride!.ComponentName) {
-                this.alignSpecToLineage(spec, existingOverride!.ComponentName);
-            }
+        if (isNewVersion) {
             // For Pending overrides, use in-place modification (keep iterating on
             // the same version). For Active overrides, bump a new version so the
             // prior version is preserved.
@@ -157,10 +158,11 @@ export class InteractiveFormApplyService {
             { Name: 'Name',       Value: formName,   Type: 'Input' },
             { Name: 'Spec',       Value: JSON.stringify(spec), Type: 'Input' },
         ], p);
-        // Net-new "Apply to my form" is an explicit, confirmed user action, so we
-        // activate the freshly-created (Pending) override immediately — the form goes
-        // live in one step. Refining an EXISTING active form (the branch above) stays
-        // Pending so a live form is never silently replaced.
+        // "Apply to my form" is an explicit, confirmed user action, so the freshly
+        // created (Pending) override is activated immediately and the form goes live in
+        // one step. Activation demotes whichever form was live to Inactive, which is
+        // what makes the two swappable: both rows survive, one is live, and the form
+        // picker switches between them.
         const activated = createResult.Success
             ? await this.activateCreatedOverride(client, createResult.Message, p)
             : false;
@@ -198,11 +200,16 @@ export class InteractiveFormApplyService {
         // A snapshot for a different entity tells us nothing about this form.
         const sameEntity = snapshot && snapshot.Entity === entityName ? snapshot : null;
 
-        if (!(await this.resolveMissingSectionKey(contribution, entityName, sameEntity))) {
-            return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
+        const context = await this.buildPlacementContext(client, provider, entityName, sameEntity);
+        if (!context) {
+            return this.fail(`Could not read the composition of the "${entityName}" form.`);
         }
 
-        const key = this.writeKeyFor(contribution);
+        const decision = await this.askWherePanelGoes(context, contribution, spec.name);
+        if (!decision) return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
+
+        const placed = decision.Contribution;
+        const key = this.writeKeyFor(placed);
         const precedence = await this.resolvePrecedence(key, sameEntity);
         if (precedence === null) {
             return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
@@ -214,23 +221,13 @@ export class InteractiveFormApplyService {
         if (!existingResult.Success) {
             return this.fail(`Could not check existing contributions: ${existingResult.Message ?? 'unknown error'}`);
         }
-        const existing = this.parseContributions(existingResult.Message).find(c =>
-            !!key && c.ContributionKey === key && c.Scope === 'User'
-            && (c.Status === 'Active' || c.Status === 'Pending'));
+        const existing = this.findExistingContribution(
+            this.parseContributions(existingResult.Message), key, spec.name);
 
-        const proceed = await this.ask(
-            'Add this to your form?',
-            existing
-                ? `You already have "${existing.Name ?? key}" on "${entityName}". Applying creates a new version and makes it active for your user.`
-                : `This adds "${contribution.title}" to the "${entityName}" form at ${contribution.slot}, for your user only.`,
-            'Add',
-        );
-        if (!proceed) return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
-
-        const specToSend: ComponentSpec = { ...spec, formContribution: contribution };
+        const specToSend: ComponentSpec = ApplyDecisionToSpec(spec, decision);
         const { result, mode } = existing
             ? await this.modifyContribution(client, provider, specToSend, existing)
-            : await this.createContribution(client, provider, specToSend, entityName, contribution, precedence);
+            : await this.createContribution(client, provider, specToSend, entityName, placed, precedence);
 
         if (!result.Success) {
             this.notifications.CreateSimpleNotification(
@@ -241,13 +238,15 @@ export class InteractiveFormApplyService {
         let payload: { ContributionID?: string; ComponentID?: string; Version?: string } = {};
         try { payload = JSON.parse(result.Message ?? '{}'); } catch { /* best effort */ }
 
-        const activated = payload.ContributionID
-            ? await this.activateContribution(client, provider, payload.ContributionID)
+        // A row is written Pending either way; activation is the user's choice, so a draft
+        // is left alone rather than activated and then explained.
+        const activated = decision.ActivateNow && !!payload.ContributionID
+            ? await this.activateContribution(client, provider, payload.ContributionID!)
             : false;
         this.notifications.CreateSimpleNotification(
             activated
-                ? `"${contribution.title}" is now on your ${entityName} form.`
-                : `"${contribution.title}" was saved as a Pending draft. Activate it from Form Studio.`,
+                ? `"${placed.title}" is now on your ${entityName} form at ${placed.slot}.`
+                : `"${placed.title}" was saved as a draft. Turn it on from "Panels on this form" on the ${entityName} form when you are ready.`,
             'success', 4000,
         );
         return {
@@ -258,25 +257,132 @@ export class InteractiveFormApplyService {
     }
 
     /**
-     * Drops a `replacesSectionKey` that names no section on the live form, with the
-     * user's consent. Returns false when the user cancels instead.
+     * What the form contains, for the placement dialog to offer as targets.
+     *
+     * The live snapshot is preferred because it reports what the form actually rendered,
+     * including compiled panels that exist only in this browser. It is absent whenever the
+     * user is not on that record — the common case from a chat conversation — and the
+     * server derivation stands in, from metadata alone.
      */
-    private async resolveMissingSectionKey(
-        contribution: FormContributionSpec,
+    private async buildPlacementContext(
+        client: GraphQLActionClient,
+        provider: IMetadataProvider,
         entityName: string,
         snapshot: FormCompositionSnapshot | null,
-    ): Promise<boolean> {
-        const replaces = contribution.replacesSectionKey;
-        if (!replaces || !snapshot) return true;
-        if (snapshot.Sections.some(s => s.Key === replaces)) return true;
-        const mountAsPane = await this.ask(
-            'Section not found',
-            `The current "${entityName}" form has no section "${replaces}", so nothing would be replaced. Add this as an extra pane instead?`,
-            'Add as extra pane',
-        );
-        if (!mountAsPane) return false;
-        delete contribution.replacesSectionKey;
-        return true;
+    ): Promise<FormPlacementContext | null> {
+        if (snapshot) {
+            return {
+                EntityName: entityName,
+                Sections: snapshot.Sections.map(s => ({
+                    Key: s.Key, Title: s.Title,
+                    Fields: (s.Fields ?? []).map(f => ({ Name: f.Name, Label: f.Label })),
+                })),
+                Related: snapshot.Related.map(r => ({
+                    Entity: r.Entity, JoinField: r.JoinField, DisplayName: r.Entity,
+                })),
+                Existing: snapshot.Contributions.map(c => ({ Key: c.Key, Slot: c.Slot, Title: c.Title })),
+                SlotsPresent: [...snapshot.SlotsPresent],
+                // The form reported these, so the dialog does not need to read one.
+                SlotsVerified: true,
+                Layout: snapshot.Layout === 'left-nav' ? 'left-nav' : 'accordion',
+                // The rail the open form is actually showing.
+                Rail: (snapshot.Rail ?? []).map(r => ({
+                    Key: r.Key, Title: r.Title, Icon: r.Icon,
+                    SectionKeys: r.SectionKeys, IsMore: r.IsMore,
+                })),
+                FullCustomForm: snapshot.SlotsPresent.length === 0,
+                // The form reported these, so every key is one it really renders.
+                TargetsVerified: true,
+            };
+        }
+
+        const result = await this.runActionByName(client, 'Get Form Composition For Entity', [
+            { Name: 'EntityName', Value: entityName, Type: 'Input' },
+        ], provider);
+        if (!result.Success) {
+            LogError(`InteractiveFormApplyService: composition lookup failed: ${result.Message ?? 'unknown error'}`);
+            return null;
+        }
+        return this.parseComposition(result.Message, entityName);
+    }
+
+    /** The `Get Form Composition For Entity` payload, as the dialog's context. */
+    private parseComposition(message: string | undefined, entityName: string): FormPlacementContext | null {
+        try {
+            const raw = JSON.parse(message ?? '{}') as {
+                Sections?: Array<{ Key: string; Title: string; Fields?: Array<{ Name: string; Label: string }> }>;
+                Related?: Array<{ Entity: string; JoinField: string }>;
+                Contributions?: Array<{ Key: string; Slot: string; Title: string }>;
+                Layout?: string;
+                SlotsPresent?: FormContributionSlot[];
+                FullCustomForm?: boolean;
+            };
+            return {
+                EntityName: entityName,
+                Sections: (raw.Sections ?? []).map(s => ({
+                    Key: s.Key, Title: s.Title,
+                    Fields: (s.Fields ?? []).map(f => ({ Name: f.Name, Label: f.Label })),
+                })),
+                Related: (raw.Related ?? []).map(r => ({
+                    Entity: r.Entity, JoinField: r.JoinField, DisplayName: r.Entity,
+                })),
+                Existing: (raw.Contributions ?? []).map(c => ({ Key: c.Key, Slot: c.Slot, Title: c.Title })),
+                SlotsPresent: raw.SlotsPresent ?? [],
+                // The generated shape, not this form's. The dialog probes to replace it.
+                SlotsVerified: false,
+                Layout: raw.Layout === 'left-nav' ? 'left-nav' : 'accordion',
+                // Entity metadata cannot say what the rail looks like — the probe resolves it.
+                Rail: [],
+                FullCustomForm: raw.FullCustomForm === true,
+                // Derived from entity metadata. A generated form is frozen at the last CodeGen
+                // run, so a section the metadata describes may not be one the form draws.
+                TargetsVerified: false,
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Opens the placement dialog and waits for the answers. Null means the user backed out.
+     *
+     * The proposal is passed in whole, but the dialog reads only what the component's author
+     * can know from having built it — where the panel goes is decided here, not upstream.
+     */
+    private askWherePanelGoes(
+        context: FormPlacementContext,
+        proposal: FormContributionSpec,
+        componentName: string | undefined,
+    ): Promise<FormPlacementDecision | null> {
+        return new Promise<FormPlacementDecision | null>((resolve) => {
+            const ref = this.dialog.Open({
+                content: MjFormPlacementDialogComponent,
+                width: 1080,
+                minWidth: 720,
+            });
+            const dialog = ref.Content?.instance as unknown as MjFormPlacementDialogComponent | undefined;
+            if (!dialog) {
+                ref.Close();
+                resolve(null);
+                return;
+            }
+            dialog.ComponentName = componentName ?? proposal.title;
+            dialog.Proposal = proposal;
+            dialog.Context = context;
+
+            let settled = false;
+            const finish = (decision: FormPlacementDecision | null): void => {
+                if (settled) return;
+                settled = true;
+                ref.Close();
+                resolve(decision);
+            };
+            dialog.Applied.subscribe((decision: FormPlacementDecision) => finish(decision));
+            dialog.Cancelled.subscribe(() => finish(null));
+            // The backdrop and the title-bar close both resolve the ref without reaching
+            // either output, so treat that as a cancel rather than hanging the caller.
+            ref.Result.subscribe(() => { if (!settled) { settled = true; resolve(null); } });
+        });
     }
 
     /**
@@ -348,7 +454,7 @@ export class InteractiveFormApplyService {
 
     /**
      * Best-effort activation. On failure the row stays a Pending draft the user can
-     * activate from Form Studio, so we log rather than failing the whole apply.
+     * activate from "Panels on this form", so we log rather than failing the whole apply.
      */
     private async activateContribution(
         client: GraphQLActionClient,
@@ -362,6 +468,32 @@ export class InteractiveFormApplyService {
             LogError(`InteractiveFormApplyService: contribution ${contributionID} created but activation failed: ${act.Message ?? 'unknown error'}`);
         }
         return act.Success;
+    }
+
+    /**
+     * The caller's own live row for this panel, or undefined when there is none.
+     *
+     * `contributionKey` is the declared identity and is matched first. A spec that
+     * declares none still has one — the component name — and matching on it is what
+     * stops a second apply of the same panel installing a second copy beside the
+     * first. Without that fallback an identity-less panel is unrecognizable to its
+     * own next apply, and the form grows a duplicate on every press.
+     */
+    private findExistingContribution(
+        rows: ParsedContribution[],
+        key: string | null,
+        componentName: string | undefined,
+    ): ParsedContribution | undefined {
+        const mine = rows.filter(c =>
+            c.Scope === 'User' && (c.Status === 'Active' || c.Status === 'Pending'));
+
+        if (key) {
+            return mine.find(c => c.ContributionKey === key);
+        }
+
+        const name = componentName?.trim();
+        if (!name) return undefined;
+        return mine.find(c => !c.ContributionKey && c.ComponentName?.trim() === name);
     }
 
     private parseContributions(message: string | undefined): ParsedContribution[] {
@@ -485,14 +617,20 @@ export class InteractiveFormApplyService {
     /** Show a confirmation dialog explaining what's about to happen. */
     private async confirm(
         hasExistingActive: boolean,
+        isNewVersion: boolean,
         entityName: string,
         currentVersion: string | null | undefined,
     ): Promise<boolean> {
         // The dialog renders string content as plain text (not innerHTML), so use
         // plain text here — HTML tags would show raw.
-        const content = hasExistingActive
-            ? `You already have a custom form for "${entityName}" (v${currentVersion ?? '?'}). Applying this will create a new version and make it your active form. The previous version is preserved and can be restored from Form Builder.`
-            : `This will create a custom form for "${entityName}" scoped to your user and make it active. Other users will continue to see the default form.`;
+        let content: string;
+        if (isNewVersion) {
+            content = `This is a new version of the custom form you already use for "${entityName}" (v${currentVersion ?? '?'}). Applying it makes the new version your active form; the previous version is preserved and can be restored.`;
+        } else if (hasExistingActive) {
+            content = `You already have a custom form for "${entityName}". This is a different form, so applying it makes this one live and puts the other aside — nothing is merged. Switch between them from the form picker in the toolbar.`;
+        } else {
+            content = `This will create a custom form for "${entityName}" scoped to your user and make it active. Other users will continue to see the default form.`;
+        }
         // MJDialogAction surface is {text, primary?, themeColor?}; the
         // dialog's Result observable emits the entire clicked action (or
         // undefined for backdrop/X dismissal). Detect intent via the

@@ -3,6 +3,7 @@ import { BaseEntity, ValidationResult, type FormInclusion } from '@memberjunctio
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import { FormToolbarItemConfig, FormToolbarItemKey } from '../types/form-toolbar-item';
+import { SlotDisplayOrder } from './slot-order';
 
 /**
  * Well-known slot positions where panels can be injected into a generated
@@ -87,6 +88,12 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      */
     replacesSectionKey?: string;
     /**
+     * A single field this contribution stands in for. The panel renders at the top of the
+     * section holding that field, and the field is not drawn. Use instead of
+     * `replacesSectionKey` when the panel replaces one input rather than a whole group.
+     */
+    replacesFieldName?: string;
+    /**
      * Pin this contribution to a chrome bucket instead of its own rail item.
      * `'details'` — leftover own-fields group. `'more'` — overflow folder.
      */
@@ -157,6 +164,41 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
     @Input() FormComponent!: BaseFormComponent;
     /** Optional form context — same shape the collapsible-panel chrome expects. Set by the slot host. */
     @Input() FormContext?: FormContext;
+
+    /**
+     * The registration this panel was mounted from. Set by the slot host.
+     *
+     * A panel reads its own slot from here, which is the only way it can know where in the
+     * form it was asked to sit: the class registration is looked up by the host, not by the
+     * panel, so nothing else on the instance carries it.
+     */
+    @Input() RegistrationMetadata?: FormPanelRegistrationMetadata;
+
+    /**
+     * The registration a subclass answers from. Overridden where the panel holds its
+     * registration somewhere other than {@link RegistrationMetadata}.
+     */
+    protected get PanelMetadata(): FormPanelRegistrationMetadata | undefined {
+        return this.RegistrationMetadata;
+    }
+
+    /**
+     * Flex order for the panel's own `mj-collapsible-panel`, to pass as `[Order]`.
+     *
+     * A panel's section key is not in the form's section order, so without this the form
+     * falls back to the section count and draws every panel at the bottom whatever slot it
+     * asked for. A panel standing in for a section takes that section's place instead, so
+     * replacing something does not also move it.
+     */
+    public get DisplayOrder(): number {
+        const metadata = this.PanelMetadata;
+        const replaced = metadata?.replacesSectionKey?.trim();
+        if (replaced) {
+            const index = this.FormComponent?.getSectionOrderIndex?.(replaced);
+            if (index != null) return index;
+        }
+        return SlotDisplayOrder(metadata?.slot ?? 'after-everything', metadata?.sortKey ?? 0);
+    }
 
     /**
      * Convenience getter for read-only / edit-mode rendering. Falls back to

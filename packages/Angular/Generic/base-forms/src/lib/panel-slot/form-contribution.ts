@@ -79,6 +79,8 @@ export interface FormContributionWinner {
     RelatedJoinField?: string;
     /** Field/other section this registered winner asked to hide. */
     ReplacesSectionKey?: string;
+    /** Single field this registered winner stands in for, so the field is not drawn. */
+    ReplacesFieldName?: string;
     BakedSectionKey: string;
     DisplayName: string;
 
@@ -283,6 +285,7 @@ function registeredWinner(
         RelatedEntity: meta.relatedEntity,
         RelatedJoinField: meta.relatedJoinField ? StripJoinFieldBrackets(meta.relatedJoinField) : undefined,
         ReplacesSectionKey: meta.replacesSectionKey?.trim() || undefined,
+        ReplacesFieldName: meta.replacesFieldName?.trim() || undefined,
         BakedSectionKey: sectionKey,
         DisplayName: displayName,
         Source: reg.Source,
@@ -403,4 +406,34 @@ export function ClaimedRelatedSectionKeys(
     registrations: readonly FormContributionRegistration[],
 ): string[] {
     return ContributionHiddenSectionKeys(entityName, relatedEntities, isaChildEntityIDs, registrations);
+}
+
+/**
+ * Field names a winning contribution stands in for, so the form stops drawing them.
+ *
+ * Separate from {@link ContributionHiddenSectionKeys} because the two hide different
+ * things: a section key removes a whole card, a field name removes one input from inside
+ * one. The panel that made the claim renders at the top of the section that held the field,
+ * which is the collapsible panel's job — this only says which fields are spoken for.
+ */
+export function ContributionClaimedFieldNames(
+    entityName: string,
+    relatedEntities: readonly FormContributionRelationship[],
+    isaChildEntityIDs: readonly string[],
+    registrations: readonly FormContributionRegistration[],
+): string[] {
+    const resolved = ResolveFormContributions({
+        EntityName: entityName,
+        RelatedEntities: relatedEntities,
+        IsaChildEntityIDs: isaChildEntityIDs,
+        Registrations: registrations,
+        BakedSectionKeys: [],
+        ShowRelatedEntities: true,
+    });
+    const names: string[] = [];
+    for (const winner of resolved.Winners) {
+        if (winner.Kind !== 'registered') continue;
+        if (winner.ReplacesFieldName) names.push(winner.ReplacesFieldName);
+    }
+    return names;
 }

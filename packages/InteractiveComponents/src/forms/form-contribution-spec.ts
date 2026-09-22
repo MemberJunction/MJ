@@ -11,17 +11,46 @@ export const FORM_CONTRIBUTION_SLOTS: readonly FormContributionSlot[] =
     ['top-area', 'before-fields', 'after-fields', 'after-related', 'after-everything'];
 
 /**
+ * The slots a generated form actually emits.
+ *
+ * CodeGen writes `before-fields`, `after-fields` and `after-related` into every form it
+ * produces, and the record container always terminates the fallback chain with
+ * `after-everything`. `top-area` is absent: no form emits it, so a panel aimed there
+ * falls through to the bottom.
+ *
+ * Used wherever a form's real slot set is not yet known, so a position nothing renders is
+ * never offered as a choice. A hand-written template can differ, which is why a form that
+ * can be read is read instead of assumed.
+ */
+export const GENERATED_FORM_CONTRIBUTION_SLOTS: readonly FormContributionSlot[] =
+    ['before-fields', 'after-fields', 'after-related', 'after-everything'];
+
+/**
  * Registration intent carried on `ComponentSpec.formContribution`. Mirrors
  * `MJ: Entity Form Contributions` columns one-to-one, minus scope and precedence
  * (host decisions) and minus identity (`Name` / `ComponentID`).
  */
 export interface FormContributionSpec {
-    slot: FormContributionSlot;
+    /**
+     * Where on the form the panel sits.
+     *
+     * Optional because placement is the user's choice, made in the apply dialog, not the
+     * component author's — a generated spec that omits it behaves exactly like one that
+     * names a slot. {@link getDeclaredFormContribution} fills the default, so everything
+     * downstream of normalization still sees a concrete slot.
+     */
+    slot?: FormContributionSlot;
     sortKey?: number;
     contributionKey?: string;
     relatedEntity?: string;
     relatedJoinField?: string;
     replacesSectionKey?: string;
+    /**
+     * A single field the panel stands in for. The panel renders at the top of the section
+     * holding that field, and the field itself is not drawn. Set instead of
+     * `replacesSectionKey` or `relatedEntity`, never alongside either.
+     */
+    replacesFieldName?: string;
     inclusion?: FormContributionInclusion;
     chromeGroup?: FormContributionChromeGroup;
     presentation: FormContributionPresentation;
@@ -29,6 +58,9 @@ export interface FormContributionSpec {
     icon?: string;
     configuration?: Record<string, unknown>;
 }
+
+/** A contribution block after normalization, where the slot has been resolved. */
+export type NormalizedFormContributionSpec = FormContributionSpec & { slot: FormContributionSlot };
 
 /** True iff the spec commits to the form-panel contract. */
 export function isFormPanelRole(spec: Pick<ComponentSpec, 'componentRole'>): boolean {
@@ -53,11 +85,11 @@ function cleanString(value: unknown): string | undefined {
  */
 export function getDeclaredFormContribution(
     spec: Pick<ComponentSpec, 'componentRole' | 'title' | 'formContribution'> | null | undefined,
-): FormContributionSpec | null {
+): NormalizedFormContributionSpec | null {
     if (!spec || !isFormPanelRole(spec)) return null;
     const raw: Partial<FormContributionSpec> = spec.formContribution ?? {};
     const title = cleanString(raw.title) ?? cleanString(spec.title) ?? 'Panel';
-    const out: FormContributionSpec = {
+    const out: NormalizedFormContributionSpec = {
         slot: isSlot(raw.slot) ? raw.slot : DEFAULT_FORM_CONTRIBUTION_SLOT,
         presentation: raw.presentation === 'bare' ? 'bare' : 'panel',
         title,
@@ -72,6 +104,8 @@ export function getDeclaredFormContribution(
     if (join) out.relatedJoinField = join;
     const replaces = cleanString(raw.replacesSectionKey);
     if (replaces) out.replacesSectionKey = replaces;
+    const replacesField = cleanString(raw.replacesFieldName);
+    if (replacesField) out.replacesFieldName = replacesField;
     if (raw.inclusion === 'Primary' || raw.inclusion === 'More' || raw.inclusion === 'None') out.inclusion = raw.inclusion;
     if (raw.chromeGroup === 'details' || raw.chromeGroup === 'more') out.chromeGroup = raw.chromeGroup;
     const icon = cleanString(raw.icon);

@@ -265,7 +265,8 @@ export class FormResolverService {
      *     form-loading path falls back to CodeGen's `@RegisterClass` lookup.
      *     This is what makes the Angular fallback reachable from the UI.
      *   - Else if the user has a saved variant ID AND that variant is in
-     *     the applicable list AND it's Active → use it.
+     *     the applicable list AND it is not Pending → use it, whether it
+     *     holds Active or was set aside by a later apply.
      *   - Else → first Active row in tier+priority order (auto-pick).
      *   - Else → null (fall back to CodeGen/@RegisterClass path).
      */
@@ -278,7 +279,11 @@ export class FormResolverService {
             return null;
         }
         if (selectedID) {
-            const sel = variants.find(v => v.Status === 'Active' && UUIDsEqual(v.ID, selectedID));
+            // A set-aside form is a legitimate choice, not history: applying a second form
+            // sets the first one aside rather than merging into it, so the picker offers
+            // both and the user's pick outranks which row happens to hold Active. A
+            // Pending row is an unfinished draft and is never rendered this way.
+            const sel = variants.find(v => v.Status !== 'Pending' && UUIDsEqual(v.ID, selectedID));
             if (sel) return sel;
             // Selection no longer valid — wipe it so future loads auto-pick.
             this.ClearSelectedVariant(entity.Name);

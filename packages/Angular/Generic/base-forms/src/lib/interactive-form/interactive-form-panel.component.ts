@@ -14,7 +14,7 @@ import {
     type FormValidationChangedArgs,
 } from '@memberjunction/interactive-component-types/forms';
 import { MJReactComponent, ReactBridgeService, type ReactComponentEvent } from '@memberjunction/ng-react';
-import { BaseFormPanel } from '../panel-slot/base-form-panel';
+import { BaseFormPanel, type FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
 import { ResolveContributionKey, type FormContributionRegistration } from '../panel-slot/form-contribution';
 import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
 
@@ -79,6 +79,14 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
 
     public get IsRelatedClaim(): boolean {
         return !!this.Contribution.Metadata.relatedEntity?.trim();
+    }
+
+    /**
+     * The registration this panel renders, which it holds as a whole contribution rather
+     * than as the bare bag the slot host assigns. Answers `DisplayOrder` on the base.
+     */
+    protected override get PanelMetadata(): FormPanelRegistrationMetadata | undefined {
+        return this.Contribution?.Metadata ?? super.PanelMetadata;
     }
 
     public get Variant(): 'default' | 'related-entity' {

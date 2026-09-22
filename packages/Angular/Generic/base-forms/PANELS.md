@@ -341,9 +341,26 @@ Related section keys use the same camelCase as CodeGen (`FormSectionCamelCase` /
 
 A row carries the same registration bag this document describes for the compiled metadata object —
 `Slot`, `SortKey`, `ContributionKey`, `RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`,
-`Inclusion`, `ChromeGroup`, `Presentation` — plus `Title`, `Icon`, a free-form `Configuration` JSON
-blob handed to the component, and scope (`User` / `Role` / `Global`) with status
-(`Active` / `Pending` / `Inactive`).
+`ReplacesFieldName`, `Inclusion`, `ChromeGroup`, `Presentation` — plus `Title`, `Icon`, a free-form
+`Configuration` JSON blob handed to the component, and scope (`User` / `Role` / `Global`) with
+status (`Active` / `Pending` / `Inactive`).
+
+### What a contribution can stand in for
+
+Four sizes of claim, largest first. A contribution makes at most one of them — the database
+enforces that, because replacing a section and one field inside it describes two different panels.
+
+| Claim | Field on the row | What goes | Where the panel draws |
+|---|---|---|---|
+| A whole rail tab | `ReplacesSectionKey` = a rail key | every panel filed under that tab | as that tab |
+| One field section | `ReplacesSectionKey` = a section key | that section's card | where the card was |
+| One field | `ReplacesFieldName` | that one input | at the top of the section that held it |
+| A related grid | `RelatedEntityID` (+ `RelatedJoinField`) | the stock grid | as that grid's section |
+
+A field claim is the only one whose position is not the panel's to choose: it belongs inside the
+section that drew the field, so the `Slot` on the row does not apply. `<mj-collapsible-panel>`
+hosts it — the section is the only thing that knows which fields it draws — and the field itself
+stops rendering through `FormContext.claimedFieldNames`.
 
 **You do not need to do anything to support this.** `CollectFormContributionRegistrations` merges
 rows and class registrations into one list before the composer runs, so a compiled panel competes
@@ -352,6 +369,11 @@ highest rank wins, and a compiled registration wins a tie.
 
 What a panel author should know:
 
+- **A compiled panel can make the same claims.** `replacesFieldName` sits on the registration
+  metadata beside `replacesSectionKey`, and the slot host passes the whole bag to the panel as
+  `RegistrationMetadata`, which is what `BaseFormPanel.DisplayOrder` reads. Pass that getter as
+  `[Order]` on your own `mj-collapsible-panel` or the form draws your panel last whatever slot it
+  asked for.
 - **Your panel can be replaced by a row**, but only deliberately — the apply flow asks the user
   before writing a row whose precedence exceeds an installed contribution's.
 - **`presentation: 'bare'`** is how both sources declare a hero: a strip that draws no collapsible

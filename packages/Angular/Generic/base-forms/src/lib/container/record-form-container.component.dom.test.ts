@@ -53,6 +53,17 @@ class SectionManagerStub {
   @Input() LockedMoreKeys: unknown;
   @Input() Visible = false;
 }
+@Component({ standalone: true, selector: 'mj-panel-manager', template: '' })
+class PanelManagerStub {
+  @Input() Visible = false;
+  @Input() Entity: unknown;
+  @Input() Compiled: unknown;
+  @Input() StockGrids: unknown;
+  @Input() FullCustomForm = false;
+  @Input() TitleByKey: unknown;
+  @Input() Related: unknown;
+  @Input() Provider: unknown;
+}
 @Component({ standalone: true, selector: 'mj-form-panel-slot', template: '' })
 class PanelSlotStub { @Input() Entity: unknown; @Input() Record: unknown; @Input() FormComponent: unknown; }
 @Component({ standalone: true, selector: 'mj-empty-state', template: '' })
@@ -70,7 +81,7 @@ class ListMgmtStub { @Input() visible = false; @Input() config: unknown; }
 @Component({ standalone: true, selector: 'mj-form-contributions', template: '' })
 class FormContributionsStub { @Input() Record: unknown; @Input() FormComponent: unknown; @Input() FormContext: unknown; @Input() BakedSectionKeys: unknown; @Input() ShowRelatedEntities = true; }
 
-const CHILD_STUBS = [ToolbarStub, SectionManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordAttachmentsStub, ListMgmtStub, FormContributionsStub];
+const CHILD_STUBS = [ToolbarStub, SectionManagerStub, PanelManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordAttachmentsStub, ListMgmtStub, FormContributionsStub];
 
 const RECORD = { EntityInfo: { Name: 'Accounts' } } as unknown as BaseEntity;
 
@@ -443,6 +454,38 @@ describe('MjRecordFormContainerComponent (DOM) — left-nav Details card classes
     expect(el.history.classList.contains('mj-chrome-details-first')).toBe(false);
   });
 
+  /**
+   * A contribution filed into Details is in no section list, so `getSectionDisplayOrder`
+   * answers with the section count — the highest order there is — while the panel lays
+   * itself out by its slot band, well above every field section. Taking the order from
+   * the form drew the card's top edge under the panel, so the panel read as loose and the
+   * fields as a separate card below it.
+   */
+  it('takes the card edges from the order each panel carries, not from the form section list', () => {
+    const { f, el } = setUp({ identity: 0, history: 1, physical: 2 });
+    const panel = document.createElement('mj-collapsible-panel');
+    panel.setAttribute('data-section-key', 'panel:OrgMemberOverviewPanel');
+    panel.setAttribute('data-variant', 'default');
+    // before-fields: the band the slot gives it, far above any field section.
+    panel.style.order = '-1000000';
+    (query(f, '.mj-forms-all-panels') as HTMLElement).appendChild(panel);
+    f.debugElement.injector.get(FormChromeCoordinator).Apply({
+      Layout: 'left-nav',
+      Groups: [
+        { Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card',
+          SectionKeys: ['panel:OrgMemberOverviewPanel', 'identity', 'history', 'physical'], IsMore: false },
+      ],
+      RelatedRoles: new Map(),
+      MoreSectionKeys: [],
+    });
+    f.componentInstance.OnChromeGroupActivate(DETAILS_SECTION_KEY);
+
+    expect(panel.classList.contains('mj-chrome-details-first')).toBe(true);
+    expect(panel.classList.contains('mj-chrome-details-last')).toBe(false);
+    expect(el.identity.classList.contains('mj-chrome-details-first')).toBe(false);
+    expect(el.physical.classList.contains('mj-chrome-details-last')).toBe(true);
+  });
+
   it('moves the card edges when the display order changes, and clears them when Details is not active', () => {
     const order: Record<string, number> = { identity: 0, history: 1, physical: 2 };
     const { f, el } = setUp(order);
@@ -462,5 +505,47 @@ describe('MjRecordFormContainerComponent (DOM) — left-nav Details card classes
     expect(classes(el.identity)).toEqual(['mj-chrome-hidden']);
     expect(classes(el.physical)).toEqual(['mj-chrome-hidden']);
     expect(classes(el.careLogs)).toEqual(['mj-chrome-show']);
+  });
+});
+
+/**
+ * The related-grid fill-in exists to close CodeGen drift: a relationship added after the
+ * form was generated has no baked grid, so the container supplies one. A form that renders
+ * its own body bakes nothing by design, so every relationship would read as drift and the
+ * container would compose grids the author never asked for.
+ */
+describe('MjRecordFormContainerComponent (DOM) — form that owns its body', () => {
+  const withForm = (form: Partial<BaseFormComponent>) => {
+    const f = render();
+    f.componentInstance.FormComponent = form as BaseFormComponent;
+    return f;
+  };
+
+  it('turns the related-grid fill-in off', () => {
+    expect(withForm({ OwnsEntireFormBody: true }).componentInstance.EffectiveShowRelatedEntities).toBe(false);
+  });
+
+  it('leaves the fill-in on for an ordinary form', () => {
+    expect(withForm({ OwnsEntireFormBody: false }).componentInstance.EffectiveShowRelatedEntities).toBe(true);
+  });
+
+  it('still honours an explicit ShowRelatedEntities: false on an ordinary form', () => {
+    const form = { OwnsEntireFormBody: false, Config: { ShowRelatedEntities: false } };
+    expect(withForm(form as Partial<BaseFormComponent>).componentInstance.EffectiveShowRelatedEntities).toBe(false);
+  });
+});
+
+/**
+ * A contribution naming a rail TAB's key stands in for that whole tab. A tab is built at
+ * render time, so its key matches no panel one-to-one and has to be expanded here. No tab
+ * is privileged — Details is one key among the rail's — and the expansion never reaches
+ * the other tabs, which is what separates this from replacing the whole form.
+ */
+describe('MjRecordFormContainerComponent (DOM) — a contribution that replaces a whole tab', () => {
+  const hiddenKeys = (f: ReturnType<typeof render>) =>
+    (f.componentInstance as unknown as { railTabSectionKeys(): string[] }).railTabSectionKeys();
+
+  it('hides nothing when no contribution claims a tab', () => {
+    expect(hiddenKeys(render())).toEqual([]);
   });
 });

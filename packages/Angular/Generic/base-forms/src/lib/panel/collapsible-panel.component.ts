@@ -11,6 +11,7 @@ import { FormContext, PanelVariant, PanelDragStartEvent, PanelDropEvent } from '
 import { IsFormSectionHidden } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { MjFormFieldComponent } from '../field/form-field.component';
+import type { BaseFormComponent } from '../base-form-component';
 import { CompositeKey } from '@memberjunction/core';
 import { EscapeHTML, HighlightSearchMatches, type ValidationErrorInfo } from '@memberjunction/global';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
@@ -124,6 +125,15 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   /** Panel visual variant */
   @Input() Variant: PanelVariant = 'default';
 
+  /**
+   * Flex order, for a panel the form's section order does not know about.
+   *
+   * `getSectionDisplayOrder` answers with the section count for an unknown key, which is
+   * the highest order on the form — so a contribution panel rendered anywhere lands last
+   * regardless of the slot it mounted in. A slot-derived order is passed here instead.
+   */
+  @Input() Order: number | null = null;
+
   /** Row count badge for related entity sections */
   @Input() BadgeCount: number | undefined;
 
@@ -198,6 +208,19 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   FieldNames = '';
   IsVisible = true;
 
+  /**
+   * The fields this panel draws, for the contributions that stand in for one and for the
+   * composition snapshot the placement dialog reads.
+   *
+   * Held as fields rather than derived in getters: the field-panel slot treats a new array
+   * as a structural change, and a getter would hand it one on every change-detection pass.
+   * Recomputed only when the projected fields change.
+   */
+  public ClaimableFields: Array<{ Name: string; Label: string }> = [];
+
+  /** Just the names, for the field-panel slot. Same lifetime as {@link ClaimableFields}. */
+  public ClaimableFieldNames: string[] = [];
+
   @HostBinding('attr.data-section-key')
   get HostSectionKey(): string {
     return this.SectionKey;
@@ -249,9 +272,45 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return classes.join(' ');
   }
 
+  /**
+   * Flex order, in precedence: where the user put this panel, then where its host said
+   * to put it, then the form's section order.
+   *
+   * The user's own placement has to win. `Order` is a fixed number a host supplies — a
+   * contribution panel derives one from its slot — and taking it unconditionally meant
+   * dragging such a panel wrote a new section order that nothing ever read, so the panel
+   * did not move and the drag looked broken.
+   */
+  /**
+   * The host form, when this panel sits in one.
+   *
+   * `Form` stays `unknown` because the panel is reused outside a form host; this narrows
+   * it for the one place that needs the record and the provider. The import is type-only,
+   * so nothing about the runtime dependency direction changes.
+   */
+  public get FieldPanelForm(): BaseFormComponent | null {
+    return (this.Form as BaseFormComponent | undefined) ?? null;
+  }
+
+  /** The entity this panel's fields belong to, or '' outside a form. */
+  public get FieldPanelEntity(): string {
+    return this.FieldPanelForm?.record?.EntityInfo?.Name ?? '';
+  }
+
+  /** True when a contribution could claim one of this panel's fields. */
+  public get HostsFieldPanels(): boolean {
+    return this.ClaimableFieldNames.length > 0 && !!this.FieldPanelForm?.record;
+  }
+
   @HostBinding('style.order')
   get CssOrder(): number {
-    const formRef = this.Form as { getSectionDisplayOrder?: (key: string) => number };
+    const formRef = this.Form as {
+      getSectionDisplayOrder?: (key: string) => number;
+      getSectionOrderIndex?: (key: string) => number | null;
+    };
+    const placed = formRef?.getSectionOrderIndex?.(this.SectionKey);
+    if (placed != null) return placed;
+    if (this.Order != null) return this.Order;
     return formRef?.getSectionDisplayOrder ? formRef.getSectionDisplayOrder(this.SectionKey) : 0;
   }
 
@@ -578,6 +637,14 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   // ---- Private Methods ----
 
+  /**
+   * Move one panel to another's position and store the result.
+   *
+   * The list this works on is every panel currently on the form in the order they are
+   * drawn, not the form's declared sections. A contribution panel is in no declared
+   * section list, so working from that list meant a drag involving one matched no index
+   * and returned without doing anything — the handle moved and the form did not.
+   */
   private ReorderSections(sourceSectionKey: string, targetSectionKey: string): void {
     const formRef = this.Form as {
       getSectionOrder?: () => string[];
@@ -585,7 +652,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     };
     if (!formRef?.getSectionOrder || !formRef?.setSectionOrder) return;
 
-    const currentOrder = formRef.getSectionOrder();
+    const currentOrder = this.VisualPanelOrder(formRef.getSectionOrder());
     const sourceIndex = currentOrder.indexOf(sourceSectionKey);
     const targetIndex = currentOrder.indexOf(targetSectionKey);
     if (sourceIndex === -1 || targetIndex === -1) return;
@@ -595,6 +662,44 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     newOrder.splice(targetIndex, 0, sourceSectionKey);
     formRef.setSectionOrder(newOrder);
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Every panel on the form, in the order it is drawn.
+   *
+   * Ordered by each panel's own `style.order`, which is what CSS lays them out by, so a
+   * panel positioned by its slot rather than by the section list still lands in the right
+   * place here. Falls back to the declared order when the DOM cannot be read.
+   *
+   * Searched over descendants of the panels column, not over siblings: a contribution
+   * panel is wrapped in its slot host, so it is not a sibling of the baked panels even
+   * though it renders among them.
+   */
+  private VisualPanelOrder(declared: readonly string[]): string[] {
+    const host = this.elementRef?.nativeElement as HTMLElement | undefined;
+    const column = host?.closest?.('.mj-forms-all-panels') ?? host?.parentElement;
+    if (!column) return [...declared];
+
+    const seen = new Set<string>();
+    const found: Array<{ key: string; order: number; index: number }> = [];
+    Array.from(column.querySelectorAll('[data-section-key]')).forEach((node, index) => {
+      const key = node.getAttribute('data-section-key')?.trim();
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      const raw = Number((node as HTMLElement).style?.order);
+      found.push({ key, order: Number.isFinite(raw) ? raw : 0, index });
+    });
+    if (found.length === 0) return [...declared];
+
+    const ordered = found
+      .sort((a, b) => (a.order - b.order) || (a.index - b.index))
+      .map((entry) => entry.key);
+    // A declared section the DOM did not show — hidden, filtered — keeps its place in
+    // the stored order rather than being dropped from it.
+    for (const key of declared) {
+      if (!seen.has(key)) ordered.push(key);
+    }
+    return ordered;
   }
 
   /**
@@ -629,6 +734,23 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return !this.chrome.IsFirstClassSectionVisible(this.SectionKey);
   }
 
+  /**
+   * Refresh {@link ClaimableFieldNames}, keeping the previous array when the set is
+   * unchanged so the field-panel slot does not read a new reference as a new set.
+   */
+  private UpdateClaimableFieldNames(): void {
+    const next: Array<{ Name: string; Label: string }> = [];
+    this.FieldComponents?.forEach((field) => {
+      if (field.FieldName) next.push({ Name: field.FieldName, Label: field.HostFieldLabel });
+    });
+    const prev = this.ClaimableFields;
+    const same = prev.length === next.length
+      && prev.every((f, i) => f.Name === next[i].Name && f.Label === next[i].Label);
+    if (same) return;
+    this.ClaimableFields = next;
+    this.ClaimableFieldNames = next.map((f) => f.Name);
+  }
+
   private UpdateFieldNames(): void {
     if (this.FieldComponents) {
       const names: string[] = [];
@@ -638,6 +760,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
         }
       });
       this.FieldNames = names.join(' ');
+      this.UpdateClaimableFieldNames();
       this.UpdateVisibilityAndHighlighting();
     }
   }

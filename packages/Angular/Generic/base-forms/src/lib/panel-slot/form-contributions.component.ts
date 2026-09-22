@@ -57,7 +57,7 @@ export class FormContributionsComponent implements OnChanges {
             EntityName: entity.Name,
             RelatedEntities: entity.RelatedEntities,
             IsaChildEntityIDs: entity.ChildEntities.map((child) => child.ID),
-            Registrations: CollectFormPanelRegistrations(),
+            Registrations: this.FormComponent.OwnsEntireFormBody ? [] : CollectFormPanelRegistrations(),
             BakedSectionKeys: this.BakedSectionKeys,
             ShowRelatedEntities: this.ShowRelatedEntities,
         });

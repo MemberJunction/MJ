@@ -72,6 +72,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJTagScopes', sectionName: 'Tag Scopes', isExpanded: false },
             { sectionKey: 'mJVersionLabelItems', sectionName: 'Version Label Items', isExpanded: false },
             { sectionKey: 'mJVersionLabels', sectionName: 'Version Labels', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonAddressLinks', sectionName: 'MJ_BizApps_Common: Address Links', isExpanded: false },
             { sectionKey: 'mJArchiveConfigurationEntities', sectionName: 'Archive Configuration Entities', isExpanded: false },
             { sectionKey: 'mJArchiveRunDetails', sectionName: 'Archive Run Details', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationEntityMaps', sectionName: 'Company Integration Entity Maps', isExpanded: false },
@@ -103,7 +104,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJFormChromeRulesRelatedEntityID', sectionName: 'Form Chrome Rules (Related Entity)', isExpanded: false },
             { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false },
             { sectionKey: 'mJEntityFormContributionsEntityID', sectionName: 'Entity Form Contributions (Parent Entity)', isExpanded: false },
-            { sectionKey: 'mJEntityFormContributionsRelatedEntityID', sectionName: 'Entity Form Contributions (Related Entity)', isExpanded: false }
+            { sectionKey: 'mJEntityFormContributionsRelatedEntityID', sectionName: 'Entity Form Contributions (Related Entity)', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonActivityLinks', sectionName: 'Activity Links', isExpanded: false }
         ]);
     }
 }

@@ -96,6 +96,9 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      */
     @Input() public previewMode = false;
 
+    /** A full custom entity form replaces the whole form body. */
+    public override get OwnsEntireFormBody(): boolean { return true; }
+
     /** FormHostProps passed to the React component. Recomputed when record or mode changes. */
     public formHostProps: FormHostProps | null = null;
 

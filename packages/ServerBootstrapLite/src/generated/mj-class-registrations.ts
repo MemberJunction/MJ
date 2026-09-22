@@ -1075,7 +1075,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (151 classes)
+// @memberjunction/core-actions (152 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1144,6 +1144,7 @@ import {
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormCompositionForEntityAction,
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
@@ -2138,6 +2139,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormCompositionForEntityAction,
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
@@ -2245,7 +2247,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 959;
+export const CLASS_REGISTRATIONS_COUNT = 960;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

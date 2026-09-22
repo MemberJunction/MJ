@@ -1340,9 +1340,12 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
 
         // Slot markers — dynamic injection points for BaseFormPanel registrations.
         // See @memberjunction/ng-base-forms PANELS.md for the authoring guide.
-        // Every generated form gets all four slots so registered panels can target
-        // any position WITHOUT requiring CodeGen to know about the panel ahead of
-        // time. Empty slots have zero rendering cost (anchor only).
+        // Every generated form gets these three slots so registered panels can target a
+        // position WITHOUT requiring CodeGen to know about the panel ahead of time. Empty
+        // slots have zero rendering cost (anchor only). `after-everything` is not emitted
+        // here — the container always terminates the fallback chain with it — and
+        // `top-area` is not emitted at all, so a panel registered there falls through to
+        // the bottom of the form.
         const slot = (slotKey: string): string =>
             `    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="${slotKey}" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>`;
 

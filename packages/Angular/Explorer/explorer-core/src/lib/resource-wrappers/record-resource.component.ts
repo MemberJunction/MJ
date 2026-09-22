@@ -4,12 +4,13 @@ import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityInfo, IMetadataProvider, IsNewEntityRecordUrlId } from '@memberjunction/core';
 import { SingleRecordComponent } from '../single-record/single-record.component';
+import type { FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
 @RegisterClass(BaseResourceComponent, 'RecordResource')
 @Component({
   standalone: false,
     selector: 'mj-record-resource',
     styles: [`:host { display: block; height: 100%; width: 100%; }`],
-    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()"></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()" (compositionChanged)="OnCompositionChanged($event)"></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
     @ViewChild(SingleRecordComponent) private singleRecord?: SingleRecordComponent;
@@ -17,6 +18,21 @@ export class EntityRecordResource extends BaseResourceComponent {
     /** A record being edited must never be consumed as the region's temp tab. */
     public override IsEditing(): boolean {
         return this.singleRecord?.IsEditing() === true;
+    }
+
+    /**
+     * Publish the form's composition to the agent context, so an agent asked to build a
+     * panel for this record knows what the form already shows — its sections, its related
+     * grids, the contributions on it, and the slots it emits.
+     *
+     * The shell folds this into `AppContextSnapshot.AdditionalContext` and assigns that
+     * wholesale, so the last publisher wins app-wide. That fails safe: another surface's
+     * publish drops the Form key and an agent simply has no form context. `ComponentCacheManager`
+     * caches each component's reported context and restores it on reactivation, so switching
+     * back to a record tab re-publishes this snapshot without extra plumbing.
+     */
+    public OnCompositionChanged(snapshot: FormCompositionSnapshot): void {
+        this.navigationService.SetAgentContext(this, { Form: snapshot });
     }
 
     public get PrimaryKey(): CompositeKey {

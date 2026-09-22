@@ -20,6 +20,7 @@ export interface FormContributionSummary {
     RelatedEntity: string | null;
     RelatedJoinField: string | null;
     ReplacesSectionKey: string | null;
+    ReplacesFieldName: string | null;
     Inclusion: string | null;
     Presentation: string;
     Title: string | null;
@@ -71,6 +72,7 @@ export class GetFormContributionsForEntityAction extends BaseAction {
                         Name: r.Name, Scope: r.Scope, Status: r.Status, Precedence: r.Precedence ?? 0, Slot: r.Slot,
                         ContributionKey: r.ContributionKey, RelatedEntity: r.RelatedEntity,
                         RelatedJoinField: r.RelatedJoinField, ReplacesSectionKey: r.ReplacesSectionKey,
+                        ReplacesFieldName: r.ReplacesFieldName,
                         Inclusion: r.Inclusion, Presentation: r.Presentation, Title: r.Title,
                     };
                 });

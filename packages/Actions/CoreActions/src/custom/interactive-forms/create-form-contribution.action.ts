@@ -68,7 +68,11 @@ export class CreateFormContributionAction extends BaseAction {
                 contribution.relatedEntity = related.Name;
             }
 
-            const writeKey = ResolveWriteContributionKey(contribution, contribution.relatedEntity ?? null);
+            // The component name is the seed for a panel that claims nothing and names no
+            // key. It has to be read before the Component row is written, because the
+            // duplicate check runs first — a rejected create must leave nothing behind.
+            const componentName = (inputs.Spec.name ?? inputs.Name)?.trim() || inputs.Name;
+            const writeKey = ResolveWriteContributionKey(contribution, contribution.relatedEntity ?? null, componentName);
             const keyCheck = writeKey
                 ? await this.checkKeyAvailable(provider, user, entityInfo.ID, inputs.EntityName, writeKey)
                 : null;
@@ -84,7 +88,7 @@ export class CreateFormContributionAction extends BaseAction {
                 provider, user, entityID: entityInfo.ID, componentID: componentInsert.id,
                 name: inputs.Name, description: inputs.Description, notes: inputs.Notes,
                 contribution, relatedEntityName: contribution.relatedEntity ?? null, relatedEntityID,
-                status: 'Pending', precedence: inputs.Precedence,
+                componentName, status: 'Pending', precedence: inputs.Precedence,
             });
             if ('error' in rowInsert) {
                 return failure("PERSIST_FAILED",

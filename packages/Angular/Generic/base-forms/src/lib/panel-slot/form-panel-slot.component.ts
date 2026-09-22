@@ -1,6 +1,7 @@
 import {
     Component,
     ComponentRef,
+    HostBinding,
     Input,
     OnChanges,
     OnDestroy,
@@ -26,7 +27,7 @@ import {
     type FormContributionRegistration,
 } from './form-contribution';
 import { CollectFormContributionRegistrations } from './collect-form-contribution-registrations';
-import { InteractiveFormPanelComponent } from '../interactive-form/interactive-form-panel.component';
+import { MountFormContribution } from './mount-form-contribution';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
@@ -82,6 +83,12 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     @Input() FormComponent!: BaseFormComponent;
     /** Optional form context — same shape collapsible-panel chrome expects. */
     @Input() FormContext?: FormContext;
+
+    /** The position, on the element, so a form's slot set can be read without its injector. */
+    @HostBinding('attr.data-form-slot')
+    get HostSlot(): string {
+        return this.Slot ?? '';
+    }
 
     @ViewChild('anchor', { read: ViewContainerRef, static: true })
     private anchor!: ViewContainerRef;
@@ -179,6 +186,12 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     private remount(): void {
+        // A form that renders its own body bars every panel. Checked before the readiness
+        // gate so a barred slot never waits on the engine.
+        if (this.FormComponent?.OwnsEntireFormBody) {
+            this.unmountAll();
+            return;
+        }
         // Design decision 9: render both sources together or not at all. Mounting compiled
         // panels first and adding rows a tick later is visible — and for a `bare` hero that
         // replaces a baked section, the user watches that section render and then vanish.
@@ -220,10 +233,11 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
 
         for (const reg of all) {
             try {
-                const ref = reg.Source === 'metadata' ? this.mountMetadata(reg) : this.mountClass(reg);
+                const ref = MountFormContribution(this.anchor, reg);
                 if (!ref) continue;
                 ref.instance.Record = this.Record;
                 ref.instance.FormComponent = this.FormComponent;
+                ref.instance.RegistrationMetadata = reg.Metadata;
                 if (this.FormContext) ref.instance.FormContext = this.FormContext;
                 // Left-nav leftover height targets mj-collapsible-panel as a
                 // flex child of .mj-forms-all-panels. The slot is already
@@ -356,22 +370,6 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
             FormPanelSlotComponent.contributionGateResolved = true;
         }
         this.remount();
-    }
-
-    private mountClass(reg: FormContributionRegistration): ComponentRef<BaseFormPanel> | null {
-        const ctor = reg.Registration?.SubClass as Type<BaseFormPanel> | undefined;
-        if (!ctor) {
-            LogError(`[mj-form-panel-slot] compiled registration for ${reg.Metadata?.entity}:${reg.Metadata?.slot} has no constructor`);
-            return null;
-        }
-        return this.anchor.createComponent(ctor);
-    }
-
-    /** A metadata row mounts through the generic React host rather than its own component. */
-    private mountMetadata(reg: FormContributionRegistration): ComponentRef<BaseFormPanel> {
-        const ref = this.anchor.createComponent(InteractiveFormPanelComponent);
-        (ref.instance as InteractiveFormPanelComponent).Contribution = reg;
-        return ref as unknown as ComponentRef<BaseFormPanel>;
     }
 
     private unmountAll(): void {

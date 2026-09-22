@@ -43,9 +43,9 @@ describe('BuildFormCompositionSnapshot', () => {
 
     it('lists sections with their rail group and hidden flag', () => {
         expect(snapshot.Sections).toEqual([
-            { Key: 'details', Title: 'Details', Variant: 'default', Group: 'details', Hidden: false },
-            { Key: 'personalIdentity', Title: 'Personal Identity', Variant: 'default', Group: 'details', Hidden: true },
-            { Key: 'mJBizAppsCommonAddresses', Title: 'Addresses', Variant: 'related-entity', Group: null, Hidden: false },
+            { Key: 'details', Title: 'Details', Variant: 'default', Group: 'details', Hidden: false, Fields: [] },
+            { Key: 'personalIdentity', Title: 'Personal Identity', Variant: 'default', Group: 'details', Hidden: true, Fields: [] },
+            { Key: 'mJBizAppsCommonAddresses', Title: 'Addresses', Variant: 'related-entity', Group: null, Hidden: false, Fields: [] },
         ]);
     });
 

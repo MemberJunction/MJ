@@ -1,6 +1,6 @@
 import type { BaseEntity, CompositeKey, PlatformSQL } from '@memberjunction/core';
 import { SimpleEntityFieldInfo } from '@memberjunction/interactive-component-types';
-import type { FormContributionSpec, FormPanelHostProps } from '@memberjunction/interactive-component-types/forms';
+import { DEFAULT_FORM_CONTRIBUTION_SLOT, type FormContributionSpec, type FormPanelHostProps } from '@memberjunction/interactive-component-types/forms';
 import type { BaseFormComponent } from '../base-form-component';
 import type { FormContributionRegistration } from '../panel-slot/form-contribution';
 import { StripJoinFieldBrackets } from '../panel-slot/form-contribution';
@@ -112,7 +112,7 @@ export function ContributionSpecToRegistration(
         Configuration: contribution.configuration ?? {},
         Metadata: {
             entity: entityName,
-            slot: contribution.slot,
+            slot: contribution.slot ?? DEFAULT_FORM_CONTRIBUTION_SLOT,
             sortKey: contribution.sortKey ?? 0,
             contributionKey: contribution.contributionKey,
             relatedEntity: contribution.relatedEntity,

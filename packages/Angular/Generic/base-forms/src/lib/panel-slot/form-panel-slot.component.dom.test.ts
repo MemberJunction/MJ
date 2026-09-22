@@ -101,3 +101,27 @@ describe('FormPanelSlotComponent (DOM) — strict entity matching', () => {
     expect(warnings.some(w => w.includes('ZZZ_SlotStrictEntity') && w.includes('will not mount'))).toBe(true);
   });
 });
+
+/**
+ * A full custom entity form owns its whole body, so it bars every contribution. The
+ * check belongs here rather than in the form template: the container always emits an
+ * `after-everything` slot, which would otherwise catch every panel the form declined
+ * to position and render the lot at the bottom.
+ */
+describe('FormPanelSlotComponent (DOM) — host form owns its body', () => {
+  const BODY_OWNING_FORM = { OwnsEntireFormBody: true } as unknown as BaseFormComponent;
+
+  it('mounts nothing when the host form renders its own body', () => {
+    const f = renderComponentFixture(FormPanelSlotComponent, {
+      declarations: [FormPanelSlotComponent],
+      inputs: { Entity: TEST_ENTITY, Slot: 'after-fields', Record: RECORD, FormComponent: BODY_OWNING_FORM },
+    });
+    f.componentRef.setInput('FormContext', {});
+    f.detectChanges();
+    expect(query(f, '.fake-slot')).toBeNull();
+  });
+
+  it('still mounts the same panel on a form that does not own its body', () => {
+    expect(query(render(TEST_ENTITY), '.fake-slot')).not.toBeNull();
+  });
+});

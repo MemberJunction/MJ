@@ -1301,7 +1301,7 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/core-actions (151 classes)
+// @memberjunction/core-actions (152 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1370,6 +1370,7 @@ import {
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormCompositionForEntityAction,
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
@@ -2465,6 +2466,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormCompositionForEntityAction,
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
@@ -2519,11 +2521,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RunStoredQueryAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
-    SearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    SearchAction,
     SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
@@ -2584,7 +2586,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1044;
+export const CLASS_REGISTRATIONS_COUNT = 1045;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -114,6 +114,7 @@ export function MetadataContributionToRegistration(row: MJEntityFormContribution
     if (row.RelatedEntity) metadata.relatedEntity = row.RelatedEntity;
     if (row.RelatedJoinField) metadata.relatedJoinField = row.RelatedJoinField;
     if (row.ReplacesSectionKey) metadata.replacesSectionKey = row.ReplacesSectionKey;
+    if (row.ReplacesFieldName) metadata.replacesFieldName = row.ReplacesFieldName;
     if (row.Inclusion) metadata.inclusion = row.Inclusion;
     if (row.ChromeGroup) metadata.chromeGroup = row.ChromeGroup;
     return {

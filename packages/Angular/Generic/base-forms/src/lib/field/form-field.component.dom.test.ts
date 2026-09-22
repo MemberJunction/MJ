@@ -895,3 +895,44 @@ describe('a server-reported validation error paints the field the way a local on
     expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(false);
   });
 });
+
+/**
+ * A contribution can stand in for one field. The panel then draws at the top of the
+ * section that held it, so the field itself must not draw at all — in either mode, or the
+ * record shows the same value twice, once in a panel and once as an input.
+ */
+describe('MjFormFieldComponent (DOM) — a field a panel stands in for', () => {
+  it('renders nothing when the form context names it', () => {
+    const f = render({
+      Record: makeWidget(), FieldName: 'Name', Type: 'textbox',
+      FormContext: { claimedFieldNames: ['Name'] },
+    });
+    expect(f.componentInstance.IsClaimedByContribution).toBe(true);
+    expect(text(f, '.mj-forms-field')).toBe('');
+  });
+
+  it('still renders in edit mode, where ShouldHideField alone would not hide it', () => {
+    const f = render({
+      Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true,
+      FormContext: { claimedFieldNames: ['Name'] },
+    });
+    expect(queryAll(f, 'input').length).toBe(0);
+  });
+
+  it('leaves every other field alone', () => {
+    const f = render({
+      Record: makeWidget(), FieldName: 'Name', Type: 'textbox',
+      FormContext: { claimedFieldNames: ['Description'] },
+    });
+    expect(f.componentInstance.IsClaimedByContribution).toBe(false);
+    expect(query(f, '.mj-forms-field')).not.toBeNull();
+  });
+
+  it('carries its name and label on the element, so a form can be read from the DOM', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox' });
+    // The fixture's own root IS the component host, so the bindings land there.
+    const host = f.nativeElement as HTMLElement;
+    expect(host.getAttribute('data-field-name')).toBe('Name');
+    expect(host.getAttribute('data-field-label')).toBe('Widget Name');
+  });
+});

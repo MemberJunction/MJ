@@ -4,6 +4,7 @@ import type { AfterDataLoadEventArgs } from '@memberjunction/ng-entity-viewer';
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import type { FormContributionWinner } from './form-contribution';
+import { SlotDisplayOrder } from './slot-order';
 
 /**
  * Stock related-entity grid the composer mounts when a DisplayInForm
@@ -16,6 +17,7 @@ import type { FormContributionWinner } from './form-contribution';
     template: `
         <mj-collapsible-panel
             [SectionKey]="Contribution.BakedSectionKey"
+            [Order]="DisplayOrder"
             [SectionName]="Contribution.DisplayName"
             [Icon]="GridIcon"
             Variant="related-entity"
@@ -37,6 +39,11 @@ import type { FormContributionWinner } from './form-contribution';
     styles: [`:host { display: contents; }`],
 })
 export class RelatedEntityGridPanelComponent {
+    /** Sits with the related grids rather than after the field sections. */
+    public get DisplayOrder(): number {
+        return SlotDisplayOrder('after-related', this.Contribution.SortKey ?? 0);
+    }
+
     @Input() Contribution!: FormContributionWinner;
     @Input() Record!: BaseEntity;
     @Input() FormComponent!: BaseFormComponent;

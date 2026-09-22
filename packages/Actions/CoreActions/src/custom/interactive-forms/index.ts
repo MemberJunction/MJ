@@ -9,3 +9,4 @@ export * from './create-form-contribution.action';
 export * from './modify-form-contribution.action';
 export * from './activate-form-contribution-version.action';
 export * from './get-form-contributions-for-entity.action';
+export * from './get-form-composition-for-entity.action';

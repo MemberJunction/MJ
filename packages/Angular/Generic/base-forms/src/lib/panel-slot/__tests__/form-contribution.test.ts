@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { FormPanelRegistrationMetadata, FormPanelSlot } from '../base-form-panel';
 import {
     CollapseFormPanelRegistrations,
+    ContributionClaimedFieldNames,
     ContributionHiddenSectionKeys,
     FormContributionEntityMatches,
     FormSectionCamelCase,
@@ -442,5 +443,35 @@ describe('FormContributionEntityMatches', () => {
     it('does not strip the MJ: prefix — that fuzzy match is what this replaces', () => {
         expect(FormContributionEntityMatches('Users', 'MJ: Users')).toBe(false);
         expect(FormContributionEntityMatches('MJ: Users', 'MJ: Users')).toBe(true);
+    });
+});
+
+/**
+ * Field claims are reported apart from section claims because they hide different things:
+ * a section key removes a whole card, a field name removes one input from inside one. A
+ * function that merged them would take a section off the form for a claim on one field.
+ */
+describe('ContributionClaimedFieldNames', () => {
+    it('names the field a winner stands in for', () => {
+        const names = ContributionClaimedFieldNames(
+            PEOPLE, [], [],
+            [reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldName: 'LifetimeValue' })],
+        );
+        expect(names).toEqual(['LifetimeValue']);
+    });
+
+    it('reports nothing for a contribution that claims a section instead', () => {
+        const names = ContributionClaimedFieldNames(
+            PEOPLE, [], [],
+            [reg({ entity: PEOPLE, slot: 'before-fields', contributionKey: 'hero', replacesSectionKey: 'personalIdentity' })],
+        );
+        expect(names).toEqual([]);
+    });
+
+    it('does not hide the section the claimed field lives in', () => {
+        const registrations = [reg({
+            entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldName: 'LifetimeValue',
+        })];
+        expect(ContributionHiddenSectionKeys(PEOPLE, [], [], registrations)).toEqual([]);
     });
 });

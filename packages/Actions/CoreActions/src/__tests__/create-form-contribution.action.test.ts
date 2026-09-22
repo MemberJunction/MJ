@@ -167,6 +167,26 @@ describe('CreateFormContributionAction', () => {
             .toBe('related:MJ_BizApps_Orders: Event Order Lines:PersonID');
     });
 
+    // A panel that claims nothing and names no key used to store ContributionKey NULL.
+    // The duplicate check filters on that column, so it matched nothing and the same
+    // panel could be applied over and over; the rail also keys its items by it, so the
+    // panel got no rail item and its ChromeGroup was never read.
+    it('derives a contribution key from the component name when nothing else supplies one', async () => {
+        const formContribution = { ...panelSpec.formContribution } as Record<string, unknown>;
+        delete formContribution.contributionKey;
+        await run(params({ Spec: { ...panelSpec, formContribution } }));
+        expect(contributionRow().fields.ContributionKey).toBe('panel:PersonLtvStrip');
+    });
+
+    it('blocks a second apply of the same keyless panel', async () => {
+        const formContribution = { ...panelSpec.formContribution } as Record<string, unknown>;
+        delete formContribution.contributionKey;
+        hoisted.dupRows = [{ ID: 'ROW-1', Status: 'Active' }];
+        const result = await run(params({ Spec: { ...panelSpec, formContribution } }));
+        expect(result.ResultCode).toBe('ALREADY_EXISTS');
+        expect(hoisted.entities).toHaveLength(0);
+    });
+
     it('rejects an unknown related entity', async () => {
         const spec = { ...panelSpec, formContribution: { ...panelSpec.formContribution, relatedEntity: 'Nope' } };
         expect((await run(params({ Spec: spec }))).ResultCode).toBe('RELATED_ENTITY_NOT_FOUND');

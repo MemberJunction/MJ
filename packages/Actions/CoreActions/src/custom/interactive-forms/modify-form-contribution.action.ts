@@ -210,6 +210,7 @@ export class ModifyFormContributionAction extends BaseAction {
         row.RelatedEntityID = relatedEntityID;
         row.RelatedJoinField = c.relatedJoinField ?? null;
         row.ReplacesSectionKey = c.replacesSectionKey ?? null;
+        row.ReplacesFieldName = c.replacesFieldName ?? null;
         row.Inclusion = c.inclusion ?? null;
         row.ChromeGroup = c.chromeGroup ?? null;
         row.Presentation = c.presentation;

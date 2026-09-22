@@ -19366,6 +19366,11 @@ export const MJEntityFormContributionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ReplacesFieldName: z.string().nullable().describe(`
+        * * Field Name: ReplacesFieldName
+        * * Display Name: Replaces Field Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Field this contribution stands in for. The panel renders at the top of the section holding that field, and the field is not drawn. Mutually exclusive with ReplacesSectionKey and RelatedEntityID.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -41032,6 +41037,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * FinalPayloadValidationResult: The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
+    * * NativeToolCallCount: The native tool call count, if specified, must be greater than or equal to zero.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -41040,6 +41046,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateFinalPayloadValidationResultStatus(result);
+        this.ValidateNativeToolCallCountGreaterThanOrEqualToZero(result);
         this.ValidateStepNumberGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
@@ -41063,6 +41070,23 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     				ValidationErrorType.Failure
     			));
     		}
+    	}
+    }
+
+    /**
+    * The native tool call count, if specified, must be greater than or equal to zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNativeToolCallCountGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.NativeToolCallCount != null && this.NativeToolCallCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"NativeToolCallCount",
+    			"Native Tool Call Count must be greater than or equal to 0.",
+    			this.NativeToolCallCount,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -87855,6 +87879,150 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
     }
 
     /**
+    * Validate() method override for MJ: Entity Form Contributions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: At most one of Replaces Section Key, Related Entity ID, or Replaces Field Name can be specified. These fields are mutually exclusive to ensure clear configuration mapping.
+    * * Table-Level: If the presentation is set to 'bare', then both the inclusion and chrome group fields must be empty.
+    * * Table-Level: If a Related Join Field is specified, a Related Entity must also be selected to ensure the relationship is properly defined.
+    * * Table-Level: Ensures that the Scope matches the provided identifiers: 'User' scope requires a UserID and no RoleID, 'Role' scope requires a RoleID and no UserID, and 'Global' scope requires both identifiers to be empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMutuallyExclusiveReplacementFields(result);
+        this.ValidatePresentationBareExcludesInclusionAndChromeGroup(result);
+        this.ValidateRelatedJoinFieldRequiresRelatedEntity(result);
+        this.ValidateScopeAndIdentifiers(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * At most one of Replaces Section Key, Related Entity ID, or Replaces Field Name can be specified. These fields are mutually exclusive to ensure clear configuration mapping.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMutuallyExclusiveReplacementFields(result: ValidationResult) {
+    	let count = 0;
+    	if (this.ReplacesSectionKey != null) {
+    		count++;
+    	}
+    	if (this.RelatedEntityID != null) {
+    		count++;
+    	}
+    	if (this.ReplacesFieldName != null) {
+    		count++;
+    	}
+    
+    	if (count > 1) {
+    		const errorMessage = "Only one of Replaces Section Key, Related Entity ID, or Replaces Field Name can be provided.";
+    		if (this.ReplacesSectionKey != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ReplacesSectionKey",
+    				errorMessage,
+    				this.ReplacesSectionKey,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.RelatedEntityID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RelatedEntityID",
+    				errorMessage,
+    				this.RelatedEntityID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.ReplacesFieldName != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ReplacesFieldName",
+    				errorMessage,
+    				this.ReplacesFieldName,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If the presentation is set to 'bare', then both the inclusion and chrome group fields must be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePresentationBareExcludesInclusionAndChromeGroup(result: ValidationResult) {
+    	if (this.Presentation === "bare") {
+    		if (this.Inclusion != null || this.ChromeGroup != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Presentation",
+    				"When Presentation is set to 'bare', both Inclusion and ChromeGroup must be empty.",
+    				this.Presentation,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If a Related Join Field is specified, a Related Entity must also be selected to ensure the relationship is properly defined.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRelatedJoinFieldRequiresRelatedEntity(result: ValidationResult) {
+    	if (this.RelatedJoinField != null && this.RelatedJoinField.trim() !== "" && this.RelatedEntityID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RelatedEntityID",
+    			"A Related Entity must be specified when a Related Join Field is provided.",
+    			this.RelatedEntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Ensures that the Scope matches the provided identifiers: 'User' scope requires a UserID and no RoleID, 'Role' scope requires a RoleID and no UserID, and 'Global' scope requires both identifiers to be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeAndIdentifiers(result: ValidationResult) {
+    	const hasUser = this.UserID != null;
+    	const hasRole = this.RoleID != null;
+    
+    	if (this.Scope === "User") {
+    		if (!hasUser || hasRole) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"When Scope is 'User', UserID must be specified and RoleID must be empty.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === "Role") {
+    		if (!hasRole || hasUser) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"When Scope is 'Role', RoleID must be specified and UserID must be empty.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === "Global") {
+    		if (hasUser || hasRole) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Scope",
+    				"When Scope is 'Global', both UserID and RoleID must be empty.",
+    				this.Scope,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -88208,6 +88376,19 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ReplacesFieldName
+    * * Display Name: Replaces Field Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Field this contribution stands in for. The panel renders at the top of the section holding that field, and the field is not drawn. Mutually exclusive with ReplacesSectionKey and RelatedEntityID.
+    */
+    get ReplacesFieldName(): string | null {
+        return this.Get('ReplacesFieldName');
+    }
+    set ReplacesFieldName(value: string | null) {
+        this.Set('ReplacesFieldName', value);
     }
 
     /**

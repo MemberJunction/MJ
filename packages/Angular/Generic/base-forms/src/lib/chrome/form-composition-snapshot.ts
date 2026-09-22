@@ -26,6 +26,11 @@ export interface FormCompositionSection {
     /** Rail group key, or null when the section is not in any first-class group. */
     Group: string | null;
     Hidden: boolean;
+    /**
+     * The inputs this section draws, so a panel can be offered one field to stand in for.
+     * Empty for a section with no fields of its own, such as a related grid.
+     */
+    Fields: Array<{ Name: string; Label: string }>;
 }
 
 export interface FormCompositionRelated {
@@ -62,8 +67,19 @@ export interface FormCompositionSnapshot {
     Sections: FormCompositionSection[];
     Related: FormCompositionRelated[];
     Contributions: FormCompositionContribution[];
+    /** The side rail this form shows, in order, with the panels filed under each item. */
+    Rail: FormCompositionRailItem[];
     SlotsPresent: FormPanelSlot[];
     ChromeRuleCount: number;
+}
+
+/** One rail item, as a consumer outside the form needs it. */
+export interface FormCompositionRailItem {
+    Key: string;
+    Title: string;
+    Icon: string;
+    SectionKeys: string[];
+    IsMore: boolean;
 }
 
 export interface BuildFormCompositionSnapshotInput {
@@ -153,9 +169,17 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
             Variant: p.Variant,
             Group: groupOf(input.Groups, p.SectionKey),
             Hidden: input.HiddenSectionKeys.has(p.SectionKey),
+            Fields: (p.Fields ?? []).map((f) => ({ Name: f.Name, Label: f.Label })),
         })),
         Related: related,
         Contributions: contributions,
+        Rail: input.Groups.map((group) => ({
+            Key: group.Key,
+            Title: group.Title,
+            Icon: group.Icon,
+            SectionKeys: [...group.SectionKeys],
+            IsMore: group.IsMore === true,
+        })),
         SlotsPresent: [...input.SlotsPresent],
         ChromeRuleCount: input.ChromeRuleCount,
     };

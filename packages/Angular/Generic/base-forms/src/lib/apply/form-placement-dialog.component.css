@@ -1,0 +1,419 @@
+/*
+ * The dialog host is a bounded flex column that clips (max-height 90vh, overflow hidden),
+ * so this component must shrink inside it and hand the leftover height to the two scrolling
+ * columns. Without `min-height: 0` on every link in that chain, each box keeps its content
+ * height, the columns never overflow, and the surplus is clipped with no way to reach it.
+ */
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.mj-placement {
+  /* Sized by its own width, not the window's. This dialog is opened both as a wide modal
+     and inside a drawer, and a viewport media query cannot tell those apart: on a desktop
+     it stays two-column at any container width and the columns crush each other. */
+  container: mj-placement / inline-size;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+.mj-placement-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mj-space-4);
+  padding: var(--mj-space-5) var(--mj-space-6) var(--mj-space-4);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.mj-placement-head-text { flex-grow: 1; min-width: 0; }
+
+.mj-placement-eyebrow {
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mj-text-secondary);
+}
+
+.mj-placement-title {
+  margin: var(--mj-space-1) 0 0;
+  font-size: var(--mj-text-xl);
+  font-weight: var(--mj-font-semibold);
+  line-height: 1.2;
+}
+
+.mj-placement-proposal {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-6);
+  background: var(--mj-status-info-bg);
+  border-bottom: 1px solid var(--mj-border-subtle);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+}
+
+.mj-placement-proposal i { color: var(--mj-brand-primary); }
+
+.mj-placement-alert { flex-shrink: 0; display: block; margin: var(--mj-space-4) var(--mj-space-6) 0; }
+
+/* The only box that grows: everything else keeps its height, this one takes the rest. */
+.mj-placement-body { flex: 1 1 auto; display: flex; min-height: 0; }
+
+/* ---- left: the form preview ---- */
+
+.mj-placement-preview {
+  width: 380px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: var(--mj-space-5);
+  border-right: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2);
+  overflow-y: auto;
+}
+
+.mj-placement-label {
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--mj-text-secondary);
+  margin-bottom: var(--mj-space-2);
+}
+
+.mj-placement-hint {
+  margin: 0;
+  font-size: var(--mj-text-sm);
+  line-height: 1.45;
+  color: var(--mj-text-secondary);
+}
+
+.mj-placement-warn {
+  margin: var(--mj-space-2) 0 0;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-status-warning-text);
+}
+
+/* The rail item the panel will join, stated in a line rather than drawn as a list. A
+   miniature of the rail beside the body left too little width for either to be legible. */
+.mj-placement-rail-note { margin-top: var(--mj-space-2); }
+
+/* A position is a gap between the blocks, not a block. No border box, no fill: it must
+   not read as a second kind of content sitting beside Contact Information. */
+.mj-placement-gap {
+  border-radius: var(--mj-radius-md);
+  padding: 0 var(--mj-space-2);
+}
+
+.mj-placement-gap.is-on {
+  background: var(--mj-status-info-bg);
+  padding-bottom: var(--mj-space-3);
+}
+
+.mj-placement-gap-pick {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  min-width: 0;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.mj-placement-gap-pick > input { flex-shrink: 0; }
+
+.mj-placement-gap-rule {
+  flex: 1 1 0;
+  min-width: var(--mj-space-2);
+  height: 1px;
+  background: var(--mj-border-subtle);
+}
+
+.mj-placement-gap.is-on .mj-placement-gap-rule { background: var(--mj-brand-primary); }
+
+.mj-placement-gap-text {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mj-space-2);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.mj-placement-gap-name {
+  flex-shrink: 0;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+.mj-placement-gap.is-on .mj-placement-gap-name {
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-brand-primary);
+}
+
+.mj-placement-gap-slot {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+/* The field groups the side rail folds into one tab, drawn as the one tab they are. A
+   generated group titled "Details" inside a tab also titled "Details" is otherwise two
+   things of the same name at the same level. */
+.mj-placement-tab {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--mj-space-1);
+  padding: var(--mj-space-2);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+}
+
+.mj-placement-tab-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mj-space-2);
+  padding: 0 var(--mj-space-1) var(--mj-space-1);
+}
+
+.mj-placement-tab-name {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+}
+
+.mj-placement-tab-kind {
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+.mj-placement-slot-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--mj-space-3);
+  border: 1px solid var(--mj-brand-primary);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface);
+}
+
+.mj-placement-slot-card-name { font-size: var(--mj-text-sm); font-weight: var(--mj-font-semibold); }
+.mj-placement-slot-card-hint { font-size: var(--mj-text-sm); color: var(--mj-text-secondary); }
+
+.mj-placement-existing {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  min-width: 0;
+  min-height: 46px;
+  box-sizing: border-box;
+  padding: 0 var(--mj-space-3);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface-sunken);
+}
+
+/* A block this choice takes off the form. Struck rather than hidden: the point is to
+   show how much the choice covers, which needs the blocks still in place to count. */
+.mj-placement-existing.is-replaced {
+  border-color: var(--mj-status-error-text);
+  background: var(--mj-status-error-bg);
+}
+
+.mj-placement-existing.is-replaced .mj-placement-existing-name {
+  text-decoration: line-through;
+  color: var(--mj-text-muted);
+}
+
+.mj-placement-existing.is-replaced .mj-placement-existing-kind {
+  color: var(--mj-status-error-text);
+  font-weight: var(--mj-font-semibold);
+}
+
+.mj-placement-tab.is-replaced {
+  border-color: var(--mj-status-error-text);
+  border-style: dashed;
+}
+
+.mj-placement-existing--compact { min-height: 40px; background: var(--mj-bg-surface-card); }
+.mj-placement-existing--nested { min-height: 38px; }
+.mj-placement-existing-name {
+  flex-grow: 1;
+  min-width: 0;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-placement-existing-kind {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: var(--mj-text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+}
+
+/* ---- right: the answers ---- */
+
+.mj-placement-settings {
+  flex-grow: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--mj-space-5) var(--mj-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-5);
+  overflow-y: auto;
+}
+
+.mj-placement-entity {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-3);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md);
+  font-size: var(--mj-text-sm);
+}
+
+.mj-placement-entity span { color: var(--mj-text-secondary); }
+
+.mj-placement-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--mj-space-3); }
+.mj-placement-stack { display: flex; flex-direction: column; gap: var(--mj-space-2); }
+
+.mj-placement-choice,
+.mj-placement-row {
+  display: flex;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  cursor: pointer;
+}
+
+.mj-placement-choice { align-items: flex-start; }
+.mj-placement-row { align-items: center; min-height: 44px; box-sizing: border-box; }
+
+.mj-placement-choice.is-on,
+.mj-placement-row.is-on {
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-status-info-bg);
+}
+
+.mj-placement-row.is-off { opacity: 0.55; cursor: not-allowed; }
+
+.mj-placement-choice-name { display: block; font-size: var(--mj-text-sm); font-weight: var(--mj-font-semibold); }
+
+.mj-placement-choice-hint {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--mj-text-sm);
+  line-height: 1.4;
+  color: var(--mj-text-secondary);
+}
+
+.mj-placement-row-text { flex-grow: 1; min-width: 0; font-size: var(--mj-text-sm); }
+
+.mj-placement-select {
+  height: 34px;
+  padding: 0 var(--mj-space-2);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  font: inherit;
+  font-size: var(--mj-text-sm);
+}
+
+.mj-placement-fields { display: flex; gap: var(--mj-space-3); margin-top: var(--mj-space-3); }
+.mj-placement-field { flex-grow: 1; min-width: 0; }
+.mj-placement-field--icon { flex-grow: 0; width: 170px; }
+
+.mj-placement-field label {
+  display: block;
+  margin-bottom: var(--mj-space-1);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+}
+
+.mj-placement-field .mj-input { width: 100%; box-sizing: border-box; height: 44px; }
+
+.mj-placement-mono { font-family: var(--mj-font-family-mono); font-size: var(--mj-text-sm); }
+
+/* ---- footer ---- */
+
+.mj-placement-foot {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-4) var(--mj-space-6);
+  border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-card);
+}
+
+.mj-placement-spacer { flex-grow: 1; }
+
+.mj-placement-summary {
+  max-width: 520px;
+  text-align: right;
+  font-size: var(--mj-text-sm);
+  line-height: 1.45;
+  color: var(--mj-text-secondary);
+}
+
+@container mj-placement (max-width: 900px) {
+  /* Stacked, two independent scrollers in a narrow space are worse than one: the body
+     scrolls as a whole and the columns size to their content. */
+  .mj-placement-body { flex-direction: column; overflow-y: auto; }
+  .mj-placement-preview,
+  .mj-placement-settings { overflow: visible; }
+  .mj-placement-preview { width: auto; border-right: 0; border-bottom: 1px solid var(--mj-border-subtle); }
+  .mj-placement-grid-2 { grid-template-columns: minmax(0, 1fr); }
+  .mj-placement-fields { flex-direction: column; }
+  .mj-placement-field--icon { width: auto; }
+  .mj-placement-summary { text-align: left; max-width: none; }
+}
+
+.mj-placement-row-note {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-status-warning-text);
+}
+
+.mj-placement-row-note--quiet {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}
+
+/* A panel standing in for a field draws inside the section, so it is indented to the
+   same depth as the blocks around it rather than spanning the preview. */
+.mj-placement-slot-card--in-section {
+  margin-left: var(--mj-space-4);
+  margin-top: calc(var(--mj-space-1) * -1);
+}

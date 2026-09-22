@@ -1,0 +1,112 @@
+@if (Visible) {
+  <div class="mj-pm-overlay" (click)="OnOverlayClick($event)">
+    <div class="mj-pm-drawer" (click)="$event.stopPropagation()" role="dialog" aria-label="Panels on this form">
+
+      <div class="mj-pm-header">
+        <div class="mj-pm-heading">
+          <h3 class="mj-pm-title">
+            <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+            Panels on this form
+          </h3>
+          <span class="mj-pm-entity">{{ EntityName }}</span>
+        </div>
+        <button type="button" class="mj-pm-close" (click)="OnClose()" aria-label="Close">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      @if (FullCustomForm) {
+        <p class="mj-pm-banner">
+          A full custom form is drawing this entity. It owns the whole body, so everything
+          below is held back until that form is turned off.
+        </p>
+      }
+
+      @if (Error) {
+        <p class="mj-pm-error" role="alert">{{ Error }}</p>
+      }
+
+      <div class="mj-pm-list">
+        @if (IsEmpty) {
+          <div class="mj-pm-empty">
+            <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+            <p class="mj-pm-empty-title">Nothing is registered on this form yet</p>
+            <p class="mj-pm-empty-note">Panels you add from a conversation show up here.</p>
+          </div>
+        }
+
+        @for (group of Groups; track group.Key) {
+          <section class="mj-pm-group">
+            <div class="mj-pm-group-head">
+              <span class="mj-pm-group-title">{{ group.Title }}</span>
+              <span class="mj-pm-group-count">{{ group.Items.length }}</span>
+            </div>
+            @if (group.Note) {
+              <p class="mj-pm-group-note">{{ group.Note }}</p>
+            }
+
+            @for (item of group.Items; track item.ID) {
+              <div class="mj-pm-row" [class.is-quiet]="!item.CanEdit">
+                <i [class]="item.Icon" class="mj-pm-row-icon" aria-hidden="true"></i>
+
+                <div class="mj-pm-row-main">
+                  <span class="mj-pm-row-name">{{ item.Title }}</span>
+                  <span class="mj-pm-row-sub">{{ item.Subtitle }}</span>
+                  <span class="mj-pm-row-where">
+                    @if (item.Slot) {
+                      <span class="mj-pm-chip mj-pm-mono">{{ item.Slot }}</span>
+                    }
+                    @if (item.Replaces) {
+                      <span class="mj-pm-chip">stands in for {{ item.Replaces }}</span>
+                    }
+                    <span class="mj-pm-chip">{{ item.Scope }}</span>
+                  </span>
+                </div>
+
+                @if (item.CanEdit || item.CanTurnOn || item.CanTurnOff || item.CanRemove) {
+                  <div class="mj-pm-row-actions">
+                    @if (item.CanEdit) {
+                      <button type="button" class="mj-pm-btn mj-pm-btn--primary"
+                              [disabled]="Busy === item.ID"
+                              (click)="OnEdit(item)">Change where it goes</button>
+                    }
+                    @if (item.CanTurnOn || item.CanTurnOff) {
+                      <button type="button" class="mj-pm-btn"
+                              [disabled]="Busy === item.ID"
+                              (click)="OnToggle(item)">{{ ToggleLabel(item) }}</button>
+                    }
+                    @if (item.CanRemove) {
+                      <button type="button" class="mj-pm-btn mj-pm-btn--danger"
+                              [class.is-confirming]="Confirming === item.ID"
+                              [disabled]="Busy === item.ID"
+                              (click)="OnRemove(item)">{{ RemoveLabel(item) }}</button>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </section>
+        }
+      </div>
+
+      <div class="mj-pm-foot">
+        <span class="mj-pm-summary">{{ Summary }}</span>
+      </div>
+
+      @if (Editing && EditContext) {
+        <div class="mj-pm-edit" role="dialog" aria-label="Change where this panel goes"
+             (click)="OnEditScrimClick($event)">
+          <mj-form-placement-dialog
+            [Context]="EditContext"
+            [Proposal]="EditProposal"
+            [ComponentName]="Editing.Title"
+            [SeedState]="SeedEdit"
+            (Applied)="OnEditApplied($event)"
+            (Cancelled)="CloseEdit()">
+          </mj-form-placement-dialog>
+        </div>
+      }
+
+    </div>
+  </div>
+}

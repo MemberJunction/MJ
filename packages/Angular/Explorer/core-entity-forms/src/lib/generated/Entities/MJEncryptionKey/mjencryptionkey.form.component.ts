@@ -17,7 +17,10 @@ export class MJEncryptionKeyFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJEntityFields', sectionName: 'Entity Fields', isExpanded: false }
+            { sectionKey: 'mJEntityFields', sectionName: 'Entity Fields', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonActivitySyncRunDetails', sectionName: 'Activity Sync Run Details', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonActivitySyncConnections', sectionName: 'Activity Sync Connections', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonActivitySyncProviderTypes', sectionName: 'Activity Sync Provider Types', isExpanded: false }
         ]);
     }
 }

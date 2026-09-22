@@ -32,6 +32,7 @@ import { evaluateComponentPermissions, PermissionEvaluationResult } from './comp
 @RegisterClass(BaseArtifactViewerPluginComponent, 'ComponentArtifactViewerPlugin')
 export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit, OnChanges {
   @ViewChild('reactComponent') reactComponent?: MJReactComponent;
+  @ViewChild('panelReactComponent') panelReactComponent?: MJReactComponent;
   @ViewChild('interactiveForm') interactiveForm?: InteractiveFormComponent;
   @Output() tabsChanged = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
@@ -84,11 +85,21 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   private _cachedResolvedSpec: ComponentSpec | null = null;
 
+  /**
+   * The React host currently mounted. A form panel previews through its own
+   * `<mj-react-component>`, so both branches have to be consulted — the artifact
+   * carries a registry reference without code, and only the mounted host holds
+   * the spec resolved from the registry.
+   */
+  private get liveReactComponent(): MJReactComponent | undefined {
+    return this.reactComponent ?? this.panelReactComponent;
+  }
+
   public get resolvedComponentSpec(): ComponentSpec | null {
     // Prefer the live React component's resolved spec (most up-to-date),
     // then fall back to our cached copy (survives DOM destruction),
     // then fall back to the stripped local spec as last resort.
-    return this.reactComponent?.resolvedComponentSpec || this._cachedResolvedSpec || this.component;
+    return this.liveReactComponent?.resolvedComponentSpec || this._cachedResolvedSpec || this.component;
   }
 
   // Feedback panel
@@ -302,10 +313,11 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * Emits tabsChanged so the parent panel re-evaluates allTabs and renders the new tab labels.
    */
   onReactComponentInitialized(): void {
-    if (this.reactComponent?.resolvedComponentSpec &&
-        this.reactComponent.resolvedComponentSpec !== this.component) {
+    const host = this.liveReactComponent;
+    if (host?.resolvedComponentSpec &&
+        host.resolvedComponentSpec !== this.component) {
       // Cache the resolved spec so it's available even after the React component is destroyed
-      this._cachedResolvedSpec = this.reactComponent.resolvedComponentSpec;
+      this._cachedResolvedSpec = host.resolvedComponentSpec;
       this.tabsChanged.emit();
 
       // Re-evaluate permissions against the resolved spec — the stripped artifact
@@ -601,7 +613,13 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     if (!this.formEntityInfo) return;
 
     const spec = await this.resolveSpecWithCode();
-    if (!spec) return;
+    if (!spec) {
+      // The artifact stores a registry reference, so the code arrives only once
+      // the preview has resolved it. Saying so beats a button that does nothing.
+      this.formInitError = 'Component code is still loading. Try again in a moment.';
+      this.cdr.detectChanges();
+      return;
+    }
 
     this.applyFormRequested.emit({
       spec,
@@ -617,10 +635,16 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     const resolved = this.resolvedComponentSpec;
     if (resolved?.code) return resolved;
 
-    // 2. For form artifacts, the React component lives inside <mj-interactive-form>.
-    //    Reach into it to get the resolved spec from the component registry.
+    // 2. For whole-form artifacts, the React component lives inside
+    //    <mj-interactive-form>. Reach into it to get the resolved spec from the
+    //    component registry.
     const formReactSpec = this.interactiveForm?.reactComponent?.resolvedComponentSpec;
     if (formReactSpec?.code) return formReactSpec;
+
+    // 2b. A panel previews through its own React host, which is the only place
+    //     its registry-resolved spec exists.
+    const panelReactSpec = this.panelReactComponent?.resolvedComponentSpec;
+    if (panelReactSpec?.code) return panelReactSpec;
 
     // 3. Re-parse the artifact version's Content directly — the agent stores the
     //    full spec including code. This handles the case where loadComponentSpec()

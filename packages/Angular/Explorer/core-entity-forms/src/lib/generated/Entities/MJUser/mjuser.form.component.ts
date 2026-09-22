@@ -85,6 +85,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJUserNotificationPreferences', sectionName: 'User Notification Preferences', isExpanded: false },
             { sectionKey: 'mJUserSettings', sectionName: 'User Settings', isExpanded: false },
             { sectionKey: 'mJVersionLabelRestores', sectionName: 'Version Label Restores', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonPeople', sectionName: 'MJ_BizApps_Common: People', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsResponseByUserID', sectionName: 'AI Agent Requests', isExpanded: false },
             { sectionKey: 'mJAPIKeysUserID', sectionName: 'API Keys (User)', isExpanded: false },
             { sectionKey: 'mJAccessControlRules', sectionName: 'Access Control Rules', isExpanded: false },
@@ -126,7 +127,9 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false },
             { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
-            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false }
+            { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonActivitySyncConnections', sectionName: 'Activity Sync Connections', isExpanded: false },
+            { sectionKey: 'mJBizAppsCommonActivities', sectionName: 'Activities', isExpanded: false }
         ]);
     }
 }

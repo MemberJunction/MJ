@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { Component, Input } from '@angular/core';
 import { Subject, of } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, text, hasClass } from '@memberjunction/ng-test-utils';
@@ -281,5 +282,198 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
     const f = render({ SectionName: 'X', SectionKey: 'k', Form: stub });
     (query(f, '.mj-forms-panel-header') as HTMLElement).click();
     expect(stub.SetSectionExpanded).toHaveBeenCalledWith('k', true);
+  });
+});
+
+
+/**
+ * A panel's flex order decides where it lands. Three sources can answer: the user's own
+ * placement, an `Order` its host supplied (a contribution derives one from its slot),
+ * and the form's declared section list. Taking the host's answer first meant a user
+ * could drag a contribution panel, a new order would be written, nothing would read it,
+ * and the panel would sit exactly where it was.
+ */
+describe('MjCollapsiblePanelComponent — where a panel sits', () => {
+  const form = (over: Record<string, unknown> = {}) => ({
+    ...formStub(true),
+    getSectionDisplayOrder: (key: string) => (key === 'known' ? 2 : 9),
+    getSectionOrderIndex: (_key: string): number | null => null,
+    ...over,
+  });
+
+  it('uses the order its host supplied when the user has placed nothing', () => {
+    const f = render({ SectionKey: 'skip:stats', Order: -1000000, Form: form() });
+    expect(f.componentInstance.CssOrder).toBe(-1000000);
+  });
+
+  it('lets the user’s own placement win over the host’s order', () => {
+    const f = render({
+      SectionKey: 'skip:stats',
+      Order: -1000000,
+      Form: form({ getSectionOrderIndex: (k: string) => (k === 'skip:stats' ? 1 : null) }),
+    });
+    expect(f.componentInstance.CssOrder).toBe(1);
+  });
+
+  it('falls back to the form’s section order when neither applies', () => {
+    const f = render({ SectionKey: 'known', Form: form() });
+    expect(f.componentInstance.CssOrder).toBe(2);
+  });
+
+  it('works against a form that predates the index lookup', () => {
+    const f = render({ SectionKey: 'known', Form: formStub(true) });
+    expect(f.componentInstance.CssOrder).toBe(0);
+  });
+});
+
+/**
+ * Reordering works on the panels that are drawn, not on the form's declared sections. A
+ * contribution panel is in no declared list, so a drag touching one used to match no
+ * index and return having done nothing.
+ */
+describe('MjCollapsiblePanelComponent — dragging a panel that is not a declared section', () => {
+  function setUp(declared: string[], drawn: Array<{ key: string; order: number }>) {
+    const setSectionOrder = vi.fn();
+    const f = render({
+      SectionKey: 'skip:stats',
+      Form: { ...formStub(true), getSectionOrder: () => declared, setSectionOrder },
+    });
+    // The real column holds baked panels and slot-wrapped contribution panels alike,
+    // so the lookup is over descendants; the contribution here is nested to match.
+    const host = f.nativeElement as HTMLElement;
+    const column = document.createElement('div');
+    column.className = 'mj-forms-all-panels';
+    document.body.appendChild(column);
+    const slot = document.createElement('mj-form-panel-slot');
+    column.appendChild(slot);
+    slot.appendChild(host);
+    host.setAttribute('data-section-key', 'skip:stats');
+    for (const panel of drawn) {
+      const el = document.createElement('mj-collapsible-panel');
+      el.setAttribute('data-section-key', panel.key);
+      el.style.order = String(panel.order);
+      column.appendChild(el);
+    }
+    return { f, setSectionOrder };
+  }
+
+  const reorder = (f: ReturnType<typeof render>, from: string, to: string) =>
+    (f.componentInstance as unknown as { ReorderSections(a: string, b: string): void })
+      .ReorderSections(from, to);
+
+  it('moves a contribution panel into the declared sections', () => {
+    const { f, setSectionOrder } = setUp(
+      ['certificationDetails', 'configuration'],
+      [{ key: 'certificationDetails', order: 0 }, { key: 'configuration', order: 1 }],
+    );
+    (f.nativeElement as HTMLElement).style.order = '1000000';
+    reorder(f, 'skip:stats', 'configuration');
+    expect(setSectionOrder).toHaveBeenCalledWith(['certificationDetails', 'skip:stats', 'configuration']);
+  });
+
+  // Dropping downward lands after the target: the target index is taken before the
+  // source is lifted out. That is the existing behaviour for any two panels.
+  it('moves a declared section past a contribution panel', () => {
+    const { f, setSectionOrder } = setUp(
+      ['certificationDetails', 'configuration'],
+      [{ key: 'certificationDetails', order: 0 }, { key: 'configuration', order: 1 }],
+    );
+    (f.nativeElement as HTMLElement).style.order = '1000000';
+    reorder(f, 'certificationDetails', 'skip:stats');
+    expect(setSectionOrder).toHaveBeenCalledWith(['configuration', 'skip:stats', 'certificationDetails']);
+  });
+
+  // A section the form declares but does not currently draw must not fall out of the order.
+  it('keeps a declared section the DOM did not show', () => {
+    const { f, setSectionOrder } = setUp(
+      ['certificationDetails', 'configuration', 'systemMetadata'],
+      [{ key: 'certificationDetails', order: 0 }, { key: 'configuration', order: 1 }],
+    );
+    (f.nativeElement as HTMLElement).style.order = '1000000';
+    reorder(f, 'skip:stats', 'certificationDetails');
+    expect(setSectionOrder.mock.calls[0][0]).toContain('systemMetadata');
+  });
+});
+
+/**
+ * A contribution can stand in for one field rather than a whole section. The panel then
+ * belongs INSIDE the section that held the field, at the top — so the section, which is
+ * the only thing that knows which fields it draws, is what hosts it.
+ */
+@Component({ standalone: true, selector: 'mj-form-field-panel-slot', template: '' })
+class FieldPanelSlotStub {
+  @Input() Entity = '';
+  @Input() FieldNames: readonly string[] = [];
+  @Input() Record: unknown;
+  @Input() FormComponent: unknown;
+  @Input() FormContext: unknown;
+}
+
+/** A projected field, as the panel reads one: a name, a label, and inert outputs. */
+function namedFields(names: string[]) {
+  const items = names.map((name) => ({
+    FieldName: name,
+    HostFieldLabel: `${name} label`,
+    DisplayName: name,
+    IsFieldReadableByUser: true,
+    ShouldHideField: false,
+    Navigate: of(),
+    ValueChange: of(),
+  }));
+  return {
+    length: items.length,
+    toArray: () => items,
+    forEach: (fn: (item: unknown) => void) => items.forEach(fn),
+    some: (fn: (item: unknown) => boolean) => items.some(fn),
+    changes: new Subject(),
+  };
+}
+
+describe('MjCollapsiblePanelComponent — hosting a panel that stands in for a field', () => {
+  function renderWithFields(fields: string[], form: unknown) {
+    const f = renderComponentFixture(MjCollapsiblePanelComponent, {
+      declarations: [MjCollapsiblePanelComponent],
+      imports: [CommonModule, FieldPanelSlotStub],
+      inputs: { SectionKey: 'details', SectionName: 'Details', Form: form },
+    });
+    (f.componentInstance as unknown as { FieldComponents: unknown }).FieldComponents = namedFields(fields);
+    f.componentInstance.ngAfterContentInit();
+    f.detectChanges();
+    return f;
+  }
+
+  const formWithRecord = {
+    ...formStub(true),
+    record: { EntityInfo: { Name: 'MoreCheese: Courses' } },
+  };
+
+  it('names the fields it draws, so a claim can be matched against them', () => {
+    const f = renderWithFields(['Name', 'SeatLimit'], formWithRecord);
+    expect(f.componentInstance.ClaimableFieldNames).toEqual(['Name', 'SeatLimit']);
+    expect(f.componentInstance.ClaimableFields[0]).toEqual({ Name: 'Name', Label: 'Name label' });
+  });
+
+  it('renders the host above its own content, so the panel lands at the top', () => {
+    const f = renderWithFields(['Name'], formWithRecord);
+    const content = query(f, '.mj-forms-panel-content');
+    expect(content?.firstElementChild?.tagName.toLowerCase()).toBe('mj-form-field-panel-slot');
+  });
+
+  it('passes the entity and the fields down', () => {
+    const f = renderWithFields(['Name'], formWithRecord);
+    const slot = query(f, 'mj-form-field-panel-slot');
+    expect(slot).not.toBeNull();
+    expect(f.componentInstance.FieldPanelEntity).toBe('MoreCheese: Courses');
+  });
+
+  it('renders no host when the panel draws no fields', () => {
+    const f = renderWithFields([], formWithRecord);
+    expect(query(f, 'mj-form-field-panel-slot')).toBeNull();
+  });
+
+  it('renders no host outside a form, where there is no record to hand it', () => {
+    const f = renderWithFields(['Name'], formStub(true));
+    expect(f.componentInstance.HostsFieldPanels).toBe(false);
+    expect(query(f, 'mj-form-field-panel-slot')).toBeNull();
   });
 });

@@ -1,6 +1,8 @@
-import { Component, EventEmitter, inject, Input, Output, ViewChild } from '@angular/core';
+import { Component, EventEmitter, inject, Input, OnDestroy, Output, ViewChild } from '@angular/core';
 import { CompositeKey, BaseEntity } from '@memberjunction/core';
 import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
+import type { BaseFormComponent, FormCompositionSnapshot } from '@memberjunction/ng-base-forms';
+import { Subscription } from 'rxjs';
 import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -24,7 +26,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
   templateUrl: './single-record.component.html',
   styleUrls: ['./single-record.component.css']
 })
-export class SingleRecordComponent extends BaseAngularComponent {
+export class SingleRecordComponent extends BaseAngularComponent implements OnDestroy {
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
   @Input() public newRecordValues: string | Record<string, unknown> | null = '';
@@ -33,6 +35,15 @@ export class SingleRecordComponent extends BaseAngularComponent {
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
   /** Emitted when the hosted form asks to be dismissed (e.g. Discard on a new record). */
   @Output() public recordDismissed: EventEmitter<void> = new EventEmitter<void>();
+
+  /**
+   * The live form's composition — sections, related grids, contributions, and the slots
+   * the form actually emits. Re-emitted on every chrome resolve.
+   *
+   * The form is created dynamically inside `<mj-entity-form-host>`, so this relay is the
+   * only route the snapshot has out to Explorer.
+   */
+  @Output() public compositionChanged: EventEmitter<FormCompositionSnapshot> = new EventEmitter<FormCompositionSnapshot>();
 
   @ViewChild(MjEntityFormHostComponent) private formHost?: MjEntityFormHostComponent;
 
@@ -56,6 +67,30 @@ export class SingleRecordComponent extends BaseAngularComponent {
   /** Unblock the shell's first-resource-load gate (success or error). */
   onLoadComplete(): void {
     this.loadComplete.emit();
+  }
+
+  private compositionSub: Subscription | null = null;
+
+  /**
+   * Bind to the newly created form's composition stream.
+   *
+   * The previous subscription is dropped first: the host re-creates the form when the
+   * user switches variants, and a retained subscription would let the replaced form
+   * keep publishing over the live one.
+   */
+  onFormCreated(form: BaseFormComponent): void {
+    this.compositionSub?.unsubscribe();
+    this.compositionSub = form.CompositionChanged.subscribe((snapshot: FormCompositionSnapshot) =>
+      this.compositionChanged.emit(snapshot),
+    );
+    if (form.CompositionSnapshot) {
+      this.compositionChanged.emit(form.CompositionSnapshot);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.compositionSub?.unsubscribe();
+    this.compositionSub = null;
   }
 
   /** Log access for existing records once the form's record is ready. */

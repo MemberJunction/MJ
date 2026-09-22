@@ -6,7 +6,7 @@
  */
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { EscapeSQLString, UUIDsEqual } from "@memberjunction/global";
 import {
     MJComponentEntity,
     MJEntityFormContributionEntity,
@@ -197,6 +197,23 @@ export async function loadContribution(
  * Returns `null` on success; a `FORBIDDEN` failure result on rejection.
  */
 /** Row shape both override and contribution ownership checks read. */
+/**
+ * Filter for the `MJ: Entity Form Contributions` rows a caller may see: their own
+ * User-scope rows, their roles' rows, and Global rows.
+ *
+ * Shared so every reader applies the same visibility. Two readers that disagree would
+ * show a contribution in one place and hide it in another, and the apply flow's
+ * duplicate check would miss a row the form is already rendering.
+ */
+export function ContributionScopeFilter(entityID: string, user: NonNullable<RunActionParams['ContextUser']>): string {
+    const roleIDs = ((user as { UserRoles?: { RoleID?: string }[] }).UserRoles ?? [])
+        .map(r => r.RoleID).filter((x): x is string => !!x);
+    const roleClause = roleIDs.length > 0
+        ? `(Scope='Role' AND RoleID IN (${roleIDs.map(id => `'${EscapeSQLString(id)}'`).join(',')}))`
+        : `(1=0)`;
+    return `EntityID='${EscapeSQLString(entityID)}' AND ((Scope='User' AND UserID='${EscapeSQLString(user.ID)}') OR ${roleClause} OR Scope='Global')`;
+}
+
 export interface ScopedRow {
     ID: string;
     Scope: 'User' | 'Role' | 'Global' | string;
@@ -498,19 +515,44 @@ function stripJoinFieldBrackets(joinField: string | null | undefined): string {
 }
 
 /**
- * The key a row will actually carry. A related-grid claim with no author-supplied key
- * gets the same `related:<entity>:<join>` value the renderer would derive, so the
- * unique index sees it.
+ * The key a row will actually carry.
  *
- * Must stay byte-identical to `RelatedContributionKey` in `@memberjunction/ng-base-forms`.
+ * Every contribution gets one. The key is the contribution's identity: the duplicate
+ * check tests it, the rail builds an item per key, and "replace an installed panel"
+ * names one. A row without a key is invisible to all three, so the same panel can be
+ * applied twice and neither copy can be targeted afterwards.
+ *
+ * Three sources, in order. An author-supplied key wins. A related-grid claim derives
+ * `related:<entity>:<join>`, byte-identical to `RelatedContributionKey` in
+ * `@memberjunction/ng-base-forms`, so the renderer computes the same string. Anything
+ * else derives from the component name, which is stable across re-applies of the same
+ * panel and distinct between different ones.
  */
 export function ResolveWriteContributionKey(
     contribution: FormContributionSpec,
     relatedEntityName: string | null,
+    componentName?: string | null,
 ): string | null {
     if (contribution.contributionKey) return contribution.contributionKey;
-    if (!relatedEntityName) return null;
-    return `related:${relatedEntityName.trim()}:${stripJoinFieldBrackets(contribution.relatedJoinField)}`;
+    if (relatedEntityName) {
+        return `related:${relatedEntityName.trim()}:${stripJoinFieldBrackets(contribution.relatedJoinField)}`;
+    }
+    return PanelContributionKey(componentName);
+}
+
+/**
+ * `panel:<component name>`, with characters {@link CONTRIBUTION_KEY_PATTERN} rejects
+ * folded to `-`. Null when the name carries nothing usable.
+ */
+export function PanelContributionKey(componentName: string | null | undefined): string | null {
+    const slug = (componentName ?? '')
+        .trim()
+        .replace(/[^A-Za-z0-9._ -]+/g, '-')
+        .replace(/-{2,}/g, '-')
+        .replace(/^-|-$/g, '')
+        .slice(0, 240)
+        .trim();
+    return slug ? `panel:${slug}` : null;
 }
 
 /**
@@ -529,6 +571,8 @@ export async function insertContribution(opts: {
     /** Resolved related entity — `Name` for the derived key, `ID` for the column. */
     relatedEntityName: string | null;
     relatedEntityID: string | null;
+    /** Seeds the contribution key when the spec names none and nothing is claimed. */
+    componentName?: string | null;
     status: 'Active' | 'Pending';
     precedence: number;
 }): Promise<{ id: string } | { error: ActionResultSimple }> {
@@ -551,10 +595,11 @@ export async function insertContribution(opts: {
     // `related:<entity>:<join>` at render time, but a NULL column is invisible to the
     // ContributionKey unique index, so two Active rows could otherwise claim the same
     // grid and the winner would be decided by row order.
-    row.ContributionKey = ResolveWriteContributionKey(contribution, relatedEntityName);
+    row.ContributionKey = ResolveWriteContributionKey(contribution, relatedEntityName, opts.componentName);
     row.RelatedEntityID = relatedEntityID;
     row.RelatedJoinField = contribution.relatedJoinField ?? null;
     row.ReplacesSectionKey = contribution.replacesSectionKey ?? null;
+    row.ReplacesFieldName = contribution.replacesFieldName ?? null;
     row.Inclusion = contribution.inclusion ?? null;
     row.ChromeGroup = contribution.chromeGroup ?? null;
     row.Presentation = contribution.presentation;
