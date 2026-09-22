@@ -51,10 +51,37 @@ const BETTY_REQUEST_TIMEOUT_MS = 120_000;
  */
 @RegisterClass(BaseLLM, 'BettyLLM')
 export class BettyLLM extends BaseLLM {
-    // No constructor and no key field: `BaseLLM` stores the key and exposes it as
-    // `protected get apiKey()`. Note it only WARNS on an empty key rather than rejecting it, so an
-    // unset `AI_VENDOR_API_KEY__BETTYLLM` reaches Betty as `Authorization: Bearer ` and comes back
-    // as a 401 — which `describe()` now reports verbatim.
+    // No key field: `BaseLLM` stores the key and exposes it as `protected get apiKey()`. Note it
+    // only WARNS on an empty key rather than rejecting it, so an unset
+    // `AI_VENDOR_API_KEY__BETTYLLM` reaches Betty as `Authorization: Bearer ` and comes back as a
+    // 401 — which `describe()` now reports verbatim.
+    private endUserId?: string;
+
+    /**
+     * @param apiKey Betty API key, sent as the bearer on every request.
+     * @param endUserId Optional caller identifier, forwarded as the `endUserId` request-body field.
+     *
+     * Betty records it against the conversation so a caller gets its own attribution row and its
+     * own rate-limit bucket rather than sharing an anonymous per-IP one — the same problem
+     * `BettyBotLLM`'s `userId` argument solves for the legacy service, and named here for the field
+     * Betty's own API documents.
+     *
+     * ATTRIBUTION ONLY, and unverified by design: retrieval scope is pinned server-side from the
+     * credential, so this never widens what content the request can reach. Do not use it for
+     * authorization.
+     *
+     * Omitted, the request body is byte-identical to one built without this parameter.
+     *
+     * Note this is reachable only by constructing the provider directly — `AIPromptRunner`
+     * instantiates through `ClassFactory.CreateInstance(BaseLLM, driverClass, apiKey)` and passes
+     * the key alone, and `ChatParams` carries no user identity to fall back on. A caller that wants
+     * attribution does `new BettyLLM(key, 'izzy')`, exactly as the legacy provider is used from
+     * `betty.action.ts`.
+     */
+    constructor(apiKey: string, endUserId?: string) {
+        super(apiKey);
+        this.endUserId = endUserId;
+    }
 
     /**
      * The API supports SSE when the request sets `Accept: text/event-stream`, but this provider
@@ -131,6 +158,10 @@ export class BettyLLM extends BaseLLM {
             // asked, with no error to show for it.
             message: getTextFromContent(params.messages[latestIndex].content ?? ''),
             ...(context ? { context: { text: context } } : {}),
+            // Spread rather than assigned so an absent identifier leaves the key off the body
+            // entirely — `endUserId: undefined` would serialize away anyway, but the body is then
+            // provably identical to one built without the constructor argument.
+            ...(this.endUserId ? { endUserId: this.endUserId } : {}),
         };
     }
 

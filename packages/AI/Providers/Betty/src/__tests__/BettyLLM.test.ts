@@ -176,6 +176,64 @@ describe('BettyLLM', () => {
         });
     });
 
+    describe('caller attribution (endUserId)', () => {
+        // Mirrors PR #4113 on the legacy provider: without an identifier every request lands in one
+        // anonymous per-IP bucket and Betty's utilization report reads the server as a bot.
+
+        it('omits the field entirely when no identifier was given', async () => {
+            vi.mocked(HttpPost).mockResolvedValue(reply());
+
+            await run(new BettyLLM('key'), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
+
+            const body = vi.mocked(HttpPost).mock.calls[0][1] as Record<string, unknown>;
+            expect('endUserId' in body).toBe(false);
+        });
+
+        it('sends it when one was given', async () => {
+            vi.mocked(HttpPost).mockResolvedValue(reply());
+
+            await run(new BettyLLM('key', 'izzy'), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
+
+            const body = vi.mocked(HttpPost).mock.calls[0][1] as { endUserId?: string };
+            expect(body.endUserId).toBe('izzy');
+        });
+
+        it('leaves the rest of the body untouched either way', async () => {
+            vi.mocked(HttpPost).mockResolvedValue(reply());
+            const messages = [{ role: ChatMessageRole.user, content: 'q' }];
+
+            await run(new BettyLLM('key'), paramsWith(messages));
+            const withoutId = vi.mocked(HttpPost).mock.calls[0][1] as Record<string, unknown>;
+
+            vi.mocked(HttpPost).mockClear();
+            await run(new BettyLLM('key', 'izzy'), paramsWith(messages));
+            const withId = vi.mocked(HttpPost).mock.calls[0][1] as Record<string, unknown>;
+
+            expect({ ...withId, endUserId: undefined }).toEqual({ ...withoutId, endUserId: undefined });
+        });
+
+        it('treats an empty identifier as none at all', async () => {
+            vi.mocked(HttpPost).mockResolvedValue(reply());
+
+            await run(new BettyLLM('key', ''), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
+
+            const body = vi.mocked(HttpPost).mock.calls[0][1] as Record<string, unknown>;
+            expect('endUserId' in body).toBe(false);
+        });
+
+        it('does not put the identifier anywhere near the credential', async () => {
+            // It is attribution metadata, not authorization — it must never influence the header
+            // that pins retrieval scope.
+            vi.mocked(HttpPost).mockResolvedValue(reply());
+
+            await run(new BettyLLM('sekrit', 'izzy'), paramsWith([{ role: ChatMessageRole.user, content: 'q' }]));
+
+            const cfg = vi.mocked(HttpPost).mock.calls[0][2] as { Headers: Record<string, string> };
+            expect(cfg.Headers.Authorization).toBe('Bearer sekrit');
+            expect(JSON.stringify(cfg.Headers)).not.toContain('izzy');
+        });
+    });
+
     describe('the result it returns', () => {
         it('puts the answer in the first choice', async () => {
             vi.mocked(HttpPost).mockResolvedValue(reply({ response: 'Cheese is aged.' }));

@@ -50,6 +50,29 @@ Runtime resolution is `AIModelVendor.DriverClass` → this class. You need:
 Do not create **MJ: AI Vendor Type Definitions** rows — they are migration-seeded; reference them
 by `@lookup`.
 
+## Caller attribution
+
+The constructor takes an optional second argument, forwarded as Betty's `endUserId` request field:
+
+```ts
+new BettyLLM(apiKey, 'izzy')
+```
+
+Betty records it against the conversation, so the caller gets its own attribution row and its own
+rate-limit bucket instead of sharing an anonymous per-IP one. Without it, utilization reports read a
+server as a single anonymous client — the problem PR #4113 fixes for `BettyBotLLM` with its `userId`
+argument; this is the same idea under the field name Betty's own API documents.
+
+Attribution only, and unverified by design: retrieval scope is pinned server-side from the
+credential, so it never widens what content a request can reach. Do not use it for authorization.
+
+Omit it and the request body is byte-identical to one built without the parameter.
+
+Note it is reachable only by constructing the provider directly. `AIPromptRunner` instantiates via
+`ClassFactory.CreateInstance(BaseLLM, driverClass, apiKey)` and passes the key alone, and
+`ChatParams` carries no user identity to fall back on — so a prompt run through the normal model
+path is anonymous, exactly as the legacy provider is.
+
 ## Conversation handling
 
 Betty threads conversations server-side through `conversationId`, but `ChatParams` carries no
