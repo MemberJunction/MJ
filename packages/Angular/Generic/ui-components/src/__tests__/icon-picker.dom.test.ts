@@ -16,6 +16,7 @@ const ICONS: FontAwesomeIcon[] = [
 ];
 
 class StubCatalogue {
+  public async Load(): Promise<readonly FontAwesomeIcon[]> { return ICONS; }
   public Icons(): readonly FontAwesomeIcon[] { return ICONS; }
   public IsFallback(): boolean { return false; }
   public Forget(): void { /* nothing memoized */ }

@@ -18,39 +18,81 @@ import {
 @Injectable({ providedIn: 'root' })
 export class IconCatalogueService {
     private catalogue: FontAwesomeIcon[] | null = null;
+    private loading: Promise<readonly FontAwesomeIcon[]> | null = null;
     private fallback = false;
 
     /**
      * Every icon on offer, with the style that draws it.
      *
+     * Each style has to be FETCHED before it can be measured. A browser loads a web font
+     * only when something on the page uses it, so an app drawing solid icons has the solid
+     * font and neither of the others — and measuring then reports every brands and regular
+     * icon as missing, which is most of the catalogue.
+     *
      * Falls back to a short built-in list when the stylesheets cannot be read — a
      * cross-origin sheet without CORS headers throws on `cssRules` — so the picker always
      * has something to show.
      */
-    public Icons(doc: Document = document): readonly FontAwesomeIcon[] {
-        if (!this.catalogue) this.catalogue = this.build(doc);
-        return this.catalogue;
+    public async Load(doc: Document = document): Promise<readonly FontAwesomeIcon[]> {
+        if (this.catalogue) return this.catalogue;
+        if (!this.loading) this.loading = this.build(doc);
+        return this.loading;
+    }
+
+    /**
+     * What is known right now, without waiting.
+     *
+     * Empty until {@link Load} has finished, which is the honest answer: a caller that
+     * rendered this before the fonts arrived would draw the short fallback list and then
+     * replace it, which reads as the picker changing its mind.
+     */
+    public Icons(): readonly FontAwesomeIcon[] {
+        return this.catalogue ?? [];
     }
 
     /** True when the built-in list is standing in because the page could not be read. */
-    public IsFallback(doc: Document = document): boolean {
-        this.Icons(doc);
+    public IsFallback(): boolean {
         return this.fallback;
     }
 
     /** Forgets the catalogue, for a page that loads a different icon set later. */
     public Forget(): void {
         this.catalogue = null;
+        this.loading = null;
         this.fallback = false;
     }
 
-    private build(doc: Document): FontAwesomeIcon[] {
+    private async build(doc: Document): Promise<readonly FontAwesomeIcon[]> {
         const rules = ScanLoadedIconRules(doc);
         const fonts = rules.length > 0 ? ProbeIconStyleFonts(doc) : [];
-        const measure = fonts.length > 0 ? this.glyphTest(doc) : null;
+        const ready = await this.fetchFonts(doc, fonts);
+        const measure = ready.length > 0 ? this.glyphTest(doc) : null;
         const resolved = measure ? ResolveIconStyles(rules, fonts, measure) : [];
         this.fallback = resolved.length === 0;
-        return this.fallback ? [...FALLBACK_ICONS] : resolved;
+        this.catalogue = this.fallback ? [...FALLBACK_ICONS] : resolved;
+        return this.catalogue;
+    }
+
+    /**
+     * Fetch each style's font file, returning the ones that arrived.
+     *
+     * `document.fonts.load` resolves once the face is usable by canvas. A style that fails
+     * to load is dropped rather than measured, because measuring it would report every one
+     * of its icons as missing and quietly halve the catalogue.
+     */
+    private async fetchFonts(doc: Document, fonts: readonly IconStyleFont[]): Promise<IconStyleFont[]> {
+        const faces = doc.fonts;
+        if (!faces?.load) return [...fonts];
+        const results = await Promise.all(fonts.map(async (font) => {
+            try {
+                const loaded = await faces.load(`${font.FontWeight} 16px ${font.FontFamily}`);
+                return loaded.length > 0 ? font : null;
+            } catch {
+                // A face the browser refuses to load cannot be measured either.
+                return null;
+            }
+        }));
+        return results.filter((font): font is IconStyleFont => font !== null);
     }
 
     /**

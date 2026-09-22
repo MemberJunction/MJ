@@ -61,7 +61,9 @@
            [value]="Search"
            (input)="Search = $any($event.target).value">
 
-    @if (Results.length === 0) {
+    @if (IsLoading) {
+      <p class="mj-iconpick-empty">Reading the icons this page can draw&hellip;</p>
+    } @else if (Results.length === 0) {
       <p class="mj-iconpick-empty">No icon matches &ldquo;{{ Search }}&rdquo;.</p>
     } @else {
       <div class="mj-iconpick-grid">
@@ -80,7 +82,9 @@
     }
 
     <p class="mj-iconpick-note">
-      @if (IsFallbackCatalogue) {
+      @if (IsLoading) {
+        Fetching the icon fonts, so only the ones this page can really draw are offered.
+      } @else if (IsFallbackCatalogue) {
         The icon stylesheet could not be read, so this is a short list. Any other name can
         still be typed.
       } @else {

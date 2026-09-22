@@ -128,13 +128,16 @@ export class MjIconPickerComponent implements ControlValueAccessor {
 
     /** Every icon on offer, each with the style that actually draws it. */
     public get Icons(): readonly FontAwesomeIcon[] {
-        return this.catalogue.Icons(this.ownerDocument);
+        return this.catalogue.Icons();
     }
 
     /** True when the page could not be read and the short list is standing in. */
     public get IsFallbackCatalogue(): boolean {
-        return this.catalogue.IsFallback(this.ownerDocument);
+        return this.catalogue.IsFallback();
     }
+
+    /** True while the icon fonts are being fetched so their glyphs can be measured. */
+    public IsLoading = false;
 
     private get ownerDocument(): Document {
         return this.host.nativeElement.ownerDocument ?? document;
@@ -150,10 +153,31 @@ export class MjIconPickerComponent implements ControlValueAccessor {
         this.IsOpen = !this.IsOpen;
         if (this.IsOpen) {
             this.Search = '';
+            void this.loadCatalogue();
             // After the grid exists, so there is something to focus.
             setTimeout(() => this.searchBox?.nativeElement.focus(), 0);
         }
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Read the catalogue, showing a wait while the icon fonts arrive.
+     *
+     * They have to be fetched before their glyphs can be measured, and a browser fetches
+     * a web font only when the page uses it — so on an app that draws solid icons the
+     * other styles are not there yet. Rendering the grid before they land would show it
+     * missing every brands and regular icon, then fill them in, which reads as a bug.
+     */
+    private async loadCatalogue(): Promise<void> {
+        if (this.Icons.length > 0) return;
+        this.IsLoading = true;
+        this.cdr.markForCheck();
+        try {
+            await this.catalogue.Load(this.ownerDocument);
+        } finally {
+            this.IsLoading = false;
+            this.cdr.markForCheck();
+        }
     }
 
     public Close(): void {
