@@ -722,7 +722,7 @@ export class InferProcessor implements IRecordProcessor {
                 const rv = new RunView();
                 const result = await rv.RunView({
                     EntityName: entity.Name,
-                    ExtraFilter: `${pk} IN (${ids})`,
+                    ExtraFilter: `[${pk}] IN (${ids})`,
                     ResultType: 'simple',
                     MaxRows: chunk.length,
                     BypassCache: true,
@@ -740,6 +740,10 @@ export class InferProcessor implements IRecordProcessor {
                             r.Record = row;
                         }
                     }
+                } else {
+                    const errMsg = result.ErrorMessage || 'Failed to load records from entity view';
+                    LogError(`[InferProcessor] ensureRecordsLoaded failed for entity '${entity.Name}': ${errMsg}`);
+                    throw new Error(`[InferProcessor] Failed to load records for entity '${entity.Name}': ${errMsg}`);
                 }
             }
         }

@@ -32,8 +32,8 @@
     width: 48px;
     height: 48px;
     border-radius: 10px;
-    background: linear-gradient(135deg, rgba(2, 132, 199, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
-    border: 1px solid rgba(2, 132, 199, 0.25);
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
     color: var(--mj-brand-primary, #0284c7);
     font-size: 22px;
     flex-shrink: 0;
@@ -87,9 +87,9 @@
 }
 
 .rpf-pill-feature {
-    background: rgba(99, 102, 241, 0.08);
-    border-color: rgba(99, 102, 241, 0.25);
-    color: var(--mj-brand-primary, #4f46e5);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+    color: var(--mj-brand-primary);
     font-weight: 600;
 }
 
@@ -111,30 +111,30 @@
 }
 
 .rpf-status-active {
-    background: rgba(34, 197, 94, 0.12);
-    color: #16a34a;
-    border: 1px solid rgba(34, 197, 94, 0.3);
+    background: var(--mj-status-success-bg, color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface)));
+    color: var(--mj-status-success-text, var(--mj-status-success));
+    border: 1px solid var(--mj-status-success-border, color-mix(in srgb, var(--mj-status-success) 30%, transparent));
 }
 .rpf-status-active .rpf-badge-dot {
-    background: #16a34a;
+    background: var(--mj-status-success);
 }
 
 .rpf-status-draft {
-    background: rgba(245, 158, 11, 0.12);
-    color: #d97706;
-    border: 1px solid rgba(245, 158, 11, 0.3);
+    background: var(--mj-status-warning-bg, color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface)));
+    color: var(--mj-status-warning-text, var(--mj-status-warning));
+    border: 1px solid var(--mj-status-warning-border, color-mix(in srgb, var(--mj-status-warning) 30%, transparent));
 }
 .rpf-status-draft .rpf-badge-dot {
-    background: #d97706;
+    background: var(--mj-status-warning);
 }
 
 .rpf-status-disabled {
-    background: rgba(148, 163, 184, 0.12);
-    color: #64748b;
-    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    border: 1px solid var(--mj-border-subtle);
 }
 .rpf-status-disabled .rpf-badge-dot {
-    background: #64748b;
+    background: var(--mj-text-muted);
 }
 
 .rpf-status-default {
