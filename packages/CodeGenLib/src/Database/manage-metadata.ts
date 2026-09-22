@@ -7909,7 +7909,14 @@ export class ManageMetadataBase {
     * Written as `UPDATE ... WHERE <key> IN (subquery)` rather than `UPDATE ... FROM ... JOIN`,
     * which is T-SQL-only. The subquery form is ANSI and runs unchanged on both platforms.
     */
-   protected buildSearchFlagHygieneSQL(excludeSchemas: string[]): { seedSQL: string; clearSQL: string } {
+   protected buildSearchFlagHygieneSQL(excludeSchemas: string[]): {
+      seedSQL: string;
+      clearSQL: string;
+      /** COUNT of the rows {@link seedSQL} would touch — see the compare-first note on the apply method. */
+      seedProbeSQL: string;
+      /** COUNT of the rows {@link clearSQL} would touch, valid only AFTER the seed has run. */
+      clearProbeSQL: string;
+   } {
       const coreSchema = mj_core_schema();
       const entity = this.qs(coreSchema, 'Entity');
       const entityField = this.qs(coreSchema, 'EntityField');
