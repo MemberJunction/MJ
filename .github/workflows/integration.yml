@@ -64,6 +64,10 @@ on:
       - 'tsconfig*'
       - 'turbo.json'
       - '.github/workflows/integration.yml'
+      # The drift gate's own script. The changed-paths filter in the `changes` job below also
+      # matches it, but that job only runs if the workflow starts at all — so without this entry
+      # a script-only PR never reaches the filter and the gate cannot catch its own regressions.
+      - 'scripts/codegen-idempotency-check.mjs'
   # Full backstop: every merge into next runs the gate, so a filter-missed break (paths are a
   # heuristic; migrations + runtime @RegisterClass wiring can couple files no filter foresees)
   # can never merge silently and red the next PR (R3, mirrors test.yml).

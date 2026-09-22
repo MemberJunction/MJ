@@ -695,12 +695,10 @@ export class InferProcessor implements IRecordProcessor {
 
         if (needsLoading.length === 0) return;
 
-        // The bound provider is preferred; the global is the fallback for callers that supply
-        // none (`provider?: IMetadataProvider` on RecordProcessorContext). Both are duck-typed
-        // because a partially-built provider without EntityByID would fail below rather than here.
-        const provider = (context.provider && typeof context.provider.EntityByID === 'function')
-            ? context.provider
-            : (typeof Metadata.Provider?.EntityByID === 'function' ? Metadata.Provider : undefined); // global-provider-ok: fallback only when the caller passed no provider — context.provider wins above, and the method silently no-ops without it
+        const candidateProvider = context.provider ?? Metadata.Provider; // global-provider-ok: fallback to global provider when not in context
+        const provider = (candidateProvider && typeof candidateProvider.EntityByID === 'function')
+            ? candidateProvider
+            : undefined;
         if (!provider) return;
 
         const byEntity = new Map<string, RecordRef[]>();
