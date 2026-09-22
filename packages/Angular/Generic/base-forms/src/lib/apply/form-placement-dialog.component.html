@@ -145,8 +145,8 @@
             </div>
             <div class="mj-placement-field mj-placement-field--icon">
               <label for="mj-placement-icon">Icon</label>
-              <input id="mj-placement-icon" type="text" class="mj-input mj-placement-mono"
-                     placeholder="fa-chart-column" [(ngModel)]="State.Icon" name="mj-icon">
+              <mj-icon-picker id="mj-placement-icon" AriaLabel="Panel icon"
+                              [(ngModel)]="State.Icon" name="mj-icon"></mj-icon-picker>
             </div>
           </div>
           @if (!HasTitle) {

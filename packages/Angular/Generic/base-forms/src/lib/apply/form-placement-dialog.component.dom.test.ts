@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import type { FormContributionSpec } from '@memberjunction/interactive-component-types/forms';
+import { MjIconPickerComponent } from '@memberjunction/ng-ui-components';
 import { MjFormPlacementDialogComponent } from './form-placement-dialog.component';
 import type { FormPlacementContext, FormPlacementDecision } from './form-placement';
 
@@ -43,7 +44,7 @@ const PROPOSAL: FormContributionSpec = {
 
 function render(context: FormPlacementContext = CONTEXT, proposal: FormContributionSpec | null = PROPOSAL) {
     const f = renderComponentFixture(MjFormPlacementDialogComponent, {
-        imports: [CommonModule, FormsModule, AlertStub, ButtonStub],
+        imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent],
         declarations: [MjFormPlacementDialogComponent],
         // The probe renders a real entity form; these specs supply the slot set directly.
         inputs: { ProbeForm: false, Context: context, Proposal: proposal, ComponentName: 'Cohort Analytics' },
@@ -481,7 +482,7 @@ describe('MjFormPlacementDialogComponent (DOM) — the preview names the tab the
 
     it('says so in the preview when the panel will get a tab of its own', () => {
         const f = renderComponentFixture(MjFormPlacementDialogComponent, {
-            imports: [CommonModule, FormsModule, AlertStub, ButtonStub],
+            imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent],
             declarations: [MjFormPlacementDialogComponent],
             inputs: { ProbeForm: false, Context: railed, Proposal: PROPOSAL, ComponentName: 'Cohort Analytics' },
             setup: (inst) => { inst.State.Slot = 'after-everything'; },
@@ -495,7 +496,7 @@ describe('MjFormPlacementDialogComponent (DOM) — the preview names the tab the
     // the is-on / is-off bindings on the replace rows, which a second check trips over.
     it('names the tab instead once the panel joins one', () => {
         const f = renderComponentFixture(MjFormPlacementDialogComponent, {
-            imports: [CommonModule, FormsModule, AlertStub, ButtonStub],
+            imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent],
             declarations: [MjFormPlacementDialogComponent],
             inputs: { ProbeForm: false, Context: railed, Proposal: PROPOSAL, ComponentName: 'Cohort Analytics' },
             setup: (inst) => inst.SetReplaceMode('rail-tab'),
@@ -599,7 +600,7 @@ describe('MjFormPlacementDialogComponent (DOM) — the preview marks what the ch
 
     it('draws the marks, so the two choices differ on screen and not only in the label', () => {
         const one = renderComponentFixture(MjFormPlacementDialogComponent, {
-            imports: [CommonModule, FormsModule, AlertStub, ButtonStub],
+            imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent],
             declarations: [MjFormPlacementDialogComponent],
             inputs: { ProbeForm: false, Context: organizations, Proposal: PROPOSAL, ComponentName: 'X' },
             setup: (inst) => { inst.SetReplaceMode('section'); inst.State.ReplaceSectionKey = 'details'; },
@@ -695,7 +696,7 @@ describe('MjFormPlacementDialogComponent (DOM) — standing in for fields', () =
     /** Render with the field mode already on, so the picker is in the first pass. */
     function renderPicking(context: FormPlacementContext = withFields) {
         return renderComponentFixture(MjFormPlacementDialogComponent, {
-            imports: [CommonModule, FormsModule, AlertStub, ButtonStub],
+            imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent],
             declarations: [MjFormPlacementDialogComponent],
             inputs: { ProbeForm: false, Context: context, Proposal: null, ComponentName: 'Identity Card' },
             setup: (c: MjFormPlacementDialogComponent) => {

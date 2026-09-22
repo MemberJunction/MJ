@@ -14,6 +14,7 @@ import {
     type FormValidationChangedArgs,
 } from '@memberjunction/interactive-component-types/forms';
 import { MJReactComponent, ReactBridgeService, type ReactComponentEvent } from '@memberjunction/ng-react';
+import { NormalizeIconClass } from '@memberjunction/ng-ui-components';
 import { BaseFormPanel, type FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
 import { ResolveContributionKey, type FormContributionRegistration } from '../panel-slot/form-contribution';
 import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
@@ -69,8 +70,16 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
         return this.Contribution.Title ?? this.Contribution.Metadata.contributionKey ?? this.SectionKey;
     }
 
+    /**
+     * The panel's icon, completed if it was stored without a style.
+     *
+     * Font Awesome needs a style class beside the name: `fa-chart-column` alone matches a
+     * rule that sets a glyph but no font family, so nothing draws. Rows written before the
+     * picker existed carry bare names, and normalizing on the way out makes them render
+     * rather than requiring each one to be edited.
+     */
     public get Icon(): string {
-        return this.Contribution.Icon ?? 'fa-solid fa-puzzle-piece';
+        return NormalizeIconClass(this.Contribution.Icon) || 'fa-solid fa-puzzle-piece';
     }
 
     public get IsBare(): boolean {

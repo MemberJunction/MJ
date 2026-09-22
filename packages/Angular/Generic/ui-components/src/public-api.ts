@@ -20,6 +20,8 @@ export * from './lib/window/window.component';
 export * from './lib/slide-panel/slide-panel.component';
 export * from './lib/bottom-sheet/bottom-sheet.component';
 export * from './lib/combobox/combobox.component';
+export * from './lib/icon-picker/icon-picker.component';
+export * from './lib/icon-picker/font-awesome-icons';
 export * from './lib/page-header/page-header.component';
 export * from './lib/page-layout/page-layout.component';
 export * from './lib/page-body/page-body.component';
