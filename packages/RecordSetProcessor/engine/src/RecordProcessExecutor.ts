@@ -5,8 +5,8 @@
  * @module @memberjunction/record-set-processor
  */
 
-import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
-import { SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
+import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { MJGlobal, EscapeSQLString, SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
     ArraySource,
@@ -29,7 +29,8 @@ import { AgentRecordProcessor } from './processors/AgentRecordProcessor';
 import { InferProcessor } from './processors/InferProcessor';
 import { FieldRulesProcessor } from './processors/FieldRulesProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
-import { OutputMappingConfig } from './writeBack';
+import { ChildRecordMapping, FieldLookupConfig, OutputMappingConfig, RunProvenance, TagOutputMapping } from './writeBack';
+import { validateSpec, validateMaterializationTargets, type DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 /** Options for executing a Record Process. */
 export interface RunRecordProcessOptions {
@@ -53,6 +54,8 @@ export interface RunRecordProcessOptions {
     dryRun?: boolean;
     /** FK to the owning `ScheduledJobRun` when launched by the scheduler (links the Process Run back). */
     scheduledJobRunID?: string;
+    /** Optional timestamp of the previous run, used for 'UpdatedAt' watermark strategy. */
+    lastRunAt?: Date | null;
     /** Progress callback. */
     onProgress?: (progress: ProgressInfo) => void;
 }
@@ -73,9 +76,27 @@ export class RecordProcessExecutor {
     /** Runs an already-loaded Record Process. */
     public async Run(rp: MJRecordProcessEntity, options: RunRecordProcessOptions): Promise<ProcessRunResult> {
         const provider = options.provider ?? Metadata.Provider;
+        let lastRunAt = options.lastRunAt;
+        if (!lastRunAt && rp.SkipUnchanged && rp.WatermarkStrategy === 'UpdatedAt') {
+            try {
+                const rv = RunView.FromMetadataProvider(provider);
+                const lastRunRes = await rv.RunView<{ StartedAt?: Date }>({
+                    EntityName: 'MJ: Process Runs',
+                    ExtraFilter: `RecordProcessID = '${EscapeSQLString(rp.ID)}' AND Status = 'Completed'`,
+                    OrderBy: 'StartedAt DESC',
+                    MaxRows: 1,
+                }, options.contextUser);
+                if (lastRunRes.Success && lastRunRes.Results && lastRunRes.Results.length > 0) {
+                    lastRunAt = lastRunRes.Results[0].StartedAt ?? null;
+                }
+            } catch (err) {
+                LogError(`RecordProcessExecutor: failed to query last run for RecordProcess '${rp.ID}': ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+
         return RecordSetProcessor.Instance.Process({
             source: this.BuildSource(rp, provider, options.singleRecordID, options.scope),
-            processor: this.BuildProcessor(rp, options.dryRun),
+            processor: this.BuildProcessor(rp, options.dryRun, provider),
             contextUser: options.contextUser,
             provider,
             dryRun: options.dryRun,
@@ -85,6 +106,9 @@ export class RecordProcessExecutor {
             triggeredBy: options.triggeredBy ?? 'OnDemand',
             batchSize: rp.BatchSize ?? undefined,
             maxConcurrency: rp.MaxConcurrency ?? undefined,
+            skipUnchanged: rp.SkipUnchanged,
+            watermarkStrategy: rp.WatermarkStrategy ?? 'Checksum',
+            lastRunAt,
             onProgress: options.onProgress,
             configuration: { recordProcessName: rp.Name, workType: rp.WorkType, scopeType: rp.ScopeType },
         });
@@ -154,7 +178,7 @@ export class RecordProcessExecutor {
      * dry-run the inner work runs but the mapping only previews (nothing is saved), so EVERY work type's
      * dry-run is side-effect-free, not just FieldRules.
      */
-    public BuildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
+    public BuildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean, provider?: IMetadataProvider): IRecordProcessor {
         if (rp.WorkType === 'FieldRules') {
             const ruleSet = rp.Configuration ? SafeJSONParse<FieldRuleSet>(rp.Configuration) : undefined;
             if (!ruleSet || !Array.isArray(ruleSet.Rules)) {
@@ -164,8 +188,9 @@ export class RecordProcessExecutor {
             return new FieldRulesProcessor({ RuleSet: ruleSet, DryRun: dryRun });
         }
 
-        const inputMapping = rp.InputMapping ? SafeJSONParse(rp.InputMapping) : undefined;
+        const inputMapping = rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : undefined;
         let base: IRecordProcessor;
+        let spec: DataFeatureSpec | undefined;
         if (rp.WorkType === 'Action') {
             if (!rp.ActionID) {
                 throw new Error(`Record Process '${rp.Name}': WorkType=Action requires ActionID`);
@@ -180,7 +205,37 @@ export class RecordProcessExecutor {
             if (!rp.PromptID) {
                 throw new Error(`Record Process '${rp.Name}': WorkType=Infer requires PromptID`);
             }
-            base = new InferProcessor(rp.PromptID, inputMapping);
+            if (rp.Configuration && rp.Configuration.trim().length > 0) {
+                try {
+                    spec = JSON.parse(rp.Configuration) as DataFeatureSpec;
+                } catch (e) {
+                    throw new Error(`Record Process '${rp.Name}': Configuration is invalid JSON: ${e instanceof Error ? e.message : String(e)}`);
+                }
+                const issues = validateSpec(spec);
+                const errors = issues.filter((i) => i.Severity === 'error');
+                if (errors.length > 0) {
+                    throw new Error(`Record Process '${rp.Name}': invalid DataFeatureSpec in Configuration: ${errors.map((err) => err.Message).join('; ')}`);
+                }
+
+                const targetProvider = provider ?? Metadata.Provider;
+                if (targetProvider && rp.EntityID) {
+                    const materializationIssues = validateMaterializationTargets(spec, targetProvider, rp.EntityID);
+                    const matErrors = materializationIssues.filter((i) => i.Severity === 'error');
+                    if (matErrors.length > 0) {
+                        throw new Error(`Record Process '${rp.Name}': invalid materialization targets: ${matErrors.map((err) => `${err.Field ? `[${err.Field}] ` : ''}${err.Message} Fix: ${err.FixRecommendation}`).join('; ')}`);
+                    }
+                }
+            }
+            if (spec?.ProcessorExtensionKey) {
+                const custom = MJGlobal.Instance.ClassFactory.CreateInstance<InferProcessor>(InferProcessor, spec.ProcessorExtensionKey, rp.PromptID, inputMapping, spec);
+                if (custom && custom.constructor !== InferProcessor) {
+                    base = custom;
+                } else {
+                    throw new Error(`Record Process '${rp.Name}': ProcessorExtensionKey '${spec.ProcessorExtensionKey}' not found in ClassFactory`);
+                }
+            } else {
+                base = new InferProcessor(rp.PromptID, inputMapping, spec);
+            }
         } else {
             // Not a built-in work type — consult the pluggable registry. This is the open seam that
             // lets external packages (e.g. Predictive Studio's 'ML Model' scoring) register a processor
@@ -189,15 +244,42 @@ export class RecordProcessExecutor {
         }
 
         const outputMapping = rp.OutputMapping ? SafeJSONParse<OutputMappingConfig>(rp.OutputMapping) : undefined;
-        if (outputMapping && (outputMapping.fields || outputMapping.childRecord)) {
-            return new WriteBackProcessor(base, outputMapping, dryRun);
+        if (outputMapping?.fields && spec?.Outputs) {
+            for (const out of spec.Outputs) {
+                if (out.Target && out.Target.Mode === 'field') {
+                    const fieldName = out.Target.EntityFieldName;
+                    if (outputMapping.fields[fieldName] && (out.Target.LookupMatchField || out.Target.OnLookupMiss)) {
+                        outputMapping.fieldLookups = outputMapping.fieldLookups ?? {};
+                        if (!outputMapping.fieldLookups[fieldName]) {
+                            outputMapping.fieldLookups[fieldName] = {
+                                matchField: out.Target.LookupMatchField ?? 'Name',
+                                onLookupMiss: out.Target.OnLookupMiss ?? 'null',
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
+        if (
+            outputMapping &&
+            (outputMapping.fields ||
+                outputMapping.childRecord ||
+                (outputMapping.childRecords && outputMapping.childRecords.length > 0) ||
+                (outputMapping.tags && outputMapping.tags.length > 0))
+        ) {
+            const run: RunProvenance = {
+                RecordProcessID: rp.ID,
+                PromptID: rp.PromptID ?? undefined,
+            };
+            return new WriteBackProcessor(base, outputMapping, dryRun, run);
         }
         return base;
     }
 
     /** @deprecated Use {@link BuildProcessor}. */
-    public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
-        return this.BuildProcessor(rp, dryRun);
+    public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean, provider?: IMetadataProvider): IRecordProcessor {
+        return this.BuildProcessor(rp, dryRun, provider);
     }
 
     /**

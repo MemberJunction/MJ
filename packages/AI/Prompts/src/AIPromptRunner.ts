@@ -3032,7 +3032,7 @@ export class AIPromptRunner {
       }
 
       // Populate new retry tracking columns with initial values
-      promptRun.ValidationBehavior = prompt.ValidationBehavior || 'Warn';
+      promptRun.ValidationBehavior = params.validationBehavior || prompt.ValidationBehavior || 'Warn';
       promptRun.RetryStrategy = prompt.RetryStrategy || 'Fixed';
       promptRun.MaxRetriesConfigured = prompt.MaxRetries || 0;
       promptRun.FirstAttemptAt = startTime;
@@ -4669,14 +4669,15 @@ export class AIPromptRunner {
 
         // Validation failed, check if we should retry
         // BUG FIX: Only retry in Strict mode, not in Warn or None modes
-        if (prompt.ValidationBehavior === 'Strict' && attempt < maxRetries) {
+        const effectiveValidationBehavior = params?.validationBehavior || prompt.ValidationBehavior;
+        if (effectiveValidationBehavior === 'Strict' && attempt < maxRetries) {
           lastError = new Error(`Validation failed: ${validationErrors?.map(e => e.Message).join('; ')}`);
           LogStatus(`   ⚠️ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
           continue; // Retry
         } else {
           // Either not strict mode or no more retries, return what we have
-          const reason = prompt.ValidationBehavior !== 'Strict' 
-            ? `${prompt.ValidationBehavior || 'None'} mode - continuing with invalid output (no retry)`
+          const reason = effectiveValidationBehavior !== 'Strict' 
+            ? `${effectiveValidationBehavior || 'None'} mode - continuing with invalid output (no retry)`
             : 'max retries exceeded';
           LogStatus(`   ⚠️ Validation failed on attempt ${attempt + 1}, stopping retries (${reason})`);
           return {
@@ -5325,7 +5326,8 @@ export class AIPromptRunner {
         new ValidationErrorInfo('general', error.message, undefined, ValidationErrorType.Failure)
       ];
 
-      switch (prompt.ValidationBehavior) {
+      const effectiveValidationBehavior = params?.validationBehavior || prompt.ValidationBehavior;
+      switch (effectiveValidationBehavior) {
         case 'Strict':
           return { result: undefined, validationResult, validationErrors: validationResult.Errors };
         case 'Warn':

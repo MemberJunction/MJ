@@ -313,9 +313,10 @@ export class ConversationAttachmentService {
   async saveAttachments(
     conversationDetailId: string,
     pendingAttachments: PendingAttachment[],
-    contextUser?: UserInfo
+    contextUser?: UserInfo,
+    agent?: MJAIAgentEntity | null
   ): Promise<MJConversationDetailAttachmentEntity[]> {
-    return this.SaveAttachments(conversationDetailId, pendingAttachments, contextUser);
+    return this.SaveAttachments(conversationDetailId, pendingAttachments, contextUser, agent);
   }
 
   /**

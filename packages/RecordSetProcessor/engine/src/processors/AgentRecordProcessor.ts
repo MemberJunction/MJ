@@ -23,10 +23,10 @@ export class AgentRecordProcessor implements IRecordProcessor {
      * @param inputMapping - Optional mapping config resolved against `{ record, recordId, entityId }`
      *   to build the agent's `data`. When omitted, the whole record is passed as `data`.
      */
-    constructor(private readonly agentID: string, private readonly inputMapping?: unknown) {}
+    constructor(private readonly agentID: string, private readonly inputMapping?: Record<string, string>) {}
 
     /** Builds the agent `data` payload from the record + optional input mapping. */
-    public static BuildData(inputMapping: unknown, record: RecordRef): Record<string, unknown> {
+    public static BuildData(inputMapping: Record<string, string> | undefined, record: RecordRef): Record<string, unknown> {
         if (!inputMapping) {
             return { record: record.Record ?? {}, recordId: record.RecordID, entityId: record.EntityID };
         }
@@ -35,7 +35,7 @@ export class AgentRecordProcessor implements IRecordProcessor {
     }
 
     /** @deprecated Use {@link BuildData}. */
-    public static buildData(inputMapping: unknown, record: RecordRef): Record<string, unknown> {
+    public static buildData(inputMapping: Record<string, string> | undefined, record: RecordRef): Record<string, unknown> {
         return this.BuildData(inputMapping, record);
     }
 

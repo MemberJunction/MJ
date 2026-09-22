@@ -454,6 +454,13 @@ export class AIPromptParams {
   skipValidation?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Optional execution-level validation behavior override ('Warn' | 'Strict' | 'None').
+   * When provided, overrides the prompt entity's ValidationBehavior for this run without
+   * mutating the shared prompt entity.
+   */
+  validationBehavior?: MJAIPromptEntityExtended['ValidationBehavior'];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
    * Optional custom template data that augments the main data context
    */
   templateData?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member

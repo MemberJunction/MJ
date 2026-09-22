@@ -141,6 +141,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   // and onTabShown can race to call loadTabContent, resulting in duplicate component rendering.
   private tabsCurrentlyLoading = new Set<string>();
 
+  // Record-tab shows GL fired while the records region was HIDDEN, by tab id.
+  // Their content loads are deferred until the region is the visible surface —
+  // see the TabShown handler in wireRecordsLayoutEvents.
+  //
+  // A SET, not a map of containers: the replay deliberately re-resolves the live
+  // container via GetContainer(tabId), so a parked one would never be read — and
+  // holding it would retain a GL container, and its possibly-detached DOM, for as
+  // long as the region stays hidden. The type says the id is all that is kept.
+  private pendingRecordShows = new Set<string>();
+
   // NEW: Smart component cache for preserving state across tab switches
   private cacheManager: ComponentCacheManager;
 
@@ -437,6 +447,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // Flush NOW — the visibility class must land in this pass, not
       // whenever the next unrelated emission happens to run CD.
       this.flushRegionCd();
+      if (showing) {
+        this.flushPendingRecordShows();
+      }
     }
 
     if (showing && activeTab && this.recordsLayoutInitialized) {
@@ -559,6 +572,48 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       }
     }
     return true;
+  }
+
+  /**
+   * Load a record tab's content into its GL container and mark it loaded —
+   * the second half of the TabShown handler, split out so a show parked
+   * while the region was hidden can be replayed on reveal.
+   */
+  private async loadShownRecordTab(tabId: string, container: unknown): Promise<void> {
+    await this.loadTabContent(tabId, container);
+    // Mark loaded ONLY when content actually attached to the LIVE
+    // container. During layout restore, GL can re-render item elements
+    // while an async load is in flight — the load appends into a
+    // detached element and the visible pane stays blank. Leaving the
+    // tab unmarked lets the next show retry, which hits the component
+    // cache and reattaches instantly into the live element.
+    const live = this.recordsLayoutManager.GetContainer(tabId);
+    if (live?.element && live.element.childElementCount > 0) {
+      this.recordsLayoutManager.MarkTabLoaded(tabId);
+    }
+  }
+
+  /**
+   * Replay the shows parked while the records region was hidden (see the
+   * TabShown handler). Always against the LIVE container: a breakpoint
+   * rebuild between park and reveal replaces the one GL handed us (and its
+   * Destroy fires TabClosed, which drops the stale entry anyway).
+   */
+  private flushPendingRecordShows(): void {
+    if (this.pendingRecordShows.size === 0) {
+      return;
+    }
+    const parked = [...this.pendingRecordShows];
+    this.pendingRecordShows.clear();
+    for (const tabId of parked) {
+      if (this.recordsLayoutManager.IsTabLoaded(tabId)) {
+        continue;
+      }
+      const live = this.recordsLayoutManager.GetContainer(tabId);
+      if (live) {
+        this.loadShownRecordTab(tabId, live).catch(e => LogError(`Deferred record tab load failed for ${tabId}: ${e}`));
+      }
+    }
   }
 
   /** Focus a records-region tab without feeding back into SetActiveTab loops */
@@ -828,21 +883,29 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
   private wireRecordsLayoutEvents(): void {
     this.subscriptions.push(
       this.recordsLayoutManager.TabShown.subscribe(async event => {
-        if (event.isFirstShow) {
-          await this.loadTabContent(event.tabId, event.container);
-          // Mark loaded ONLY when content actually attached to the LIVE
-          // container. During layout restore, GL can re-render item elements
-          // while an async load is in flight — the load appends into a
-          // detached element and the visible pane stays blank. Leaving the
-          // tab unmarked lets the next show retry, which hits the component
-          // cache and reattaches instantly into the live element.
-          const live = this.recordsLayoutManager.GetContainer(event.tabId);
-          if (live?.element && live.element.childElementCount > 0) {
-            this.recordsLayoutManager.MarkTabLoaded(event.tabId);
-          }
+        if (!event.isFirstShow) {
+          return;
         }
+        // LAZY content. The records GL initializes EAGERLY (see
+        // ensureRecordsLayoutInitialized) so the strip and the pill never
+        // drift from the workspace — and as it builds, GL fires 'show' for
+        // every stack's active tab while the region is still
+        // visibility-hidden behind the main surface. Loading content on
+        // those shows means every restored record hydrates at BOOT: an open
+        // AI Agent Run pulls its whole run tree (every prompt run, action
+        // log, step) before the user has looked at it, and client-side
+        // RunView coalescing folds the ACTIVE tab's own reads into the same
+        // requests, so the surface the user is looking at waits for records
+        // they are not. Park the show; it is replayed when the region shows.
+        if (!this.ShowRecordsRegion) {
+          this.pendingRecordShows.add(event.tabId);
+          return;
+        }
+        this.pendingRecordShows.delete(event.tabId);
+        await this.loadShownRecordTab(event.tabId, event.container);
       }),
       this.recordsLayoutManager.TabClosed.subscribe(async tabId => {
+        this.pendingRecordShows.delete(tabId);
         this.cleanupTabComponent(tabId);
         // REBUILD guard (breakpoint crossing): Destroy() fires TabClosed for
         // every pane. The tabs are NOT closing — the layout is being rebuilt

@@ -40,6 +40,62 @@ describe('buildOutcomeMessage', () => {
     expect(BuildOutcomeMessage(SummarizeBuildResult(held))).toMatch(/holding it back/i);
     expect(BuildOutcomeMessage(SummarizeBuildResult(failed))).toMatch(/couldn't build/i);
   });
+
+  it('never renders double periods on held messages whether heldReason has trailing period or not', () => {
+    const heldWithoutPeriod: BuildPredictionResult = {
+      ...held,
+      heldReason: 'Accuracy too low to trust',
+    };
+    const msg1 = BuildOutcomeMessage(SummarizeBuildResult(heldWithoutPeriod));
+    expect(msg1).not.toContain('..');
+    expect(msg1).toContain('Accuracy too low to trust.');
+
+    const heldWithPeriod: BuildPredictionResult = {
+      ...held,
+      heldReason: 'Accuracy too low to trust.',
+    };
+    const msg2 = BuildOutcomeMessage(SummarizeBuildResult(heldWithPeriod));
+    expect(msg2).not.toContain('..');
+    expect(msg2).toContain('Accuracy too low to trust.');
+
+    const heldNullReason: BuildPredictionResult = {
+      ...held,
+      heldReason: null,
+    };
+    const msg3 = BuildOutcomeMessage(SummarizeBuildResult(heldNullReason));
+    expect(msg3).not.toContain('..');
+    expect(msg3).toContain('it needs review before it can be published.');
+  });
+
+  it('projects a result with warnings and surfaces them in the message', () => {
+    const withWarnings: BuildPredictionResult = {
+      ...published,
+      warnings: [
+        { FeatureName: 'JobTitleNorm', Kind: 'llm-derived', Reason: 'Requires upstream Feature Pipeline' },
+      ],
+    };
+    const summary = SummarizeBuildResult(withWarnings);
+    expect(summary.warnings).toHaveLength(1);
+    expect(summary.warnings?.[0].FeatureName).toBe('JobTitleNorm');
+    expect(BuildOutcomeMessage(summary)).toContain('Note: 1 candidate feature(s) could not be mapped to pipeline steps');
+    expect(BuildOutcomeMessage(summary)).toContain('JobTitleNorm: Requires upstream Feature Pipeline');
+  });
+
+  it('surfaces warnings even on a failed build outcome', () => {
+    const failedWithWarnings: BuildPredictionResult = {
+      ...failed,
+      warnings: [
+        { FeatureName: 'UnmappedCol', Kind: 'embedding', Reason: 'Dedicated vector step needed' },
+      ],
+    };
+    const summary = SummarizeBuildResult(failedWithWarnings);
+    expect(summary.success).toBe(false);
+    expect(summary.warnings).toHaveLength(1);
+    const msg = BuildOutcomeMessage(summary);
+    expect(msg).toContain("I couldn't build the prediction: Algorithm not found.");
+    expect(msg).toContain('Note: 1 candidate feature(s) could not be mapped to pipeline steps');
+    expect(msg).toContain('UnmappedCol: Dedicated vector step needed');
+  });
 });
 
 describe('parseFeatureImportance', () => {

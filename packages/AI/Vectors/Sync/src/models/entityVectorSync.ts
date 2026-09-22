@@ -10,7 +10,7 @@ import { IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunctio
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse, VectorizeProgressUpdate } from '../generic/vectorSync.types';
 import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocumentFieldConfig } from '../generic/entityDocumentConfig.types';
-import { EntityDocumentCache } from './EntityDocumentCache';
+import { EntityDocumentCache } from '@memberjunction/entity-documents';
 import { PagedRecords } from './PagedRecords';
 import { AsyncBatchTransform } from './AsyncBatchTransform';
 import { Transform, TransformCallback, Writable } from 'node:stream';
@@ -951,6 +951,13 @@ export class EntityVectorSyncer extends VectorBase {
       else {
         throw new Error(`No Entity Document found for ID=${entityDocumentID}`);
       }
+    }
+
+    if (!entityDocument.VectorDatabaseID) {
+      throw new Error(`Entity Document '${entityDocument.Name}' (${entityDocument.ID}) cannot be vectorized: VectorDatabaseID is required but is null.`);
+    }
+    if (!entityDocument.AIModelID) {
+      throw new Error(`Entity Document '${entityDocument.Name}' (${entityDocument.ID}) cannot be vectorized: AIModelID is required but is null.`);
     }
 
     const vectorDBEntity: MJVectorDatabaseEntity = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
