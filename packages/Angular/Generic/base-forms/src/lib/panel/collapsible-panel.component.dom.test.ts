@@ -1,10 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Subject, of } from 'rxjs';
 import { CommonModule } from '@angular/common';
+import { Component, ElementRef, EventEmitter, Input, inject, type OnChanges } from '@angular/core';
 import { renderComponentFixture, query, text, hasClass } from '@memberjunction/ng-test-utils';
 import { CompositeKey } from '@memberjunction/core';
+import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjCollapsiblePanelComponent } from './collapsible-panel.component';
+import type { MjFormFieldComponent } from '../field/form-field.component';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
+import { FormSectionIndicatorCoordinator } from '../section-indicators/form-section-indicator-coordinator.service';
+import { FORM_SECTION_FIELD_HOST, type FormSectionFieldHost } from '../section-indicators/form-section-field-host';
+import { ParseValidationSource } from '../section-indicators/form-section-indicators';
 import type { FormNavigationEvent } from '../types/navigation-events';
 import type { FormContext } from '../types/form-types';
 
@@ -281,5 +287,155 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
     const f = render({ SectionName: 'X', SectionKey: 'k', Form: stub });
     (query(f, '.mj-forms-panel-header') as HTMLElement).click();
     expect(stub.SetSectionExpanded).toHaveBeenCalledWith('k', true);
+  });
+});
+
+/**
+ * golive #255 — the panel's field set is the union of its content query and the fields that
+ * reach it through {@link FORM_SECTION_FIELD_HOST}.
+ *
+ * A field declared inside a widget component's OWN template, with the widget projected into the
+ * panel, is behind a view boundary the content query cannot cross. The Accounting section of the
+ * Product form was exactly that: four required fields the section could not see, so it reported
+ * no required-and-empty count before a save and owned none of the field errors after the failed
+ * one, and the rail never badged it. The injector does cross that boundary.
+ *
+ * The field here is a duck-typed stand-in registered through the token, not a real
+ * `mj-form-field`: the panel reads `EditMode`, `IsFieldReadOnly`, `IsRequiredEmpty`, `ShowErrors`,
+ * `IsDirty`, `FieldName`, `DisplayName`, `ShouldHideField`, `IsFieldReadableByUser`, `ValueChange`
+ * and `HostElement` off it, and that is the whole contract. The REAL field's side — that it
+ * registers on construction and withdraws on destroy — is pinned in form-field.component.dom.test.ts.
+ */
+@Component({
+  standalone: true,
+  selector: 'test-hosted-field',
+  template: '<span class="hosted-field">{{ FieldName }}</span>',
+})
+class HostedFieldStub implements OnChanges {
+  @Input() FieldName = '';
+  @Input() IsRequiredEmpty = false;
+  @Input() IsDirty = false;
+  EditMode = true;
+  IsFieldReadOnly = false;
+  ShowErrors = false;
+  ShowWarnings = false;
+  StoredDateIsUnreadable = false;
+  IsFieldReadableByUser = true;
+  ShouldHideField = false;
+  ValueChange = new EventEmitter<unknown>();
+  Navigate = new EventEmitter<FormNavigationEvent>();
+  get DisplayName(): string {
+    return this.FieldName;
+  }
+  private readonly host = inject(FORM_SECTION_FIELD_HOST, { optional: true });
+  private readonly el = inject(ElementRef<HTMLElement>);
+  get HostElement(): HTMLElement {
+    return this.el.nativeElement;
+  }
+  constructor() {
+    this.host?.RegisterField(this as unknown as MjFormFieldComponent);
+  }
+  ngOnChanges(): void {
+    this.host?.NotifyFieldChanged(this as unknown as MjFormFieldComponent);
+  }
+}
+
+/** A widget with its own view: the boundary a content query stops at. */
+@Component({
+  standalone: true,
+  selector: 'test-widget',
+  imports: [HostedFieldStub],
+  template: `
+    <div class="widget-shell">
+      <test-hosted-field FieldName="CompanyID" [IsRequiredEmpty]="RequiredEmpty"></test-hosted-field>
+      <test-hosted-field FieldName="RevenueRecognitionTypeID" [IsRequiredEmpty]="RequiredEmpty"></test-hosted-field>
+    </div>
+  `,
+})
+class WidgetStub {
+  @Input() RequiredEmpty = false;
+}
+
+@Component({
+  standalone: false,
+  selector: 'test-form-with-widget-section',
+  template: `
+    <mj-collapsible-panel SectionKey="accounting" SectionName="Accounting" [Form]="Form">
+      <test-widget [RequiredEmpty]="RequiredEmpty"></test-widget>
+    </mj-collapsible-panel>
+  `,
+})
+class FormWithWidgetSection {
+  Form = formStub(true);
+  /** An input so a test can flip it through `setInput`, which marks the view dirty for the zoneless TestBed. */
+  @Input() RequiredEmpty = true;
+}
+
+describe('MjCollapsiblePanelComponent — fields behind a component view boundary', () => {
+  function renderWidgetSection() {
+    const f = renderComponentFixture(FormWithWidgetSection, {
+      declarations: [FormWithWidgetSection, MjCollapsiblePanelComponent],
+      imports: [CommonModule, WidgetStub],
+      providers: [FormSectionIndicatorCoordinator],
+    });
+    const panel = f.debugElement.children[0].componentInstance as MjCollapsiblePanelComponent;
+    return { f, panel };
+  }
+
+  it('counts a required-and-empty field the content query cannot see', () => {
+    const { f, panel } = renderWidgetSection();
+    // The content query genuinely sees nothing — that is the situation being fixed.
+    expect(panel.FieldComponents.length).toBe(0);
+    expect(panel.SectionIndicators.ErrorCount).toBe(2);
+    expect(query(f, 'mj-collapsible-panel')?.getAttribute('data-error-count')).toBe('2');
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-panel-has-errors')).toBe(true);
+  });
+
+  it('owns the field-named validation errors a failed save publishes for those fields', () => {
+    const { panel } = renderWidgetSection();
+    expect(panel.OwnsValidationSource(ParseValidationSource('CompanyID'))).toBe(true);
+    expect(panel.OwnsValidationSource(ParseValidationSource('RevenueRecognitionTypeID'))).toBe(true);
+    expect(panel.OwnsValidationSource(ParseValidationSource('SKU'))).toBe(false);
+  });
+
+  it('reports through the coordinator the rail reads, so the group badge follows', () => {
+    const { f } = renderWidgetSection();
+    const coordinator = f.debugElement.injector.get(FormSectionIndicatorCoordinator);
+    expect(coordinator.IndicatorsFor('accounting').ErrorCount).toBe(2);
+    const orphan = new ValidationErrorInfo('CompanyID', 'Company cannot be null', null);
+    expect(coordinator.UnroutedValidationErrors([orphan])).toEqual([]);
+  });
+
+  it('clears once the fields are filled, on the same pass', () => {
+    // The widget's view refreshes AFTER the panel's host bindings and the rail. Without the
+    // field's NotifyFieldChanged this pass would end with the section still counting 2 and, in
+    // dev mode, an ExpressionChangedAfterItHasBeenChecked error on data-error-count.
+    const { f, panel } = renderWidgetSection();
+    f.componentRef.setInput('RequiredEmpty', false);
+    f.detectChanges();
+    expect(panel.SectionIndicators.ErrorCount).toBe(0);
+    expect(query(f, 'mj-collapsible-panel')?.getAttribute('data-error-count')).toBe('0');
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-panel-has-errors')).toBe(false);
+  });
+
+  it('finds hosted fields by name in section search, and does not hide a section that has them', () => {
+    const { panel } = renderWidgetSection();
+    expect(panel.MatchesSearch('revenue')).toBe(true);
+    expect(panel.IsVisible).toBe(true);
+  });
+
+  it('ignores a registered field whose element is not inside the panel', () => {
+    const { panel } = renderWidgetSection();
+    const elsewhere = document.createElement('div');
+    const stray = {
+      FieldName: 'Stray', DisplayName: 'Stray', EditMode: true, IsFieldReadOnly: false,
+      Navigate: new EventEmitter<FormNavigationEvent>(),
+      IsRequiredEmpty: true, ShowErrors: false, IsDirty: false, ShouldHideField: false,
+      IsFieldReadableByUser: true, ValueChange: new EventEmitter<unknown>(), HostElement: elsewhere,
+    } as unknown as MjFormFieldComponent;
+    (panel as FormSectionFieldHost).RegisterField(stray);
+    expect(panel.SectionIndicators.ErrorCount).toBe(2);
+    expect(panel.OwnsValidationSource(ParseValidationSource('Stray'))).toBe(false);
+    (panel as FormSectionFieldHost).UnregisterField(stray);
   });
 });

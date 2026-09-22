@@ -5,6 +5,7 @@ import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
+import { FORM_SECTION_FIELD_HOST } from '../section-indicators/form-section-field-host';
 import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
 import {
@@ -171,6 +172,26 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private cdr = inject(ChangeDetectorRef);
   private renderer = inject(Renderer2);
   private hostRef = inject(ElementRef<HTMLElement>);
+  /**
+   * The section this field renders inside, when there is one. Resolved through the element
+   * injector, so it is found across component view boundaries a content query cannot cross —
+   * a field declared in a widget's own template still reaches the panel the widget is projected
+   * into. Absent for a field rendered outside any `mj-collapsible-panel`.
+   */
+  private sectionHost = inject(FORM_SECTION_FIELD_HOST, { optional: true });
+
+  constructor() {
+    super();
+    // Registered at construction (the creation pass), not in a lifecycle hook: the section's host
+    // bindings read its field set during the first update pass, and a registration landing
+    // mid-pass would change an already-checked binding.
+    this.sectionHost?.RegisterField(this);
+  }
+
+  /** This component's host element — what a section uses to confirm the field is inside it. */
+  public get HostElement(): HTMLElement {
+    return this.hostRef.nativeElement;
+  }
 
   /** The entity record containing this field */
   @Input() Record!: BaseEntity;
@@ -2480,6 +2501,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    // Everything the section derives from this field (required-and-empty, dirty, hidden, which
+    // errors it owns) follows from these inputs, and the section may already have been checked
+    // this pass — see FormSectionFieldHost.NotifyFieldChanged.
+    this.sectionHost?.NotifyFieldChanged(this);
     // Field security depends on both the record's entity and which field this is, so the
     // memoized answer has to be dropped whenever either changes.
     if (changes['Record'] || changes['FieldName']) {
@@ -2541,6 +2566,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   ngOnDestroy(): void {
+    this.sectionHost?.UnregisterField(this);
     if (this._fkSearchTimeout) {
       clearTimeout(this._fkSearchTimeout);
     }
