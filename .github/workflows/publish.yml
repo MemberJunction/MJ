@@ -669,11 +669,18 @@ jobs:
         run: |
           VERSION=$(jq -r .version packages/MJServer/package.json)
           NPM_TAG='${{ steps.channel.outputs.NPM_TAG }}'
+          # Read the registry, not npm's cache. The packument is served with a Cache-Control
+          # max-age, and an earlier step in this job already fetched it (to read the previous
+          # tags), so a plain `npm view` here can answer from cacache with the pre-publish
+          # dist-tags for the whole cache window. 6.1.3 (2026-09-22, run 35681725991) failed
+          # exactly this way: 304 of 306 packages were live under lts-6.1, and five polls over
+          # 75 seconds all read the stale packument. A fresh cache directory per attempt makes
+          # every poll a real request; the longer window covers CDN propagation on top.
           AT_TAG=''
-          for i in 1 2 3 4 5; do
-            AT_TAG=$(npm view "@memberjunction/core@$NPM_TAG" version 2>/dev/null || true)
+          for i in $(seq 1 20); do
+            AT_TAG=$(npm view --cache "$(mktemp -d)" "@memberjunction/core@$NPM_TAG" version 2>/dev/null || true)
             [ "$AT_TAG" = "$VERSION" ] && break
-            echo "dist-tag '$NPM_TAG' is at '${AT_TAG:-<unset>}', want $VERSION — retry $i/5 in 15s"
+            echo "dist-tag '$NPM_TAG' is at '${AT_TAG:-<unset>}', want $VERSION — retry $i/20 in 15s"
             sleep 15
           done
           if [ "$AT_TAG" != "$VERSION" ]; then
@@ -1221,11 +1228,18 @@ jobs:
         run: |
           set -euo pipefail
           NEW="${VERSION#v}"
+          # Read the registry, not npm's cache. The packument is served with a Cache-Control
+          # max-age, and an earlier step in this job already fetched it (to read the previous
+          # tags), so a plain `npm view` here can answer from cacache with the pre-publish
+          # dist-tags for the whole cache window. 6.1.3 (2026-09-22, run 35681725991) failed
+          # exactly this way: 304 of 306 packages were live under lts-6.1, and five polls over
+          # 75 seconds all read the stale packument. A fresh cache directory per attempt makes
+          # every poll a real request; the longer window covers CDN propagation on top.
           AT_TAG=''
-          for i in 1 2 3 4 5; do
-            AT_TAG=$(npm view "@memberjunction/core@$PUBLISH_TAG" version 2>/dev/null || true)
+          for i in $(seq 1 20); do
+            AT_TAG=$(npm view --cache "$(mktemp -d)" "@memberjunction/core@$PUBLISH_TAG" version 2>/dev/null || true)
             [ "$AT_TAG" = "$NEW" ] && break
-            echo "dist-tag '$PUBLISH_TAG' is at '${AT_TAG:-<unset>}', want $NEW - retry $i/5 in 15s"
+            echo "dist-tag '$PUBLISH_TAG' is at '${AT_TAG:-<unset>}', want $NEW - retry $i/20 in 15s"
             sleep 15
           done
           if [ "$AT_TAG" != "$NEW" ]; then
@@ -1734,11 +1748,18 @@ jobs:
           PREV_LATEST: ${{ steps.publish.outputs.PREV_LATEST }}
         run: |
           set -euo pipefail
+          # Read the registry, not npm's cache. The packument is served with a Cache-Control
+          # max-age, and an earlier step in this job already fetched it (to read the previous
+          # tags), so a plain `npm view` here can answer from cacache with the pre-publish
+          # dist-tags for the whole cache window. 6.1.3 (2026-09-22, run 35681725991) failed
+          # exactly this way: 304 of 306 packages were live under lts-6.1, and five polls over
+          # 75 seconds all read the stale packument. A fresh cache directory per attempt makes
+          # every poll a real request; the longer window covers CDN propagation on top.
           AT_TAG=''
-          for i in 1 2 3 4 5; do
-            AT_TAG=$(npm view "@memberjunction/core@$NPM_TAG" version 2>/dev/null || true)
+          for i in $(seq 1 20); do
+            AT_TAG=$(npm view --cache "$(mktemp -d)" "@memberjunction/core@$NPM_TAG" version 2>/dev/null || true)
             [ "$AT_TAG" = "$VERSION" ] && break
-            echo "dist-tag '$NPM_TAG' is at '${AT_TAG:-<unset>}', want $VERSION. Retry $i/5 in 15s"
+            echo "dist-tag '$NPM_TAG' is at '${AT_TAG:-<unset>}', want $VERSION. Retry $i/20 in 15s"
             sleep 15
           done
           if [ "$AT_TAG" != "$VERSION" ]; then
