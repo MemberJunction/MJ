@@ -130,8 +130,40 @@ jobs:
             echo "codegen=true" >> "$GITHUB_OUTPUT"
           fi
 
+  # Lockfile preflight (MJ#4650). Every heavy job below installs for itself, so a lockfile that
+  # does not resolve used to fail ALL of them — each after minutes, each under a name implying the
+  # PR broke that thing. On #4604 one stale lockfile produced "Build failed" (1m25s), "Integration
+  # failed" (1m31s), "CodeGen drift gate failed" (1m27s) and three more; none had reached the work
+  # it is named for, and the drift gate in particular never created its database, so it could not
+  # catch the drift that PR was introducing (MJ#4647).
+  #
+  # This resolves the lockfile alone, in seconds, and the jobs below depend on it. A bad lockfile
+  # now SKIPS them instead of failing them — "could not run" and "ran and found a problem" stop
+  # reporting the same state, which is also what lets a ruleset treat them differently (MJ#4648).
+  # Resolve-only: it writes no node_modules and is not a substitute for each job's own install.
+  preflight:
+    name: Lockfile resolves
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Resolve against the committed lockfile
+        run: pnpm install --frozen-lockfile --lockfile-only
+
   integration-sqlserver:
     name: Integration (SQL Server, deterministic)
+    needs: [preflight]
     # Runs on PRs, merges, dispatch, and the NIGHTLY cron (with the mutation tier armed).
     # The weekly Sunday cron is the live-model lane's trigger — the deterministic suite
     # already ran that morning's nightly, so skip it there.
@@ -339,6 +371,7 @@ jobs:
   # silent pass.
   integration-live-model:
     name: Integration (Live Model, weekly)
+    needs: [preflight]
     if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_live_model == 'true')
     timeout-minutes: 90
     runs-on: ubuntu-latest
@@ -485,6 +518,7 @@ jobs:
   # stay green — the failure only manifests when a second server's lookup misses.
   cross-server-invalidation:
     name: Cross-server invalidation rig (nightly)
+    needs: [preflight]
     # workflow_dispatch also runs it so the rig can be re-run on demand without waiting for the cron.
     if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch'
     timeout-minutes: 45
@@ -606,7 +640,7 @@ jobs:
   # Blocking gate: committed generated artifacts must match output from a clean DB.
   codegen-drift:
     name: CodeGen drift gate
-    needs: [changes]
+    needs: [changes, preflight]
     if: |
       (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') ||
       github.event_name == 'workflow_dispatch' ||
@@ -761,6 +795,7 @@ jobs:
   # Runs the CodeGen idempotency and drift suite with live AI models enabled.
   codegen-drift-ai:
     name: CodeGen drift gate (weekly AI-assisted)
+    needs: [preflight]
     if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && inputs.run_live_model)
     timeout-minutes: 60
     runs-on: ubuntu-latest
