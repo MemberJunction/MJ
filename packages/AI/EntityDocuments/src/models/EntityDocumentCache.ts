@@ -1,7 +1,6 @@
 import { UserInfo, RunView, LogStatus, RunViewResult } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { UUIDsEqual, BaseSingleton } from "@memberjunction/global";
 import { MJEntityDocumentEntity, MJEntityDocumentTypeEntity, KnowledgeHubMetadataEngine } from "@memberjunction/core-entities";
-import { BaseSingleton } from "@memberjunction/global";
 
 /**
  * Caching class for Entity Documents and Entity Document Types.
@@ -20,7 +19,7 @@ export class EntityDocumentCache extends BaseSingleton<EntityDocumentCache> {
     }
 
     public static get Instance(): EntityDocumentCache {
-        return EntityDocumentCache.getInstance<EntityDocumentCache>();
+        return super.getInstance<EntityDocumentCache>();
     }
 
     public get IsLoaded(): boolean {
@@ -82,7 +81,9 @@ export class EntityDocumentCache extends BaseSingleton<EntityDocumentCache> {
 
     public GetDocumentTypeByName(EntityDocumentTypeName: string): MJEntityDocumentTypeEntity | null {
         const toLower = EntityDocumentTypeName.trim().toLowerCase();
-        const documentType: MJEntityDocumentTypeEntity = Object.values(this._typeCache).find((edt: MJEntityDocumentTypeEntity) => edt.Name.trim().toLowerCase() === toLower);
+        const documentType: MJEntityDocumentTypeEntity | undefined = Object.values(this._typeCache).find(
+            (edt: MJEntityDocumentTypeEntity) => edt.Name.trim().toLowerCase() === toLower
+        );
 
         if (!documentType) {
             LogStatus(`EntityDocumentCache.GetDocumentTypeByName: Cache miss for EntityDocumentTypeName: ${EntityDocumentTypeName}`);
@@ -100,8 +101,7 @@ export class EntityDocumentCache extends BaseSingleton<EntityDocumentCache> {
      * Refreshes the cache. Entity Documents are loaded via KnowledgeHubMetadataEngine
      * (auto-refreshing BaseEngine). Entity Document Types are loaded independently.
      */
-    public async Refresh(forceRefresh: boolean, ContextUser?: UserInfo) {
-
+    public async Refresh(forceRefresh: boolean, ContextUser?: UserInfo): Promise<void> {
         if (!forceRefresh && this._loaded) {
             return;
         }

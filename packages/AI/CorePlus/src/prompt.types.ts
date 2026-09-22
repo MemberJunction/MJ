@@ -391,6 +391,13 @@ export class AIPromptParams {
   skipValidation?: boolean;
 
   /**
+   * Optional execution-level validation behavior override ('Warn' | 'Strict' | 'None').
+   * When provided, overrides the prompt entity's ValidationBehavior for this run without
+   * mutating the shared prompt entity.
+   */
+  validationBehavior?: MJAIPromptEntityExtended['ValidationBehavior'];
+
+  /**
    * Optional custom template data that augments the main data context
    */
   templateData?: Record<string, unknown>;
