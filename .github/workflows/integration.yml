@@ -620,24 +620,78 @@ jobs:
           fi
           echo "Failure output correctly named the row and the repair command."
 
-      # The exact command the guidance above prints, run non-interactively: @inquirer/prompts
-      # throws in a non-TTY (see repair.ts), which is why --yes exists and is required here.
+      # CI run 35747616370 proved the spec's "one collision" assumption wrong:
+      # V202608080752__v6.1.x__Metadata_Sync.sql collided on a SECOND row
+      # (275162a6-80a2-42b3-9d7e-58e1753a97d2) in the very next batch after the first repair.
+      # A migration can plant many fixed-GUID rows ahead of the chain, so recovery is not
+      # "repair once, migrate once" — it is "repair, migrate, and if that still collides,
+      # repair the next row too", repeated until `mj migrate` finally succeeds.
       #
-      # --migration is passed so the lane exercises the spec's third refusal end-to-end:
-      # repair reads that file and deletes nothing unless the ID appears in it. Its value
-      # must stay in step with COLLIDING_MIGRATION in the migrate step above.
-      - name: Repair — delete the row the guidance named
-        env:
-          COLLIDING_MIGRATION: migrations/v6/V202608080752__v6.1.x__Metadata_Sync.sql
-        run: node packages/MJCLI/bin/run.js migrate repair --id "${COLLIDING_RECORD_ID}" --entity "${ENTITY_REF}" --migration "${COLLIDING_MIGRATION}" --yes
-
-      # This is the assertion that recovery actually works: with the blocking row gone, the
-      # same migration that just failed now takes its ordinary CREATE path and the chain
-      # completes.
-      - name: Migrate again — this is the assertion
+      # This loop replays exactly that: each cycle takes the GUID and entity out of the most
+      # recent failure's own "mj migrate repair --id ... --entity ..." guidance line — the
+      # same paste-ready command the assertion step above just proved appears in the
+      # output — deletes that one row (non-interactively: @inquirer/prompts throws in a
+      # non-TTY, which is why --yes exists and is required here), and tries `mj migrate`
+      # again. --migration is passed on every repair so the lane keeps exercising the spec's
+      # third refusal end-to-end (repair reads that file and deletes nothing unless the ID
+      # appears in it); its value must stay in step with COLLIDING_MIGRATION above.
+      #
+      # The cap is 10, not "however many it takes": if the known MJ#4503 scenario ever needs
+      # more than that, something other than the documented multi-row collision is wrong, and
+      # this must fail loudly rather than loop quietly past it. The iteration count this
+      # prints IS the evidence for whether a `--sweep` mode is ever worth building.
+      - name: Repair, then migrate — repeat until it converges
         env:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
-        run: node packages/MJCLI/bin/run.js migrate
+          COLLIDING_MIGRATION: migrations/v6/V202608080752__v6.1.x__Metadata_Sync.sql
+          MAX_ITERATIONS: '10'
+        run: |
+          set +e
+
+          # The first failure is already sitting in /tmp/migrate-fail.log from "Finish
+          # migrating" above, and the step just before this one already proved it contains a
+          # "mj migrate repair --id ... --entity ..." line for it — so cycle 1 repairs THAT
+          # row, then tries `mj migrate` for the first time inside this loop.
+          CURRENT_LOG=/tmp/migrate-fail.log
+          ITERATION=0
+
+          while :; do
+            ITERATION=$((ITERATION + 1))
+            if [ "$ITERATION" -gt "$MAX_ITERATIONS" ]; then
+              echo "::error::mj migrate still failing on a primary-key collision after $MAX_ITERATIONS repair cycles. That is more collisions than the known MJ#4503 scenario accounts for -- this is not evidence for a --sweep mode, it means something else is wrong. See $CURRENT_LOG." >&2
+              cat "$CURRENT_LOG"
+              exit 1
+            fi
+
+            REPAIR_LINE=$(grep -o 'mj migrate repair --id [0-9a-fA-F-]\{36\} --entity [A-Za-z0-9_.]\+' "$CURRENT_LOG" | head -n 1)
+            if [ -z "$REPAIR_LINE" ]; then
+              echo "::error::Cycle $ITERATION: mj migrate failed but no 'mj migrate repair --id ... --entity ...' command was found in $CURRENT_LOG. FormatCollisionGuidance's output shape may have changed, or this failure is not the known collision -- see packages/MJCLI/src/lib/collision-guidance.ts." >&2
+              cat "$CURRENT_LOG"
+              exit 1
+            fi
+            GUID=$(echo "$REPAIR_LINE" | awk '{print $5}')
+            ENTITY=$(echo "$REPAIR_LINE" | awk '{print $7}')
+            echo "Cycle $ITERATION: repairing $ENTITY ($GUID)."
+
+            node packages/MJCLI/bin/run.js migrate repair --id "$GUID" --entity "$ENTITY" --migration "$COLLIDING_MIGRATION" --yes
+            REPAIR_STATUS=$?
+            if [ "$REPAIR_STATUS" -ne 0 ]; then
+              echo "::error::Cycle $ITERATION: 'mj migrate repair' failed (exit $REPAIR_STATUS) for $ENTITY ($GUID)." >&2
+              exit 1
+            fi
+
+            CURRENT_LOG="/tmp/migrate-cycle-${ITERATION}.log"
+            node packages/MJCLI/bin/run.js migrate > "$CURRENT_LOG" 2>&1
+            STATUS=$?
+            cat "$CURRENT_LOG"
+            if [ "$STATUS" -eq 0 ]; then
+              echo "mj migrate succeeded after $ITERATION repair cycle(s)."
+              break
+            fi
+            echo "mj migrate failed again after cycle $ITERATION (exit $STATUS) -- checking whether another row is blocking it."
+          done
+
+          set -e
 
       - name: Assert the row converged on the release content
         run: |

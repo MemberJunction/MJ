@@ -159,6 +159,10 @@ export default class MigrateRepair extends Command {
 
       this.log(`Deleted ${rowsAffected} row from ${schema}.${table} (${flags.id}).`);
       this.log('Now re-run: mj migrate');
+      this.log(
+        'A migration can create more than one fixed-GUID row, so this may not be the only ' +
+          'collision it has — if mj migrate fails again on a different row, the same repair applies to it too.',
+      );
     } finally {
       await pool.close();
     }
