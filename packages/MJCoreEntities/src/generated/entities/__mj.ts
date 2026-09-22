@@ -41201,7 +41201,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * FinalPayloadValidationResult: The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
-    * * NativeToolCallCount: The native tool call count must be a non-negative number if it is provided.
+    * * NativeToolCallCount: The native tool call count must be greater than or equal to zero, if it is specified.
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -41238,7 +41238,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     }
 
     /**
-    * The native tool call count must be a non-negative number if it is provided.
+    * The native tool call count must be greater than or equal to zero, if it is specified.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
