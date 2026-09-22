@@ -167,6 +167,8 @@ interface RunActionCall {
     params: ScriptedActionParam[];
     /** What BaseAgent.ExecuteSingleAction stamped as Context.ActiveSkillIDs (the run's active skills). */
     activeSkillIDs?: unknown;
+    /** `RunActionParams.RuntimeAPIKeyResolver` (the run's scoped key resolver) — absent when the run has no keys. */
+    resolveAPIKey?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -267,6 +269,7 @@ class LoopHarness {
     public runs: FakeAgentRun[] = [];
     public steps: MockStepEntity[] = [];
     public runActionCalls: RunActionCall[] = [];
+    public runActionParamsJSON: string[] = [];
     /** Scripted RunAction responder — override per test. */
     public runAction: (call: RunActionCall) => ScriptedActionResult = () => ({
         Success: true,
@@ -349,8 +352,12 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown } }): Promise<ScriptedActionResult> => {
+            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; RuntimeAPIKeyResolver?: unknown }): Promise<ScriptedActionResult> => {
                 const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
+                if (input.RuntimeAPIKeyResolver !== undefined) call.resolveAPIKey = input.RuntimeAPIKeyResolver;
+                // What any log of the whole RunActionParams could contain — kept off the call record so
+                // the toEqual assertions over runActionCalls stay exact.
+                this.runActionParamsJSON.push(JSON.stringify({ ...input, Action: input.Action.Name }));
                 this.runActionCalls.push(call);
                 return this.runAction(call);
             },
@@ -652,6 +659,109 @@ describe('BaseAgent.Execute — Context.ActiveSkillIDs carries the run\'s active
         ]);
         await agent.Execute(makeParams({ parentActivatedSkillIDs: [PARENT_SKILL] }));
         expect(harness.runActionCalls[0].activeSkillIDs).toEqual([PARENT_SKILL]);
+    });
+});
+
+describe('BaseAgent.Execute — the run\'s runtime API keys reach actions as a SCOPED resolver, never as a list', () => {
+    // Prompts have always received params.apiKeys (AIPromptRunner → GetAIAPIKey(driverClass, apiKeys)).
+    // Actions never did, so a run on a customer's OpenAI key still generated its images on the
+    // platform's. The fix hands an action a RESOLVER — one driver class in, one key out — and these
+    // cases pin its three properties: an action gets the key for the class it names; no action can
+    // enumerate the run's credentials (not from the Context, its JSON, or the resolver itself); and
+    // the agent can refuse, a refusal being the platform key rather than an error.
+    const KEYS = [
+        { driverClass: 'OpenAIImageGenerator', apiKey: 'sk-image' },
+        { driverClass: 'OpenAILLM', apiKey: 'sk-llm' },
+        { driverClass: 'GeminiLLM', apiKey: 'sk-gemini' },
+    ];
+    const okAction = () => { harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null }); };
+    const script = () => [() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())];
+    function resolverOf(call: RunActionCall): (driverClass: string) => string | undefined {
+        expect(typeof call.resolveAPIKey).toBe('function');
+        return call.resolveAPIKey as (driverClass: string) => string | undefined;
+    }
+
+    it('an action gets the run\'s key for the ONE driver class it names', async () => {
+        okAction();
+        const { agent } = makeAgent(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS }));
+        const resolve = resolverOf(harness.runActionCalls[0]);
+        expect(resolve('OpenAIImageGenerator')).toBe('sk-image');
+        expect(resolve('GeminiLLM')).toBe('sk-gemini');
+    });
+
+    it('no action can enumerate the run\'s credentials — the list is on neither the Context nor the RunActionParams, and the resolver is a closure', async () => {
+        // actionContext IS params.context by reference: shared by every action in the run and copied
+        // into sub-agent params and run steps. A key that survives JSON.stringify is a key in the
+        // database; a list an action can read is ambient authority for every action in the run.
+        okAction();
+        const { agent } = makeAgent(script());
+        const params = makeParams({ apiKeys: KEYS, context: { tenant: 't1' } });
+        await agent.Execute(params);
+        const ctx = params.context as Record<string, unknown>;
+        expect('apiKeys' in ctx).toBe(false);                              // nothing about keys on the shared context…
+        expect('RuntimeAPIKeyResolver' in ctx).toBe(false);
+        expect('resolveRuntimeAPIKey' in ctx).toBe(false);
+        expect(JSON.stringify(ctx)).not.toContain('sk-');
+        const call = harness.runActionCalls[0];
+        expect(harness.runActionParamsJSON[0]).not.toContain('sk-');       // …and none in anything the engine could log
+        expect(harness.runActionParamsJSON[0]).not.toContain('apiKeys');
+        const resolve = resolverOf(call);
+        expect(String(resolve)).not.toContain('sk-');                      // a closure, not a bag
+        expect(resolve('')).toBeUndefined();
+    });
+
+    it('the resolver is bound to the action it was handed to — two actions in one turn get two, each naming its own action', async () => {
+        // params.context is one object for the whole run, so anything stamped there is last-writer-
+        // wins across parallel actions. Per dispatch, the refusing agent sees the right action.
+        const seen: string[] = [];
+        class RecordingAgent extends HarnessAgent {
+            protected override actionMayUseRuntimeAPIKey(action: MJActionEntityExtended): boolean {
+                seen.push(action.Name);
+                return true;
+            }
+        }
+        okAction();
+        const agent = new RecordingAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([
+            () => llmEnvelope(actionsEnvelope({ nextStep: { type: 'Actions', actions: [{ name: ACTION_NAME, params: { n: 1 } }, { name: ACTION_NAME, params: { n: 2 } }] } })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        await agent.Execute(makeParams({ apiKeys: KEYS }));
+        expect(harness.runActionCalls).toHaveLength(2);
+        const [a, b] = harness.runActionCalls.map(resolverOf);
+        expect(a).not.toBe(b);
+        a('OpenAILLM'); b('OpenAILLM');
+        expect(seen).toEqual([harness.runActionCalls[0].actionName, harness.runActionCalls[1].actionName]);
+    });
+
+    it('a driver class the run has no key for resolves to the platform key — none here, so the action falls back exactly as before', async () => {
+        okAction();
+        const { agent } = makeAgent(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS }));
+        expect(resolverOf(harness.runActionCalls[0])('NoSuchDriverClass_Loop_Test')).toBeUndefined();
+    });
+
+    it('the agent can refuse an action the run\'s key for a driver class — the action then sees the platform key, not an error', async () => {
+        class RefusingAgent extends HarnessAgent {
+            protected override actionMayUseRuntimeAPIKey(_action: MJActionEntityExtended, driverClass: string): boolean {
+                return driverClass !== 'OpenAIImageGenerator';
+            }
+        }
+        okAction();
+        const agent = new RefusingAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS }));
+        const resolve = resolverOf(harness.runActionCalls[0]);
+        expect(resolve('OpenAIImageGenerator')).toBeUndefined();  // refused → platform key applies in the action
+        expect(resolve('OpenAILLM')).toBe('sk-llm');               // the policy is per driver class, not all-or-nothing
+    });
+
+    it('stamps nothing when the run has no runtime keys — absent, not a resolver that answers undefined', async () => {
+        okAction();
+        const { agent } = makeAgent(script());
+        await agent.Execute(makeParams());
+        expect('resolveAPIKey' in harness.runActionCalls[0]).toBe(false);
     });
 });
 

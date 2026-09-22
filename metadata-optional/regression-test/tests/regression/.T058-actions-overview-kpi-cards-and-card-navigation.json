@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T058 - Actions Overview KPI Cards and Card Navigation",
+    "Description": "Exercises the bespoke ActionsOverview dashboard — computed KPI cards + clickable-card navigation (onTotalActionsClick/onExecutionsClick/onCategoriesClick) — not a generic entity grid.",
+    "InputDefinition": "{\n  \"goal\": \"Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box) and switch to the 'Actions' application. It lands on the 'Actions Overview' page (default nav item). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Verify the overview renders its KPI metric cards (Total Actions with an Active/Pending/Disabled breakdown, Total Executions, Categories, AI Generated). Then click the 'Total Actions' metric card and confirm the app navigates to another Actions view (e.g. the Explorer/list of actions). Seeing the metric cards render and the card click drive navigation is success.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"The Actions Overview page renders a row of KPI metric cards showing numeric counts (Total Actions, Executions, Categories, AI Generated)\",\n    \"At least one metric card shows a breakdown sub-line (e.g. Active / Pending / Disabled counts) rather than a bare number\",\n    \"Clicking a clickable metric card navigates to a different Actions view (URL or main content changes)\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,actions",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "B6F581A1-69C5-4B13-9EF5-FBC571D0C729"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.373Z",
+    "checksum": "da3205ac1e0d5af241f74b4210a16b0cf421363f7313f5c87a277d7c0a80b046"
+  }
+}

@@ -1,0 +1,50 @@
+# Navigation: the app's destinations are visible from the screen it launches into.
+#
+# This app shipped a state where navigation lived ONLY in a modal sheet inside a chat thread, so
+# the screen it launched into could not reach Apps, Data or Profile at all — you had to open a
+# conversation to find the way out of conversations. That is the regression this flow exists to
+# catch, and it is a question about what is ON SCREEN, which is exactly what this can prove.
+#
+# WHAT THIS DOES NOT COVER, deliberately: driving the tab bar. Maestro reports a successful tap on
+# React Navigation's tab button and the tab does not change — by testID or by coordinates, on both
+# platforms, warm or cold. A body control on the same screen taps fine (the "All chats" link below
+# fires its handler), so this is the harness meeting React Navigation's pressable, not the app: the
+# bar works by hand and by screenshot on both platforms. A flow that "passed" by tapping twice and
+# hoping would be asserting the harness, not the product.
+#
+# Tab-to-screen wiring is covered instead by src/__tests__/navigation.test.ts, which asserts that
+# every declared destination has a screen file and that the navigator declares exactly those tabs.
+appId: org.memberjunction.mobile
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Ask an agent anything, or pick up where you left off."
+    timeout: 40000
+- assertVisible: "New conversation"
+
+# The bar — every destination visible without a tap, which is the whole point. Asserted by testID
+# so a renamed or reordered bar cannot pass by accident.
+- assertVisible:
+    id: "tab-home"
+- assertVisible:
+    id: "tab-chats"
+- assertVisible:
+    id: "tab-apps"
+- assertVisible:
+    id: "tab-you"
+
+# Data Explorer is deliberately not a tab, so Home has to be the door to it. A destination nothing
+# links to is precisely how the previous design stranded three of them.
+- assertVisible: "Data Explorer"
+- assertVisible: "Apps"
+
+# Home's own link out, which is a real user path and proves the screen is interactive.
+- tapOn: "All chats"
+- extendedWaitUntil:
+    visible: "Conversations"
+    timeout: 25000
+# The bar survives the trip rather than being a Home-only decoration.
+- assertVisible:
+    id: "tab-home"
+- assertVisible:
+    id: "tab-you"

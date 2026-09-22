@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icons } from '@/components/Icon';
 import {
-    capturePhoto,
-    pickDocument,
-    pickImageFromLibrary,
+    CapturePhoto,
+    PickDocument,
+    PickImageFromLibrary,
     type CapturedAttachment,
 } from '@/data/services/attachments';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
@@ -68,7 +68,7 @@ export function AttachmentPicker({ visible, onClose, onPicked }: AttachmentPicke
                         sublabel="Use the camera"
                         busy={busy === 'camera'}
                         disabled={busy !== null}
-                        onPress={() => void run('camera', capturePhoto)}
+                        onPress={() => void run('camera', CapturePhoto)}
                     />
                     <PickerRow
                         icon={<Icons.Image size={20} color={Colors.brand} strokeWidth={2} />}
@@ -76,7 +76,7 @@ export function AttachmentPicker({ visible, onClose, onPicked }: AttachmentPicke
                         sublabel="Pick from your library"
                         busy={busy === 'library'}
                         disabled={busy !== null}
-                        onPress={() => void run('library', pickImageFromLibrary)}
+                        onPress={() => void run('library', PickImageFromLibrary)}
                     />
                     <PickerRow
                         icon={<Icons.FileText size={20} color={Colors.brand} strokeWidth={2} />}
@@ -84,7 +84,7 @@ export function AttachmentPicker({ visible, onClose, onPicked }: AttachmentPicke
                         sublabel="Pick a document"
                         busy={busy === 'document'}
                         disabled={busy !== null}
-                        onPress={() => void run('document', pickDocument)}
+                        onPress={() => void run('document', PickDocument)}
                     />
 
                     <Pressable style={styles.cancel} onPress={() => (busy ? undefined : onClose())} disabled={busy !== null}>
@@ -118,7 +118,7 @@ function PickerRow({ icon, label, sublabel, busy, disabled, onPress }: {
 }
 
 const styles = StyleSheet.create({
-    scrim: { flex: 1, backgroundColor: 'rgba(13,13,16,0.35)', justifyContent: 'flex-end' },
+    scrim: { flex: 1, backgroundColor: 'rgba(7,25,39,0.35)', justifyContent: 'flex-end' },
     sheet: { backgroundColor: Colors.bg, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 28, ...Shadow.cardLarge },
     grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.line2, marginBottom: 12 },
     title: { fontSize: 12, fontWeight: Type.bold, color: Colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', paddingHorizontal: 6, paddingBottom: 8 },

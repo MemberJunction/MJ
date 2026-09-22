@@ -32,7 +32,7 @@ import { RealtimeToolDefinition } from '@memberjunction/ai';
 import { FormatAppContextNote } from '@memberjunction/ai-core-plus';
 import { Subscription } from 'rxjs';
 import { distinctUntilChanged } from 'rxjs/operators';
-import { BaseRealtimeChannelClient } from './base-realtime-channel-client';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 
 /** The stable name of the single proxy tool this channel registers with the realtime provider. */
 export const CONTEXT_TOOL_NAME = 'ContextTool';
