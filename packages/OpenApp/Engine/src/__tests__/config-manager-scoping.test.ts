@@ -2,10 +2,11 @@
  * Tests for two config-manager defects that both fail SILENTLY — the app installs, `__mj.OpenApp`
  * reports Active, and nothing in the logs is red, but the config the runtime actually loads is wrong:
  *
- *  1. **Cross-array idempotency.** A `shared` package is written to BOTH `dynamicPackages.server`
- *     and `dynamicPackages.client`. The "already present?" check matched the WHOLE file, so the
- *     server entry written moments earlier satisfied the client check and the client insert was
- *     skipped. The package never reached `dynamicPackages.client`, so its `@RegisterClass`
+ *  1. **Cross-array idempotency.** A `shared` package that runs on both tiers is written to BOTH
+ *     `dynamicPackages.server` and `dynamicPackages.client` (a Node-only one goes to server alone
+ *     — see config-manager-platform.test.ts). The "already present?" check matched the WHOLE file,
+ *     so the server entry written moments earlier satisfied the client check and the client insert
+ *     was skipped. The package never reached `dynamicPackages.client`, so its `@RegisterClass`
  *     components were tree-shaken out of the browser bundle with no error anywhere.
  *
  *  2. **Add-only upgrades.** The `Add*` writers are additive and idempotent — correct for install,
