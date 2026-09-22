@@ -156,6 +156,33 @@ export function primaryAuc(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>
   return train.AUC ?? null;
 }
 
+/** The primary metric score of a model: holdout preferred, else training. Inspects ProblemType and selects R² for regression, AUC for classification. */
+export function primaryModelScore(
+  model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'> & { ProblemType?: string | null },
+): { key: PSMetricKey; label: string; value: number } | null {
+  const isReg = (model.ProblemType ?? '').toLowerCase() === 'regression';
+  const holdout = parseMetrics(model.HoldoutMetrics);
+  const train = parseMetrics(model.Metrics);
+
+  if (isReg) {
+    for (const k of ['R2', 'RMSE', 'MAE'] as const) {
+      if (holdout[k] != null) return { key: k, label: METRIC_LABELS[k], value: holdout[k]! };
+    }
+    for (const k of ['R2', 'RMSE', 'MAE'] as const) {
+      if (train[k] != null) return { key: k, label: METRIC_LABELS[k], value: train[k]! };
+    }
+  }
+
+  for (const k of ['AUC', 'Accuracy', 'F1', 'R2', 'RMSE'] as const) {
+    if (holdout[k] != null) return { key: k, label: METRIC_LABELS[k], value: holdout[k]! };
+  }
+  for (const k of ['AUC', 'Accuracy', 'F1', 'R2', 'RMSE'] as const) {
+    if (train[k] != null) return { key: k, label: METRIC_LABELS[k], value: train[k]! };
+  }
+
+  return null;
+}
+
 /** A labeled metric ready for display (value formatted to a sensible precision). */
 export interface PSMetricDisplay {
   key: PSMetricKey;
@@ -164,7 +191,7 @@ export interface PSMetricDisplay {
 }
 
 /** Human labels for the canonical metric keys. */
-const METRIC_LABELS: Record<PSMetricKey, string> = {
+export const METRIC_LABELS: Record<PSMetricKey, string> = {
   AUC: 'AUC',
   Accuracy: 'Accuracy',
   Precision: 'Precision',
@@ -203,12 +230,28 @@ export function formatMetricValue(key: PSMetricKey, value: number): string {
 }
 
 /**
- * The train-vs-holdout overfit gap (train AUC − holdout AUC), or null when either is missing.
+ * The train-vs-holdout overfit gap (train metric − holdout metric), or null when either is missing.
  * Positive means the model does better in-sample than out-of-sample (the expected direction).
  */
-export function overfitGap(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>): number | null {
-  const train = parseMetrics(model.Metrics).AUC;
-  const holdout = parseMetrics(model.HoldoutMetrics).AUC;
+export function overfitGap(
+  model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'> & { ProblemType?: string | null },
+  preferredKey?: PSMetricKey,
+): number | null {
+  const trainMetrics = parseMetrics(model.Metrics);
+  const holdoutMetrics = parseMetrics(model.HoldoutMetrics);
+
+  const key: PSMetricKey | null =
+    preferredKey ??
+    ((model.ProblemType ?? '').toLowerCase() === 'regression'
+      ? (trainMetrics.R2 != null && holdoutMetrics.R2 != null ? 'R2' : null)
+      : null) ??
+    (trainMetrics.AUC != null && holdoutMetrics.AUC != null ? 'AUC' : null) ??
+    (trainMetrics.Accuracy != null && holdoutMetrics.Accuracy != null ? 'Accuracy' : null) ??
+    (trainMetrics.R2 != null && holdoutMetrics.R2 != null ? 'R2' : null);
+
+  if (!key) return null;
+  const train = trainMetrics[key];
+  const holdout = holdoutMetrics[key];
   if (train == null || holdout == null) return null;
   return train - holdout;
 }

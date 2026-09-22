@@ -675,7 +675,40 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * timestamp comparison can disconfirm.
      */
     protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
+        if (this.MetadataMemberRefreshMustWait) {
+            // Not now — re-arm the same window and try again once the provider is free. Bounded:
+            // a provider that never leaves its transaction (a leaked or doomed handle) would
+            // otherwise re-arm forever on a timer that holds the process open. The next
+            // member-entity write schedules a fresh refresh, so dropping this one loses nothing
+            // that a later write does not restore.
+            this._metadataMemberRefreshWaits++;
+            if (this._metadataMemberRefreshWaits > ProviderBase.MaxMetadataMemberRefreshWaits) {
+                LogError(`Metadata refresh after a member-entity change is still waiting on an ambient transaction after ${this._metadataMemberRefreshWaits} windows of ${this.MetadataMemberRefreshDelayMs}ms; dropping it — the next member write re-arms it`);
+                this._metadataMemberRefreshWaits = 0;
+                return true;
+            }
+            this.scheduleMetadataMemberRefresh();
+            return true;
+        }
+        this._metadataMemberRefreshWaits = 0;
         return this.Refresh();
+    }
+
+    /**
+     * How many consecutive windows a member-change refresh may wait on
+     * {@link MetadataMemberRefreshMustWait} before it is dropped. At the default 500ms window
+     * this is ten seconds — far longer than any transaction a Save or Delete holds.
+     */
+    public static MaxMetadataMemberRefreshWaits: number = 20;
+    private _metadataMemberRefreshWaits = 0;
+
+    /**
+     * True while a member-change refresh must NOT run, e.g. the provider is inside an ambient
+     * transaction. The base never waits; a database provider overrides this so a timer-driven
+     * refresh cannot land inside a caller's transaction (see GenericDatabaseProvider, #4486).
+     */
+    protected get MetadataMemberRefreshMustWait(): boolean {
+        return false;
     }
 
     /**
@@ -750,6 +783,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             cachedEntry = await this.GetEntityRecordName(entityName, compositeKey);
         }
         return cachedEntry
+    }
+
+    /**
+     * Checks whether an entity record name is currently available in the in-memory LRU cache.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns True if the record name is cached in memory, false otherwise
+     */
+    public HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean {
+        return this._entityRecordNameCache.Get(this.getCacheKey(entityName, compositeKey)) !== undefined;
+    }
+
+    /**
+     * Retrieves an entity record name from the in-memory LRU cache if already cached.
+     * Returns undefined immediately when not cached and will NEVER initiate a database lookup.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns The cached display name, or undefined if not in cache
+     */
+    public GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined {
+        return this._entityRecordNameCache.Get(this.getCacheKey(entityName, compositeKey));
     }
 
     /**
@@ -4895,7 +4949,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Get the dataset and cache it for anyone else who wants to use it
             // When forceRefresh is true (from a hard Refresh() call), bypass LocalCacheManager
             const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse, forceRefresh);
-            if (d && d.Success) {
+            // A dataset with no entities is a failed read, whatever its Success flag says: there
+            // is no deployment in which MJ_Metadata legitimately holds zero entities. Returning
+            // undefined here keeps the metadata already loaded (Config() treats undefined as
+            // "not updated") instead of replacing it with an empty set that fails every
+            // EntityByName until the process restarts (#4486).
+            const entitiesItem = d?.Success ? d.Results?.find(r => r.Code === 'Entities') : undefined;
+            const hasEntities = Array.isArray(entitiesItem?.Results) && entitiesItem.Results.length > 0;
+            if (d && d.Success && !hasEntities) {
+                LogError(`GetAllMetadata() - the ${ProviderBase._mjMetadataDatasetName} dataset returned no entities; keeping the metadata already loaded`);
+            }
+            else if (d && d.Success) {
                 // cache the dataset for anyone who wants to use it
                 await this.CacheDataset(ProviderBase._mjMetadataDatasetName, null, d);
 

@@ -13,7 +13,7 @@ import {
  * This replaces the manual interface that was needed before CodeGen emitted the typed accessor.
  */
 type IContentSourceConfiguration = MJContentSourceEntity_IContentSourceConfiguration;
-import { EntityDocumentTemplateParser } from "@memberjunction/ai-vector-sync";
+import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import { TagEngine, TaxonomyMode } from "@memberjunction/tag-engine";
 import { TagScopeContext } from "@memberjunction/tag-engine-base";

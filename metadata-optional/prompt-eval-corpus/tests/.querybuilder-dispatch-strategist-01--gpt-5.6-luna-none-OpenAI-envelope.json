@@ -1,0 +1,85 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "querybuilder-dispatch-strategist-01 [gpt-5.6-luna@none · OpenAI · envelope]",
+    "Description": "Query Builder owns catalog CRUD; the SQL work belongs to its Query Strategist sub-agent. Searching the query catalog first is what the action's description prescribes and what the Strategist's prompt anticipates, so it is as correct as delegating immediately .",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Build me a query showing monthly signups by plan tier."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "querybuilder-dispatch-strategist-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "subAgent",
+            "subAgents": [
+              "Query Strategist"
+            ]
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Search Query Catalog"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Query Builder",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "subAgent",
+                "subAgents": [
+                  "Query Strategist"
+                ]
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Search Query Catalog"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "3B9BF056-2D7B-458F-A52E-7B5A882F7B5C"
+  }
+}

@@ -47,6 +47,13 @@ export {
   type LLMConformanceDeviation,
   type LLMConformanceSuiteConfig,
 } from './ai/llm-conformance';
+
+// ---- Shared native-tool-calling conformance suite (applied by provider packages) ----
+export {
+  RunLLMToolCallingConformanceSuite,
+  type ScriptedToolCall,
+  type LLMToolConformanceSuiteConfig,
+} from './ai/llm-tool-conformance';
 export {
   CreateOpenAICompatibleSeamMock,
   type OpenAICompatibleSeam,

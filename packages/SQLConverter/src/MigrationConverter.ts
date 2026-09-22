@@ -26,7 +26,7 @@
  */
 import { splitMigration, type MigrationSplitResult, type MigrationRegionKind } from './MigrationSplitter.js';
 import { splitByStatement, type StatementBatch, type StatementKind } from './MigrationStatementSplitter.js';
-import { castBooleanInsertValues } from './rules/ExpressionHelpers.js';
+import { castBooleanInsertValues, convertBooleanLiteralComparisons } from './rules/ExpressionHelpers.js';
 import { seedCoreMetadataBooleanColumns } from './rules/CoreMetadataBooleanColumns.js';
 
 export type ConversionStatus =
@@ -535,7 +535,16 @@ function assemblePgSQL(
 function castCoreMetadataBooleans(body: string): string {
   const coreMetadataColumns = new Map<string, Map<string, string>>();
   seedCoreMetadataBooleanColumns(coreMetadataColumns);
-  return castBooleanInsertValues(body, coreMetadataColumns);
+  // Two distinct shapes, both of which reach PostgreSQL as `boolean` vs `integer`:
+  //   INSERT … VALUES (…, 1, 0, …)        → castBooleanInsertValues  (by ordinal position)
+  //   UPDATE … SET "Col" = 1 / WHERE = 0  → convertBooleanLiteralComparisons  (by column name)
+  // The rule-based path applies both; this path applied only the first, so a CodeGen UPDATE against
+  // a core-metadata table still failed at apply time with `operator does not exist: boolean =
+  // integer` — the same class of defect as the INSERT case, at a different syntactic site.
+  return convertBooleanLiteralComparisons(
+    castBooleanInsertValues(body, coreMetadataColumns),
+    coreMetadataColumns,
+  );
 }
 
 /** The standard committed-`.pg.sql` provenance header. */

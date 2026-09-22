@@ -1,0 +1,30 @@
+{
+  "id": "sage-disambig-web-not-internal-01",
+  "agent": "Sage",
+  "tags": [
+    "disambiguation"
+  ],
+  "description": "The mirror of the previous case: a question about the outside world must NOT go to internal search. Catches a model that has learned one habit.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "What did the Fed announce about interest rates this week?"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Web Search"
+      }
+    ],
+    "allowAdditionalActions": true,
+    "forbiddenActions": [
+      "Scoped Search",
+      "Get Record"
+    ]
+  }
+}

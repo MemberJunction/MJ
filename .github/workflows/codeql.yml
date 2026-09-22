@@ -42,7 +42,24 @@
 # current: without it, a finding merged on Tuesday shows as "new" on every other open PR
 # until the weekly run, and a finding fixed on Tuesday stays open until then.
 #
-# js-rest is the remainder, predominantly Angular Explorer. It runs weekly and on demand.
+# js-rest is the remainder, predominantly Angular Explorer. It runs on every pull request
+# and merge as well, for two reasons.
+#
+# The first is correctness of the check itself. GitHub compares the configurations that
+# produced results on the base branch against those the PR produces. The weekly run
+# uploads under /language:javascript-typescript/rest, so a PR that did not produce that
+# category failed the "CodeQL" check with "1 configuration not found" — a red security
+# check on a PR that introduced nothing. That is worse than the wall time it saved:
+# a security check that is red by construction teaches people to ignore it.
+#
+# The second is that the wall time it saved was near zero. Four dispatch runs on next
+# (13 September 2026) measured js-rest at 8.6, 8.8, 8.8 and 8.8 minutes — a 2.3% spread,
+# far tighter than js-core's 2.5-4.3 range. Matrix legs run in parallel, so CodeQL's
+# contribution is the slowest leg, not the sum; and the PR critical path is set elsewhere
+# (Integration at 7.8-14.1 minutes, the native-ESM guard up to 15.6). Those figures are
+# full scans, and PR runs are diff-informed per the note above, so the PR cost is lower
+# still. What it buys is CodeQL coverage of ~70% of the repo's TypeScript on every PR,
+# which previously had none until the following Monday.
 #
 # The weekly schedule also re-scans unchanged code with GitHub's newest query packs.
 # Keep it even if every analysis is someday moved to push.
@@ -118,7 +135,7 @@ jobs:
               "queries": "security-extended",
               "config": "./.github/codeql/codeql-config-rest.yml",
               "category": "/language:javascript-typescript/rest",
-              "run_on": "schedule" }
+              "run_on": "always" }
           ]
           JSON
           )

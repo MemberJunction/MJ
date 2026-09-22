@@ -66,6 +66,16 @@ const commandInfoSchema = z.object({
   args: z.string().array(),
   /** Optional timeout in milliseconds */
   timeout: z.number().nullish(),
+  /**
+   * Marks a long-running service that never exits on its own (e.g. `npm start`).
+   *
+   * For these, reaching `timeout` without having crashed IS the pass — the command
+   * is a boot check and the timeout is the observation window. Exiting before the
+   * timeout is still a failure, because a service that comes down on its own
+   * crashed. Requires a positive `timeout`; without one the process would never be
+   * killed and CodeGen would wait forever.
+   */
+  isDaemon: z.boolean().nullish(),
   /** When to run the command (e.g., 'before', 'after') */
   when: z.string(),
 });
@@ -594,7 +604,7 @@ const configInfoSchema = z.object({
     { workingDirectory: '../GeneratedEntities', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../GeneratedActions', command: 'npm', args: ['run', 'build'], when: 'after' },
     { workingDirectory: '../MJServer', command: 'npm', args: ['run', 'build'], when: 'after' },
-    { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, when: 'after' },
+    { workingDirectory: '../MJAPI', command: 'npm', args: ['start'], timeout: 30000, isDaemon: true, when: 'after' },
   ]),
   /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
   additionalSchemaInfo: z.string().optional(),
@@ -1484,4 +1494,44 @@ export function mj_core_schema(): string {
  */
 export function dbPlatform(): DatabasePlatform {
   return configInfo.dbPlatform;
+}
+
+/**
+ * Environment switch that keeps advanced (AI) generation ON for in-process CodeGen runs. Absent, or any
+ * value other than '1', means an in-process run turns it off for its duration.
+ */
+export const IN_PROCESS_ADVANCED_GENERATION_ENV = 'RSU_CODEGEN_ADVANCED_GENERATION';
+
+/**
+ * Applies the in-process CodeGen policy for advanced generation to `config` and returns a function that
+ * puts the previous value back.
+ *
+ * In-process CodeGen is the runtime schema-update path: a connector's tables are created while a
+ * customer watches a progress screen. The CLI's full AI profile is the wrong thing to run there. Every
+ * new entity and field goes through several LLM round trips, so the step's duration becomes the LLM
+ * provider's failover behaviour rather than the schema's size (one 27-table connector spent hours in
+ * it), and a model that answers the name prompt with `-1` puts the whole table at risk. So an in-process
+ * run disables advanced generation unless the operator opts back in with
+ * RSU_CODEGEN_ADVANCED_GENERATION=1. Table-derived names and descriptions are what the runtime path
+ * produces; the AI profile stays available to the CLI, which reads the same config untouched.
+ */
+export function applyInProcessAdvancedGenerationPolicy(
+  config: ConfigInfo,
+  env: NodeJS.ProcessEnv = process.env
+): { disabled: boolean; restore: () => void } {
+  const noop = { disabled: false, restore: (): void => undefined };
+  if (env[IN_PROCESS_ADVANCED_GENERATION_ENV] === '1') {
+    return noop;
+  }
+  const section = config.advancedGeneration;
+  if (!section || section.enableAdvancedGeneration !== true) {
+    return noop;
+  }
+  section.enableAdvancedGeneration = false;
+  return {
+    disabled: true,
+    restore: (): void => {
+      section.enableAdvancedGeneration = true;
+    },
+  };
 }

@@ -1,0 +1,109 @@
+{
+  "id": "reportwriter-terminal-synthesis-01",
+  "agent": "Research Report Writer",
+  "description": "Findings are complete in the payload. The Report Writer's own prompt mandates at least one chart for any quantitative data and forbids generating SVG itself, so building visuals through its actions is as correct as completing outright (the agent's prompt is trusted). This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+  "tags": [
+    "terminal-synthesis",
+    "prompt-mandated-action",
+    "implicit-payload-first"
+  ],
+  "input": {
+    "payload": {
+      "findings": [
+        {
+          "content": "IBM reached 1000+ qubits in Q4 2024",
+          "source": {
+            "type": "web",
+            "url": "https://example.org/a"
+          }
+        }
+      ],
+      "sources": [
+        {
+          "id": "src_001",
+          "url": "https://example.org/a"
+        }
+      ]
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Research is complete. Write the final report from the payload findings."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "taskComplete"
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Create SVG Chart"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Create Mermaid Diagram"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Generate Image"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Create SVG Diagram"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Create SVG Network"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Create SVG Word Cloud"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Create SVG Sketch Diagram"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "payloadChange"
+      }
+    ]
+  }
+}

@@ -8,7 +8,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { G, Rect, Text as SvgText } from 'react-native-svg';
 import { Colors, Spacing, Type } from '@/theme/tokens';
-import { chartColorAt, type ChartDatum } from './chart-spec';
+import { ChartColorAt, type ChartDatum } from './chart-spec';
 
 /** Props for {@link BarChart}. */
 export type BarChartProps = {
@@ -57,7 +57,7 @@ export function BarChart({ data, width, title }: BarChartProps) {
                             <SvgText x={0} y={midY} fill={Colors.ink2} fontSize={11} alignmentBaseline="middle">
                                 {truncate(datum.label, 14)}
                             </SvgText>
-                            <Rect x={LABEL_WIDTH} y={barY} width={barWidth} height={BAR_HEIGHT} rx={4} fill={chartColorAt(idx)} />
+                            <Rect x={LABEL_WIDTH} y={barY} width={barWidth} height={BAR_HEIGHT} rx={4} fill={ChartColorAt(idx)} />
                             <SvgText x={LABEL_WIDTH + barWidth + 6} y={midY} fill={Colors.ink3} fontSize={11} alignmentBaseline="middle">
                                 {formatValue(datum.value)}
                             </SvgText>

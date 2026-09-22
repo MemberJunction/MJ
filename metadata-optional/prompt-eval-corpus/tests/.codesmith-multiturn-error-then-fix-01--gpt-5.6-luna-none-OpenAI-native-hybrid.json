@@ -1,0 +1,110 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-multiturn-error-then-fix-01 [gpt-5.6-luna@none · OpenAI · native-hybrid]",
+    "Description": "The first execution failed with a TypeError returned as a tool result; the right next step is a corrected execution, not a question. Neutral tool form (see dbresearch-multiturn-entity-then-query-01).",
+    "InputDefinition": {
+      "payload": {
+        "task": "parse dates",
+        "inputData": {
+          "dates": [
+            "2024-01-01",
+            "2024-02-15"
+          ]
+        },
+        "iterations": 1
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Parse the dates in inputData and return them as ISO timestamps."
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "call_0",
+              "name": "execute_code",
+              "arguments": {
+                "code": "output = input.dates.map(d => new Date(d).toISOString());",
+                "inputData": "{\"dates\":[\"2024-01-01\",\"2024-02-15\"]}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": [
+            {
+              "type": "tool_result",
+              "toolCallId": "call_0",
+              "toolName": "execute_code",
+              "isError": true,
+              "content": "TypeError: Cannot read properties of undefined (reading 'map') — `input.dates` is undefined; the input object is `{ inputData: { dates: [...] } }`."
+            }
+          ]
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-multiturn-error-then-fix-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Execute Code",
+            "params": {
+              "code": {
+                "matcher": "nonEmpty"
+              }
+            }
+          }
+        ],
+        "allowAdditionalActions": false
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "native",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Execute Code",
+                "params": {
+                  "code": {
+                    "matcher": "nonEmpty"
+                  }
+                }
+              }
+            ],
+            "allowAdditionalActions": false
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E4AAAE33-2CB0-43BD-AC2D-B03D6F2EB03F"
+  }
+}
