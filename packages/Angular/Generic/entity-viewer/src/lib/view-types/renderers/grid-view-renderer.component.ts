@@ -1,6 +1,5 @@
-import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, ChangeDetectorRef, inject } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, ChangeDetectorRef, OnDestroy, inject } from '@angular/core';
 import { EntityInfo, RunViewParams, LogError, CompositeKey, RunView, RecordMergeRequest } from '@memberjunction/core';
-import type { RecordComparisonFieldValue } from '@memberjunction/core-entities';
 import {
   RecordComparisonService,
   type FieldComparison,
@@ -216,7 +215,12 @@ export interface GridViewConfig {
       </mj-dialog>
     }
     @if (mergeNotice) {
-      <div class="mj-ev-merge-notice" role="status">{{ mergeNotice }}</div>
+      <div class="mj-ev-merge-notice" role="status">
+        <span class="mj-ev-merge-notice-text">{{ mergeNotice }}</span>
+        <button type="button" class="mj-ev-merge-notice-dismiss" (click)="onDismissMergeNotice()" title="Dismiss" aria-label="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
     }
   `,
   styles: [
@@ -259,11 +263,29 @@ export interface GridViewConfig {
         color: var(--mj-text-primary);
         font-size: var(--mj-text-sm);
         box-shadow: var(--mj-shadow-md);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .mj-ev-merge-notice-dismiss {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        padding: 0 2px;
+        cursor: pointer;
+        color: var(--mj-text-muted);
+        font-size: var(--mj-text-sm);
+        line-height: 1;
+      }
+
+      .mj-ev-merge-notice-dismiss:hover {
+        color: var(--mj-text-primary);
       }
     `,
   ],
 })
-export class GridViewRendererComponent extends BaseAngularComponent implements IViewRenderer<GridViewConfig> {
+export class GridViewRendererComponent extends BaseAngularComponent implements IViewRenderer<GridViewConfig>, OnDestroy {
   /** Change detection ref used to flush dialog visibility toggles driven by grid events. */
   private cdr = inject(ChangeDetectorRef);
 
@@ -712,7 +734,51 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   /** A one-line status shown under the grid — why a merge was refused, or how one ended. */
   protected mergeNotice: string | null = null;
 
+  /** Auto-dismiss timer for {@link mergeNotice}; cleared whenever the notice is replaced. */
+  private mergeNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * How long a merge notice stays up before dismissing itself. The banner is fixed-position over
+   * the whole application, so leaving it until the next merge pins it across navigation and every
+   * other record the user visits afterwards.
+   */
+  private static readonly MERGE_NOTICE_TIMEOUT_MS = 8000;
+
   private readonly comparison = inject(RecordComparisonService);
+
+  ngOnDestroy(): void {
+    // The notice's auto-dismiss outlives the view otherwise, and fires detectChanges on a
+    // destroyed component.
+    if (this.mergeNoticeTimer) {
+      clearTimeout(this.mergeNoticeTimer);
+      this.mergeNoticeTimer = null;
+    }
+  }
+
+  /** Dismiss the merge notice from its own close button. */
+  onDismissMergeNotice(): void {
+    this.setMergeNotice(null);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Set (or clear) the merge notice, replacing any pending auto-dismiss. Every write to
+   * `mergeNotice` goes through here so a notice cannot outlive its timer or strand an old one.
+   */
+  private setMergeNotice(message: string | null): void {
+    if (this.mergeNoticeTimer) {
+      clearTimeout(this.mergeNoticeTimer);
+      this.mergeNoticeTimer = null;
+    }
+    this.mergeNotice = message;
+    if (message) {
+      this.mergeNoticeTimer = setTimeout(() => {
+        this.mergeNoticeTimer = null;
+        this.mergeNotice = null;
+        this.cdr.detectChanges();
+      }, GridViewRendererComponent.MERGE_NOTICE_TIMEOUT_MS);
+    }
+  }
 
   /**
    * Show the Merge button only where merging can actually succeed: the entity opts in and the
@@ -738,12 +804,12 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * the panel — nothing is written until the user confirms.
    */
   async onMergeRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[] }): Promise<void> {
-    this.mergeNotice = null;
+    this.setMergeNotice(null);
     try {
       await this.prepareMerge(event);
     } catch (err) {
       // A transport failure in any pre-flight query must not leave the user with nothing.
-      this.mergeNotice = `Could not prepare the merge: ${err instanceof Error ? err.message : String(err)}`;
+      this.setMergeNotice(`Could not prepare the merge: ${err instanceof Error ? err.message : String(err)}`);
       this.cdr.detectChanges();
     }
   }
@@ -764,7 +830,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
 
     // The merge panel is two-sided by construction, so n > 2 has nowhere to render.
     if (event.records.length !== 2) {
-      this.mergeNotice = 'Select exactly two records to merge.';
+      this.setMergeNotice('Select exactly two records to merge.');
       this.cdr.detectChanges();
       return;
     }
@@ -772,7 +838,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     // Composite-key safe: the grid renders arbitrary entities, so never assume one key column.
     const keys = event.records.map(r => CompositeKey.FromEntityRecord(entity, r)) as [CompositeKey, CompositeKey];
     if (keys.some(k => k.KeyValuePairs.length === 0 || k.KeyValuePairs.some(kv => kv.Value == null || kv.Value === ''))) {
-      this.mergeNotice = 'Could not read the primary key of the selected records.';
+      this.setMergeNotice('Could not read the primary key of the selected records.');
       this.cdr.detectChanges();
       return;
     }
@@ -782,20 +848,21 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     // Subtype records: the merge re-points only the keys that target this entity, then the loser's
     // delete follows the shared key into the parent row, whose own references never moved.
     if (entity.ParentID) {
-      this.mergeNotice = `${entity.DisplayName} records extend a parent type; merging subtype records is not supported yet.`;
+      this.setMergeNotice(`${entity.DisplayName} records extend a parent type; merging subtype records is not supported yet.`);
       this.cdr.detectChanges();
       return;
     }
     const childRows = await this.hasIsAChildRows(entity, keys);
     if (childRows === null) {
-      this.mergeNotice = 'Could not verify whether the selected records have subtype rows, so the merge was not started.';
+      this.setMergeNotice('Could not verify whether the selected records have subtype rows, so the merge was not started.');
       this.cdr.detectChanges();
       return;
     }
     if (childRows) {
-      this.mergeNotice =
+      this.setMergeNotice(
         `${entity.DisplayName} records that another app extends (shared-key subtype rows) cannot be merged yet — ` +
-        'the merge would collide on the shared key. Merge them from the extending app instead.';
+        'the merge would collide on the shared key. Merge them from the extending app instead.',
+      );
       this.cdr.detectChanges();
       return;
     }
@@ -810,7 +877,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
       this.ProviderToUse,
     );
     if (!result.Success || !result.Output) {
-      this.mergeNotice = result.ErrorMessage ?? 'Could not compare the selected records.';
+      this.setMergeNotice(result.ErrorMessage ?? 'Could not compare the selected records.');
       this.cdr.detectChanges();
       return;
     }
@@ -864,13 +931,13 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     try {
       const result = await this.ProviderToUse.MergeRecords(request);
       this.mergeState = null;
-      this.mergeNotice = result.Success ? 'Records merged.' : `Merge failed: ${result.OverallStatus}`;
+      this.setMergeNotice(result.Success ? 'Records merged.' : `Merge failed: ${result.OverallStatus}`);
       if (result.Success) {
         this.dataRequest.emit(this.currentPageDataRequest());
       }
     } catch (err) {
       this.mergeState = null;
-      this.mergeNotice = `Merge failed: ${err instanceof Error ? err.message : String(err)}`;
+      this.setMergeNotice(`Merge failed: ${err instanceof Error ? err.message : String(err)}`);
     }
     this.cdr.detectChanges();
   }
@@ -882,22 +949,28 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   }
 
   /**
-   * Only the fields the user resolved AWAY from the survivor need to travel; everything else the
-   * survivor already has. The transport stringifies values and rejects null, so empty resolutions
-   * are dropped rather than sent as a clear.
+   * Fields whose resolution has to travel, and only those: the survivor already holds the value
+   * for any field resolved to its own side.
+   *
+   * The distinction that matters is "the user did not change this" versus "the user chose the
+   * blank side". Both arrive as an absent value, so deciding from the value alone drops a real
+   * resolution — the survivor silently keeps its old value on the one operation where someone is
+   * reconciling two records field by field, and the loser is gone afterwards. So the skip is
+   * decided from WHICH SIDE was chosen, and a chosen blank is written through as null.
    */
   private buildFieldMap(event: MergeConfirmedEvent, survivorIsLeft: boolean): { FieldName: string; Value: unknown }[] {
     const map: { FieldName: string; Value: unknown }[] = [];
     for (const field of event.ResolvedFields) {
       if (field.IsReadOnly || !field.HasConflict) continue;
-      const value =
+      // Resolved to the survivor's own side — nothing to write, whatever the value is.
+      if (field.SelectedSide !== 'custom' && (field.SelectedSide === 'left') === survivorIsLeft) continue;
+      const chosen =
         field.SelectedSide === 'custom'
           ? field.CustomValue
-          : (field.SelectedSide === 'left') === survivorIsLeft
-            ? undefined // the survivor's own value — nothing to write
-            : (survivorIsLeft ? field.RightValue : field.LeftValue);
-      if (value === undefined || value === null) continue;
-      map.push({ FieldName: field.FieldName, Value: value });
+          : (survivorIsLeft ? field.RightValue : field.LeftValue);
+      // A chosen blank is a clear, not a no-op. Normalize undefined to null so the transport
+      // carries an explicit value rather than an absent one.
+      map.push({ FieldName: field.FieldName, Value: chosen === undefined ? null : chosen });
     }
     return map;
   }
@@ -912,11 +985,19 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     const children = entity.ChildEntities;
     if (children.length === 0) return false;
 
-    // An IS-A child shares the parent's key, whatever its shape, so OR the two key predicates
-    // rather than assuming one column to put in an IN list.
-    const filter = keys.map(k => `(${k.ToWhereClause()})`).join(' OR ');
+    // An IS-A child shares its parent's key SEMANTICALLY; nothing requires it to share the column
+    // NAME. `CompositeKey.ToWhereClause()` emits the parent's names, so filtering a child view
+    // with it fails wherever the names differ — and a failed probe refuses the merge, which would
+    // disable merge for that entity permanently. Pair each key's values onto the child's own PK
+    // columns instead, the way the platform's own child discovery does
+    // (SQLServerDataProvider.BuildChildDiscoverySQL).
+    const probes = children
+      .map(child => ({ child, filter: this.buildChildKeyFilter(child, keys) }))
+      .filter((probe): probe is { child: EntityInfo; filter: string } => probe.filter !== null);
+    if (probes.length === 0) return false;
+
     const results = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews(
-      children.map(child => ({
+      probes.map(({ child, filter }) => ({
         EntityName: child.Name,
         ExtraFilter: filter,
         Fields: child.PrimaryKeys.map(f => f.Name),
@@ -928,7 +1009,32 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     return results.some(r => r.Results.length > 0);
   }
 
-  /** How many linked records will move to the survivor — the thing users most want to know. */
+  /**
+   * `(childPk = v1) OR (childPk = v2)` against one child entity, built from the parent's key
+   * VALUES and the child's own key COLUMN NAMES, paired positionally because an IS-A child shares
+   * its parent's key by design. Null when the child's key arity differs, which means it does not
+   * share the key and cannot hold a subtype row for these records.
+   */
+  private buildChildKeyFilter(child: EntityInfo, keys: ReadonlyArray<CompositeKey>): string | null {
+    const childPkFields = child.PrimaryKeys;
+    if (childPkFields.length === 0 || keys.some(k => k.KeyValuePairs.length !== childPkFields.length)) {
+      return null;
+    }
+    const clauses = keys.map(key =>
+      childPkFields
+        .map((field, i) => `[${field.Name}] = '${String(key.KeyValuePairs[i].Value ?? '').replace(/'/g, "''")}'`)
+        .join(' AND '),
+    );
+    return clauses.map(c => `(${c})`).join(' OR ');
+  }
+
+  /**
+   * How many linked records will move to the survivor — the thing users most want to know.
+   *
+   * Indexes `counts[0]` / `counts[1]` directly: `onMergeRequested` refuses anything other than
+   * exactly two records before reaching here, and the merge panel's config is two-sided by
+   * construction, so this is only ever called with a pair. Widen both together.
+   */
   private async describeDependencies(entity: EntityInfo, keys: ReadonlyArray<CompositeKey>): Promise<string | null> {
     try {
       const counts = await Promise.all(

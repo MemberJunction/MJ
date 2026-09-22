@@ -319,6 +319,62 @@ describe('mj-form-field FK lookup strategy', () => {
     }
   });
 
+  it('survives a strategy that throws, instead of spinning forever', async () => {
+    // The seam exists so third-party code can supply the rows. A strategy that throws must not
+    // leave FKLoading true with an unhandled rejection behind it.
+    const boom = vi
+      .spyOn(GroupedTestStrategy.prototype, 'Lookup')
+      .mockRejectedValue(new Error('strategy exploded'));
+    try {
+      // Rows so MJ's own strategy has something to fall back TO — otherwise an empty result is
+      // indistinguishable from the containment not happening.
+      const f = renderFK({ Provider: fkProvider([{ ID: CUSTOMER_ID, Name: 'Northwind Institute', City: 'Springfield' }]) });
+      await openDropdown(f);
+
+      // The spinner cleared: the field is usable again rather than hung.
+      expect(f.componentInstance.FKLoading).toBe(false);
+      // Fell back to MJ's own rows, under its own (absent) scope labels.
+      expect(f.componentInstance.FKGroups.map(g => g.Key)).toEqual(['results']);
+      expect(f.componentInstance.FKSuggestions.map(x => x.DisplayName)).toEqual(['Northwind Institute']);
+      expect(f.componentInstance.FKScopeLabels).toBeNull();
+    } finally {
+      boom.mockRestore();
+    }
+  });
+
+  it('lets the pick through when BeforeSelect throws, rather than swallowing the click', async () => {
+    const boom = vi
+      .spyOn(GroupedTestStrategy.prototype, 'BeforeSelect')
+      .mockRejectedValue(new Error('veto exploded'));
+    try {
+      const f = renderFK();
+      await openDropdown(f);
+      mousedown(f, '.mj-fk-grid-row:not(.mj-fk-grid-row--header):not(.mj-fk-group-head)');
+      await f.whenStable();
+
+      expect(f.componentInstance.Value).toBe(CUSTOMER_ID);
+    } finally {
+      boom.mockRestore();
+    }
+  });
+
+  it('sorts within each group, keeping group order and the keyboard walk aligned', async () => {
+    const f = renderFK();
+    await openDropdown(f);
+
+    // A saved column sort must not alphabetize across groups: Recent is ordered by recency, and
+    // the template renders group by group while the keyboard walks the flat array.
+    const component = f.componentInstance as unknown as { FKSortField: string | null; FKSortDir: 'asc' | 'desc' };
+    component.FKSortField = 'Name';
+    component.FKSortDir = 'asc';
+    await openDropdown(f);
+
+    const groupOrder = f.componentInstance.FKGroups.map(g => g.Key);
+    const flatOrder = f.componentInstance.FKSuggestions.map(s => s.GroupKey);
+    // The flat list is the groups concatenated — never interleaved.
+    expect(flatOrder).toEqual(groupOrder.flatMap(key => flatOrder.filter(g => g === key)));
+  });
+
   it('offers the user recent picks above the strategy rows on the browse list', async () => {
     LinkedFieldOptionsStore.Instance.PushRecentPick('Test Orders', 'PartyID', RECENT_ID);
 

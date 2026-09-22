@@ -309,6 +309,71 @@ describe('GridViewRendererComponent merge wiring', () => {
     expect(text(f, '.mj-ev-merge-notice')).toContain('merged');
   });
 
+  it('writes a conflict the user resolved to the blank side, rather than silently dropping it', async () => {
+    // The gap Robert found: `undefined` (the user did not move this field off the survivor) and a
+    // chosen blank both arrive as an absent value. Deciding from the value dropped the second,
+    // leaving the survivor's old value while reporting a successful merge — unrecoverable, since
+    // the loser is deleted.
+    const mergeRecords = vi.fn(async (_request: RecordMergeRequest) => ({ Success: true, OverallStatus: 'Complete' }));
+    const f = render(partyEntity(), provider({ MergeRecords: mergeRecords }));
+
+    await host(f).onMergeRequested({ entityInfo: partyEntity(), records: twoParties });
+    await host(f).onMergeConfirmed({
+      Config: {
+        EntityName: 'Test Parties',
+        LeftRecordID: PARTY_A,
+        RightRecordID: PARTY_B,
+        SurvivorSide: 'left',
+        LeftLabel: 'Northwind Institute',
+        RightLabel: 'Northwind Institute (Regional)',
+      },
+      ResolvedFields: [
+        // Chose the right side, whose value is blank — a clear, not a no-op.
+        { FieldName: 'Name', HasConflict: true, IsReadOnly: false, SelectedSide: 'right', LeftValue: 'Northwind Institute', RightValue: null },
+        // Cleared a custom value — also a clear.
+        { FieldName: 'Website', HasConflict: true, IsReadOnly: false, SelectedSide: 'custom', CustomValue: null, LeftValue: 'a', RightValue: 'b' },
+        // Resolved to the survivor's own side: still nothing to write.
+        { FieldName: 'City', HasConflict: true, IsReadOnly: false, SelectedSide: 'left', LeftValue: 'Springfield', RightValue: 'Riverton' },
+      ],
+    });
+
+    expect(mergeRecords.mock.calls[0][0].FieldMap).toEqual([
+      { FieldName: 'Name', Value: null },
+      { FieldName: 'Website', Value: null },
+    ]);
+  });
+
+  it('probes an IS-A child with the child\'s own key column name, not the parent\'s', async () => {
+    // An IS-A child shares its parent's key semantically, not necessarily by column name. Filtering
+    // the child view with the parent's names fails, and a failed probe refuses the merge — which
+    // would disable merge for that entity permanently.
+    const parent = partyEntity();
+    const child = new EntityInfo({
+      ID: 'E0000003-0000-0000-0000-000000000003',
+      Name: 'Test Sales Accounts',
+      Status: 'Active',
+      BaseTable: 'SalesAccount',
+      BaseView: 'vwSalesAccounts',
+      Fields: [{ ID: 'C1', Name: 'AccountID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true }],
+    });
+    Object.defineProperty(parent, 'ChildEntities', { get: () => [child] });
+
+    const filters: (string | undefined)[] = [];
+    const p = provider({
+      RunViews: async (params: { EntityName: string; ExtraFilter?: string }[]) => {
+        filters.push(...params.map(x => x.ExtraFilter));
+        return params.map(() => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0 }));
+      },
+    });
+    const f = render(parent, p);
+    await host(f).onMergeRequested({ entityInfo: parent, records: twoParties });
+
+    expect(filters[0]).toContain('[AccountID]');
+    expect(filters[0]).not.toContain('[ID]');
+    // Probe answered "no subtype rows", so the merge panel opened.
+    expect(host(f).mergeState).not.toBeNull();
+  });
+
   it('reports a failed merge and does not reload', async () => {
     const f = render(partyEntity(), provider({
       MergeRecords: async () => ({ Success: false, OverallStatus: 'Dependencies could not be repointed' }),

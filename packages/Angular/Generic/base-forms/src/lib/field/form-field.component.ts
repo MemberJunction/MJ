@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, LogError, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
@@ -1449,10 +1449,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /**
-   * Returns a sorted copy of the suggestions per the active sort column/direction.
-   * Null sort field → natural order (original array, untouched). Sorts on the name
-   * column's `DisplayName` or the matching extra column's formatted `Value`,
-   * case-insensitively.
+   * Returns a sorted copy of the suggestions per the active sort column/direction, sorting
+   * WITHIN each group and preserving group order. Null sort field → natural order (original
+   * array, untouched). Sorts on the name column's `DisplayName` or the matching extra column's
+   * formatted `Value`, case-insensitively.
+   *
+   * Sorting the flat concatenation instead would break two things, and `FKSortField` is restored
+   * from saved preferences — so a user who once sorted a column would get both on every open:
+   * "Recent" is ordered by recency and a global sort alphabetizes that away, and the template
+   * renders group by group while the keyboard walks the flat array, so the two orders diverge and
+   * arrow keys skip rows the user can see.
    */
   private sortSuggestions(suggestions: FKSuggestion[]): FKSuggestion[] {
     const field = this.FKSortField;
@@ -1462,9 +1468,22 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       return s.ExtraColumns.find(c => c.FieldName === field)?.Value ?? '';
     };
     const dir = this.FKSortDir === 'desc' ? -1 : 1;
-    return [...suggestions].sort((a, b) =>
-      dir * keyOf(a).localeCompare(keyOf(b), undefined, { numeric: true, sensitivity: 'base' })
-    );
+    const compare = (a: FKSuggestion, b: FKSuggestion): number =>
+      dir * keyOf(a).localeCompare(keyOf(b), undefined, { numeric: true, sensitivity: 'base' });
+
+    // Group order is the render order; only the rows inside a group move.
+    const order: string[] = [];
+    const byGroup = new Map<string, FKSuggestion[]>();
+    for (const suggestion of suggestions) {
+      let rows = byGroup.get(suggestion.GroupKey);
+      if (!rows) {
+        rows = [];
+        byGroup.set(suggestion.GroupKey, rows);
+        order.push(suggestion.GroupKey);
+      }
+      rows.push(suggestion);
+    }
+    return order.flatMap(key => [...(byGroup.get(key) ?? [])].sort(compare));
   }
 
   /**
@@ -1885,7 +1904,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
           [plan.NameFieldName]: suggestion.DisplayName,
         },
       };
-      if (!await this.resolveStrategy().BeforeSelect(context, row)) {
+      // A strategy that throws here must not swallow the user's click. Fail OPEN: the veto is an
+      // opportunity to confirm, not a security boundary, so a broken one lets the pick through
+      // rather than making the field unusable.
+      let vetoed = false;
+      try {
+        vetoed = !(await this.resolveStrategy().BeforeSelect(context, row));
+      } catch (err) {
+        LogError(`FK lookup strategy BeforeSelect failed for ${this.FieldName}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      if (vetoed) {
         this.cdr.markForCheck();
         return;
       }
@@ -1955,7 +1983,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.cdr.markForCheck();
 
     const context = this.buildLookupContext(plan, query);
-    const newRecordValues = context ? this.resolveStrategy().CreateDefaults(context) : {};
+    // Prefill is a convenience; a strategy that throws should cost the user the prefill, not the
+    // ability to create a record.
+    let newRecordValues: Record<string, unknown> = {};
+    if (context) {
+      try {
+        newRecordValues = this.resolveStrategy().CreateDefaults(context);
+      } catch (err) {
+        LogError(`FK lookup strategy CreateDefaults failed for ${this.FieldName}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
 
     this.Navigate.emit({
       Kind: 'create-related',
@@ -2040,14 +2077,30 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (!context) { this.FKLoading = false; return; }
 
     const strategy = this.resolveStrategy();
-    this.FKScopeLabels = strategy.ScopeLabels(context);
 
-    // Recent picks only make sense on the browse list; once the user types, what they typed is
-    // the better signal than what they picked last week.
-    const [groups, recent] = await Promise.all([
-      strategy.Lookup(context),
-      query.trim() ? Promise.resolve<FKLookupRow[]>([]) : this.loadRecentPicks(context),
-    ]);
+    // Everything from here to the results is third-party code: this seam exists so an app can
+    // supply its own lookup. A strategy that throws must not leave the field spinning forever on
+    // an unhandled rejection, so contain it, say so, and fall back to MJ's own rows.
+    let groups: FKLookupGroup[];
+    let recent: FKLookupRow[];
+    try {
+      this.FKScopeLabels = strategy.ScopeLabels(context);
+
+      // Recent picks only make sense on the browse list; once the user types, what they typed is
+      // the better signal than what they picked last week.
+      [groups, recent] = await Promise.all([
+        strategy.Lookup(context),
+        query.trim() ? Promise.resolve<FKLookupRow[]>([]) : this.loadRecentPicks(context),
+      ]);
+    } catch (err) {
+      if (seq !== this._fkSearchSeq) return;
+      LogError(
+        `FK lookup strategy failed for ${this.Record?.EntityInfo?.Name ?? '?'}.${this.FieldName}: ` +
+          `${err instanceof Error ? err.message : String(err)}`
+      );
+      [groups, recent] = [await this.fallbackLookup(context), []];
+      this.FKScopeLabels = null;
+    }
 
     // Ignore stale responses (a newer keystroke already fired).
     if (seq !== this._fkSearchSeq) return;
@@ -2068,6 +2121,19 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     );
     this.applySuggestions(suggestions, plan);
     this.cdr.markForCheck();
+  }
+
+  /**
+   * MJ's own rows, used when a registered strategy threw. Contained in turn: if the default
+   * cannot answer either, the dropdown shows "no matches" rather than propagating.
+   */
+  private async fallbackLookup(context: FKLookupContext): Promise<FKLookupGroup[]> {
+    try {
+      return await new DefaultFKLookupStrategy().Lookup(context);
+    } catch (err) {
+      LogError(`Default FK lookup also failed for ${this.FieldName}: ${err instanceof Error ? err.message : String(err)}`);
+      return [];
+    }
   }
 
   /**
