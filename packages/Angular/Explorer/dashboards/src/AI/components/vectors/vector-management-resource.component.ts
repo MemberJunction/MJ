@@ -156,8 +156,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.EditDocID = doc.ID;
         this.EditDocName = doc.Name;
         this.EditDocEntityName = doc.Entity || '';
-        this.EditDocVectorDBID = doc.VectorDatabaseID;
-        this.EditDocAIModelID = doc.AIModelID;
+        this.EditDocVectorDBID = doc.VectorDatabaseID ?? '';
+        this.EditDocAIModelID = doc.AIModelID ?? '';
         this.EditDocVectorIndexID = doc.VectorIndexID || '';
         this.EditDocStatus = doc.Status;
         this.EditDocTemplate = '';
@@ -206,8 +206,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (!loaded) throw new Error('Could not load entity document');
 
             doc.Name = this.EditDocName;
-            doc.VectorDatabaseID = this.EditDocVectorDBID;
-            doc.AIModelID = this.EditDocAIModelID;
+            doc.VectorDatabaseID = this.EditDocVectorDBID || null;
+            doc.AIModelID = this.EditDocAIModelID || null;
             doc.VectorIndexID = this.EditDocVectorIndexID || null;
             doc.Status = this.EditDocStatus as 'Active' | 'Inactive';
 
@@ -217,7 +217,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 await this.saveEditDocTemplate(doc.TemplateID);
                 MJNotificationService.Instance.CreateSimpleNotification('Entity document updated', 'success', 2500);
                 this.ShowEditPanel = false;
-                await this.LoadData();
+                await this.LoadData(true);
             } else {
                 const msg = doc.LatestResult?.CompleteMessage || 'Unknown error';
                 MJNotificationService.Instance.CreateSimpleNotification(`Save failed: ${msg}`, 'error', 5000);
@@ -296,7 +296,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (deleted) {
                 MJNotificationService.Instance.CreateSimpleNotification('Entity document deleted', 'success', 2500);
                 this.ShowEditPanel = false;
-                await this.LoadData();
+                await this.LoadData(true);
             } else {
                 MJNotificationService.Instance.CreateSimpleNotification('Delete failed', 'error', 3000);
             }
@@ -567,7 +567,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 Description: 'Reload the vector management dashboard (vector counts, sync rows, KPIs) from the server.',
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async () => {
-                    await this.LoadData();
+                    await this.LoadData(true);
                     this.emitAgentContext();
                     return { Success: true, Data: { TotalVectors: this.TotalVectors } };
                 },
@@ -585,7 +585,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                     if (!v.ok) return v.result;
                     const resolved = resolveSyncRow(v.value, this.getSyncRowCandidates());
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
-                    if (this.SyncingIds.has(resolved.value.EntityDocumentID)) {
+                    if (this.IsSyncing(resolved.value.EntityDocumentID)) {
                         return { Success: false, ErrorMessage: `"${resolved.value.EntityName}" is already syncing` };
                     }
                     await this.SyncEntity(resolved.value.EntityDocumentID);
@@ -664,12 +664,12 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // ================================================================
 
     /** Reload all dashboard data */
-    public async LoadData(): Promise<void> {
+    public async LoadData(forceRefresh: boolean = false): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 
         try {
-            await this.fetchAllData();
+            await this.fetchAllData(forceRefresh);
             this.buildSyncRows();
             this.buildKPICards();
             this.buildSidebarData();
@@ -685,12 +685,15 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Trigger vectorization for a specific entity document via GraphQL (fire-and-forget with progress subscription) */
     public async SyncEntity(entityDocumentId: string): Promise<void> {
-        if (this.SyncingIds.has(entityDocumentId)) {
-            return;
-        }
-
         const doc = this.entityDocuments.find(d => UUIDsEqual(d.ID, entityDocumentId));
         if (!doc) return;
+
+        // Canonicalize ID to doc.ID to ensure consistent casing across maps, sets, and rows
+        entityDocumentId = doc.ID;
+
+        if (this.IsSyncing(entityDocumentId)) {
+            return;
+        }
 
         const provider = this.ProviderToUse as GraphQLDataProvider;
         if (!provider) return;
@@ -726,7 +729,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             }
 
             // Store PipelineRunID on the row for tracking
-            const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
+            const row = this.SyncRows.find(r => UUIDsEqual(r.EntityDocumentID, entityDocumentId));
             if (row) {
                 row.PipelineRunID = result.PipelineRunID;
             }
@@ -774,22 +777,29 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             // (Promise.resolve microtasks run between Angular's check passes
             // and still trigger NG0100.)
             setTimeout(async () => {
-                this.removeSyncingId(entityDocumentId);
+                try {
+                    this.removeSyncingId(entityDocumentId);
 
-                if (success) {
-                    MJNotificationService.Instance.CreateSimpleNotification(
-                        `Vectorization complete for ${entityName}`,
-                        'success', 3000
-                    );
-                    await this.refreshSyncRow(entityDocumentId);
-                } else {
-                    this.updateRowStatus(entityDocumentId, 'Error');
-                    MJNotificationService.Instance.CreateSimpleNotification(
-                        `Vectorization failed for ${entityName}`,
-                        'error', 5000
-                    );
+                    if (success) {
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Vectorization complete for ${entityName}`,
+                            'success', 3000
+                        );
+                        await this.refreshSyncRow(entityDocumentId);
+                    } else {
+                        this.updateRowStatus(entityDocumentId, 'Error');
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Vectorization failed for ${entityName}`,
+                            'error', 5000
+                        );
+                    }
+                } catch (err) {
+                    console.error(`[VectorManagement] Error finishing sync for ${entityName}:`, err);
+                } finally {
+                    this.buildSidebarData();
+                    this.emitAgentContext();
+                    this.cdr.detectChanges();
                 }
-                this.cdr.detectChanges();
             });
         };
 
@@ -798,7 +808,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         const resetIdleTimer = () => {
             if (idleTimer) clearTimeout(idleTimer);
             idleTimer = setTimeout(() => {
-                if (this.SyncingIds.has(entityDocumentId)) {
+                if (this.IsSyncing(entityDocumentId)) {
                     finishSync(true);
                 }
             }, 5000);
@@ -836,11 +846,31 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     }
 
     /**
+     * Returns true if the given entity document is currently syncing.
+     * Compares case-insensitively using UUIDsEqual.
+     */
+    public IsSyncing(id: string): boolean {
+        for (const syncingId of this.SyncingIds) {
+            if (UUIDsEqual(syncingId, id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Add an ID to SyncingIds, creating a new Set reference so Angular
      * change detection picks up the mutation in template bindings.
      */
     private addSyncingId(id: string): void {
-        this.SyncingIds = new Set([...this.SyncingIds, id]);
+        const next = new Set<string>();
+        for (const existing of this.SyncingIds) {
+            if (!UUIDsEqual(existing, id)) {
+                next.add(existing);
+            }
+        }
+        next.add(id);
+        this.SyncingIds = next;
         this.emitAgentContext();
     }
 
@@ -849,9 +879,13 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
      * change detection picks up the mutation in template bindings.
      */
     private removeSyncingId(id: string): void {
-        if (this.SyncingIds.has(id)) {
-            const next = new Set(this.SyncingIds);
-            next.delete(id);
+        const next = new Set<string>();
+        for (const existing of this.SyncingIds) {
+            if (!UUIDsEqual(existing, id)) {
+                next.add(existing);
+            }
+        }
+        if (next.size !== this.SyncingIds.size) {
             this.SyncingIds = next;
             this.emitAgentContext();
         }
@@ -1071,7 +1105,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                     'success',
                     3000
                 );
-                await this.LoadData();
+                await this.LoadData(true);
                 setTimeout(() => {
                     this.CloseSuggestDialog();
                     this.cdr.detectChanges();
@@ -1153,11 +1187,11 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // Private helpers
     // ================================================================
 
-    private async fetchAllData(): Promise<void> {
-        // Use cached engine data — BaseEngine's entity-event auto-refresh handles
-        // updates from saves/deletes on the entities it tracks.
+    private async fetchAllData(forceRefresh: boolean = false): Promise<void> {
+        // Use cached engine data unless forceRefresh is true — BaseEngine's entity-event
+        // auto-refresh handles updates from saves/deletes on the entities it tracks.
         const engine = KnowledgeHubMetadataEngine.Instance;
-        await engine.Config(false);
+        await engine.Config(forceRefresh);
         // AIEngineBase is deferred at startup; ensure loaded before reading .VectorDatabases.
         await AIEngineBase.Instance.EnsureLoaded();
 
@@ -1177,10 +1211,11 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             Fields: ['__mj_UpdatedAt'],
             OrderBy: '__mj_UpdatedAt DESC',
             MaxRows: 1,
+            BypassCache: forceRefresh,
         }));
         const allQueries = [
             ...erdQueries,
-            { EntityName: 'MJ: AI Models', ExtraFilter: '', ResultType: 'entity_object' as const }
+            { EntityName: 'MJ: AI Models', ExtraFilter: '', ResultType: 'entity_object' as const, BypassCache: forceRefresh }
         ];
         const allResults = await rv.RunViews(allQueries);
 
@@ -1206,7 +1241,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     private buildSyncRows(): void {
         this.SyncRows = this.entityDocuments.map(doc => {
-            const stats = this.erdStats.get(doc.ID);
+            const stats = this.erdStats.get(doc.ID) ??
+                Array.from(this.erdStats.entries()).find(([k]) => UUIDsEqual(k, doc.ID))?.[1];
             const vectorCount = stats?.vectorCount ?? 0;
             const lastSynced = stats?.lastSynced ?? null;
             const status = this.computeSyncStatus(doc, vectorCount);
@@ -1230,7 +1266,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         doc: MJEntityDocumentEntity,
         vectorCount: number
     ): 'Synced' | 'Syncing' | 'Error' | 'Pending' {
-        if (this.SyncingIds.has(doc.ID)) {
+        if (this.IsSyncing(doc.ID)) {
             return 'Syncing';
         }
         if (doc.Status === 'Inactive') {
@@ -1499,14 +1535,14 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     }
 
     private updateRowStatus(entityDocumentId: string, status: EntitySyncRow['Status']): void {
-        const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
+        const row = this.SyncRows.find(r => UUIDsEqual(r.EntityDocumentID, entityDocumentId));
         if (row) {
             row.Status = status;
         }
     }
 
     private updateRowProgress(entityDocumentId: string, percentComplete: number): void {
-        const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
+        const row = this.SyncRows.find(r => UUIDsEqual(r.EntityDocumentID, entityDocumentId));
         if (row) {
             row.PercentComplete = percentComplete;
         }
@@ -1514,7 +1550,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Refresh a single sync row's vector count and status from the DB */
     private async refreshSyncRow(entityDocumentId: string): Promise<void> {
-        const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
+        const row = this.SyncRows.find(r => UUIDsEqual(r.EntityDocumentID, entityDocumentId));
         if (!row) return;
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -1524,16 +1560,34 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             Fields: ['__mj_UpdatedAt'],
             OrderBy: '__mj_UpdatedAt DESC',
             ResultType: 'simple',
-            MaxRows: 1
+            MaxRows: 1,
+            BypassCache: true,
         });
 
         if (result.Success) {
             row.VectorCount = result.TotalRowCount;
-            row.LastSynced = result.Results.length > 0 ? new Date(result.Results[0].__mj_UpdatedAt) : null;
+            row.LastSynced = result.Results.length > 0 ? new Date(result.Results[0].__mj_UpdatedAt) : (row.LastSynced ?? new Date());
             row.Status = row.VectorCount > 0 ? 'Synced' : 'Pending';
             row.PercentComplete = 100;
-            this.erdStats.set(entityDocumentId, { vectorCount: row.VectorCount, lastSynced: row.LastSynced });
+
+            const doc = this.entityDocuments.find(d => UUIDsEqual(d.ID, entityDocumentId));
+            const docId = doc?.ID ?? row.EntityDocumentID;
+            for (const key of this.erdStats.keys()) {
+                if (UUIDsEqual(key, docId)) {
+                    this.erdStats.delete(key);
+                }
+            }
+            this.erdStats.set(docId, { vectorCount: row.VectorCount, lastSynced: row.LastSynced });
             this.buildKPICards();
+            this.buildSidebarData();
+            this.emitAgentContext();
+            this.cdr.detectChanges();
+        } else {
+            console.error(`[VectorManagement] Failed to refresh sync row for ${entityDocumentId}:`, result.ErrorMessage);
+            row.Status = row.VectorCount > 0 ? 'Synced' : 'Error';
+            this.buildKPICards();
+            this.buildSidebarData();
+            this.emitAgentContext();
             this.cdr.detectChanges();
         }
     }

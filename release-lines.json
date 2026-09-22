@@ -57,7 +57,7 @@
     "5.51": {
       "status": "certified",
       "certifiedBuild": "5.51.0",
-      "newest": "5.51.2",
+      "newest": "5.51.3",
       "candidateDate": "2026-07-31",
       "certifiedDate": "2026-08-14",
       "supportEnds": "2027-02-14",
@@ -68,6 +68,9 @@
         },
         "5.51.2": {
           "dbImpact": "none"
+        },
+        "5.51.3": {
+          "dbImpact": "none"
         }
       },
       "scorecard": "certifications/5.51.0.md"
@@ -75,13 +78,19 @@
     "6.1": {
       "status": "candidate",
       "candidateDate": "2026-09-11",
-      "newest": "6.1.1",
+      "newest": "6.1.3",
       "releases": {
         "6.1.0": {
           "dbImpact": "none"
         },
         "6.1.1": {
           "dbImpact": "metadata"
+        },
+        "6.1.2": {
+          "dbImpact": "metadata"
+        },
+        "6.1.3": {
+          "dbImpact": "schema"
         }
       }
     }

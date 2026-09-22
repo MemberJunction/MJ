@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext } from '../utils/variable-substitution.js';
+import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext, findUnresolvedPlaceholders, findUnresolvedAuthPlaceholders } from '../utils/variable-substitution.js';
 
 describe('buildVariableValuesFromContext', () => {
     it('returns empty when there is no context and no relevant env vars', () => {
@@ -38,8 +38,11 @@ describe('buildVariableValuesFromContext', () => {
 
     it('ignores empty-string env vars', () => {
         const env = { MJ_TEST_VAR_baseUrl: '' };
-        // empty string is still defined; we include it (matches process.env behavior)
-        expect(buildVariableValuesFromContext(null, env)).toEqual({ baseUrl: '' });
+        // An empty value is a variable nobody set, not a variable set to "".
+        // docker-compose declares every one as `"${MJ_TEST_VAR_x:-}"`, so the key is
+        // always present in the container; including it substituted "" into the
+        // auth bindings and the suite logged in with blank credentials.
+        expect(buildVariableValuesFromContext(null, env)).toEqual({});
     });
 
     it('JSON-parses env-var values that look like arrays/objects/scalars', () => {
@@ -201,5 +204,117 @@ describe('composeApplicationContext', () => {
             '## Test-specific Notes\n\nreal content'
         );
         expect(composeApplicationContext('real content', '\t\n', {})).toBe('real content');
+    });
+});
+
+describe('findUnresolvedPlaceholders', () => {
+    it('returns [] for a fully-resolved string', () => {
+        expect(findUnresolvedPlaceholders('http://localhost:4200/app')).toEqual([]);
+    });
+
+    it('returns [] for undefined/empty', () => {
+        expect(findUnresolvedPlaceholders(undefined)).toEqual([]);
+        expect(findUnresolvedPlaceholders('')).toEqual([]);
+    });
+
+    it('finds a single unresolved placeholder', () => {
+        expect(findUnresolvedPlaceholders('{{baseUrl}}/dashboard')).toEqual(['baseUrl']);
+    });
+
+    it('finds multiple distinct placeholders and de-dupes', () => {
+        const out = findUnresolvedPlaceholders('{{scheme}}://{{host}}/{{host}}');
+        expect(out.sort()).toEqual(['host', 'scheme']);
+    });
+
+    it('matches the substitution grammar (whitespace, dots, hyphens)', () => {
+        expect(findUnresolvedPlaceholders('{{ base.url-v2 }}')).toEqual(['base.url-v2']);
+    });
+
+    it('agrees with substituteVariables: a provided key leaves nothing unresolved', () => {
+        const resolved = substituteVariables({ u: '{{baseUrl}}/x' }, { baseUrl: 'http://h' });
+        expect(findUnresolvedPlaceholders((resolved as { u: string }).u)).toEqual([]);
+    });
+});
+
+describe('empty MJ_TEST_VAR_* values (regression: blank Auth0 credentials)', () => {
+    it('treats an empty env var as UNSET, so a blank value never substitutes', () => {
+        // docker-compose declares MJ_TEST_VAR_authUsername: "${MJ_TEST_VAR_authUsername:-}",
+        // so inside the container the key always exists — as "" when the host never set it.
+        // Keeping it turned every login into a blank-credential submit against Auth0.
+        const values = buildVariableValuesFromContext(null, {
+            MJ_TEST_VAR_authUsername: '',
+            MJ_TEST_VAR_authPassword: '',
+            MJ_TEST_VAR_baseUrl: 'http://localhost:4200',
+        } as NodeJS.ProcessEnv);
+
+        expect(values).not.toHaveProperty('authUsername');
+        expect(values).not.toHaveProperty('authPassword');
+        expect(values.baseUrl).toBe('http://localhost:4200');
+    });
+
+    it('keeps a whitespace-only value out too', () => {
+        const values = buildVariableValuesFromContext(null, {
+            MJ_TEST_VAR_authPassword: '   ',
+        } as NodeJS.ProcessEnv);
+        expect(values).not.toHaveProperty('authPassword');
+    });
+
+    it('still keeps legitimately falsy non-empty values', () => {
+        const values = buildVariableValuesFromContext(null, {
+            MJ_TEST_VAR_retries: '0',
+            MJ_TEST_VAR_headless: 'false',
+        } as NodeJS.ProcessEnv);
+        expect(values.retries).toBe(0);
+        expect(values.headless).toBe(false);
+    });
+
+    it('a resolver value still wins over an absent env var', () => {
+        const values = buildVariableValuesFromContext(
+            { resolvedVariables: { values: { authUsername: 'alex@example.com' } } },
+            { MJ_TEST_VAR_authUsername: '' } as NodeJS.ProcessEnv
+        );
+        expect(values.authUsername).toBe('alex@example.com');
+    });
+});
+
+describe('findUnresolvedAuthPlaceholders', () => {
+    const auth = (method: Record<string, unknown>) => ({ bindings: [{ domains: ['localhost'], method }] });
+
+    it('finds an unresolved password, which would otherwise fail at the IdP looking like bad credentials', () => {
+        const found = findUnresolvedAuthPlaceholders(auth({
+            Type: 'Basic', Strategy: 'FormLogin',
+            Username: '{{authUsername}}', Password: '{{authPassword}}',
+        }));
+        expect(found).toEqual([
+            'auth.bindings[0].Username:{{authUsername}}',
+            'auth.bindings[0].Password:{{authPassword}}',
+        ]);
+    });
+
+    it('is quiet when every placeholder resolved', () => {
+        expect(findUnresolvedAuthPlaceholders(auth({
+            Username: 'alex@example.com', Password: 'hunter2',
+        }))).toEqual([]);
+    });
+
+    it('labels the binding index so a multi-domain test says which one', () => {
+        const found = findUnresolvedAuthPlaceholders({
+            bindings: [
+                { domains: ['a'], method: { Username: 'set' } },
+                { domains: ['b'], method: { Password: '{{otherPassword}}' } },
+            ],
+        });
+        expect(found).toEqual(['auth.bindings[1].Password:{{otherPassword}}']);
+    });
+
+    it('tolerates a missing/!array auth block rather than throwing mid-run', () => {
+        expect(findUnresolvedAuthPlaceholders(undefined)).toEqual([]);
+        expect(findUnresolvedAuthPlaceholders({})).toEqual([]);
+        expect(findUnresolvedAuthPlaceholders({ bindings: 'nope' })).toEqual([]);
+        expect(findUnresolvedAuthPlaceholders({ bindings: [{ domains: ['a'] }] })).toEqual([]);
+    });
+
+    it('ignores non-string method fields', () => {
+        expect(findUnresolvedAuthPlaceholders(auth({ Timeout: 5000, Nested: { x: '{{y}}' } }))).toEqual([]);
     });
 });

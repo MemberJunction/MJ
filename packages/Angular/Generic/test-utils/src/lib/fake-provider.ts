@@ -70,3 +70,11 @@ export function createFakeProvider<T = unknown>(options: FakeProviderOptions<T> 
   // the one justified seam — everything the caller touches above is fully typed.
   return fake as unknown as IMetadataProvider;
 }
+
+/**
+ * Minimal stub provider for tests that only resolve entity metadata via `EntityByName`.
+ */
+export const fakeMetadataProvider = <T extends { Name: string; DisplayName?: string }>(entities: T[]) => ({
+  Entities: entities,
+  EntityByName: (n: string) => entities.find(e => e.Name.trim().toLowerCase() === n?.trim().toLowerCase()),
+});
