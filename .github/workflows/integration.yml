@@ -121,7 +121,11 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "$PR_BASE_REF"
             CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
-            if echo "$CHANGED" | grep -qE '^(packages/CodeGenLib/|packages/MJCore/src/generic/(providerBase|entityInfo)\.ts|packages/MJGlobal/src/util\.ts|migrations/|metadata/|.*generated/|\.github/workflows/integration\.yml)'; then
+            # scripts/codegen-idempotency-check.mjs IS the gate: a change to it must run the gate,
+            # or the gate cannot catch its own regressions. #4386's probe-cleanup hole sat cosmetic
+            # and then went fatal under 6805744ae4 without a single run of the gate on the change
+            # that caused it, because nothing in this filter matched.
+            if echo "$CHANGED" | grep -qE '^(packages/CodeGenLib/|packages/MJCore/src/generic/(providerBase|entityInfo)\.ts|packages/MJGlobal/src/util\.ts|migrations/|metadata/|.*generated/|\.github/workflows/integration\.yml|scripts/codegen-idempotency-check\.mjs)'; then
               echo "codegen=true" >> "$GITHUB_OUTPUT"
             else
               echo "codegen=false" >> "$GITHUB_OUTPUT"
