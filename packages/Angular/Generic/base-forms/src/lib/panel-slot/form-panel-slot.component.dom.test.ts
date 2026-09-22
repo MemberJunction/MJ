@@ -125,3 +125,36 @@ describe('FormPanelSlotComponent (DOM) — host form owns its body', () => {
     expect(query(render(TEST_ENTITY), '.fake-slot')).not.toBeNull();
   });
 });
+
+/**
+ * A field claim is hosted by the section drawing its fields, not by a slot. It still carries
+ * a slot, because every registration does — so a slot host going by slot alone put the same
+ * panel on the form twice: once inside the group, once as a section of its own at the bottom.
+ */
+const FIELD_CLAIM_ENTITY = 'ZZZ_SlotFieldClaimEntity';
+
+@RegisterClassEx(BaseFormPanel, {
+  metadata: {
+    entity: FIELD_CLAIM_ENTITY,
+    slot: 'after-fields',
+    replacesFieldNames: ['Street', 'City'],
+  },
+})
+@Component({ standalone: true, selector: 'test-field-claim-panel', template: `<div class="fake-field-claim">claim</div>` })
+class FakeFieldClaimPanel extends BaseFormPanel {}
+
+describe('FormPanelSlotComponent (DOM) — a contribution that stands in for fields', () => {
+  it('registers the fake panel exactly once (guard)', () => {
+    expect(FakeFieldClaimPanel).toBeDefined();
+  });
+
+  it('does not mount it, because the section hosting its fields does', () => {
+    const f = render(FIELD_CLAIM_ENTITY);
+    expect(query(f, '.fake-field-claim')).toBeNull();
+  });
+
+  it('still mounts a contribution that claims no field', () => {
+    const f = render(TEST_ENTITY);
+    expect(query(f, '.fake-slot')).not.toBeNull();
+  });
+});

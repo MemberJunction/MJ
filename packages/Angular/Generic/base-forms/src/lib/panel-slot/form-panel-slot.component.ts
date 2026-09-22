@@ -23,6 +23,7 @@ import { BaseFormPanel, FormPanelRegistrationMetadata, FormPanelSlot } from './b
 import { FormSlotCoordinator } from './form-slot-coordinator.service';
 import {
     CollapseFormPanelRegistrations,
+    ContributionClaimsFields,
     FormContributionEntityMatches,
     type FormContributionRegistration,
 } from './form-contribution';
@@ -271,7 +272,10 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         const all = CollectFormContributionRegistrations(entity, provider);
         const strict = all.filter((reg) => FormContributionEntityMatches(reg.Metadata?.entity, this.Entity));
         this.warnOnLooseRegistrations(all, strict);
-        return strict;
+        // A contribution that names fields is mounted by the section drawing them, not by a
+        // slot. It still carries a slot — every row does — so leaving it here would put the
+        // same panel on the form twice, once inside the group and once at the bottom.
+        return strict.filter((reg) => !ContributionClaimsFields(reg.Metadata));
     }
 
     /**

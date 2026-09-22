@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
-import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, FieldGroupsInDetails, RailGroupSectionKeys, SlotChromeGroup } from '../form-chrome';
+import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, FieldGroupsInDetails, RailGroupSectionKeys, SlotChromeGroup, SectionDrawingAnyField } from '../form-chrome';
 import { ApplyFormChromeRuleTitles, ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
 import type { FormChromeGroup, FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
@@ -1300,5 +1300,46 @@ describe('SlotChromeGroup', () => {
         expect(SlotChromeGroup('')).toBeNull();
         expect(SlotChromeGroup(null)).toBeNull();
         expect(SlotChromeGroup('made-up')).toBeNull();
+    });
+});
+
+/**
+ * A panel standing in for fields renders inside the section drawing them, so the rail has
+ * to file it there. Without this it is filed as a contribution in its own right and the
+ * rail lifts it out of the group it is visibly sitting in — the panel reads as appearing
+ * twice, once in the group and once as a tab of its own.
+ */
+describe('SectionDrawingAnyField', () => {
+    const panels = [
+        {
+            SectionKey: 'details', SectionName: 'Details', Variant: 'default',
+            Fields: [{ Name: 'Name', Label: 'Name' }, { Name: 'Description', Label: 'Description' }],
+        },
+        {
+            SectionKey: 'address', SectionName: 'Address', Variant: 'default',
+            Fields: [{ Name: 'Street', Label: 'Street' }, { Name: 'City', Label: 'City' }],
+        },
+        { SectionKey: 'orders', SectionName: 'Orders', Variant: 'related-entity' },
+    ];
+
+    it('finds the section drawing the claimed fields', () => {
+        expect(SectionDrawingAnyField(panels, ['Street', 'City'])).toBe('address');
+    });
+
+    it('finds it from one surviving field when another has left the form', () => {
+        expect(SectionDrawingAnyField(panels, ['Retired', 'City'])).toBe('address');
+    });
+
+    it('finds nothing when the form draws none of them', () => {
+        expect(SectionDrawingAnyField(panels, ['Retired', 'AlsoGone'])).toBeUndefined();
+    });
+
+    it('finds nothing for a claim that names no field', () => {
+        expect(SectionDrawingAnyField(panels, [])).toBeUndefined();
+        expect(SectionDrawingAnyField(panels, ['  '])).toBeUndefined();
+    });
+
+    it('ignores a section with no fields of its own, such as a related grid', () => {
+        expect(SectionDrawingAnyField([panels[2]], ['Street'])).toBeUndefined();
     });
 });

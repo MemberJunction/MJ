@@ -40,7 +40,7 @@ import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
-import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, RailGroupSectionKeys, SlotChromeGroup } from '../chrome/form-chrome';
+import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, RailGroupSectionKeys, SlotChromeGroup, SectionDrawingAnyField } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
 import {
   ClampRailWidth,
@@ -1053,10 +1053,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     if (this.fc) this.fc.ChromeLayout = result.Spec.Layout;
     this.warnUnmatchedReplaceKeys();
+    this.warnUnmatchedFieldClaims();
     this.publishCompositionSnapshot(result.Spec);
   }
 
   private warnedReplaceKeys = new Set<string>();
+  private warnedFieldClaims = new Set<string>();
 
   /**
    * Contributions that may act on this form. Empty when the form suppresses them — a
@@ -1089,6 +1091,36 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       console.warn(
         `[mj-record-form-container] contribution ${id} replaces section "${key}", but the ` +
         `${entity.Name} form has no section with that key. Nothing was hidden.`,
+      );
+    }
+  }
+
+  /**
+   * A field claim naming no field this form draws renders nowhere at all.
+   *
+   * Unlike a section claim, which still mounts beside the section it meant to replace, a
+   * field claim is hosted by the section drawing its fields — so when no section draws any
+   * of them there is no host, and the panel is simply absent. That is a worse silence than
+   * a misplaced panel, which is why it is reported separately.
+   */
+  private warnUnmatchedFieldClaims(): void {
+    const entity = this.EffectiveEntityInfo;
+    if (!entity) return;
+    const drawn = new Set<string>();
+    for (const panel of this.allChromePanels()) {
+      for (const field of panel.ClaimableFields) drawn.add(field.Name);
+    }
+    if (drawn.size === 0) return;
+    for (const reg of this.formContributionRegistrations()) {
+      const claimed = reg.Metadata?.replacesFieldNames ?? [];
+      if (claimed.length === 0 || reg.Metadata.entity !== entity.Name) continue;
+      if (claimed.some((name) => drawn.has(name.trim()))) continue;
+      const id = ResolveContributionKey(reg.Metadata) || reg.RowID || 'unknown';
+      if (this.warnedFieldClaims.has(id)) continue;
+      this.warnedFieldClaims.add(id);
+      console.warn(
+        `[mj-record-form-container] contribution ${id} stands in for ${claimed.join(', ')}, but the ` +
+        `${entity.Name} form draws none of those fields. The panel has no section to render in.`,
       );
     }
   }
@@ -1388,6 +1420,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         continue;
       }
       const group = this.groupOfReplacedSection(replaced.get(row.Key))
+        ?? this.groupOfReplacedSection(this.sectionHostingFieldClaim(row.Key))
         ?? SlotChromeGroup(slotByKey.get(row.Key));
       if (group) map.set(row.Key, group);
     }
@@ -1428,6 +1461,27 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * slot-mounted ones in the DOM, because a replaced panel is hidden and so is already
    * out of the resolved chrome spec by the time this is asked.
    */
+  /**
+   * The section a field-claiming contribution renders inside, by contribution key.
+   *
+   * Such a panel draws at the top of the section holding its fields, so it belongs to that
+   * section's rail item — the same rule a section claim follows. Without it the panel is
+   * filed as a contribution in its own right and the rail lifts it out of the group it is
+   * visibly sitting in, which reads as the panel appearing twice.
+   */
+  private sectionHostingFieldClaim(contributionKey: string): string | undefined {
+    const entityName = this.EffectiveEntityInfo?.Name;
+    if (!entityName) return undefined;
+    for (const reg of this.formContributionRegistrations()) {
+      const meta = reg.Metadata;
+      if (!meta || meta.entity !== entityName) continue;
+      if (contributionRailKey(meta) !== contributionKey) continue;
+      const found = SectionDrawingAnyField(this.chromePanelSnapshots(), meta.replacesFieldNames ?? []);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
   private groupOfReplacedSection(sectionKey: string | undefined): 'details' | 'more' | null {
     if (!sectionKey) return null;
     const panel = this.allChromePanels().find((p) => p.SectionKey === sectionKey)

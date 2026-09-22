@@ -409,6 +409,20 @@ export function ClaimedRelatedSectionKeys(
 }
 
 /**
+ * Whether this registration is hosted by a section rather than by a slot.
+ *
+ * A contribution that names fields renders at the top of the section drawing them, which
+ * `<mj-form-field-panel-slot>` mounts. It still carries a `slot`, because every row does,
+ * so a slot host that went by slot alone would mount it a second time at the bottom of the
+ * form — the same panel twice, once in the group and once as a section of its own.
+ */
+export function ContributionClaimsFields(
+    metadata: Pick<FormPanelRegistrationMetadata, 'replacesFieldNames'> | null | undefined,
+): boolean {
+    return (metadata?.replacesFieldNames ?? []).some((name) => name.trim().length > 0);
+}
+
+/**
  * Field names the winning contributions stand in for, so the form stops drawing them.
  *
  * Separate from {@link ContributionHiddenSectionKeys} because the two hide different

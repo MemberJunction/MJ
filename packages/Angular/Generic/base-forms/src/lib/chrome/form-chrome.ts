@@ -94,6 +94,22 @@ export function FieldGroupsInDetails(
 }
 
 /**
+ * The section drawing any of these fields, which is where a field claim renders.
+ *
+ * Any, not all: a claim naming a field the form has stopped drawing still renders where
+ * its remaining fields are. The first match wins, and the claim is meant to name fields of
+ * one section, so there is normally only one.
+ */
+export function SectionDrawingAnyField(
+    panels: readonly FormChromePanelSnapshot[],
+    fieldNames: readonly string[],
+): string | undefined {
+    const wanted = new Set(fieldNames.map((name) => name.trim()).filter((name) => name.length > 0));
+    if (wanted.size === 0) return undefined;
+    return panels.find((panel) => (panel.Fields ?? []).some((field) => wanted.has(field.Name)))?.SectionKey;
+}
+
+/**
  * The rail item a contribution belongs to by virtue of the slot it mounts at.
  *
  * A slot says where a panel sits in the form body, and the rail groups that body — so the
