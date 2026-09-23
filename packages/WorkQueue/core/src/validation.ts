@@ -12,8 +12,8 @@ export const MAX_DEDUPLICATION_KEY_LENGTH = 200;
 export const MIN_DEDUPLICATION_TTL_SECONDS = 60;
 export const MAX_DEDUPLICATION_TTL_SECONDS = 2592000;
 
-/** No dot: a dotted name is MJ's `source.field` filter form, so a dotted attribute key could never be filtered. */
-const ATTRIBUTE_KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+/** No dot: a dotted name is MJ's `source.field` filter form, so a dotted attribute key could never be filtered. Shared with filter.ts so a filter can only name a key a producer could publish. */
+export const ATTRIBUTE_KEY_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const UUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 const RESERVED_ATTRIBUTE_PREFIXES = ['mj.', 'mj_'];
 const SIZE_PLACEHOLDER_MESSAGE_ID = '00000000-0000-0000-0000-000000000000';

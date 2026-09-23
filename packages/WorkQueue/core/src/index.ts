@@ -8,3 +8,4 @@ export * from './transport';
 export * from './operator';
 export * from './manifest';
 export * from './validation';
+export * from './filter';
