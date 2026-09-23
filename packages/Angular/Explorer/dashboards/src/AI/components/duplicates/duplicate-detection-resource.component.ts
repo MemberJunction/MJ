@@ -30,7 +30,8 @@ import {
     DupeEntityDocCandidate,
 } from './duplicate-detection-agent-context';
 import {
-    buildRunScopedReviewQueries,
+    buildMatchQueriesForDetailIDs,
+    buildRunScopedDetailsQuery,
     groupMatchesByDetail,
     selectCurrentRunForEntity,
 } from './duplicate-detection-run-scope';
@@ -622,7 +623,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.reconnectToActiveRun();
     }
 
-    /** Resolve the selected document's current run and load that run's details + matches. */
+    /**
+     * Resolve the selected document's current run and load that run's details, then the matches for
+     * exactly those details. Two round trips on purpose: the match filter is a plain `IN (...)` of the
+     * detail IDs, so it runs on any database behind the API (see duplicate-detection-run-scope.ts).
+     */
     private async loadReviewRowsForSelectedDocument(): Promise<void> {
         this.CurrentRun = selectCurrentRunForEntity(this.Runs, this.SelectedDocumentThresholds?.EntityID);
         this.Details = [];
@@ -630,24 +635,24 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         if (!this.CurrentRun) {
             return;
         }
-        const detailsEntity = this.ProviderToUse.EntityByName('MJ: Duplicate Run Details');
-        if (!detailsEntity) {
-            console.error('[DuplicateDetection] Entity metadata for "MJ: Duplicate Run Details" not found');
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const detailsResult = await rv.RunView<MJDuplicateRunDetailEntity>(buildRunScopedDetailsQuery(this.CurrentRun.ID));
+        if (!detailsResult.Success) {
+            console.error('[DuplicateDetection] Could not load run details:', detailsResult.ErrorMessage);
             return;
         }
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const [detailsResult, matchesResult] = await rv.RunViews(
-            buildRunScopedReviewQueries(this.CurrentRun.ID, {
-                SchemaName: detailsEntity.SchemaName,
-                BaseView: detailsEntity.BaseView,
-            })
+        this.Details = detailsResult.Results;
+        if (this.Details.length === 0) {
+            return;
+        }
+        const matchResults = await rv.RunViews<MJDuplicateRunDetailMatchEntity>(
+            buildMatchQueriesForDetailIDs(this.Details.map(d => d.ID))
         );
-        if (detailsResult.Success) {
-            this.Details = detailsResult.Results as MJDuplicateRunDetailEntity[];
+        const failed = matchResults.find(r => !r.Success);
+        if (failed) {
+            console.error('[DuplicateDetection] Could not load run matches:', failed.ErrorMessage);
         }
-        if (matchesResult.Success) {
-            this.Matches = matchesResult.Results as MJDuplicateRunDetailMatchEntity[];
-        }
+        this.Matches = matchResults.filter(r => r.Success).flatMap(r => r.Results);
     }
 
     /** Rebuild groups, entity names, ranges and columns from the loaded review rows. */

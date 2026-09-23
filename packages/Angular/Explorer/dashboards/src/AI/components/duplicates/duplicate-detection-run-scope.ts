@@ -7,7 +7,16 @@
  * grows with each run anyone performs. Restricting both sides to the run being viewed bounds the
  * load to that run's rows, which is what the board actually renders.
  *
- * Why the scoped queries still carry `IgnoreMaxRows`: details truncate to the newest N by date while
+ * The scoping is done in two steps, details first and then matches by the detail IDs just loaded,
+ * on purpose. Matches carry no DuplicateRunID of their own, and the only single-query alternative is
+ * a subquery against the details view, which needs the schema and view name quoted for the database
+ * behind the API. The Angular client has no dialect knowledge (`QuoteSchemaAndView` lives on the
+ * server-side database providers, not on the GraphQL provider), so a quoted reference built here is a
+ * guess: bracketed T-SQL identifiers are a syntax error on PostgreSQL, where this bug was reported.
+ * An `IN (...)` list of IDs is plain SQL everywhere and the join it produces is exact rather than
+ * re-derived. Cost: one extra round trip.
+ *
+ * Why both queries still carry `IgnoreMaxRows`: details truncate to the newest N by date while
  * matches truncate to the top N by probability. Those two subsets diverge as soon as a run exceeds
  * UserViewMaxRows (1000), leaving details with no loaded matches; buildGroups() then drops every
  * such detail and the board is empty with a full run behind it. Scoping bounds the volume, and the
@@ -25,11 +34,8 @@ export interface DuplicateRunCandidate {
     StartedAt: Date | string | null;
 }
 
-/** Schema and base view of `MJ: Duplicate Run Details`; matches are scoped through their parent detail. */
-export interface DuplicateRunDetailsViewInfo {
-    SchemaName: string;
-    BaseView: string;
-}
+/** How many detail IDs go into one matches query; keeps each `IN (...)` list a sane size. */
+export const MATCH_QUERY_DETAIL_CHUNK_SIZE = 500;
 
 const RUN_COMPLETE = 'Complete';
 const DETAIL_COMPLETE = 'Complete';
@@ -56,33 +62,48 @@ export function selectCurrentRunForEntity<T extends DuplicateRunCandidate>(
     return forEntity.find(r => r.ProcessingStatus === RUN_COMPLETE) ?? forEntity[0];
 }
 
-/**
- * Build the two review-row queries for ONE run: its completed details, and the matches whose parent
- * detail belongs to that run. Both are bounded by the run, and both keep `IgnoreMaxRows` so the two
- * sides stay a consistent set (see the file comment).
- */
-export function buildRunScopedReviewQueries(
-    runID: string,
-    detailsView: DuplicateRunDetailsViewInfo
-): [RunViewParams, RunViewParams] {
-    const runLiteral = EscapeSQLString(runID);
-    const detailsQuery: RunViewParams = {
+/** The completed details of ONE run, newest first. Bounded by the run; `IgnoreMaxRows` per the file comment. */
+export function buildRunScopedDetailsQuery(runID: string): RunViewParams {
+    return {
         EntityName: 'MJ: Duplicate Run Details',
-        ExtraFilter: `DuplicateRunID='${runLiteral}' AND MatchStatus='${DETAIL_COMPLETE}'`,
+        ExtraFilter: `DuplicateRunID='${EscapeSQLString(runID)}' AND MatchStatus='${DETAIL_COMPLETE}'`,
         OrderBy: '__mj_CreatedAt DESC',
         IgnoreMaxRows: true,
         ResultType: 'entity_object'
     };
-    const matchesQuery: RunViewParams = {
-        EntityName: 'MJ: Duplicate Run Detail Matches',
-        ExtraFilter:
-            `DuplicateRunDetailID IN (SELECT ID FROM [${detailsView.SchemaName}].[${detailsView.BaseView}] ` +
-            `WHERE DuplicateRunID='${runLiteral}')`,
-        OrderBy: 'MatchProbability DESC',
-        IgnoreMaxRows: true,
-        ResultType: 'entity_object'
-    };
-    return [detailsQuery, matchesQuery];
+}
+
+/**
+ * The matches whose parent detail is one of `detailIDs`, as one query per chunk of
+ * {@link MATCH_QUERY_DETAIL_CHUNK_SIZE} IDs. No IDs, no queries. Plain `IN (...)` so it runs on any
+ * database behind the API; `IgnoreMaxRows` per the file comment.
+ */
+export function buildMatchQueriesForDetailIDs(
+    detailIDs: readonly string[],
+    chunkSize: number = MATCH_QUERY_DETAIL_CHUNK_SIZE
+): RunViewParams[] {
+    const queries: RunViewParams[] = [];
+    for (let start = 0; start < detailIDs.length; start += chunkSize) {
+        const literals = detailIDs.slice(start, start + chunkSize).map(id => `'${EscapeSQLString(id)}'`);
+        queries.push({
+            EntityName: 'MJ: Duplicate Run Detail Matches',
+            ExtraFilter: `DuplicateRunDetailID IN (${literals.join(',')})`,
+            OrderBy: 'MatchProbability DESC',
+            IgnoreMaxRows: true,
+            ResultType: 'entity_object'
+        });
+    }
+    return queries;
+}
+
+/** The detail IDs a matches query built by {@link buildMatchQueriesForDetailIDs} covers. */
+export function detailIDsCoveredByMatchQuery(query: RunViewParams): string[] {
+    const filter = typeof query.ExtraFilter === 'string' ? query.ExtraFilter : '';
+    const list = /DuplicateRunDetailID IN \((.*)\)/s.exec(filter)?.[1] ?? '';
+    return list
+        .split(/','/)
+        .map(part => part.replace(/^'|'$/g, '').replace(/''/g, "'"))
+        .filter(part => part.length > 0);
 }
 
 /** Index matches by their parent detail; the join buildGroups() performs. */

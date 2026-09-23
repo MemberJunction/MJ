@@ -6,13 +6,19 @@
  * probability first) to DIFFERENT subsets, so the details that load have no matches and every group
  * is dropped. The board must load ONE run's rows, and all of them, so the join is complete.
  *
- * The fake RunViews below reproduces the real truncation semantics (OrderBy, then cut at 1000 unless
- * IgnoreMaxRows) so the queries are exercised the way the server would run them.
+ * Matches are scoped by the detail IDs already loaded, not by a subquery: the client cannot quote a
+ * schema/view for the database behind the API, so the tests pin WHICH detail IDs the match queries
+ * cover, never the SQL text of the filter. The fake RunViews below reproduces the real truncation
+ * semantics (OrderBy, then cut at 1000 unless IgnoreMaxRows) so the queries are exercised the way
+ * the server would run them.
  */
 import { describe, it, expect } from 'vitest';
 import type { RunViewParams, RunViewResult } from '@memberjunction/core';
 import {
-    buildRunScopedReviewQueries,
+    MATCH_QUERY_DETAIL_CHUNK_SIZE,
+    buildMatchQueriesForDetailIDs,
+    buildRunScopedDetailsQuery,
+    detailIDsCoveredByMatchQuery,
     groupMatchesByDetail,
     selectCurrentRunForEntity,
 } from '../AI/components/duplicates/duplicate-detection-run-scope';
@@ -22,7 +28,6 @@ const ENTITY_PEOPLE = 'E0000002-0000-0000-0000-000000000002';
 const RUN_ORGS_OLD = 'A0000000-0000-0000-0000-00000000000A';
 const RUN_ORGS_NEW = 'B0000000-0000-0000-0000-00000000000B';
 const RUN_PEOPLE = 'C0000000-0000-0000-0000-00000000000C';
-const DETAILS_VIEW = { SchemaName: '__mj', BaseView: 'vwDuplicateRunDetails' };
 const MAX_ROWS = 1000;
 
 interface DetailRow { ID: string; DuplicateRunID: string; MatchStatus: string; __mj_CreatedAt: Date }
@@ -47,8 +52,10 @@ function makeRun(runID: string, createdAt: Date, probability: number, detailCoun
  * run): the divergence the board must never see. A third run for another entity is noise.
  */
 function buildStore() {
-    const old = makeRun(RUN_ORGS_OLD, new Date('2026-09-01T00:00:00Z'), 0.95, 1200, 2);
-    const recent = makeRun(RUN_ORGS_NEW, new Date('2026-09-15T00:00:00Z'), 0.75, 1200, 2);
+    // Three matches per detail: a 500-detail chunk then holds 1500 matches, above the cap, so the
+    // match side of the join depends on IgnoreMaxRows too.
+    const old = makeRun(RUN_ORGS_OLD, new Date('2026-09-01T00:00:00Z'), 0.95, 1200, 3);
+    const recent = makeRun(RUN_ORGS_NEW, new Date('2026-09-15T00:00:00Z'), 0.75, 1200, 3);
     const people = makeRun(RUN_PEOPLE, new Date('2026-09-20T00:00:00Z'), 0.99, 50, 1);
     return {
         details: [...old.details, ...recent.details, ...people.details],
@@ -63,17 +70,17 @@ function sqlText(value: RunViewParams['ExtraFilter']): string {
 
 /** A RunViews double with a real entity's truncation semantics: filter, order, cut at 1000 unless IgnoreMaxRows. */
 function fakeRunViews(store: { details: DetailRow[]; matches: MatchRow[] }) {
-    const runOfDetail = new Map(store.details.map(d => [d.ID, d.DuplicateRunID]));
     const runQuery = (q: RunViewParams): RunViewResult => {
-        const filter = sqlText(q.ExtraFilter);
-        const scopedRun = /DuplicateRunID='([^']*)'/.exec(filter)?.[1];
         let rows: Array<DetailRow | MatchRow>;
         if (q.EntityName === 'MJ: Duplicate Run Details') {
+            const filter = sqlText(q.ExtraFilter);
+            const scopedRun = /DuplicateRunID='([^']*)'/.exec(filter)?.[1];
             const completeOnly = /MatchStatus='Complete'/.test(filter);
             rows = store.details.filter(d =>
                 (!scopedRun || d.DuplicateRunID === scopedRun) && (!completeOnly || d.MatchStatus === 'Complete'));
         } else if (q.EntityName === 'MJ: Duplicate Run Detail Matches') {
-            rows = store.matches.filter(m => !scopedRun || runOfDetail.get(m.DuplicateRunDetailID) === scopedRun);
+            const covered = new Set(detailIDsCoveredByMatchQuery(q));
+            rows = store.matches.filter(m => covered.size === 0 || covered.has(m.DuplicateRunDetailID));
         } else {
             throw new Error(`unexpected entity ${q.EntityName}`);
         }
@@ -88,6 +95,15 @@ function fakeRunViews(store: { details: DetailRow[]; matches: MatchRow[] }) {
         return { Success: true, Results: results, RowCount: results.length, TotalRowCount: rows.length } as RunViewResult;
     };
     return (queries: RunViewParams[]): RunViewResult[] => queries.map(runQuery);
+}
+
+/** The two-step load the board performs: the run's details, then the matches for exactly those details. */
+function loadReviewRows(runViews: ReturnType<typeof fakeRunViews>, runID: string) {
+    const [detailsResult] = runViews([buildRunScopedDetailsQuery(runID)]);
+    const details = detailsResult.Results as DetailRow[];
+    const matchQueries = buildMatchQueriesForDetailIDs(details.map(d => d.ID));
+    const matches = runViews(matchQueries).flatMap(r => r.Results as MatchRow[]);
+    return { details, matchQueries, matches };
 }
 
 function run(ID: string, EntityID: string, ProcessingStatus: string, StartedAt: string) {
@@ -131,57 +147,64 @@ describe('selectCurrentRunForEntity', () => {
     });
 });
 
-describe('buildRunScopedReviewQueries', () => {
-    it('scopes details to the run and its completed rows, and matches through their parent detail', () => {
-        const [details, matches] = buildRunScopedReviewQueries(RUN_ORGS_NEW, DETAILS_VIEW);
-        expect(details.EntityName).toBe('MJ: Duplicate Run Details');
-        expect(details.ExtraFilter).toContain(`DuplicateRunID='${RUN_ORGS_NEW}'`);
-        expect(details.ExtraFilter).toContain(`MatchStatus='Complete'`);
-        expect(matches.EntityName).toBe('MJ: Duplicate Run Detail Matches');
-        expect(matches.ExtraFilter).toContain('DuplicateRunDetailID IN (SELECT ID FROM [__mj].[vwDuplicateRunDetails]');
-        expect(matches.ExtraFilter).toContain(`DuplicateRunID='${RUN_ORGS_NEW}'`);
-    });
-
-    it('keeps IgnoreMaxRows on BOTH sides so a run above the row cap still joins completely', () => {
-        // Details truncate by date, matches by probability; inside one large run those subsets still
-        // diverge, so the cap must stay off on both queries. See the module comment.
-        const [details, matches] = buildRunScopedReviewQueries(RUN_ORGS_NEW, DETAILS_VIEW);
-        expect(details.IgnoreMaxRows).toBe(true);
-        expect(matches.IgnoreMaxRows).toBe(true);
+describe('buildRunScopedDetailsQuery', () => {
+    it('scopes details to the run and its completed rows, with the row cap off', () => {
+        const q = buildRunScopedDetailsQuery(RUN_ORGS_NEW);
+        expect(q.EntityName).toBe('MJ: Duplicate Run Details');
+        expect(q.ExtraFilter).toContain(`DuplicateRunID='${RUN_ORGS_NEW}'`);
+        expect(q.ExtraFilter).toContain(`MatchStatus='Complete'`);
+        expect(q.IgnoreMaxRows).toBe(true);
     });
 
     it('doubles a stray quote in the run ID instead of letting it close the literal', () => {
-        const [details, matches] = buildRunScopedReviewQueries("abc'def", DETAILS_VIEW);
-        expect(details.ExtraFilter).toContain("DuplicateRunID='abc''def'");
-        expect(matches.ExtraFilter).toContain("DuplicateRunID='abc''def'");
+        expect(buildRunScopedDetailsQuery("abc'def").ExtraFilter).toContain("DuplicateRunID='abc''def'");
+    });
+});
+
+describe('buildMatchQueriesForDetailIDs', () => {
+    it('covers exactly the detail IDs it was given, chunked, and nothing for an empty list', () => {
+        const ids = Array.from({ length: 1200 }, (_, i) => `D${i}`);
+        const queries = buildMatchQueriesForDetailIDs(ids);
+        expect(queries).toHaveLength(Math.ceil(1200 / MATCH_QUERY_DETAIL_CHUNK_SIZE));
+        expect(queries.every(q => q.EntityName === 'MJ: Duplicate Run Detail Matches')).toBe(true);
+        expect(queries.every(q => q.IgnoreMaxRows === true)).toBe(true);
+        const covered = queries.flatMap(detailIDsCoveredByMatchQuery);
+        expect(covered).toEqual(ids);
+        expect(queries.map(q => detailIDsCoveredByMatchQuery(q).length)).toEqual([500, 500, 200]);
+        expect(buildMatchQueriesForDetailIDs([])).toEqual([]);
+    });
+
+    it('keeps an ID with a quote intact through escaping and back', () => {
+        const [q] = buildMatchQueriesForDetailIDs(["x'y", 'z']);
+        expect(detailIDsCoveredByMatchQuery(q)).toEqual(["x'y", 'z']);
     });
 });
 
 describe('review rows for one run among several, each above the 1000-row cap', () => {
     const store = buildStore();
     const runViews = fakeRunViews(store);
-    const [detailsResult, matchesResult] = runViews(buildRunScopedReviewQueries(RUN_ORGS_NEW, DETAILS_VIEW));
-    const details = detailsResult.Results as DetailRow[];
-    const matches = matchesResult.Results as MatchRow[];
+    const { details, matchQueries, matches } = loadReviewRows(runViews, RUN_ORGS_NEW);
 
-    it("returns only the selected run's rows, not the whole table", () => {
+    it("returns only the selected run's details, all of them", () => {
         expect(details).toHaveLength(1200);
         expect(details.every(d => d.DuplicateRunID === RUN_ORGS_NEW)).toBe(true);
-        expect(matches).toHaveLength(2400);
-        expect(matches.every(m => m.DuplicateRunDetailID.startsWith(RUN_ORGS_NEW))).toBe(true);
+    });
+
+    it("asks for matches of exactly the selected run's details, no more and no fewer", () => {
+        const covered = matchQueries.flatMap(detailIDsCoveredByMatchQuery).sort();
+        expect(covered).toEqual(details.map(d => d.ID).sort());
     });
 
     it('joins every detail of the selected run to all of its matches, so every group builds', () => {
+        expect(matches).toHaveLength(3600);
         const byDetail = groupMatchesByDetail(matches);
-        const joined = details.filter(d => (byDetail.get(d.ID)?.length ?? 0) > 0);
-        expect(joined).toHaveLength(1200);
-        expect(details.every(d => byDetail.get(d.ID)?.length === 2)).toBe(true);
+        expect(details.every(d => byDetail.get(d.ID)?.length === 3)).toBe(true);
     });
 
     it('the same store loaded unscoped shows the trap: newest details, but none of their matches', () => {
         // Documents WHY scoping + IgnoreMaxRows are both needed: the legacy unscoped, capped queries
-        // load the 1000 newest details (all from the new run) and the 1000 top matches (all from the
-        // old run), and nothing joins.
+        // load the 1000 newest details (mostly from the new run) and the 1000 top matches (from the
+        // old run), and nothing from the new run joins.
         const [legacyDetails, legacyMatches] = runViews([
             { EntityName: 'MJ: Duplicate Run Details', ExtraFilter: "MatchStatus='Complete'", OrderBy: '__mj_CreatedAt DESC' },
             { EntityName: 'MJ: Duplicate Run Detail Matches', OrderBy: 'MatchProbability DESC' },
