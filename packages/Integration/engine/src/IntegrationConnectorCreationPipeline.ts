@@ -19,6 +19,7 @@ import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSc
 import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
 import { getHeapStatistics } from 'node:v8';
+import { totalmem } from 'node:os';
 
 /**
  * Has the heap reached the point where a long stage must stop taking on new work?
@@ -33,6 +34,43 @@ import { getHeapStatistics } from 'node:v8';
 export function ShouldStopSamplingForHeap(usedBytes: number, limitBytes: number, stopFraction: number): boolean {
     if (!(limitBytes > 0) || !(stopFraction > 0)) return false;
     return usedBytes / limitBytes >= stopFraction;
+}
+
+/** One reading of the two numbers the two memory ceilings are measured against. */
+export interface MemorySample {
+    /** V8 heap in use, bytes. */
+    HeapUsed: number;
+    /** V8's heap ceiling (`--max-old-space-size`), bytes; 0 when unknown. */
+    HeapLimit: number;
+    /** Resident set of this process, bytes. */
+    RSS: number;
+    /** Physical memory of the box, bytes; 0 when unknown. */
+    TotalMemory: number;
+}
+
+/** The live reading. Cheap enough per object: counters V8 and the OS already maintain. */
+export function ReadMemorySample(): MemorySample {
+    const heap = getHeapStatistics();
+    return {
+        HeapUsed: heap.used_heap_size,
+        HeapLimit: heap.heap_size_limit,
+        RSS: process.memoryUsage().rss,
+        TotalMemory: totalmem(),
+    };
+}
+
+/**
+ * Stop when EITHER ceiling is close. The heap gate alone cannot save a process the kernel kills:
+ * the kernel measures resident memory against the box, V8 measures the heap against its own
+ * limit, and the two diverge — parsed response bodies, driver buffers and heap fragmentation all
+ * sit in RSS outside the live heap, so RSS runs well above it under load. Observed 2026-09-18 and
+ * 2026-09-21 on a 15.7 GB box: node killed at 15.3 GB and 15.6 GB anon-RSS mid-discovery while
+ * the heap was still under its ceiling, so the heap gate never fired. An unknown reading (a
+ * limit or a box size of 0) is not evidence of pressure, as for the heap.
+ */
+export function ShouldStopForMemory(sample: MemorySample, heapStopFraction: number, rssStopFraction: number): boolean {
+    return ShouldStopSamplingForHeap(sample.HeapUsed, sample.HeapLimit, heapStopFraction)
+        || ShouldStopSamplingForHeap(sample.RSS, sample.TotalMemory, rssStopFraction);
 }
 
 /** Options for the creation/refresh pipeline run. */
@@ -184,6 +222,12 @@ export class IntegrationConnectorCreationPipeline {
      * gathered, which is the entire point of stopping rather than being stopped.
      */
     private static readonly HEAP_STOP_FRACTION = 0.92;
+    /**
+     * Resident-set fraction of the box's memory past which the two long stages stop. Lower than
+     * the heap fraction on purpose: the box is shared with everything else that runs on it, and
+     * the kernel does not warn first. See ShouldStopForMemory.
+     */
+    private static readonly RSS_STOP_FRACTION = 0.80;
     /** Just-completed runs by CompanyIntegrationID — coalesces a *sequential* duplicate within the window. */
     private static readonly recentRuns = new Map<string, { result: ConnectorCreationPipelineResult; at: number }>();
     /** Default coalesce window (ms) when the env override is unset/invalid. */
@@ -505,14 +549,11 @@ export class IntegrationConnectorCreationPipeline {
         // what is gathered, let the stage finish and persist. A smaller catalog beats no catalog.
         // Read synchronously and per object: `used_heap_size` is a counter V8 already maintains,
         // and the alternative (the async whole-machine reading) cannot be afforded per item.
-        const outOfMemory = (): boolean => {
-            const heap = getHeapStatistics();
-            return ShouldStopSamplingForHeap(
-                heap.used_heap_size,
-                heap.heap_size_limit,
-                IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
-            );
-        };
+        const outOfMemory = (): boolean => ShouldStopForMemory(
+            ReadMemorySample(),
+            IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
+            IntegrationConnectorCreationPipeline.RSS_STOP_FRACTION,
+        );
         try {
             // U11 — determinate discovery progress: surface scanned/total on the structured
             // stream (IntegrationTailRunEvents carries counts) so a client can render a real
@@ -906,14 +947,11 @@ export class IntegrationConnectorCreationPipeline {
 
         // The same reading and the same threshold Introspect uses, so the two long stages agree
         // about what "out of room" means.
-        const outOfMemoryPK = (): boolean => {
-            const heap = getHeapStatistics();
-            return ShouldStopSamplingForHeap(
-                heap.used_heap_size,
-                heap.heap_size_limit,
-                IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
-            );
-        };
+        const outOfMemoryPK = (): boolean => ShouldStopForMemory(
+            ReadMemorySample(),
+            IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
+            IntegrationConnectorCreationPipeline.RSS_STOP_FRACTION,
+        );
         // This stage runs right after the run's largest write, so it starts wherever Introspect
         // left the heap, and then works a tight loop: a classifier verdict per object and a Save()
         // for each nominee. Two things keep it from being the stage that dies where Introspect

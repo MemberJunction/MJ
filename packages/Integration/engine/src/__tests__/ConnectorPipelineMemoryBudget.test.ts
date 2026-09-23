@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ShouldStopSamplingForHeap } from '../IntegrationConnectorCreationPipeline.js';
+import { ShouldStopSamplingForHeap, ShouldStopForMemory } from '../IntegrationConnectorCreationPipeline.js';
 
 /**
  * Introspect has two budgets, and only one of them used to exist.
@@ -61,5 +61,43 @@ describe('ShouldStopSamplingForHeap', () => {
         const used = 3_000 * 1024 * 1024;
         expect(ShouldStopSamplingForHeap(used, 8_000 * 1024 * 1024, STOP)).toBe(false);
         expect(ShouldStopSamplingForHeap(used, 3_100 * 1024 * 1024, STOP)).toBe(true);
+    });
+});
+
+/**
+ * The heap is not the only ceiling. The kernel's oom-killer measures resident memory against the
+ * box, V8 measures the heap against its own limit, and the two diverge under load (parsed response
+ * bodies, driver buffers, fragmentation). Observed 2026-09-18 and 2026-09-21 on a 15.7 GB box:
+ * node killed at 15.3 GB and 15.6 GB anon-RSS with the heap still under its ceiling, so the heap
+ * gate never fired. Both readings are judged, each against its own ceiling.
+ */
+describe('ShouldStopForMemory', () => {
+    const GB = 1024 * 1024 * 1024;
+    const HEAP = 0.92;
+    const RSS = 0.8;
+    const room = { HeapUsed: 2 * GB, HeapLimit: 8 * GB, RSS: 4 * GB, TotalMemory: 16 * GB };
+
+    it('keeps going while both ceilings are far', () => {
+        expect(ShouldStopForMemory(room, HEAP, RSS)).toBe(false);
+    });
+
+    it('stops on the heap alone', () => {
+        expect(ShouldStopForMemory({ ...room, HeapUsed: 7.5 * GB }, HEAP, RSS)).toBe(true);
+    });
+
+    it('stops on resident memory alone — the case the kernel kills on', () => {
+        // Heap well under its ceiling, RSS at 15.3 of 15.7 GB: the 2026-09-18 kill, one reading earlier.
+        expect(ShouldStopForMemory({ HeapUsed: 6 * GB, HeapLimit: 12 * GB, RSS: 15.3 * GB, TotalMemory: 15.7 * GB }, HEAP, RSS)).toBe(true);
+    });
+
+    it('an unknown box size is not pressure', () => {
+        expect(ShouldStopForMemory({ ...room, RSS: 15 * GB, TotalMemory: 0 }, HEAP, RSS)).toBe(false);
+    });
+
+    it('judges RSS against the box and the heap against its own limit', () => {
+        // The same 10 GB resident is fine on a 32 GB box and fatal on a 12 GB one, at identical heap figures.
+        const s = { HeapUsed: 4 * GB, HeapLimit: 12 * GB, RSS: 10 * GB, TotalMemory: 32 * GB };
+        expect(ShouldStopForMemory(s, HEAP, RSS)).toBe(false);
+        expect(ShouldStopForMemory({ ...s, TotalMemory: 12 * GB }, HEAP, RSS)).toBe(true);
     });
 });
