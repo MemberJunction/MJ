@@ -823,7 +823,24 @@ On the release PR:
    >
    > # 2. The integration tier CI never runs on a release branch
    > RUN_MUTATION_TESTS=1 RUN_SEARCH_TESTS=1 pnpm run test:integration   # supersets integration.yml (see below)
+   >
+   > # 3. publish.yml's "Update version and check against expected" step — dry-run it in a
+   > #    throwaway worktree (it rewrites every package.json), then check the version it produced
+   > W=$(mktemp -d)/cs && git worktree add -q --detach "$W" HEAD
+   > (cd "$W" && ln -s "$OLDPWD/node_modules" node_modules && node node_modules/@changesets/cli/bin.js version)
+   > node -p "require('$W/packages/MJServer/package.json').version"   # must be X.Y.0-edge.N
+   >
+   > # 4. publish.yml's back-merge — merge that version-bumped tree into current next. Any
+   > #    conflicted path other than pnpm-lock.yaml makes the real back-merge abort AFTER npm publish.
+   > (cd "$W" && git -c user.name=x -c user.email=x@x commit -qam rehearsal)
+   > N=$(mktemp -d)/next && git fetch -q origin next && git worktree add -q --detach "$N" origin/next
+   > (cd "$N" && git merge --no-edit "$(git -C "$W" rev-parse HEAD)" >/dev/null; git diff --name-only --diff-filter=U)
+   > git worktree remove --force "$N"; git worktree remove --force "$W"
    > ```
+   >
+   > A step-4 conflict is not a reason to hold the release — it is usually a manifest `next` changed after the cut (6.2.0-edge.0: `next` added a dependency to `core-entity-forms/package.json` while the version bump rewrote the neighbouring lines). Knowing it in advance means the fallback back-merge PR is expected, and its resolution (the release's versions **plus** `next`'s change) can be prepared before the merge instead of investigated after.
+   >
+   > Step 3 exists because `changeset version` validates **every** pending changeset, including the ones that arrived from `next` — and `check:changeset` only looks at changesets added on the branch. On 6.2.0-edge.0 one changeset from `next` named a package that does not exist (`@memberjunction/ai-core`); `changeset version` refuses to run at all on that, so `publish.yml` failed after the merge, before publishing, and shipping took a third release PR.
    >
    > 🚨 **Run the full `npm test`, not just the suites of the packages you changed.** A fix is often correct and still breaks a *consumer's* test that pinned the old behaviour. On 6.2.0-edge.0 a `@memberjunction/sql-parser` fix passed all 684 of its own tests; `@memberjunction/core-entities-server` — which consumes the parser — had two tests asserting the old limitation, the merged release failed `publish.yml`'s gate, and shipping took a second release PR. `--force` is deliberate: turbo would otherwise replay cached passes for packages whose own sources did not change.
    >
