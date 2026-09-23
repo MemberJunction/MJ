@@ -257,13 +257,13 @@ describe('ConversationListComponent (DOM) — modifier-click selection', () => {
     expect(selected(f.componentInstance)).toEqual(['A1', 'A2', 'U1']);
   });
 
-  it('a plain click still toggles one row when the mode was opened from the menu', () => {
+  it('a plain click collapses the selection however the mode was started', () => {
     const f = render();
     f.componentInstance.toggleSelectionMode();
-    f.componentInstance.handleConversationClick(byId('U1'), click());
+    f.componentInstance.selectedConversationIds.add('U1');
     f.componentInstance.handleConversationClick(byId('U2'), click());
-    expect(selected(f.componentInstance)).toEqual(['U1', 'U2']);
-    expect(f.componentInstance.isSelectionMode).toBe(true);
+    expect(selected(f.componentInstance)).toEqual([]);
+    expect(f.componentInstance.isSelectionMode).toBe(false);
   });
 
   it('leaves selection mode when a modifier-click deselects the last row', () => {
@@ -273,13 +273,13 @@ describe('ConversationListComponent (DOM) — modifier-click selection', () => {
     expect(f.componentInstance.isSelectionMode).toBe(false);
   });
 
-  it('stays in selection mode with nothing selected when the mode was opened from the menu', () => {
+  it('leaves selection mode when the last row is deselected, however the mode was started', () => {
     const f = render();
     f.componentInstance.toggleSelectionMode();
-    f.componentInstance.handleConversationClick(byId('U1'), click());
-    f.componentInstance.handleConversationClick(byId('U1'), click());
+    f.componentInstance.handleConversationClick(byId('U1'), click('ctrl'));
+    f.componentInstance.handleConversationClick(byId('U1'), click('ctrl'));
     expect(selected(f.componentInstance)).toEqual([]);
-    expect(f.componentInstance.isSelectionMode).toBe(true);
+    expect(f.componentInstance.isSelectionMode).toBe(false);
   });
 
   it('Escape leaves selection mode and clears the selection', () => {
@@ -578,11 +578,11 @@ describe('ConversationListComponent (DOM) — clicking empty space clears the se
     expect(f.componentInstance.isSelectionMode).toBe(false);
   });
 
-  it('clicking below the conversations clears the selection but keeps a menu-opened mode', () => {
+  it('clicking below the conversations ends selection mode however it was started', () => {
     const f = renderSelected(['U1', 'U2'], true);
     clickBlankArea(f);
     expect(selected(f.componentInstance)).toEqual([]);
-    expect(f.componentInstance.isSelectionMode).toBe(true);
+    expect(f.componentInstance.isSelectionMode).toBe(false);
   });
 
   it('does not open or close any conversation', () => {
@@ -753,13 +753,6 @@ describe('ConversationListComponent (DOM) — a Ctrl-click selection includes th
     f.componentInstance.handleConversationClick(byId('P1'), click('ctrl')); // drop the open one
     f.componentInstance.handleConversationClick(byId('U2'), click('ctrl'));
     expect(selected(f.componentInstance)).toEqual(['U1', 'U2']);
-  });
-
-  it('does not seed selection mode opened from the menu', () => {
-    const f = render({ selectedConversationId: 'P1' });
-    f.componentInstance.toggleSelectionMode();
-    f.componentInstance.handleConversationClick(byId('U1'), click());
-    expect(selected(f.componentInstance)).toEqual(['U1']);
   });
 
   it('does not add an open conversation hidden inside a collapsed folder', () => {

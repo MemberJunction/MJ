@@ -117,6 +117,15 @@ describe('ConversationListComponent (DOM) — chrome toggles', () => {
     expect(f.componentInstance.searchQuery).toBe('');
   });
 
+  it('the ⋯ menu no longer offers Select Conversations — selection starts from the list itself', () => {
+    const f = render();
+    (query(f, '.btn-menu') as HTMLButtonElement).click();
+    f.detectChanges();
+    const labels = queryAll(f, '.header-dropdown-menu .dropdown-item').map(b => b.textContent?.trim() ?? '');
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels.some(l => l.includes('Select Conversations'))).toBe(false);
+  });
+
   it('hides the New Conversation button when showNewConversationButton=false', () => {
     const f = render({ showNewConversationButton: false });
     expect(query(f, '.btn-new-conversation')).toBeNull();

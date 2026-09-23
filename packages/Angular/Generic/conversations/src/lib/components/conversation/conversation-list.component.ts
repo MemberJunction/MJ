@@ -90,10 +90,6 @@ interface ListContextMenu {
                     <i class="fas fa-sync-alt" [class.fa-spin]="isRefreshing"></i>
                     <span>{{ isRefreshing ? 'Refreshing...' : 'Refresh' }}</span>
                   </button>
-                  <button class="dropdown-item" (click)="onSelectConversationsClick($event)">
-                    <i class="fas fa-check-square"></i>
-                    <span>Select Conversations</span>
-                  </button>
                   <button class="dropdown-item" (click)="onToggleGroupByClick($event)">
                     <i class="fas" [class.fa-folder-tree]="groupBy !== 'project'" [class.fa-list]="groupBy === 'project'"></i>
                     <span>{{ groupBy === 'project' ? 'Show as flat list' : 'Group by folder' }}</span>
@@ -1268,8 +1264,6 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** Row a Shift-click ranges from — the last row picked without Shift. */
   private selectionAnchorId: string | null = null;
 
-  /** True when selection mode was started by a modifier-click rather than the ⋯ menu. */
-  private selectionModeAutoEntered: boolean = false;
   public isHeaderMenuOpen: boolean = false;
 
   public isRefreshing: boolean = false;
@@ -1437,12 +1431,6 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   public closeHeaderMenu(): void {
     this.isHeaderMenuOpen = false;
-  }
-
-  public onSelectConversationsClick(event: Event): void {
-    event.stopPropagation();
-    this.toggleSelectionMode();
-    this.closeHeaderMenu();
   }
 
   public onToggleGroupByClick(event: Event): void {
@@ -2096,10 +2084,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   public contextSelectAll(): void {
     this.closeContextMenu();
-    if (!this.isSelectionMode) {
-      this.isSelectionMode = true;
-      this.selectionModeAutoEntered = true;
-    }
+    this.isSelectionMode = true;
     this.selectAll();
   }
 
@@ -2301,7 +2286,6 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       this.exitSelectionMode();
     } else {
       this.isSelectionMode = true;
-      this.selectionModeAutoEntered = false;
     }
   }
 
@@ -2316,28 +2300,18 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     const target = event.target as HTMLElement | null;
     if (target?.closest('.conversation-item, .folder-row, .section-header, button')) return;
 
-    if (this.selectionModeAutoEntered) {
-      this.exitSelectionMode();
-    } else {
-      // Mode opened from the ⋯ menu stays open until Cancel — only the picks go.
-      this.selectedConversationIds.clear();
-      this.selectionAnchorId = null;
-    }
+    this.exitSelectionMode();
   }
 
   private exitSelectionMode(): void {
     this.isSelectionMode = false;
-    this.selectionModeAutoEntered = false;
     this.selectedConversationIds.clear();
     this.selectionAnchorId = null;
   }
 
-  /**
-   * Selection mode a modifier-click opened closes itself once the last row is
-   * deselected; mode opened from the ⋯ menu stays until Cancel.
-   */
-  private exitAutoSelectionModeIfEmpty(): void {
-    if (this.selectionModeAutoEntered && this.selectedConversationIds.size === 0) {
+  /** Selection mode closes itself once the last row is deselected. */
+  private exitSelectionModeIfEmpty(): void {
+    if (this.selectedConversationIds.size === 0) {
       this.exitSelectionMode();
     }
   }
@@ -2548,7 +2522,6 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       const entering = !this.isSelectionMode;
       if (entering) {
         this.isSelectionMode = true;
-        this.selectionModeAutoEntered = true;
       }
       if (isRangeClick) {
         this.selectRangeTo(conversation.ID);
@@ -2560,21 +2533,13 @@ export class ConversationListComponent implements OnInit, OnDestroy {
           this.toggleConversationSelection(conversation.ID);
         }
         this.selectionAnchorId = conversation.ID;
-        this.exitAutoSelectionModeIfEmpty();
+        this.exitSelectionModeIfEmpty();
       }
       return;
     }
 
-    // A plain click collapses a modifier-built selection down to this one
-    // conversation, the way a file browser does. Selection mode opened from the
-    // ⋯ menu keeps toggling instead — tapping rows is the only way to pick them
-    // there, so a plain click must not throw the selection away.
-    if (this.isSelectionMode && !this.selectionModeAutoEntered) {
-      this.toggleConversationSelection(conversation.ID);
-      this.selectionAnchorId = conversation.ID;
-      return;
-    }
-
+    // A plain click collapses the selection down to this one conversation, the
+    // way a file browser does.
     if (this.isSelectionMode) {
       this.exitSelectionMode();
     }
