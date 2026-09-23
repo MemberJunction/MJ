@@ -18,6 +18,10 @@ type ParseInternals = {
   parseDateOutput(s: string, skip: boolean, errs: ValidationErrorInfo[]): Date;
   parseObjectOutput(s: string, prompt: unknown, skip: boolean, clean: boolean, errs: ValidationErrorInfo[], run: unknown, params?: unknown): Promise<unknown>;
   validateAgainstSchema(parsed: unknown, outputExample: string, promptId: string): Promise<ValidationErrorInfo[]>;
+  parseAndValidateResultEnhanced(
+    modelResult: unknown, prompt: unknown, skipValidation: boolean, cleanValidationSyntax: boolean,
+    currentPromptRun: unknown, params?: unknown
+  ): Promise<{ result: unknown; validationErrors?: ValidationErrorInfo[] }>;
 };
 function priv(r: AIPromptRunner): ParseInternals { return r as unknown as ParseInternals; }
 
@@ -148,4 +152,49 @@ describe('validateAgainstSchema', () => {
     expect(errs.length).toBe(1);
     expect(errs[0].Message).toMatch(/Invalid OutputExample JSON/);
   });
+});
+
+/**
+ * A turn that is nothing but native tool calls.
+ *
+ * Every provider returns `content: null` for it, so the emptiness check that guards text parsing
+ * fires on the one response native mode is designed to produce. Under `ValidationBehavior: 'Warn'`
+ * that is a spurious warning on every native turn; under `'Strict'` it is a retry loop that cannot
+ * terminate, because the model already answered correctly and will answer the same way again.
+ */
+describe('parseAndValidateResultEnhanced — native tool calls', () => {
+    const objectPrompt = { ID: 'p1', OutputType: 'object', ValidationBehavior: 'Strict', OutputExample: null };
+    const turn = (message: Record<string, unknown>) => ({
+        success: true,
+        data: { choices: [{ message }] }
+    });
+
+    it('accepts a tool-call-only turn instead of calling it "no output"', async () => {
+        const result = await priv(runner).parseAndValidateResultEnhanced(
+            turn({ role: 'assistant', content: null, toolCalls: [{ id: '1', name: 'get_weather', arguments: {} }] }),
+            objectPrompt, false, false, {});
+
+        expect(result.result).toBeNull();
+        expect(result.validationErrors ?? []).toEqual([]);
+    });
+
+    it('still reports genuinely empty output as a failure', async () => {
+        const result = await priv(runner).parseAndValidateResultEnhanced(
+            turn({ role: 'assistant', content: null }), objectPrompt, false, false, {});
+
+        expect(result.result).toBeUndefined();
+        expect(result.validationErrors?.[0]?.Message).toContain('No output received');
+    });
+
+    it('parses text normally when a turn carries both', async () => {
+        const result = await priv(runner).parseAndValidateResultEnhanced(
+            turn({
+                role: 'assistant',
+                content: '{"taskComplete":false}',
+                toolCalls: [{ id: '1', name: 'get_weather', arguments: {} }]
+            }),
+            objectPrompt, false, false, {});
+
+        expect(result.result).toEqual({ taskComplete: false });
+    });
 });

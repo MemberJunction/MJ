@@ -45,6 +45,8 @@ import '../agent-types/loop-agent-type';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
+import { sanitizeToolName } from '../native-tools/action-tool-builder';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 // ============================================================================
@@ -163,6 +165,10 @@ interface ScriptedActionResult {
 interface RunActionCall {
     actionName: string;
     params: ScriptedActionParam[];
+    /** What BaseAgent.ExecuteSingleAction stamped as Context.ActiveSkillIDs (the run's active skills). */
+    activeSkillIDs?: unknown;
+    /** `RunActionParams.RuntimeAPIKeyResolver` (the run's scoped key resolver) — absent when the run has no keys. */
+    resolveAPIKey?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -263,6 +269,7 @@ class LoopHarness {
     public runs: FakeAgentRun[] = [];
     public steps: MockStepEntity[] = [];
     public runActionCalls: RunActionCall[] = [];
+    public runActionParamsJSON: string[] = [];
     /** Scripted RunAction responder — override per test. */
     public runAction: (call: RunActionCall) => ScriptedActionResult = () => ({
         Success: true,
@@ -345,8 +352,12 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[] }): Promise<ScriptedActionResult> => {
-                const call: RunActionCall = { actionName: input.Action.Name, params: input.Params };
+            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown }; RuntimeAPIKeyResolver?: unknown }): Promise<ScriptedActionResult> => {
+                const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
+                if (input.RuntimeAPIKeyResolver !== undefined) call.resolveAPIKey = input.RuntimeAPIKeyResolver;
+                // What any log of the whole RunActionParams could contain — kept off the call record so
+                // the toEqual assertions over runActionCalls stay exact.
+                this.runActionParamsJSON.push(JSON.stringify({ ...input, Action: input.Action.Name }));
                 this.runActionCalls.push(call);
                 return this.runAction(call);
             },
@@ -464,6 +475,23 @@ function llmEnvelope(envelope: LoopAgentResponse): AIPromptRunResult {
         result: JSON.stringify(envelope),
         chatResult: {} as AIPromptRunResult['chatResult'],
     };
+}
+
+
+/**
+ * A native tool-call turn as the REAL runner hands it to the loop: no text, the call on
+ * `chatResult`, and the gate's decision recorded on that same result object (which is what the
+ * loop reads `sendResultsNatively` from — Plan B / results §16.5).
+ */
+function llmNativeActionCall(toolCallId: string, toolResults: boolean): AIPromptRunResult {
+    const chatResult = {
+        success: true,
+        data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id: toolCallId, name: sanitizeToolName(ACTION_NAME), arguments: { foo: 'bar' } }] } }] },
+    } as unknown as AIPromptRunResult['chatResult'];
+    RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'Native', controlFlow: 'envelope', toolResults });
+    // What the real runner hands back for a tool-call-only turn: parseAndValidate returns `{ result: null }`
+    // and `result: parsed?.result ? parsed.result : parsed` puts that (truthy) object in `result`.
+    return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult };
 }
 
 /** Builds a failed AIPromptRunResult (no errorInfo → BaseAgent classifies via message). */
@@ -604,7 +632,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
 
         // The LLM's action params were converted to the ActionParam array shape
         expect(harness.runActionCalls).toEqual([
-            { actionName: ACTION_NAME, params: [{ Name: 'foo', Value: 'bar', Type: 'Input' }] },
+            // ActiveSkillIDs is ALWAYS stamped inside a run — an empty array here means "in a run, no
+            // skill active", which Scoped Search treats differently from "no run at all" (undefined).
+            { actionName: ACTION_NAME, params: [{ Name: 'foo', Value: 'bar', Type: 'Input' }], activeSkillIDs: [] },
         ]);
 
         // The ActionExecutionLog ID was stamped onto the Actions step (index 2: after Validation + Prompt)
@@ -616,6 +646,169 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         expect(contents.some((c) => c.includes(`You invoked the **${ACTION_NAME}** action`))).toBe(true);
         expect(contents.some((c) => c.startsWith('Action results:'))).toBe(true);
         expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+    });
+});
+
+describe('BaseAgent.Execute — Context.ActiveSkillIDs carries the run\'s active skills to every action', () => {
+    it('merges the parent run\'s activated skills (parentActivatedSkillIDs) into the stamp, so a sub-agent\'s actions see the root\'s skill', async () => {
+        const PARENT_SKILL = 'aaaaaaaa-5555-4000-8000-000000000001';
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        await agent.Execute(makeParams({ parentActivatedSkillIDs: [PARENT_SKILL] }));
+        expect(harness.runActionCalls[0].activeSkillIDs).toEqual([PARENT_SKILL]);
+    });
+});
+
+describe('BaseAgent.Execute — the run\'s runtime API keys reach actions as a SCOPED resolver, never as a list', () => {
+    // Prompts have always received params.apiKeys (AIPromptRunner → GetAIAPIKey(driverClass, apiKeys)).
+    // Actions never did, so a run on a customer's OpenAI key still generated its images on the
+    // platform's. The fix hands an action a RESOLVER — one driver class in, one key out — and these
+    // cases pin its three properties: an action gets the key for the class it names; no action can
+    // enumerate the run's credentials (not from the Context, its JSON, or the resolver itself); and
+    // the agent can refuse, a refusal being the platform key rather than an error.
+    const KEYS = [
+        { driverClass: 'OpenAIImageGenerator', apiKey: 'sk-image' },
+        { driverClass: 'OpenAILLM', apiKey: 'sk-llm' },
+        { driverClass: 'GeminiLLM', apiKey: 'sk-gemini' },
+    ];
+    const okAction = () => { harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null }); };
+    const script = () => [() => llmEnvelope(actionsEnvelope()), () => llmEnvelope(successEnvelope())];
+    function resolverOf(call: RunActionCall): (driverClass: string) => string | undefined {
+        expect(typeof call.resolveAPIKey).toBe('function');
+        return call.resolveAPIKey as (driverClass: string) => string | undefined;
+    }
+
+    it('an action gets the run\'s key for the ONE driver class it names', async () => {
+        okAction();
+        const { agent } = makeAgent(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS }));
+        const resolve = resolverOf(harness.runActionCalls[0]);
+        expect(resolve('OpenAIImageGenerator')).toBe('sk-image');
+        expect(resolve('GeminiLLM')).toBe('sk-gemini');
+    });
+
+    it('no action can enumerate the run\'s credentials — the list is on neither the Context nor the RunActionParams, and the resolver is a closure', async () => {
+        // actionContext IS params.context by reference: shared by every action in the run and copied
+        // into sub-agent params and run steps. A key that survives JSON.stringify is a key in the
+        // database; a list an action can read is ambient authority for every action in the run.
+        okAction();
+        const { agent } = makeAgent(script());
+        const params = makeParams({ apiKeys: KEYS, context: { tenant: 't1' } });
+        await agent.Execute(params);
+        const ctx = params.context as Record<string, unknown>;
+        expect('apiKeys' in ctx).toBe(false);                              // nothing about keys on the shared context…
+        expect('RuntimeAPIKeyResolver' in ctx).toBe(false);
+        expect('resolveRuntimeAPIKey' in ctx).toBe(false);
+        expect(JSON.stringify(ctx)).not.toContain('sk-');
+        const call = harness.runActionCalls[0];
+        expect(harness.runActionParamsJSON[0]).not.toContain('sk-');       // …and none in anything the engine could log
+        expect(harness.runActionParamsJSON[0]).not.toContain('apiKeys');
+        const resolve = resolverOf(call);
+        expect(String(resolve)).not.toContain('sk-');                      // a closure, not a bag
+        expect(resolve('')).toBeUndefined();
+    });
+
+    it('the resolver is bound to the action it was handed to — two actions in one turn get two, each naming its own action', async () => {
+        // params.context is one object for the whole run, so anything stamped there is last-writer-
+        // wins across parallel actions. Per dispatch, the refusing agent sees the right action.
+        const seen: string[] = [];
+        class RecordingAgent extends HarnessAgent {
+            protected override actionMayUseRuntimeAPIKey(action: MJActionEntityExtended): boolean {
+                seen.push(action.Name);
+                return true;
+            }
+        }
+        okAction();
+        const agent = new RecordingAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([
+            () => llmEnvelope(actionsEnvelope({ nextStep: { type: 'Actions', actions: [{ name: ACTION_NAME, params: { n: 1 } }, { name: ACTION_NAME, params: { n: 2 } }] } })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        await agent.Execute(makeParams({ apiKeys: KEYS }));
+        expect(harness.runActionCalls).toHaveLength(2);
+        const [a, b] = harness.runActionCalls.map(resolverOf);
+        expect(a).not.toBe(b);
+        a('OpenAILLM'); b('OpenAILLM');
+        expect(seen).toEqual([harness.runActionCalls[0].actionName, harness.runActionCalls[1].actionName]);
+    });
+
+    it('a driver class the run has no key for resolves to the platform key — none here, so the action falls back exactly as before', async () => {
+        okAction();
+        const { agent } = makeAgent(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS }));
+        expect(resolverOf(harness.runActionCalls[0])('NoSuchDriverClass_Loop_Test')).toBeUndefined();
+    });
+
+    it('the agent can refuse an action the run\'s key for a driver class — the action then sees the platform key, not an error', async () => {
+        class RefusingAgent extends HarnessAgent {
+            protected override actionMayUseRuntimeAPIKey(_action: MJActionEntityExtended, driverClass: string): boolean {
+                return driverClass !== 'OpenAIImageGenerator';
+            }
+        }
+        okAction();
+        const agent = new RefusingAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner(script());
+        await agent.Execute(makeParams({ apiKeys: KEYS }));
+        const resolve = resolverOf(harness.runActionCalls[0]);
+        expect(resolve('OpenAIImageGenerator')).toBeUndefined();  // refused → platform key applies in the action
+        expect(resolve('OpenAILLM')).toBe('sk-llm');               // the policy is per driver class, not all-or-nothing
+    });
+
+    it('stamps nothing when the run has no runtime keys — absent, not a resolver that answers undefined', async () => {
+        okAction();
+        const { agent } = makeAgent(script());
+        await agent.Execute(makeParams());
+        expect('resolveAPIKey' in harness.runActionCalls[0]).toBe(false);
+    });
+});
+
+describe('BaseAgent.Execute — native tool results: call turn → tool turn, nothing in between', () => {
+    type ToolBlock = { type: string; toolCallId?: string; toolName?: string; isError?: boolean; content?: string };
+    const textOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    it('answers a native action call with a `tool` turn immediately after the assistant call turn — no recap, no markdown results', async () => {
+        const { agent, runner } = makeAgent([
+            () => llmNativeActionCall('call_1', true),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions', 'Prompt']);
+        // activeSkillIDs is always stamped inside a run — empty here means "in a run, no skill active".
+        expect(harness.runActionCalls).toEqual([{ actionName: ACTION_NAME, params: [{ Name: 'foo', Value: 'bar', Type: 'Input' }], activeSkillIDs: [] }]);
+
+        const messages = params.conversationMessages as Array<{ role: string; content: unknown; toolCalls?: Array<{ id: string }> }>;
+        const callIndex = messages.findIndex((m) => m.role === 'assistant' && (m.toolCalls?.length ?? 0) > 0);
+        expect(callIndex).toBeGreaterThan(-1);
+        expect(messages[callIndex].toolCalls?.[0].id).toBe('call_1');
+        // The very next message is the tool turn answering that call — the provider contract.
+        const next = messages[callIndex + 1];
+        expect(next.role).toBe('tool');
+        const blocks = next.content as ToolBlock[];
+        expect(blocks.map((b) => [b.type, b.toolCallId, b.toolName, b.isError])).toEqual([['tool_result', 'call_1', sanitizeToolName(ACTION_NAME), false]]);
+        // Neither the "[You invoked …]" recap nor the markdown "Action results:" message exists.
+        expect(messages.some((m) => textOf(m).includes('You invoked'))).toBe(false);
+        expect(messages.some((m) => textOf(m).startsWith('Action results:'))).toBe(false);
+        // Prompt 2 saw the same array.
+        expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+    });
+
+    it('keeps the recap and the markdown results when the catalog did not ask for native results', async () => {
+        const { agent } = makeAgent([
+            () => llmNativeActionCall('call_1', false),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+        await agent.Execute(params);
+        const messages = params.conversationMessages as Array<{ role: string; content: unknown }>;
+        expect(messages.some((m) => m.role === 'tool')).toBe(false);
+        expect(messages.some((m) => textOf(m).includes(`You invoked the **${ACTION_NAME}** action`))).toBe(true);
+        expect(messages.some((m) => textOf(m).startsWith('Action results:'))).toBe(true);
     });
 });
 

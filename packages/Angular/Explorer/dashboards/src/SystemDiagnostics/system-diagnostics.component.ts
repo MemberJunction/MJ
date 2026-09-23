@@ -4125,10 +4125,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         const recordId = this.getRecordId(row);
         if (!recordId || !entityName) return;
 
-        // Create a CompositeKey with the ID
-        const compositeKey = new CompositeKey([
-            { FieldName: 'ID', Value: recordId }
-        ]);
+        // Any entity can be opened here, so resolve the key column from metadata rather than assuming ID
+        const compositeKey = CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId);
 
         this.navigationService.OpenEntityRecord(entityName, compositeKey);
     }

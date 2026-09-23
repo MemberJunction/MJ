@@ -42,7 +42,7 @@ import type {
   MatrixData,
   FeatureKind,
 } from '@memberjunction/predictive-studio-core';
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { LogStatus, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 
 import type { AIPromptParams } from '@memberjunction/ai-core-plus';
 import type { VisionLLMFeatureStep } from '@memberjunction/predictive-studio-core';
@@ -316,9 +316,9 @@ export class FeatureAssemblyExecutor {
     if (!res.Success) {
       return records; // re-read failed — let the guardrail throw with a precise, actionable message
     }
-    const byId = new Map(res.Rows.map((row) => [String(row[pkField] ?? ''), row]));
+    const byId = new Map(res.Rows.map((row) => [String(row[pkField] ?? '').toLowerCase(), row]));
     return records.map((r) => {
-      const fresh = byId.get(String(r[pkField] ?? ''));
+      const fresh = byId.get(String(r[pkField] ?? '').toLowerCase());
       if (!fresh) {
         return r;
       }
@@ -326,6 +326,12 @@ export class FeatureAssemblyExecutor {
       for (const col of missing) {
         if (col in fresh) {
           merged[col] = fresh[col];
+        } else {
+          const lowerCol = col.toLowerCase();
+          const matchedKey = Object.keys(fresh).find((k) => k.toLowerCase() === lowerCol);
+          if (matchedKey !== undefined) {
+            merged[col] = fresh[matchedKey];
+          }
         }
       }
       return merged;
@@ -444,29 +450,29 @@ export class FeatureAssemblyExecutor {
   ): Promise<ColumnPlan> {
     const schema: FeatureSchemaEntry[] = [];
     const emitters: ColumnEmitter[] = [];
+    const plannedCols = new Set<string>();
 
     for (const step of dataSteps) {
       switch (step.Kind) {
         case 'select':
-          this.planSelectColumns(step.Columns, guard, schema, emitters);
+          this.planSelectColumns(step.Columns, guard, schema, emitters, plannedCols);
           break;
         case 'embedding':
-          this.planEmbeddingColumns(step, guard, schema, emitters);
+          this.planEmbeddingColumns(step, guard, schema, emitters, plannedCols);
           break;
         case 'llm-derived':
           // §5.3/§6.5: read the PERSISTED, version-pinned attribute — never recompute inline.
-          // The persisted feature column name is the pipeline ref by convention; resolved
-          // per-record from the target row (the upstream Feature Pipeline wrote it back).
-          this.planLLMDerivedColumns(step, guard, schema, emitters);
+          // Explicit output columns populated by the upstream Feature Pipeline write-back.
+          this.planLLMDerivedColumns(step, guard, schema, emitters, plannedCols);
           break;
         case 'flow-agent':
           // INTEGRATION SEAM (§5.4): resolve from a persisted attribute when present;
           // otherwise leave a clearly-commented per-record agent-invocation point.
-          this.planFlowAgentColumns(step, guard, schema, emitters);
+          this.planFlowAgentColumns(step, guard, schema, emitters, plannedCols);
           break;
         case 'vision-llm':
           // §11/§5.6: per-row, stateless vision extraction → one RAW feature column.
-          this.planVisionLLMColumn(step, guard, schema, emitters);
+          this.planVisionLLMColumn(step, guard, schema, emitters, plannedCols);
           break;
         default:
           break;
@@ -479,6 +485,10 @@ export class FeatureAssemblyExecutor {
         if (!guard.isFieldAllowed(f.OutputColumn)) {
           continue;
         }
+        if (plannedCols.has(f.OutputColumn)) {
+          continue;
+        }
+        plannedCols.add(f.OutputColumn);
         schema.push({ Name: f.OutputColumn, Kind: 'numeric' });
         // The actual value is computed in buildMatrix from the dated index; placeholder emitter.
         emitters.push({ column: f.OutputColumn, kind: 'as-of', datedSource: ds, datedFeature: f });
@@ -489,8 +499,18 @@ export class FeatureAssemblyExecutor {
   }
 
   /** Plan plain `select` columns (raw passthrough from the target row). */
-  private planSelectColumns(columns: string[], guard: LeakageGuardEnforcer, schema: FeatureSchemaEntry[], emitters: ColumnEmitter[]): void {
+  private planSelectColumns(
+    columns: string[],
+    guard: LeakageGuardEnforcer,
+    schema: FeatureSchemaEntry[],
+    emitters: ColumnEmitter[],
+    plannedCols: Set<string>,
+  ): void {
     for (const col of guard.partitionColumns(columns).allowed) {
+      if (plannedCols.has(col)) {
+        continue;
+      }
+      plannedCols.add(col);
       schema.push({ Name: col, Kind: 'numeric' });
       emitters.push({ column: col, kind: 'select', sourceColumn: col });
     }
@@ -502,12 +522,17 @@ export class FeatureAssemblyExecutor {
     guard: LeakageGuardEnforcer,
     schema: FeatureSchemaEntry[],
     emitters: ColumnEmitter[],
+    plannedCols: Set<string>,
   ): void {
     for (let i = 0; i < step.Dims; i++) {
       const name = `emb_${i}`;
       if (!guard.isFieldAllowed(name)) {
         continue;
       }
+      if (plannedCols.has(name)) {
+        continue;
+      }
+      plannedCols.add(name);
       schema.push({ Name: name, Kind: 'embedding' });
       emitters.push({
         column: name,
@@ -526,14 +551,27 @@ export class FeatureAssemblyExecutor {
     guard: LeakageGuardEnforcer,
     schema: FeatureSchemaEntry[],
     emitters: ColumnEmitter[],
+    plannedCols: Set<string>,
   ): void {
-    const col = step.FeaturePipelineRef;
-    if (!guard.isFieldAllowed(col)) {
+    const cols = step.Columns && step.Columns.length > 0 ? step.Columns : [];
+    if (cols.length === 0) {
+      LogStatus(
+        `Feature step ${step.Id} (llm-derived) has no Columns configured; skipping column emission.`
+      );
       return;
     }
-    schema.push({ Name: col, Kind: 'llm-derived' });
-    // Read the persisted attribute off the target row by its pipeline-ref column name.
-    emitters.push({ column: col, kind: 'select', sourceColumn: col });
+    for (const col of cols) {
+      if (!guard.isFieldAllowed(col)) {
+        continue;
+      }
+      if (plannedCols.has(col)) {
+        continue;
+      }
+      plannedCols.add(col);
+      schema.push({ Name: col, Kind: 'llm-derived' });
+      // Read the persisted attribute off the target row by its column name.
+      emitters.push({ column: col, kind: 'select', sourceColumn: col });
+    }
   }
 
   /** Plan flow-agent output columns (resolved from persisted attributes for now). */
@@ -542,11 +580,16 @@ export class FeatureAssemblyExecutor {
     guard: LeakageGuardEnforcer,
     schema: FeatureSchemaEntry[],
     emitters: ColumnEmitter[],
+    plannedCols: Set<string>,
   ): void {
     for (const outName of Object.keys(step.OutputMapping)) {
       if (!guard.isFieldAllowed(outName)) {
         continue;
       }
+      if (plannedCols.has(outName)) {
+        continue;
+      }
+      plannedCols.add(outName);
       schema.push({ Name: outName, Kind: 'numeric' });
       // INTEGRATION SEAM (§5.4): for now resolve from a persisted attribute of the
       // same name on the target row. When the live Flow Agent runtime is wired,
@@ -571,11 +614,16 @@ export class FeatureAssemblyExecutor {
     guard: LeakageGuardEnforcer,
     schema: FeatureSchemaEntry[],
     emitters: ColumnEmitter[],
+    plannedCols: Set<string>,
   ): void {
     const col = step.Output.FeatureName;
     if (!guard.isFieldAllowed(col)) {
       return;
     }
+    if (plannedCols.has(col)) {
+      return;
+    }
+    plannedCols.add(col);
     // Scalar → numeric matrix column; category → categorical (raw label, typically
     // one-hot encoded by a downstream preprocessing step).
     schema.push({ Name: col, Kind: step.Output.Kind === 'scalar' ? 'numeric' : 'categorical' });
@@ -612,7 +660,7 @@ export class FeatureAssemblyExecutor {
         if (Number.isNaN(date.getTime())) {
           continue;
         }
-        const key = String(fk);
+        const key = String(fk).toLowerCase();
         const list = bySource.get(key) ?? [];
         list.push({ Date: date, Row: row });
         bySource.set(key, list);
@@ -705,7 +753,7 @@ export class FeatureAssemblyExecutor {
   /** Compute an as-of aggregate for one record from the dated index. */
   private emitAsOfValue(emitter: Extract<ColumnEmitter, { kind: 'as-of' }>, recordId: string, asOfDate: Date | null, datedIndex: DatedIndex): number | null {
     const bySource = datedIndex.get(emitter.datedSource.EntityName);
-    const datedRows = bySource?.get(recordId) ?? [];
+    const datedRows = bySource?.get(recordId.toLowerCase()) ?? bySource?.get(recordId) ?? [];
     switch (emitter.datedFeature.Aggregate) {
       case 'days_since_last_activity':
         return daysSinceLastActivityAsOf(datedRows, asOfDate);

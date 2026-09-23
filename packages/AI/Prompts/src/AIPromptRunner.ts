@@ -1,4 +1,5 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
+import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { BaseEntitySaveQueue, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
@@ -125,6 +126,8 @@ interface ModelSelectionResult {
   vendorApiName?: string;
   vendorSupportsEffortLevel?: boolean;
   modelEffortLevel?: number;
+  /** The selected candidate's AIPromptModel `PromptConfiguration`, for the native tool-calling gate. */
+  promptModelConfiguration?: AIPromptConfiguration | null;
   selectionInfo?: AIModelSelectionInfo;
   allCandidates: ModelVendorCandidate[];
   /**
@@ -154,6 +157,12 @@ interface ModelVendorCandidate {
   apiName?: string;
   supportsEffortLevel?: boolean;
   effortLevel?: number;
+  /**
+   * The `PromptConfiguration` bag of the `AIPromptModel` row this candidate came from, when it came
+   * from one. Threaded like `effortLevel` rather than looked up later, because a candidate sourced
+   * from power-rank or model-type has NO prompt-model row and must contribute no override.
+   */
+  promptModelConfiguration?: AIPromptConfiguration | null;
   isPreferredVendor: boolean;
   priority: number; // Higher is better
   source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank' | 'power-match-fallback';
@@ -161,9 +170,13 @@ interface ModelVendorCandidate {
 
 
 /**
- * Configuration for failover behavior when primary model fails
+ * Configuration for failover behavior when primary model fails.
+ *
+ * Exported because it is the return type of `AIPromptRunner.getFailoverConfiguration`, a
+ * `protected` method documented as an override point — a subclass cannot name its own return type
+ * otherwise, which made the documented extension point unusable from outside this package.
  */
-interface FailoverConfiguration {
+export interface FailoverConfiguration {
   strategy: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None';
   maxAttempts: number;
   delaySeconds: number;
@@ -786,6 +799,33 @@ export class AIPromptRunner {
           throw new Error(this.buildNoModelFoundMessage(modelSelectionPrompt.Name, selection.selectionInfo));
         }
 
+        // Tell the template which path this run is actually taking, BEFORE it renders. The loop
+        // template drops its action catalog and the `'Actions'` step type under native mode
+        // (plan §8.4), and that is only safe if the flag is the gate's real answer rather than the
+        // caller's intent — a prompt that suppressed its catalog while the model received no tools
+        // would leave the agent unable to act at all.
+        // Caveat: failover re-resolves the gate per attempt, so a failover onto a model without
+        // the capability keeps the already-rendered native wording. The request still degrades
+        // correctly (no tools are sent); the prompt is merely quieter than it should be.
+        //
+        // This must resolve from the SAME inputs the request-time call uses (see
+        // `applyNativeToolCalling`), or the template can render for the opposite path: the vendor
+        // actually selected — not merely the caller's override, which is usually absent — and the
+        // selected candidate's AIPromptModel bag. Resolving without those skips the two layers the
+        // capability is normally declared on and silently inverts the decision.
+        if (params.tools?.length) {
+          const nativeDecision = this.resolveNativeToolCallingDecision(
+            prompt, params, selection.model,
+            selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
+            selection.promptModelConfiguration);
+          params.data = {
+            ...(params.data ?? {}),
+            _NATIVE_TOOL_CALLING: nativeDecision.useNativeTools,
+            // The template renders the implicit-mode section only when this is the gate's REAL answer.
+            _NATIVE_CONTROL_FLOW: nativeDecision.controlFlow
+          };
+        }
+
         // Check if we have a system prompt override
         if (params.systemPromptOverride) {
           // Use the override instead of rendering child templates and parent template
@@ -955,6 +995,7 @@ export class AIPromptRunner {
     let vendorApiName = existingSelection?.vendorApiName;
     let vendorSupportsEffortLevel = existingSelection?.vendorSupportsEffortLevel;
     let modelEffortLevel = existingSelection?.modelEffortLevel;
+    let promptModelConfiguration = existingSelection?.promptModelConfiguration;
     let allCandidates: ModelVendorCandidate[] = existingSelection?.allCandidates ?? [];
     // Credential probes already done during selection — reused by failover so it doesn't
     // recompute hasCredentialsAvailable for the prefix it walks before the selected candidate.
@@ -974,6 +1015,7 @@ export class AIPromptRunner {
       vendorApiName = modelResult.vendorApiName;
       vendorSupportsEffortLevel = modelResult.vendorSupportsEffortLevel;
       modelEffortLevel = modelResult.modelEffortLevel;
+      promptModelConfiguration = modelResult.promptModelConfiguration;
       modelSelectionInfo = modelResult.selectionInfo;
       allCandidates = modelResult.allCandidates || [];
       credentialAvailability = modelResult.credentialAvailability;
@@ -1007,12 +1049,17 @@ export class AIPromptRunner {
       vendorApiName,
       vendorSupportsEffortLevel,
       modelEffortLevel, // Pass model-specific effort level
-      credentialAvailability // Reuse credential probes from selection
+      credentialAvailability, // Reuse credential probes from selection
+      promptModelConfiguration
     );
 
     // Calculate execution metrics
     const endTime = new Date();
     const executionTimeMS = endTime.getTime() - startTime.getTime();
+
+    // Layer 4 instrumentation: attribute this run to the path it actually took, before the update
+    // persists it. Left NULL when no model call happened, which is the honest value.
+    promptRun.ToolCallingMode = GetToolCallingMode(modelResult) ?? null;
 
     // Update the prompt run with results including validation attempts and cumulative tokens
     await this.updatePromptRun(promptRun, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens);
@@ -1206,6 +1253,12 @@ export class AIPromptRunner {
     consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
     consolidatedPromptRun.Result = selectedResult.rawResult || '';
     consolidatedPromptRun.TokensUsed = parallelResult.totalTokensUsed;
+
+    // Layer 4 instrumentation, same as the single-model path. This path reaches the same
+    // `executeModel` and therefore declares tools, so leaving the column NULL here would tell the
+    // agent loop a NativeImplicit turn was not implicit — every control-flow call would then be
+    // rejected as an undeclared tool and the loop would retry on tools it declared itself.
+    consolidatedPromptRun.ToolCallingMode = GetToolCallingMode(selectedResult.modelResult) ?? null;
     
     // Extract token and cost info from selected result
     const selectedResultUsage = selectedResult.modelResult?.data?.usage;
@@ -1814,6 +1867,7 @@ export class AIPromptRunner {
         vendorApiName: selected.apiName,
         vendorSupportsEffortLevel: selected.supportsEffortLevel,
         modelEffortLevel: selected.effortLevel, // Pass through model-specific effort level
+        promptModelConfiguration: selected.promptModelConfiguration,
         allCandidates: candidates,
         credentialAvailability,
         selectionInfo: this.createSelectionInfo({
@@ -2218,6 +2272,7 @@ export class AIPromptRunner {
       apiName: modelVendor.APIName || model.APIName,
       supportsEffortLevel: modelVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
       effortLevel: promptModel.EffortLevel ?? undefined, // Model-specific effort level override
+      promptModelConfiguration: promptModel.PromptConfigurationObject,
       isPreferredVendor: false,
       priority: computedPriority,
       source: 'prompt-model'
@@ -2898,8 +2953,10 @@ export class AIPromptRunner {
       promptRun.ConfigurationID = params.configurationId;
       promptRun.RunAt = startTime;
       
-      // Resolve and save the effort level used (same precedence as ChatParams resolution)
-      if (params.effortLevel !== undefined && params.effortLevel !== null) {
+      // Resolve and save the effort level used (same precedence as ChatParams resolution).
+      // EffortLevel is a numeric column with a CHECK (1-100), so a provider-named level such as
+      // 'xhigh' is deliberately not persisted here — it still reaches the driver via ChatParams.
+      if (typeof params.effortLevel === 'number') {
         promptRun.EffortLevel = params.effortLevel;
       } else if (prompt.EffortLevel !== undefined && prompt.EffortLevel !== null) {
         promptRun.EffortLevel = prompt.EffortLevel;
@@ -2975,7 +3032,7 @@ export class AIPromptRunner {
       }
 
       // Populate new retry tracking columns with initial values
-      promptRun.ValidationBehavior = prompt.ValidationBehavior || 'Warn';
+      promptRun.ValidationBehavior = params.validationBehavior || prompt.ValidationBehavior || 'Warn';
       promptRun.RetryStrategy = prompt.RetryStrategy || 'Fixed';
       promptRun.MaxRetriesConfigured = prompt.MaxRetries || 0;
       promptRun.FirstAttemptAt = startTime;
@@ -3102,7 +3159,8 @@ export class AIPromptRunner {
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
     modelEffortLevel?: number,
-    credentialAvailability?: Map<string, boolean>
+    credentialAvailability?: Map<string, boolean>,
+    promptModelConfiguration?: AIPromptConfiguration | null
   ): Promise<ChatResult> {
     // Get failover configuration (used for errorScope filtering)
     const failoverConfig = this.getFailoverConfiguration(prompt);
@@ -3112,7 +3170,8 @@ export class AIPromptRunner {
       return this.executeModel(
         model, renderedPrompt, prompt, params, vendorId,
         conversationMessages, templateMessageRole, cancellationToken,
-        vendorDriverClass, vendorApiName, vendorSupportsEffortLevel, modelEffortLevel
+        vendorDriverClass, vendorApiName, vendorSupportsEffortLevel, modelEffortLevel,
+        promptModelConfiguration
       );
     }
 
@@ -3193,7 +3252,8 @@ export class AIPromptRunner {
           candidate.driverClass,
           candidate.apiName,
           candidate.supportsEffortLevel,
-          candidate.effortLevel
+          candidate.effortLevel,
+          candidate.promptModelConfiguration
         );
 
         // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
@@ -3231,7 +3291,15 @@ export class AIPromptRunner {
           break;
         }
 
-        // If we reach here, the result was successful
+        // A failure that is not eligible for failover (structural error, or none diagnosed) is
+        // returned as-is — but never silently: callers often see only an empty result.
+        if (!result.success) {
+          this.logError(
+            `Model call failed and is not eligible for failover (${result.errorInfo?.errorType ?? 'undiagnosed'}): ${result.errorMessage ?? 'no error message'}`,
+            { prompt, model: candidate.model, metadata: { vendorId: candidate.vendorId, driverClass: candidate.driverClass } }
+          );
+        }
+
         // Update promptRun with failover information if we had prior failures
         if (failoverAttempts.length > 0 && promptRun) {
           this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, candidate.model, candidate.vendorId || null);
@@ -3452,6 +3520,169 @@ export class AIPromptRunner {
    * resolution, driver selection, ChatParams construction, prefill, media handling, and streaming
    * all live here ONCE. Do not duplicate this logic elsewhere.
    */
+  /**
+   * Resolves the native tool-calling gate for THIS (model, vendor) and, when it opens, copies the
+   * caller's ephemeral tool surface onto the outgoing request.
+   *
+   * Called per model call rather than once per run: failover can move the run to a different
+   * (model, vendor) whose capability differs, and a decision made before failover would be wrong.
+   *
+   * @param chatParams The request being assembled (mutated in place)
+   * @param prompt The prompt being run — supplies the prompt-layer configuration bag
+   * @param params The caller's params — supplies the tool declarations, if any
+   * @param model The selected model
+   * @param vendorId The selected vendor (`MJ: AI Vendors` ID), or null
+   * @param promptModelConfiguration The selected candidate's `AIPromptModel` bag, when it came from one
+   */
+  /**
+   * Resolves the native tool-calling gate WITHOUT touching a request.
+   *
+   * Split out because the answer is needed twice and must be the same both times: once before the
+   * template renders — the loop template drops its action catalog and the `'Actions'` step type
+   * when native mode is on (plan §8.4), and it can only do that truthfully if it knows the real
+   * decision rather than the caller's intent — and once when the request is assembled.
+   *
+   * Never throws: the gate is an opt-in enhancement and must not be able to fail a run that would
+   * otherwise succeed, so any configuration problem resolves to the path that has always worked.
+   */
+  public resolveNativeToolCallingDecision(
+    prompt: MJAIPromptEntityExtended,
+    params: AIPromptParams,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    promptModelConfiguration?: AIPromptConfiguration | null
+  ): NativeToolCallingDecision {
+    try {
+      return ResolveNativeToolCalling({
+        catalogConfiguration: AIEngine.Instance.GetEffectiveModelConfiguration(
+          model.ID,
+          vendorId
+            // Must be the INFERENCE PROVIDER row, not the Model Developer row: most models carry
+            // two AIModelVendor rows for the same VendorID, and ModelVendors has no guaranteed
+            // order. Picking the developer row merges an empty config layer and silently drops any
+            // per-serving-path LLM.* knob (notably the SupportsNativeToolCalling kill switch).
+            ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId)
+                && mv.Status === 'Active' && this.isInferenceProvider(mv))?.ID
+            : undefined
+        ),
+        promptConfiguration: prompt.PromptConfigurationObject,
+        promptModelConfiguration,
+        // Action tools and control-flow tools are counted separately: under the hybrid the control
+        // tools are stripped, so on their own they must not open the gate (spec §5).
+        toolsProvided: (params.tools ?? []).some((t) => !(params.controlFlowToolNames ?? []).includes(t.name)),
+        controlToolsProvided: (params.tools ?? []).some((t) => (params.controlFlowToolNames ?? []).includes(t.name))
+      });
+    } catch (error) {
+      console.warn(
+        `AIPromptRunner: could not resolve the native tool-calling gate for prompt "${prompt.Name}" ` +
+        `on model "${model.Name}" — defaulting to the envelope path.`,
+        error
+      );
+      return { useNativeTools: false, mode: 'Envelope', controlFlow: 'envelope', toolResults: false };
+    }
+  }
+
+  private applyNativeToolCalling(
+    chatParams: ChatParams,
+    prompt: MJAIPromptEntityExtended,
+    params: AIPromptParams,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    promptModelConfiguration?: AIPromptConfiguration | null
+  ): void {
+    const decision: NativeToolCallingDecision =
+      this.resolveNativeToolCallingDecision(prompt, params, model, vendorId, promptModelConfiguration);
+
+    if (decision.warning) {
+      console.warn(
+        `AIPromptRunner: ${decision.warning} (prompt "${prompt.Name}", model "${model.Name}"` +
+        `${vendorId ? `, vendor ${vendorId}` : ''})`
+      );
+    }
+
+    if (decision.useNativeTools) {
+      const control = new Set(params.controlFlowToolNames ?? []);
+      // Under the hybrid the control tools are stripped: that model's control flow is the envelope,
+      // and offering it ask_user or a sub-agent tool would be a protocol it was never told about.
+      chatParams.tools = decision.controlFlow === 'implicit'
+        ? params.tools
+        : params.tools?.filter((t) => !control.has(t.name));
+      chatParams.toolChoice = params.toolChoice;
+      chatParams.parallelToolCalls = params.parallelToolCalls;
+    }
+
+    // Recorded even on the envelope path, so a run is always attributable to a path. The whole
+    // decision travels so the agent loop can read `toolResults` off the result later.
+    RecordToolCallingDecision(chatParams, decision);
+  }
+
+  /**
+   * Whether a failed result failed for a TOOLS-specific reason, and so is worth one retry with the
+   * declarations stripped.
+   *
+   * Deliberately narrow. A rate limit, a context-length error or a network failure has nothing to do
+   * with tools, and retrying those here would burn the fallback and mask the real cause from the
+   * existing retry/failover logic — which already handles them properly.
+   *
+   * @param result The result of a native-mode call
+   * @returns true when the failure looks tool-related
+   */
+  private isToolSpecificFailure(result: ChatResult): boolean {
+    if (result.success) {
+      return false;
+    }
+    // A cancellation is the caller's decision, never a tool problem.
+    if (result.errorInfo?.canFailover === false && result.errorInfo?.providerErrorCode === 'request_cancelled') {
+      return false;
+    }
+    return this.isToolSpecificFailureText(`${result.errorMessage ?? ''} ${result.statusText ?? ''}`);
+  }
+
+  /**
+   * Retries a native call once on today's exact path, with the tool declarations stripped.
+   *
+   * The retry reuses the SAME execution bound rather than opening a fresh one, so the two attempts
+   * share one timeout budget. That is deliberate: the bound exists to cap how long a single model
+   * call may take from the caller's point of view, and a fallback is still that one call. It does
+   * mean a native attempt that burned most of the budget leaves the retry little — but the
+   * alternative, silently doubling the caller's timeout, is worse.
+   *
+   * @param reason What the provider said, for the warning — a misconfiguration should be visible
+   */
+  private async retryWithToolsStripped(
+    llm: BaseLLM,
+    chatParams: ChatParams,
+    executionBound: ExecutionBound,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    prompt: MJAIPromptEntityExtended,
+    reason: string
+  ): Promise<ChatResult> {
+    console.warn(
+      `AIPromptRunner: native tool calling failed on ${model.Name}${vendorId ? ` (vendor ${vendorId})` : ''} ` +
+      `for prompt "${prompt.Name}" — retrying once on the envelope path with tools stripped. ` +
+      `Provider error: ${reason}`
+    );
+    chatParams.tools = undefined;
+    chatParams.toolChoice = undefined;
+    chatParams.parallelToolCalls = undefined;
+    // A history that already holds native turns — the assistant's call turn, the tool-result turn —
+    // is refused once the declarations are gone (Gemini also polices their order), so the retry
+    // would fail for a second, different reason and the loop would burn its remaining attempts on
+    // the same request. Show the retry what the envelope path has always
+    // shown: the calls' prose, and each result as an "[Action Result]" user message.
+    chatParams.messages = EncodeToolTurnsAsText(chatParams.messages);
+    const fallbackResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
+    RecordToolCallingMode(fallbackResult, 'NativeFallback');
+    return fallbackResult;
+  }
+
+  /** Scans provider prose for a tools marker. Shared by the thrown-error and failed-result paths. */
+  private isToolSpecificFailureText(text: string): boolean {
+    const lowered = text.toLowerCase();
+    return AIPromptRunner.TOOL_FAILURE_MARKERS.some(marker => lowered.includes(marker));
+  }
+
   protected async executeModel(
     model: MJAIModelEntityExtended,
     renderedPrompt: string,
@@ -3464,7 +3695,8 @@ export class AIPromptRunner {
     vendorDriverClass?: string,
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
-    modelEffortLevel?: number
+    modelEffortLevel?: number,
+    promptModelConfiguration?: AIPromptConfiguration | null
   ): Promise<ChatResult> {
     // define these variables here to ensure they're available in the catch block
     let driverClass: string;
@@ -3610,8 +3842,24 @@ export class AIPromptRunner {
         chatParams.responseFormat = undefined;
       }
 
+      // Native tool calling (Layer 3). This is the ONLY place metadata decides whether tools go out.
+      // Resolved HERE rather than once per run because failover may land on a different
+      // (model, vendor) that does not support tools.
+      this.applyNativeToolCalling(chatParams, prompt, params, model, vendorId, promptModelConfiguration);
+
       // Build message array with rendered prompt and conversation messages
       chatParams.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
+
+      // Declarations and tool turns must travel TOGETHER. The gate above is re-resolved per
+      // failover attempt, so an attempt can legitimately come back envelope on a history that
+      // earlier turns filled with assistant `toolCalls` and `tool` turns — a candidate whose vendor
+      // row lacks the capability, or a catalog change mid-run. Sending those with no `tools` array
+      // is rejected outright by Anthropic and OpenAI (Gemini also polices their order), which would
+      // make failover — the mechanism meant to rescue a failing run — fail for a second, unrelated
+      // reason. Degrade the turns to text, exactly as the tools-stripped retry does.
+      if (!chatParams.tools?.length) {
+        chatParams.messages = EncodeToolTurnsAsText(chatParams.messages);
+      }
 
       // Resolve native file inputs: check each file against the driver's capabilities
       // and inject qualifying files as content blocks in the last user message.
@@ -3642,7 +3890,43 @@ export class AIPromptRunner {
       }
 
       // Execute the model bounded by the composed abort signal (caller cancellation + prompt TimeoutMS)
-      return await this.runChatCompletionBounded(llm, chatParams, executionBound);
+      //
+      // Layer 4 fallback, part one: some providers REJECT a tools payload instead of returning a
+      // failed result. The OpenAI SDK raises a 400 as an exception, so the returned-result check
+      // below never sees it and a native run that should degrade hard-fails instead. Observed on
+      // gpt-5.6-luna: `400 Function tools with reasoning_effort are not supported
+      // for gpt-5.6-luna in /v1/chat/completions`. Both shapes get the same one-shot retry.
+      let chatResult: ChatResult;
+      try {
+        chatResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
+      } catch (error) {
+        if (!chatParams.tools?.length || !this.isToolSpecificFailureText(error instanceof Error ? error.message : String(error ?? ''))) {
+          throw error;
+        }
+        return await this.retryWithToolsStripped(
+          llm, chatParams, executionBound, model, vendorId, prompt,
+          error instanceof Error ? error.message : String(error));
+      }
+      // Carry the gate's WHOLE decision from the request onto the result, which is what flows back up
+      // to the prompt run (mode) and to the agent loop (`toolResults` — the loop answers native
+      // calls as tool turns only when the result says so). Copying the mode alone resets `toolResults`
+      // to false on the fresh result object, which leaves native tool results inert.
+      // A fallback below overwrites the mode with 'NativeFallback'.
+      const gatedDecision = GetToolCallingDecision(chatParams);
+      if (gatedDecision) {
+        RecordToolCallingDecision(chatResult, gatedDecision);
+      }
+
+      // Layer 4 fallback, part two: a native-mode call that came back as a failed result for a
+      // TOOLS-specific reason retries the same way. Non-tool failures fall through to the existing
+      // retry/failover machinery untouched.
+      if (chatParams.tools?.length && this.isToolSpecificFailure(chatResult)) {
+        return await this.retryWithToolsStripped(
+          llm, chatParams, executionBound, model, vendorId, prompt,
+          chatResult.errorMessage || chatResult.statusText || 'unspecified');
+      }
+
+      return chatResult;
     } catch (error) {
       const errorInfo = ErrorAnalyzer.analyzeError(error, driverClass)
       this.logError(error, {
@@ -4043,6 +4327,34 @@ export class AIPromptRunner {
   private static readonly STOP_SEQUENCE_TRIM_REGEX = /^[ \t]+|[ \t]+$/g;
 
   /**
+   * Substrings that mark a provider failure as TOOLS-specific, so the native call is worth one
+   * envelope retry (see {@link AIPromptRunner.isToolSpecificFailure}). Drawn from how the
+   * tool-capable providers word a rejected `tools` payload, an unusable tool call, or a turn whose output
+   * they discarded for a tool-related reason.
+   *
+   * Substring matching over provider prose is inherently approximate. It is deliberately biased
+   * toward MISSING a tool failure rather than catching an unrelated one: a missed match just means
+   * the existing retry/failover logic handles the error as it does today, whereas a false positive
+   * would silently strip tools from a run that should have kept them.
+   */
+  private static readonly TOOL_FAILURE_MARKERS: readonly string[] = [
+    'tool_use',
+    'tool use',
+    'tool_call',
+    'tool call',
+    'tool_choice',
+    'tool choice',
+    'tools',
+    'function_call',
+    'function call',
+    'function_declaration',
+    'functiondeclarations',
+    'malformed_function_call',
+    'input_schema',
+    'parametersjsonschema'
+  ];
+
+  /**
    * Resolves whether the current model/vendor supports native assistant prefill.
    *
    * Resolution order:
@@ -4227,7 +4539,8 @@ export class AIPromptRunner {
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean,
     modelEffortLevel?: number,
-    credentialAvailability?: Map<string, boolean>
+    credentialAvailability?: Map<string, boolean>,
+    promptModelConfiguration?: AIPromptConfiguration | null
   ): Promise<{
     modelResult: ChatResult;
     parsedResult: { result: unknown; validationResult?: ValidationResult };
@@ -4275,7 +4588,8 @@ export class AIPromptRunner {
           vendorApiName,
           vendorSupportsEffortLevel,
           modelEffortLevel,
-          credentialAvailability // Reuse credential probes from selection
+          credentialAvailability, // Reuse credential probes from selection
+          promptModelConfiguration
         );
 
         // Check for fatal errors - don't attempt validation/retry on these
@@ -4352,14 +4666,15 @@ export class AIPromptRunner {
 
         // Validation failed, check if we should retry
         // BUG FIX: Only retry in Strict mode, not in Warn or None modes
-        if (prompt.ValidationBehavior === 'Strict' && attempt < maxRetries) {
+        const effectiveValidationBehavior = params?.validationBehavior || prompt.ValidationBehavior;
+        if (effectiveValidationBehavior === 'Strict' && attempt < maxRetries) {
           lastError = new Error(`Validation failed: ${validationErrors?.map(e => e.Message).join('; ')}`);
           LogStatus(`   ⚠️ Validation failed on attempt ${attempt + 1}, will retry (Strict mode)`);
           continue; // Retry
         } else {
           // Either not strict mode or no more retries, return what we have
-          const reason = prompt.ValidationBehavior !== 'Strict' 
-            ? `${prompt.ValidationBehavior || 'None'} mode - continuing with invalid output (no retry)`
+          const reason = effectiveValidationBehavior !== 'Strict' 
+            ? `${effectiveValidationBehavior || 'None'} mode - continuing with invalid output (no retry)`
             : 'max retries exceeded';
           LogStatus(`   ⚠️ Validation failed on attempt ${attempt + 1}, stopping retries (${reason})`);
           return {
@@ -4864,6 +5179,19 @@ export class AIPromptRunner {
    * @param params - Optional prompt parameters containing additional configuration like attemptJSONRepair
    * @returns Parsed result with optional validation results and errors
    */
+  /**
+   * Whether `text` parses as JSON once CleanJSON has stripped fences and prose around it — the test
+   * for "is this an envelope or plain prose?" under implicit control flow. Never throws.
+   */
+  private parsesAsJSON(text: string): boolean {
+    try {
+      JSON.parse(CleanJSON(text) ?? text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async parseAndValidateResultEnhanced(
     modelResult: ChatResult,
     prompt: MJAIPromptEntityExtended,
@@ -4886,7 +5214,31 @@ export class AIPromptRunner {
 
       rawOutput = modelResult.data?.choices?.[0]?.message?.content;
       if (!rawOutput) {
+        // A native tool call IS the model's answer. Providers return `content: null` on a turn
+        // that is nothing but calls, so reading emptiness as "no output" turns the designed
+        // native response into a validation failure — a warning on every native turn under
+        // `ValidationBehavior: 'Warn'`, and under `'Strict'` a retry that cannot ever succeed,
+        // because retrying asks the same question of a model that already answered it correctly.
+        //
+        // There is also nothing here to parse: `OutputType` describes the shape of TEXT output,
+        // and tool-call arguments arrive already structured and already schema-checked by the
+        // provider. The callers that care read them off `chatResult` directly — the agent loop
+        // via `LoopAgentType`, the eval harness via its own turn extractor.
+        if ((modelResult.data?.choices?.[0]?.message?.toolCalls?.length ?? 0) > 0) {
+          return { result: null };
+        }
         throw new Error('No output received from model');
+      }
+
+      // Implicit control flow: "reply in plain text when the task is complete" — prose IS the
+      // designed terminal form, so on a prompt whose OutputType is 'object' a reply that is not JSON is
+      // the answer, not a malformed envelope. Validating it as JSON marks every such prompt run
+      // Failed and spends a "Repair JSON" model call trying to fix prose.
+      // A reply that does parse as JSON — an honoured envelope — takes the normal path.
+      if (prompt.OutputType === 'object' && GetToolCallingDecision(modelResult)?.controlFlow === 'implicit' && !this.parsesAsJSON(rawOutput)) {
+        const accepted = new ValidationResult();
+        accepted.Success = true;
+        return { result: rawOutput, validationResult: accepted };
       }
 
       // Parse based on output type
@@ -4971,7 +5323,8 @@ export class AIPromptRunner {
         new ValidationErrorInfo('general', error.message, undefined, ValidationErrorType.Failure)
       ];
 
-      switch (prompt.ValidationBehavior) {
+      const effectiveValidationBehavior = params?.validationBehavior || prompt.ValidationBehavior;
+      switch (effectiveValidationBehavior) {
         case 'Strict':
           return { result: undefined, validationResult, validationErrors: validationResult.Errors };
         case 'Warn':

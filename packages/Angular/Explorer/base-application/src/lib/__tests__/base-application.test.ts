@@ -498,9 +498,10 @@ describe('WorkspaceStateManager records-style filters (docked records)', () => {
       { ApplicationId: 'app-1', Title: title, Configuration: { resourceType: 'Dashboards', navItemName: title } },
       '#ff0000');
   }
-  // PreservePinState mirrors NavigationService.OpenEntityRecord's records-style
-  // request — without it OpenTabForced's pin cascade pins the nav tab and
-  // pollutes the bar-visibility assertions.
+  // PreservePinState is the LEGACY records-style request shape (the blunt
+  // opt-out from the pin cascade). Record opens now use TempScope: 'records'
+  // instead — see the records temp-tab pool suite below. Kept here because
+  // these cases are about region membership, not the pool.
   function openDockedRecord(title: string, recordId: string) {
     return manager.OpenTabForced(
       { ApplicationId: 'app-1', Title: title, ResourceRecordId: recordId, PreservePinState: true,
@@ -566,6 +567,172 @@ describe('WorkspaceStateManager records-style filters (docked records)', () => {
       const regionId = openRegionRecord('Region Widget', 'r2');
       manager.CloseTab(regionId);
       expect(manager.GetConfiguration()!.tabs.length).toBe(0);
+    });
+  });
+});
+
+
+// ===================== Records temp-tab pool (preview tabs) =====================
+// TempScope: 'records' gives the records region its own single-temporary-tab
+// pool. The two pools must stay disjoint in BOTH directions: a nav click may
+// never consume an open record (the pre-existing protection), and a record
+// open may never consume the nav tab (which is what makes the main tab bar
+// appear on every nav page thereafter).
+describe('WorkspaceStateManager records temp-tab pool (TempScope)', () => {
+  let manager: InstanceType<typeof import('../workspace-state-manager').WorkspaceStateManager>;
+
+  const isRecord = (tab: { configuration?: Record<string, unknown> }) =>
+    tab.configuration?.['resourceType'] === 'Records';
+  const isRegionRecord = (tab: { configuration?: Record<string, unknown> }) =>
+    isRecord(tab) && tab.configuration?.['recordDockedToWorkspace'] !== true;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const mod = await import('../workspace-state-manager');
+    manager = new mod.WorkspaceStateManager();
+    // The shell's records-style assignments, all three of them.
+    manager.MainLayoutTabFilter = (tab) => !isRegionRecord(tab);
+    manager.TempTabConsumptionFilter = (tab) => !isRecord(tab);
+    manager.RecordsRegionTabFilter = (tab) => isRegionRecord(tab);
+    const { createDefaultWorkspaceConfiguration } = await import('../interfaces/workspace-configuration.interface');
+    manager.UpdateConfiguration(createDefaultWorkspaceConfiguration());
+  });
+
+  function openNav(title: string) {
+    return manager.OpenTab(
+      { ApplicationId: 'app-1', Title: title, Configuration: { resourceType: 'Dashboards', navItemName: title } },
+      '#ff0000');
+  }
+  /** A plain (no-modifier) record click. */
+  function openRecord(recordId: string, entity = 'Widgets') {
+    return manager.OpenTab(
+      { ApplicationId: 'app-1', Title: `${entity} - ${recordId}`, ResourceRecordId: recordId, TempScope: 'records',
+        Configuration: { resourceType: 'Records', Entity: entity, recordId } },
+      '#ff0000');
+  }
+  /** A shift-click / explicit "open in new tab" record open. */
+  function openRecordForced(recordId: string, entity = 'Widgets') {
+    return manager.OpenTabForced(
+      { ApplicationId: 'app-1', Title: `${entity} - ${recordId}`, ResourceRecordId: recordId, TempScope: 'records',
+        Configuration: { resourceType: 'Records', Entity: entity, recordId } },
+      '#ff0000');
+  }
+  function openDockedRecord(recordId: string) {
+    return manager.OpenTabForced(
+      { ApplicationId: 'app-1', Title: `Docked ${recordId}`, ResourceRecordId: recordId, PreservePinState: true,
+        Configuration: { resourceType: 'Records', Entity: 'Widgets', recordId, recordDockedToWorkspace: true } },
+      '#ff0000');
+  }
+  const tabs = () => manager.GetConfiguration()!.tabs;
+
+  describe('consumption', () => {
+    it('a plain record open consumes the region temp IN PLACE, reusing the tab id', () => {
+      const first = openRecord('r1');
+      const second = openRecord('r2');
+      // Id reuse is load-bearing: it is what keeps the saved split layout
+      // covering the exact tab set, so panes survive a replacement.
+      expect(second).toBe(first);
+      expect(tabs().length).toBe(1);
+      expect(tabs()[0].resourceRecordId).toBe('r2');
+      expect(tabs()[0].isPinned).toBe(false);
+    });
+
+    it('leaves the nav temp tab alone (records opens never touch the main pool)', () => {
+      const navId = openNav('Data');
+      openRecord('r1');
+      expect(tabs().length).toBe(2);
+      const nav = tabs().find(t => t.id === navId)!;
+      expect(nav.title).toBe('Data');
+      // Still temporary: a pinned nav tab forces the main tab bar visible on
+      // every nav page from then on, which is the bug PreservePinState existed
+      // to avoid and the scoped cascade now avoids by construction.
+      expect(nav.isPinned).toBe(false);
+    });
+
+    it('a nav open still never consumes an open record (protection intact)', () => {
+      const recordId = openRecord('r1');
+      openNav('Queries');
+      expect(tabs().some(t => t.id === recordId)).toBe(true);
+      expect(tabs().length).toBe(2);
+    });
+
+    it('never consumes a DOCKED record — it is in neither pool', () => {
+      const dockedId = openDockedRecord('r1');
+      openRecord('r2');
+      expect(tabs().some(t => t.id === dockedId)).toBe(true);
+      expect(tabs().length).toBe(2);
+    });
+
+    it('never replaces a PINNED (promoted) record', () => {
+      const pinnedId = openRecord('r1');
+      manager.TogglePin(pinnedId);
+      expect(tabs().find(t => t.id === pinnedId)!.isPinned).toBe(true);
+      const nextId = openRecord('r2');
+      expect(nextId).not.toBe(pinnedId);
+      expect(tabs().length).toBe(2);
+    });
+
+    it('consumes nothing when no records region is active (classic style)', () => {
+      manager.RecordsRegionTabFilter = null;
+      openRecord('r1');
+      openRecord('r2');
+      // Empty pool, so each open creates its own tab rather than falling
+      // through to "consume anything unpinned".
+      expect(tabs().length).toBe(2);
+    });
+  });
+
+  describe('dedup beats consumption', () => {
+    // These pin the already-open tab first. Consumption also reuses a tab id,
+    // so against an unpinned tab both mechanisms look identical from the
+    // outside and the assertion would prove nothing about dedup.
+    it('re-opening a record already open focuses THAT tab, leaving the temp alone', () => {
+      const firstId = openRecord('r1');
+      manager.TogglePin(firstId);
+      const tempId = openRecord('r2');
+      const again = openRecord('r1');
+      expect(again).toBe(firstId);
+      expect(tabs().length).toBe(2);
+      // Dedup ran BEFORE consumption — the temp still holds r2 rather than
+      // having been overwritten with a second copy of r1.
+      expect(tabs().find(t => t.id === tempId)!.resourceRecordId).toBe('r2');
+    });
+
+    it('does NOT treat the same record id in a DIFFERENT entity as a match', () => {
+      const widget = openRecordForced('r1', 'Widgets');
+      manager.TogglePin(widget);
+      const order = openRecord('r1', 'Orders');
+      expect(order).not.toBe(widget);
+      expect(tabs().length).toBe(2);
+    });
+  });
+
+  describe('scoped pin cascade on forced (shift-click) opens', () => {
+    it('promotes the previous region temp and leaves the new one temporary', () => {
+      const firstId = openRecord('r1');
+      const secondId = openRecordForced('r2');
+      expect(tabs().length).toBe(2);
+      expect(tabs().find(t => t.id === firstId)!.isPinned).toBe(true);
+      expect(tabs().find(t => t.id === secondId)!.isPinned).toBe(false);
+    });
+
+    it('does not pin the nav temp tab on the way past', () => {
+      const navId = openNav('Data');
+      openRecord('r1');
+      openRecordForced('r2');
+      expect(tabs().find(t => t.id === navId)!.isPinned).toBe(false);
+    });
+
+    it('a MAIN-scoped forced open still pins everything (classic cascade)', () => {
+      const navId = openNav('Data');
+      // A DIFFERENT resourceType on purpose: standard resource types dedup on
+      // resourceType + recordId alone, so a second 'Dashboards' tab with no
+      // record id would be focused rather than created and no cascade runs.
+      manager.OpenTabForced(
+        { ApplicationId: 'app-1', Title: 'Users', Configuration: { resourceType: 'UserViews', navItemName: 'Users' } },
+        '#ff0000');
+      expect(tabs().length).toBe(2);
+      expect(tabs().find(t => t.id === navId)!.isPinned).toBe(true);
     });
   });
 });

@@ -636,6 +636,26 @@ CodeGen reporting success.
 **MJ core uses this itself.** `MJ: Version Installations` and `MJ: User View Run Details` are layered
 as of v6.1, and the remaining fully-custom core entities are expected to follow.
 
+**One CodeGen pass.** Apply the hand-authored overlay (it selects `g.*` from the inner generated
+view plus extra columns), `mj sync push` any Entity pins (e.g. `SupportsGeoCoding`), then run
+`mj codegen --skipfiles` **once from the Open App cwd**. Pass 1 discovers overlay columns from
+`BaseView` (`vwSQLColumnsAndEntityFields`) and logs EntityField INSERTs; Pass 2 writes only the
+**inner** view (`GeneratedBaseViewName`) and never DROPs the overlay. A second CodeGen run is not
+required for overlay columns and is how duplicate `__mj_Latitude` / missing SPs happen.
+
+### Open App metadata SQL (`CodeGen_Run_*.sql`)
+
+EntityField INSERTs are **not** in `SQL Scripts/generated/` (that tree is views/SPs). They go to
+`SQLOutput` as `CodeGen_Run_<utc>.sql`.
+
+- Run `mj codegen` from the **Open App cwd** (`mj-app.json`). SQLOutput defaults to
+  `./migrations/codegen`. Do not run it from the MJ repo with `includeSchemas` pointing at an
+  app — that used to dump EntityField SQL into `MJ/migrations/v5`.
+- `--sql-output-dir` overrides the folder. Pointing it at `MJ/migrations/v*` from an app fails.
+- If `SQLOutput.enabled` and no log file is open, CodeGen **refuses to apply** metadata SQL.
+  Fold the `CodeGen_Run` file into the app V migration; never transcribe EntityField rows from
+  the live DB. ExtendedType pins stay in `metadata/entities` (`mj sync push`).
+
 ### The two paths, side by side
 
 The thing to hold onto: **`BaseView` is always the public surface**, and the only question is who

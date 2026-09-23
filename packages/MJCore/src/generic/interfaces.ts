@@ -505,6 +505,28 @@ export class EntityMergeOptions {
 }
 
 /**
+ * Options for computing a deterministic content hash of an entity's field values.
+ */
+export interface ComputeContentHashOptions {
+    /**
+     * Explicit list of field names to include in the hash basis.
+     * When omitted, all loaded fields on the entity (and parent entity chain, if IS-A) are considered.
+     */
+    Fields?: string[];
+
+    /**
+     * Explicit list of field names to exclude from the hash basis (e.g. write-back target fields).
+     */
+    ExcludeFields?: string[];
+
+    /**
+     * Whether to exclude system columns (`__mj_` prefixed, such as `__mj_CreatedAt`, `__mj_UpdatedAt`)
+     * from the hash basis. Defaults to true.
+     */
+    ExcludeSystemFields?: boolean;
+}
+
+/**
  * Input parameters for retrieving entity record names.
  * Used for batch operations to get display names for multiple records.
  */
@@ -725,6 +747,12 @@ export interface IMetadataProvider {
 
     get CurrentUser(): UserInfo
 
+    /**
+     * Refreshes CurrentUser and its role assignments from the server,
+     * updating cached metadata in place.
+     */
+    RefreshCurrentUser?(): Promise<UserInfo | null>;
+
     get Roles(): RoleInfo[]
 
     get RowLevelSecurityFilters(): RowLevelSecurityFilterInfo[]
@@ -862,6 +890,23 @@ export interface IMetadataProvider {
     GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
 
     /**
+     * Checks whether an entity record name is currently available in the in-memory LRU cache.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns True if the record name is cached in memory, false otherwise
+     */
+    HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean;
+
+    /**
+     * Retrieves an entity record name from the in-memory LRU cache if already cached.
+     * Returns undefined immediately when not cached and will NEVER initiate a database lookup.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns The cached display name, or undefined if not in cache
+     */
+    GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined;
+
+    /**
      * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
      * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
      * @param entityName - The name of the entity
@@ -878,9 +923,18 @@ export interface IMetadataProvider {
 
     Refresh(providerToUse?: IMetadataProvider): Promise<boolean>
 
-    RefreshIfNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
+    /**
+     * @param bypassMinCheckInterval - When true, skips the minimum-interval throttle between
+     * staleness checks. Event-driven callers pass true: they hold positive evidence that a
+     * metadata member entity was just written, and the throttle would otherwise answer "fresh"
+     * for any check arriving within the window of the previous one.
+     */
+    RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean>
 
-    CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
+    /**
+     * @param bypassMinCheckInterval - See {@link RefreshIfNeeded}.
+     */
+    CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean>
 
     get LocalStorageProvider(): ILocalStorageProvider
 

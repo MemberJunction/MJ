@@ -94,7 +94,13 @@ jobs:
 
           # Pinned explicitly — the CLI's default alias `auto` currently resolves to
           # the RETIRED gemini-3-pro-preview.
-          gemini_model: gemini-3.6-flash
+          #
+          # 3.8-flash (released 2026-09-02) supersedes 3.6-flash here. Note the date on the
+          # price: $0.75/$3.75 per 1M is INTRODUCTORY and runs to 2026-12-31, stepping to
+          # $1.50/$7.50 on 2027-01-01 with context caching doubling alongside it. At a few
+          # release runs a month that is noise — it is recorded so whoever reads this in
+          # January knows the jump was expected and not a billing fault.
+          gemini_model: gemini-3.8-flash
 
           # Pinned so the tool-name strings below stay true; `latest` moves.
           gemini_cli_version: '0.54.4'
@@ -139,14 +145,29 @@ jobs:
           prompt: |
             You are a technical analyst working as a release coordinator for MemberJunction. Your task is to create release notes in markdown and update the PR description.
 
+            ## Format
+
+            **Read `releases/README.md` before writing anything.** It defines the template, the
+            required `## TL;DR` section and the house style, and it is the single source of that
+            format. This prompt deliberately does not restate it: the format used to be written
+            out in four places, and three of them had drifted to describe a shape no release had
+            used since v5.51.1. Follow that file — not your memory of what a release note looks
+            like, and not the opening structure of an older file in `releases/`.
+
+            The PR description you produce is pasted into Teams verbatim by the build engineer,
+            and most readers there stop after the TL;DR. It is the release announcement, not
+            just a PR body.
+
             ## Process
 
             1. Compare next HEAD to the latest published version tag (using repo tags, `git fetch --tags && git --no-pager tag -l "v*" --sort=-version:refname | head -n1`) to get the changes in this release.
             2. Figure out the next version (whether patch or minor) using `npx changeset status --since main`
             3. Use both the diff contents and git commit messages to build up the context.
             - The .changeset/ dir also has more focused human-entered notes you can use.
-            4. Write the release notes to tmp/release-<version>.md following the template given below.
+            4. Write the release notes to tmp/release-<version>.md following the format in `releases/README.md`.
             - You can add/remove bullets as needed and omit sections if there are no bullets.
+            - `## TL;DR` is the one section that is never omitted. A later CI step reads the
+              published PR body back and fails the run if it has no TL;DR.
             5. Use the GitHub MCP server to update the PR description with the release notes.
 
             ## Steps to complete:
@@ -156,26 +177,33 @@ jobs:
                - Set the PR title to the version number (e.g., "v2.73.0")
                - Set the PR description to the generated release notes (replace entire description)
 
-            <template>
-            # <6-10 word summary of the entire release>
+            The generated release notes should become the entire PR description, not appended to existing content.
 
-            ## New Features
-            - <Detail>
-            - <Detail>
-            - <Detail>
-
-            ## Improvements
-            - <Detail>
-            - <Detail>
-            - <Detail>
-
-            ## Bug Fixes
-            - <Detail>
-            - <Detail>
-            - <Detail>
-            </template>
-
-            The generated release notes following the template above should become the entire PR description, not appended to existing content.
+      # The agent's own report is not evidence — the sibling job below says exactly that and
+      # then checks its artifact. This job never did, which was survivable while the PR body
+      # was read only by release reviewers. It stopped being survivable when the body became
+      # the release announcement: the build engineer pastes it into Teams verbatim, so a run
+      # that quietly drops the TL;DR ships an announcement missing the part most readers stop
+      # at, and nobody finds out until it is in the channel.
+      #
+      # Check the body that actually shipped, NOT tmp/release-<version>.md. The agent writes
+      # the file and updates the PR in two separate steps; only one of them is the artifact.
+      #
+      # PR path only: a workflow_dispatch carries no PR context at all (see the changeset-gate
+      # note above), so there is no published body to read back.
+      - name: Verify the PR body carries a TL;DR
+        if: github.event_name == 'pull_request' && steps.gemini-release-notes.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh pr view "$PR" --json body --jq '.body' > "$RUNNER_TEMP/pr-body.md"
+          # The same shape check the line job runs, so the two generators cannot drift into
+          # producing differently-shaped notes. Unit tested — including the case a naive
+          # "is there a TL;DR heading" grep silently passes:
+          # .github/scripts/__tests__/check-release-notes-shape.test.mjs
+          node .github/scripts/check-release-notes-shape.mjs "$RUNNER_TEMP/pr-body.md"
 
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -188,8 +216,12 @@ jobs:
   #     commit is the one that deleted them. This is prepared in shell, not left to
   #     the model: git archaeology is exactly where an agent invents things.
   #   * It writes releases/v<version>.md — the CANONICAL notes, which is a file the
-  #     Edge job has never produced — and opens the PR itself, pre-labelled, because
-  #     notes that stop at `next` publish nothing (the docs site builds the line).
+  #     Edge job has never produced — and opens the PR itself, then labels it as a
+  #     SEPARATE step immediately afterwards. The label matters because notes that stop
+  #     at `next` publish nothing (the docs site builds the line); it is applied after
+  #     rather than at creation because a label that cannot be applied must never cost
+  #     us the PR. See the "Open the notes PR against next" step for the incident that
+  #     settled that order.
   # ─────────────────────────────────────────────────────────────────────────────
   line-release-notes:
     name: Write canonical notes for a line release
@@ -237,7 +269,26 @@ jobs:
           if [ -f "releases/v$VERSION.md" ]; then
             echo "::notice::releases/v$VERSION.md already exists on next — nothing to do."
             echo "skip=true" >> "$GITHUB_OUTPUT"
-          elif gh pr list --head "docs/release-notes-$VERSION" --state open --json number --jq 'length' | grep -qv '^0$'; then
+            exit 0
+          fi
+
+          # Asked as an assignment, NOT as a pipeline in an `elif`. A failed READ is not a
+          # negative answer: `gh ... --jq length | grep -qv '^0$'` puts "GitHub said zero" and
+          # "GitHub could not be asked" on the same false branch — a dead or rotated PAT, a 502
+          # or a secondary rate limit all emit nothing, the pipeline exits non-zero, and the
+          # step writes skip=false while exiting 0, so nothing downstream learns the question
+          # went unanswered. That matters far more than a wasted agent run: the push below
+          # force-updates this branch, and its only safety argument is that no PR is open on it.
+          OPEN_PRS=$(gh pr list --head "docs/release-notes-$VERSION" --state open --json number --jq 'length') || {
+            echo "::error::could not ask GitHub whether a notes PR for $VERSION is already open. Refusing to continue, because the steps below rewrite that branch and are only safe while the answer is known to be none. Re-run once GitHub is reachable and MJ_GH_BOT_GITHUB_TOKEN is valid."
+            exit 1; }
+          case "$OPEN_PRS" in
+            ''|*[!0-9]*)
+              echo "::error::gh pr list returned '$OPEN_PRS' rather than a count, so the same question is still unanswered. Refusing to continue."
+              exit 1 ;;
+          esac
+
+          if [ "$OPEN_PRS" -ne 0 ]; then
             echo "::notice::a notes PR for $VERSION is already open — nothing to do."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
@@ -270,7 +321,12 @@ jobs:
             echo "## Changesets consumed by this release"
           } > /tmp/release-context.md
 
-          REL=$(git log --format='%H %s' "$PREV..$TAG" | awk '/RELEASING:/{print $1; exit}')
+          # Filter in git, not in a consumer that exits early. `git log | awk '{...; exit}'`
+          # closes the pipe after the first match while git is still writing the rest of the
+          # range; git takes SIGPIPE and, under `pipefail`, the step fails with exit 141. The
+          # race fires only when the range outruns the pipe buffer, so it passed for months
+          # and then killed the 5.51.3 and 6.1.2 runs on 2026-09-16.
+          REL=$(git log --format='%H' --grep='^RELEASING:' -n 1 "$PREV..$TAG")
           if [ -z "$REL" ]; then
             echo "::warning::no RELEASING commit found in $PREV..$TAG; notes will rest on commit messages alone."
             echo "_(none recovered — the release commit could not be located)_" >> /tmp/release-context.md
@@ -296,7 +352,8 @@ jobs:
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          gemini_model: gemini-3.6-flash
+          # See the Edge job above for why this model and what happens to its price in 2027.
+          gemini_model: gemini-3.8-flash
           gemini_cli_version: '0.54.4'
 
           # Narrower than the Edge job on purpose: this agent writes ONE file. It needs
@@ -323,26 +380,29 @@ jobs:
             changesets are the highest-quality source: they are what the engineer wrote
             about their own change. Prefer them over commit subjects.
 
-            Read `releases/README.md` for the house format, and `releases/v5.51.1.md` as a
-            worked example of the expected depth and tone.
+            Read `releases/README.md` for the house format — it is authoritative. Use
+            `releases/v5.51.1.md` for the expected depth and tone of the section BULLETS
+            only: it was written before `## TL;DR` was required, so its opening is not a
+            model to copy.
 
             You may run read-only git commands for more detail (`git log`, `git show`,
             `git diff --stat`). Do not modify the repository except for the one file below.
 
             ## Write exactly one file: `releases/v${{ github.event.inputs.version }}.md`
 
-            Follow the house template: an H1 of 6-10 words summarising the release, a short
-            intro paragraph, then `## New Features` / `## Improvements` / `## Bug Fixes`.
-            OMIT any section with no content — a patch release usually has only bug fixes.
+            Follow the template and house style in `releases/README.md` exactly. It is the
+            single definition of both, shared with the two other generators, so there is
+            nothing to reconcile against your own recollection of the format.
 
-            House style, taken from the existing files:
-            - Each bullet opens with a **bolded claim**, then the affected packages in
-              parentheses as backticked names, then the explanation.
-            - Explain the DEFECT and its user-visible consequence, not the code change.
-              "Scheduled jobs silently stopped honouring their activation windows" beats
-              "changed a comparison in isJobDue".
-            - Add an `## Upgrade Notes` section ONLY if a deployment could have depended on
-              the old behaviour. Most patches need none. Do not invent one.
+            The two things this format most often gets wrong:
+            - `## TL;DR` is required and comes FIRST: one to three sentences of PROSE, not
+              bullets. Headline features first, then fixes and improvements as one short
+              clause. NAME things there and let the sections explain them — "lead with the
+              consequence" is a rule for section bullets, not for the TL;DR. Do not ALSO
+              write an unlabelled intro paragraph above the sections; the TL;DR replaces it.
+            - OMIT any section with no content. A patch release usually has only `## TL;DR`
+              and `## Bug Fixes`; an `## Upgrade Notes` section belongs there only if a
+              deployment could have depended on the old behaviour. Do not invent one.
 
             ## Rules
 
@@ -361,16 +421,31 @@ jobs:
           set -euo pipefail
           F="releases/v$VERSION.md"
           [ -f "$F" ] || { echo "::error::$F was not written."; exit 1; }
-          BYTES=$(wc -c < "$F")
-          [ "$BYTES" -ge 400 ] || { echo "::error::$F is only $BYTES bytes — too thin to publish."; exit 1; }
-          head -1 "$F" | grep -q '^# ' || { echo "::error::$F does not start with an H1 summary."; exit 1; }
-          grep -q '^## ' "$F" || { echo "::error::$F has no section headings."; exit 1; }
+          # Shape is checked by the script shared with the Edge job above; see its header
+          # for why "the first ## is TL;DR" is not a sufficient check on its own.
+          node .github/scripts/check-release-notes-shape.mjs "$F"
+          # Scope, which is this job's own concern rather than the format's: the agent was
+          # told to write exactly one file.
           git diff --name-only --exit-code -- . ":(exclude)$F" || {
             echo "::error::the agent modified files other than $F (listed above)."; exit 1; }
-          echo "::notice::$F looks well-formed ($BYTES bytes)"
 
-      # Pre-labelled, because the label is the entire point: the docs site builds the
-      # line branch, so notes that stop at `next` are published nowhere.
+      # The label is the entire point: the docs site builds the line branch, so notes that
+      # stop at `next` are published nowhere. It used to be passed to `gh pr create`, which
+      # welded the two together — and on v6.1.0 (run 34805937932) that cost us the PR. Each
+      # line's `backport lts/<x>` label is created BY HAND when the line is cut, so on 6.1 it
+      # did not exist yet: the agent wrote the file, the branch was committed and PUSHED, and
+      # then `gh pr create --label` failed with `could not add label: 'backport lts/6.1' not
+      # found` and exited 1. What survived was a dangling branch and no PR — a run that looks
+      # half-successful, nine minutes of a human noticing, and the PR opened by hand. The
+      # FIRST release on every new LTS line hits this, which is precisely when nobody is
+      # watching for it.
+      #
+      # Hence the order below: create-label → create-PR → label-PR. A lost PR is worse than
+      # an unlabelled one. The PR is the irreplaceable artifact — it carries the generated
+      # notes and the branch they live on — while the label is one command for a human. So a
+      # label failure never aborts before the PR exists, and a labelling failure after it
+      # still fails the RUN, naming the exact remedy, so a green check never means "shipped"
+      # when the notes would publish nowhere.
       - name: Open the notes PR against next
         if: steps.pre.outputs.skip == 'false'
         env:
@@ -384,7 +459,37 @@ jobs:
           git add "releases/v$VERSION.md"
           git commit -m "docs(releases): add v$VERSION release notes" \
                      -m "Generated for the $LINE line release. Needs the backport label to reach the line branch."
-          git push -u origin "$BRANCH"
+          # --force-with-lease, deliberately. The branch is pushed BEFORE the PR exists, so a run
+          # that dies in between leaves a branch with no PR — and the only way to finish that
+          # release is for a human to open the PR, which makes that human its AUTHOR. GitHub
+          # will not let an author approve their own PR, so the release then needs a second
+          # reviewer: the exact deadlock this job exists to remove. A re-dispatch has to be able
+          # to recover, and a plain push cannot — the agent is non-deterministic, so the new
+          # commit differs from the abandoned one and the push is rejected as non-fast-forward.
+          #
+          # Safe here and nowhere else: the "Skip if the notes already exist" step above has
+          # already established that NO PR is open for this branch, so anything sitting on it is
+          # debris from a run that died before opening one. The lease still refuses to overwrite
+          # anything that arrived after this job's checkout.
+          # Asked again HERE, immediately before the destructive step, rather than inherited
+          # from the skip check — the agent runs between the two, so that answer is minutes
+          # old. `--force-with-lease` does not close the gap: its expected value comes from
+          # this job's own checkout, so a commit pushed to the branch BEFORE the job started
+          # is already inside the lease and would be overwritten with no trace. The push also
+          # authenticates with the checkout's GITHUB_TOKEN while this query uses the PAT, so
+          # the read can fail while the write still succeeds — which is exactly the pairing
+          # that turns a wrong answer here into silent data loss.
+          if ! OPEN_PRS=$(gh pr list --head "$BRANCH" --state open --json number --jq 'length'); then
+            echo "::error::could not confirm that no PR is open for $BRANCH, so the branch cannot be shown to be safe to overwrite. Refusing to force-update it: if a reviewer has pushed a correction there, forcing would destroy it silently. Re-run once GitHub is reachable."
+            exit 1
+          fi
+          if [ "$OPEN_PRS" != "0" ]; then
+            echo "::error::$BRANCH already has an open PR ($OPEN_PRS), so this job should have skipped and must not rewrite that branch. Nothing has been pushed. If the notes there are wrong, push a correction to the PR instead."
+            exit 1
+          fi
+          # Debris from a run that died between this push and `gh pr create`: no PR is open on
+          # it, so forcing is what lets a re-dispatch recover rather than die non-fast-forward.
+          git push --force-with-lease -u origin "$BRANCH"
 
           # --body-file, not --body: a multi-line --body argument has to be indented to stay
           # inside this block scalar, and an un-indented continuation line silently ends the
@@ -394,10 +499,53 @@ jobs:
 
           **Agent-written — review the content before merging.** Every claim should trace to the changesets in the release range. The workflow verifies the file's shape, not its accuracy.
 
-          The \`backport $LINE\` label is applied on creation and is load-bearing: the docs site builds \`$LINE\`, so notes that stop at \`next\` publish nothing.
+          The \`backport $LINE\` label is added by the workflow immediately after this PR is opened, and is load-bearing: the docs site builds \`$LINE\`, so notes that stop at \`next\` publish nothing. Do not remove it.
           BODY
 
-          gh pr create --base next --head "$BRANCH" \
+          # Idempotent by design: --force creates the label on a line that has never had one,
+          # and refreshes the colour/description on a line that has. Colour and wording match
+          # the hand-made `backport lts/5` / `backport lts/6.1` labels so the set stays uniform.
+          # NON-FATAL on purpose — see the note above this step. If the label cannot be made,
+          # the PR is still worth far more than the failure, and the labelling step below is
+          # where a human gets told what to do about it.
+          if ! gh label create "backport $LINE" --force \
+                 --color 0e8a16 \
+                 --description "Backport this merged PR to the $LINE line (opens a cherry-pick PR automatically)"; then
+            # A WARNING, not an error: this branch exists in order to CONTINUE. A GitHub
+            # `::error::` annotation does not itself fail a job, so when the labelling below
+            # then succeeds — the label already existed and only the --force refresh failed —
+            # the run ends green carrying a red annotation, and its conclusion and its
+            # annotations contradict each other. On a step whose whole purpose is that a green
+            # check means "shipped", that is the same noise pointed the other way. The verdict
+            # is decided below; this line only reports what was tried. Same convention as
+            # publish.yml's back-merge fallback.
+            echo "::warning::could not create or update the 'backport $LINE' label. Continuing anyway so the PR still gets opened; if the label is genuinely missing, the labelling step below fails the run with the remedy."
+          fi
+
+          # The postcondition of this step is "a PR is open for $BRANCH" — NOT "our create call
+          # returned 0". Those differ every time the branch is already pushed, which it always
+          # is by now, and treating the call's success as the goal is what turns any transient
+          # gh failure into a release that only a human can finish.
+          PR_URL=$(gh pr create --base next --head "$BRANCH" \
             --title "docs(releases): add v$VERSION release notes" \
-            --label "backport $LINE" \
-            --body-file /tmp/pr-body.md
+            --body-file /tmp/pr-body.md) || PR_URL=""
+
+          # An empty capture means gh either failed or succeeded without saying which PR it
+          # made. Either way, ask the question that actually matters. A create that raced with
+          # itself, hit a 502 after the PR was already made, or refused because one exists
+          # ("a pull request for branch ... already exists") all land here with a perfectly good
+          # PR on the other end; adopting it is what keeps a human out of the author slot.
+          if [ -z "$PR_URL" ]; then
+            PR_URL=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url // empty') || PR_URL=""
+            [ -z "$PR_URL" ] || echo "::notice::gh pr create did not report a PR, but $PR_URL is already open for $BRANCH — adopting it."
+          fi
+
+          [ -n "$PR_URL" ] || {
+            echo "::error::$BRANCH is pushed but no PR is open for it, so the notes exist only on a branch and publish nowhere. RE-RUN THIS WORKFLOW — it is idempotent: it force-updates the branch and opens the PR. Do NOT open the PR by hand unless the re-run also fails: a human author cannot approve their own PR, which is what leaves the release waiting on a second reviewer. If you must, open it and add the 'backport $LINE' label."
+            exit 1; }
+          echo "::notice::opened $PR_URL for v$VERSION ($LINE)"
+
+          if ! gh pr edit "$PR_URL" --add-label "backport $LINE"; then
+            echo "::error::$PR_URL is open but UNLABELLED. Without 'backport $LINE' these notes merge into next and publish nowhere, because the docs site builds $LINE. Fix by hand: gh label create \"backport $LINE\" --color 0e8a16 --description \"Backport this merged PR to the $LINE line (opens a cherry-pick PR automatically)\" && gh pr edit $PR_URL --add-label \"backport $LINE\". Failing the run so this is not read as a finished release."
+            exit 1
+          fi

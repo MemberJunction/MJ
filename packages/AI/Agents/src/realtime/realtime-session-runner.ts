@@ -3,11 +3,12 @@
  * the {@link RealtimeAgentType} (Realtime Co-Agent).
  *
  * The {@link RealtimeSessionRunner} owns the lifecycle of a single full-duplex
- * {@link IRealtimeSession}: it opens the session, registers a **stable, target-independent** tool
- * set (always including `invoke-target-agent`), wires the provider event handlers, routes tool
- * calls (invoke-target → delegate to the target agent; others → an injected tool executor),
+ * {@link IRealtimeSession}: it opens the session, registers the tool set (always including
+ * `invoke-target-agent`, extra tools, and any server channel tools), wires the provider event handlers,
+ * routes tool calls (invoke-target → delegate to the target agent; others → an injected tool executor),
  * persists each transcript turn as a conversation detail, accumulates usage and checkpoints it on
- * a debounced cadence, and aborts any in-flight delegated run on barge-in.
+ * a debounced cadence, and aborts any in-flight delegated run on barge-in. (Note: telephony, media,
+ * and room sessions run via this runner do not project direct actions).
  *
  * **Why dependency injection.** Every collaborator that would otherwise pull in `BaseAgent`,
  * metadata, or the database is injected via {@link RealtimeSessionRunnerDeps}. That keeps the
@@ -37,6 +38,7 @@ import { RealtimeRecordingController } from './realtime-recording-capture';
 import {
     RealtimeToolBroker,
     INVOKE_TARGET_AGENT_TOOL_NAME,
+    INVOKE_TARGET_AGENT_DESCRIPTION,
     DelegateToTargetRequest,
     DelegatedResult,
     ToolExecutionResult,
@@ -49,6 +51,7 @@ import { BuildServerNarrationInstructions } from './realtime-narration';
 // keep their import paths. The single source of truth is `realtime-tool-broker.ts`.
 export {
     INVOKE_TARGET_AGENT_TOOL_NAME,
+    INVOKE_TARGET_AGENT_DESCRIPTION,
     DelegateToTargetRequest,
     DelegatedResult,
     ToolExecutionResult,
@@ -80,8 +83,7 @@ export interface RealtimeSessionRunnerDeps {
 
     /**
      * Extra realtime tools to register *in addition to* the always-present `invoke-target-agent`
-     * tool — e.g. fixed UI/control tools. These stay target-independent (see
-     * {@link INVOKE_TARGET_AGENT_TOOL_NAME}). Optional.
+     * tool — e.g. fixed UI/control tools. Optional.
      */
     ExtraTools?: RealtimeToolDefinition[];
 
@@ -366,6 +368,8 @@ export class RealtimeSessionRunner {
      * {@link RealtimeSessionRunnerDeps.ServerChannelTools} (the server-side interactive channels'
      * dynamic vocabulary). This is the full set the provider sees — everything target-specific runs
      * *inside* the delegated agent's own run and is never registered on the realtime socket.
+     * Note: telephony, media, and room sessions run via RealtimeSessionRunner currently do not
+     * project direct actions.
      *
      * @returns The ordered tool definitions to register.
      */
@@ -383,9 +387,7 @@ export class RealtimeSessionRunner {
 
         const invokeTargetTool: RealtimeToolDefinition = {
             Name: INVOKE_TARGET_AGENT_TOOL_NAME,
-            Description:
-                'Invoke the target agent to perform real work (seconds to minutes). Use this whenever ' +
-                'actual work is needed beyond conversation; narrate while it runs.',
+            Description: INVOKE_TARGET_AGENT_DESCRIPTION,
             ParametersSchema: invokeTargetSchema
         };
 
@@ -442,7 +444,7 @@ export class RealtimeSessionRunner {
         }
 
         this.deps.LogStatus?.(
-            `🎙️ Realtime session started with ${tools.length} tool(s) (target-independent set).`,
+            `🎙️ Realtime session started with ${tools.length} tool(s).`,
             true
         );
     }

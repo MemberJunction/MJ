@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, Metadata, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import {
   MJUserViewEntityExtended,
   ViewColumnInfo,
@@ -395,6 +395,22 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Field names field-level security denies the current user READ on, lowercased. Empty when
+   * there is no entity or resolved user, when the entity has field security off, or when nothing
+   * is denied — so callers can treat it as "nothing to filter".
+   *
+   * Uses the BULK primitive rather than the per-field form: `GetDeniedReadFields` aggregates the
+   * user's roles once, where the per-field call would repeat that for every field.
+   */
+  private deniedReadFields(): Set<string> {
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!this.Entity || !user) {
+      return new Set<string>();
+    }
+    return this.Entity.GetDeniedReadFields(user);
+  }
+
+  /**
    * Initialize form state from entity and view
    * Priority for column state: currentGridState > viewEntity.Columns > entity defaults
    */
@@ -404,8 +420,17 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       return;
     }
 
-    // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info)
+    // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info).
+    //
+    // Field security: a field the user cannot READ is not offered as a column at all. The grid
+    // already refuses to render its values, so listing it here would only advertise the NAME of a
+    // column they can never populate — and invite them to "fix" a column that will always be
+    // blank. This is a rendering surface, so filtering is correct here; the saved view's stored
+    // column preferences are deliberately left alone (see EntityDataGrid.filterToExistingFields —
+    // a denial is reversible, and dropping the preference would not restore it on re-grant).
+    const denied = this.deniedReadFields();
     this.Columns = this.Entity.Fields
+      .filter(field => !denied.has(field.Name.trim().toLowerCase()))
       .map((field, index) => ({
         fieldId: field.ID,
         fieldName: field.Name,
@@ -1245,7 +1270,11 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   /**
    * Format a value for preview display
    */
-  FormatPreviewValue(value: unknown, format: ColumnFormat | undefined): string {
+  /**
+   * @param field The column's field, so a SQL `date` previews as its stored calendar day rather
+   * than shifting into the reader's zone (MJ#4210).
+   */
+  FormatPreviewValue(value: unknown, format: ColumnFormat | undefined, field?: EntityFieldInfo): string {
     if (value == null) return '—';
     if (!format || format.type === 'auto') return String(value);
 
@@ -1258,7 +1287,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         return this.formatPercent(value as number, format);
       case 'date':
       case 'datetime':
-        return this.formatDate(value as Date, format);
+        return this.formatDate(value as Date, format, IsDateOnlySQLType(field?.Type));
       case 'boolean':
         return this.formatBoolean(value as boolean, format);
       default:
@@ -1295,7 +1324,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     return new Intl.NumberFormat('en-US', options).format(value / 100);
   }
 
-  private formatDate(value: Date, format: ColumnFormat): string {
+  private formatDate(value: Date, format: ColumnFormat, dateOnly: boolean): string {
     const date = value instanceof Date ? value : new Date(value);
     if (isNaN(date.getTime())) return String(value);
 
@@ -1303,6 +1332,8 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     const formatStr = format.dateFormat || 'medium';
     const includeWeekday = formatStr.includes('-weekday');
     const baseFormat = formatStr.replace('-weekday', '') as 'short' | 'medium' | 'long';
+    // A `date` column has no time to show and must not shift into the reader's zone.
+    const withTime = format.type === 'datetime' && !dateOnly;
 
     let options: Intl.DateTimeFormatOptions;
 
@@ -1317,7 +1348,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         // medium
         options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
       }
-      if (format.type === 'datetime') {
+      if (withTime) {
         options.hour = 'numeric';
         options.minute = '2-digit';
       }
@@ -1326,12 +1357,12 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       options = {
         dateStyle: baseFormat === 'short' ? 'short' : baseFormat === 'long' ? 'long' : 'medium'
       };
-      if (format.type === 'datetime') {
+      if (withTime) {
         options.timeStyle = 'short';
       }
     }
 
-    return new Intl.DateTimeFormat('en-US', options).format(date);
+    return dateOnly ? FormatDateOnly(date, options, 'en-US') : new Intl.DateTimeFormat('en-US', options).format(date);
   }
 
   private formatBoolean(value: boolean, format: ColumnFormat): string {

@@ -1,18 +1,11 @@
 import { BaseEntity, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
+import type { MJAIBridgeProviderEntity_IBridgeProviderFeatures } from '@memberjunction/core-entities';
 
-/**
- * The complete set of known `IBridgeProviderFeatures` keys (see the generated
- * `MJAIBridgeProviderEntity_IBridgeProviderFeatures` interface and
- * `metadata/entities/JSONType-interfaces/IBridgeProviderFeatures.ts`). `SupportedFeatures` is a
- * flat object of optional booleans, so the validation is: every present key must be in this set
- * and every value must be a boolean. Keeping the list here (rather than reflecting off a runtime
- * value) makes the validator a PURE, dependency-free, easily-unit-tested function and gives a
- * friendly "unknown feature flag" message that a free-form `additionalProperties:false` schema
- * would not.
- */
-export const KNOWN_BRIDGE_PROVIDER_FEATURE_KEYS: ReadonlySet<string> = new Set<string>([
+type FeatureKey = keyof MJAIBridgeProviderEntity_IBridgeProviderFeatures;
+
+const FEATURE_KEYS = [
     // Join methods
     'OnDemandJoin',
     'ScheduledJoin',
@@ -32,7 +25,21 @@ export const KNOWN_BRIDGE_PROVIDER_FEATURE_KEYS: ReadonlySet<string> = new Set<s
     'DTMF',
     'CallTransfer',
     'Recording',
-]);
+    'DetachedMediaPlane',
+] as const satisfies readonly FeatureKey[];
+
+type _Missing = Exclude<FeatureKey, (typeof FEATURE_KEYS)[number]>;
+// Compile-time check: fails build if any key in MJAIBridgeProviderEntity_IBridgeProviderFeatures is omitted
+const _exhaustive: [_Missing] extends [never] ? true : ['MISSING KEYS:', _Missing] = true;
+void _exhaustive;
+
+/**
+ * The complete set of known `IBridgeProviderFeatures` keys (see the generated
+ * `MJAIBridgeProviderEntity_IBridgeProviderFeatures` interface and
+ * `metadata/entities/JSONType-interfaces/IBridgeProviderFeatures.ts`). `SupportedFeatures` is a
+ * flat object of optional booleans, verified at compile-time to track the generated interface.
+ */
+export const KNOWN_BRIDGE_PROVIDER_FEATURE_KEYS: ReadonlySet<string> = new Set<string>(FEATURE_KEYS);
 
 /**
  * Server-side `MJ: AI Bridge Providers` entity enforcing the invariants the architecture documents

@@ -27,6 +27,8 @@ import { BaseTestDriver } from '../drivers/BaseTestDriver';
 import { IOracle } from '../oracles/IOracle';
 import { SchemaValidatorOracle } from '../oracles/SchemaValidatorOracle';
 import { TraceValidatorOracle } from '../oracles/TraceValidatorOracle';
+import { TraceSubAgentValidatorOracle } from '../oracles/TraceSubAgentValidatorOracle';
+import { AgentDecisionOracle, ResponseWellFormedOracle } from '../oracles/AgentDecisionOracle';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
@@ -651,6 +653,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     private async registerBuiltInOracles(): Promise<void> {
         this.RegisterOracle(new SchemaValidatorOracle());
         this.RegisterOracle(new TraceValidatorOracle());
+        this.RegisterOracle(new TraceSubAgentValidatorOracle());
+        this.RegisterOracle(new AgentDecisionOracle());
+        this.RegisterOracle(new ResponseWellFormedOracle());
         this.RegisterOracle(new LLMJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
@@ -1320,6 +1325,17 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             errorMessage: driverResult.errorMessage,
             resolvedVariables
         };
+
+        // Tiering telemetry, when the driver reports it. Without this the fields
+        // exist on TestRunResult and are never populated, so reporting cannot
+        // segment tier mix or replay share and the drift signal survives only
+        // inside TestRun.ActualOutputData.
+        if (driverResult.tier !== undefined) {
+            result.tier = driverResult.tier;
+        }
+        if (driverResult.replay !== undefined) {
+            result.replay = driverResult.replay;
+        }
 
         // Add sequence if this is a repeated test iteration
         if (sequence && sequence > 1) {

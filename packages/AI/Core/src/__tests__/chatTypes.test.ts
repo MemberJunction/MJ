@@ -11,7 +11,13 @@ import {
     getTextFromContent,
     parseBase64DataUrl,
     createBase64DataUrl,
-    CONTENT_BLOCKS_PREFIX
+    CONTENT_BLOCKS_PREFIX,
+    ChatMessageContentBlock,
+    ChatMessage,
+    toClassicChatMessageRole,
+    createToolResultMessage,
+    getToolResultBlocks,
+    validateToolConversation
 } from '../generic/chat.types';
 
 describe('ChatMessageRole', () => {
@@ -218,5 +224,180 @@ describe('createBase64DataUrl', () => {
         const result = createBase64DataUrl('abc123', 'image/jpeg');
 
         expect(result).toBe('data:image/jpeg;base64,abc123');
+    });
+});
+
+// =============================================================================
+// Native tool calling — the provider-neutral surface (implementation plan §5)
+// =============================================================================
+
+describe('ChatMessageRole.tool', () => {
+    it('exposes a tool role for carrying tool results', () => {
+        expect(ChatMessageRole.tool).toBe('tool');
+    });
+});
+
+describe('toClassicChatMessageRole', () => {
+    it('collapses tool onto user, the role a tool result reads as without tool support', () => {
+        expect(toClassicChatMessageRole(ChatMessageRole.tool)).toBe('user');
+    });
+
+    it('leaves the three classic roles untouched', () => {
+        expect(toClassicChatMessageRole(ChatMessageRole.system)).toBe('system');
+        expect(toClassicChatMessageRole(ChatMessageRole.user)).toBe('user');
+        expect(toClassicChatMessageRole(ChatMessageRole.assistant)).toBe('assistant');
+    });
+});
+
+describe('createToolResultMessage', () => {
+    it('builds a single tool turn carrying every result, as providers require', () => {
+        const message = createToolResultMessage([
+            { toolCallId: 'call_1', toolName: 'get_weather', content: '72F' },
+            { toolCallId: 'call_2', toolName: 'get_time', content: '10:30' }
+        ]);
+
+        expect(message.role).toBe('tool');
+        expect(Array.isArray(message.content)).toBe(true);
+        const blocks = message.content as ChatMessageContentBlock[];
+        expect(blocks).toHaveLength(2);
+        expect(blocks[0]).toMatchObject({ type: 'tool_result', toolCallId: 'call_1', toolName: 'get_weather', content: '72F' });
+        expect(blocks[1]).toMatchObject({ type: 'tool_result', toolCallId: 'call_2', content: '10:30' });
+    });
+
+    it('carries the error flag through so failures stay distinguishable from results', () => {
+        const message = createToolResultMessage([
+            { toolCallId: 'call_1', content: 'boom', isError: true }
+        ]);
+        expect((message.content as ChatMessageContentBlock[])[0].isError).toBe(true);
+    });
+});
+
+describe('getToolResultBlocks', () => {
+    it('returns only the tool_result blocks', () => {
+        const blocks = getToolResultBlocks([
+            { type: 'text', content: 'hello' },
+            { type: 'tool_result', content: 'result', toolCallId: 'call_1' }
+        ]);
+        expect(blocks).toHaveLength(1);
+        expect(blocks[0].toolCallId).toBe('call_1');
+    });
+
+    it('returns an empty array for plain-string content', () => {
+        expect(getToolResultBlocks('just text')).toEqual([]);
+    });
+});
+
+describe('getTextFromContent with tool results', () => {
+    it('ignores tool_result blocks — they are not prose', () => {
+        const text = getTextFromContent([
+            { type: 'text', content: 'hello' },
+            { type: 'tool_result', content: 'raw tool payload', toolCallId: 'call_1' }
+        ]);
+        expect(text).toBe('hello');
+    });
+});
+
+describe('tool_result content-block serialization', () => {
+    it('round-trips a tool turn through storage so tool history survives message logs', () => {
+        const original = createToolResultMessage([
+            { toolCallId: 'call_1', toolName: 'get_weather', content: '72F', isError: false }
+        ]);
+
+        const restored = deserializeMessageContent(serializeMessageContent(original.content));
+
+        expect(restored).toEqual(original.content);
+    });
+});
+
+describe('ChatParams tool fields', () => {
+    it('leaves every tool field undefined by default, so existing calls are unchanged', () => {
+        const params = new ChatParams();
+        expect(params.tools).toBeUndefined();
+        expect(params.toolChoice).toBeUndefined();
+        expect(params.parallelToolCalls).toBeUndefined();
+    });
+
+    it('accepts declarations, a named choice, and a parallelism flag', () => {
+        const params = new ChatParams();
+        params.tools = [{ name: 'get_weather', description: 'Call this when asked about weather.', inputSchema: { type: 'object', properties: {} } }];
+        params.toolChoice = { name: 'get_weather' };
+        params.parallelToolCalls = false;
+
+        expect(params.tools[0].name).toBe('get_weather');
+        expect(params.toolChoice).toEqual({ name: 'get_weather' });
+        expect(params.parallelToolCalls).toBe(false);
+    });
+});
+
+describe('validateToolConversation', () => {
+    const assistantWithCall = (id: string): ChatMessage => ({
+        role: ChatMessageRole.assistant,
+        content: '',
+        toolCalls: [{ id, name: 'get_weather', arguments: {} }]
+    });
+
+    it('accepts a well-formed call/result exchange', () => {
+        expect(() => validateToolConversation([
+            { role: ChatMessageRole.user, content: 'weather?' },
+            assistantWithCall('call_1'),
+            createToolResultMessage([{ toolCallId: 'call_1', content: '72F' }])
+        ])).not.toThrow();
+    });
+
+    it('rejects a result whose call was never declared, naming the id', () => {
+        expect(() => validateToolConversation([
+            { role: ChatMessageRole.user, content: 'weather?' },
+            // The caller forgot to copy toolCalls onto the assistant turn — the exact mistake.
+            { role: ChatMessageRole.assistant, content: '' },
+            createToolResultMessage([{ toolCallId: 'call_1', content: '72F' }])
+        ])).toThrow(/call_1/);
+    });
+
+    it('rejects a result that arrives BEFORE the call declaring it', () => {
+        expect(() => validateToolConversation([
+            createToolResultMessage([{ toolCallId: 'call_1', content: '72F' }]),
+            assistantWithCall('call_1')
+        ])).toThrow(/call_1/);
+    });
+
+    it('rejects a tool_result block with no toolCallId at all', () => {
+        expect(() => validateToolConversation([
+            assistantWithCall('call_1'),
+            { role: ChatMessageRole.tool, content: [{ type: 'tool_result', content: '72F' }] }
+        ])).toThrow(/missing toolCallId/);
+    });
+
+    it('accepts several results answering several calls from one turn', () => {
+        expect(() => validateToolConversation([
+            {
+                role: ChatMessageRole.assistant,
+                content: '',
+                toolCalls: [
+                    { id: 'call_1', name: 'get_weather', arguments: {} },
+                    { id: 'call_2', name: 'get_time', arguments: {} }
+                ]
+            },
+            createToolResultMessage([
+                { toolCallId: 'call_1', content: '72F' },
+                { toolCallId: 'call_2', content: '10:30' }
+            ])
+        ])).not.toThrow();
+    });
+
+    it('reports every orphan, not just the first', () => {
+        expect(() => validateToolConversation([
+            { role: ChatMessageRole.assistant, content: '' },
+            createToolResultMessage([
+                { toolCallId: 'call_1', content: 'a' },
+                { toolCallId: 'call_2', content: 'b' }
+            ])
+        ])).toThrow(/call_1, call_2/);
+    });
+
+    it('leaves a conversation with no tool turns alone', () => {
+        expect(() => validateToolConversation([
+            { role: ChatMessageRole.user, content: 'hello' },
+            { role: ChatMessageRole.assistant, content: 'hi' }
+        ])).not.toThrow();
     });
 });

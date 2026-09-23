@@ -12,6 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
+import { buildHealSchemaRoutineParams } from '../Database/heal-schema-params';
 
 describe('Phase A — scoped entity field plumbing', () => {
     describe('SQLServerCodeGenProvider.getPendingEntityFieldsSQL', () => {
@@ -41,6 +42,12 @@ describe('Phase A — scoped entity field plumbing', () => {
             // semantic, the scope filter is performance-only and must not displace it
             expect(sql).toContain('EntityFieldID IS NULL');
             expect(sql).toMatch(/AND\s+sf\.EntityID\s+IN\b/);
+        });
+
+        it('adds SchemaName NOT IN when excludeSchemas is supplied (includeSchemas compile)', () => {
+            const sql = provider.getPendingEntityFieldsSQL('__mj', undefined, ['__mj_BizAppsCommon', '__mj']);
+            expect(sql).toContain("e.SchemaName NOT IN ('__mj_BizAppsCommon','__mj')");
+            expect(sql).toContain('EntityFieldID IS NULL');
         });
     });
 
@@ -131,3 +138,75 @@ describe('EDS — external-entity prune guard (PR #2449)', () => {
         expect(sql!).toMatch(/information_schema\.columns[\s\S]*'ExternalDataSourceID'/);
     });
 });
+
+describe('T19 — PostgreSQL callRoutineSQL named notation and unscoped heal parameters (C1, §0.3)', () => {
+    const provider = new PostgreSQLCodeGenProvider();
+
+    it('emits named notation when paramNames is supplied in SELECT * FROM shape', () => {
+        const sql = provider.callRoutineSQL(
+            '__mj',
+            'spUpdateExistingEntityFieldsFromSchema',
+            [`'sys,staging'`, `'custom_schema'`],
+            ['ExcludedSchemaNames', 'IncludedSchemaNames']
+        );
+        expect(sql).toBe(
+            `SELECT * FROM "__mj"."spUpdateExistingEntityFieldsFromSchema"(p_ExcludedSchemaNames => 'sys,staging', p_IncludedSchemaNames => 'custom_schema')`
+        );
+    });
+
+    it('emits named notation when paramNames is supplied in DO $$ ... PERFORM shape', () => {
+        const sql = provider.callRoutineSQL(
+            '__mj',
+            'spDeleteEntityWithCoreDependencies',
+            [`'11111111-1111-1111-1111-111111111111'`],
+            ['EntityID'],
+            true
+        );
+        expect(sql).toBe(
+            `DO $$ BEGIN PERFORM "__mj"."spDeleteEntityWithCoreDependencies"(p_EntityID => '11111111-1111-1111-1111-111111111111'); END $$`
+        );
+    });
+
+    it('stays positional when paramNames is omitted or mismatched in length', () => {
+        const sqlNoNames = provider.callRoutineSQL(
+            '__mj',
+            'spSomeRoutine',
+            [`'val1'`, `'val2'`]
+        );
+        expect(sqlNoNames).toBe(`SELECT * FROM "__mj"."spSomeRoutine"('val1', 'val2')`);
+
+        const sqlMismatched = provider.callRoutineSQL(
+            '__mj',
+            'spSomeRoutine',
+            [`'val1'`, `'val2'`],
+            ['OnlyOneName']
+        );
+        expect(sqlMismatched).toBe(`SELECT * FROM "__mj"."spSomeRoutine"('val1', 'val2')`);
+    });
+
+    it('buildHealSchemaRoutineParams with includeSchemas and undefined entityIDs never lands include list in p_EntityIDs', () => {
+        const heal = buildHealSchemaRoutineParams({
+            authoredExclude: ['sys', 'staging'],
+            includeSchemas: ['tenant_schema'],
+            entityIDs: undefined
+        });
+
+        expect(heal.names).toEqual(['ExcludedSchemaNames', 'IncludedSchemaNames']);
+        expect(heal.values).toEqual([`'sys,staging'`, `'tenant_schema'`]);
+
+        const sql = provider.callRoutineSQL(
+            '__mj',
+            'spUpdateExistingEntityFieldsFromSchema',
+            heal.values,
+            heal.names
+        );
+
+        // Named notation maps directly to p_ExcludedSchemaNames and p_IncludedSchemaNames
+        expect(sql).toContain(`p_ExcludedSchemaNames => 'sys,staging'`);
+        expect(sql).toContain(`p_IncludedSchemaNames => 'tenant_schema'`);
+        // Crucially, p_EntityIDs must not appear in the call
+        expect(sql).not.toContain('p_EntityIDs');
+        expect(sql).not.toContain(`p_EntityIDs => 'tenant_schema'`);
+    });
+});
+

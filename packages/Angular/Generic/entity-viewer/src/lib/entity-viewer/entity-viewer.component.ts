@@ -10,7 +10,7 @@ import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
   EntityViewerConfig,
-  DEFAULT_VIEWER_CONFIG,
+  ResolveViewerConfig,
   RecordSelectedEvent,
   RecordOpenedEvent,
   DataLoadedEvent,
@@ -198,6 +198,20 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       }
       this.viewTypeConfigById.clear();
       this.InternalSortState = null;
+      // The canonical grid state, when WE captured it from the renderer. It was the other entity's
+      // column list, and `resolveCanonicalGridState()` prefers this field over the new entity's own
+      // saved view — so leaving it set applies the old entity's columnSettings to the new one and
+      // only the fields common to both survive. That is the same "no/too-few columns" symptom the
+      // lines above already guard against; this field was simply missed when the canonical store
+      // was introduced (MemberJunction/MJ#4244). Clearing it lets the new entity's saved view, or
+      // its metadata, supply the columns.
+      //
+      // A host-supplied `[GridState]` is deliberately NOT cleared: it is the host's instruction
+      // about the view it is binding, and a host that rebinds the entity rebinds that too.
+      if (this._gridStateFromRenderer) {
+        this._gridState = null;
+        this._gridStateFromRenderer = false;
+      }
       // Throw out the cached plug-in instances — they belong to the previous entity. The next
       // selection rebuilds them fresh for the new entity (correct columns / date fields / geo).
       this.clearDynamicRendererCache();
@@ -441,6 +455,18 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   private _gridState: ViewGridState | null = null;
 
   /**
+   * True when {@link _gridState} was CAPTURED FROM THE RENDERER (the user resized, reordered or
+   * hid a column and the grid handed its state back), rather than supplied by the host through
+   * {@link GridState}.
+   *
+   * The distinction decides one thing only: whether an entity change may throw the state away.
+   * A captured state describes the entity that was on screen when it was captured, so it is
+   * meaningless — and actively harmful — against a different entity. A host-supplied one is the
+   * host's instruction about the view it is binding, and is never discarded on our own initiative.
+   */
+  private _gridStateFromRenderer: boolean = false;
+
+  /**
    * Canonical grid state for the current view — the single, framework-wide source of truth for a
    * view's columns (visibility / order / width / formatting), sort, filter and aggregates. It is
    * the `UserView.GridState` column, also read by `MJUserViewEntity.Columns`, the GraphQL data
@@ -455,6 +481,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   set GridState(value: ViewGridState | null) {
     const previous = this._gridState;
     this._gridState = value;
+    // Host-supplied, so it is no longer ours to discard on an entity change.
+    this._gridStateFromRenderer = false;
     if (this._initialized && value !== previous) {
       this.refreshCanonicalGridStateRenderer();
     }
@@ -788,7 +816,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * Get merged configuration with defaults
    */
   get EffectiveConfig(): Required<EntityViewerConfig> {
-    return { ...DEFAULT_VIEWER_CONFIG, ...this.Config };
+    return ResolveViewerConfig(this.Config);
   }
 
   /**
@@ -1296,26 +1324,31 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       // Build ExtraFilter from view's WhereClause if available
       // The view's WhereClause is the "business filter" - UserSearchString is additive
       const extraFilter = this.ViewEntity?.WhereClause || undefined;
+      const userSearchString = config.serverSideFiltering && !this.ViewEntity?.SmartFilterEnabled
+        ? this.DebouncedFilterText || undefined
+        : undefined;
 
-      const result = await rv.RunView<Record<string, unknown>>({
-        EntityName: entity.Name,
-        ResultType: 'simple',
-        // Load the FULL field set. The container is a generic plug-in host: different view types need
-        // different fields (the grid shows its columns, but Timeline needs the date field, Map needs
-        // lat/long, etc.). It cannot restrict to any one plug-in's columns, so it fetches all fields and
-        // lets each plug-in pick what it needs. (Omitting `Fields` on a 'simple' RunView returns all
-        // entity fields.) Previously this used `computeFieldsList(entity, GridState)` — correct when the
-        // host WAS the grid, but it dropped `__mj_*` date fields, leaving Timeline with "no events".
-        MaxRows: maxRows,
-        StartRow: startRow,
-        OrderBy: orderBy,
-        ExtraFilter: extraFilter,
-        // Only use UserSearchString for regular text search, NOT for smart filters
-        // Smart filters generate WhereClause via AI on the server, so the prompt text should not be passed as UserSearchString
-        UserSearchString: config.serverSideFiltering && !this.ViewEntity?.SmartFilterEnabled
-          ? this.DebouncedFilterText || undefined
-          : undefined
-      });
+      // Page of rows + a count_only query (IgnoreMaxRows so UserViewMaxRows=1000 cannot
+      // cap the total). One RunViews round trip. TotalRowCount on the paged call is the
+      // page length whenever the server skipped COUNT.
+      const [result, countResult] = await rv.RunViews<Record<string, unknown>>([
+        {
+          EntityName: entity.Name,
+          ResultType: 'simple',
+          MaxRows: maxRows,
+          StartRow: startRow,
+          OrderBy: orderBy,
+          ExtraFilter: extraFilter,
+          UserSearchString: userSearchString,
+        },
+        {
+          EntityName: entity.Name,
+          ResultType: 'count_only',
+          ExtraFilter: extraFilter,
+          UserSearchString: userSearchString,
+          IgnoreMaxRows: true,
+        },
+      ]);
 
       // Check if this load is still the current one (detect stale responses)
       if (loadId !== this._loadSequence) {
@@ -1327,15 +1360,18 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
         // Always replace records (page-based navigation, not accumulation)
         this.InternalRecords = result.Results;
 
-        this.TotalRecordCount = result.TotalRowCount;
+        const total = countResult?.Success && countResult.TotalRowCount != null
+          ? countResult.TotalRowCount
+          : result.TotalRowCount;
+        this.TotalRecordCount = total;
         this.FilteredRecordCount = this.InternalRecords.length;
 
         // Update pagination state
-        this.Pagination.totalRecords = result.TotalRowCount;
+        this.Pagination.totalRecords = total;
         this.Pagination.hasMore = false; // No longer used with page-based paging
 
         this.DataLoaded.emit({
-          totalRowCount: result.TotalRowCount,
+          totalRowCount: total,
           loadedRowCount: this.InternalRecords.length,
           loadTime: Date.now() - startTime,
           records: this.InternalRecords
@@ -1343,7 +1379,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
         this.FilteredCountChanged.emit({
           filteredCount: this.InternalRecords.length,
-          totalCount: result.TotalRowCount
+          totalCount: total
         });
       } else {
         if (this.isInitialLoad) {
@@ -2022,11 +2058,27 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    */
   private effectiveRendererConfig(option: ViewModeOption): Record<string, unknown> {
     const base = this.viewTypeConfigById.get(option.viewTypeId) ?? {};
+    const seeded = this.seedEmbeddedGridChrome(base);
     if (!option.descriptor.UsesCanonicalGridState) {
+      return seeded;
+    }
+    const gridState = this.resolveCanonicalGridState(seeded);
+    return gridState ? { ...seeded, gridState } : seeded;
+  }
+
+  /**
+   * Embedded chrome is a container concern: peek cards should not grow a grid toolbar or pager.
+   * Only fill keys the plug-in blob has not already set, so an explicit ViewTypeConfigs still wins.
+   */
+  private seedEmbeddedGridChrome(base: Record<string, unknown>): Record<string, unknown> {
+    if (this.EffectiveConfig.chrome !== 'embedded') {
       return base;
     }
-    const gridState = this.resolveCanonicalGridState(base);
-    return gridState ? { ...base, gridState } : base;
+    return {
+      ...base,
+      showToolbar: base['showToolbar'] ?? false,
+      showPager: base['showPager'] ?? false,
+    };
   }
 
   /**
@@ -2139,6 +2191,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       const newGridState = config['gridState'] as ViewGridState | undefined;
       if (newGridState) {
         this._gridState = newGridState;
+        // Captured from the renderer, so it belongs to the CURRENT entity and must not outlive it.
+        this._gridStateFromRenderer = true;
       }
       if (this.AutoSaveView && this.persistenceTarget() === 'record') {
         void this.persistCanonicalGridState(newGridState);

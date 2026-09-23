@@ -1,6 +1,7 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { trimTrailingStatementTerminators } from '../Misc/sql_text';
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
 
@@ -239,6 +240,45 @@ export interface CascadeDeleteContext {
 }
 
 /**
+ * One live permission entry from the database catalog within the managed scope, captured at
+ * generation time for the reconciliation preamble (see the Field-Level Security DB-tier work).
+ */
+export interface CatalogPermissionEntry {
+    /** The grantee database role name (always one of the managed role SQLNames). */
+    RoleName: string;
+    /** e.g. 'SELECT' | 'EXECUTE' */
+    PermissionName: string;
+    /** 'GRANT' | 'DENY' | 'GRANT_WITH_GRANT_OPTION' */
+    StateDesc: string;
+    /** Non-null for column-level entries (minor_id > 0); null for object-level. */
+    ColumnName: string | null;
+}
+
+/**
+ * Once-per-run context for field-level-security DB-tier emission and permission
+ * reconciliation, computed by the orchestrator (async catalog reads) and handed to the
+ * provider whose emitters are synchronous string builders.
+ */
+export interface FieldSecurityRunContext {
+    /**
+     * SQLNames (lowercased) of roles that a protected principal — the API service login(s)
+     * and the CodeGen login — is a MEMBER of. A column DENY emitted to such a role would
+     * strip the column from the service login itself (DENY beats every sibling GRANT), so
+     * emission SKIPS these roles with a prominent warning instead.
+     */
+    ServiceProtectedRoleSQLNames: Set<string>;
+    /**
+     * Live catalog permission state within the managed scope, keyed
+     * `<schema>.<object>` (lowercased) → entries. Only rows granted to managed roles are
+     * captured; DBA-owned grants to anything else are invisible here and therefore never
+     * touched.
+     */
+    CatalogPermissions: Map<string, CatalogPermissionEntry[]>;
+    /** RoleID → SQLName for resolving EntityFieldPermission rows (which carry only RoleID). */
+    RoleSQLNameByID: Map<string, string>;
+}
+
+/**
  * Abstract base class for database-specific code generation providers.
  *
  * Each database platform (SQL Server, PostgreSQL, etc.) implements this class
@@ -265,6 +305,16 @@ export interface MaterializedColumnSpec {
 }
 
 export abstract class CodeGenDatabaseProvider {
+    /**
+     * Field-security run context (catalog snapshot + protected-role set), set once per run by
+     * the orchestrator before entity generation begins. Null when the platform emits no
+     * DB-tier field security (PostgreSQL, per decision D2) or on runs that could not read the
+     * catalog — emitters must degrade to grants-only emission in that case.
+     */
+    protected _fieldSecurityRunContext: FieldSecurityRunContext | null = null;
+    public SetFieldSecurityRunContext(context: FieldSecurityRunContext | null): void {
+        this._fieldSecurityRunContext = context;
+    }
     /**
      * The SQL dialect instance for this provider.
      */
@@ -392,6 +442,38 @@ export abstract class CodeGenDatabaseProvider {
      */
     generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
         throw new Error(`generateMaterializedWrapperViewSQL is not implemented for platform '${this.PlatformKey}'`);
+    }
+
+    // ─── CONFIG-DECLARED VIEWS ───────────────────────────────────────────
+
+    /**
+     * Generates idempotent create-or-replace DDL for a view whose body is supplied verbatim
+     * by configuration — e.g. an organic key's `TransitiveView` bridge view. Re-running the
+     * statement against an existing view must replace it in place, including when the body's
+     * column list has changed.
+     *
+     * The body is emitted as-is, so it must already be written in this platform's dialect.
+     * Returns a single statement with no trailing batch separator; callers executing it through
+     * `LogSQLAndExecute` pass `includeBatchSeparator` with the provider's `BatchSeparator` so the
+     * migration file still gets one.
+     *
+     * Default throws — each engine provider overrides.
+     *
+     * @param schema    Schema to create the view in.
+     * @param viewName  Unqualified view name.
+     * @param selectSQL The view body (a SELECT statement). A trailing `;` is tolerated.
+     */
+    generateCreateOrReplaceViewSQL(schema: string, viewName: string, selectSQL: string): string {
+        throw new Error(`generateCreateOrReplaceViewSQL is not implemented for platform '${this.PlatformKey}'`);
+    }
+
+    /**
+     * Strips trailing whitespace and statement terminators from a caller-supplied SQL body so
+     * it can be embedded in a larger statement (a view definition, a dynamic `EXECUTE` string).
+     * Linear time — the body comes from configuration (see Misc/sql_text).
+     */
+    protected trimStatementTerminator(sql: string): string {
+        return trimTrailingStatementTerminators(sql);
     }
 
     /**
@@ -757,6 +839,41 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract generateSingleCascadeOperation(context: CascadeDeleteContext): string;
 
+    /**
+     * Resolves which of the parent's primary-key columns a cascading FK references, so the
+     * cascade's `WHERE <fk> = @<param>` binds to the matching `spDelete` parameter (one is
+     * declared per parent PK column). An FK always targets exactly one column:
+     *
+     *  - Single-column parent key: the FK necessarily targets it — returned directly.
+     *  - Composite parent key: the referenced column is `fkField.RelatedEntityFieldName`.
+     *    When it names a parent PK column that column is returned; when it names nothing
+     *    (metadata not yet synced) or a non-key unique column, `null` is returned because
+     *    no `spDelete` parameter carries that value — the caller must skip the cascade
+     *    rather than silently bind the FK to the wrong key column.
+     */
+    protected resolveCascadeParentKeyField(parentEntity: EntityInfo, fkField: EntityFieldInfo): EntityFieldInfo | null {
+        if (parentEntity.PrimaryKeys.length === 1) {
+            return parentEntity.FirstPrimaryKey; // first-pk-ok: single-column parent key; an FK targets exactly one column so it is this one
+        }
+        const referenced = (fkField.RelatedEntityFieldName ?? '').trim().toLowerCase();
+        if (referenced.length === 0) {
+            return null;
+        }
+        return parentEntity.PrimaryKeys.find((k: EntityFieldInfo) => k.Name.trim().toLowerCase() === referenced) ?? null;
+    }
+
+    /**
+     * SQL comment emitted (and warning logged) when a cascade cannot be generated because the
+     * FK on a composite-key parent does not resolve to one of the parent's key columns.
+     */
+    protected unresolvedCascadeKeyComment(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
+        const referenced = (fkField.RelatedEntityFieldName ?? '').trim();
+        const detail = referenced.length > 0
+            ? `references ${parentEntity.Name}.${referenced}, which is not one of its primary key columns (${parentEntity.PrimaryKeys.map((k: EntityFieldInfo) => k.Name).join(', ')})`
+            : `has no RelatedEntityFieldName, so the referenced column of composite-key parent ${parentEntity.Name} is unknown`;
+        return `    -- WARNING: Cannot cascade to ${relatedEntity.Name}.${fkField.Name} — the FK ${detail}; no spDelete parameter carries that value`;
+    }
+
     // ─── TIMESTAMP COLUMNS ───────────────────────────────────────────────
 
     /**
@@ -954,7 +1071,6 @@ export abstract class CodeGenDatabaseProvider {
      */
     generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
         const dialect = this.Dialect;
-        const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement;
         const usingParameterPrefix = !!prefix && prefix.length > 0;
         const parts: string[] = [];
         for (const ef of entityFields) {
@@ -965,10 +1081,12 @@ export abstract class CodeGenDatabaseProvider {
             // this exception, the !AllowUpdateAPI clause below silently strips these
             // out — the metadata discovery query hardcodes `AllowUpdateAPI=0` for every
             // PK row — and the generated INSERT becomes invalid.
-            const isCallerSuppliedPK = ef.IsPrimaryKey && !autoGeneratedPrimaryKey && !excludePrimaryKey;
+            // AutoIncrement is evaluated PER COLUMN: on a composite key such as
+            // (TenantID, ID IDENTITY) only the identity column is database-generated —
+            // the other key columns are still caller-supplied and must stay in the list.
+            const isCallerSuppliedPK = ef.IsPrimaryKey && !ef.AutoIncrement && !excludePrimaryKey;
             if (
                 (excludePrimaryKey && ef.IsPrimaryKey) ||
-                (ef.IsPrimaryKey && autoGeneratedPrimaryKey) ||
                 ef.IsVirtual ||
                 (!ef.AllowUpdateAPI && !isCallerSuppliedPK) ||
                 ef.AutoIncrement
@@ -1380,7 +1498,7 @@ export abstract class CodeGenDatabaseProvider {
      *   avoid re-scanning the entire schema for entities that haven't changed. `undefined`
      *   or empty preserves the prior unscoped behavior.
      */
-    abstract getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string;
+    abstract getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string;
 
     /**
      * Returns an additional WHERE clause fragment for the check-constraints query.

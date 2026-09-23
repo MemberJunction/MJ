@@ -83,6 +83,32 @@ export interface SaveContext {
 }
 
 /**
+ * Work handed to {@link DatabaseProviderBase.RunAfterCommit}. Runs at most once.
+ */
+export type PostCommitTask = () => Promise<void>;
+
+/**
+ * Identifies the transaction frames that were open at one moment, so work registered *later* with
+ * {@link DatabaseProviderBase.RunAfterCommit} is tied to the transaction it came from rather than to
+ * whatever transaction happens to be open when it registers.
+ *
+ * Capture it synchronously with {@link DatabaseProviderBase.CapturePostCommitToken} at the point the
+ * work is caused (e.g. in a save hook, before the first `await`). Opaque to callers — pass it back
+ * to the same provider unchanged.
+ */
+export interface PostCommitToken {
+    /**
+     * The outermost transaction the frames belong to, unique per process, or `null` when the work
+     * was caused with **no transaction open**. A `null` epoch is not "unknown": it says the save is
+     * already durable, so the task runs whenever it registers, rather than being attached to an
+     * unrelated transaction that happens to be open by then.
+     */
+    readonly Epoch: number | null;
+    /** Ids of the open frames, outermost first (the outermost transaction, then each savepoint). */
+    readonly FrameIds: readonly number[];
+}
+
+/**
  * This class is a generic server-side provider class to abstract database operations
  * on any database system and therefore be usable by server-side components that need to
  * do database operations but do not want close coupling with a specific database provider
@@ -174,6 +200,115 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     protected get CurrentTransactionDepth(): number {
         return 0;
+    }
+
+    /**
+     * Public nesting depth. 0 = no ambient TX. Join-TX callers (accounting
+     * CreateJournalEntries) must read this, not `IsInTransaction` (SQL Server
+     * leaves that false). Deprecated camelCase `transactionDepth` alias ships
+     * for one release.
+     */
+    public get TransactionDepth(): number {
+        return this.CurrentTransactionDepth;
+    }
+
+    /**
+     * Independent instance that **shares the connection pool and metadata cache**
+     * but has its own transaction stack. Same pattern MJAPI uses for per-request
+     * providers. Used by an entity directory that `mj sync push` writes with isolated
+     * transactions, so parallel graphs do not interleave `EntityTransactionScope`s on one provider.
+     *
+     * Not SQL Server-specific: each concrete provider implements this against
+     * its own pool. {@link ReleaseIndependentInstance} must NOT close the pool.
+     */
+    public async CreateIndependentInstance(): Promise<DatabaseProviderBase> {
+        throw new Error(`${this.constructor.name} does not implement CreateIndependentInstance`);
+    }
+
+    /**
+     * Drop this instance's transaction handle. Must not close the shared pool.
+     */
+    public async ReleaseIndependentInstance(): Promise<void> {
+        if (this.TransactionDepth > 0) {
+            try {
+                await this.RollbackTransaction();
+            } catch {
+                await this.ResetTransactionState();
+            }
+        }
+    }
+
+    /** @deprecated Use {@link TransactionDepth}. */
+    public get transactionDepth(): number {
+        return this.TransactionDepth;
+    }
+
+    /**
+     * Drop a dead physical handle and reset depth. No-op on providers that
+     * do not track nested transactions. Use after a server-side abort when
+     * {@link RollbackTransaction} itself rejects.
+     */
+    public async ResetTransactionState(): Promise<void> {
+        /* no-op */
+    }
+
+    /**
+     * Run `task` once the ambient transaction on this provider has committed, or now if there is
+     * no ambient transaction.
+     *
+     * Use it for side effects that must only happen for work that is actually durable — queueing
+     * background jobs, firing deferred entity actions — and must not run *inside* the caller's
+     * transaction. Providers that track transactions (see `GenericDatabaseProvider`) queue the task
+     * while a transaction is open, run queued tasks in registration order after the **outermost**
+     * commit succeeds (once the transaction lock is released, so a task may open its own
+     * transaction), and discard them — without running them — when the transaction rolls back,
+     * fails to commit, or is abandoned.
+     *
+     * This default is for providers that do not track transactions: the task starts immediately.
+     *
+     * In every case the caller is never blocked by, and never sees an error from, a task that runs
+     * immediately: it is started fire-and-forget and a rejection is logged with {@link LogError}.
+     *
+     * **Registering late.** Work that is caused inside a transaction but registers after an `await`
+     * may find that transaction already settled. Capture a {@link PostCommitToken} with
+     * {@link CapturePostCommitToken} when the work is caused and pass it here: the task then follows
+     * the transaction the token names (run if it committed, dropped if it — or a savepoint the token
+     * was captured in — rolled back), not whatever is open when it registers. A token captured
+     * with no transaction open runs the task whenever it registers. Without a token at all the
+     * task follows the transaction open at registration time, which is right for a caller that
+     * registers synchronously inside its own transaction and wrong for a deferred one — so pass
+     * a token whenever registration can outlive the save.
+     *
+     * @param task The work to run. Should not throw; a rejection is logged and swallowed.
+     * @param description Short label used in log lines (e.g. `'Entity AI Action'`).
+     * @param _token Where the work was caused, from {@link CapturePostCommitToken}. Ignored by this
+     *              default, which has no transactions to follow.
+     */
+    public RunAfterCommit(task: PostCommitTask, description: string = 'post-commit task', _token?: PostCommitToken): void {
+        void this.RunPostCommitTaskSafely(task, description);
+    }
+
+    /**
+     * Snapshot of the transaction frames open right now, for a later {@link RunAfterCommit}.
+     * Synchronous by contract — call it before the first `await` of the code that causes the work.
+     *
+     * @returns `undefined` when no transaction is open. This default never tracks transactions, so
+     *          it always returns `undefined`.
+     */
+    public CapturePostCommitToken(): PostCommitToken | undefined {
+        return undefined;
+    }
+
+    /**
+     * Await one post-commit task, logging (never rethrowing) its failure. Shared by the immediate
+     * path of {@link RunAfterCommit} and by subclasses that drain a queue after commit.
+     */
+    protected async RunPostCommitTaskSafely(task: PostCommitTask, description: string): Promise<void> {
+        try {
+            await task();
+        } catch (e) {
+            LogError(`Post-commit task '${description}' failed: ${e instanceof Error ? e.message : String(e)}`, undefined, e);
+        }
     }
 
     /**
@@ -780,7 +915,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const ufEntity: BaseEntity = await this.GetEntityObject('MJ: User Favorites', contextUser || this.CurrentUser);
             if (currentFavoriteId !== null) {
                 // delete the record since we are setting isFavorite to FALSE
-                await ufEntity.InnerLoad(CompositeKey.FromKeyValuePair('ID', currentFavoriteId));
+                await ufEntity.InnerLoad(CompositeKey.FromID(currentFavoriteId));
                 if (await ufEntity.Delete()) return;
                 else throw new Error(`Error deleting user favorite`);
             } else {
@@ -819,10 +954,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         try {
             const recordDependencies: RecordDependency[] = [];
 
-            const entityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
-            if (entityDependencies.length === 0) return recordDependencies;
+            // Validate up front. Reporting "no dependencies" for an entity we cannot resolve would be
+            // indistinguishable, to a caller about to delete a record, from "this record is safe to
+            // delete" - the same failure mode as skipping the soft-link query altogether.
+            if (!this.EntityByName(entityName)) {
+                throw new Error(`Entity ${entityName} not found in metadata`);
+            }
 
-            const hardSQL = this.BuildHardLinkDependencySQL(entityDependencies, compositeKey);
+            const entityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
+
+            // Deliberately NO early return when there are no hard (foreign key) dependents. An entity
+            // whose only dependents are polymorphic EntityID/RecordID links is precisely the case the
+            // soft-link query exists to serve, and returning here skipped building it entirely.
+            const hardSQL = entityDependencies.length > 0 ? this.BuildHardLinkDependencySQL(entityDependencies, compositeKey) : '';
             const softSQL = this.BuildSoftLinkDependencySQL(entityName, compositeKey);
             const sSQL = [hardSQL, softSQL].filter(s => s.length > 0).join(' UNION ALL ');
 
@@ -839,14 +983,35 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * The value to write into a dependent record's link column so it points at the surviving record
+     * of a merge.
+     *
+     * The two kinds of link store their target differently, and writing the wrong one is silent: a
+     * hard foreign key holds the bare primary key value, while a polymorphic `RecordID` column holds
+     * the canonical `ID|<guid>` encoding produced by {@link CompositeKey.ToRecordID}. Writing a bare
+     * value into a `RecordID` column leaves a pointer that resolves to nothing *and* re-introduces
+     * the second encoding this work exists to eliminate - so it would corrupt exactly the rows the
+     * merge was supposed to preserve.
+     *
+     * Separated from `MergeRecords` so the choice is directly testable, since nothing about the
+     * resulting row makes the mistake visible after the fact.
+     */
+    protected ResolveMergeLinkValue(dependency: RecordDependency, survivingRecordKey: CompositeKey): unknown {
+        return dependency.IsSoftLink ? survivingRecordKey.ToRecordID() : survivingRecordKey.GetValueByIndex(0);
+    }
+
+    /**
      * Parses raw SQL results from dependency queries into RecordDependency objects.
      */
     private parseRecordDependencyResults(result: Record<string, unknown>[]): RecordDependency[] {
         const recordDependencies: RecordDependency[] = [];
         for (const r of result) {
-            const entityInfo = this.EntityByName(r.EntityName as string);
-            if (!entityInfo) {
-                throw new Error(`Entity ${r.EntityName} not found in metadata`);
+            // PrimaryKeyValue is the key of the *dependent* record - the row that holds the link - so it
+            // is the RelatedEntity's key, and that is the entity whose primary key columns it must be
+            // mapped onto. Consumers use it that way too (record merge loads it as RelatedEntityName).
+            const relatedEntityInfo = this.EntityByName(r.RelatedEntityName as string);
+            if (!relatedEntityInfo) {
+                throw new Error(`Entity ${r.RelatedEntityName} not found in metadata`);
             }
 
             const depCompositeKey: CompositeKey = new CompositeKey();
@@ -854,15 +1019,21 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const keyValues = (r.PrimaryKeyValue as string).split(CompositeKey.DefaultFieldDelimiter);
             keyValues.forEach((kv) => {
                 const parts = kv.split(CompositeKey.DefaultValueDelimiter);
-                pkeys[parts[0]] = parts[1];
+                // Everything after the first delimiter is the value, so a key value containing the
+                // delimiter survives instead of being truncated.
+                pkeys[parts[0]] = parts.slice(1).join(CompositeKey.DefaultValueDelimiter);
             });
-            depCompositeKey.LoadFromEntityInfoAndRecord(entityInfo, pkeys);
+            depCompositeKey.LoadFromEntityInfoAndRecord(relatedEntityInfo, pkeys);
 
             recordDependencies.push({
                 EntityName: r.EntityName as string,
                 RelatedEntityName: r.RelatedEntityName as string,
                 FieldName: r.FieldName as string,
                 PrimaryKey: depCompositeKey,
+                // Both dialects emit this literal on every row of the union: 1/true for the polymorphic
+                // branch, 0/false for the foreign key branch.
+                IsSoftLink: r.IsSoftLink === true || r.IsSoftLink === 1,
+                EntityIDFieldName: (r.EntityIDFieldName as string) ?? undefined,
             });
         }
         return recordDependencies;
@@ -1020,7 +1191,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             isMutation: true,
             description: `Save ${entity.EntityInfo.Name}`,
         };
-        if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+        // Always offer the record-change-free form to the SQL logger, not only when the
+        // entity tracks record changes: it is also the replay-safe form of a create for
+        // migration recordings (MemberJunction/MJ#4503). Execution still uses fullSQL.
+        if (sqlDetails.simpleSQL) {
             opts.simpleSQLFallback = sqlDetails.simpleSQL;
         }
         return opts;
@@ -1493,7 +1667,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     this.OnSuspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
-                    if (entity.EntityInfo.TrackRecordChanges && sqlDetails.simpleSQL) {
+                    if (sqlDetails.simpleSQL) {
                         extraData.simpleSQLFallback = sqlDetails.simpleSQL;
                     }
                     extraData.entityName = entity.EntityInfo.Name;
@@ -2150,7 +2324,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         }
 
         const listEntity: BaseEntity = await this.GetEntityObject('MJ: Lists', contextUser);
-        await listEntity.InnerLoad(CompositeKey.FromKeyValuePair('ID', params.ListID));
+        await listEntity.InnerLoad(CompositeKey.FromID(params.ListID));
 
         const duplicateRun: BaseEntity = await this.GetEntityObject('MJ: Duplicate Runs', contextUser);
         duplicateRun.NewRecord();
@@ -2187,6 +2361,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const e = this.EntityByName(request.EntityName);
         if (!e || !e.AllowRecordMerge)
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
+
+        // IS-A records: the dependency pass below re-points only the foreign keys that target this
+        // entity, and BaseEntity.Delete follows the shared key into the loser's subtype and parent
+        // rows, whose own references never moved. Refuse rather than half-merge.
+        if (e.ParentID)
+            throw new Error(`Entity ${request.EntityName} is an IS-A subtype; merging subtype records is not supported yet`);
+        if (e.ChildEntities.length > 0) {
+            for (const key of [request.SurvivingRecordCompositeKey, ...request.RecordsToMerge]) {
+                const child = await this.FindISAChildEntity(e, key.Values(), contextUser);
+                if (child)
+                    throw new Error(`Record ${key.ToString()} of ${request.EntityName} has a ${child.ChildEntityName} subtype row; merging records another entity extends is not supported yet`);
+            }
+        }
 
         const result: RecordMergeResult = {
             Success: false,
@@ -2226,7 +2413,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 for (const dependency of dependencies) {
                     const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
                     await relatedEntity.InnerLoad(dependency.PrimaryKey);
-                    relatedEntity.Set(dependency.FieldName, request.SurvivingRecordCompositeKey.GetValueByIndex(0));
+                    relatedEntity.Set(dependency.FieldName, this.ResolveMergeLinkValue(dependency, request.SurvivingRecordCompositeKey));
                     if (!(await relatedEntity.Save())) {
                         newRecStatus.Success = false;
                         newRecStatus.Message = `Error updating dependency record ${dependency.PrimaryKey.ToString()} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordCompositeKey.ToString()}`;
@@ -2342,4 +2529,16 @@ export interface ExecuteSQLOptions {
   isMutation?: boolean;
   /** Simple SQL fallback for loggers to emit logging of a simpler SQL statement that doesn't have extra functionality that isn't important for migrations or other logging purposes. */
   simpleSQLFallback?: string;
+  /**
+   * Explicit driver handle (pool, client, or transaction). When set, the statement
+   * bypasses the ambient transaction — required for teardown/probes after a doomed TX.
+   */
+  connectionSource?: object;
+  /**
+   * Run on the pool even while an ambient transaction is open, without naming a handle. For
+   * reads that are not part of any caller's unit of work — the metadata dataset a background
+   * refresh loads — so they never land on the transaction's connection beside its COMMIT. A
+   * pool read sees committed data only (#4514).
+   */
+  ignoreAmbientTransaction?: boolean;
 }

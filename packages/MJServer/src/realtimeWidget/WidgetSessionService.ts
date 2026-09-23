@@ -17,7 +17,7 @@
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJLruCache, UUIDsEqual } from '@memberjunction/global';
 import type { MJConversationWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { ResolveConfiguredPrincipal } from '../auth/principals.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { generateSessionId } from '../auth/magicLink/magicLinkCore.js';
 import { MagicLinkService } from '../auth/magicLink/MagicLinkService.js';
@@ -694,19 +694,7 @@ export class WidgetSessionService {
 
   /** Resolves the server-side context user used to READ widget config (not the guest principal). */
   private resolveLookupUser(): UserInfo | null {
-    const candidate = this.config.contextUserForLookup;
-    if (candidate) {
-      const byName = UserCache.Instance.UserByName(candidate);
-      if (byName) {
-        return byName;
-      }
-      LogError(`[Widget] Configured lookup user '${candidate}' not found; falling back to system/Owner.`);
-    }
-    return (
-      UserCache.Instance.GetSystemUser() ??
-      UserCache.Users.find((u) => u.IsActive && u.Type?.trim().toLowerCase() === 'owner') ??
-      null
-    );
+    return ResolveConfiguredPrincipal(this.config.contextUserForLookup, 'Widget');
   }
 
   /**

@@ -1,0 +1,29 @@
+{
+  "id": "webresearch-parallel-fanout-01",
+  "agent": "Web Research Agent",
+  "tags": [
+    "parallel-actions"
+  ],
+  "description": "Two independent searches warranted in one turn. the provider matrix showed parallel-call support varies by generation even within one vendor; this is the corpus-level version.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Find 2025 solid-state battery commercialization news, and separately the current status of sodium-ion battery production."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Web Search"
+      },
+      {
+        "name": "Web Search"
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

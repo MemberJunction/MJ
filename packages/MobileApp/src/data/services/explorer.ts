@@ -6,6 +6,7 @@
 
 import { Metadata, RunView, RunQuery, CompositeKey, type UserInfo, type EntityInfo, type EntityFieldInfo } from '@memberjunction/core';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
+import { BuildDashboardConfig, type DashboardPanelSpec } from '@/dashboards/dashboard-config';
 
 // ---------------------------------------------------------------------------
 // Entities
@@ -23,7 +24,7 @@ export type EntityListItem = {
  * Entities the user can browse. We surface entities that are not system/
  * internal and that the current user can read. Sorted by display name.
  */
-export function loadEntities(): EntityListItem[] {
+export function LoadEntities(): EntityListItem[] {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     return md.Entities
         .filter((e) => e.AllowUserSearchAPI !== false && !e.Name.startsWith('__'))
@@ -37,7 +38,7 @@ export function loadEntities(): EntityListItem[] {
 }
 
 /** Total number of entities known to the metadata (all, unfiltered). */
-export function entityCount(): number {
+export function EntityCount(): number {
     return new Metadata().Entities.length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
 }
 
@@ -50,7 +51,7 @@ function primaryDisplayField(entity: EntityInfo): EntityFieldInfo | undefined {
         entity.Fields.find((f) => f.Name === entity.NameField?.Name) ??
         entity.Fields.find((f) => f.Name.toLowerCase() === 'name') ??
         entity.Fields.find((f) => f.Type === 'nvarchar' && !f.IsPrimaryKey) ??
-        entity.FirstPrimaryKey
+        entity.FirstPrimaryKey // first-pk-ok: card-title display fallback only; record identity is built from the full key (see LoadEntityRecords)
     );
 }
 
@@ -77,7 +78,7 @@ export type EntityRecordRow = {
     raw: Record<string, unknown>;
 };
 
-/** Result of {@link loadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
+/** Result of {@link LoadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
 export type EntityRecordsLoad = {
     entity: EntityInfo;
     rows: EntityRecordRow[];
@@ -88,7 +89,7 @@ export type EntityRecordsLoad = {
  * Load records for an entity (read-only, card view). Uses `simple` ResultType
  * with a narrowed field set for performance (CLAUDE.md RunView guidance).
  */
-export async function loadEntityRecords(
+export async function LoadEntityRecords(
     entityName: string,
     contextUser?: UserInfo,
     maxRows = 100,
@@ -98,15 +99,15 @@ export async function loadEntityRecords(
     if (!entity) return null;
 
     const titleField = primaryDisplayField(entity);
-    const pk = entity.FirstPrimaryKey;
 
     // Pick up to 3 secondary display fields (default-in-view, non-PK, simple types)
     const secondary = entity.Fields
         .filter((f) => f.DefaultInView && !f.IsPrimaryKey && f.Name !== titleField?.Name)
         .slice(0, 3);
 
+    // Every primary-key column must be selected so the record id round-trips for composite keys too.
     const fields = Array.from(new Set([
-        pk?.Name,
+        ...entity.PrimaryKeys.map((pk) => pk.Name),
         titleField?.Name,
         ...secondary.map((f) => f.Name),
     ].filter((x): x is string => !!x)));
@@ -127,7 +128,9 @@ export async function loadEntityRecords(
     }
 
     const rows: EntityRecordRow[] = (result.Results ?? []).map((r) => {
-        const idVal = pk ? String(r[pk.Name] ?? '') : '';
+        // Compact record id — the bare value for a single-column key, `F1|v1||F2|v2` for a composite
+        // key — which LoadRecordDetail reads back with CompositeKey.FromURLSegment.
+        const idVal = entity.PrimaryKeys.length > 0 ? CompositeKey.FromEntityRecord(entity, r).ToCompactURLSegment() : '';
         const title = titleField ? String(r[titleField.Name] ?? '(no name)') : idVal;
         const subtitle = secondary
             .map((f) => r[f.Name])
@@ -143,7 +146,7 @@ export async function loadEntityRecords(
 /** A single displayable field of a record: its key, label, and stringified value. */
 export type RecordFieldRow = { key: string; label: string; value: string };
 
-/** Result of {@link loadRecordDetail}: the entity metadata, a title, and the projected field rows. */
+/** Result of {@link LoadRecordDetail}: the entity metadata, a title, and the projected field rows. */
 export type RecordDetailLoad = {
     entity: EntityInfo;
     title: string;
@@ -154,7 +157,7 @@ export type RecordDetailLoad = {
  * Load a single record's fields (read-only). Uses GetEntityObject + Load so
  * we get the full strongly-typed entity, then projects displayable fields.
  */
-export async function loadRecordDetail(
+export async function LoadRecordDetail(
     entityName: string,
     recordId: string,
     contextUser?: UserInfo,
@@ -164,7 +167,9 @@ export async function loadRecordDetail(
     if (!entityInfo) return null;
 
     const obj = await md.GetEntityObject(entityName, contextUser);
-    const loaded = await obj.InnerLoad(CompositeKey.FromID(recordId));
+    // The entity is arbitrary — its key column can have any name — so resolve the key against
+    // its metadata rather than assuming `ID` via FromID.
+    const loaded = await obj.InnerLoad(CompositeKey.FromURLSegment(entityInfo, recordId));
     if (!loaded) return null;
 
     const titleField = primaryDisplayField(entityInfo);
@@ -195,6 +200,14 @@ export type QueryListItem = {
     name: string;
     description: string | null;
     category: string | null;
+    /**
+     * Whether the query needs a parameter with no default before it can run.
+     *
+     * A dashboard panel supplies no parameters, so one of these renders as
+     * `Parameter validation failed: Required parameter 'X' is missing` — an error where a panel
+     * should be. The composer needs to know BEFORE offering it, not after saving.
+     */
+    requiresParameters: boolean;
 };
 
 /**
@@ -203,7 +216,7 @@ export type QueryListItem = {
  *
  * @returns The approved queries as {@link QueryListItem}s.
  */
-export function loadQueries(): QueryListItem[] {
+export function LoadQueries(): QueryListItem[] {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     return md.Queries
         .filter((q) => q.Status === 'Approved')
@@ -212,12 +225,14 @@ export function loadQueries(): QueryListItem[] {
             name: q.Name ?? '(unnamed query)',
             description: q.Description ?? null,
             category: q.CategoryInfo?.Name ?? null,
+            // A parameter with a default is fine — the query runs without being asked.
+            requiresParameters: (q.Parameters ?? []).some((p) => p.IsRequired && !p.DefaultValue),
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** Count of approved saved queries in metadata. */
-export function queryCount(): number {
+export function QueryCount(): number {
     return new Metadata().Queries.filter((q) => q.Status === 'Approved').length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
 }
 
@@ -282,11 +297,21 @@ export type DashboardListItem = {
  * @param contextUser Optional acting user (server-side scoping).
  * @returns The dashboards as {@link DashboardListItem}s.
  */
-export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
+export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string; Name: string; Description: string | null }>(
         {
-            EntityName: 'Dashboards',
+            EntityName: 'MJ: Dashboards',
+            // `Config` only. The other two types are not dashboards this app can open: a `Code`
+            // dashboard's panels ARE an Angular component and a `Dynamic Code` dashboard's are
+            // generated at runtime for a browser — neither has anything a native surface could
+            // render, which is why every one of them used to arrive here and then apologise.
+            //
+            // Listing a row that can only disappoint is worse than not listing it: the list stops
+            // being a menu of things you can do and becomes a menu of things you mostly cannot.
+            // A `Config` dashboard is data — panels of queries and artifacts — and renders here
+            // properly, which makes this list exactly the dashboards mobile supports.
+            ExtraFilter: `Type = 'Config'`,
             Fields: ['ID', 'Name', 'Description'],
             OrderBy: 'Name',
             MaxRows: 200,
@@ -296,6 +321,94 @@ export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardL
     );
     if (!result.Success) return [];
     return (result.Results ?? []).map((d) => ({ id: d.ID, name: d.Name, description: d.Description }));
+}
+
+/** An artifact that can be placed on a dashboard. */
+export type DashboardArtifactOption = {
+    id: string;
+    name: string;
+    typeName: string;
+    /** The conversation it came from, so a user can tell two similarly-named artifacts apart. */
+    conversation: string | null;
+};
+
+/**
+ * Lists the artifacts a user can put on a dashboard, newest first.
+ *
+ * Restricted to the types that render as a PANEL rather than a document: an interactive component,
+ * a data/query result, a chart. A 40-page markdown report is an artifact too, and putting it in a
+ * dashboard tile helps nobody.
+ *
+ * @param contextUser Optional acting user (server-side scoping).
+ */
+export async function LoadDashboardArtifactOptions(contextUser?: UserInfo): Promise<DashboardArtifactOption[]> {
+    const rv = new RunView();
+    const result = await rv.RunView<{
+        ID: string; Name: string; ArtifactType: string | null; Conversation: string | null;
+    }>(
+        {
+            EntityName: 'MJ: Conversation Artifacts',
+            Fields: ['ID', 'Name', 'ArtifactType', 'Conversation'],
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 100,
+            ResultType: 'simple',
+        },
+        contextUser,
+    );
+    if (!result.Success) return [];
+    const panelTypes = new Set(['component', 'data', 'data snapshot', 'json', 'image', 'svg image']);
+    return (result.Results ?? [])
+        .filter((a) => panelTypes.has((a.ArtifactType ?? '').trim().toLowerCase()))
+        .map((a) => ({
+            id: a.ID,
+            name: a.Name,
+            typeName: a.ArtifactType ?? 'Artifact',
+            conversation: a.Conversation ?? null,
+        }));
+}
+
+/**
+ * Creates a `Config` dashboard from a set of saved queries.
+ *
+ * The layout it writes is the Golden Layout tree MJ Explorer reads, so a dashboard composed on a
+ * phone opens on the desktop and can be rearranged there — see `dashboard-config.ts` for why a
+ * simpler mobile-only shape was rejected.
+ *
+ * `Type` is `Config` rather than `Code`: every dashboard currently in MJ is a `Code` dashboard
+ * whose panels are an Angular component, which is precisely why none of them render anywhere but
+ * Explorer. A `Config` dashboard is data, and data renders wherever there is a renderer.
+ *
+ * @param name The dashboard's name.
+ * @param description Optional description.
+ * @param panels The panels, in the order the user arranged them.
+ * @param contextUser Optional acting user.
+ * @returns The new dashboard's id, or null with a reason when the save failed.
+ */
+export async function CreateConfigDashboard(
+    name: string,
+    description: string | null,
+    panels: readonly DashboardPanelSpec[],
+    contextUser?: UserInfo,
+): Promise<{ ID: string } | { Error: string }> {
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+    const currentUser = contextUser ?? md.CurrentUser;
+    if (!currentUser) return { Error: 'Not signed in.' };
+
+    const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards', currentUser);
+    dashboard.NewRecord();
+    dashboard.Name = name;
+    dashboard.Description = description;
+    dashboard.UserID = currentUser.ID;
+    dashboard.Type = 'Config';
+    // `Global` rather than `App`: a dashboard composed from Data Explorer is not scoped to an
+    // application, and an `App` scope with no ApplicationID is not a valid row.
+    dashboard.Scope = 'Global';
+    dashboard.UIConfigDetails = BuildDashboardConfig(panels);
+
+    if (!(await dashboard.Save())) {
+        return { Error: dashboard.LatestResult?.Message ?? 'The dashboard could not be saved.' };
+    }
+    return { ID: dashboard.ID };
 }
 
 /** Renderable dashboard part kinds (mirrors MJ's Dashboard Part Types). */
@@ -371,8 +484,23 @@ function kindFromTypeName(name: string): DashboardPartKind {
     return 'unknown';
 }
 
-/** Parse `UIConfigDetails` into raw panels, tolerating malformed JSON. */
-function parsePanels(uiConfigDetails: string): RawPanel[] {
+/**
+ * Parse `UIConfigDetails` into raw panels, tolerating malformed JSON.
+ *
+ * Exported for tests. The shape this has to survive is **Golden Layout's native
+ * `ResolvedLayoutConfig`**, which is what MJ Explorer persists — not the simplified tree the
+ * mobile composer writes. Two properties of that format matter and are easy to get wrong:
+ *
+ * - **Components live inside `stack` nodes**, always, even a stack of one. A walk that only
+ *   descends rows and columns finds nothing in a real Explorer dashboard.
+ * - **Panels in the SAME stack are tabs on a desktop.** A phone has no tabs, so they flatten into
+ *   the panel list in order and stack vertically. Nothing is hidden behind a tab the user cannot
+ *   reach.
+ *
+ * The walk therefore keys on `type === 'component'` and recurses on `content` regardless of node
+ * type — the same thing the Angular viewer's own walker does.
+ */
+export function parsePanels(uiConfigDetails: string): RawPanel[] {
     if (!uiConfigDetails || uiConfigDetails.trim() === '') return [];
     try {
         const parsed: unknown = JSON.parse(uiConfigDetails);
@@ -399,7 +527,7 @@ function parsePanels(uiConfigDetails: string): RawPanel[] {
  * @param dashboardId The dashboard to load.
  * @param contextUser Optional acting user (server-side scoping).
  */
-export async function loadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
+export async function LoadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 

@@ -31,6 +31,17 @@
       "FinalPayloadValidationMaxRetries": 3,
       "AgentTypePromptParams": {
         "enableTaskGraphs": true
+      },
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 5000,
+            "actionNames": [
+              "Search Query Catalog"
+            ]
+          }
+        }
       }
     },
     "relatedEntities": {
@@ -403,8 +414,8 @@
       "ID": "204FF1D6-A807-4278-B71A-9D692F19E808"
     },
     "sync": {
-      "lastModified": "2026-08-07T23:58:28.257Z",
-      "checksum": "98ba8c76d33c7ceb4605f8c58dbf8f2a386aa6a1a0ab1dfe69eb075fc6581c56"
+      "lastModified": "2026-09-12T15:03:57.291Z",
+      "checksum": "5bdf225512d5c5af2254f2917b31b38e5d871abe7236c10854755abafadc0fe0"
     }
   }
 ]

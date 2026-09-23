@@ -285,7 +285,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
                 if (fetchedCount < SWEEP_PAGE_SIZE) {
                     break;
                 }
-                afterKey = CompositeKey.FromID(lastFetchedId);
+                afterKey = CompositeKey.FromID(lastFetchedId); // first-pk-ok: keyset AfterKey on SESSION_ENTITY = MJ: AI Agent Sessions, a core entity keyed by ID
                 continue;
             }
             // Batch-load every channel for this whole page of sessions in ONE query, then hand each
@@ -311,7 +311,7 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             if (fetchedCount < SWEEP_PAGE_SIZE) {
                 break; // partial page (by the SQL-matched set) => end of data
             }
-            afterKey = CompositeKey.FromID(lastFetchedId);
+            afterKey = CompositeKey.FromID(lastFetchedId); // first-pk-ok: keyset AfterKey on SESSION_ENTITY = MJ: AI Agent Sessions, a core entity keyed by ID
         }
         return closedCount;
     }

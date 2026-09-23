@@ -1904,6 +1904,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       try {
         const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
         // Any HTTP response means the server is up
+        await response.body?.cancel().catch(() => { /* nothing to drain */ });
         if (response.status < 500) return true;
       } catch {
         /* server not ready yet */

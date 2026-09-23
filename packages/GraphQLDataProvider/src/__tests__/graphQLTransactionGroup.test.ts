@@ -30,6 +30,15 @@ vi.mock('@memberjunction/core', () => {
 
   return {
     TransactionGroupBase: MockTransactionGroupBase,
+    BaseEntityResult: class {
+      Success = false;
+      Type = '';
+      Message: string | null = null;
+      Error: unknown = null;
+      Errors: unknown[] = [];
+      StartedAt: Date | null = null;
+      EndedAt: Date | null = null;
+    },
     TransactionResult: class {
       Item: unknown;
       Result: unknown;
@@ -97,6 +106,7 @@ describe('GraphQLTransactionGroup', () => {
         BaseEntity: {
           EntityInfo: { Name: 'MJTestEntity' },
           GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+          RegisterResultHistoryEntry: vi.fn(),
         },
         OperationType: 'Create',
       },
@@ -104,6 +114,7 @@ describe('GraphQLTransactionGroup', () => {
         BaseEntity: {
           EntityInfo: { Name: 'MJTestEntity' },
           GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+          RegisterResultHistoryEntry: vi.fn(),
         },
         OperationType: 'Update',
       },
@@ -173,6 +184,7 @@ describe('GraphQLTransactionGroup', () => {
         BaseEntity: {
           EntityInfo: { Name: 'MJTestEntity' },
           GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+          RegisterResultHistoryEntry: vi.fn(),
         },
         OperationType: 'Create',
       },
@@ -180,6 +192,7 @@ describe('GraphQLTransactionGroup', () => {
         BaseEntity: {
           EntityInfo: { Name: 'MJTestEntity' },
           GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+          RegisterResultHistoryEntry: vi.fn(),
         },
         OperationType: 'Update',
       },
@@ -192,6 +205,121 @@ describe('GraphQLTransactionGroup', () => {
     for (const r of results) {
       expect(r.Success).toBe(false);
     }
+  });
+
+  /**
+   * #4309: the server already returns WHY each row was refused — PrepareReturnValue maps
+   * `ErrorMessages` from every entity's `LatestResult` — and the client threw it away, so a UI
+   * could only report the generic "all changes have been rolled back". `TransactionResult`'s own
+   * docstring points consumers at `BaseEntity.LatestResult`, so that is where the reason belongs.
+   */
+  it("registers the server's per-item refusal reason on the entity's result history", async () => {
+    const mockResults = {
+      ExecuteTransactionGroup: {
+        Success: false,
+        ErrorMessages: [
+          JSON.stringify({
+            Success: false,
+            Type: 'create',
+            Message: 'You may only assign a role that you hold yourself',
+            Errors: [{ Source: 'RoleID', Message: 'You may only assign a role that you hold yourself' }],
+          }),
+        ],
+        ResultsJSON: [JSON.stringify({ ID: '123', RoleID: null })],
+      },
+    };
+    mockProvider.ExecuteGQL.mockResolvedValue(mockResults);
+
+    const registered: Array<{ Message: string | null; Success: boolean }> = [];
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    group.PendingTransactions = [
+      {
+        BaseEntity: {
+          EntityInfo: { Name: 'MJ: User Roles' },
+          GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+          RegisterResultHistoryEntry: (r: { Message: string | null; Success: boolean }) => registered.push(r),
+        },
+        OperationType: 'Create',
+      },
+    ];
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    expect(registered).toHaveLength(1);
+    expect(registered[0].Success).toBe(false);
+    expect(registered[0].Message).toContain('You may only assign a role that you hold yourself');
+  });
+
+  it('registers nothing for an item the server did NOT refuse, so no phantom failure is invented', async () => {
+    // A partially-refused group: item 0 was ACCEPTED, item 1 was refused. Only the refusal has a
+    // reason to report.
+    //
+    // Item 0's wire shape is taken from a live capture, not guessed, and it is the whole point of
+    // this test: an accepted row still serializes as `Success: false` with an EMPTY message,
+    // because `DatabaseProviderBase` registers its result before enrolling the row and only flips
+    // it to true in the transaction callback — which never runs when the group is abandoned. So
+    // `Success === false` cannot be the predicate; carrying an actual reason has to be. Keying on
+    // the flag would overwrite `BaseEntity`'s own "Transaction group failed" with a blank message,
+    // making the report WORSE for every non-refused row in a failed group.
+    const mockResults = {
+      ExecuteTransactionGroup: {
+        Success: false,
+        ErrorMessages: [
+          JSON.stringify({ Success: false, Type: 'create', Message: '', Errors: [] }),
+          JSON.stringify({ Success: false, Type: 'create', Message: 'Name cannot be null' }),
+        ],
+        ResultsJSON: [JSON.stringify({ ID: '123' }), JSON.stringify({ ID: '456' })],
+      },
+    };
+    mockProvider.ExecuteGQL.mockResolvedValue(mockResults);
+
+    const registeredPerItem: Array<Array<{ Message: string | null }>> = [[], []];
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    group.PendingTransactions = [0, 1].map((i) => ({
+      BaseEntity: {
+        EntityInfo: { Name: 'MJ: Lists' },
+        GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+        RegisterResultHistoryEntry: (r: { Message: string | null }) => registeredPerItem[i].push(r),
+      },
+      OperationType: 'Create',
+    }));
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    expect(registeredPerItem[0]).toHaveLength(0);
+    expect(registeredPerItem[1]).toHaveLength(1);
+    expect(registeredPerItem[1][0].Message).toContain('Name cannot be null');
+  });
+
+  it('registers nothing when the transaction SUCCEEDED', async () => {
+    const mockResults = {
+      ExecuteTransactionGroup: {
+        Success: true,
+        ErrorMessages: ['null'],
+        ResultsJSON: [JSON.stringify({ ID: '123', Name: 'Created' })],
+      },
+    };
+    mockProvider.ExecuteGQL.mockResolvedValue(mockResults);
+
+    const registered: unknown[] = [];
+    const group = new GraphQLTransactionGroup(mockProvider as never);
+    group.PendingTransactions = [
+      {
+        BaseEntity: {
+          EntityInfo: { Name: 'MJ: Lists' },
+          GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+          RegisterResultHistoryEntry: (r: unknown) => registered.push(r),
+        },
+        OperationType: 'Create',
+      },
+    ];
+
+    const handleSubmit = (group as Record<string, Function>)['HandleSubmit'].bind(group);
+    await handleSubmit();
+
+    expect(registered).toHaveLength(0);
   });
 
   it('should handle empty pending transactions', async () => {
@@ -231,6 +359,7 @@ describe('GraphQLTransactionGroup', () => {
         BaseEntity: {
           EntityInfo: { Name: 'MJTestEntity' },
           GetDataObjectJSON: vi.fn().mockResolvedValue('{}'),
+          RegisterResultHistoryEntry: vi.fn(),
         },
         OperationType: 'Create',
       },

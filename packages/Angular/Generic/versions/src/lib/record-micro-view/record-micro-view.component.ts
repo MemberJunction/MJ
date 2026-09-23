@@ -152,7 +152,8 @@ export class MjRecordMicroViewComponent extends BaseAngularComponent implements 
     public OnEntityLinkClicked(event: MouseEvent, field: FieldDisplay): void {
         event.stopPropagation();
         if (field.ForeignKeyEntityName && field.ForeignKeyRecordId) {
-            const pkey = new CompositeKey([{ FieldName: 'ID', Value: field.ForeignKeyRecordId }]);
+            // The FK target is any entity — resolve its key column from metadata, not a hardcoded ID.
+            const pkey = CompositeKey.FromURLSegment(this.metadata.EntityByName(field.ForeignKeyEntityName), field.ForeignKeyRecordId);
             this.EntityLinkClick.emit({
                 EntityName: field.ForeignKeyEntityName,
                 RecordID: field.ForeignKeyRecordId,
@@ -164,7 +165,8 @@ export class MjRecordMicroViewComponent extends BaseAngularComponent implements 
     public OnOpenRecord(): void {
         if (this.Data.EntityName && this.Data.RecordID) {
             const rawId = this.extractRawId(this.Data.RecordID);
-            const pkey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+            // RecordID is a CompositeKey segment — parse it against the entity's real key column(s).
+            const pkey = CompositeKey.FromURLSegment(this.metadata.EntityByName(this.Data.EntityName), this.Data.RecordID);
             this.OpenRecord.emit({
                 EntityName: this.Data.EntityName,
                 RecordID: rawId,
@@ -209,7 +211,10 @@ export class MjRecordMicroViewComponent extends BaseAngularComponent implements 
         const result = await rv.RunView<RecordChangeSimple>({
             EntityName: 'MJ: Record Changes',
             ExtraFilter: `ID = '${changeId}'`,
-            Fields: ['FullRecordJSON'],
+            // 'EntityID' is required, not decorative: field-level security projects a Record Change's
+            // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot
+            // be resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
+            Fields: ['EntityID', 'FullRecordJSON'],
             ResultType: 'simple'
         });
 

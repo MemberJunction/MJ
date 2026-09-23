@@ -1,5 +1,5 @@
 import { RegisterClass, CleanAndParseJSON } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata } from "@memberjunction/core";
+import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from "@memberjunction/core";
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -35,6 +35,46 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      */
     protected override get SmartFilterImplemented(): boolean {
         return true;
+    }
+
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.validateCustomWhereClauseAuthorization(result);
+        result.Success = result.Success && result.Errors.length === 0;
+        return result;
+    }
+
+    /**
+     * SECURITY gate: `CustomWhereClause = 1` tells the platform to fold the stored
+     * `WhereClause` into view SQL verbatim — it bypasses both the auto-generation in
+     * `UpdateWhereClause()` and the render-time `ValidateUserProvidedSQLClause` screen in
+     * the database provider (custom clauses may legitimately contain constructs that screen
+     * blocks). That makes the CustomWhereClause/WhereClause pair an arbitrary-SQL channel,
+     * so creating or modifying a view with `CustomWhereClause` enabled is restricted to
+     * admin (Owner-type) users. Ordinary views (CustomWhereClause off) are unaffected.
+     */
+    private validateCustomWhereClauseAuthorization(result: ValidationResult): void {
+        const isCustom = !!this.CustomWhereClause; // truthy — the DB may hand back true or 1
+        if (!isCustom) {
+            return;
+        }
+        const customDirty = this.GetFieldByName('CustomWhereClause')?.Dirty === true;
+        const whereDirty = this.GetFieldByName('WhereClause')?.Dirty === true;
+        if (!customDirty && !whereDirty) {
+            // Neither sensitive field changed on this save — nothing new to authorize.
+            return;
+        }
+
+        const user = this.ContextCurrentUser
+            ?? (this.ProviderToUse as unknown as IMetadataProvider).CurrentUser;
+        if (!user || user.Type?.trim().toLowerCase() !== 'owner') {
+            result.Errors.push(new ValidationErrorInfo(
+                'CustomWhereClause',
+                'Only an administrator (Owner-type user) may create or modify a view with CustomWhereClause enabled — the custom WhereClause is executed as raw SQL.',
+                this.CustomWhereClause,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**

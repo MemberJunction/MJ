@@ -1,0 +1,290 @@
+# Extending the MJ Chat Surface — Web and Native
+
+How to tailor MemberJunction's conversational UI for a product (Sidecar's Sid, a tutor surface, an
+embedded assistant) **without forking it**, on Angular and React Native alike.
+
+Read this before building a bespoke chat UI on top of MJ. Almost everything teams reach for a fork
+to do is already an extension point.
+
+---
+
+## 1. The shape of the thing
+
+MJ's conversational stack is split so that **no decision lives in a renderer**:
+
+```
+        @memberjunction/conversations-runtime          ← pure TypeScript, no DOM
+        ────────────────────────────────────
+        MentionParser         the @{"type":…} wire format
+        MentionAutocomplete   who/what you may mention, permission-filtered + ranked
+        ConversationAgentRunner   turn execution
+        DefaultAgentResolver, Streaming, Sessions, …
+                       │
+        ┌──────────────┴──────────────┐
+        ▼                             ▼
+   ng-conversations             MobileApp/src/chat
+   (Angular templates)          (React Native)
+```
+
+A renderer owns **pixels and gestures**. Which agents you may address, which skills an agent
+accepts, how a turn is routed, what a mention serializes to — all runtime. That is what keeps two
+surfaces from disagreeing, and it is why extending is cheap: you are replacing presentation over an
+engine that already knows the rules.
+
+---
+
+## 2. The four extension mechanisms
+
+| Angular | React Native | Use it for |
+|---|---|---|
+| `@Input()` | props | configuration, feature switches |
+| `@Output() EventEmitter` | `On*` callback props | observing and **intercepting** |
+| public methods | `ref` + `useImperativeHandle` | commands (send this, refresh, focus) |
+| `<ng-template mjChatSlot="x">` | component props with typed contracts | replacing whole visual zones |
+
+Plus a fifth that is literally identical on both: **`MJGlobal.ClassFactory` registries**. Composer
+trigger providers, artifact viewers and channel plugins resolve by key from the same registry with
+the same base classes, so a plugin registered for the web is registered for both.
+
+### 2.1 Slots
+
+Seven named zones, same names on both surfaces:
+
+`emptyState` · `agentPresence` · `header` · `headerActions` · `messageExtra` ·
+`demonstrationSurface` · `messageRenderer`
+
+Each has a typed contract and a **shipped default that is exported**, which is what makes three
+different override styles possible:
+
+| Pattern | When |
+|---|---|
+| **Replace** — supply your own component | The zone is wholly yours (Sid's character, Sid's welcome) |
+| **Wrap** — render the default inside yours | You want framing/chrome but not to reimplement behaviour |
+| **Extend** — override part of the contract, pass the rest through | You want the default with a different greeting, count, or title |
+
+```html
+<!-- Angular -->
+<mj-conversation-chat-area>
+  <ng-template mjChatSlot="emptyState"><sid-welcome /></ng-template>
+  <ng-template mjChatSlot="agentPresence" let-state>
+    <sid-character [State]="state" />
+  </ng-template>
+</mj-conversation-chat-area>
+```
+
+```tsx
+// React Native
+<MJChat
+    ConversationID={id}
+    Slots={{
+        emptyState: SidWelcome,
+        agentPresence: SidCharacter,
+        header: (p) => <SidFrame><MJChatHeaderDefault {...p} /></SidFrame>,
+    }}
+/>
+```
+
+Two rules worth knowing before you design around them:
+
+- **`headerActions` is additive** — it renders inside the default header's action strip, after the
+  stock buttons. It is deliberately **not** rendered when a full `header` slot is supplied, because
+  that slot owns the whole header including its actions.
+- **`messageRenderer` is per-item**, not positional. It replaces the feed-vs-bubble decision itself,
+  so you can change how every message looks without touching the list, its scrolling, or its
+  pending/progress handling. Two defaults ship on both surfaces: a **feed** layout (avatar, name,
+  timestamp — the default) and a **bubble** layout (identity from side and colour).
+
+### 2.2 Intercepting, not just observing
+
+The `Before*` half of MJ's cancelable event contract (see
+[UI Layering Guide](UI_LAYERING_GUIDE.md)) lets a host veto rather than merely react:
+
+```tsx
+<MJChat
+    OnBeforeSend={async (text) => (await containsPII(text)) ? false : true}
+    OnTurnComplete={({ Success, ErrorMessage }) => track(Success, ErrorMessage)}
+/>
+```
+
+### 2.3 The composer's feature switches
+
+`MJComposer` is one component shared by the chat thread and the new-conversation screen, so a host
+configures the composer once and both surfaces follow. The switches are named for the Angular
+composer's inputs:
+
+```tsx
+<MJComposer
+    OnSend={send}
+    EnableMentions        // `@` agents and people
+    EnableEntityMentions  // `#` records and queries
+    EnableSkillCommands   // `/` skills, narrowed to the addressed agent
+    EnableAttachments
+    EnableRealtime        // the voice launcher
+    SubmitOnEnter="hardware-keyboard"
+/>
+```
+
+`SubmitOnEnter` deserves a note, because native React Native cannot express the desktop rule
+faithfully. Its key event is `{ key: string }` and nothing more — no modifier bits — so **a hardware
+Shift+Return is indistinguishable from a plain Return on iOS and Android**. React-native-web does
+report `shiftKey`, and the resolver honours it wherever a platform supplies it.
+
+That is why the default is `hardware-keyboard` rather than `always`:
+
+| Policy | Return on a hardware keyboard | Return on an on-screen keyboard |
+|---|---|---|
+| `hardware-keyboard` (default) | sends | inserts a newline |
+| `always` | sends | sends |
+| `never` | inserts a newline | inserts a newline |
+
+An on-screen keyboard has no Shift to escape to, so `always` leaves a phone user with no way at all
+to type a second line — which is why every mainstream phone chat app sends from the button there.
+Pick `always` only if you ship your own newline affordance.
+
+One rule outranks all three, and it matches the web exactly: **while a mention picker is open with
+results, Return completes the mention** instead of sending. An open-but-empty picker deliberately
+lets Return through — the same call `mention-editor.component.ts` makes on the web.
+
+The precedence lives in `MobileApp/src/chat/composer/enter-key.ts` as a pure function, so it is
+unit-tested rather than device-tested.
+
+---
+
+## 3. Theming
+
+Both surfaces read the same token vocabulary. The chat-specific group exists precisely so a product
+can retheme the conversation without disturbing the rest of the palette:
+
+```
+--mj-chat-bubble-user-bg     --mj-chat-composer-bg
+--mj-chat-bubble-user-text   --mj-chat-composer-border
+--mj-chat-bubble-agent-bg    --mj-chat-presence-pulse-color
+--mj-chat-bubble-agent-text  --mj-chat-voice-thinking
+```
+
+On the web these are CSS custom properties. React Native has no CSS, so the values are mirrored in
+TypeScript (`MobileApp/src/theme/tokens.ts` → `ChatColors`); `@memberjunction/realtime-widget` does
+the same for its shadow root. **`_tokens.scss` is the source of truth** — if a mirror disagrees with
+it, the mirror is wrong.
+
+> **Known duplication.** Three mirrors of one palette is a standing argument for promoting the
+> values into a framework-neutral package that emits both the SCSS and a TS object. Not yet done;
+> it touches the token pipeline and the `check:ui` gate.
+
+---
+
+## 3.5 Voice sessions in the thread
+
+A live voice call persists every turn as an ordinary `MJ: Conversation Detail`, stamped with its
+`AgentSessionID`. Rendering those as normal chat bubbles is wrong in the specific sense that a
+forty-turn call buries the typed conversation around it — so both surfaces collapse each session
+into **one** element at the position of its first turn.
+
+The grouping pass and every decision the card makes live in `@memberjunction/conversations-runtime`:
+
+```ts
+import {
+    BuildConversationTimeline,   // rows -> [ message | session ] in order
+    CollectRealtimeSessionIDs,   // the distinct session ids to look up
+    MapRealtimeSessionMeta,      // session rows -> card meta, keyed case-insensitively
+    FindRealtimeSessionMeta,
+    IsVisibleRealtimeTurn,       // which rows count as a turn
+    SessionCardTitle,
+    SessionCardStatusChip,       // { Label, Tone } — Tone is semantic, not a colour
+    SessionCardIsSameDayRange,
+} from '@memberjunction/conversations-runtime';
+```
+
+These were extracted from `ng-conversations`, which is where they had always been — pure TypeScript
+sitting behind an Angular import, which is why the React Native thread had no collapse at all. Both
+surfaces now run the same pass. `ng-conversations` re-exports them from
+`lib/utils/realtime-session-timeline`, so its own call sites were unaffected.
+
+Two things differ between the surfaces, deliberately:
+
+| | Web | React Native |
+|---|---|---|
+| Opening a session | a session-review **overlay** | expands **in place** |
+| Replacing the card | fixed component | `realtimeSessionCard` slot |
+
+The expand is not a cheaper overlay — on a phone a modal would be a second way to read a transcript
+the thread is already showing. It reveals exactly the turns the card counted, because both come
+from `IsVisibleRealtimeTurn`.
+
+> **Asymmetry to close.** `realtimeSessionCard` has no counterpart in `MJChatSlotName` yet: the web
+> creates `RealtimeSessionTimelineCardComponent` as a fixed class from its message list, so hosts
+> cannot replace it there. The mobile slot is named and shaped so the web can grow one without
+> changing this contract.
+
+### Context flows both ways
+
+Voice and text share one conversation, and until recently the sharing was one-directional:
+
+| Direction | Mechanism |
+|---|---|
+| Voice → text | every caption turn is persisted as a `Conversation Detail` — always worked |
+| Text → voice | `ConversationMessages` hydrated at session mint — **was a hardcoded `[]`** |
+
+The consumer had been written all along (`formatConversationHistory` frames it as *"Conversation
+so far"*); only the plumbing was missing, so a call started mid-thread opened knowing nothing about
+what had been typed. It now loads the conversation's turns, newest 30 and at most 8,000 characters
+with the oldest dropped first — the same caps the session-resume path uses.
+
+One subtlety worth knowing before changing it: voice turns are conversation rows too, so a *resumed*
+session would otherwise receive its previous leg twice — once as `PriorTranscript` and once as
+history. The prior-transcript loader returns its leg ids alongside the text, and those legs are
+excluded from the history. Earlier calls that are **not** being resumed stay in, because they are
+genuinely part of the conversation.
+
+---
+
+## 4. The mention wire format
+
+A message composed anywhere must be the same message. Mentions serialize to JSON tokens inside the
+message text, and the runtime parses them back:
+
+```
+@{"type":"agent","id":"E7B3…","name":"Sage"}
+@{"type":"skill","id":"9A21…","name":"Summarize"}
+```
+
+| Token | Becomes | Enforced where |
+|---|---|---|
+| `agent` | `explicitAgentId` — outranks any stored default | runtime |
+| `skill` | `requestedSkillIDs` | server: ∩ agent's accepted skills ∩ your Run permission |
+| `entity` / `query` | `entityMentions` | resolved by the target agent |
+| `user` | `userMentions` | addressing / notification |
+
+**Parse on send, not in the composer.** That keeps the wire format the single source of truth, so a
+token typed by hand behaves exactly like one inserted from a picker.
+
+---
+
+## 5. When an extension point is missing
+
+If you find yourself needing logic that lives inside a renderer, that is usually a packaging bug
+rather than a reason to fork. The test:
+
+> **Does the file import from `@angular/*`? If not, and a non-Angular host needs it, it is in the
+> wrong package.**
+
+Two capabilities have already made that trip — `RealtimeSessionRuntime` (2,768 lines) and
+`MentionAutocomplete` (503 lines), both pure TypeScript stranded in an Angular package. Both moved
+into runtime packages with a thin shim left behind so existing call sites did not change. Propose
+the same rather than copying: a second copy of a permission rule is the copy that drifts.
+
+---
+
+## 6. Where things are
+
+| | |
+|---|---|
+| Runtime | `packages/ConversationsRuntime/src/` |
+| Angular surface | `packages/Angular/Generic/conversations/src/lib/` |
+| Angular slot contracts | `…/components/slots/slot-interfaces.ts` |
+| Native surface | `packages/MobileApp/src/chat/` |
+| Native slot contracts | `packages/MobileApp/src/chat/slots.ts` |
+| Session-timeline grouping + card logic | `packages/ConversationsRuntime/src/timeline/RealtimeSessionTimeline.ts` |
+| Voice-session context hydration | `packages/MJServer/src/resolvers/RealtimeClientSessionResolver.ts` |
+| Native deep-dive | [`packages/MobileApp/src/chat/README.md`](../packages/MobileApp/src/chat/README.md) |
+| Hosting an app on mobile | [MOBILE_APP_HOSTING_GUIDE.md](MOBILE_APP_HOSTING_GUIDE.md) |

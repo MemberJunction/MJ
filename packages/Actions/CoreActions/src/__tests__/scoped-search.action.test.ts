@@ -113,12 +113,16 @@ function mkParam(name: string, value: unknown, type: 'Input' | 'Output' = 'Input
     return { Name: name, Value: value, Type: type };
 }
 
-function mkParams(paramList: Array<{ Name: string; Value: unknown; Type?: 'Input' | 'Output' }>): RunActionParams {
+function mkParams(
+    paramList: Array<{ Name: string; Value: unknown; Type?: 'Input' | 'Output' }>,
+    context?: Record<string, unknown>,
+): RunActionParams {
     return {
         Action: { Name: 'Scoped Search' },
         ContextUser: { ID: 'u1' },
         Params: paramList.map(p => mkParam(p.Name, p.Value, p.Type ?? 'Input')),
         Filters: [],
+        ...(context ? { Context: context } : {}),
     } as unknown as RunActionParams;
 }
 
@@ -532,6 +536,122 @@ describe('ScopedSearchAction', () => {
             ]));
             expect(result.Success).toBe(false);
             expect(searchSpy).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('AISkillID — bound to the RUN when inside one (Context.ActiveSkillIDs)', () => {
+        // BaseAgent.ExecuteSingleAction stamps Context.ActiveSkillIDs (the skills the run actually
+        // activated) before every action call. Inside a Loop agent the AISkillID parameter is written by
+        // the MODEL, so the run is the authority: a named skill the run never activated is refused, and a
+        // lone active skill becomes the principal without the model having to name it.
+        const SKILL_UUID = '11111111-2222-4333-8444-555555555555';
+        const OTHER_UUID = '99999999-8888-4777-8666-555555555555';
+
+        beforeEach(() => {
+            loadedSkillStub.ID = SKILL_UUID;
+            loadedSkillStub.Load = async () => true;
+            loadedSkillStub.SearchScopeAccess = 'All';
+            loadedAgentStub.SearchScopeAccess = 'All';
+            globalScopeStub = { ID: 'global-id', Name: 'Global', IsGlobal: true };
+        });
+
+        it('defaults the principal to the run\'s lone active skill when none is named', async () => {
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams(
+                [{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }],
+                { ActiveSkillIDs: [SKILL_UUID] },
+            ));
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].AISkillID).toBe(SKILL_UUID);
+            const gateArgs = permissionResolveSpy.mock.calls[permissionResolveSpy.mock.calls.length - 1]?.[0] as { Skill?: { ID: string } | null };
+            expect(gateArgs.Skill?.ID).toBe(SKILL_UUID);
+        });
+
+        it('REFUSES a named skill the run never activated (the model cannot widen its own reach)', async () => {
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams(
+                [{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, { Name: 'AISkillID', Value: OTHER_UUID }],
+                { ActiveSkillIDs: [SKILL_UUID] },
+            ));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it('REFUSES a named skill when the run has NO active skill (empty array is still "inside a run")', async () => {
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams(
+                [{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, { Name: 'AISkillID', Value: SKILL_UUID }],
+                { ActiveSkillIDs: [] },
+            ));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it('accepts a named skill that IS active in the run', async () => {
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams(
+                [{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, { Name: 'AISkillID', Value: SKILL_UUID.toUpperCase() }],
+                { ActiveSkillIDs: [SKILL_UUID] },
+            ));
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].AISkillID).toBe(SKILL_UUID);
+        });
+
+        it('does NOT pick a default when several skills are active and none is named', async () => {
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams(
+                [{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }],
+                { ActiveSkillIDs: [SKILL_UUID, OTHER_UUID] },
+            ));
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].AISkillID).toBeUndefined();
+        });
+
+        it('outside an agent run (no ActiveSkillIDs on the context) the explicit parameter still rules', async () => {
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams(
+                [{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, { Name: 'AISkillID', Value: SKILL_UUID }],
+            ));
+            expect(result.Success).toBe(true);
+            expect(searchSpy.mock.calls[0][0].AISkillID).toBe(SKILL_UUID);
+        });
+    });
+
+    describe('AgentID — bound to the RUN when inside one (Context.AgentID)', () => {
+        // Inside a Loop agent the AgentID parameter is model-written, like AISkillID. It may restate the
+        // run's identity, never replace it: a different agent would be judged by THAT agent's
+        // SearchScopeAccess and grants.
+        beforeEach(() => {
+            loadedAgentStub.SearchScopeAccess = 'All';
+            globalScopeStub = { ID: 'global-id', Name: 'Global', IsGlobal: true };
+        });
+
+        it('REFUSES an explicit AgentID that differs from the run\'s stamped agent', async () => {
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams(
+                [{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-other' }],
+                { AgentID: 'agent-1', ActiveSkillIDs: [] },
+            ));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it('accepts an explicit AgentID that restates the run\'s agent (case-insensitively)', async () => {
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams(
+                [{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'AGENT-1' }],
+                { AgentID: 'agent-1', ActiveSkillIDs: [] },
+            ));
+            expect(result.Success).toBe(true);
+        });
+
+        it('outside a run (no Context.AgentID) the explicit AgentID is the only source, as before', async () => {
+            const action = new ScopedSearchAction();
+            const result = await run(action, mkParams([{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }]));
+            expect(result.Success).toBe(true);
         });
     });
 

@@ -106,7 +106,7 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
      * Get the artifactId as a CompositeKey for the tree dropdown
      */
     public get ArtifactIdAsKey(): CompositeKey | null {
-        return this.artifactId ? CompositeKey.FromID(this.artifactId) : null;
+        return this.artifactId ? CompositeKey.FromID(this.artifactId) : null; // first-pk-ok: artifactId is an MJ: Artifacts record (ArtifactLeafConfig) — core entity keyed by ID
     }
 
     public async initFromConfig(config: PanelConfig | null): Promise<void> {

@@ -2,10 +2,10 @@
  * Record edit service — turns a single MJ record into an editable form model and
  * saves user edits back through the MJ object model.
  *
- * Flow: {@link loadRecordForEdit} loads a strongly-typed {@link BaseEntity} via
+ * Flow: {@link LoadRecordForEdit} loads a strongly-typed {@link BaseEntity} via
  * `Metadata.GetEntityObject` + `InnerLoad`, projects its editable scalar fields
  * into {@link FieldEditorDescriptor}s (driven by `EntityFieldInfo` metadata), and
- * captures the current values as a form-friendly bag. {@link saveRecord} applies
+ * captures the current values as a form-friendly bag. {@link SaveRecord} applies
  * the edited values back onto the live entity, runs `BaseEntity.Validate()`, and
  * calls `BaseEntity.Save()` — returning a typed {@link RecordSaveResult}.
  *
@@ -65,7 +65,7 @@ export type FieldEditorDescriptor = {
     options: EditorOption[];
 };
 
-/** Result of {@link loadRecordForEdit}: the live entity plus its form model. */
+/** Result of {@link LoadRecordForEdit}: the live entity plus its form model. */
 export type RecordEditLoad = {
     /** The loaded, strongly-typed entity — retained so edits can be saved to it. */
     record: BaseEntity;
@@ -84,7 +84,7 @@ export type RecordEditLoad = {
 /** A per-field validation failure surfaced inline in the form. */
 export type FieldValidationError = { key: string; message: string };
 
-/** Result of {@link saveRecord}: success plus an optional error / field errors. */
+/** Result of {@link SaveRecord}: success plus an optional error / field errors. */
 export type RecordSaveResult = {
     success: boolean;
     /** A single human-readable error message when `success` is false. */
@@ -139,7 +139,7 @@ export type FieldMeta = {
  * @param field The entity field metadata to read.
  * @returns A structural {@link FieldMeta} snapshot.
  */
-export function describeField(field: EntityFieldInfo): FieldMeta {
+export function DescribeField(field: EntityFieldInfo): FieldMeta {
     return {
         name: field.Name,
         label: field.DisplayName || field.Name,
@@ -162,7 +162,7 @@ export function describeField(field: EntityFieldInfo): FieldMeta {
  * @param meta The field metadata snapshot.
  * @returns True when the field should appear in the edit form.
  */
-export function isEditableField(meta: FieldMeta): boolean {
+export function IsEditableField(meta: FieldMeta): boolean {
     return !meta.readOnly && !meta.isVirtual && meta.status === 'Active';
 }
 
@@ -175,7 +175,7 @@ export function isEditableField(meta: FieldMeta): boolean {
  * @param meta The field metadata snapshot.
  * @returns The editor kind to render.
  */
-export function editorKindForField(meta: FieldMeta): EditorKind {
+export function EditorKindForField(meta: FieldMeta): EditorKind {
     if (meta.valueListType !== EntityFieldValueListType.None && meta.options.length > 0) return 'dropdown';
     switch (meta.tsType) {
         case EntityFieldTSType.Boolean:
@@ -197,8 +197,8 @@ export function editorKindForField(meta: FieldMeta): EditorKind {
  * @param meta The field metadata snapshot.
  * @returns The descriptor the form renders.
  */
-export function buildDescriptor(meta: FieldMeta): FieldEditorDescriptor {
-    const kind = editorKindForField(meta);
+export function BuildDescriptor(meta: FieldMeta): FieldEditorDescriptor {
+    const kind = EditorKindForField(meta);
     return {
         key: meta.name,
         label: meta.label,
@@ -222,7 +222,7 @@ export function buildDescriptor(meta: FieldMeta): FieldEditorDescriptor {
  * @param kind The editor kind for the field.
  * @returns A form-friendly value.
  */
-export function formValueFromRaw(raw: unknown, kind: EditorKind): FieldValue {
+export function FormValueFromRaw(raw: unknown, kind: EditorKind): FieldValue {
     if (kind === 'boolean') return raw === true;
     if (raw === null || raw === undefined) return '';
     if (kind === 'date') return raw instanceof Date ? raw.toISOString() : String(raw);
@@ -235,13 +235,13 @@ export type EntityFieldValue = string | number | boolean | Date | null;
 /**
  * Convert a form-side {@link FieldValue} back to the concrete type the entity
  * expects for the given editor kind. Empty strings become `null`; numbers and
- * dates are parsed. Callers should validate first (see {@link validateRequired}).
+ * dates are parsed. Callers should validate first (see {@link ValidateRequired}).
  *
  * @param value The current form value.
  * @param kind The editor kind for the field.
  * @returns The value to hand to `BaseEntity.Set`.
  */
-export function entityValueFromForm(value: FieldValue, kind: EditorKind): EntityFieldValue {
+export function EntityValueFromForm(value: FieldValue, kind: EditorKind): EntityFieldValue {
     if (kind === 'boolean') return value === true;
     if (typeof value !== 'string' || value === '') return null;
     if (kind === 'number') {
@@ -263,7 +263,7 @@ export function entityValueFromForm(value: FieldValue, kind: EditorKind): Entity
  * @param values The current form values.
  * @returns One {@link FieldValidationError} per failing field (empty when valid).
  */
-export function validateRequired(
+export function ValidateRequired(
     descriptors: FieldEditorDescriptor[],
     values: Record<string, FieldValue>,
 ): FieldValidationError[] {
@@ -319,7 +319,7 @@ function computeCanUpdate(entity: EntityInfo, user: UserInfo | undefined): boole
  * @param contextUser Optional acting user (server-side scoping / permission check).
  * @returns The {@link RecordEditLoad}, or `null` when unavailable.
  */
-export async function loadRecordForEdit(
+export async function LoadRecordForEdit(
     entityName: string,
     recordId: string,
     contextUser?: UserInfo,
@@ -329,12 +329,13 @@ export async function loadRecordForEdit(
     if (!entity) return null;
 
     const record = await md.GetEntityObject<BaseEntity>(entityName, contextUser);
-    const loaded = await record.InnerLoad(CompositeKey.FromID(recordId));
+    // Arbitrary entity: resolve the key column from metadata instead of assuming `ID`.
+    const loaded = await record.InnerLoad(CompositeKey.FromURLSegment(entity, recordId));
     if (!loaded) return null;
 
-    const descriptors = entity.Fields.map(describeField).filter(isEditableField).map(buildDescriptor);
+    const descriptors = entity.Fields.map(DescribeField).filter(IsEditableField).map(BuildDescriptor);
     const values: Record<string, FieldValue> = {};
-    for (const d of descriptors) values[d.key] = formValueFromRaw(record.Get(d.key), d.kind);
+    for (const d of descriptors) values[d.key] = FormValueFromRaw(record.Get(d.key), d.kind);
 
     return {
         record,
@@ -354,7 +355,7 @@ function applyEdits(load: RecordEditLoad, values: Record<string, FieldValue>): v
         // field marks untouched fields dirty and can round-trip a value into a form
         // the entity rejects at Validate()/Save() time — which silently blocked saves.
         if (values[d.key] === load.values[d.key]) continue;
-        load.record.Set(d.key, entityValueFromForm(values[d.key], d.kind));
+        load.record.Set(d.key, EntityValueFromForm(values[d.key], d.kind));
     }
 }
 
@@ -387,10 +388,11 @@ function buildOfflineChanges(
     const changedFields: Record<string, QueueScalar> = {};
     for (const d of load.descriptors) {
         if (values[d.key] === load.values[d.key]) continue;
-        changedFields[d.key] = toQueueScalar(entityValueFromForm(values[d.key], d.kind));
+        changedFields[d.key] = toQueueScalar(EntityValueFromForm(values[d.key], d.kind));
     }
-    const pkField = load.entity.FirstPrimaryKey;
-    const primaryKey = pkField ? String(load.record.Get(pkField.Name)) : null;
+    // The entity is arbitrary (any key column name, possibly composite), so serialize the record's full
+    // primary key in the compact form offline-sync reads back with CompositeKey.FromURLSegment.
+    const primaryKey = load.entity.PrimaryKeys.length > 0 ? load.record.PrimaryKey.ToCompactURLSegment() : null;
     return { changedFields, primaryKey };
 }
 
@@ -416,7 +418,7 @@ function queueOfflineEdit(load: RecordEditLoad, values: Record<string, FieldValu
  * @param contextUser Optional acting user (unused directly; the entity carries its user).
  * @returns A typed result describing success or the failure reason.
  */
-export async function saveRecord(
+export async function SaveRecord(
     load: RecordEditLoad,
     values: Record<string, FieldValue>,
     contextUser?: UserInfo,
@@ -426,7 +428,7 @@ export async function saveRecord(
         return { success: false, error: 'You do not have permission to update this record.' };
     }
 
-    const requiredErrors = validateRequired(load.descriptors, values);
+    const requiredErrors = ValidateRequired(load.descriptors, values);
     if (requiredErrors.length > 0) return { success: false, validationErrors: requiredErrors };
 
     applyEdits(load, values);

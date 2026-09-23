@@ -109,7 +109,7 @@ export class AuthorizationStateManager {
 
     this.states.set(proxyState, state);
 
-    console.log(`OAuth Proxy: Created state ${proxyState.substring(0, 8)}... for client ${params.clientId}`);
+    console.log(`OAuth Proxy: Created state ${proxyState.substring(0, 8)}... for client ${JSON.stringify(params.clientId)}`);
 
     return proxyState;
   }

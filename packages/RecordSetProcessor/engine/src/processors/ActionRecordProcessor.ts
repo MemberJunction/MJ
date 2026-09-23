@@ -22,7 +22,7 @@ export class ActionRecordProcessor implements IRecordProcessor {
      * @param inputMapping - Optional mapping config resolved against `{ record, recordId, entityId }`
      *   to build the action's input params (e.g. `{ "CustomerID": "record.ID", "Tier": "record.Tier" }`).
      */
-    constructor(private readonly actionID: string, private readonly inputMapping?: unknown) {}
+    constructor(private readonly actionID: string, private readonly inputMapping?: Record<string, string>) {}
 
     /** Named sources exposed to the input mapping for a record. */
     public static buildSources(record: RecordRef): Record<string, unknown> {
@@ -30,7 +30,7 @@ export class ActionRecordProcessor implements IRecordProcessor {
     }
 
     /** Resolves the input mapping into Action input params. */
-    public static buildActionParams(inputMapping: unknown, record: RecordRef): ActionParam[] {
+    public static buildActionParams(inputMapping: Record<string, string> | undefined, record: RecordRef): ActionParam[] {
         const mapped = inputMapping
             ? resolveValueMapping<Record<string, unknown>>(inputMapping, ActionRecordProcessor.buildSources(record))
             : {};

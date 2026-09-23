@@ -21,6 +21,7 @@ The `sync` blocks will be automatically added/updated when `mj sync push` runs.
 1. PRs contribute ONLY the declarative metadata JSON changes (fields + `@lookup` refs + `uuidgen` primaryKey, no `sync`).
 2. At build time, the build engineer takes all merged PRs on `next` and runs `mj sync push` against a clean DB at the last released version.
 3. That push generates ONE consolidated metadata-sync migration for the release (SQL Server + PostgreSQL) and writes the `sync` blocks back into the JSON files.
+4. **Post-Sync Verification**: After applying a new `Metadata_Sync` migration to a from-nothing database, verify that `SELECT COUNT(*) FROM [__mj].[EntityField] WHERE ID IN (<ids in file>)` matches the count of `-- Save MJ: Entity Fields` blocks. `spUpdateEntityField` is a full-row procedure that silently no-ops when an ID is absent rather than throwing a SQL error.
 
 Hand-authoring per-PR sync migrations duplicates this step, creates many small migrations instead of one per build, and risks drift from the real push output.
 
@@ -73,6 +74,13 @@ All agents in MemberJunction currently use the "Loop" agent type, which provides
 - **ResponseFormat**: Typically "JSON" for agent prompts
 - **PromptRole**: "System" for agent system prompts
 - **PromptPosition**: "First" for primary prompts
+
+#### Deprecating an AI Model Vendor
+`Status` values differ per entity — always check the target entity's allowed values, they are not interchangeable.
+- Vendor row (`MJ: AI Model Vendors`): `Status: "Inactive"`.
+- Its paired cost row (`MJ: AI Model Costs`): `Status: "Expired"` plus an `EndedAt` ISO timestamp.
+- `"Inactive"` is **not** a valid cost `Status` — the CHECK constraint allows only `Active`, `Pending`, `Expired`, `Invalid`, and a bad value fails `mj sync push` in CI.
+- Run `mj sync validate --dir=metadata` before opening a PR.
 
 ### 5. Template Variable Conventions
 Agent prompt templates receive these standard variables:
@@ -181,16 +189,16 @@ metadata/
 Run from the **repository root** (not from inside `metadata/`):
 ```bash
 # Push all metadata
-npx mj sync push --dir=metadata
+pnpm mj sync push --dir=metadata
 
 # Push only specific entity directories (use --include)
-npx mj sync push --dir=metadata --include="prompts"
+pnpm mj sync push --dir=metadata --include="prompts"
 
 # Exclude problematic directories (use --exclude)
-npx mj sync push --dir=metadata --exclude="api-application-scopes"
+pnpm mj sync push --dir=metadata --exclude="api-application-scopes"
 
 # Multiple patterns (comma-separated)
-npx mj sync push --dir=metadata --include="prompts,agents"
+pnpm mj sync push --dir=metadata --include="prompts,agents"
 ```
 
 **Important:**
@@ -304,7 +312,7 @@ When a migration creates a new lookup or reference table (e.g., `AIAgentRequestT
    }
    ```
 3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — see rule 1.
-4. Push with: `npx mj sync push --dir=metadata --include="agent-request-types"`
+4. Push with: `pnpm mj sync push --dir=metadata --include="agent-request-types"`
 
 **Why metadata files over SQL INSERTs:**
 - Version-controlled, declarative, and human-readable

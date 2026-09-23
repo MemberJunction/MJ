@@ -194,7 +194,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
         return {
             OwnerIDFieldName: ownerIDField?.Name,
             NameFieldName: nameField?.Name,
-            PrimaryKeyFieldName: entity.FirstPrimaryKey.Name
+            PrimaryKeyFieldName: entity.FirstPrimaryKey.Name // first-pk-ok: ResourcePermission.ResourceRecordID stores one key value, so resource entities are single-column by contract
         }
     }
 }
