@@ -9,3 +9,5 @@ export * from './operator';
 export * from './manifest';
 export * from './validation';
 export * from './filter';
+export * from './backoff';
+export * from './compatibility';
