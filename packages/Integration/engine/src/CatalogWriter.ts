@@ -128,6 +128,12 @@ export interface CatalogWriter {
 
     ObjectsInScope(): Promise<MJIntegrationObjectEntity[]>;
     FieldsForObject(objectID: string): Promise<MJIntegrationObjectFieldEntity[]>;
+    /**
+     * Lowercased ids of the given objects that already carry a primary key, from one two-column
+     * scan per 200 owners. The classify stage used to load every object's fields as entity
+     * objects just to ask `some(IsPrimaryKey)`; the keyed majority needs nothing else.
+     */
+    KeyedObjectIDs(objectIDs: readonly string[]): Promise<Set<string>>;
     NewObjectRow(): Promise<MJIntegrationObjectEntity>;
     NewFieldRow(): Promise<MJIntegrationObjectFieldEntity>;
     LoadObject(objectID: string): Promise<MJIntegrationObjectEntity | null>;
@@ -248,6 +254,39 @@ async function viewRows<T>(
     return (res.Results ?? []).map(r => proxyRow<T>(r, entityName, guard, aliases));
 }
 
+/**
+ * Which of these owner rows already carry a primary key — one two-column scan per 200 owners
+ * rather than one entity-object read per owner.
+ *
+ * The key flag is filtered here rather than in SQL: `IsPrimaryKey = 1` is a bit on SQL Server
+ * and a boolean on Postgres, and this code runs on both. Owner ids are compared lowercased —
+ * the two dialects return GUID text in different cases.
+ */
+async function keyedOwnerIDs(
+    entityName: string, ownerColumn: string, ownerIDs: readonly string[],
+    contextUser: UserInfo, provider: IMetadataProvider | undefined
+): Promise<Set<string>> {
+    const keyed = new Set<string>();
+    const CHUNK = 200;
+    for (let i = 0; i < ownerIDs.length; i += CHUNK) {
+        const slice = ownerIDs.slice(i, i + CHUNK);
+        if (slice.length === 0) continue;
+        const list = slice.map(id => `'${lit(String(id))}'`).join(',');
+        const rv = new RunView(provider as DatabaseProviderBase | undefined);
+        const res = await rv.RunView<Record<string, unknown>>(
+            { EntityName: entityName, ExtraFilter: `${ownerColumn} IN (${list})`, Fields: [ownerColumn, 'IsPrimaryKey'], ResultType: 'simple' },
+            contextUser);
+        if (!res?.Success) {
+            throw new CompanyIntegrationCatalogReadFailed(entityName, `${ownerColumn} IN (${slice.length} ids)`, res?.ErrorMessage ?? 'RunView returned no result');
+        }
+        for (const row of res.Results ?? []) {
+            const flag = row.IsPrimaryKey;
+            if (flag === true || flag === 1 || flag === '1' || flag === 'true') keyed.add(String(row[ownerColumn]).toLowerCase());
+        }
+    }
+    return keyed;
+}
+
 /** A catalog read that did not succeed: the entity, the filter and the provider's own message. */
 export class CompanyIntegrationCatalogReadFailed extends Error {
     public readonly EntityName: string;
@@ -308,6 +347,10 @@ export class SharedCatalogWriter implements CatalogWriter {
     public FieldsForObject(objectID: string): Promise<MJIntegrationObjectFieldEntity[]> {
         return viewRows(SharedCatalogWriter.FIELDS, `IntegrationObjectID = '${lit(objectID)}'`,
                         this.contextUser, this.md, null, null);
+    }
+
+    public KeyedObjectIDs(objectIDs: readonly string[]): Promise<Set<string>> {
+        return keyedOwnerIDs(SharedCatalogWriter.FIELDS, 'IntegrationObjectID', objectIDs, this.contextUser, this.md);
     }
 
     /**
@@ -403,6 +446,10 @@ export class PerConnectionCatalogWriter implements CatalogWriter {
         return viewRows(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
                         `CompanyIntegrationObjectID = '${lit(objectID)}'`,
                         this.contextUser, this.md, CATALOG_FIELD_COLUMNS, FIELD_WRITE_ALIASES);
+    }
+
+    public KeyedObjectIDs(objectIDs: readonly string[]): Promise<Set<string>> {
+        return keyedOwnerIDs(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS, 'CompanyIntegrationObjectID', objectIDs, this.contextUser, this.md);
     }
 
     public NewObjectRow(): Promise<MJIntegrationObjectEntity> {

@@ -848,12 +848,22 @@ export class IntegrationConnectorCreationPipeline {
         // its nominee to primary key — would have had nothing to write to.
         const writer = BuildCatalogWriter(md, opts.CompanyIntegration, opts.ContextUser);
         const objects = (await writer.ObjectsInScope()).filter(o => o.Status === 'Active');
+        // Ask ONCE which objects already have a key. The loop below used to load every object's
+        // fields as entity objects just to test `some(IsPrimaryKey)` — 97,414 BaseEntity instances
+        // on an 888-object catalog, right after the run's largest write. The keyed majority needs
+        // nothing else and is settled from one scan; the entity read is kept for the keyless
+        // minority, whose nominee must be Saved.
+        const keyedObjectIDs = await writer.KeyedObjectIDs(objects.map(o => String(o.ID)));
 
         const classifier = new SoftPKClassifier();
         const verdicts: ConnectorCreationPipelineResult['PKVerdicts'] = [];
         const unresolved: string[] = [];
 
         for (const obj of objects) {
+            if (keyedObjectIDs.has(String(obj.ID).toLowerCase())) {
+                emitter.entityGenerated(obj.Name, obj.Name);
+                continue;
+            }
             const fields = await writer.FieldsForObject(obj.ID);
             const hasPK = fields.some(f => f.IsPrimaryKey);
             if (hasPK) {
