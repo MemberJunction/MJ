@@ -2474,19 +2474,25 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         }
 
         // Details, agent runs and the junction entities all resolve through the detail cache and
-        // return early when the conversation they name is not in it. With the cache empty — any
-        // session that has not opened a conversation — none of them can do anything, whatever the
-        // row says. (A non-empty cache still needs the read: ConversationID is a foreign key, so
-        // the primary key cannot tell us whether this detail belongs to a conversation we hold.)
+        // return early when the conversation they name is not in it.
+        //
+        // A remote DELETE can never be served: the record is gone, so the re-read comes back null
+        // and every one of those handlers early-returns on the missing foreign key. The round trip
+        // could not change an outcome, so it is not made. (That these handlers cannot act on a
+        // remote delete at all is a pre-existing gap — deletes never carried `recordData` at either
+        // publish site — and is not what this method is for.) Local deletes are unaffected: the
+        // free-row check above already returned true for them.
+        if (effectiveType === 'delete') {
+            return false;
+        }
+
+        // With the cache empty — any session that has not opened a conversation — none of them can
+        // do anything, whatever the row says. (A non-empty cache still needs the read:
+        // ConversationID is a foreign key, so the primary key cannot tell us whether this detail
+        // belongs to a conversation we hold.)
         return this._detailCache.size > 0;
     }
 
-    /**
-     * Extracts record data from a BaseEntityEvent.
-     * For local events: uses baseEntity directly.
-     * For remote-invalidate events: parses recordData JSON from the payload.
-     * Returns null if no data is available.
-     */
     /**
      * This record's id, from the primary key the event always carries.
      *
@@ -2501,25 +2507,6 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return String(fromKey);
         }
         return data?.['ID'] as string | undefined;
-    }
-
-    private extractRecordData(event: BaseEntityEvent): Record<string, unknown> | null {
-        // Local event — entity is available directly
-        if (event.baseEntity) {
-            return event.baseEntity.GetAll();
-        }
-
-        // Remote event — parse from payload
-        const payload = event.payload as { recordData?: string } | undefined;
-        if (payload?.recordData) {
-            try {
-                return JSON.parse(payload.recordData);
-            } catch {
-                return null;
-            }
-        }
-
-        return null;
     }
 
     /**
@@ -2546,6 +2533,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (!id) return true;
 
         if (action === 'save') {
+            // Same reasoning as handleProjectEntityEvent: the row can be null even when
+            // `eventNeedsRow` said yes, because the re-read can be refused, find the record gone,
+            // or simply fail — all of which `ResolveEntityEventRow` reports as null rather than
+            // throwing. `mergeDataOntoRecord` would hand that null to `BaseEntity.SetMany`, which
+            // throws, and nothing above this frame catches it. A conversation we cannot re-read
+            // stays as it was; the next `LoadConversations` corrects it.
+            if (!data) return true;
             const existing = this.GetConversation(id);
             if (existing) {
                 this.mergeDataOntoRecord(existing, data);

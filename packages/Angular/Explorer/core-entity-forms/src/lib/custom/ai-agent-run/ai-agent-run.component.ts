@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
-import { BaseEntity, BaseEntityEvent, CompositeKey, Metadata, ResolveEntityEventRow } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, CompositeKey, LogError, Metadata, ResolveEntityEventRow } from '@memberjunction/core';
 import {
     LoadAgentRunTree,
     MAX_AGENT_RUN_TREE_DEPTH,
@@ -239,8 +239,20 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
    * Fire-and-forget: nothing consumes the return, which is what lets this be async. It has to be,
    * because a remote event no longer carries the row unless the deployment allowlisted the entity
    * — the fields below come from a keyed re-read instead (see `ResolveEntityEventRow`).
+   *
+   * Because the subscriber in `subscribeToRunEvents` drops the promise, a throw here would surface
+   * as an unhandled rejection; the body is wrapped so it is logged instead, the same way
+   * `FormBuilderResourceComponent.handleEntityEvent` handles it.
    */
   private async handleEntityEvent(mjEvent: MJEvent): Promise<void> {
+    try {
+      await this.handleEntityEventUnguarded(mjEvent);
+    } catch (err) {
+      LogError(`AIAgentRunForm.handleEntityEvent: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  private async handleEntityEventUnguarded(mjEvent: MJEvent): Promise<void> {
     if (mjEvent.event !== MJEventType.ComponentEvent) return;
     if (mjEvent.eventCode !== BaseEntity.BaseEventCode) return;
     const evt = mjEvent.args as BaseEntityEvent | undefined;
@@ -270,7 +282,12 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       return;
     }
 
-    // Steps still carry AgentRunID, so a step write can be correlated exactly to this run.
+    // Steps still carry AgentRunID, so a step write can be correlated exactly to this run. Unlike
+    // `Status` above, this read is NOT behind an id match — it cannot be, because AgentRunID is a
+    // foreign key on the step and there is nothing to compare until the row is in hand. So while
+    // this form is open on a Running agent, every step save anywhere in the deployment costs it
+    // one keyed read (or nothing, if the entity is allowlisted for broadcast). It is bounded by
+    // the run's lifetime: `unsubscribeFromRunEvents()` fires once the run leaves 'Running'.
     if (entityName === 'MJ: AI Agent Run Steps') {
       const childAgentRunId = (await this.resolveEventRow(evt))?.['AgentRunID'] as string | undefined;
       if (childAgentRunId && UUIDsEqual(childAgentRunId, runId)) {

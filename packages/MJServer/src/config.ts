@@ -242,6 +242,13 @@ const cacheSettingsSchema = z.object({
    * control applies. Listing an entity re-enables the apply-in-place optimisation for it — correct
    * only for reference data every signed-in user is allowed to read.
    *
+   * What the re-fetch costs depends on the consumer. `ConversationEngine` re-reads the ONE record
+   * by primary key. `BaseEngine` (every engine subclass with `AutoRefresh`, the default) applies a
+   * remote save in place only when the row is present, so without it a remote save falls through to
+   * a full reload of each matching config — a `RunView` of that entity, not a keyed read. Remote
+   * deletes still apply in place from the primary key. Engine-cached reference entities that every
+   * signed-in user may read are the ones worth listing here.
+   *
    * `['*']` opts every entity in, restoring the previous behaviour. Only safe on a deployment where
    * every signed-in user may read every row of every entity.
    */
