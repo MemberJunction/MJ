@@ -891,15 +891,55 @@ export class IntegrationConnectorCreationPipeline {
         emitter.stageStart('PKClassify', 'Soft PK classifier for objects still missing a PK');
         const md = opts.Provider ?? Metadata.Provider;
         const engine = IntegrationEngineBase.Instance;
-        // Refresh from DB so we see what Persist just wrote
-        await engine.Config(true, opts.ContextUser, md);
+        // See what Persist just wrote — but only that. `Config(true)` reloads every dataset the
+        // engine owns, which on a large catalog is the run's biggest single allocation, made at
+        // the moment the process has the least room for it (Persist has just finished). The two
+        // catalog arrays are all this stage reads; `RefreshCatalog` reloads exactly those and
+        // invalidates the memoised per-object field index by array identity.
+        await engine.Config(false, opts.ContextUser, md);
+        await engine.RefreshCatalog(opts.ContextUser);
         const objects = engine.GetIntegrationObjectsByIntegrationID(opts.CompanyIntegration.IntegrationID);
 
         const classifier = new SoftPKClassifier();
         const verdicts: ConnectorCreationPipelineResult['PKVerdicts'] = [];
         const unresolved: string[] = [];
 
+        // The same reading and the same threshold Introspect uses, so the two long stages agree
+        // about what "out of room" means.
+        const outOfMemoryPK = (): boolean => {
+            const heap = getHeapStatistics();
+            return ShouldStopSamplingForHeap(
+                heap.used_heap_size,
+                heap.heap_size_limit,
+                IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
+            );
+        };
+        // This stage runs right after the run's largest write, so it starts wherever Introspect
+        // left the heap, and then works a tight loop: a classifier verdict per object and a Save()
+        // for each nominee. Two things keep it from being the stage that dies where Introspect
+        // learned to stop:
+        //  1. YIELD. Every YIELD_EVERY objects, hand the loop back to the event loop so the
+        //     collector can run — a loop with no await between allocations never lets it.
+        //  2. GATE, and STOP rather than die. Past the memory fraction, stop classifying. The
+        //     objects not reached come back unresolved, are emitted as skipped, and ONE warning
+        //     says how many and why. A short key list is the symptom a customer sees, and
+        //     "we stopped early under memory pressure" is the only honest explanation for it.
+        // Observed 2026-09-22 on an 888-object catalog: Persist completed, this stage started the
+        // same second, and 44 s later V8 aborted with `Ineffective mark-compacts near heap limit`
+        // — 830 objects kept their fields, 46 kept a key, and the run was marked killed.
+        const YIELD_EVERY = 25;
+        let classifiedCount = 0;
+        let shedForMemory = 0;
+
         for (const obj of objects) {
+            if (classifiedCount > 0 && classifiedCount % YIELD_EVERY === 0) {
+                await new Promise<void>(resolve => setImmediate(resolve));
+                if (outOfMemoryPK()) {
+                    shedForMemory = objects.length - classifiedCount;
+                    break;
+                }
+            }
+            classifiedCount++;
             const fields = engine.GetIntegrationObjectFields(obj.ID);
             const hasPK = fields.some(f => f.IsPrimaryKey);
             if (hasPK) {
@@ -950,6 +990,19 @@ export class IntegrationConnectorCreationPipeline {
                 unresolved.push(obj.Name);
                 emitter.entitySkippedNoPK(obj.Name);
             }
+        }
+
+        if (shedForMemory > 0) {
+            // Loud, and on the run stream rather than a server console.
+            for (const skipped of objects.slice(objects.length - shedForMemory)) {
+                unresolved.push(skipped.Name);
+                emitter.entitySkippedNoPK(skipped.Name);
+            }
+            emitter.warning('PKClassify', 'HOST_MEMORY_PRESSURE',
+                `Stopped classifying primary keys after ${classifiedCount} of ${objects.length} objects — the ` +
+                `process was at its memory ceiling. The ${shedForMemory} object(s) not reached are reported ` +
+                `without a key; re-run discovery with more memory, or a smaller selection, to classify them.`,
+                { classified: classifiedCount, total: objects.length, shed: shedForMemory });
         }
 
         emitter.stageComplete('PKClassify', {
