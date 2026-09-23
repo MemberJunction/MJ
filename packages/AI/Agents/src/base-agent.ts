@@ -4357,9 +4357,9 @@ export class BaseAgent {
     /**
      * Determines whether the current prompt execution should use append-only trailing state retention.
      *
-     * Why: OpenAI prompt caching operates on an exact byte prefix match from token 0. Replacing the
+     * Why: OpenAI and xAI prompt caching operate on an exact byte prefix match from token 0. Replacing the
      * trailing runtime-state fragment turn-over-turn breaks the byte prefix after the system prompt,
-     * dropping OpenAI cache hit rate to ~22%. In append-only mode, prior runtime state messages are
+     * dropping cache hit rates significantly. In append-only mode, prior runtime state messages are
      * retained in the message history so each turn is an exact prefix extension of the prior turn,
      * achieving ~93% cache hit rate. Providers with block-level or sliding caching (Gemini, Cerebras)
      * use replace-in-place to keep context compact.
@@ -4376,19 +4376,25 @@ export class BaseAgent {
             return false;
         }
 
+        const isPrefixCacheTarget = (name?: string | null, vendor?: string | null, driver?: string | null): boolean => {
+            const n = name?.toLowerCase() ?? '';
+            const v = vendor?.toLowerCase() ?? '';
+            const d = driver?.toLowerCase() ?? '';
+            return n.includes('gpt') || n.includes('openai') || n.includes('grok') ||
+                   v.includes('openai') || v.includes('x.ai') || v.includes('xai') ||
+                   d.includes('openai') || d.includes('xai');
+        };
+
         // Check runtime override
         if (promptParams.override?.vendorId) {
             const vendor = AIEngine.Instance?.Vendors?.find(v => UUIDsEqual(v.ID, promptParams.override?.vendorId));
-            if (vendor?.Name?.toLowerCase().includes('openai')) {
+            if (isPrefixCacheTarget(undefined, vendor?.Name)) {
                 return true;
             }
         }
         if (promptParams.override?.modelId) {
             const model = AIEngine.Instance?.Models?.find(m => UUIDsEqual(m.ID, promptParams.override?.modelId));
-            if (model?.Name?.toLowerCase().includes('gpt') || model?.Name?.toLowerCase().includes('openai')) {
-                return true;
-            }
-            if (model?.Vendor?.toLowerCase().includes('openai') || model?.DriverClass?.toLowerCase().includes('openai')) {
+            if (isPrefixCacheTarget(model?.Name, model?.Vendor, model?.DriverClass)) {
                 return true;
             }
         }
@@ -4396,13 +4402,13 @@ export class BaseAgent {
         // Check previous turn's model selection info
         if (this._lastModelSelectionInfo?.vendorSelected) {
             const v = this._lastModelSelectionInfo.vendorSelected;
-            if (v.Name?.toLowerCase().includes('openai')) {
+            if (isPrefixCacheTarget(undefined, v.Name, (v as any).DriverClass)) {
                 return true;
             }
         }
         if (this._lastModelSelectionInfo?.modelSelected) {
             const m = this._lastModelSelectionInfo.modelSelected;
-            if (m.Name?.toLowerCase().includes('gpt') || m.Name?.toLowerCase().includes('openai')) {
+            if (isPrefixCacheTarget(m.Name, (m as any).Vendor, (m as any).DriverClass)) {
                 return true;
             }
         }
@@ -4413,11 +4419,8 @@ export class BaseAgent {
             const promptModels = AIEngine.Instance.PromptModels.filter(pm => UUIDsEqual(pm.PromptID, prompt.ID));
             for (const pm of promptModels) {
                 const model = AIEngine.Instance.Models?.find(m => UUIDsEqual(m.ID, pm.ModelID));
-                if (model?.Name?.toLowerCase().includes('gpt') || model?.Name?.toLowerCase().includes('openai')) {
-                    return true;
-                }
                 const vendor = pm.VendorID ? AIEngine.Instance.Vendors?.find(v => UUIDsEqual(v.ID, pm.VendorID)) : undefined;
-                if (vendor?.Name?.toLowerCase().includes('openai')) {
+                if (isPrefixCacheTarget(model?.Name, vendor?.Name ?? model?.Vendor, model?.DriverClass)) {
                     return true;
                 }
             }

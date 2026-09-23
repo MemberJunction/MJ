@@ -308,7 +308,17 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
     });
 
-    it('returns false for non-OpenAI vendors (e.g. Anthropic, Cerebras)', () => {
+    it('auto-detects xAI and Grok models from previous turn model selection info', () => {
+        const a = agentUnderTest();
+        const { promptParams } = makeInputs({});
+        a._lastModelSelectionInfo = { vendorSelected: { Name: 'x.ai', DriverClass: 'xAILLM' } };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+
+        a._lastModelSelectionInfo = { modelSelected: { Name: 'Grok 4.7' } };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+    });
+
+    it('returns false for non-prefix-cache vendors (e.g. Anthropic, Cerebras)', () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({});
         a._lastModelSelectionInfo = { vendorSelected: { Name: 'Anthropic', DriverClass: 'AnthropicLLM' } };
