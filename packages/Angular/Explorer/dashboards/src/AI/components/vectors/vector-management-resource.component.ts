@@ -32,6 +32,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { BuildSingleStaticParamConfiguration, ResolveActionJobTypeID } from '../../../shared/action-scheduled-job';
 import { CronToHumanReadable } from '../autotagging/shared/classify.format';
+import { buildAutoVectorIndexName, findMatchingVectorIndex } from './vector-index-auto';
 import {
     buildVectorAgentContext,
     resolveSyncRow,
@@ -206,9 +207,17 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (!loaded) throw new Error('Could not load entity document');
 
             doc.Name = this.EditDocName;
-            doc.VectorDatabaseID = this.EditDocVectorDBID || null;
-            doc.AIModelID = this.EditDocAIModelID || null;
-            doc.VectorIndexID = this.EditDocVectorIndexID || null;
+            const vectorDatabaseID = this.EditDocVectorDBID || null;
+            const aiModelID = this.EditDocAIModelID || null;
+            doc.VectorDatabaseID = vectorDatabaseID;
+            doc.AIModelID = aiModelID;
+            // "Auto (create/find matching index)" resolves to a real index for this DB + model, so the
+            // syncer always has one to write into; without both parts there is nothing to match.
+            doc.VectorIndexID = this.EditDocVectorIndexID
+                ? this.EditDocVectorIndexID
+                : (vectorDatabaseID && aiModelID
+                    ? await this.resolveOrCreateVectorIndex(vectorDatabaseID, aiModelID, this.EditDocEntityName)
+                    : null);
             doc.Status = this.EditDocStatus as 'Active' | 'Inactive';
 
             const saved = await doc.Save();
@@ -1439,25 +1448,65 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             throw new Error('Entity Document Type "Record Duplicate" not found in database');
         }
 
-        // If a vector index is selected, use its DB + model so the syncer finds it
-        // instead of auto-creating a new one
-        if (this.SelectedVectorIndexID) {
-            const idx = this.AvailableVectorIndexes.find(i => UUIDsEqual(i.ID, this.SelectedVectorIndexID));
-            if (idx) {
-                entityDoc.VectorDatabaseID = idx.VectorDatabaseID;
-                entityDoc.AIModelID = idx.EmbeddingModelID;
-                entityDoc.VectorIndexID = idx.ID;
-            } else {
-                entityDoc.VectorDatabaseID = this.SelectedVectorDBID || this.vectorDatabases[0].ID;
-                entityDoc.AIModelID = this.SelectedEmbeddingModelID || this.findEmbeddingModel()!.ID;
-            }
+        // An explicitly chosen index fixes the DB + model. "Auto (create/find matching index)" resolves
+        // (or creates) the index for the chosen DB + model, so the syncer always has a VectorIndexID:
+        // it refuses to run without one, which made the Auto choice a dead end before.
+        const chosen = this.SelectedVectorIndexID
+            ? this.AvailableVectorIndexes.find(i => UUIDsEqual(i.ID, this.SelectedVectorIndexID))
+            : undefined;
+        if (chosen) {
+            entityDoc.VectorDatabaseID = chosen.VectorDatabaseID;
+            entityDoc.AIModelID = chosen.EmbeddingModelID;
+            entityDoc.VectorIndexID = chosen.ID;
         } else {
-            entityDoc.VectorDatabaseID = this.SelectedVectorDBID || this.vectorDatabases[0].ID;
-            entityDoc.AIModelID = this.SelectedEmbeddingModelID || this.findEmbeddingModel()!.ID;
+            const vectorDatabaseID = this.SelectedVectorDBID || this.vectorDatabases[0].ID;
+            const aiModelID = this.SelectedEmbeddingModelID || this.findEmbeddingModel()!.ID;
+            entityDoc.VectorDatabaseID = vectorDatabaseID;
+            entityDoc.AIModelID = aiModelID;
+            entityDoc.VectorIndexID = await this.resolveOrCreateVectorIndex(vectorDatabaseID, aiModelID, this.SuggestEntityName);
         }
 
         // TemplateID — create a Template record with the generated template content
         await this.createTemplateForDocument(entityDoc);
+    }
+
+    /**
+     * "Auto (create/find matching index)": reuse the index already built for this vector database +
+     * embedding model, or create the `MJ: Vector Indexes` record for one. Only the metadata row is
+     * written here and the save returns as soon as it is stored; the server-side entity hook then
+     * provisions the index in the provider (bounded by its own timeout) and writes the provider
+     * metadata back, so this request is never held while the provider works.
+     * Returns the index ID to store on the document.
+     */
+    private async resolveOrCreateVectorIndex(vectorDatabaseID: string, aiModelID: string, entityName: string): Promise<string> {
+        const existing = findMatchingVectorIndex(this.vectorIndexes, vectorDatabaseID, aiModelID);
+        if (existing) {
+            return existing.ID;
+        }
+
+        const md = this.ProviderToUse;
+        const modelName = this.aiModels.find(m => UUIDsEqual(m.ID, aiModelID))?.Name ?? null;
+        const index = await md.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes');
+        index.NewRecord();
+        index.Name = buildAutoVectorIndexName(entityName, modelName);
+        index.VectorDatabaseID = vectorDatabaseID;
+        index.EmbeddingModelID = aiModelID;
+        index.Description = `Auto-created for the "${entityName}" entity document (${modelName ?? 'embedding model'})`;
+
+        const saved = await index.Save();
+        if (!saved) {
+            throw new Error(
+                `Could not create a vector index for "${entityName}": ${index.LatestResult?.CompleteMessage || 'unknown error'}`
+            );
+        }
+        this.vectorIndexes.push(index);
+        this.AvailableVectorIndexes.push({
+            ID: index.ID,
+            Name: index.Name,
+            VectorDatabaseID: index.VectorDatabaseID,
+            EmbeddingModelID: index.EmbeddingModelID,
+        });
+        return index.ID;
     }
 
     /** Create a Template + TemplateContent record for the entity document */
