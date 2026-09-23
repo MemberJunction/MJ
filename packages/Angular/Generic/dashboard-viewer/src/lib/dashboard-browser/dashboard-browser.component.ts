@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { MJDashboardEntity, MJDashboardCategoryEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
-import { UUIDsEqual, EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID, EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
 
 // ========================================
 // Event Types
@@ -885,7 +885,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             try {
                 const dragData = JSON.parse(data);
                 if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
-                    const dashboards = this.Dashboards.filter(d => dragData.ids.some((id: string) => UUIDsEqual(id, d.ID)));
+                    const dashboards = this.dashboardsWithIds(dragData.ids);
                     if (dashboards.length > 0) {
                         this.DashboardMove.emit({
                             Dashboards: dashboards,
@@ -1069,7 +1069,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             try {
                 const dragData = JSON.parse(data);
                 if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
-                    const dashboards = this.Dashboards.filter(d => dragData.ids.some((id: string) => UUIDsEqual(id, d.ID)));
+                    const dashboards = this.dashboardsWithIds(dragData.ids);
                     if (dashboards.length > 0) {
                         this.DashboardMove.emit({
                             Dashboards: dashboards,
@@ -1091,10 +1091,19 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     /**
+     * The loaded dashboards whose IDs appear in `ids`, in `Dashboards` order. A normalized Set
+     * rather than a nested UUIDsEqual scan, which is dashboards x dragged IDs.
+     */
+    private dashboardsWithIds(ids: readonly string[]): MJDashboardEntity[] {
+        const wanted = new Set(ids.map(id => NormalizeUUID(id)));
+        return this.Dashboards.filter(d => wanted.has(NormalizeUUID(d.ID)));
+    }
+
+    /**
      * Handle drop from breadcrumb component
      */
     public OnBreadcrumbDrop(event: { TargetCategoryId: string | null; DashboardIds: string[] }): void {
-        const dashboards = this.Dashboards.filter(d => event.DashboardIds.some(id => UUIDsEqual(id, d.ID)));
+        const dashboards = this.dashboardsWithIds(event.DashboardIds);
         if (dashboards.length > 0) {
             this.DashboardMove.emit({
                 Dashboards: dashboards,

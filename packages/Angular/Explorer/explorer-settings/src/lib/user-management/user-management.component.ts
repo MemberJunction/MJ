@@ -4,7 +4,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { MJUserEntity, MJRoleEntity, MJUserRoleEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
 import { EnrolledRow, serverRefusalReasons } from './transaction-group-refusals';
@@ -1085,8 +1085,17 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
   // Get roles for a specific user
   public getUserRoles(userId: string): MJRoleEntity[] {
-    const roleIds = this.userRoleMap.get(userId) || [];
-    return this.roles.filter(role => roleIds.some(id => UUIDsEqual(id, role.ID)));
+    const roleIds = this.userRoleMap.get(userId);
+    if (!roleIds || roleIds.length === 0) {
+      return [];
+    }
+    // Normalize the user's role IDs into a Set rather than running a nested `.some(UUIDsEqual(...))`
+    // per role: UUIDsEqual's `===` fast path misses whenever the IDs differ, so every miss allocated
+    // two lowercased strings and the nested scan paid that roles x userRoles times. The template
+    // calls this TWICE per user row (the @if and the @for), on every change-detection pass. Filtering
+    // `this.roles` still drives the result, so the rendered order is unchanged.
+    const assignedIds = new Set(roleIds.map(id => NormalizeUUID(id)));
+    return this.roles.filter(role => assignedIds.has(NormalizeUUID(role.ID)));
   }
 
   /**

@@ -92,7 +92,9 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
       const roles = md.Roles;
 
       if (this.Mode === 'Entity') {
-        const rolesWithNoPermissions = roles.filter(r => !existingPermissions.some(p => UUIDsEqual(p.RoleID, r.ID)));
+        // A normalized Set, not a nested UUIDsEqual scan: roles x permissions grows with both.
+        const rolesWithPermissions = new Set(existingPermissions.map(p => NormalizeUUID(p.RoleID)));
+        const rolesWithNoPermissions = roles.filter(r => !rolesWithPermissions.has(NormalizeUUID(r.ID)));
         for (const r of rolesWithNoPermissions) {
           const p = await md.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions')
            
@@ -112,7 +114,9 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
       }
       else if (this.Mode === 'Role') {
         // for the mode of Role, that means we want to show all entities and their permissions for the given role
-        const entitiesWithNoPermissions = md.Entities.filter(e => !existingPermissions.some(p => UUIDsEqual(p.EntityID, e.ID)));
+        // A normalized Set, not a nested UUIDsEqual scan: every entity x every permission row.
+        const entitiesWithPermissions = new Set(existingPermissions.map(p => NormalizeUUID(p.EntityID)));
+        const entitiesWithNoPermissions = md.Entities.filter(e => !entitiesWithPermissions.has(NormalizeUUID(e.ID)));
         for (const e of entitiesWithNoPermissions) {
           const p = await md.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions')
           
