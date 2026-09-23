@@ -7,3 +7,4 @@ export * from './errors';
 export * from './transport';
 export * from './operator';
 export * from './manifest';
+export * from './validation';
