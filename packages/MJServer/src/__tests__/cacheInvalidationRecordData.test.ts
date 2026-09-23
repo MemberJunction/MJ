@@ -1,7 +1,7 @@
 // The gate lives beside the subscription it protects, and that module carries type-graphql
 // decorators — so the metadata shim has to be in place before it is imported.
 import 'reflect-metadata';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ConfigureRecordDataBroadcast,
   MayBroadcastRecordData,
