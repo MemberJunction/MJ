@@ -1,0 +1,62 @@
+[
+  {
+    "_comments": [
+      "Runtime table written by set-based SQL: no change tracking, no search, direct SQL sanctioned"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Messages"
+    },
+    "fields": {
+      "Name": "MJ: Work Queue Messages",
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "TrustServerCacheCompletely": false,
+      "AllowCreateAPI": false,
+      "AllowUpdateAPI": false,
+      "AllowDeleteAPI": false,
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "_comments": [
+      "Claim table: every claim, heartbeat and settle is a direct SQL write"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Deliveries"
+    },
+    "fields": {
+      "Name": "MJ: Work Queue Deliveries",
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "TrustServerCacheCompletely": false,
+      "AllowCreateAPI": false,
+      "AllowUpdateAPI": false,
+      "AllowDeleteAPI": false,
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  },
+  {
+    "_comments": [
+      "Short-lived deduplication keys"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Work Queue Deduplications"
+    },
+    "fields": {
+      "Name": "MJ: Work Queue Deduplications",
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "TrustServerCacheCompletely": false,
+      "AllowCreateAPI": false,
+      "AllowUpdateAPI": false,
+      "AllowDeleteAPI": false,
+      "AllowDirectSQLInsert": true,
+      "AllowDirectSQLUpdate": true,
+      "AllowDirectSQLDelete": true
+    }
+  }
+]

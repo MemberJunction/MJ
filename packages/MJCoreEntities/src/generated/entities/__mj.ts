@@ -34927,6 +34927,562 @@ export const MJWebSearchProviderSchema = z.object({
 export type MJWebSearchProviderEntityType = z.infer<typeof MJWebSearchProviderSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Work Queue Deduplications
+ */
+export const MJWorkQueueDeduplicationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TopicID: z.string().describe(`
+        * * Field Name: TopicID
+        * * Display Name: Topic ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)`),
+    DeduplicationKey: z.string().describe(`
+        * * Field Name: DeduplicationKey
+        * * Display Name: Deduplication Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Producer-supplied key identifying one logical message within the topic. Compared case-sensitively (binary collation).`),
+    MessageID: z.string().describe(`
+        * * Field Name: MessageID
+        * * Display Name: Message ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: MessageID of the publish that owns the key. Not a foreign key: cloud messages have no row.`),
+    Status: z.union([z.literal('Confirmed'), z.literal('Reserved')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Confirmed
+    *   * Reserved
+        * * Description: Reserved: a send is in progress (short expiry) and proves nothing about its outcome. Confirmed: the publish was accepted. Only Confirmed rows make a later publish a Duplicate.`),
+    ExpiresAt: z.date().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the key stops suppressing duplicates. Expired rows are replaced on publish and purged by the sweeper.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Topic: z.string().describe(`
+        * * Field Name: Topic
+        * * Display Name: Topic
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJWorkQueueDeduplicationEntityType = z.infer<typeof MJWorkQueueDeduplicationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Work Queue Deliveries
+ */
+export const MJWorkQueueDeliverySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    MessageID: z.string().describe(`
+        * * Field Name: MessageID
+        * * Display Name: Message ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Messages (vwWorkQueueMessages.ID)`),
+    SubscriptionID: z.string().describe(`
+        * * Field Name: SubscriptionID
+        * * Display Name: Subscription ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Subscriptions (vwWorkQueueSubscriptions.ID)`),
+    Status: z.union([z.literal('Completed'), z.literal('DeadLettered'), z.literal('Discarded'), z.literal('InFlight'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * DeadLettered
+    *   * Discarded
+    *   * InFlight
+    *   * Pending
+        * * Description: Pending: awaiting claim. InFlight: leased. Completed: handler succeeded. DeadLettered: exhausted or rejected, needs an operator. Discarded: cancelled or resolved by an operator.`),
+    PartitionKey: z.string().nullable().describe(`
+        * * Field Name: PartitionKey
+        * * Display Name: Partition Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Copy of the message partition key, populated only for Exclusive and Ordered subscriptions. Drives the in-flight uniqueness rule.`),
+    OrderKey: z.number().describe(`
+        * * Field Name: OrderKey
+        * * Display Name: Order Key
+        * * SQL Data Type: bigint
+        * * Description: Position within the partition key: always the message PublishOrdinal.`),
+    AttemptCount: z.number().describe(`
+        * * Field Name: AttemptCount
+        * * Display Name: Attempt Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Claims so far, including claims whose lease expired. Reset to 0 by replay.`),
+    IsReplay: z.boolean().describe(`
+        * * Field Name: IsReplay
+        * * Display Name: Is Replay
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: 1 once an operator has replayed this delivery from the dead-letter state.`),
+    VisibleAt: z.date().describe(`
+        * * Field Name: VisibleAt
+        * * Display Name: Visible At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: Earliest time the delivery may be claimed; retry backoff moves it forward.`),
+    LeaseOwner: z.string().nullable().describe(`
+        * * Field Name: LeaseOwner
+        * * Display Name: Lease Owner
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Worker instance holding the current lease.`),
+    LeaseToken: z.string().nullable().describe(`
+        * * Field Name: LeaseToken
+        * * Display Name: Lease Token
+        * * SQL Data Type: uniqueidentifier
+        * * Description: New value per claim; a cancel leaves it unchanged. Every heartbeat and settle must present it, so a worker that lost its lease cannot overwrite a newer claim.`),
+    LeaseExpiresAt: z.date().nullable().describe(`
+        * * Field Name: LeaseExpiresAt
+        * * Display Name: Lease Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the current lease expires, on the database clock.`),
+    LastHeartbeatAt: z.date().nullable().describe(`
+        * * Field Name: LastHeartbeatAt
+        * * Display Name: Last Heartbeat At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the lease was last renewed.`),
+    Progress: z.string().nullable().describe(`
+        * * Field Name: Progress
+        * * Display Name: Progress
+        * * SQL Data Type: nvarchar(4000)
+        * * Description: Latest handler progress JSON ({"Percent","Message","Checkpoint"}).`),
+    LastError: z.string().nullable().describe(`
+        * * Field Name: LastError
+        * * Display Name: Last Error
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Most recent failure text, including LeaseExpired.`),
+    DeadLetterReason: z.string().nullable().describe(`
+        * * Field Name: DeadLetterReason
+        * * Display Name: Dead Letter Reason
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Why the delivery was dead-lettered: a handler reason, MaxAttemptsExceeded, LeaseExpired or HandlerNotRegistered.`),
+    DeadLetteredAt: z.date().nullable().describe(`
+        * * Field Name: DeadLetteredAt
+        * * Display Name: Dead Lettered At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the delivery entered DeadLettered.`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Terminal time for both Completed and Discarded; the retention purge key.`),
+    CancelRequestedAt: z.date().nullable().describe(`
+        * * Field Name: CancelRequestedAt
+        * * Display Name: Cancel Requested At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Set when an operator cancels an in-flight delivery. From then on every holder write except AcknowledgeCancel fails; the holder acknowledges and the row becomes Discarded at once, or ExpireLeases discards it when the lease runs out. Never retried.`),
+    ResolvedByUserID: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUserID
+        * * Display Name: Resolved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    ResolutionNote: z.string().nullable().describe(`
+        * * Field Name: ResolutionNote
+        * * Display Name: Resolution Note
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: Operator note recorded with a replay or the reason recorded with a discard.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Subscription: z.string().describe(`
+        * * Field Name: Subscription
+        * * Display Name: Subscription
+        * * SQL Data Type: nvarchar(200)`),
+    ResolvedByUser: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUser
+        * * Display Name: Resolved By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJWorkQueueDeliveryEntityType = z.infer<typeof MJWorkQueueDeliverySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Work Queue Messages
+ */
+export const MJWorkQueueMessageSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier`),
+    PublishOrdinal: z.number().describe(`
+        * * Field Name: PublishOrdinal
+        * * Display Name: Publish Ordinal
+        * * SQL Data Type: bigint
+        * * Description: Publish order, assigned by the database. Every delivery of the message carries it as its OrderKey.`),
+    TopicID: z.string().describe(`
+        * * Field Name: TopicID
+        * * Display Name: Topic ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)`),
+    PartitionKey: z.string().nullable().describe(`
+        * * Field Name: PartitionKey
+        * * Display Name: Partition Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Producer-supplied key used by Exclusive and Ordered subscriptions. Compared case-sensitively (binary collation).`),
+    Attributes: z.string().nullable().describe(`
+        * * Field Name: Attributes
+        * * Display Name: Attributes
+        * * SQL Data Type: nvarchar(4000)
+        * * Description: JSON object of string attributes (at most 10). The only envelope fields subscription filters see.`),
+    Payload: z.string().nullable().describe(`
+        * * Field Name: Payload
+        * * Display Name: Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Inline JSON payload. Mutually exclusive with PayloadRef.`),
+    PayloadRef: z.string().nullable().describe(`
+        * * Field Name: PayloadRef
+        * * Display Name: Payload Ref
+        * * SQL Data Type: nvarchar(2000)
+        * * Description: JSON claim-check reference ({"Uri":...}) to data held outside the queue.`),
+    CorrelationID: z.string().nullable().describe(`
+        * * Field Name: CorrelationID
+        * * Display Name: Correlation ID
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Caller-supplied identifier for tracing related work.`),
+    PublishedAt: z.date().describe(`
+        * * Field Name: PublishedAt
+        * * Display Name: Published At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When MJ accepted the publish, on the database clock.`),
+    PublishedByUserID: z.string().nullable().describe(`
+        * * Field Name: PublishedByUserID
+        * * Display Name: Published By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Topic: z.string().describe(`
+        * * Field Name: Topic
+        * * Display Name: Topic
+        * * SQL Data Type: nvarchar(200)`),
+    PublishedByUser: z.string().nullable().describe(`
+        * * Field Name: PublishedByUser
+        * * Display Name: Published By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJWorkQueueMessageEntityType = z.infer<typeof MJWorkQueueMessageSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Work Queue Subscriptions
+ */
+export const MJWorkQueueSubscriptionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TopicID: z.string().describe(`
+        * * Field Name: TopicID
+        * * Display Name: Topic ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Globally unique subscription name, used in manifests and consumer configuration.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What this consumer does and who owns it.`),
+    Filter: z.string().nullable().describe(`
+        * * Field Name: Filter
+        * * Display Name: Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional attribute filter as MJ CompositeFilterDescriptor JSON (03 section 4), restricted to the broker-translatable operators eq, neq, startswith, isnull and isnotnull over envelope attribute names. Null matches every message.`),
+    PartitionMode: z.union([z.literal('Exclusive'), z.literal('None'), z.literal('Ordered')]).describe(`
+        * * Field Name: PartitionMode
+        * * Display Name: Partition Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exclusive
+    *   * None
+    *   * Ordered
+        * * Description: None: no key constraints. Exclusive: one delivery in flight per partition key, no order promise. Ordered (Database transport only): a key's deliveries run in publish order, one at a time, and a dead-lettered head blocks its key. Immutable once the subscription has deliveries.`),
+    MaxAttempts: z.number().describe(`
+        * * Field Name: MaxAttempts
+        * * Display Name: Max Attempts
+        * * SQL Data Type: int
+        * * Default Value: 5
+        * * Description: Attempts allowed per delivery, including lease expiries, before it is dead-lettered.`),
+    BackoffBaseSeconds: z.number().describe(`
+        * * Field Name: BackoffBaseSeconds
+        * * Display Name: Backoff Base Seconds
+        * * SQL Data Type: int
+        * * Default Value: 10
+        * * Description: Base retry delay in seconds; full-jitter exponential backoff doubles it per attempt.`),
+    BackoffMaxSeconds: z.number().describe(`
+        * * Field Name: BackoffMaxSeconds
+        * * Display Name: Backoff Max Seconds
+        * * SQL Data Type: int
+        * * Default Value: 900
+        * * Description: Upper bound on the retry delay, in seconds.`),
+    LeaseSeconds: z.number().describe(`
+        * * Field Name: LeaseSeconds
+        * * Display Name: Lease Seconds
+        * * SQL Data Type: int
+        * * Default Value: 60
+        * * Description: Seconds a claim lasts before it expires unless renewed by a heartbeat. Measured on the transport clock.`),
+    HeartbeatMode: z.union([z.literal('Auto'), z.literal('Manual')]).describe(`
+        * * Field Name: HeartbeatMode
+        * * Display Name: Heartbeat Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Manual
+        * * Description: Auto: the runtime renews the lease while the handler runs. Manual: only handler heartbeats renew it, so hung handlers are detected.`),
+    MaxProcessingSeconds: z.number().nullable().describe(`
+        * * Field Name: MaxProcessingSeconds
+        * * Display Name: Max Processing Seconds
+        * * SQL Data Type: int
+        * * Description: Optional cap on handler run time; Auto heartbeats stop and the handler is aborted after it. Above a host's known ceiling it produces a validation warning.`),
+    HostType: z.union([z.literal('External'), z.literal('MJWorker')]).describe(`
+        * * Field Name: HostType
+        * * Display Name: Host Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: MJWorker
+    * * Value List Type: List
+    * * Possible Values 
+    *   * External
+    *   * MJWorker
+        * * Description: MJWorker: the handler runs inside an MJ server process. External: the handler runs elsewhere, for example a Lambda (cloud transports only).`),
+    HandlerKey: z.string().nullable().describe(`
+        * * Field Name: HandlerKey
+        * * Display Name: Handler Key
+        * * SQL Data Type: nvarchar(200)
+        * * Description: ClassFactory key of the BaseWorkHandler registration that processes deliveries. Required for MJWorker subscriptions.`),
+    ExternalRef: z.string().nullable().describe(`
+        * * Field Name: ExternalRef
+        * * Display Name: External Ref
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Informational reference to an external consumer, for example a Lambda ARN.`),
+    BindingConfig: z.string().nullable().describe(`
+        * * Field Name: BindingConfig
+        * * Display Name: Binding Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Transport binding JSON imported after provisioning, for example queue and dead-letter queue URLs. Empty for Database subscriptions.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Paused')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Paused
+        * * Description: Active: deliveries are created and processed. Paused: deliveries are created but nothing is claimed. Disabled: no new deliveries are created.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Topic: z.string().describe(`
+        * * Field Name: Topic
+        * * Display Name: Topic
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJWorkQueueSubscriptionEntityType = z.infer<typeof MJWorkQueueSubscriptionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Work Queue Topics
+ */
+export const MJWorkQueueTopicSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Unique dotted lowercase topic name, for example email.events.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the topic represents and who publishes to it.`),
+    TransportID: z.string().describe(`
+        * * Field Name: TransportID
+        * * Display Name: Transport ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Work Queue Transports (vwWorkQueueTransports.ID)`),
+    IsFifo: z.boolean().describe(`
+        * * Field Name: IsFifo
+        * * Display Name: Is Fifo
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Cloud transports: the topic uses FIFO resources. Required on AWS when any subscription is Exclusive.`),
+    AllowExternalPublish: z.boolean().describe(`
+        * * Field Name: AllowExternalPublish
+        * * Display Name: Allow External Publish
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, API callers may publish to this topic through POST /work-queue/topics/{topic}/messages. In-process code may publish to any active topic.`),
+    MaxPayloadBytes: z.number().describe(`
+        * * Field Name: MaxPayloadBytes
+        * * Display Name: Max Payload Bytes
+        * * SQL Data Type: int
+        * * Default Value: 262144
+        * * Description: Largest serialized envelope accepted, in bytes (at most 262144).`),
+    DefaultDeduplicationTTLSeconds: z.number().describe(`
+        * * Field Name: DefaultDeduplicationTTLSeconds
+        * * Display Name: Default Deduplication TTL Seconds
+        * * SQL Data Type: int
+        * * Default Value: 86400
+        * * Description: Window, in seconds, during which a DeduplicationKey suppresses repeat publishes when the publisher does not supply one.`),
+    RetentionDays: z.number().describe(`
+        * * Field Name: RetentionDays
+        * * Display Name: Retention Days
+        * * SQL Data Type: int
+        * * Default Value: 7
+        * * Description: Days completed and discarded deliveries, and their messages, are kept before the sweeper purges them (Database transport).`),
+    BindingConfig: z.string().nullable().describe(`
+        * * Field Name: BindingConfig
+        * * Display Name: Binding Config
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Transport binding JSON imported after provisioning, for example {"SnsTopicArn":"..."}. Empty for Database topics.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active topics accept publishes; Disabled topics reject them.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Transport: z.string().describe(`
+        * * Field Name: Transport
+        * * Display Name: Transport
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJWorkQueueTopicEntityType = z.infer<typeof MJWorkQueueTopicSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Work Queue Transports
+ */
+export const MJWorkQueueTransportSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique transport name, for example Database or AWS-prod-us-east-1.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What this transport is used for and who operates it.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: ClassFactory key of the BaseTransportDriverFactory registration that builds the driver: Database or AWS.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Driver-specific JSON configuration, for example {"Region":"us-east-1"}. Never holds secrets; use CredentialID.`),
+    CredentialID: z.string().nullable().describe(`
+        * * Field Name: CredentialID
+        * * Display Name: Credential ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active transports can deliver; Disabled transports reject publishes.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Credential: z.string().nullable().describe(`
+        * * Field Name: Credential
+        * * Display Name: Credential
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJWorkQueueTransportEntityType = z.infer<typeof MJWorkQueueTransportSchema>;
+
+/**
  * zod schema definition for the entity MJ: Workspace Items
  */
 export const MJWorkspaceItemSchema = z.object({
@@ -129698,6 +130254,1645 @@ export class MJWebSearchProviderEntity extends BaseEntity<MJWebSearchProviderEnt
     }
     set Comments(value: string | null) {
         this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Credential
+    * * Display Name: Credential
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Credential(): string | null {
+        return this.Get('Credential');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Deduplications - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueDeduplication
+ * * Base View: vwWorkQueueDeduplications
+ * * @description Publish deduplication ledger for every transport: a key suppresses repeat publishes to a topic until ExpiresAt.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Deduplications')
+export class MJWorkQueueDeduplicationEntity extends BaseEntity<MJWorkQueueDeduplicationEntityType> {
+    /**
+    * Loads the MJ: Work Queue Deduplications record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Deduplications record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueDeduplicationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Work Queue Deduplications - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeduplicationEntity
+    * @throws {Error} - Save is not allowed for MJ: Work Queue Deduplications, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Work Queue Deduplications, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Work Queue Deduplications - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeduplicationEntity
+    * @throws {Error} - Delete is not allowed for MJ: Work Queue Deduplications, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Work Queue Deduplications, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TopicID
+    * * Display Name: Topic ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)
+    */
+    get TopicID(): string {
+        return this.Get('TopicID');
+    }
+    set TopicID(value: string) {
+        this.Set('TopicID', value);
+    }
+
+    /**
+    * * Field Name: DeduplicationKey
+    * * Display Name: Deduplication Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Producer-supplied key identifying one logical message within the topic. Compared case-sensitively (binary collation).
+    */
+    get DeduplicationKey(): string {
+        return this.Get('DeduplicationKey');
+    }
+    set DeduplicationKey(value: string) {
+        this.Set('DeduplicationKey', value);
+    }
+
+    /**
+    * * Field Name: MessageID
+    * * Display Name: Message ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: MessageID of the publish that owns the key. Not a foreign key: cloud messages have no row.
+    */
+    get MessageID(): string {
+        return this.Get('MessageID');
+    }
+    set MessageID(value: string) {
+        this.Set('MessageID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Confirmed
+    *   * Reserved
+    * * Description: Reserved: a send is in progress (short expiry) and proves nothing about its outcome. Confirmed: the publish was accepted. Only Confirmed rows make a later publish a Duplicate.
+    */
+    get Status(): 'Confirmed' | 'Reserved' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Confirmed' | 'Reserved') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the key stops suppressing duplicates. Expired rows are replaced on publish and purged by the sweeper.
+    */
+    get ExpiresAt(): Date {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Topic
+    * * Display Name: Topic
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Topic(): string {
+        return this.Get('Topic');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Deliveries - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueDelivery
+ * * Base View: vwWorkQueueDeliveries
+ * * @description One subscription's processing of one message: status, attempts and lease.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Deliveries')
+export class MJWorkQueueDeliveryEntity extends BaseEntity<MJWorkQueueDeliveryEntityType> {
+    /**
+    * Loads the MJ: Work Queue Deliveries record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Deliveries record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueDeliveryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Work Queue Deliveries - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeliveryEntity
+    * @throws {Error} - Save is not allowed for MJ: Work Queue Deliveries, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Work Queue Deliveries, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Work Queue Deliveries - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueDeliveryEntity
+    * @throws {Error} - Delete is not allowed for MJ: Work Queue Deliveries, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Work Queue Deliveries, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * Validate() method override for MJ: Work Queue Deliveries entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * AttemptCount: Attempt count must be zero or greater. This ensures the system never records a negative number of delivery attempts, maintaining accurate tracking of message processing retries.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateAttemptCountNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Attempt count must be zero or greater. This ensures the system never records a negative number of delivery attempts, maintaining accurate tracking of message processing retries.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAttemptCountNonNegative(result: ValidationResult) {
+    	if (this.AttemptCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"AttemptCount",
+    			"Attempt count cannot be negative. It must be zero or greater.",
+    			this.AttemptCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: MessageID
+    * * Display Name: Message ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Messages (vwWorkQueueMessages.ID)
+    */
+    get MessageID(): string {
+        return this.Get('MessageID');
+    }
+    set MessageID(value: string) {
+        this.Set('MessageID', value);
+    }
+
+    /**
+    * * Field Name: SubscriptionID
+    * * Display Name: Subscription ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Subscriptions (vwWorkQueueSubscriptions.ID)
+    */
+    get SubscriptionID(): string {
+        return this.Get('SubscriptionID');
+    }
+    set SubscriptionID(value: string) {
+        this.Set('SubscriptionID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Completed
+    *   * DeadLettered
+    *   * Discarded
+    *   * InFlight
+    *   * Pending
+    * * Description: Pending: awaiting claim. InFlight: leased. Completed: handler succeeded. DeadLettered: exhausted or rejected, needs an operator. Discarded: cancelled or resolved by an operator.
+    */
+    get Status(): 'Completed' | 'DeadLettered' | 'Discarded' | 'InFlight' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Completed' | 'DeadLettered' | 'Discarded' | 'InFlight' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: PartitionKey
+    * * Display Name: Partition Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Copy of the message partition key, populated only for Exclusive and Ordered subscriptions. Drives the in-flight uniqueness rule.
+    */
+    get PartitionKey(): string | null {
+        return this.Get('PartitionKey');
+    }
+    set PartitionKey(value: string | null) {
+        this.Set('PartitionKey', value);
+    }
+
+    /**
+    * * Field Name: OrderKey
+    * * Display Name: Order Key
+    * * SQL Data Type: bigint
+    * * Description: Position within the partition key: always the message PublishOrdinal.
+    */
+    get OrderKey(): number {
+        return this.Get('OrderKey');
+    }
+    set OrderKey(value: number) {
+        this.Set('OrderKey', value);
+    }
+
+    /**
+    * * Field Name: AttemptCount
+    * * Display Name: Attempt Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Claims so far, including claims whose lease expired. Reset to 0 by replay.
+    */
+    get AttemptCount(): number {
+        return this.Get('AttemptCount');
+    }
+    set AttemptCount(value: number) {
+        this.Set('AttemptCount', value);
+    }
+
+    /**
+    * * Field Name: IsReplay
+    * * Display Name: Is Replay
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: 1 once an operator has replayed this delivery from the dead-letter state.
+    */
+    get IsReplay(): boolean {
+        return this.Get('IsReplay');
+    }
+    set IsReplay(value: boolean) {
+        this.Set('IsReplay', value);
+    }
+
+    /**
+    * * Field Name: VisibleAt
+    * * Display Name: Visible At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Earliest time the delivery may be claimed; retry backoff moves it forward.
+    */
+    get VisibleAt(): Date {
+        return this.Get('VisibleAt');
+    }
+    set VisibleAt(value: Date) {
+        this.Set('VisibleAt', value);
+    }
+
+    /**
+    * * Field Name: LeaseOwner
+    * * Display Name: Lease Owner
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Worker instance holding the current lease.
+    */
+    get LeaseOwner(): string | null {
+        return this.Get('LeaseOwner');
+    }
+    set LeaseOwner(value: string | null) {
+        this.Set('LeaseOwner', value);
+    }
+
+    /**
+    * * Field Name: LeaseToken
+    * * Display Name: Lease Token
+    * * SQL Data Type: uniqueidentifier
+    * * Description: New value per claim; a cancel leaves it unchanged. Every heartbeat and settle must present it, so a worker that lost its lease cannot overwrite a newer claim.
+    */
+    get LeaseToken(): string | null {
+        return this.Get('LeaseToken');
+    }
+    set LeaseToken(value: string | null) {
+        this.Set('LeaseToken', value);
+    }
+
+    /**
+    * * Field Name: LeaseExpiresAt
+    * * Display Name: Lease Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the current lease expires, on the database clock.
+    */
+    get LeaseExpiresAt(): Date | null {
+        return this.Get('LeaseExpiresAt');
+    }
+    set LeaseExpiresAt(value: Date | null) {
+        this.Set('LeaseExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: LastHeartbeatAt
+    * * Display Name: Last Heartbeat At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the lease was last renewed.
+    */
+    get LastHeartbeatAt(): Date | null {
+        return this.Get('LastHeartbeatAt');
+    }
+    set LastHeartbeatAt(value: Date | null) {
+        this.Set('LastHeartbeatAt', value);
+    }
+
+    /**
+    * * Field Name: Progress
+    * * Display Name: Progress
+    * * SQL Data Type: nvarchar(4000)
+    * * Description: Latest handler progress JSON ({"Percent","Message","Checkpoint"}).
+    */
+    get Progress(): string | null {
+        return this.Get('Progress');
+    }
+    set Progress(value: string | null) {
+        this.Set('Progress', value);
+    }
+
+    /**
+    * * Field Name: LastError
+    * * Display Name: Last Error
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Most recent failure text, including LeaseExpired.
+    */
+    get LastError(): string | null {
+        return this.Get('LastError');
+    }
+    set LastError(value: string | null) {
+        this.Set('LastError', value);
+    }
+
+    /**
+    * * Field Name: DeadLetterReason
+    * * Display Name: Dead Letter Reason
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Why the delivery was dead-lettered: a handler reason, MaxAttemptsExceeded, LeaseExpired or HandlerNotRegistered.
+    */
+    get DeadLetterReason(): string | null {
+        return this.Get('DeadLetterReason');
+    }
+    set DeadLetterReason(value: string | null) {
+        this.Set('DeadLetterReason', value);
+    }
+
+    /**
+    * * Field Name: DeadLetteredAt
+    * * Display Name: Dead Lettered At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the delivery entered DeadLettered.
+    */
+    get DeadLetteredAt(): Date | null {
+        return this.Get('DeadLetteredAt');
+    }
+    set DeadLetteredAt(value: Date | null) {
+        this.Set('DeadLetteredAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Terminal time for both Completed and Discarded; the retention purge key.
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: CancelRequestedAt
+    * * Display Name: Cancel Requested At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Set when an operator cancels an in-flight delivery. From then on every holder write except AcknowledgeCancel fails; the holder acknowledges and the row becomes Discarded at once, or ExpireLeases discards it when the lease runs out. Never retried.
+    */
+    get CancelRequestedAt(): Date | null {
+        return this.Get('CancelRequestedAt');
+    }
+    set CancelRequestedAt(value: Date | null) {
+        this.Set('CancelRequestedAt', value);
+    }
+
+    /**
+    * * Field Name: ResolvedByUserID
+    * * Display Name: Resolved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get ResolvedByUserID(): string | null {
+        return this.Get('ResolvedByUserID');
+    }
+    set ResolvedByUserID(value: string | null) {
+        this.Set('ResolvedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ResolutionNote
+    * * Display Name: Resolution Note
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: Operator note recorded with a replay or the reason recorded with a discard.
+    */
+    get ResolutionNote(): string | null {
+        return this.Get('ResolutionNote');
+    }
+    set ResolutionNote(value: string | null) {
+        this.Set('ResolutionNote', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Subscription
+    * * Display Name: Subscription
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Subscription(): string {
+        return this.Get('Subscription');
+    }
+
+    /**
+    * * Field Name: ResolvedByUser
+    * * Display Name: Resolved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ResolvedByUser(): string | null {
+        return this.Get('ResolvedByUser');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Messages - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueMessage
+ * * Base View: vwWorkQueueMessages
+ * * @description One published unit of work (the envelope). Immutable. Stored for Database-transport topics only. ID is the globally unique MessageID.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Messages')
+export class MJWorkQueueMessageEntity extends BaseEntity<MJWorkQueueMessageEntityType> {
+    /**
+    * Loads the MJ: Work Queue Messages record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Messages record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueMessageEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Work Queue Messages - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueMessageEntity
+    * @throws {Error} - Save is not allowed for MJ: Work Queue Messages, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Work Queue Messages, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Work Queue Messages - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJWorkQueueMessageEntity
+    * @throws {Error} - Delete is not allowed for MJ: Work Queue Messages, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Work Queue Messages, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: PublishOrdinal
+    * * Display Name: Publish Ordinal
+    * * SQL Data Type: bigint
+    * * Description: Publish order, assigned by the database. Every delivery of the message carries it as its OrderKey.
+    */
+    get PublishOrdinal(): number {
+        return this.Get('PublishOrdinal');
+    }
+    set PublishOrdinal(value: number) {
+        this.Set('PublishOrdinal', value);
+    }
+
+    /**
+    * * Field Name: TopicID
+    * * Display Name: Topic ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)
+    */
+    get TopicID(): string {
+        return this.Get('TopicID');
+    }
+    set TopicID(value: string) {
+        this.Set('TopicID', value);
+    }
+
+    /**
+    * * Field Name: PartitionKey
+    * * Display Name: Partition Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Producer-supplied key used by Exclusive and Ordered subscriptions. Compared case-sensitively (binary collation).
+    */
+    get PartitionKey(): string | null {
+        return this.Get('PartitionKey');
+    }
+    set PartitionKey(value: string | null) {
+        this.Set('PartitionKey', value);
+    }
+
+    /**
+    * * Field Name: Attributes
+    * * Display Name: Attributes
+    * * SQL Data Type: nvarchar(4000)
+    * * Description: JSON object of string attributes (at most 10). The only envelope fields subscription filters see.
+    */
+    get Attributes(): string | null {
+        return this.Get('Attributes');
+    }
+    set Attributes(value: string | null) {
+        this.Set('Attributes', value);
+    }
+
+    /**
+    * * Field Name: Payload
+    * * Display Name: Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Inline JSON payload. Mutually exclusive with PayloadRef.
+    */
+    get Payload(): string | null {
+        return this.Get('Payload');
+    }
+    set Payload(value: string | null) {
+        this.Set('Payload', value);
+    }
+
+    /**
+    * * Field Name: PayloadRef
+    * * Display Name: Payload Ref
+    * * SQL Data Type: nvarchar(2000)
+    * * Description: JSON claim-check reference ({"Uri":...}) to data held outside the queue.
+    */
+    get PayloadRef(): string | null {
+        return this.Get('PayloadRef');
+    }
+    set PayloadRef(value: string | null) {
+        this.Set('PayloadRef', value);
+    }
+
+    /**
+    * * Field Name: CorrelationID
+    * * Display Name: Correlation ID
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Caller-supplied identifier for tracing related work.
+    */
+    get CorrelationID(): string | null {
+        return this.Get('CorrelationID');
+    }
+    set CorrelationID(value: string | null) {
+        this.Set('CorrelationID', value);
+    }
+
+    /**
+    * * Field Name: PublishedAt
+    * * Display Name: Published At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When MJ accepted the publish, on the database clock.
+    */
+    get PublishedAt(): Date {
+        return this.Get('PublishedAt');
+    }
+    set PublishedAt(value: Date) {
+        this.Set('PublishedAt', value);
+    }
+
+    /**
+    * * Field Name: PublishedByUserID
+    * * Display Name: Published By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get PublishedByUserID(): string | null {
+        return this.Get('PublishedByUserID');
+    }
+    set PublishedByUserID(value: string | null) {
+        this.Set('PublishedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Topic
+    * * Display Name: Topic
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Topic(): string {
+        return this.Get('Topic');
+    }
+
+    /**
+    * * Field Name: PublishedByUser
+    * * Display Name: Published By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get PublishedByUser(): string | null {
+        return this.Get('PublishedByUser');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Subscriptions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueSubscription
+ * * Base View: vwWorkQueueSubscriptions
+ * * @description A consumer's standing request for a topic's messages: filter, partition mode, retry and lease policy, and where the handler runs.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Subscriptions')
+export class MJWorkQueueSubscriptionEntity extends BaseEntity<MJWorkQueueSubscriptionEntityType> {
+    /**
+    * Loads the MJ: Work Queue Subscriptions record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Subscriptions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueSubscriptionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Work Queue Subscriptions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * BackoffBaseSeconds: Backoff base seconds must be greater than or equal to zero. This ensures that retry delays are never negative, maintaining valid backoff timing for subscription processing.
+    * * BackoffMaxSeconds: The maximum backoff seconds for retry attempts must be a non-negative value (zero or greater). This ensures that the retry delay configuration is valid and prevents negative time values that would be meaningless in a retry mechanism.
+    * * LeaseSeconds: The lease duration for this subscription must be at least 5 seconds to ensure minimum viability of the lease period
+    * * MaxAttempts: The maximum number of retry attempts must be at least 1. This ensures that subscription handlers have a minimum opportunity to attempt processing before giving up, preventing configurations where messages would fail immediately without any retry effort.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateBackoffBaseSecondsNonNegative(result);
+        this.ValidateBackoffMaxSecondsNonNegative(result);
+        this.ValidateLeaseSecondsMinimum(result);
+        this.ValidateMaxAttemptsMinimum(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Backoff base seconds must be greater than or equal to zero. This ensures that retry delays are never negative, maintaining valid backoff timing for subscription processing.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateBackoffBaseSecondsNonNegative(result: ValidationResult) {
+    	if (this.BackoffBaseSeconds < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"BackoffBaseSeconds",
+    			"Backoff base seconds must be greater than or equal to zero",
+    			this.BackoffBaseSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The maximum backoff seconds for retry attempts must be a non-negative value (zero or greater). This ensures that the retry delay configuration is valid and prevents negative time values that would be meaningless in a retry mechanism.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateBackoffMaxSecondsNonNegative(result: ValidationResult) {
+    	if (this.BackoffMaxSeconds < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"BackoffMaxSeconds",
+    			"Maximum backoff seconds must be greater than or equal to 0.",
+    			this.BackoffMaxSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The lease duration for this subscription must be at least 5 seconds to ensure minimum viability of the lease period
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLeaseSecondsMinimum(result: ValidationResult) {
+    	if (this.LeaseSeconds < 5) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LeaseSeconds",
+    			"Lease duration must be at least 5 seconds.",
+    			this.LeaseSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The maximum number of retry attempts must be at least 1. This ensures that subscription handlers have a minimum opportunity to attempt processing before giving up, preventing configurations where messages would fail immediately without any retry effort.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxAttemptsMinimum(result: ValidationResult) {
+    	if (this.MaxAttempts < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MaxAttempts",
+    			"Maximum attempts must be at least 1",
+    			this.MaxAttempts,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TopicID
+    * * Display Name: Topic ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Topics (vwWorkQueueTopics.ID)
+    */
+    get TopicID(): string {
+        return this.Get('TopicID');
+    }
+    set TopicID(value: string) {
+        this.Set('TopicID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Globally unique subscription name, used in manifests and consumer configuration.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What this consumer does and who owns it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Filter
+    * * Display Name: Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional attribute filter as MJ CompositeFilterDescriptor JSON (03 section 4), restricted to the broker-translatable operators eq, neq, startswith, isnull and isnotnull over envelope attribute names. Null matches every message.
+    */
+    get Filter(): string | null {
+        return this.Get('Filter');
+    }
+    set Filter(value: string | null) {
+        this.Set('Filter', value);
+    }
+
+    /**
+    * * Field Name: PartitionMode
+    * * Display Name: Partition Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exclusive
+    *   * None
+    *   * Ordered
+    * * Description: None: no key constraints. Exclusive: one delivery in flight per partition key, no order promise. Ordered (Database transport only): a key's deliveries run in publish order, one at a time, and a dead-lettered head blocks its key. Immutable once the subscription has deliveries.
+    */
+    get PartitionMode(): 'Exclusive' | 'None' | 'Ordered' {
+        return this.Get('PartitionMode');
+    }
+    set PartitionMode(value: 'Exclusive' | 'None' | 'Ordered') {
+        this.Set('PartitionMode', value);
+    }
+
+    /**
+    * * Field Name: MaxAttempts
+    * * Display Name: Max Attempts
+    * * SQL Data Type: int
+    * * Default Value: 5
+    * * Description: Attempts allowed per delivery, including lease expiries, before it is dead-lettered.
+    */
+    get MaxAttempts(): number {
+        return this.Get('MaxAttempts');
+    }
+    set MaxAttempts(value: number) {
+        this.Set('MaxAttempts', value);
+    }
+
+    /**
+    * * Field Name: BackoffBaseSeconds
+    * * Display Name: Backoff Base Seconds
+    * * SQL Data Type: int
+    * * Default Value: 10
+    * * Description: Base retry delay in seconds; full-jitter exponential backoff doubles it per attempt.
+    */
+    get BackoffBaseSeconds(): number {
+        return this.Get('BackoffBaseSeconds');
+    }
+    set BackoffBaseSeconds(value: number) {
+        this.Set('BackoffBaseSeconds', value);
+    }
+
+    /**
+    * * Field Name: BackoffMaxSeconds
+    * * Display Name: Backoff Max Seconds
+    * * SQL Data Type: int
+    * * Default Value: 900
+    * * Description: Upper bound on the retry delay, in seconds.
+    */
+    get BackoffMaxSeconds(): number {
+        return this.Get('BackoffMaxSeconds');
+    }
+    set BackoffMaxSeconds(value: number) {
+        this.Set('BackoffMaxSeconds', value);
+    }
+
+    /**
+    * * Field Name: LeaseSeconds
+    * * Display Name: Lease Seconds
+    * * SQL Data Type: int
+    * * Default Value: 60
+    * * Description: Seconds a claim lasts before it expires unless renewed by a heartbeat. Measured on the transport clock.
+    */
+    get LeaseSeconds(): number {
+        return this.Get('LeaseSeconds');
+    }
+    set LeaseSeconds(value: number) {
+        this.Set('LeaseSeconds', value);
+    }
+
+    /**
+    * * Field Name: HeartbeatMode
+    * * Display Name: Heartbeat Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Manual
+    * * Description: Auto: the runtime renews the lease while the handler runs. Manual: only handler heartbeats renew it, so hung handlers are detected.
+    */
+    get HeartbeatMode(): 'Auto' | 'Manual' {
+        return this.Get('HeartbeatMode');
+    }
+    set HeartbeatMode(value: 'Auto' | 'Manual') {
+        this.Set('HeartbeatMode', value);
+    }
+
+    /**
+    * * Field Name: MaxProcessingSeconds
+    * * Display Name: Max Processing Seconds
+    * * SQL Data Type: int
+    * * Description: Optional cap on handler run time; Auto heartbeats stop and the handler is aborted after it. Above a host's known ceiling it produces a validation warning.
+    */
+    get MaxProcessingSeconds(): number | null {
+        return this.Get('MaxProcessingSeconds');
+    }
+    set MaxProcessingSeconds(value: number | null) {
+        this.Set('MaxProcessingSeconds', value);
+    }
+
+    /**
+    * * Field Name: HostType
+    * * Display Name: Host Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: MJWorker
+    * * Value List Type: List
+    * * Possible Values 
+    *   * External
+    *   * MJWorker
+    * * Description: MJWorker: the handler runs inside an MJ server process. External: the handler runs elsewhere, for example a Lambda (cloud transports only).
+    */
+    get HostType(): 'External' | 'MJWorker' {
+        return this.Get('HostType');
+    }
+    set HostType(value: 'External' | 'MJWorker') {
+        this.Set('HostType', value);
+    }
+
+    /**
+    * * Field Name: HandlerKey
+    * * Display Name: Handler Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: ClassFactory key of the BaseWorkHandler registration that processes deliveries. Required for MJWorker subscriptions.
+    */
+    get HandlerKey(): string | null {
+        return this.Get('HandlerKey');
+    }
+    set HandlerKey(value: string | null) {
+        this.Set('HandlerKey', value);
+    }
+
+    /**
+    * * Field Name: ExternalRef
+    * * Display Name: External Ref
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Informational reference to an external consumer, for example a Lambda ARN.
+    */
+    get ExternalRef(): string | null {
+        return this.Get('ExternalRef');
+    }
+    set ExternalRef(value: string | null) {
+        this.Set('ExternalRef', value);
+    }
+
+    /**
+    * * Field Name: BindingConfig
+    * * Display Name: Binding Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Transport binding JSON imported after provisioning, for example queue and dead-letter queue URLs. Empty for Database subscriptions.
+    */
+    get BindingConfig(): string | null {
+        return this.Get('BindingConfig');
+    }
+    set BindingConfig(value: string | null) {
+        this.Set('BindingConfig', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Paused
+    * * Description: Active: deliveries are created and processed. Paused: deliveries are created but nothing is claimed. Disabled: no new deliveries are created.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Paused' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Paused') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Topic
+    * * Display Name: Topic
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Topic(): string {
+        return this.Get('Topic');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Topics - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueTopic
+ * * Base View: vwWorkQueueTopics
+ * * @description A named destination producers publish work to. Each topic is bound to one transport and fans out to its subscriptions.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Topics')
+export class MJWorkQueueTopicEntity extends BaseEntity<MJWorkQueueTopicEntityType> {
+    /**
+    * Loads the MJ: Work Queue Topics record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Topics record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueTopicEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Work Queue Topics entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * DefaultDeduplicationTTLSeconds: The default deduplication time-to-live setting must be at least 60 seconds to ensure messages have a reasonable minimum window for deduplication processing
+    * * MaxPayloadBytes: Maximum payload size must be greater than 0 bytes and cannot exceed 262,144 bytes (256 KB) to ensure messages stay within reasonable size limits for transmission and storage
+    * * RetentionDays: Retention period must be at least 1 day. This ensures that all message queues maintain a minimum retention window to prevent data loss and allow consumers adequate time to process messages.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDefaultDeduplicationTTLSecondsMinimum(result);
+        this.ValidateMaxPayloadBytesRange(result);
+        this.ValidateRetentionDaysMinimum(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The default deduplication time-to-live setting must be at least 60 seconds to ensure messages have a reasonable minimum window for deduplication processing
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDefaultDeduplicationTTLSecondsMinimum(result: ValidationResult) {
+    	if (this.DefaultDeduplicationTTLSeconds < 60) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DefaultDeduplicationTTLSeconds",
+    			"Default deduplication time-to-live must be at least 60 seconds",
+    			this.DefaultDeduplicationTTLSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Maximum payload size must be greater than 0 bytes and cannot exceed 262,144 bytes (256 KB) to ensure messages stay within reasonable size limits for transmission and storage
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxPayloadBytesRange(result: ValidationResult) {
+    	if (this.MaxPayloadBytes <= 0 || this.MaxPayloadBytes > 262144) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MaxPayloadBytes",
+    			"Maximum payload size must be greater than 0 bytes and cannot exceed 262,144 bytes (256 KB)",
+    			this.MaxPayloadBytes,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Retention period must be at least 1 day. This ensures that all message queues maintain a minimum retention window to prevent data loss and allow consumers adequate time to process messages.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetentionDaysMinimum(result: ValidationResult) {
+    	if (this.RetentionDays < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RetentionDays",
+    			"Retention period must be at least 1 day",
+    			this.RetentionDays,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Unique dotted lowercase topic name, for example email.events.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the topic represents and who publishes to it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: TransportID
+    * * Display Name: Transport ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Work Queue Transports (vwWorkQueueTransports.ID)
+    */
+    get TransportID(): string {
+        return this.Get('TransportID');
+    }
+    set TransportID(value: string) {
+        this.Set('TransportID', value);
+    }
+
+    /**
+    * * Field Name: IsFifo
+    * * Display Name: Is Fifo
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Cloud transports: the topic uses FIFO resources. Required on AWS when any subscription is Exclusive.
+    */
+    get IsFifo(): boolean {
+        return this.Get('IsFifo');
+    }
+    set IsFifo(value: boolean) {
+        this.Set('IsFifo', value);
+    }
+
+    /**
+    * * Field Name: AllowExternalPublish
+    * * Display Name: Allow External Publish
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, API callers may publish to this topic through POST /work-queue/topics/{topic}/messages. In-process code may publish to any active topic.
+    */
+    get AllowExternalPublish(): boolean {
+        return this.Get('AllowExternalPublish');
+    }
+    set AllowExternalPublish(value: boolean) {
+        this.Set('AllowExternalPublish', value);
+    }
+
+    /**
+    * * Field Name: MaxPayloadBytes
+    * * Display Name: Max Payload Bytes
+    * * SQL Data Type: int
+    * * Default Value: 262144
+    * * Description: Largest serialized envelope accepted, in bytes (at most 262144).
+    */
+    get MaxPayloadBytes(): number {
+        return this.Get('MaxPayloadBytes');
+    }
+    set MaxPayloadBytes(value: number) {
+        this.Set('MaxPayloadBytes', value);
+    }
+
+    /**
+    * * Field Name: DefaultDeduplicationTTLSeconds
+    * * Display Name: Default Deduplication TTL Seconds
+    * * SQL Data Type: int
+    * * Default Value: 86400
+    * * Description: Window, in seconds, during which a DeduplicationKey suppresses repeat publishes when the publisher does not supply one.
+    */
+    get DefaultDeduplicationTTLSeconds(): number {
+        return this.Get('DefaultDeduplicationTTLSeconds');
+    }
+    set DefaultDeduplicationTTLSeconds(value: number) {
+        this.Set('DefaultDeduplicationTTLSeconds', value);
+    }
+
+    /**
+    * * Field Name: RetentionDays
+    * * Display Name: Retention Days
+    * * SQL Data Type: int
+    * * Default Value: 7
+    * * Description: Days completed and discarded deliveries, and their messages, are kept before the sweeper purges them (Database transport).
+    */
+    get RetentionDays(): number {
+        return this.Get('RetentionDays');
+    }
+    set RetentionDays(value: number) {
+        this.Set('RetentionDays', value);
+    }
+
+    /**
+    * * Field Name: BindingConfig
+    * * Display Name: Binding Config
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Transport binding JSON imported after provisioning, for example {"SnsTopicArn":"..."}. Empty for Database topics.
+    */
+    get BindingConfig(): string | null {
+        return this.Get('BindingConfig');
+    }
+    set BindingConfig(value: string | null) {
+        this.Set('BindingConfig', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active topics accept publishes; Disabled topics reject them.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Transport
+    * * Display Name: Transport
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Transport(): string {
+        return this.Get('Transport');
+    }
+}
+
+
+/**
+ * MJ: Work Queue Transports - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: WorkQueueTransport
+ * * Base View: vwWorkQueueTransports
+ * * @description A configured backend that stores and delivers work-queue messages (Database, AWS, ...). Topics bind to exactly one transport.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Work Queue Transports')
+export class MJWorkQueueTransportEntity extends BaseEntity<MJWorkQueueTransportEntityType> {
+    /**
+    * Loads the MJ: Work Queue Transports record from the database
+    * @param ID: string - primary key value to load the MJ: Work Queue Transports record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJWorkQueueTransportEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique transport name, for example Database or AWS-prod-us-east-1.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What this transport is used for and who operates it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: ClassFactory key of the BaseTransportDriverFactory registration that builds the driver: Database or AWS.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Driver-specific JSON configuration, for example {"Region":"us-east-1"}. Never holds secrets; use CredentialID.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: CredentialID
+    * * Display Name: Credential ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
+    */
+    get CredentialID(): string | null {
+        return this.Get('CredentialID');
+    }
+    set CredentialID(value: string | null) {
+        this.Set('CredentialID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active transports can deliver; Disabled transports reject publishes.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
     }
 
     /**

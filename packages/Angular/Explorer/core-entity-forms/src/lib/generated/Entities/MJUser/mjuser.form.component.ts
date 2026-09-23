@@ -123,7 +123,9 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false },
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
             { sectionKey: 'mJAISkillPermissions', sectionName: 'AI Skill Permissions', isExpanded: false },
+            { sectionKey: 'mJWorkQueueDeliveries', sectionName: 'Work Queue Deliveries', isExpanded: false },
             { sectionKey: 'mJAISkills', sectionName: 'AI Skills', isExpanded: false },
+            { sectionKey: 'mJWorkQueueMessages', sectionName: 'Work Queue Messages', isExpanded: false },
             { sectionKey: 'mJUserRoutines', sectionName: 'User Routines', isExpanded: false },
             { sectionKey: 'mJUserRoutineRecipients', sectionName: 'User Routine Recipients', isExpanded: false }
         ]);
