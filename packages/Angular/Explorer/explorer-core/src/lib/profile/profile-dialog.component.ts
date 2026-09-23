@@ -267,11 +267,28 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
     width: 100%;
     height: 100%;
 }
+/* The card fills its host when the host has a height, and caps itself at the viewport when it does
+   not. Both halves are load-bearing.
+
+   MJDialogService is opened here with a width and no height, so .mj-dialog-container keeps
+   height:auto with only max-height:90vh. A percentage height resolves against a definite containing
+   block, and max-height does not make one -- so on the block path the height:100% below computed to
+   auto, the card grew past the screen, and overflow:hidden on this element CLIPPED the excess
+   instead of letting the scroll region inside it take over. The lower half of the card was
+   unreachable: the exact shape #4351 fixed for the user menu, one layer out.
+
+   max-height:100dvh bounds it regardless of what any ancestor resolves to (100vh first as the
+   fallback for engines without dvh), and display:flex makes the children below size by FLEX rather
+   than by percentage -- flex distributes definite sizes down, which is what the scroll regions
+   (.mj-profile__section, .mj-profile__panel-body) already assume with flex:1 and min-height:0. */
 .mj-profile {
-    display: block;
+    display: flex;
+    flex-direction: column;
     background: var(--mj-bg-surface);
     color: var(--mj-text-primary);
     height: 100%;
+    max-height: 100vh;
+    max-height: 100dvh;
     min-height: 0;
     position: relative;
     font-family: inherit;
@@ -295,10 +312,15 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
 .mj-profile--panel-open .mj-profile__close { opacity: 0; pointer-events: none; }
 
 /* ============ MAIN VIEW ============ */
+/* flex:1 with min-height:0 rather than height:100%: the parent is now a flex column, so this claims
+   the space the hero and footer do not take, and min-height:0 is what allows it to shrink below its
+   content -- without it a flex item's automatic minimum size refuses to, and the scroll region
+   inside would never be constrained enough to scroll. */
 .mj-profile__main {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     transition: transform 0.32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .mj-profile--panel-open .mj-profile__main {
