@@ -1,5 +1,100 @@
 # Change Log - @memberjunction/core
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 9b5b489: Fix the 5.51.2 → 6.1.0 upgrade failing in the Phase-0 retirement migration on databases where Reports were used (#4483), and harden `spDeleteEntityWithCoreDependencies` so a blocked entity delete fails loudly instead of leaving metadata half-pruned (#3546).
+- 683f652: feat(ng-base-forms): foreign-key lookups get a class-factory seam, the platform search API, metadata scoping, prefix ranking and recent picks.
+
+  The stock FK field ran one `LIKE '%q%'` on the name column, twenty rows, no ordering, and nothing an app could override — so on a large related entity a user typing three letters got twenty arbitrary records containing them, and `%` or `_` typed into the field acted as live wildcards.
+
+  Rows now come from an `FKLookupStrategy` resolved through the class factory by `<HostEntity>.<Field>`, then `<RelatedEntity>`, then MJ's own default. The default searches the column the user chose with an escaped `LIKE`, prefix matches first (or ranks through `SearchEntity` and hydrates by ID when a field opts into `SearchMode: 'hybrid'`), orders the browse list by the name field, applies the new `EntityField.RelatedEntityFilter` / `RelatedEntityOrderBy` metadata plus `[FKExtraFilter]` / `[FKOrderBy]` inputs — on the engine-cached path too — and leads with the user's last picks for that field, scoped the same way. A strategy can group its rows, give each a second line and chips, veto a pick with the full row it returned, and prefill the create form.
+
+  `@memberjunction/server` is listed because its generated GraphQL schema gains the two columns; the shared `fixed` group would bump it regardless, but the release notes should name it.
+
+  Minor rather than patch: this ships a migration adding two `EntityField` columns.
+
+- bfd67c6: Open the 6.2 Edge stream: first Edge release of line 6.2 (6.2.0-edge.0). Written by ci/candidate-cut.mjs at the previous line's cut; without it the first patch-only merge would version Edge to a tuple the new line's patches own.
+- a17a228: Consolidate metadata cache API methods and update PredictiveStudio outcome config score band semantics per review.
+  - **Metadata Cache API**:
+    - Make `HasCachedRecordName` and `GetCachedRecordNameOnlyIfCached` required methods on `IMetadataProvider`.
+    - Remove deprecated `GetCachedRecordNameSync` across core and UI consumers (`navigation.service.ts`, `record-origin-crumb.component.ts`, `app-routing.module.ts`).
+  - **Predictive Studio Outcome Config**:
+    - Score band assignment now uses clean half-open intervals `[Min, Max)` with the highest band inclusive `[Min, Max]`, eliminating floating-point sentinel tolerances.
+    - Non-finite and out-of-range normalized model scores (`< 0` or `> 1`) return `null` rather than silently clamping.
+    - Non-standard/neutral target variables default to neutral gray band styling without asserting polarity.
+    - Warn on JSON parse failures in `resolveOutcomeConfig`.
+  - **Lockfile & Dev Scripts**:
+    - Restored `@memberjunction/tag-engine-base` lockfile sync.
+    - Restored MJExplorer dev port 4201.
+
+### Patch Changes
+
+- 7be1684: fix: commit and rollback run inside the SQL Server provider's serial SQL queue, and the metadata dataset is read on the pool regardless of the ambient transaction
+
+  `SQLServerDataProvider` drained its instance SQL queue and then committed, leaving a microtask window in which a query enqueued after the drain could still race the handle — `ENOTBEGUN` for a caller that fired without awaiting, and `EINVALIDSTATE` / `ECLOSE` when the framework's own debounced metadata refresh was the concurrent caller. Commit, rollback, and the rollback that abandons a handle after a failed commit are now items in the same strictly serial queue, so ordering is the queue's: everything enqueued before them has finished, everything after runs after. A query bound to a handle the provider owns is rejected with a message naming the cause — instead of reaching mssql as `ENOTBEGUN` on a finished handle — whenever that handle has committed, rolled back, or been doomed by a failed commit by the time the query reaches the front, including a query a caller issues on a handle it kept after the commit completed. A query on an explicit handle a caller passed in is never subject to that check. The provider no longer depends on `uuid`. Closes MJ#4454.
+
+  `ExecuteSQLOptions` and `ExecuteSQLBatchOptions` gain `ignoreAmbientTransaction`, honored by both providers: the statement runs on the pool even while an ambient transaction is open. `GetDatasetByName` and `GetDatasetStatusByName` set it for `MJ_Metadata` only — that dataset is loaded by a timer-driven refresh that is not part of any caller's unit of work — while every other dataset keeps joining the ambient transaction so a caller that writes and then loads inside one transaction still sees its own rows. Closes MJ#4514.
+
+- e1fd4c1: fix: a date-only column renders as its stored calendar day in grids, cards, the record detail panel, aggregates, the aggregate panel, the view-config preview, the IS-A related card and the FK dropdown, not the previous day
+
+  A SQL `date` column arrives as UTC midnight, and every display path except the form field (fixed in #4177) formatted it in the reader's local zone, so a stored 2026-11-20 read as Nov 19 for everyone west of Greenwich and 2026-01-01 read as the previous year. The form and the list disagreed on the same row. `@memberjunction/core` now exports `IsDateOnlySQLType` and `FormatDateOnly`, its own `FormatValue` uses them for `date` types, and the grid, cards, detail panel, entity card and view-config preview branch on the field's declared SQL type. A `datetime` or `datetimeoffset` column is an instant and keeps local rendering with its time. `ng-entity-viewer` also exports `AggregateFieldName` and `AggregateField`, which read the column out of a single-field aggregate such as `MIN(IntakeDate)`, and the aggregate panel gains an optional `Entity` input: with it bound, a date aggregate renders as its day instead of the raw ISO string the wire carries, while a `COUNT` over a date column still renders as the count. A timestamp aggregate that arrives as that ISO string now renders in local time in grid cards rather than as the wire text. In `ng-base-forms`, the IS-A related card and the FK dropdown cells branch on the column's SQL type the same way. Closes MJ#4210.
+
+- f48dffc: fix: a failed metadata dataset read no longer replaces loaded metadata with an empty set, and a member-change refresh waits for the ambient transaction
+
+  `GetDatasetByName` treated a thrown data batch as an empty result: every uncached item reported Success with zero rows, the empty rows were written through to the cache, and for `MJ_Metadata` the provider installed a metadata cache with no entities, after which every `EntityByName` in the process failed until restart. A batch failure now fails the affected items and the dataset, carrying the error in `Status`, and caches nothing. `GetAllMetadata` additionally refuses an `Entities` item with no rows, keeping the metadata already loaded. The debounced refresh that runs after a write to a metadata-member entity is timer-driven and could fire while the same provider was committing an ambient transaction, putting the metadata batch on the transaction's connection alongside the COMMIT (tedious `EINVALIDSTATE` / `ECLOSE`, never retried); it now waits for the transaction to end and runs on the pool. Fixes MJ#4486; the residual commit window itself remains MJ#4454.
+
+- 630bb88: Record creates in the SQL log as create-or-update guarded on the primary key (MemberJunction/MJ#4503). The consolidated Metadata_Sync migrations are recordings of `mj sync push`, and a push creates rows with the fixed primary keys from `metadata/**`; replaying an unguarded `spCreate` on a database where a push already created the row failed on the primary key, which is what stopped the CDP upgrade to 6.1.1. SQL Server's logged form of a create is now `IF NOT EXISTS (row with this PK) EXEC spCreate ELSE EXEC spUpdate` with the same named argument list, so a replay converges an existing row to the recorded content (release-owned metadata is overwritten, not skipped). Entities without a generated update proc get the guard with no ELSE branch. Executed SQL is unchanged.
+
+  Two things to know. Convergence has one narrow exception: a NOT NULL column with a non-NULL default whose value is left unset on the recording (uniqueidentifier defaults such as `AIAgent.OwnerUserID`) keeps its existing value on the update branch instead of taking the default. And because the logged text of a create now contains both proc names, a SQL-logging filter pattern such as `*spUpdateX*` also matches that entity's creates; in-repo configs already pair the create and update patterns. The record-change-free form is now offered to the logger for every save, not only for entities that track record changes, so the guard reaches every recording; the logger tags a statement "(core SP call only)" only when the logged text differs from what ran.
+
+- ee1f0d9: Add a provider post-commit queue: `DatabaseProviderBase.RunAfterCommit(task, description, token?)` plus `CapturePostCommitToken()`, which returns a `PostCommitToken` naming the transaction frames open at that moment. Inside a transaction a task waits for the outermost commit and is discarded on rollback, failed commit, abandoned (doomed) transaction, or `ResetTransactionState`; a savepoint rollback discards only the tasks registered inside that savepoint. Work dispatched fire-and-forget by a save registers after the transaction may already have settled, so the entity-action and AI-action dispatchers capture a token before their first `await` and pass it along: the task then follows the transaction that caused it rather than whatever is open when it registers. SQL Server's deferred Entity AI Action queueing uses this, and Durable After\* entity actions with no queue submitter (e.g. `mj sync push`) are handed to it instead of polling `TransactionDepth` on every tick — so they no longer busy-spin during a long transaction, and never fire for rows a rollback removed. A savepoint that rolled back keeps that fate after the outer transaction commits, so work caused inside it is still dropped. A token captured with no transaction open says so, and its task runs rather than being attached to an unrelated transaction that opened in the meantime. A task whose own transaction has committed waits for any unrelated transaction on that provider to end, so its writes are never enlisted in — or rolled back with — a transaction it has nothing to do with.
+- 104125c: Rebuild an engine's derived state after a cross-server cache payload replaces one of its arrays.
+
+  In a multi-server deployment with Redis pub/sub enabled, `BaseEngine.OnExternalCacheChange` applies a peer's cache payload by replacing the config's property with newly materialized entity objects. It then returned without calling `AdditionalLoading`, so anything a subclass derived from the _previous_ objects — grouped child collections, memoized lookups — still referenced instances the engine had just discarded.
+
+  The resulting state is unusually hard to diagnose, because nothing about the engine looks wrong. The replaced array is complete and correct and its row count is unchanged; only the derived collections are empty. Consumers that read derived state behave as though the data were missing while every count-based health check passes. It also does not self-correct: the config is still marked loaded, so `EnsureLoaded()` and `Config()` short-circuit and the process stays that way until it restarts.
+
+  For `AIEngineBase` this surfaced as model selection failing with "No suitable model found … No model-vendor candidates were available" on every request, because `AdditionalLoading` is what attaches `ModelVendors` to each `AIModel`. Any peer server warming its cache at startup was enough to trigger it, since that republishes every entity config it loads to every other server.
+
+  `AdditionalLoading` now runs on both paths that replace a property — the payload fast path and the full-reload fallback — and the property-change notification is emitted after the rebuild, so subscribers cannot observe a property before its derived state is attached. That notification was also missing from the payload path entirely, so `ObserveProperty` subscribers never saw cross-server updates at all.
+
+  One supporting change:
+
+  **`AIEngineBase.AdditionalLoading` is now idempotent and linear.** It previously appended into whatever each parent already held, which is only correct on a full load where the parents are new. Running it per cache event multiplied every derived collection on each call — unbounded growth on a long-lived process. It now buckets children in a single pass and replaces each parent collection outright, which also drops the model/model-vendor pairing from O(parents × children) to O(parents + children) and leaves no window in which a parent is observably empty.
+
+- 5513c2a: fix: three defects found by the 6.2.0-edge.0 integration gate.
+  - `SearchEntities` over GraphQL returned empty results on any server without a read-only database login: the resolver asked for the read-only provider with no fallback and got `null`.
+  - Query SQL that wraps a template value in quotes (`= '{{ X }}'`, `LIKE '%{{ X }}%'`) lost its deterministic field extraction: placeholder substitution added a second pair of quotes, so the SQL no longer parsed.
+  - A record saved inside a transaction that rolled back stayed in `BaseEngine` caches. Immediate cache mutations now follow the saving transaction: applied on commit, dropped on rollback.
+  - `registerTestLLM` now returns a `restore()` for long-lived processes that cannot reset singletons.
+
+- 8a5d2c0: `mj sync push` is all-or-nothing again (#4550).
+  - **Atomic by default.** Every create, update and delete runs in one database transaction, one JSON-root graph at a time. A failure anywhere rolls back everything the push wrote and restores the metadata files. This also removes the push deadlocking against itself when an entity view reads other rows during the insert read-back (#4550).
+  - **Isolated transactions are opt-in, per entity.** `push.isolatedTransactions: true` in an entity's `.mj-sync.json` (or at the root as a default) keeps the 6.1.0 behavior for that directory: its graphs run in parallel on independent provider instances (`--parallel-batch-size`, default 10), and each create and update commits as it is saved. For an entity that manages its own transaction scopes and wants the parallelism. The CLI flags `--isolated-transactions` and `--no-isolated-transactions` override every file, in either direction, so one run can be forced without editing metadata. A push that mixes the two is all-or-nothing for its shared directories and best effort for its isolated ones, and says which is which.
+  - **Every record error stops the push**, including a record that fails without throwing (`status: 'error'`) and a deferred record that fails in Phase 2.5. The push transaction is never left open.
+  - **Messages are true.** "rolled back successfully" is printed only when nothing was committed. A failed non-atomic push lists the files and records that stayed in the database and keeps those files as written. The deletion banner matches the mode. A rejected COMMIT says so, and on PostgreSQL explains that deferred foreign keys are checked at commit. Deferred-record failures appear in the JSON `errors[]`.
+  - **Incremental state** is saved only after the push commits.
+  - The interactive "commit the successful changes?" prompt is removed: a failed push has already rolled back.
+  - A failed push still reports: the JSON result keeps its `data` block with the counts reached, the SQL log path, and how many records stayed committed.
+  - A file whose write was deferred (it contains deletions) is written after a failed push when its records were committed, so their primary keys are not lost and the next push does not duplicate them.
+  - A write is reported as committed the moment its save settles, so a graph rolling back leftover depth afterwards cannot hide a row that is in the database.
+
+- 2c590b0: `RunView`'s `UserSearchString` is a no-op again on an entity that declares no searchable field, and `EntityInfo` gains a cached `HasSearchFields`.
+
+  `9cf55b750e` made an empty per-field predicate emit `(1=0)`, so a search term against **any** entity with no `IncludeInUserSearchAPI` field returned zero rows instead of being ignored. That blanks a generic grid whose search box sits over an entity nobody configured search fields for, and it broke the pinned integration check `runview-matrix.RVM9`.
+
+  The `(1=0)` fallback is now gated on the entity actually declaring searchable fields, which preserves what that change was for — a term whose candidate fields all dropped out (denied by field-level security, or not sensible text-search targets) still returns zero rows rather than the whole table. An entity with no search surface at all goes back to ignoring the term.
+
+  `EntityInfo.HasSearchFields` answers "does this entity have a search surface at all", computed once per `EntityInfo` and cached like `HasInactiveFields`, so a hot search path never rescans the field list. It is reset wherever `_Fields` is (re)assigned.
+
+  That reset block also now clears `_hasInactiveFields`. `HasInactiveFields` was added three days after the block and never listed in it, so it served stale results after a `_Fields` reassignment — the exact staleness the block exists to prevent.
+
+  Fixes #4581.
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/sql-dialect@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

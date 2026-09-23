@@ -1,5 +1,87 @@
 # @memberjunction/generic-database-provider
 
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- 7be1684: fix: commit and rollback run inside the SQL Server provider's serial SQL queue, and the metadata dataset is read on the pool regardless of the ambient transaction
+
+  `SQLServerDataProvider` drained its instance SQL queue and then committed, leaving a microtask window in which a query enqueued after the drain could still race the handle — `ENOTBEGUN` for a caller that fired without awaiting, and `EINVALIDSTATE` / `ECLOSE` when the framework's own debounced metadata refresh was the concurrent caller. Commit, rollback, and the rollback that abandons a handle after a failed commit are now items in the same strictly serial queue, so ordering is the queue's: everything enqueued before them has finished, everything after runs after. A query bound to a handle the provider owns is rejected with a message naming the cause — instead of reaching mssql as `ENOTBEGUN` on a finished handle — whenever that handle has committed, rolled back, or been doomed by a failed commit by the time the query reaches the front, including a query a caller issues on a handle it kept after the commit completed. A query on an explicit handle a caller passed in is never subject to that check. The provider no longer depends on `uuid`. Closes MJ#4454.
+
+  `ExecuteSQLOptions` and `ExecuteSQLBatchOptions` gain `ignoreAmbientTransaction`, honored by both providers: the statement runs on the pool even while an ambient transaction is open. `GetDatasetByName` and `GetDatasetStatusByName` set it for `MJ_Metadata` only — that dataset is loaded by a timer-driven refresh that is not part of any caller's unit of work — while every other dataset keeps joining the ambient transaction so a caller that writes and then loads inside one transaction still sees its own rows. Closes MJ#4514.
+
+- f48dffc: fix: a failed metadata dataset read no longer replaces loaded metadata with an empty set, and a member-change refresh waits for the ambient transaction
+
+  `GetDatasetByName` treated a thrown data batch as an empty result: every uncached item reported Success with zero rows, the empty rows were written through to the cache, and for `MJ_Metadata` the provider installed a metadata cache with no entities, after which every `EntityByName` in the process failed until restart. A batch failure now fails the affected items and the dataset, carrying the error in `Status`, and caches nothing. `GetAllMetadata` additionally refuses an `Entities` item with no rows, keeping the metadata already loaded. The debounced refresh that runs after a write to a metadata-member entity is timer-driven and could fire while the same provider was committing an ambient transaction, putting the metadata batch on the transaction's connection alongside the COMMIT (tedious `EINVALIDSTATE` / `ECLOSE`, never retried); it now waits for the transaction to end and runs on the pool. Fixes MJ#4486; the residual commit window itself remains MJ#4454.
+
+- 630bb88: Record creates in the SQL log as create-or-update guarded on the primary key (MemberJunction/MJ#4503). The consolidated Metadata_Sync migrations are recordings of `mj sync push`, and a push creates rows with the fixed primary keys from `metadata/**`; replaying an unguarded `spCreate` on a database where a push already created the row failed on the primary key, which is what stopped the CDP upgrade to 6.1.1. SQL Server's logged form of a create is now `IF NOT EXISTS (row with this PK) EXEC spCreate ELSE EXEC spUpdate` with the same named argument list, so a replay converges an existing row to the recorded content (release-owned metadata is overwritten, not skipped). Entities without a generated update proc get the guard with no ELSE branch. Executed SQL is unchanged.
+
+  Two things to know. Convergence has one narrow exception: a NOT NULL column with a non-NULL default whose value is left unset on the recording (uniqueidentifier defaults such as `AIAgent.OwnerUserID`) keeps its existing value on the update branch instead of taking the default. And because the logged text of a create now contains both proc names, a SQL-logging filter pattern such as `*spUpdateX*` also matches that entity's creates; in-repo configs already pair the create and update patterns. The record-change-free form is now offered to the logger for every save, not only for entities that track record changes, so the guard reaches every recording; the logger tags a statement "(core SP call only)" only when the logged text differs from what ran.
+
+- ee1f0d9: Add a provider post-commit queue: `DatabaseProviderBase.RunAfterCommit(task, description, token?)` plus `CapturePostCommitToken()`, which returns a `PostCommitToken` naming the transaction frames open at that moment. Inside a transaction a task waits for the outermost commit and is discarded on rollback, failed commit, abandoned (doomed) transaction, or `ResetTransactionState`; a savepoint rollback discards only the tasks registered inside that savepoint. Work dispatched fire-and-forget by a save registers after the transaction may already have settled, so the entity-action and AI-action dispatchers capture a token before their first `await` and pass it along: the task then follows the transaction that caused it rather than whatever is open when it registers. SQL Server's deferred Entity AI Action queueing uses this, and Durable After\* entity actions with no queue submitter (e.g. `mj sync push`) are handed to it instead of polling `TransactionDepth` on every tick — so they no longer busy-spin during a long transaction, and never fire for rows a rollback removed. A savepoint that rolled back keeps that fate after the outer transaction commits, so work caused inside it is still dropped. A token captured with no transaction open says so, and its task runs rather than being attached to an unrelated transaction that opened in the meantime. A task whose own transaction has committed waits for any unrelated transaction on that provider to end, so its writes are never enlisted in — or rolled back with — a transaction it has nothing to do with.
+- 3d633ed: Introduce `TagSearchProvider`, fix search engine zombie leaks, exclude administrative entities from user search, and promote entity-sourced content items.
+  - **Tag Search Provider**:
+    - Adds `TagSearchProvider` registered under driver class `TagSearchProvider` (SourceType: `tag`, Priority: 3), which matches queries against the taxonomy graph (tags and synonyms) using `TagEngineBase` and retrieves the associated records from `MJ: Tagged Items` and `MJ: Content Item Tags`.
+    - Weights retrieved records by multiplying the tag match confidence (0.0 to 1.0) by the tagged item's continuous relevance weight (`TaggedItem.Weight`), surfacing records tagged with a query concept even when the query term does not appear literally in the entity record's text fields.
+    - Deduplicates multi-tag matches on the same record (highest score wins) and blends tag candidates with other search sources (vector, full-text, entity LIKE) via Reciprocal Rank Fusion (RRF).
+  - **Search Engine Safeguards & 15% Zombie Leak Fix**:
+    - In `GenericDatabaseProvider.createViewUserSearchSQL`, returns `'(1=0)'` when a search string is provided but no searchable fields exist (or all are non-text/restricted), preventing unconstrained `SELECT TOP N` queries with no `WHERE` clause.
+    - In `EntitySearchProvider.convertResults`, drops records where `matchedFields === 0`, eliminating the 15% base floor score leak on non-matching rows.
+    - In `metadata/entities/.entity-search-exclusions.json`, sets `AllowUserSearchAPI = 0` and `AutoUpdateAllowUserSearchAPI = 0` for taxonomy entities (`MJ: Tags`, `MJ: Tagged Items`, `MJ: Tag Synonyms`, `MJ: Tag Scopes`, `MJ: Tag Co Occurrences`), `MJ: Content Items`, and 13 internal/zombie entities (`MJ: Magic Link Invites`, `MJ: Magic Link Invite Allowed Domains`, `MJ: Magic Link Invite Allowed Paths`, `MJ: Magic Link Invite Applications`, `MJ: Magic Link Invite Roles`, `MJ: Magic Link Redemptions`, `MJ: Materialized Results`, `MJ: Materialized Result Queries`, `MJ: RSU Pending Works`, `MJ: AI Skill Search Scopes`, `MJ: Cluster Analysis Clusters`, `MJ: Employees`).
+  - **Option B Entity-Sourced Content Item Promotion**:
+    - In `SearchEnricher.ExcludeEntitySourcedContentItems`, when vector search surfaces a content item originating from an entity record (via `EntityRecordDocumentID` or `RawMetadata`), promotes the item to the underlying entity (`EntityName`, `RecordID`), preserving score, snippet, and icon while resolving entity record names.
+    - Preserves genuine external unstructured content items (PDFs, URLs, markdown documents) as `MJ: Content Items`.
+    - In `SearchEngine`, deduplicates results after content promotion so promoted entity records merge cleanly with direct entity matches.
+
+- 2c590b0: `RunView`'s `UserSearchString` is a no-op again on an entity that declares no searchable field, and `EntityInfo` gains a cached `HasSearchFields`.
+
+  `9cf55b750e` made an empty per-field predicate emit `(1=0)`, so a search term against **any** entity with no `IncludeInUserSearchAPI` field returned zero rows instead of being ignored. That blanks a generic grid whose search box sits over an entity nobody configured search fields for, and it broke the pinned integration check `runview-matrix.RVM9`.
+
+  The `(1=0)` fallback is now gated on the entity actually declaring searchable fields, which preserves what that change was for — a term whose candidate fields all dropped out (denied by field-level security, or not sensible text-search targets) still returns zero rows rather than the whole table. An entity with no search surface at all goes back to ignoring the term.
+
+  `EntityInfo.HasSearchFields` answers "does this entity have a search surface at all", computed once per `EntityInfo` and cached like `HasInactiveFields`, so a hot search path never rescans the field list. It is reset wherever `_Fields` is (re)assigned.
+
+  That reset block also now clears `_hasInactiveFields`. `HasInactiveFields` was added three days after the block and never listed in it, so it served stale results after a `_Fields` reassignment — the exact staleness the block exists to prevent.
+
+  Fixes #4581.
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/actions@6.2.0-edge.0
+  - @memberjunction/sql-parser@6.2.0-edge.0
+  - @memberjunction/encryption@6.2.0-edge.0
+  - @memberjunction/queue@6.2.0-edge.0
+  - @memberjunction/query-processor@6.2.0-edge.0
+  - @memberjunction/geo-core@6.2.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/sql-dialect@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes
