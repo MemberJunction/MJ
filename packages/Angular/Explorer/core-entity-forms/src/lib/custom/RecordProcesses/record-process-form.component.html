@@ -6,7 +6,607 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
-    <mj-record-process-editor [Record]="record" [ShowToolbar]="false" [Provider]="ProviderToUse"></mj-record-process-editor>
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 
+    <!-- ========================================
+         OVERVIEW & STATUS (Lead Panel)
+         ======================================== -->
+    <mj-collapsible-panel
+        SectionKey="processOverview"
+        SectionName="Overview & Status"
+        Icon="fa-solid fa-gauge-high"
+        [Form]="this"
+        [FormContext]="formContext"
+        [DefaultExpanded]="true">
+        <div class="rpf-overview-container">
+            <!-- Hero Header Card -->
+            <div class="rpf-hero-card">
+                <div class="rpf-hero-main">
+                    <div class="rpf-hero-icon-wrap">
+                        <i [class]="WorkTypeIcon"></i>
+                    </div>
+                    <div class="rpf-hero-info">
+                        <div class="rpf-hero-title-row">
+                            <h2 class="rpf-hero-title">{{ record.Name || 'Untitled Process' }}</h2>
+                            <span class="rpf-badge" [ngClass]="StatusBadgeClass">
+                                <span class="rpf-badge-dot"></span>
+                                {{ record.Status || 'Draft' }}
+                            </span>
+                        </div>
+                        <p class="rpf-hero-desc">{{ record.Description || 'No description provided for this process.' }}</p>
+                        <div class="rpf-hero-pills">
+                            <span class="rpf-pill" title="Target Entity">
+                                <i class="fa-solid fa-database"></i>
+                                <span>{{ TargetEntityName }}</span>
+                            </span>
+                            <span class="rpf-pill" title="Work Type">
+                                <i [class]="WorkTypeIcon"></i>
+                                <span>{{ record.WorkType || 'Not set' }}</span>
+                            </span>
+                            @if (record.WorkType === 'Infer') {
+                                <span class="rpf-pill rpf-pill-feature" title="Feature Pipeline">
+                                    <i class="fa-solid fa-sparkles"></i>
+                                    <span>Feature Pipeline</span>
+                                </span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPI Summary Grid -->
+            <div class="rpf-kpi-grid">
+                <div class="rpf-kpi-card">
+                    <div class="rpf-kpi-label"><i class="fa-solid fa-filter"></i> Target Scope</div>
+                    <div class="rpf-kpi-value">{{ record.ScopeType || 'Filter' }}</div>
+                    <div class="rpf-kpi-sub" [title]="record.ScopeFilter || 'All records in scope'">
+                        {{ record.ScopeFilter ? record.ScopeFilter : 'No filter applied (all records)' }}
+                    </div>
+                </div>
+
+                <div class="rpf-kpi-card">
+                    <div class="rpf-kpi-label"><i class="fa-solid fa-bolt"></i> Triggers</div>
+                    <div class="rpf-kpi-value">
+                        @if (record.ScheduleEnabled) {
+                            <span>Scheduled</span>
+                        } @else if (record.OnChangeEnabled) {
+                            <span>On Change</span>
+                        } @else if (record.OnDemandEnabled) {
+                            <span>On Demand</span>
+                        } @else {
+                            <span class="muted">Manual</span>
+                        }
+                    </div>
+                    <div class="rpf-kpi-sub">
+                        @if (record.ScheduleEnabled && record.CronExpression) {
+                            <code>{{ record.CronExpression }}</code>
+                        } @else if (record.OnChangeEnabled) {
+                            <span>Mode: {{ record.OnChangeInvocationType || 'Immediate' }}</span>
+                        } @else {
+                            <span>On demand execution</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="rpf-kpi-card">
+                    <div class="rpf-kpi-label"><i class="fa-solid fa-water"></i> Optimization</div>
+                    <div class="rpf-kpi-value">{{ record.WatermarkStrategy || 'None' }}</div>
+                    <div class="rpf-kpi-sub">
+                        Batch: {{ record.BatchSize || 'default' }} | Concurrency: {{ record.MaxConcurrency || '1' }}
+                    </div>
+                </div>
+
+                <div class="rpf-kpi-card">
+                    <div class="rpf-kpi-label"><i class="fa-solid fa-microchip"></i> Skip Unchanged</div>
+                    <div class="rpf-kpi-value">{{ record.SkipUnchanged ? 'Enabled' : 'Disabled' }}</div>
+                    <div class="rpf-kpi-sub">
+                        {{ record.SkipUnchanged ? 'Skips re-evaluating unchanged rows' : 'Processes all matching rows' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- ========================================
+         PIPELINE CONFIGURATION (Visual Builder)
+         ======================================== -->
+    <mj-collapsible-panel
+        SectionKey="pipelineConfiguration"
+        SectionName="Pipeline Configuration"
+        Icon="fa-solid fa-wand-magic-sparkles"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [DefaultExpanded]="true">
+        @if (record.WorkType === 'Infer') {
+            <div class="rpf-pipeline-builder-wrap">
+                <mj-feature-pipeline-builder
+                    [Record]="record"
+                    [EntityID]="record.EntityID"
+                    (SpecChange)="OnPipelineSpecChange()"
+                    (ValidChange)="OnPipelineValidChange($event)">
+                </mj-feature-pipeline-builder>
+            </div>
+        } @else if (record.WorkType === 'FieldRules') {
+            <div class="rpf-editor-wrap">
+                <mj-record-process-editor
+                    [Record]="record"
+                    [ShowToolbar]="false"
+                    [Provider]="ProviderToUse">
+                </mj-record-process-editor>
+            </div>
+        } @else {
+            <div class="rpf-generic-config-wrap">
+                <div class="rpf-notice-card">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <div>
+                        <strong>{{ record.WorkType || 'Custom' }} Execution Logic</strong>
+                        <p>Configure actions, prompts, and mappings in the <em>Process Definition</em> and <em>Execution Logic</em> sections below.</p>
+                    </div>
+                </div>
+            </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- ========================================
+         PRIOR RUNS & AUDIT (Embedded History)
+         ======================================== -->
+    <mj-collapsible-panel
+        SectionKey="processRuns"
+        SectionName="Prior Runs"
+        Icon="fa-solid fa-clock-rotate-left"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [DefaultExpanded]="true">
+        @if (record.IsSaved) {
+            <div class="rpf-history-wrap">
+                <mj-record-process-history
+                    [RecordProcessID]="record.ID">
+                </mj-record-process-history>
+            </div>
+        } @else {
+            <div class="rpf-notice-card">
+                <i class="fa-solid fa-circle-info"></i>
+                <span>Save this record process to view execution history and per-record audit logs.</span>
+            </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- ========================================
+         FIELD PANELS (Fold into Details rail)
+         ======================================== -->
+
+    <!-- Process Definition Section -->
+    <mj-collapsible-panel
+        SectionKey="processDefinition"
+        SectionName="Process Definition"
+        Icon="fa fa-info-circle"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Name" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Description" Type="textarea" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="CategoryID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="EntityID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Status" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    </mj-collapsible-panel>
+
+    <!-- Execution Logic Section -->
+    <mj-collapsible-panel
+        SectionKey="executionLogic"
+        SectionName="Execution Logic"
+        Icon="fa fa-play"
+        [Form]="this"
+        [FormContext]="formContext"
+        [DefaultExpanded]="false">
+        @if (record.WorkType === 'Infer') {
+            <!-- Health & Schema Audit Bar -->
+            <div class="rpf-audit-bar" [class.rpf-audit-bar-warning]="!IsSpecValid">
+                <div class="rpf-audit-badges">
+                    <div class="rpf-audit-chip" [class.rpf-audit-chip-valid]="IsSpecValid" [class.rpf-audit-chip-warning]="!IsSpecValid">
+                        <i [class]="IsSpecValid ? 'fa-solid fa-shield-check' : 'fa-solid fa-triangle-exclamation'"></i>
+                        <span>{{ IsSpecValid ? 'Configuration Valid' : 'Configuration Issues Found' }}</span>
+                    </div>
+                    <div class="rpf-audit-chip">
+                        <i class="fa-solid fa-check-circle" style="color: var(--mj-status-success);"></i>
+                        <span>{{ BoundFeaturesCount }} of {{ TotalFeaturesCount }} Features Bound to Target</span>
+                    </div>
+                    <div class="rpf-audit-chip">
+                        <i class="fa-solid fa-database"></i>
+                        <span>Context: {{ ContextModeText }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Model & Context Query Section -->
+            <div class="rpf-prompt-grid">
+                <!-- Prompt Card -->
+                <div class="rpf-card-box">
+                    <div class="rpf-box-eyebrow">Bound AI Prompt</div>
+                    <div class="rpf-prompt-title">
+                        <i class="fa-solid fa-message-code"></i>
+                        <span>{{ record.PromptID ? 'Prompt Configured' : 'No Prompt Selected' }}</span>
+                    </div>
+                    <div class="rpf-chip-wrap">
+                        @if (record.PromptID) {
+                            <span class="rpf-sm-chip rpf-sm-chip-brand">ID: {{ record.PromptID.substring(0, 8) }}...</span>
+                        }
+                        <span class="rpf-sm-chip"><i class="fa-solid fa-sparkles"></i> Feature Infer Engine</span>
+                        <span class="rpf-sm-chip"><i class="fa-solid fa-microchip"></i> LLM Output Parser</span>
+                    </div>
+                    @if (EditMode) {
+                        <div style="margin-top: 10px;">
+                            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="PromptID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+                        </div>
+                    }
+                </div>
+
+                <!-- Parameters Resolution Card -->
+                <div class="rpf-card-box">
+                    <div class="rpf-box-eyebrow">Prompt Parameter Resolution</div>
+                    @if (ParameterMappings.length > 0) {
+                        <div class="rpf-param-list">
+                            @for (item of ParameterMappings; track item.Param) {
+                                <div class="rpf-param-row">
+                                    <span class="rpf-param-name">{{ item.Param }}</span>
+                                    <span>
+                                        <i class="fa-solid fa-arrow-left rpf-param-arrow"></i>
+                                        <span>Column: <code>{{ item.Field }}</code></span>
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    } @else {
+                        <div style="font-size: 12px; color: var(--mj-text-muted);">
+                            No parameter bindings configured. Entire row context will be passed to prompt.
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Context Query Display -->
+            <div class="rpf-sql-preview-box">
+                <div class="rpf-sql-preview-label">
+                    <i class="fa-solid fa-code"></i> Context Retrieval Query
+                </div>
+                <div class="rpf-sql-preview-code">
+                    <code>{{ ContextQueryDisplay }}</code>
+                </div>
+            </div>
+
+            <!-- Feature Output Schema & Entity Mappings Table -->
+            <div class="rpf-table-wrap">
+                <table class="rpf-feature-table">
+                    <thead>
+                        <tr>
+                            <th>Feature Name</th>
+                            <th>Kind / Type</th>
+                            <th>Validation Constraints</th>
+                            <th>Target Field Binding</th>
+                            <th>Reasoning</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (FeatureOutputs.length > 0) {
+                            @for (out of FeatureOutputs; track out.Name) {
+                                <tr>
+                                    <td>
+                                        <div class="rpf-feature-name-cell">
+                                            <i [class]="out.FeatureKind === 'numeric' ? 'fa-solid fa-chart-line' : 'fa-solid fa-tags'"
+                                               [style.color]="out.FeatureKind === 'numeric' ? '#f59e0b' : '#8b5cf6'"></i>
+                                            <span>{{ out.Name }}</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="rpf-type-tag"
+                                              [class.rpf-type-numeric]="out.FeatureKind === 'numeric'"
+                                              [class.rpf-type-categorical]="out.FeatureKind === 'categorical'"
+                                              [class.rpf-type-default]="out.FeatureKind !== 'numeric' && out.FeatureKind !== 'categorical'">
+                                            {{ out.FeatureKind }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="rpf-sm-chip" [title]="'Violation policy: ' + out.ViolationPolicy">
+                                            <i class="fa-solid fa-shield"></i> {{ out.ConstraintSummary }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="rpf-binding-pill">
+                                            <i [class]="out.TargetFieldExists ? 'fa-solid fa-check-circle rpf-binding-valid' : 'fa-solid fa-triangle-exclamation rpf-binding-invalid'"></i>
+                                            <span>{{ TargetEntityName }}.<strong>{{ out.TargetField }}</strong></span>
+                                            <span style="color: var(--mj-text-muted); font-size: 11px;">({{ out.TargetFieldType }})</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        @if (out.ReasoningTarget === 'Enabled') {
+                                            <span class="rpf-sm-chip rpf-sm-chip-brand"><i class="fa-solid fa-brain"></i> Captured</span>
+                                        } @else {
+                                            <span style="color: var(--mj-text-muted); font-size: 11px;">None</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        } @else {
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: var(--mj-text-muted); padding: 20px;">
+                                    No output features defined yet. Use the <em>Pipeline Configuration</em> builder tab to add output features.
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Advanced Raw JSON Drawer -->
+            <div class="rpf-raw-json-drawer">
+                <div class="rpf-raw-json-header" (click)="toggleRawJson()">
+                    <div class="rpf-raw-json-title">
+                        <i [class]="rawJsonExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+                        <i class="fa-solid fa-code"></i>
+                        <span>Power User Escape Hatch: View Raw Pipeline Configuration JSON</span>
+                    </div>
+                    <button type="button" class="rpf-sm-chip" (click)="$event.stopPropagation(); copyRawJson()">
+                        <i [class]="rawJsonCopied ? 'fa-solid fa-check' : 'fa-regular fa-copy'"></i>
+                        <span>{{ rawJsonCopied ? 'Copied!' : 'Copy JSON' }}</span>
+                    </button>
+                </div>
+                @if (rawJsonExpanded) {
+                    <div class="rpf-raw-json-body">
+                        <pre><code>{{ FormattedRawJson }}</code></pre>
+                    </div>
+                }
+            </div>
+
+            @if (EditMode) {
+                <div class="rpf-edit-fields-divider">
+                    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="WorkType" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+                    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Configuration" Type="code" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+                    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="OutputMapping" Type="code" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+                </div>
+            }
+        } @else {
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="WorkType" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ActionID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="AgentID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="PromptID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="InputMapping" Type="code" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="OutputMapping" Type="code" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Configuration" Type="code" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Scope Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="scopeConfiguration"
+        SectionName="Scope Configuration"
+        Icon="fa fa-filter"
+        [Form]="this"
+        [FormContext]="formContext">
+        @if (record.WorkType === 'Infer') {
+            <div class="rpf-scope-infer-wrap">
+                <div class="rpf-scope-summary-row">
+                    <div class="rpf-scope-badge-group">
+                        <span class="rpf-scope-chip">
+                            <i class="fa-solid fa-filter"></i>
+                            <span>Scope Type: <strong>{{ record.ScopeType || 'Filter' }}</strong></span>
+                        </span>
+                        @if (record.ScopeFilter) {
+                            <span class="rpf-scope-chip rpf-scope-chip-brand">
+                                <i class="fa-solid fa-calculator"></i>
+                                <span>Filter Active</span>
+                            </span>
+                        }
+                    </div>
+                </div>
+                @if (FormattedScopeFilter) {
+                    <div class="rpf-sql-preview-box">
+                        <div class="rpf-sql-preview-label">
+                            <i class="fa-solid fa-database"></i> SQL Scope Filter (WHERE clause)
+                        </div>
+                        <div class="rpf-sql-preview-code">
+                            <code>{{ FormattedScopeFilter }}</code>
+                        </div>
+                    </div>
+                } @else {
+                    <div class="rpf-notice-card">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <span>No scope filter applied. All records in <strong>{{ TargetEntityName }}</strong> will be evaluated.</span>
+                    </div>
+                }
+                @if (EditMode) {
+                    <div class="rpf-edit-fields-divider">
+                        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ScopeType" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+                        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ScopeFilter" Type="code" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+                    </div>
+                }
+            </div>
+        } @else {
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ScopeType" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ScopeViewID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ScopeListID" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ScopeFilter" Type="code" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Triggers Section -->
+    <mj-collapsible-panel
+        SectionKey="triggers"
+        SectionName="Triggers"
+        Icon="fa fa-bolt"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="OnChangeEnabled" Type="checkbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="OnChangeInvocationType" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="OnChangeFilter" Type="code" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="ScheduleEnabled" Type="checkbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="CronExpression" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Timezone" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="OnDemandEnabled" Type="checkbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    </mj-collapsible-panel>
+
+    <!-- Performance and Optimization Section -->
+    <mj-collapsible-panel
+        SectionKey="performanceAndOptimization"
+        SectionName="Performance and Optimization"
+        Icon="fa fa-tachometer-alt"
+        [Form]="this"
+        [FormContext]="formContext">
+        @if (record.WorkType === 'Infer') {
+            <div class="rpf-opt-grid">
+                <div class="rpf-opt-card">
+                    <div class="rpf-opt-label">Delta Watermark</div>
+                    <div class="rpf-opt-value">{{ record.WatermarkStrategy || 'Checksum' }}</div>
+                    <div class="rpf-opt-sub">Evaluates row state changes</div>
+                </div>
+                <div class="rpf-opt-card">
+                    <div class="rpf-opt-label">Batch Processing</div>
+                    <div class="rpf-opt-value">{{ record.BatchSize || 100 }} records</div>
+                    <div class="rpf-opt-sub">Per inference chunk</div>
+                </div>
+                <div class="rpf-opt-card">
+                    <div class="rpf-opt-label">Concurrency</div>
+                    <div class="rpf-opt-value">{{ record.MaxConcurrency || 1 }} Parallel</div>
+                    <div class="rpf-opt-sub">Concurrent worker threads</div>
+                </div>
+                <div class="rpf-opt-card">
+                    <div class="rpf-opt-label">Skip Unchanged</div>
+                    <div class="rpf-opt-value" [class.rpf-text-success]="record.SkipUnchanged">
+                        <i [class]="record.SkipUnchanged ? 'fa-solid fa-check' : 'fa-solid fa-minus'"></i>
+                        {{ record.SkipUnchanged ? 'Enabled' : 'Disabled' }}
+                    </div>
+                    <div class="rpf-opt-sub">Skips re-evaluating unchanged rows</div>
+                </div>
+            </div>
+            @if (EditMode) {
+                <div class="rpf-edit-fields-divider">
+                    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="SkipUnchanged" Type="checkbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+                    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="WatermarkStrategy" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+                    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="BatchSize" Type="number" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+                    <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="MaxConcurrency" Type="number" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+                </div>
+            }
+        } @else {
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="SkipUnchanged" Type="checkbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="WatermarkStrategy" Type="select" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="BatchSize" Type="number" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+            <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="MaxConcurrency" Type="number" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        }
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext"
+        [DefaultExpanded]="false">
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_CreatedAt" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_UpdatedAt" Type="textbox" [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- ========================================
+         RELATED ENTITY PANELS
+         ======================================== -->
+
+    <!-- Record Process Watermarks Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRecordProcessWatermarks"
+        SectionName="Record Process Watermarks"
+        Icon="fa fa-water"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRecordProcessWatermarks')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Process Watermarks','RecordProcessID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Process Watermarks','RecordProcessID')"
+                [AllowLoad]="IsSectionExpanded('mJRecordProcessWatermarks')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordProcessWatermarks', $event.totalRowCount)">
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- ML Model Scoring Bindings Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLModelScoringBindings"
+        SectionName="ML Model Scoring Bindings"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLModelScoringBindings')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Scoring Bindings','RecordProcessID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings','RecordProcessID')"
+                [AllowLoad]="IsSectionExpanded('mJMLModelScoringBindings')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLModelScoringBindings', $event.totalRowCount)">
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Feature Values Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFeatureValues"
+        SectionName="Feature Values"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFeatureValues')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Values','RecordProcessID')"
+                [NewRecordValues]="NewRecordValues('MJ: Feature Values','RecordProcessID')"
+                [AllowLoad]="IsSectionExpanded('mJFeatureValues')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFeatureValues', $event.totalRowCount)">
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Feature Value Caches Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFeatureValueCaches"
+        SectionName="Feature Value Caches"
+        Icon="fa fa-database"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFeatureValueCaches')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Value Caches','RecordProcessID')"
+                [NewRecordValues]="NewRecordValues('MJ: Feature Value Caches','RecordProcessID')"
+                [AllowLoad]="IsSectionExpanded('mJFeatureValueCaches')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFeatureValueCaches', $event.totalRowCount)">
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
 }

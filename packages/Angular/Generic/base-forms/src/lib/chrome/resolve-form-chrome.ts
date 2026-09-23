@@ -243,7 +243,8 @@ export function ApplyFormChromeRuleTitles(
         if (group.IsMore) continue;
         const override = group.SectionKeys
             .map((key) => titleByKey.get(key))
-            .find((value): value is string => !!value);
+            .find((value): value is string => !!value)
+            ?? titleByKey.get(group.Key);
         if (override) group.Title = override;
     }
 }
@@ -462,7 +463,7 @@ export function StabilizeFirstClassGroupOrder(
     if (!previous || previous.Groups.length === 0) return next;
     const details = next.Groups.filter((g) => g.Key === DETAILS_SECTION_KEY);
     const more = next.Groups.filter((g) => g.IsMore);
-    const leads = next.Groups.filter((g) => !!g.IsLead);
+    const leads = next.Groups.filter((g) => !g.IsMore && !!g.IsLead && g.Key !== DETAILS_SECTION_KEY);
     const related = next.Groups.filter((g) => !g.IsMore && !g.IsLead && g.Key !== DETAILS_SECTION_KEY);
     if (leads.length === 0 && related.length === 0) return next;
 

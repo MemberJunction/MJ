@@ -47,8 +47,7 @@
           }
         ],
         "forbiddenActions": [
-          "Google Custom Search",
-          "Perplexity Search",
+          "Web Search",
           "Web Page Content"
         ]
       }
@@ -84,8 +83,7 @@
               }
             ],
             "forbiddenActions": [
-              "Google Custom Search",
-              "Perplexity Search",
+              "Web Search",
               "Web Page Content"
             ]
           }

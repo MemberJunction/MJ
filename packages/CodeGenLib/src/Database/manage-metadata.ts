@@ -24,6 +24,8 @@ import {
    defaultPredicateFor,
    entityLevelEnableBlockedReason,
    isNarrativeFieldName,
+   MAX_SEARCHABLE_FIELDS_PER_ENTITY,
+   NAME_LIKE_FIELD_NAMES,
    normalizePredicate,
    normalizeSmartFieldResultShape,
    SearchPredicate,
@@ -36,6 +38,7 @@ import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 import * as fs from 'fs';
 import path from 'path';
 import { canonicalJSONStringify, deepEqualJSON } from "../Misc/util";
+import { trimTrailingStatementTerminators } from "../Misc/sql_text";
 import { SQLLogging } from "../Misc/sql_logging";
 import { AIEngine } from "@memberjunction/aiengine";
 import { computeFieldMetadataUpdate, FieldLockContext } from "./field-metadata-lock";
@@ -211,7 +214,12 @@ export interface OrganicKeyTransitiveViewConfig {
    Name: string;
    /** The schema to create the view in (defaults to the related entity's schema if not specified) */
    SchemaName?: string;
-   /** Raw SQL for the view body (the SELECT statement). CodeGen emits CREATE OR ALTER VIEW wrapping this. */
+   /**
+    * Raw SQL for the view body (the SELECT statement), written in the target platform's dialect.
+    * CodeGen wraps it in the platform's create-or-replace DDL (`CREATE OR ALTER VIEW` on SQL Server,
+    * `CREATE OR REPLACE VIEW` on PostgreSQL). On PostgreSQL the body is not auto-quoted, so
+    * mixed-case identifiers must be double-quoted.
+    */
    SQL: string;
 }
 
@@ -960,46 +968,57 @@ export class ManageMetadataBase {
     * All SQL is executed AND logged via LogSQLAndExecute for complete CI/CD traceability.
     * Must run AFTER entities are created.
     */
-   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<{ success: boolean; createdCount: number; updatedCount: number }> {
+   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<{ success: boolean; createdCount: number; updatedCount: number; failedCount: number }> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
-      if (!config) return { success: true, createdCount: 0, updatedCount: 0 };
+      if (!config) return { success: true, createdCount: 0, updatedCount: 0, failedCount: 0 };
 
       const allOrganicKeys = this.extractOrganicKeysFromConfig(config as Record<string, unknown>);
-      if (allOrganicKeys.length === 0) return { success: true, createdCount: 0, updatedCount: 0 };
+      if (allOrganicKeys.length === 0) return { success: true, createdCount: 0, updatedCount: 0, failedCount: 0 };
 
       const schema = mj_core_schema();
       let createdCount = 0;
       let updatedCount = 0;
+      let failedCount = 0;
 
       for (const tableConfig of allOrganicKeys) {
          // Resolve the owning entity
-         const ownerResult = await this.runQueryWithParams(pool, `
-            ${this.selectTop(1, 'ID, Name',
-               `FROM ${this.qs(schema, 'vwEntities')}
-            WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
-               OR Name = @TableName`,
-               'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
-         `, { 'TableName': tableConfig.TableName, 'SchemaName': tableConfig.SchemaName });
-
-         if (ownerResult.recordset.length === 0) {
-            logError(`    > Organic keys config: entity "${tableConfig.SchemaName}.${tableConfig.TableName}" not found — skipping`);
+         const owner = await this.findOrganicKeyEntity(pool, tableConfig.SchemaName, tableConfig.TableName);
+         if (!owner) {
+            // Every key declared on this table goes unapplied, so each one counts as a failure.
+            failedCount += tableConfig.OrganicKeys.length;
+            logError(`    > Organic keys config: entity "${tableConfig.SchemaName}.${tableConfig.TableName}" not found — skipping its ${tableConfig.OrganicKeys.length} organic key(s)`);
             continue;
          }
 
-         const ownerEntityId = ownerResult.recordset[0].ID;
-         const ownerEntityName = ownerResult.recordset[0].Name;
+         const ownerEntityId = owner.ID;
+         const ownerEntityName = owner.Name;
 
          for (const okConfig of tableConfig.OrganicKeys) {
             try {
+               // Resolve every related entity BEFORE writing anything for this key. Step 1 creates
+               // bridge views (in the database and the migration log) and step 2 records the key, so
+               // discovering a missing related entity in step 3 would leave an orphan view and a key
+               // with a mapping missing.
+               const relatedEntities = await this.resolveOrganicKeyRelatedEntities(pool, okConfig);
+               if (!relatedEntities) {
+                  failedCount++;
+                  continue;
+               }
+
                // Step 1: Create transitive views if defined
                for (const re of okConfig.RelatedEntities) {
                   if (re.TransitiveView) {
                      const viewSchema = re.TransitiveView.SchemaName || re.SchemaName;
                      const viewFullName = `${viewSchema}.${re.TransitiveView.Name}`;
 
-                     const viewSQL = `CREATE OR ALTER VIEW ${this.qs(viewSchema, re.TransitiveView.Name)} AS\n${re.TransitiveView.SQL}`;
+                     const viewSQL = this.dbProvider.generateCreateOrReplaceViewSQL(viewSchema, re.TransitiveView.Name, re.TransitiveView.SQL);
+                     // T-SQL requires CREATE [OR ALTER] VIEW to be the ONLY statement in its batch — first as
+                     // well as last — and the metadata DML logged just before it (entity-config UPDATEs, the
+                     // previous key's INSERTs) has no trailing GO. requiresOwnBatch puts the provider's
+                     // separator on both sides in the migration file ('' on PostgreSQL: nothing is added).
                      await this.LogSQLAndExecute(pool, viewSQL,
-                        `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`);
+                        `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`,
+                        false, true, this.dbProvider.BatchSeparator, true);
 
                      // Auto-populate TransitiveObject from the view definition
                      re.TransitiveObject = viewFullName;
@@ -1048,22 +1067,9 @@ export class ManageMetadataBase {
                }
 
                // Step 3: Upsert EntityOrganicKeyRelatedEntity for each related entity
-               for (const reConfig of okConfig.RelatedEntities) {
-                  const relResult = await this.runQueryWithParams(pool, `
-                     ${this.selectTop(1, 'ID, Name',
-                        `FROM ${this.qs(schema, 'vwEntities')}
-                     WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
-                        OR Name = @TableName`,
-                        'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
-                  `, { 'TableName': reConfig.TableName, 'SchemaName': reConfig.SchemaName });
-
-                  if (relResult.recordset.length === 0) {
-                     logError(`    > Organic key "${okConfig.Name}": related entity "${reConfig.SchemaName}.${reConfig.TableName}" not found — skipping`);
-                     continue;
-                  }
-
-                  const relEntityId = relResult.recordset[0].ID;
-                  const relEntityName = relResult.recordset[0].Name;
+               for (const { config: reConfig, entity: relEntity } of relatedEntities) {
+                  const relEntityId = relEntity.ID;
+                  const relEntityName = relEntity.Name;
 
                   // Check if this related entity mapping already exists
                   const existingRel = await this.runQueryWithParams(pool,
@@ -1115,13 +1121,56 @@ export class ManageMetadataBase {
                   logStatus(`    > Organic key "${okConfig.Name}": ${existingRel.recordset.length > 0 ? 'updated' : 'created'} → ${relEntityName} (${isDirect ? 'direct' : 'transitive'})`);
                }
             } catch (err) {
+               // Keep going so one bad key doesn't block the others — but count it: a key that failed
+               // here (bridge-view DDL the database rejected, a refused view drop, …) is missing from
+               // the database, and the run must not report success for it.
+               failedCount++;
                const errMessage = err instanceof Error ? err.message : String(err);
                logError(`    > Organic key config: Failed to process "${okConfig.Name}" on ${ownerEntityName}: ${errMessage}`);
             }
          }
       }
 
-      return { success: true, createdCount, updatedCount };
+      return { success: failedCount === 0, createdCount, updatedCount, failedCount };
+   }
+
+   /**
+    * Finds the entity an organic-key config names: by base table + schema, else by entity name.
+    * Returns `null` when neither matches.
+    */
+   private async findOrganicKeyEntity(pool: CodeGenConnection, schemaName: string, tableName: string): Promise<{ ID: string; Name: string } | null> {
+      const result = await this.runQueryWithParams(pool, `
+         ${this.selectTop(1, 'ID, Name',
+            `FROM ${this.qs(mj_core_schema(), 'vwEntities')}
+         WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
+            OR Name = @TableName`,
+            'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
+      `, { 'TableName': tableName, 'SchemaName': schemaName });
+      const row = result.recordset[0];
+      return row ? { ID: row.ID, Name: row.Name } : null;
+   }
+
+   /**
+    * Resolves every related entity of an organic key, in config order. Logs each one that doesn't
+    * resolve and returns `null` if any is missing, so the caller can skip the key before writing any
+    * of it.
+    */
+   private async resolveOrganicKeyRelatedEntities(
+      pool: CodeGenConnection,
+      okConfig: OrganicKeyConfig
+   ): Promise<{ config: OrganicKeyRelatedEntityConfig; entity: { ID: string; Name: string } }[] | null> {
+      const resolved: { config: OrganicKeyRelatedEntityConfig; entity: { ID: string; Name: string } }[] = [];
+      let missing = 0;
+      for (const reConfig of okConfig.RelatedEntities) {
+         const entity = await this.findOrganicKeyEntity(pool, reConfig.SchemaName, reConfig.TableName);
+         if (entity) {
+            resolved.push({ config: reConfig, entity });
+         } else {
+            missing++;
+            logError(`    > Organic key "${okConfig.Name}": related entity "${reConfig.SchemaName}.${reConfig.TableName}" not found — the key is not applied`);
+         }
+      }
+      return missing === 0 ? resolved : null;
    }
 
    /**
@@ -2554,6 +2603,10 @@ export class ManageMetadataBase {
       const organicKeyResult = await this.processOrganicKeyConfig(pool);
       if (organicKeyResult.createdCount > 0 || organicKeyResult.updatedCount > 0) {
          logStatus(`    > Organic keys: ${organicKeyResult.createdCount} created, ${organicKeyResult.updatedCount} updated from config`);
+      }
+      if (!organicKeyResult.success) {
+         logError(`   Error processing organic keys: ${organicKeyResult.failedCount} key(s) failed and were not applied — see the errors above`);
+         bSuccess = false;
       }
 
       // Config-driven base-view materialization — emit the physical table + wrapper view and
@@ -4410,6 +4463,23 @@ export class ManageMetadataBase {
          }
          const step7Elapsed = ((new Date().getTime() - step7StartTime.getTime()) / 1000).toFixed(1);
          succeedSpinner(`Advanced generation completed (${step7Elapsed}s)`);
+      }
+
+      // Deterministic search-flag hygiene. Deliberately OUTSIDE the `skipAdvancedGeneration`
+      // guard above: advanced generation is off by default, and an entity created under that
+      // default is precisely the one that ends up flagged searchable with nothing searchable on
+      // it. Ordered after it so the model's choices, where it did run, are already applied and
+      // the seed only fills a genuine gap. See buildSearchFlagHygieneSQL.
+      if (!await this.applySearchFlagHygiene(pool, excludeSchemas)) {
+         logError('Error applying search flag hygiene');
+         // FATAL, unlike advanced generation. This pass compares before it writes, so a failure
+         // means the probes could not run — and because nothing is written in that case, the pass
+         // failing is indistinguishable from the pass having nothing to do: no SQL, no artifact,
+         // every gate green. Advanced generation can degrade quietly because it only ever ADDS
+         // model-suggested metadata; this one turns search OFF on entities and is the only thing
+         // keeping AllowUserSearchAPI honest, so a run where it did not execute must not be
+         // reported as a clean run.
+         bSuccess = false;
       }
 
       logStatus(`      Total time to manage entity fields: ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
@@ -7876,6 +7946,309 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Build the two deterministic search-flag hygiene statements.
+    *
+    * These exist because the LLM-driven smart-field pipeline cannot be relied on to run at all:
+    * `AdvancedGeneration.enabled` reads `enableAdvancedGeneration ?? false`, so on a default
+    * configuration none of `applySearchableFieldUpdates` / `applyEntitySearchConfig` ever
+    * executes — while every new entity is still INSERTed with `AllowUserSearchAPI = 1`
+    * (see `createNewEntityInsertSQL`). The result is an entity flagged searchable with nothing
+    * searchable on it, which is not a harmless default: `UserSearchString` against such an entity
+    * is a documented no-op (MJ#4581/#4582), so the data provider ignores the term and returns the
+    * UNFILTERED table. Global search then fans out to it on every keystroke and discards every row.
+    *
+    * Both statements are deterministic, need no model, and are safe to run on every pass:
+    *
+    *  1. **Seed** — an entity with NO searchable field gets its name-like columns flagged
+    *     (`NAME_LIKE_FIELD_NAMES`: Name, Title, FirstName, LastName, …). Those are what a person
+    *     types into a search box, so they are the one defensible default. Only fires when the
+    *     entity has nothing flagged at all, so it fills a gap rather than overriding anyone —
+    *     including the LLM, which has already run by this point when it is enabled.
+    *
+    *     Note this keys on the field's NAME, not on `IsNameField`. That flag looks like the
+    *     obvious source and is the wrong one: measured against a real database, seeding from it
+    *     would flag 54 fields of which 41 are VIRTUAL — the denormalized FK display columns
+    *     CodeGen puts on views (`Action`, `Agent`, `Artifact`). Those are computed by JOIN, so a
+    *     LIKE against them cannot seek any index, and flagging them would push 49 junction
+    *     entities into the global-search fan-out with unindexable predicates — the exact cost
+    *     `search-guardrails.ts` exists to prevent. It also picked up identifiers (`RecordID`,
+    *     `Token`, `ExternalSystemRecordID`) and a `Description`, which `isNarrativeFieldName`
+    *     rejects on the LLM path. And it would still not have fixed `MJ: Employees`, whose only
+    *     `IsNameField` is the virtual `FirstLast`; keying on the name reaches its real
+    *     `FirstName` / `LastName` columns, which is what the reported bug needed.
+    *  2. **Clear** — an entity STILL left with no searchable field has `AllowUserSearchAPI` turned
+    *     off, so it drops out of the search fan-out instead of contributing noise.
+    *
+    * Both honor the `AutoUpdate*` opt-outs, which is how an operator pins a hand-made decision —
+    * and is exactly how the curated entries in `metadata/entities/.entity-search-exclusions.json`
+    * protect themselves (they set `AutoUpdateAllowUserSearchAPI` to false alongside the flag).
+    *
+    * Full-text-search entities are exempt from both. An FTS entity is searchable through its
+    * INDEX: `createViewUserSearchSQL` takes the full-text branch before it ever reads
+    * `IncludeInUserSearchAPI`, so those flags are dead metadata there and the entity is a
+    * perfectly valid search target without them.
+    *
+    * Written as `UPDATE ... WHERE <key> IN (subquery)` rather than `UPDATE ... FROM ... JOIN`,
+    * which is T-SQL-only. The subquery form is ANSI and runs unchanged on both platforms.
+    */
+   protected buildSearchFlagHygieneSQL(excludeSchemas: string[]): {
+      seedSQL: string;
+      clearSQL: string;
+      /** COUNT of the rows {@link seedSQL} would touch — see the compare-first note on the apply method. */
+      seedProbeSQL: string;
+      /** NAMES of the entities {@link clearSQL} would disable. Valid only AFTER the seed has run. */
+      clearProbeSQL: string;
+   } {
+      const coreSchema = mj_core_schema();
+      const entity = this.qs(coreSchema, 'Entity');
+      const entityField = this.qs(coreSchema, 'EntityField');
+      const yes = this.boolLit(true);
+      const no = this.boolLit(false);
+      // Same set the LLM path's isNameLikeFieldName() tests, lowered for a case-insensitive
+      // comparison that does not depend on the database collation.
+      const nameLikeList = NAME_LIKE_FIELD_NAMES.map(n => `'${n.toLowerCase()}'`).join(',');
+
+      // Every name in NAME_LIKE_FIELD_NAMES resolves to the same predicate, so one literal covers
+      // the whole seed. This MUST be set explicitly: `EntityField.UserSearchPredicateAPI` defaults
+      // to 'Contains' in the database, which is `LIKE '%term%'` — the unindexable scan the
+      // guardrails exist to prevent. Seeding the flag without the predicate would have made every
+      // seeded entity a full scan on every keystroke.
+      const seedPredicate = defaultPredicateFor(NAME_LIKE_FIELD_NAMES[0]);
+
+      // The entity-shape guardrails the LLM path applies (`entityLevelEnableBlockedReason`).
+      // A log / audit / run-history table grows without bound and a detail / line-item child is
+      // reached through its parent; neither is a global-search target, whichever columns it has.
+      // Expressed as SQL rather than reusing the regex helpers because this runs in the database.
+      const shapeSuffixes = [
+         'Logs', 'Log', 'Runs', 'Run', 'Run History', 'Run Steps', 'Run Messages', 'Execution Logs',
+         'Details', 'Detail', 'Lines', 'Line', 'Items', 'Item', 'Steps', 'Step',
+         'Params', 'Param', 'Mappings', 'Mapping',
+      ];
+
+      // WORD boundaries, not raw suffixes. `LIKE '%Lines'` is a case-insensitive endsWith under
+      // the default collation, so it matched `Pipelines`, `Guidelines`, `Timelines`, `Airlines`,
+      // `Deadlines` and `Baselines`; `LIKE '%Logs'` matched `Catalogs`, `Dialogs` and `Blogs`;
+      // `LIKE '%Audit%'` matched `Auditors`. MJ's own metadata was not exempt — `MJ: ML Training
+      // Pipelines` was caught by `'%Lines'`. Those entities were then excluded from the seed and
+      // swept up by the clear (which carries no shape filter, deliberately — see below), so a
+      // guardrail meaning "do not bother seeding these" silently turned search OFF on them.
+      //
+      // Matching the final WORD keeps every intended shape — `Order Details`, `Audit Logs`,
+      // `MJ: AI Agent Runs` — while `Catalogs`, `Pipelines` and `Auditors` fall through to the
+      // seed as ordinary entities.
+      const nameEndsWithWord = (word: string) =>
+         `(e.${this.qi('Name')} = '${word}' OR e.${this.qi('Name')} LIKE '% ${word}')`;
+      const nameContainsWord = (word: string) =>
+         `(e.${this.qi('Name')} = '${word}'`
+         + ` OR e.${this.qi('Name')} LIKE '${word} %'`
+         + ` OR e.${this.qi('Name')} LIKE '% ${word}'`
+         + ` OR e.${this.qi('Name')} LIKE '% ${word} %')`;
+
+      const shapeClauses = shapeSuffixes
+         .map(sfx => nameEndsWithWord(sfx))
+         .concat([nameContainsWord('Audit'), nameContainsWord('Record Change')])
+         .join(' OR ');
+      const entityShapeFilter = `AND NOT (${shapeClauses})`;
+      // Schema names are configuration, not literals we control: double any apostrophe rather
+      // than interpolating it straight into the statement.
+      const schemaFilter = excludeSchemas.length > 0
+         ? `AND e.${this.qi('SchemaName')} NOT IN (${excludeSchemas.map(sc => `'${sc.replace(/'/g, "''")}'`).join(',')})`
+         : '';
+
+      // "This entity has nothing a user search can match." Mirrors
+      // `EntityInfo.HasSearchFields` and the runtime screen in EntitySearchProvider.
+      const noSearchableField = `NOT EXISTS (
+               SELECT 1 FROM ${entityField} f2
+               WHERE f2.${this.qi('EntityID')} = e.${this.qi('ID')}
+                 AND f2.${this.qi('IncludeInUserSearchAPI')} = ${yes}
+            )`;
+
+      // An FTS entity is searchable through its index, with no per-field flags involved.
+      const notFullText = `AND ${this.coalesce(`e.${this.qi('FullTextSearchEnabled')}`, no)} = ${no}`;
+
+      // The eligibility predicate here mirrors `isFieldEligibleForUserSearch` (and the runtime
+      // `isTextSearchableType` it was written against): not the primary key, a bounded text
+      // column. A name field that is neither is left alone rather than flagged uselessly.
+      // The candidate SELECTs are built once and used twice: once as the UPDATE's subquery, once
+      // as the probe `applySearchFlagHygiene` runs to decide whether to emit the UPDATE at all.
+      // Sharing the text is the point — a probe whose predicates could drift from the statement
+      // it guards would either suppress a needed write or emit a no-op one.
+      const seedCandidateSQL = `
+            SELECT ranked.${this.qi('ID')} FROM (
+               SELECT f.${this.qi('ID')},
+                      ROW_NUMBER() OVER (
+                         PARTITION BY f.${this.qi('EntityID')}
+                         ORDER BY f.${this.qi('Sequence')}, f.${this.qi('Name')}
+                      ) AS rn
+               FROM ${entityField} f
+               INNER JOIN ${entity} e ON e.${this.qi('ID')} = f.${this.qi('EntityID')}
+               WHERE LOWER(f.${this.qi('Name')}) IN (${nameLikeList})
+                 AND f.${this.qi('AutoUpdateIncludeInUserSearchAPI')} = ${yes}
+                 AND f.${this.qi('IncludeInUserSearchAPI')} = ${no}
+                 AND ${this.coalesce(`f.${this.qi('IsPrimaryKey')}`, no)} = ${no}
+                 AND ${this.coalesce(`f.${this.qi('IsVirtual')}`, no)} = ${no}
+                 AND LOWER(f.${this.qi('Type')}) IN ('nvarchar','varchar','char','nchar')
+                 AND ${this.coalesce(`f.${this.qi('Length')}`, '0')} <> -1
+                 AND e.${this.qi('VirtualEntity')} = ${no}
+                 AND e.${this.qi('AllowUserSearchAPI')} = ${yes}
+                 ${notFullText}
+                 ${entityShapeFilter}
+                 ${schemaFilter}
+                 AND ${noSearchableField}
+            ) ranked
+            WHERE ranked.rn <= ${MAX_SEARCHABLE_FIELDS_PER_ENTITY}`;
+
+      // The clear carries NO entity-shape filter, and that is deliberate rather than an
+      // oversight: a log / run / detail table is exactly what should drop out of the search
+      // fan-out, so the shapes the seed refuses to touch are meant to fall through to here.
+      //
+      // That composition is load-bearing and worth stating, because it means the shape list
+      // above does not merely withhold help — it DECIDES which entities get search turned off.
+      // A name wrongly matched there is not "left alone", it is disabled. Which is why the
+      // matching is word-boundary (see nameEndsWithWord) and why widening that list is a
+      // destructive change, not a conservative one.
+      const clearWhere = `e.${this.qi('AllowUserSearchAPI')} = ${yes}
+              AND e.${this.qi('AutoUpdateAllowUserSearchAPI')} = ${yes}
+              AND e.${this.qi('VirtualEntity')} = ${no}
+              ${notFullText}
+              ${schemaFilter}
+              AND ${noSearchableField}`;
+
+      const clearCandidateSQL = `
+            SELECT e.${this.qi('ID')}
+            FROM ${entity} e
+            WHERE ${clearWhere}`;
+
+      const seedSQL = `
+         UPDATE ${entityField}
+         SET ${this.qi('IncludeInUserSearchAPI')} = ${yes},
+             ${this.qi('UserSearchPredicateAPI')} = '${seedPredicate}'
+         WHERE ${this.qi('ID')} IN (${seedCandidateSQL}
+         )`;
+
+      const clearSQL = `
+         UPDATE ${entity}
+         SET ${this.qi('AllowUserSearchAPI')} = ${no}
+         WHERE ${this.qi('ID')} IN (${clearCandidateSQL}
+         )`;
+
+      // Derived-table alias is required by T-SQL and accepted by PostgreSQL, so one form serves
+      // both. COUNT(*) rather than EXISTS because the count also feeds the status line.
+      const seedProbeSQL = `SELECT COUNT(*) AS ${this.qi('Cnt')} FROM (${seedCandidateSQL}
+         ) probe`;
+
+      // The clear probe returns NAMES, not a count. Disabling search is the destructive half of
+      // this pass and it is effectively one-way: getting it back means flagging a field by hand
+      // AND pinning AutoUpdateAllowUserSearchAPI = 0, or the next run undoes the repair. An
+      // operator told "cleared 14 entities" has no way to learn which 14 without going to the
+      // database; naming them in the run output is the difference between an auditable change
+      // and a silent one. Shares `clearWhere` with the UPDATE so the two cannot disagree.
+      const clearProbeSQL = `
+         SELECT e.${this.qi('Name')} AS ${this.qi('Name')}
+         FROM ${entity} e
+         WHERE ${clearWhere}
+         ORDER BY e.${this.qi('Name')}`;
+
+      return { seedSQL, clearSQL, seedProbeSQL, clearProbeSQL };
+   }
+
+   /**
+    * Run the deterministic search-flag hygiene pass (see {@link buildSearchFlagHygieneSQL}).
+    *
+    * Runs OUTSIDE `applyAdvancedGeneration` and therefore regardless of whether advanced
+    * generation is enabled — which is the whole point, since it is off by default and an entity
+    * created under that default is exactly the one that needs this. Ordered after it so the
+    * model's choices, when it did run, are already in place and the seed only fills a real gap.
+    *
+    * COMPARE FIRST, then write — the T20 contract every-run config writers are held to (see
+    * `__tests__/idempotency/config-writers-compare-first.test.ts`). The two UPDATEs converge on
+    * their own, because the first pass makes `noSearchableField` false for every row it touches,
+    * so re-running them changes nothing. That is not sufficient: `LogSQLBatchAndExecute` writes
+    * whatever it is handed into the run's `CodeGen_Run_*.sql` capture whether or not a row moves,
+    * and the drift gate's warm-twice stage fails on ANY capture surviving a second run. Emitting
+    * unconditionally therefore reddened the gate on every PR while the data was perfectly
+    * idempotent — the data converged, the log did not. So each statement is emitted only when its
+    * own candidate probe finds work.
+    */
+   protected async applySearchFlagHygiene(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
+      try {
+         const { seedSQL, clearSQL, seedProbeSQL, clearProbeSQL } = this.buildSearchFlagHygieneSQL(excludeSchemas);
+
+         // Order matters: seeding first means an entity whose name field was just flagged is no
+         // longer a candidate for having its AllowUserSearchAPI cleared. Reversed, the pass would
+         // disable search on an entity it was about to make searchable.
+         //
+         // 4th arg is `isRecurringScript`, NOT a throw flag — passing `false` here is the default
+         // and is spelled out only to make the intent explicit. Errors are caught below.
+         const seedCount = await this.searchFlagHygieneCandidateCount(pool, seedProbeSQL);
+         if (seedCount > 0) {
+            logStatus(`         Search-flag hygiene: seeding ${seedCount} name field(s)`);
+            await this.LogSQLBatchAndExecute(pool, [seedSQL], 'Deterministic search-flag hygiene — seed name fields', false);
+         }
+
+         // Probed AFTER the seed has run, not alongside it. Seeding changes which entities still
+         // have nothing searchable, so a clear probe taken before it would count entities the seed
+         // was about to repair and emit a statement that then matched nothing — reintroducing the
+         // stray capture file this is here to avoid.
+         const clearNames = await this.searchFlagHygieneClearCandidates(pool, clearProbeSQL);
+         if (clearNames.length > 0) {
+            // NAME them. This is the destructive half and it is effectively one-way for an
+            // operator who does not know it happened.
+            const shown = clearNames.slice(0, 25).join(', ');
+            const more = clearNames.length > 25 ? `, ... and ${clearNames.length - 25} more` : '';
+            logStatus(`         Search-flag hygiene: turning AllowUserSearchAPI OFF on ${clearNames.length} entity(ies): ${shown}${more}`);
+            await this.LogSQLBatchAndExecute(pool, [clearSQL], 'Deterministic search-flag hygiene — clear AllowUserSearchAPI', false);
+         }
+
+         return true;
+      }
+      catch (ex) {
+         // A probe that cannot run is NOT the same as "nothing to do", and must not be allowed to
+         // look like it. Before this pass compared first, a malformed statement was appended to
+         // the CodeGen_Run capture by SQLLogging BEFORE it was executed, so a broken pass left a
+         // surviving artifact and reddened the drift gate. Probing first removes that signal: the
+         // throw now happens before anything is written, so without a loud failure here the pass
+         // would silently do nothing while every gate stayed green — the exact silent no-op this
+         // whole change exists to eliminate, one level up in the fixer. The caller fails the run.
+         logError('Search-flag hygiene FAILED — search flags were NOT reconciled on this run', ex);
+         return false;
+      }
+   }
+
+   /**
+    * Row count for one of the search-flag hygiene probes (see {@link applySearchFlagHygiene}).
+    *
+    * Reads the first column of the first row positionally rather than by name, because the alias
+    * comes back cased differently across drivers. A probe that returns nothing is treated as no
+    * work, which is the safe direction: the statement is skipped rather than emitted blind.
+    */
+   private async searchFlagHygieneCandidateCount(pool: CodeGenConnection, probeSQL: string): Promise<number> {
+      const result = await this.runQuery(pool, probeSQL);
+      const row = result?.recordset?.[0];
+      if (!row) {
+         return 0;
+      }
+      const count = Number(Object.values(row)[0]);
+      return Number.isFinite(count) ? count : 0;
+   }
+
+   /**
+    * Names of the entities the clear would disable (see {@link applySearchFlagHygiene}).
+    *
+    * Valid only AFTER the seed has run, since seeding changes which entities still have nothing
+    * searchable. Names rather than a count because this is the destructive half: the run output
+    * is the only place an operator can see which entities lost search, and getting it back is
+    * manual.
+    */
+   private async searchFlagHygieneClearCandidates(pool: CodeGenConnection, probeSQL: string): Promise<string[]> {
+      const result = await this.runQuery(pool, probeSQL);
+      const rows = result?.recordset ?? [];
+      return rows
+         .map(r => String(Object.values(r)[0] ?? '').trim())
+         .filter(n => n.length > 0);
+   }
+
+   /**
     * Returns true if the field is a sensible target for LIKE-based user search.
     * Mirrors the runtime guard in GenericDatabaseProvider.isTextSearchableType /
     * the Phase 1 hygiene migration so CodeGen stops re-introducing invalid flags.
@@ -8473,8 +8846,8 @@ WHERE
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
-      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator);
+   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO', requiresOwnBatch: boolean = false): Promise<any> {
+      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator, requiresOwnBatch);
    }
 
    /**
@@ -8503,7 +8876,7 @@ WHERE
    ): Promise<any> {
       const terminated: string[] = [];
       for (const s of statements) {
-         const trimmed = (s ?? '').replace(/[\s;]+$/g, '');
+         const trimmed = trimTrailingStatementTerminators(s ?? '');
          if (trimmed.length === 0) continue;
          terminated.push(`${trimmed};`);
       }

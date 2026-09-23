@@ -316,13 +316,23 @@ export class TestLLM extends BaseLLM {
  * instantiates.
  *
  * Registrations persist on the MJGlobal singleton and the ClassFactory has no
- * unregister API — pair with `resetMJSingletons()` from this package in
- * `beforeEach`/`afterEach` so each test gets a fresh factory (re-registering the
- * same DriverClass name without a reset logs a duplicate-registration warning,
- * though the newest registration still wins).
+ * unregister API. In unit tests, pair with `resetMJSingletons()` from this package in
+ * `beforeEach`/`afterEach` so each test gets a fresh factory. In a long-lived process
+ * that must keep its real providers (the integration suite runs every bundle in one
+ * process), call the returned `restore()` in a `finally` instead: it re-registers, above
+ * the TestLLM, whatever class each name resolved to before. A name that had no prior
+ * registration has nothing to restore and keeps resolving to the TestLLM.
+ *
+ * @returns `restore` — hands every name back to its previous class.
  */
-export function registerTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): void {
+export function registerTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): () => void {
   const driverClasses = Array.isArray(driverClass) ? driverClass : [driverClass];
+  const factory = MJGlobal.Instance.ClassFactory;
+  const previous = driverClasses.flatMap((name) => {
+    const registration = factory.GetRegistration(BaseLLM, name);
+    return registration ? [{ name, registration }] : [];
+  });
+
   for (const name of driverClasses) {
     // The constructor's object-return makes the ClassFactory hand back the
     // shared scripted instance while still going through a real registration
@@ -333,6 +343,15 @@ export function registerTestLLM(llm: TestLLM, driverClass: string | string[], pr
         return llm;
       }
     }
-    MJGlobal.Instance.ClassFactory.Register(BaseLLM, TestLLMRegistrationHandle, name, priority);
+    factory.Register(BaseLLM, TestLLMRegistrationHandle, name, priority);
   }
+
+  return () => {
+    for (const { name, registration } of previous) {
+      // An explicit priority above everything registered wins resolution outright, and avoids
+      // the unrelated-class warning the auto-increment path emits.
+      const highest = Math.max(...factory.GetAllRegistrations(BaseLLM, name).map((r) => r.Priority));
+      factory.Register(BaseLLM, registration.SubClass, name, highest + 1);
+    }
+  };
 }

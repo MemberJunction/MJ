@@ -4,7 +4,7 @@ import { MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, text, capture, click } from '@memberjunction/ng-test-utils';
 import { RealtimeDelegationCardComponent } from './realtime-delegation-card.component';
 import type { RealtimeDelegationCardVM } from './realtime-session-state';
-import type { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import type { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 
 /**
  * DOM spec for <mj-realtime-delegation-card>. Renders one delegation two ways off the
@@ -175,6 +175,51 @@ describe('RealtimeDelegationCardComponent (DOM)', () => {
       // No open run link
       expect(query(f, '.dev-link')).toBeNull();
       // Direct actions never render artifact chips even if Artifacts were supplied in VM
+      expect(query(f, '.artifact-link')).toBeNull();
+    });
+  });
+
+  describe('narration cards (Kind: narration)', () => {
+    it('renders the working narration card with agent name, brain icon, and thinking title', () => {
+      const f = render(workingCard({
+        Kind: 'narration',
+        AgentName: 'Sage',
+        LatestStep: 'thinking',
+        LatestMessage: 'Evaluating historical data',
+        RunID: 'run-not-used',
+      }), { DevMode: true });
+
+      expect(query(f, '.work-card')).not.toBeNull();
+      expect(text(f, '.work-card__title')).toBe('Sage is thinking…');
+      expect(query(f, '.avatar--narration')).not.toBeNull();
+      expect(query(f, '.avatar--narration .fa-brain')).not.toBeNull();
+      // Narration cards have no cancel button
+      expect(query(f, '.cancel-work')).toBeNull();
+      // Narration cards have no open-run link even in dev mode with a RunID
+      expect(query(f, '.dev-link')).toBeNull();
+    });
+
+    it('renders the done narration card with narration badge, thought provenance tooltip, and no open run link or artifact chips', () => {
+      const f = render(doneCard({
+        Kind: 'narration',
+        AgentName: 'Sage',
+        Result: 'Identified three key patterns in churn.',
+        Artifacts: [artifact],
+        RunID: 'run-not-used',
+      }), { DevMode: true });
+
+      expect(query(f, '.done-accordion')).not.toBeNull();
+      expect(text(f, '.done-chip__agent')).toBe('Sage');
+      expect(text(f, '.done-chip__preview')).toContain('Identified three key patterns in churn.');
+      // Provenance badge renders "narration" instead of "via <agent>"
+      expect(text(f, '.via-badge')).toContain('narration');
+      expect(text(f, '.via-badge')).not.toContain('via');
+      // Provenance title matches thought narration phrasing
+      const shield = query(f, '.fa-shield-halved');
+      expect(shield?.getAttribute('title')).toBe('Thought / narration authored by Sage.');
+      // No open run link
+      expect(query(f, '.dev-link')).toBeNull();
+      // Narration never renders artifact chips even if Artifacts were supplied in VM
       expect(query(f, '.artifact-link')).toBeNull();
     });
   });

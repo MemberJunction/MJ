@@ -21,6 +21,7 @@ import { DatabaseDocumentation } from '../types/state.js';
 import { OrganicKeyCluster, OrganicKeyDetectionPhase } from '../types/organic-keys.js';
 import { runSemanticPhase, ProgressCallback } from './SemanticPhase.js';
 import { runStructuralPhase } from './StructuralPhase.js';
+import { BridgeViewProvider } from './BridgeViewSQLGenerator.js';
 import { compose } from './Composer.js';
 import { DetectedOrganicKeysOutput } from './OrganicKeyTranslator.js';
 
@@ -48,9 +49,14 @@ export interface DetectorRunOptions {
 }
 
 export class OrganicKeyDetector {
+    /**
+     * @param databaseProvider - Platform of the analyzed database. Bridge-view SQL is emitted in
+     *                           its dialect because CodeGen executes it verbatim. Default SQL Server.
+     */
     constructor(
         private readonly config: OrganicKeyDetectionConfig,
         private readonly aiConfig: AIConfig,
+        private readonly databaseProvider?: BridgeViewProvider,
     ) {}
 
     public async detect(
@@ -61,7 +67,7 @@ export class OrganicKeyDetector {
         const startedAt = new Date().toISOString();
 
         const a = await runSemanticPhase(state, this.config, this.aiConfig, progress);
-        const b = runStructuralPhase(state, a.clusters);
+        const b = runStructuralPhase(state, a.clusters, this.databaseProvider);
         progress(`structural: ${b.summary.transitiveBridgesFound} bridges`);
         const c = compose(a.clusters, b.bridges);
         progress(`compose: emitted ${c.emitted}/${a.clusters.length} clusters (${c.summary.outputKeys} keys, ${c.summary.outputSpokes} spokes)`);

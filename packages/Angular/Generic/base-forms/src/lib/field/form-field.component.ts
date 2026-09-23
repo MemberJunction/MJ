@@ -1,12 +1,30 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, LogError, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
-import { FormatFKCell, FilterCachedFKRows } from './fk-search-utils';
+import { FORM_SECTION_FIELD_HOST, SectionRelevantFormContextChanged } from '../section-indicators/form-section-field-host';
+import { FormatFKCell, FilterCachedFKRows, QuoteSqlIdList } from './fk-search-utils';
 import { LinkedFieldOptionsStore } from './linked-field-options';
+import {
+  FKLookupStrategy,
+  ResolveFKLookupStrategy,
+  type FKLookupChip,
+  type FKLookupContext,
+  type FKLookupGroup,
+  type FKLookupRow,
+  type FKLookupScope,
+  type FKLookupScopeLabels,
+} from './fk-lookup-strategy';
+import { CombineFilters, DefaultFKLookupStrategy } from './default-fk-lookup-strategy';
+
+/**
+ * Rows a foreign-key lookup returns by default. Module scope because the `FKMaxRows` input's
+ * initializer runs before the component's own statics are available.
+ */
+const FK_DB_SEARCH_LIMIT = 20;
 
 /**
  * How a field's value should be rendered/edited beyond a plain input.
@@ -68,6 +86,23 @@ export interface FKSuggestion {
    * icon; null when neither exists.
    */
   Icon: string | null;
+  /**
+   * Which {@link FKLookupGroup} this row belongs to. Rows render under their group's header,
+   * in group order. `'results'` for the ungrouped default.
+   */
+  GroupKey: string;
+  /**
+   * Second line under the name, supplied by the lookup strategy to tell look-alikes apart —
+   * "Springfield, IL · northwind.example.org". Absent for the default strategy, which has nothing to add.
+   */
+  Secondary?: string;
+  /** Small markers beside the name, e.g. "4 orders". Supplied by the lookup strategy. */
+  Chips?: FKLookupChip[];
+  /**
+   * The row the strategy returned, so {@link FKLookupStrategy.BeforeSelect} sees every value it
+   * supplied rather than a rebuilt key + name. Absent on the cached path, which has no strategy row.
+   */
+  Row?: FKLookupRow;
 }
 
 /**
@@ -137,6 +172,38 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private cdr = inject(ChangeDetectorRef);
   private renderer = inject(Renderer2);
   private hostRef = inject(ElementRef<HTMLElement>);
+  /**
+   * The section this field renders inside, when there is one. Resolved through the element
+   * injector, so it is found across component view boundaries a content query cannot cross —
+   * a field declared in a widget's own template still reaches the panel the widget is projected
+   * into. Absent for a field rendered outside any `mj-collapsible-panel`.
+   */
+  private sectionHost = inject(FORM_SECTION_FIELD_HOST, { optional: true });
+
+  constructor() {
+    super();
+    // Registered at construction (the creation pass), not in a lifecycle hook: the section's host
+    // bindings read its field set during the first update pass, and a registration landing
+    // mid-pass would change an already-checked binding.
+    this.sectionHost?.RegisterField(this);
+  }
+
+  /** This component's host element — what a section uses to confirm the field is inside it. */
+  public get HostElement(): HTMLElement {
+    return this.hostRef.nativeElement;
+  }
+
+  private _inputsBound = false;
+
+  /**
+   * False until the first `ngOnChanges`, i.e. until `Record`, `FieldName`, `EditMode` and the
+   * rest have been bound. A section must not read a field before then: with no inputs a field
+   * reports itself hidden (read mode, empty value) and not required-and-empty, which would hide
+   * a section whose fields all sit behind a view boundary before they ever bind.
+   */
+  public get InputsBound(): boolean {
+    return this._inputsBound;
+  }
 
   /** The entity record containing this field */
   @Input() Record!: BaseEntity;
@@ -657,7 +724,32 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Surface used for the inline create form: a modal dialog (default) or a slide-in. */
   @Input() FKCreatePresentation: 'dialog' | 'slide-in' = 'dialog';
 
-  /** Cleanup function for scroll/resize listeners */
+  /**
+   * Extra WHERE fragment applied to every lookup on this field, AND-ed with the related
+   * entity's `RelatedEntityFilter` metadata. Use this for a
+   * scope only this instance of the form knows about; prefer the metadata column when the
+   * rule is true of the field everywhere it appears.
+   */
+  @Input() FKExtraFilter: string | null = null;
+
+  /**
+   * ORDER BY for the empty-query browse list, overriding the field's `RelatedEntityOrderBy`
+   * metadata. Defaults to the related entity's name field. Does not affect a typed query,
+   * which is ordered by relevance.
+   */
+  @Input() FKOrderBy: string | null = null;
+
+  /** Rows requested from a lookup. */
+  @Input() FKMaxRows = FK_DB_SEARCH_LIMIT;
+
+  /**
+   * Opaque options handed to the resolved {@link FKLookupStrategy} — e.g.
+   * `{ ScopeField: 'BillToOrganizationID' }` to tell a person picker which organization's
+   * people to offer first. Each strategy documents its own keys.
+   */
+  @Input() FKLookupOptions: Record<string, unknown> = {};
+
+  /** Cleanup function for the scroll/resize/outside-press listeners armed while a dropdown is open */
   private _scrollCleanup: (() => void) | null = null;
 
   /** Inline style for the fixed-position dropdown */
@@ -737,6 +829,11 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // the DOM yet when we first look, so retry across a few frames until it renders.
     // (The async DB path lands here post-render, so it succeeds on the first try.)
     const tryPortal = (retriesLeft: number): void => {
+      // The portal runs a tick after the open. If the field was destroyed or the panel
+      // dismissed in between, moving the node to <body> now would orphan it there: a destroyed
+      // component has no ngOnDestroy left to remove it, and a closed panel's @if has already
+      // let go of it.
+      if (this._destroyed || !this.ShowFKDropdown) return;
       const host = this.hostRef?.nativeElement;
       if (!host) return;
       const dropdown = host.querySelector('.mj-fk-dropdown') as HTMLElement | null;
@@ -755,7 +852,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Tracks a dropdown element we relocated to body so we can drop the reference on close. */
   private _portaledDropdownEl: HTMLElement | null = null;
 
-  /** Start listening for scroll/resize to close dropdowns */
+  /** Set in ngOnDestroy so deferred work (the portal microtask) knows not to touch the DOM. */
+  private _destroyed = false;
+
+  /**
+   * Arm the listeners that dismiss an open dropdown from outside the field: an ancestor scroll,
+   * a resize, and a pointer press anywhere but the field or its panel.
+   */
   private startScrollListener(): void {
     this.stopScrollListener();
 
@@ -773,12 +876,27 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       this.cdr.markForCheck();
     };
 
+    // A press outside the field and its panel dismisses, whether or not the input has focus.
+    // The input's blur covers the ordinary case, but the panel is portaled to <body> and must
+    // own its dismissal: a panel that is open while nothing has focus has no blur to come, and
+    // the input's Escape handler cannot hear a key it is not focused for.
+    const onPointerDown = (e: Event) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (this.hostRef.nativeElement.contains(target)) return;
+      if (this._portaledDropdownEl?.contains(target)) return;
+      this.closeAllDropdowns();
+      this.cdr.markForCheck();
+    };
+
     document.addEventListener('scroll', onScroll, true); // capture phase catches all scrollable ancestors
     window.addEventListener('resize', onResize);
+    document.addEventListener('mousedown', onPointerDown, true);
 
     this._scrollCleanup = () => {
       document.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onResize);
+      document.removeEventListener('mousedown', onPointerDown, true);
     };
   }
 
@@ -799,7 +917,23 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this._portaledDropdownEl = null;
     this.ShowValueListDropdown = false;
     this.ShowSelectDropdown = false;
+    this.cancelPendingFKSearch();
     this.stopScrollListener();
+  }
+
+  /**
+   * Nothing started before a dismiss may reopen the panel. Retiring the sequence orphans a
+   * lookup still in flight (its result is dropped at the sequence check), and cancelling the
+   * debounce stops a keystroke's pending search from firing after the user has left the field.
+   * Without this, a lookup slower than the blur grace period reopened the list with nothing
+   * focused, and neither Escape nor clicking away could reach it — only picking a row could.
+   */
+  private cancelPendingFKSearch(): void {
+    this._fkSearchSeq++;
+    if (this._fkSearchTimeout) {
+      clearTimeout(this._fkSearchTimeout);
+      this._fkSearchTimeout = null;
+    }
   }
 
   // ============================================
@@ -809,11 +943,43 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Max rows shown on an empty-input focus-show (cached fast path only). */
   private static readonly FK_FOCUS_SHOW_LIMIT = 50;
 
-  /** Max rows returned from a DB search. */
-  private static readonly FK_DB_SEARCH_LIMIT = 20;
+  /** Group key for the user's recent picks, which the field prepends itself. */
+  private static readonly FK_RECENT_GROUP = '__recent';
+
+  /** Group key used whenever rows arrive ungrouped (the cached path, the default strategy). */
+  private static readonly FK_RESULTS_GROUP = 'results';
+
+  /** How many recent picks the dropdown offers before the strategy's own rows. */
+  private static readonly FK_RECENT_SHOWN = 5;
 
   /** Suggestions returned from the FK entity search */
   FKSuggestions: FKSuggestion[] = [];
+
+  /**
+   * Group headers in render order, from the last lookup. Rows are matched to a group by
+   * {@link FKSuggestion.GroupKey}; a null `Label` renders its rows with no header.
+   */
+  FKGroups: { Key: string; Label: string | null }[] = [];
+
+  /**
+   * Labels for the population toggle supplied by the resolved strategy — e.g. Customers vs
+   * All organizations. Null hides the toggle, which is the case for most fields.
+   */
+  FKScopeLabels: FKLookupScopeLabels | null = null;
+
+  /** Which population the dropdown is currently showing. */
+  FKScope: FKLookupScope = 'primary';
+
+  /** The resolved lookup strategy for this field, memoized until the field changes. */
+  private _fkStrategy: FKLookupStrategy | null = null;
+
+  /**
+   * Whether {@link _fkStrategy} came from a registration rather than being MJ's default. Tracked
+   * separately because a registered strategy may legitimately subclass `DefaultFKLookupStrategy`
+   * to reuse its querying — an `instanceof` test would call that one "the default" and let the
+   * cached path bypass it.
+   */
+  private _fkStrategyIsRegistered = false;
 
   /**
    * The currently-linked record, pinned as a sticky "Currently selected" section at the
@@ -872,10 +1038,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Debounce timer for FK search */
   private _fkSearchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  /** The blur grace timer, so a refocus inside the grace window can cancel the close it scheduled. */
+  private _fkBlurTimeout: ReturnType<typeof setTimeout> | null = null;
+
   /** Last known FK input element for position recalculation */
   private _lastFKInputEl: HTMLElement | null = null;
 
-  /** Monotonic token so a slow DB response from a stale query can't clobber a newer one. */
+  /**
+   * Monotonic token so a slow lookup response cannot clobber a newer one — and, because every
+   * dismiss retires it, cannot reopen a panel the user has already closed.
+   */
   private _fkSearchSeq = 0;
 
   /** Cached column plan for the current related entity (rebuilt on demand). */
@@ -945,13 +1117,86 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   /**
+   * The lookup strategy for this field: a registration for `<HostEntity>.<FieldName>`, else one
+   * for the related entity, else MJ's own. Memoized — resolution walks the class factory and the
+   * answer cannot change while the field is bound to the same record and column.
+   */
+  private resolveStrategy(): FKLookupStrategy {
+    if (!this._fkStrategy) {
+      const registered = ResolveFKLookupStrategy(
+        this.Record?.EntityInfo?.Name ?? '',
+        this.FieldName,
+        this.FieldInfo?.RelatedEntity ?? ''
+      );
+      this._fkStrategyIsRegistered = registered !== null;
+      this._fkStrategy = registered ?? new DefaultFKLookupStrategy();
+    }
+    return this._fkStrategy;
+  }
+
+  /**
+   * True when an app registered a strategy for this field. The in-memory cached path answers a
+   * different question from the one such a strategy exists to answer, so it must not short-circuit
+   * past it — see {@link getCachedRecordsForRelatedEntity}.
+   */
+  private hasCustomStrategy(): boolean {
+    this.resolveStrategy();
+    return this._fkStrategyIsRegistered;
+  }
+
+  /** True when metadata or this instance's inputs scope or order the related rows. */
+  private hasFKScoping(): boolean {
+    return !!(
+      this.FieldInfo?.RelatedEntityFilter ||
+      this.FieldInfo?.RelatedEntityOrderBy ||
+      this.FKExtraFilter ||
+      this.FKOrderBy
+    );
+  }
+
+  /** Everything the strategy needs for one lookup. Null when the field is not fully resolved. */
+  private buildLookupContext(plan: FKColumnPlan, query: string): FKLookupContext | null {
+    const relatedEntity = this.getRelatedEntityInfo();
+    if (!relatedEntity || !this.FieldInfo || !this.Record) return null;
+    const searchField = this.FKSearchField || plan.NameFieldName;
+    const fields = Array.from(new Set([
+      plan.PkFieldName, plan.NameFieldName, ...plan.ExtraFieldNames, searchField,
+      ...(plan.IconFieldName ? [plan.IconFieldName] : [])
+    ]));
+    return {
+      Record: this.Record,
+      FieldInfo: this.FieldInfo,
+      RelatedEntity: relatedEntity,
+      Provider: this.ProviderToUse,
+      Fields: fields,
+      PkField: plan.PkFieldName,
+      NameField: plan.NameFieldName,
+      SearchField: searchField,
+      Query: query,
+      Scope: this.FKScope,
+      MaxRows: this.FKMaxRows,
+      Options: {
+        ...this.FKLookupOptions,
+        ExtraFilter: this.FKExtraFilter ?? '',
+        OrderBy: this.FKOrderBy ?? '',
+      },
+    };
+  }
+
+  /**
    * Returns the LIVE cached array of records for the related entity IF a loaded
    * engine holds the full (unfiltered) set; otherwise null. Records are read-only —
    * never mutate. Wraps {@link BaseEngineRegistry.TryGetCachedRecords}.
+   *
+   * A registered strategy always wins: it exists precisely because "every row of the related
+   * entity, filtered by name" is the wrong answer for this field, and filtering a cache in memory
+   * would silently reinstate that answer. So does any scoping the default strategy would apply
+   * (`RelatedEntityFilter`, `RelatedEntityOrderBy`, `[FKExtraFilter]`, `[FKOrderBy]`): the cache
+   * cannot honour it, and the answer must not depend on which engines a page happened to load.
    */
   private getCachedRecordsForRelatedEntity(): BaseEntity[] | null {
     const relatedName = this.FieldInfo?.RelatedEntity;
-    if (!relatedName) return null;
+    if (!relatedName || this.hasCustomStrategy() || this.hasFKScoping()) return null;
     const registry = BaseEngineRegistry.Instance;
     const records = registry.TryGetCachedRecords<BaseEntity>(relatedName, { unfilteredOnly: true });
     // Treat an empty (or absent) cache as "no usable cache" so callers fall through
@@ -1162,9 +1407,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKSearchFieldLabel = this.labelForRelatedField(this.FKSearchField);
   }
 
-  /** Format a raw cell value for display in the dropdown (delegates to the pure helper). */
-  private formatCell(val: unknown): string {
-    return FormatFKCell(val);
+  /**
+   * Format a raw cell value for display in the dropdown (delegates to the pure helper). The
+   * related entity's column type lets a SQL `date` render as its stored day (MJ#4210).
+   */
+  private formatCell(val: unknown, fieldName?: string): string {
+    const sqlType = fieldName ? this.getRelatedEntityInfo()?.Fields.find(f => f.Name === fieldName)?.Type : undefined;
+    return FormatFKCell(val, sqlType);
   }
 
   /**
@@ -1175,23 +1424,25 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private buildSuggestions(
     rows: ReadonlyArray<{ get: (field: string) => unknown }>,
     plan: FKColumnPlan,
-    query: string
+    query: string,
+    groupKey: string = MjFormFieldComponent.FK_RESULTS_GROUP,
+    decoration: ReadonlyArray<FKLookupRow> = []
   ): FKSuggestion[] {
     const searchField = this.FKSearchField || plan.NameFieldName;
     // Only highlight the column actually being searched, and only when enabled.
     const nameQuery = (this.FKHighlightMatches && this.isSearchingNameField(plan)) ? query : '';
-    return rows.map(row => {
-      const name = this.formatCell(row.get(plan.NameFieldName));
+    return rows.map((row, index) => {
+      const name = this.formatCell(row.get(plan.NameFieldName), plan.NameFieldName);
       // Per-row icon from the entity's ExtendedType='Icon' field; else the
       // entity-level icon; else none.
-      const rowIcon = plan.IconFieldName ? this.formatCell(row.get(plan.IconFieldName)).trim() : '';
+      const rowIcon = plan.IconFieldName ? this.formatCell(row.get(plan.IconFieldName), plan.IconFieldName).trim() : '';
       return {
         PrimaryKeyValue: row.get(plan.PkFieldName),
         DisplayName: name,
         // Empty query yields the (still HTML-escaped) plain name — no marks.
         HighlightedName: HighlightSearchMatches(name, nameQuery, 'mj-forms-search-highlight'),
         ExtraColumns: plan.ExtraFieldNames.map((fieldName, i) => {
-          const value = this.formatCell(row.get(fieldName));
+          const value = this.formatCell(row.get(fieldName), fieldName);
           const colQuery = (this.FKHighlightMatches && fieldName === searchField) ? query : '';
           return {
             FieldName: fieldName,
@@ -1200,9 +1451,23 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
             HighlightedValue: HighlightSearchMatches(value, colQuery, 'mj-forms-search-highlight')
           };
         }),
-        Icon: (rowIcon || plan.EntityIcon) || null
+        Icon: (rowIcon || plan.EntityIcon) || null,
+        GroupKey: groupKey,
+        Secondary: decoration[index]?.Secondary,
+        Chips: decoration[index]?.Chips,
+        Row: decoration[index]
       };
     });
+  }
+
+  /** Rows belonging to one group, in the dropdown's overall (sorted) order. */
+  FKSuggestionsInGroup(groupKey: string): FKSuggestion[] {
+    return this.FKSuggestions.filter(s => s.GroupKey === groupKey);
+  }
+
+  /** Index of a row within the flat, keyboard-navigable list. */
+  FKIndexOf(suggestion: FKSuggestion): number {
+    return this.FKSuggestions.indexOf(suggestion);
   }
 
   /** Apply a freshly-built suggestion list to the dropdown state + reposition + portal. */
@@ -1258,15 +1523,23 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       ExtraColumns: plan.ExtraFieldNames.map((fn, i) => ({
         FieldName: fn, Header: plan.ExtraHeaders[i], Value: '', HighlightedValue: ''
       })),
-      Icon: plan.EntityIcon ?? null
+      Icon: plan.EntityIcon ?? null,
+      // Rendered in its own pinned section above the grid, never inside a group.
+      GroupKey: MjFormFieldComponent.FK_RESULTS_GROUP
     };
   }
 
   /**
-   * Returns a sorted copy of the suggestions per the active sort column/direction.
-   * Null sort field → natural order (original array, untouched). Sorts on the name
-   * column's `DisplayName` or the matching extra column's formatted `Value`,
-   * case-insensitively.
+   * Returns a sorted copy of the suggestions per the active sort column/direction, sorting
+   * WITHIN each group and preserving group order. Null sort field → natural order (original
+   * array, untouched). Sorts on the name column's `DisplayName` or the matching extra column's
+   * formatted `Value`, case-insensitively.
+   *
+   * Sorting the flat concatenation instead would break two things, and `FKSortField` is restored
+   * from saved preferences — so a user who once sorted a column would get both on every open:
+   * "Recent" is ordered by recency and a global sort alphabetizes that away, and the template
+   * renders group by group while the keyboard walks the flat array, so the two orders diverge and
+   * arrow keys skip rows the user can see.
    */
   private sortSuggestions(suggestions: FKSuggestion[]): FKSuggestion[] {
     const field = this.FKSortField;
@@ -1276,9 +1549,22 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       return s.ExtraColumns.find(c => c.FieldName === field)?.Value ?? '';
     };
     const dir = this.FKSortDir === 'desc' ? -1 : 1;
-    return [...suggestions].sort((a, b) =>
-      dir * keyOf(a).localeCompare(keyOf(b), undefined, { numeric: true, sensitivity: 'base' })
-    );
+    const compare = (a: FKSuggestion, b: FKSuggestion): number =>
+      dir * keyOf(a).localeCompare(keyOf(b), undefined, { numeric: true, sensitivity: 'base' });
+
+    // Group order is the render order; only the rows inside a group move.
+    const order: string[] = [];
+    const byGroup = new Map<string, FKSuggestion[]>();
+    for (const suggestion of suggestions) {
+      let rows = byGroup.get(suggestion.GroupKey);
+      if (!rows) {
+        rows = [];
+        byGroup.set(suggestion.GroupKey, rows);
+        order.push(suggestion.GroupKey);
+      }
+      rows.push(suggestion);
+    }
+    return order.flatMap(key => [...(byGroup.get(key) ?? [])].sort(compare));
   }
 
   /**
@@ -1514,6 +1800,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this._fkResizeUp = null;
   }
 
+  /**
+   * Flip between the strategy's narrow population and its wide one — "Customers" versus
+   * "All organizations" — and re-run the current lookup in the new scope.
+   */
+  OnFKScopeChange(event: MouseEvent): void {
+    event.preventDefault(); // keep focus on the input so the dropdown stays open
+    this.FKScope = this.FKScope === 'primary' ? 'all' : 'primary';
+    void this.searchRelatedEntity(this._fkQuery);
+  }
+
   /** Handle typing in the FK search input */
   OnFKInput(event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -1547,6 +1843,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   OnFKFocus(event: FocusEvent): void {
     const input = event.target as HTMLInputElement;
     this._lastFKInputEl = input;
+    // Focus regained inside the blur grace window: that blur must not close the panel this
+    // focus is about to open, nor retire the lookup it starts.
+    this.cancelPendingFKBlur();
     this.FKFocused = true; // reveal the scope pill while focused
     // Select any pre-filled (linked) text so the first keystroke replaces it instead
     // of appending — matches how a searchable dropdown behaves.
@@ -1598,13 +1897,19 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     );
 
     this.FKLoading = false;
+    // The cached path is only reached for the default strategy, so there is one ungrouped,
+    // unlabelled group and no scope toggle.
+    this.FKGroups = [{ Key: MjFormFieldComponent.FK_RESULTS_GROUP, Label: null }];
+    this.FKScopeLabels = null;
     this.applySuggestions(this.buildSuggestions(matches.map(accessor), plan, query), plan);
   }
 
   /** Hide dropdown on blur, revert to matched name if user didn't select */
   OnFKBlur(): void {
     // Small delay so mousedown on dropdown items / scope menu fires first
-    setTimeout(() => {
+    this.cancelPendingFKBlur();
+    this._fkBlurTimeout = setTimeout(() => {
+      this._fkBlurTimeout = null;
       this.closeFKDropdown();
       this.FKShowScopeMenu = false;
       this.FKFocused = false; // hide the scope pill
@@ -1616,15 +1921,32 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }, 200);
   }
 
+  private cancelPendingFKBlur(): void {
+    if (this._fkBlurTimeout) {
+      clearTimeout(this._fkBlurTimeout);
+      this._fkBlurTimeout = null;
+    }
+  }
+
   /**
    * Keyboard navigation in the FK input: ArrowDown/ArrowUp move the active row,
    * Enter selects it, Escape closes the dropdown.
    */
   OnFKKeydown(event: KeyboardEvent): void {
-    if (!this.ShowFKDropdown || this.FKSuggestions.length === 0) {
-      if (event.key === 'Escape') { this.closeFKDropdown(); this.cdr.markForCheck(); }
+    if (event.key === 'Escape') {
+      // Escape closes the panel and is consumed: the same key reaching the document would
+      // also close a dialog hosting the form (mj-dialog listens for document Escape), and
+      // dismissing a picker must not take the whole form with it. With no panel open the key
+      // is left alone, so it still closes the dialog when that is what the user means.
+      if (this.ShowFKDropdown) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeFKDropdown();
+        this.cdr.markForCheck();
+      }
       return;
     }
+    if (!this.ShowFKDropdown || this.FKSuggestions.length === 0) return;
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -1642,15 +1964,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         const active = this.FKSuggestions[this.FKActiveIndex];
         if (active) {
           event.preventDefault();
-          this.selectFKSuggestion(active);
+          void this.selectFKSuggestion(active);
         }
         break;
       }
-      case 'Escape':
-        event.preventDefault();
-        this.closeFKDropdown();
-        this.cdr.markForCheck();
-        break;
     }
   }
 
@@ -1667,11 +1984,39 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Select an item from the FK dropdown (mouse) */
   OnFKSelectItem(suggestion: FKSuggestion, event: MouseEvent): void {
     event.preventDefault();
-    this.selectFKSuggestion(suggestion);
+    void this.selectFKSuggestion(suggestion);
   }
 
-  /** Shared selection logic for mouse-click and keyboard-Enter. */
-  private selectFKSuggestion(suggestion: FKSuggestion): void {
+  /**
+   * Shared selection logic for mouse-click and keyboard-Enter. The strategy gets to veto the
+   * pick first — that is how a field asks the user to confirm a consequential choice.
+   */
+  private async selectFKSuggestion(suggestion: FKSuggestion): Promise<void> {
+    const plan = this.buildColumnPlan();
+    const context = plan ? this.buildLookupContext(plan, this._fkQuery) : null;
+    if (plan && context) {
+      // The strategy's own row when it supplied one, so a veto can read every value it returned.
+      const row: FKLookupRow = suggestion.Row ?? {
+        Values: {
+          [plan.PkFieldName]: suggestion.PrimaryKeyValue,
+          [plan.NameFieldName]: suggestion.DisplayName,
+        },
+      };
+      // A strategy that throws here must not swallow the user's click. Fail OPEN: the veto is an
+      // opportunity to confirm, not a security boundary, so a broken one lets the pick through
+      // rather than making the field unusable.
+      let vetoed = false;
+      try {
+        vetoed = !(await this.resolveStrategy().BeforeSelect(context, row));
+      } catch (err) {
+        LogError(`FK lookup strategy BeforeSelect failed for ${this.FieldName}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      if (vetoed) {
+        this.cdr.markForCheck();
+        return;
+      }
+    }
+
     this._fkInputText = suggestion.DisplayName;
     this.Value = suggestion.PrimaryKeyValue;
     this.FKIsMatched = true;
@@ -1682,7 +2027,17 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (nameFieldMap) {
       this.Record.Set(nameFieldMap, suggestion.DisplayName);
     }
+    this.rememberPick(suggestion.PrimaryKeyValue);
     this.cdr.markForCheck();
+  }
+
+  /** Record a pick so it leads the browse list next time this user opens this dropdown. */
+  private rememberPick(primaryKeyValue: unknown): void {
+    LinkedFieldOptionsStore.Instance.PushRecentPick(
+      this.Record?.EntityInfo?.Name ?? '',
+      this.FieldName,
+      String(primaryKeyValue ?? '')
+    );
   }
 
   // ---- Inline "create new related record" ----
@@ -1725,8 +2080,17 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.closeFKDropdown();
     this.cdr.markForCheck();
 
-    const newRecordValues: Record<string, unknown> = {};
-    if (query) newRecordValues[plan.NameFieldName] = query;
+    const context = this.buildLookupContext(plan, query);
+    // Prefill is a convenience; a strategy that throws should cost the user the prefill, not the
+    // ability to create a record.
+    let newRecordValues: Record<string, unknown> = {};
+    if (context) {
+      try {
+        newRecordValues = this.resolveStrategy().CreateDefaults(context);
+      } catch (err) {
+        LogError(`FK lookup strategy CreateDefaults failed for ${this.FieldName}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
 
     this.Navigate.emit({
       Kind: 'create-related',
@@ -1742,12 +2106,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private selectCreatedFKRecord(created: BaseEntity, plan: FKColumnPlan): void {
     const pk = created.Get(plan.PkFieldName);
     if (pk == null) return;
-    const name = this.formatCell(created.Get(plan.NameFieldName));
+    const name = this.formatCell(created.Get(plan.NameFieldName), plan.NameFieldName);
     this._fkInputText = name;
     this.Value = pk;
     this.FKIsMatched = true;
     const nameFieldMap = this.FieldInfo?.RelatedEntityNameFieldMap;
     if (nameFieldMap) this.Record.Set(nameFieldMap, name);
+    this.rememberPick(pk);
     this.closeFKDropdown();
     this.cdr.markForCheck();
   }
@@ -1768,7 +2133,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       this.Record.Set(nameFieldMap, '');
     }
 
-    // Re-open the full list — clearing almost always precedes picking something else.
+    // Re-open the full list — clearing almost always precedes picking something else. A blur
+    // still inside its grace period must not close the list this just opened.
+    this.cancelPendingFKBlur();
     this.showInitialFKSuggestions();
     this.cdr.markForCheck();
   }
@@ -1781,6 +2148,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.FKActiveIndex = -1;
     this.FKSelectedSuggestion = null;
     this._portaledDropdownEl = null;
+    this.cancelPendingFKSearch();
     this.stopScrollListener();
   }
 
@@ -1806,38 +2174,105 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
     this.cdr.markForCheck();
 
-    // Build Fields: PK + name + extra DefaultInView columns + the searched field +
-    // the per-row icon field (when present), deduped via Set.
-    const searchField = this.FKSearchField || plan.NameFieldName;
-    const fields = Array.from(new Set([
-      plan.PkFieldName, plan.NameFieldName, ...plan.ExtraFieldNames, searchField,
-      ...(plan.IconFieldName ? [plan.IconFieldName] : [])
-    ]));
-    const escapedQuery = query.replace(/'/g, "''").trim();
+    const context = this.buildLookupContext(plan, query);
+    if (!context) { this.FKLoading = false; return; }
 
-    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const result = await rv.RunView<Record<string, unknown>>({
-      EntityName: fieldInfo.RelatedEntity,
-      // Empty query (focus / cleared field) → no filter → first N rows.
-      ExtraFilter: escapedQuery ? `[${searchField}] LIKE '%${escapedQuery}%'` : '',
-      MaxRows: MjFormFieldComponent.FK_DB_SEARCH_LIMIT,
-      ResultType: 'simple',
-      Fields: fields
-    });
+    const strategy = this.resolveStrategy();
 
-    // Ignore stale responses (a newer keystroke already fired).
+    // Everything from here to the results is third-party code: this seam exists so an app can
+    // supply its own lookup. A strategy that throws must not leave the field spinning forever on
+    // an unhandled rejection, so contain it, say so, and fall back to MJ's own rows.
+    let groups: FKLookupGroup[];
+    let recent: FKLookupRow[];
+    try {
+      this.FKScopeLabels = strategy.ScopeLabels(context);
+
+      // Recent picks only make sense on the browse list; once the user types, what they typed is
+      // the better signal than what they picked last week.
+      [groups, recent] = await Promise.all([
+        strategy.Lookup(context),
+        query.trim() ? Promise.resolve<FKLookupRow[]>([]) : this.loadRecentPicks(context),
+      ]);
+    } catch (err) {
+      // Stale: a newer keystroke fired, or the panel was dismissed while this was in flight.
+      if (seq !== this._fkSearchSeq) return;
+      LogError(
+        `FK lookup strategy failed for ${this.Record?.EntityInfo?.Name ?? '?'}.${this.FieldName}: ` +
+          `${err instanceof Error ? err.message : String(err)}`
+      );
+      [groups, recent] = [await this.fallbackLookup(context), []];
+      this.FKScopeLabels = null;
+    }
+
+    // Stale: a newer keystroke fired, or the panel was dismissed while this was in flight. A
+    // dismissed panel stays dismissed — this result must not reopen it.
     if (seq !== this._fkSearchSeq) return;
     this.FKLoading = false;
 
-    if (result.Success) {
-      const accessor = (r: Record<string, unknown>) => ({ get: (field: string) => r[field] });
-      this.applySuggestions(this.buildSuggestions(result.Results.map(accessor), plan, query), plan);
-    } else {
-      this.FKSuggestions = [];
-      this.FKNoMatches = true;
-      this.ShowFKDropdown = true;
-    }
+    // A recent pick the strategy also returned renders once, in the strategy's group.
+    const pkOf = (r: FKLookupRow): string => String(r.Values[plan.PkFieldName] ?? '').toLowerCase();
+    const offered = new Set(groups.flatMap(g => g.Rows.map(pkOf)));
+    const recentOnly = recent.filter(r => !offered.has(pkOf(r)));
+    const allGroups: FKLookupGroup[] = recentOnly.length
+      ? [{ Key: MjFormFieldComponent.FK_RECENT_GROUP, Label: 'Recent', Rows: recentOnly }, ...groups]
+      : groups;
+    this.FKGroups = allGroups.filter(g => g.Rows.length > 0).map(g => ({ Key: g.Key, Label: g.Label }));
+
+    const accessor = (r: FKLookupRow) => ({ get: (field: string) => r.Values[field] });
+    const suggestions = allGroups.flatMap(g =>
+      this.buildSuggestions(g.Rows.map(accessor), plan, query, g.Key, g.Rows)
+    );
+    this.applySuggestions(suggestions, plan);
     this.cdr.markForCheck();
+  }
+
+  /**
+   * MJ's own rows, used when a registered strategy threw. Contained in turn: if the default
+   * cannot answer either, the dropdown shows "no matches" rather than propagating.
+   */
+  private async fallbackLookup(context: FKLookupContext): Promise<FKLookupGroup[]> {
+    try {
+      return await new DefaultFKLookupStrategy().Lookup(context);
+    } catch (err) {
+      LogError(`Default FK lookup also failed for ${this.FieldName}: ${err instanceof Error ? err.message : String(err)}`);
+      return [];
+    }
+  }
+
+  /**
+   * Hydrate the user's last picks for this field into rows. Run through the related entity's
+   * own view, under the strategy's {@link FKLookupStrategy.RecentFilter}, so a record that has
+   * since been deleted, that the user may no longer read, or that the field no longer offers
+   * simply stops appearing rather than leading the list.
+   */
+  private async loadRecentPicks(context: FKLookupContext): Promise<FKLookupRow[]> {
+    const hostEntity = this.Record?.EntityInfo?.Name ?? '';
+    // The linked value is pinned above the grid already; it is not "recent" as well.
+    const current = this.Value;
+    const ids = LinkedFieldOptionsStore.Instance
+      .RecentPicks(hostEntity, this.FieldName)
+      .filter(id => current == null || current === '' || !UUIDsEqual(String(current), id))
+      .slice(0, MjFormFieldComponent.FK_RECENT_SHOWN);
+    if (ids.length === 0 || context.RelatedEntity.PrimaryKeys.length !== 1) return [];
+
+    const result = await RunView.FromMetadataProvider(context.Provider).RunView<Record<string, unknown>>({
+      EntityName: context.RelatedEntity.Name,
+      ExtraFilter: CombineFilters(
+        `[${context.PkField}] IN (${QuoteSqlIdList(ids)})`,
+        this.resolveStrategy().RecentFilter(context)
+      ),
+      ResultType: 'simple',
+      Fields: context.Fields,
+    });
+    if (!result.Success) return [];
+
+    // Re-impose the stored order: the view returns whatever order it likes, but "recent" is
+    // only useful if the most recent is first.
+    const byId = new Map(result.Results.map(r => [String(r[context.PkField]).toLowerCase(), r]));
+    return ids
+      .map(id => byId.get(id.toLowerCase()))
+      .filter((r): r is Record<string, unknown> => !!r)
+      .map(Values => ({ Values }));
   }
 
   // ============================================
@@ -2115,7 +2550,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * an instant, and the correct way to show THAT is the reader's local zone.
    */
   private get IsDateOnlyField(): boolean {
-    return (this.FieldInfo?.Type ?? '').trim().toLowerCase() === 'date';
+    return IsDateOnlySQLType(this.FieldInfo?.Type);
   }
 
   FormatValue(): string {
@@ -2140,7 +2575,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
        * and local time is the right way to show one.
        */
       if (this.IsDateOnlyField) {
-        return val.toLocaleDateString(undefined, { timeZone: 'UTC' });
+        return FormatDateOnly(val);
       }
       return val.toLocaleString();
     }
@@ -2148,6 +2583,20 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   ngOnChanges(changes: SimpleChanges): void {
+    // Everything the section derives from this field (required-and-empty, dirty, hidden, which
+    // errors it owns) follows from these inputs, and the section may already have been checked
+    // this pass — see FormSectionFieldHost.NotifyFieldChanged. Guarded, because `[FormContext]`
+    // is bound to a getter that returns a fresh object every pass, so this hook runs every pass.
+    const firstBinding = !this._inputsBound;
+    this._inputsBound = true;
+    if (this.sectionHost) {
+      const context = changes['FormContext'];
+      const sectionRelevant = firstBinding
+        || !!changes['Record'] || !!changes['FieldName'] || !!changes['EditMode']
+        || !!changes['HideWhenEmptyInReadOnlyMode'] || !!changes['DisplayNameOverride']
+        || (!!context && SectionRelevantFormContextChanged(context.previousValue as FormContext | undefined, context.currentValue as FormContext | undefined));
+      if (sectionRelevant) this.sectionHost.NotifyFieldChanged(this);
+    }
     // Field security depends on both the record's entity and which field this is, so the
     // memoized answer has to be dropped whenever either changes.
     if (changes['Record'] || changes['FieldName']) {
@@ -2178,7 +2627,15 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         this._fkColWidths = {};
         this._fkPrefKey = null; // force prefs reload for the new field
         this._portaledDropdownEl = null;
+        // A lookup still out for the previous record must not land on this one.
+        this.cancelPendingFKSearch();
+        this.stopScrollListener();
         this._fkColumnPlan = null;
+        this._fkStrategy = null; // a different field may resolve a different strategy
+        this._fkStrategyIsRegistered = false;
+        this.FKGroups = [];
+        this.FKScopeLabels = null;
+        this.FKScope = 'primary';
         this._resolvedFKName = undefined;
         this._resolvedFKValue = undefined;
         this._fkNameLoading = false;
@@ -2204,9 +2661,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   }
 
   ngOnDestroy(): void {
-    if (this._fkSearchTimeout) {
-      clearTimeout(this._fkSearchTimeout);
-    }
+    this._destroyed = true;
+    this.sectionHost?.UnregisterField(this);
+    // Retire the sequence too, not just the debounce: a lookup still in flight would otherwise
+    // land on a destroyed component, reopen the panel and re-arm document listeners with no
+    // owner left to remove them.
+    this.cancelPendingFKSearch();
+    this.cancelPendingFKBlur();
     this.teardownFKResizeListeners();
     this.stopScrollListener();
     // If we relocated the dropdown to <body> and Angular tears us down while it's

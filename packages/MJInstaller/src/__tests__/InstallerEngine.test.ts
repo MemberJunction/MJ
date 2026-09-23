@@ -623,7 +623,8 @@ describe('InstallerEngine', () => {
 
       // 2 known-issue checks + 1 auth validation check (env.ts not found in test dir)
       // + 1 claude-pack info check (no pack in /test/dir)
-      expect(mockDiagnostics.AddCheck).toHaveBeenCalledTimes(4);
+      // + 2 runtime & AI checks (MJ_BASE_ENCRYPTION_KEY and AI Provider API Keys)
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledTimes(6);
       // First call: needs_patch → warn
       expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
         expect.objectContaining({ Status: 'warn', Name: 'Known issue: issue-1' })
@@ -640,6 +641,35 @@ describe('InstallerEngine', () => {
       expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
         expect.objectContaining({ Status: 'info', Name: expect.stringContaining('Claude pack') })
       );
+      // Fifth call: runtime encryption key check
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Name: 'Base encryption key', Scope: 'runtime', Code: 'ENCRYPTION_KEY_MISSING' })
+      );
+      // Sixth call: AI provider keys check
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Name: 'AI provider credentials', Scope: 'ai', Code: 'AI_CREDENTIAL_MISSING' })
+      );
+    });
+
+    it('filters checks by Scope when Scope option is provided', async () => {
+      const mockDiagnostics = {
+        Checks: [
+          { Name: 'Node', Status: 'pass', Message: 'ok', Scope: 'install' },
+        ],
+        HasFailures: false,
+        Failures: [],
+        Warnings: [],
+        LastInstall: null,
+        AddCheck: vi.fn((check) => {
+          mockDiagnostics.Checks.push(check);
+        }),
+      };
+      mockPreflightRunDiagnostics.mockResolvedValue(mockDiagnostics);
+      mockCodeGenRunKnownIssueChecks.mockResolvedValue([]);
+
+      const result = await engine.Doctor('/test/dir', { Scope: 'ai' });
+      expect(result.Checks.every((c) => c.Scope === 'ai')).toBe(true);
+      expect(result.Checks.some((c) => c.Name === 'AI provider credentials')).toBe(true);
     });
   });
 

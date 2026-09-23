@@ -6,6 +6,11 @@ import { JsonWriteHelper } from './json-write-helper';
 import { EntityPropertyExtractor } from './EntityPropertyExtractor';
 import { FieldExternalizer } from './FieldExternalizer';
 import { RelatedEntityHandler } from './RelatedEntityHandler';
+import {
+  findSubPropertyExternalizations,
+  externalizeSubProperties,
+  fieldExternalizerAdapter,
+} from './json-subproperty-externalization';
 import { METADATA_KEYWORDS, createKeywordReference } from '../constants/metadata-keywords';
 import { RelatedEntityConfig } from '../config';
 
@@ -376,9 +381,21 @@ export class RecordProcessor {
     
     const externalizePattern = this.getExternalizationPattern(fieldName, entityConfig);
     if (!externalizePattern) {
-      return fieldValue;
+      // No whole-field pattern. The field may still carry dotted configs targeting
+      // properties inside its JSON (`Configuration.ReplayScript`), which externalize the
+      // leaf and leave an `@file:` reference beside the hand-authored keys. A whole-field
+      // config takes precedence, so this only runs when there isn't one.
+      return await this.applyJsonSubPropertyExternalization(
+        fieldName,
+        fieldValue,
+        allProperties,
+        targetDir,
+        entityConfig,
+        existingRecordData,
+        verbose
+      );
     }
-    
+
     try {
       const existingFileReference = existingRecordData?.fields?.[fieldName];
       const recordData = this.createRecordDataForExternalization(allProperties);
@@ -398,6 +415,47 @@ export class RecordProcessor {
         console.warn(`Failed to externalize field ${fieldName}: ${error}`);
       }
       return fieldValue; // Keep original value if externalization fails
+    }
+  }
+
+  /**
+   * Externalizes any configured properties *inside* this field's JSON, returning the
+   * field with `@file:` references in their place. A no-op unless the field has dotted
+   * `externalizeFields` entries. Best-effort like the whole-field path: a failure keeps
+   * the original value rather than losing the pull.
+   */
+  private async applyJsonSubPropertyExternalization(
+    fieldName: string,
+    fieldValue: any,
+    allProperties: Record<string, any>,
+    targetDir: string,
+    entityConfig: EntityConfig,
+    existingRecordData: RecordData | undefined,
+    verbose?: boolean
+  ): Promise<any> {
+    const subConfigs = findSubPropertyExternalizations(fieldName, entityConfig.pull?.externalizeFields);
+    if (subConfigs.length === 0) {
+      return fieldValue;
+    }
+
+    try {
+      return await externalizeSubProperties(
+        fieldValue,
+        subConfigs,
+        fieldExternalizerAdapter(
+          this.fieldExternalizer,
+          allProperties,
+          targetDir,
+          entityConfig.pull?.mergeStrategy || 'merge',
+          verbose
+        ),
+        existingRecordData?.fields?.[fieldName]
+      );
+    } catch (error) {
+      if (verbose) {
+        console.warn(`Failed to externalize sub-properties of ${fieldName}: ${error}`);
+      }
+      return fieldValue;
     }
   }
 
@@ -456,8 +514,8 @@ export class RecordProcessor {
   /**
    * Creates a BaseEntity-like object for externalization processing
    */
-  private createRecordDataForExternalization(allProperties: Record<string, any>): BaseEntity {
-    return allProperties as any as BaseEntity;
+  private createRecordDataForExternalization(allProperties: Record<string, any>): Record<string, unknown> {
+    return allProperties;
   }
 
   /**
