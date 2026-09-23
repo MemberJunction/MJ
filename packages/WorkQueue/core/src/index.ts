@@ -19,3 +19,5 @@ export { InMemoryTransport, IN_MEMORY_TRANSPORT_CAPABILITIES } from './memory/In
 export type { InMemoryTransportOptions } from './memory/InMemoryTransport';
 export type { InMemoryDeliverySnapshot } from './memory/InMemoryStore';
 export { LEASE_EXPIRED_REASON, MAX_RESOLUTION_NOTE_LENGTH } from './memory/InMemoryStore';
+export * from './api/restContract';
+export * from './api/WorkQueueApiPublisher';
