@@ -700,6 +700,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
+                undefined,
+                entity.CloneContext ? 'Clone' : 'Internal',
+                entity.CloneContext
+                    ? JSON.stringify({
+                        Version: 1,
+                        Kind: 'Clone',
+                        Clone: entity.CloneContext,
+                    })
+                    : null,
             )
             : null;
 
@@ -1357,6 +1366,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 user,
                 entity.RestoreContext,
                 "'",
+                entity.CloneContext,
             );
             if (payload) {
                 saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);

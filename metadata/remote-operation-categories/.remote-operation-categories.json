@@ -96,5 +96,19 @@
       "lastModified": "2026-09-03T17:21:06.573Z",
       "checksum": "1bffd9df08981ef83ab6e70434aea2484a39942eb9cf8c74b9c41f6dfa27e4c0"
     }
+  },
+  {
+    "fields": {
+      "Name": "Record Cloning",
+      "Description": "Record cloning operations (describe, plan, execute, and get-lineage via Remote Operations).",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "B283BAD9-8285-4825-95F7-8211540D93F1"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:53.445Z",
+      "checksum": "d4d281674bd094e032d2289aea0db934379b268676572d5bcce0ba131f397f09"
+    }
   }
 ]

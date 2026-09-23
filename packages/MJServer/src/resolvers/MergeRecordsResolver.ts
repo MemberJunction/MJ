@@ -50,7 +50,13 @@ export class RecordDependencyResult {
   FieldName: string; // required
 
   @Field(() => CompositeKeyOutputType)
-  CompositeKey: CompositeKey;
+  PrimaryKey: CompositeKey;
+
+  @Field(() => Boolean, { nullable: true })
+  IsSoftLink?: boolean;
+
+  @Field(() => String, { nullable: true })
+  EntityIDFieldName?: string;
 }
 
 @Resolver(RecordDependencyResult)
@@ -67,12 +73,13 @@ export class RecordDependencyResolver {
       const ck = new CompositeKey(ckInput.KeyValuePairs);
       const result = await md.GetRecordDependencies(entityName, ck);
       
-      // Map PrimaryKey to CompositeKey for GraphQL response
       return result.map(dep => ({
         EntityName: dep.EntityName,
         RelatedEntityName: dep.RelatedEntityName,
         FieldName: dep.FieldName,
-        CompositeKey: dep.PrimaryKey // Map PrimaryKey to CompositeKey
+        PrimaryKey: dep.PrimaryKey,
+        IsSoftLink: dep.IsSoftLink,
+        EntityIDFieldName: dep.EntityIDFieldName,
       }));
     } catch (e) {
       LogError(e);

@@ -1,0 +1,25 @@
+{
+  "name": "@memberjunction/record-cloning",
+  "type": "module",
+  "version": "6.1.0",
+  "description": "Engine for MemberJunction record cloning: planning, materialization, and composite execution",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@memberjunction/core": "6.1.0",
+    "@memberjunction/core-entities": "6.1.0",
+    "@memberjunction/global": "6.1.0",
+    "@memberjunction/record-graph": "6.1.0",
+    "@memberjunction/record-cloning-base": "6.1.0",
+    "@memberjunction/record-set-processor-base": "6.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.16",
+    "vitest": "^4.0.18"
+  }
+}

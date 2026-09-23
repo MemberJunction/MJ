@@ -18,6 +18,8 @@ import {
     IMetadataProvider,
     RunQuerySQLFilterManager,
     RestoreContext,
+    CloneContext,
+    RecordChangeSource,
     RecordChangePayload,
     EntityDeleteOptions,
 } from '@memberjunction/core';
@@ -879,8 +881,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
-        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
-    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text
+        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason", "ChangeContext")
+    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text, $${s + 9}::text
     FROM save_result
     RETURNING "ID"
 )
@@ -896,6 +898,7 @@ SELECT * FROM save_result`;
             payload.fullRecordJSON,
             payload.restoredFromID,
             payload.restoreReason,
+            payload.changeContext,
         ];
         return { sql: fullSQL, parameters };
     }
@@ -941,14 +944,15 @@ SELECT * FROM save_result`;
                     payload.fullRecordJSON,
                     payload.restoredFromID,
                     payload.restoreReason,
+                    payload.changeContext,
                 );
                 const fullSQL = `WITH delete_result AS (
     ${simpleSQL}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
-        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
-    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', $${s+3}::varchar, '', 'Record Deleted', $${s+4}::text, 'Complete', $${s+5}::uuid, $${s+6}::text
+        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason", "ChangeContext")
+    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', $${s+3}::varchar, '', 'Record Deleted', $${s+4}::text, 'Complete', $${s+5}::uuid, $${s+6}::text, $${s+7}::text
     FROM delete_result
     WHERE EXISTS (SELECT 1 FROM delete_result)
     RETURNING "ID"
@@ -1257,6 +1261,7 @@ SELECT * FROM delete_result`;
         type: 'Create' | 'Update' | 'Delete',
         user: UserInfo,
         restoreContext?: RestoreContext | null,
+        cloneContext?: CloneContext | null,
     ): { sql: string; parameters?: unknown[] } | null {
         const payload = this.BuildRecordChangePayload(
             newData,
@@ -1267,12 +1272,13 @@ SELECT * FROM delete_result`;
             user,
             restoreContext,
             "'",
+            cloneContext,
         );
         if (!payload) return null;
 
         const sql = `INSERT INTO ${this._schemaName}."RecordChange"
-            ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason")
-            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text)
+            ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason", "ChangeContext")
+            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text, $11::text)
             RETURNING "ID"`;
 
         const parameters: unknown[] = [
@@ -1286,6 +1292,7 @@ SELECT * FROM delete_result`;
             payload.fullRecordJSON,
             payload.restoredFromID,
             payload.restoreReason,
+            payload.changeContext,
         ];
 
         return { sql, parameters };
@@ -1302,6 +1309,8 @@ SELECT * FROM delete_result`;
         safeChangesDesc: string,
         safePKValue: string,
         safeUserId: string,
+        source?: RecordChangeSource,
+        changeContext?: string | null,
     ): string {
         const schema = entityInfo.SchemaName || '__mj';
         const view = entityInfo.BaseView;
@@ -1312,18 +1321,23 @@ SELECT * FROM delete_result`;
             .map(pk => `${pk.CodeName}|${safePKValue}`)
             .join('||');
 
+        const sourceVal = source ?? 'Internal';
+        const safeChangeContext = changeContext ? `'${changeContext.replace(/'/g, "''")}'::text` : 'NULL';
+
         return `
 INSERT INTO ${this._schemaName}."RecordChange"
-    ("EntityID", "RecordID", "UserID", "Type", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status")
+    ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "ChangeContext")
 SELECT
     '${entityInfo.ID}'::uuid,
     '${recordID}',
     '${safeUserId}'::uuid,
     'Update',
+    '${sourceVal}',
     '${safeChangesJSON}',
     '${safeChangesDesc}',
     row_to_json(r)::text,
-    'Complete'
+    'Complete',
+    ${safeChangeContext}
 FROM ${pgDialect.QuoteSchema(schema, view)} r
 WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
     }

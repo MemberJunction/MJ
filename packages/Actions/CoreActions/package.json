@@ -57,6 +57,8 @@
     "@memberjunction/lists-base": "6.1.0",
     "@memberjunction/network-utils": "6.1.0",
     "@memberjunction/react-linter": "6.1.0",
+    "@memberjunction/record-cloning": "6.1.0",
+    "@memberjunction/record-cloning-base": "6.1.0",
     "@memberjunction/record-set-processor": "6.1.0",
     "@memberjunction/record-set-processor-base": "6.1.0",
     "@memberjunction/search-engine": "6.1.0",

@@ -3,6 +3,7 @@ import {
   BaseEntity,
   BaseEntityEvent,
   CompositeKey,
+  CloneContext,
   DatabaseProviderBase,
   EntityFieldTSType,
   EntityInfo,
@@ -233,9 +234,9 @@ export class ResolverBase {
           Key: mapper.ReverseMapFieldName(item.Key),
           Value: item.Value,
         }));
-      } else if (key === 'RestoreContext___') {
-        // Pass through the restore-context blob unchanged — its inner field
-        // names (SourceChangeID, Reason) are not entity-field names.
+      } else if (key === 'RestoreContext___' || key === 'CloneContext___') {
+        // Pass through the restore/clone-context blob unchanged — its inner field
+        // names are not entity-field names.
         mapped[key] = input[key];
       } else {
         mapped[mapper.ReverseMapFieldName(key)] = input[key];
@@ -259,6 +260,24 @@ export class ResolverBase {
     const ctx = input?.RestoreContext___;
     if (!ctx || !ctx.SourceChangeID) return false;
     entityObject.SetRestoreContext(ctx.SourceChangeID, ctx.Reason ?? null);
+    return true;
+  }
+
+  /**
+   * Applies an inbound CloneContext___ blob to a server-side BaseEntity.
+   * Mirrors the OldValues___ and RestoreContext___ pattern — the client-side
+   * BaseEntity's `_cloneContext` doesn't traverse the network, so the server
+   * must reconstruct it from the mutation input before calling Save().
+   *
+   * Returns true when context was applied; false when no context was on the input.
+   */
+  protected applyCloneContext(
+    entityObject: BaseEntity,
+    input: { CloneContext___?: CloneContext | null },
+  ): boolean {
+    const ctx = input?.CloneContext___;
+    if (!ctx || !ctx.SourceRecordID || !ctx.SourceEntityName) return false;
+    entityObject.SetCloneContext(ctx);
     return true;
   }
 
@@ -1589,11 +1608,11 @@ export class ResolverBase {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
       entityObject.NewRecord();
-      // Strip the RestoreContext___ blob from the field assignments — it's
-      // metadata for the upcoming Save(), not a field on the record.
+      // Strip the RestoreContext___ and CloneContext___ blobs from the field assignments —
+      // they are metadata for the upcoming Save(), not fields on the record.
       const fieldsForSet: Record<string, unknown> = {};
       for (const key of Object.keys(input)) {
-        if (key !== 'RestoreContext___') fieldsForSet[key] = input[key];
+        if (key !== 'RestoreContext___' && key !== 'CloneContext___') fieldsForSet[key] = input[key];
       }
       // IS-A promotion: bind the new child to its EXISTING parent row BEFORE the field
       // assignments, so values the client sent for parent fields land on the loaded parent
@@ -1601,9 +1620,10 @@ export class ResolverBase {
       await this.attachToExistingParentIfPromotion(entityObject, fieldsForSet);
       entityObject.SetMany(fieldsForSet);
 
-      // Reconstruct the client-side restore context, if any, on this server
+      // Reconstruct the client-side restore/clone context, if any, on this server
       // entity so the data provider writes the lineage columns on Save().
       this.applyRestoreContext(entityObject, input);
+      this.applyCloneContext(entityObject, input);
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
 
@@ -1648,7 +1668,7 @@ export class ResolverBase {
       const clientNewValues = {};
       Object.keys(input).forEach((key) => {
         // Skip metadata blobs that aren't actual entity fields.
-        if (key !== 'OldValues___' && key !== 'RestoreContext___') {
+        if (key !== 'OldValues___' && key !== 'RestoreContext___' && key !== 'CloneContext___') {
           clientNewValues[key] = input[key];
         }
       });
@@ -1684,7 +1704,7 @@ export class ResolverBase {
             await this.TestAndSetClientOldValuesToDBValues(input, clientNewValues, entityObject, userInfo);
           } else {
             // no OldValues, so we can just set the new values from input
-            entityObject.SetMany(input);
+            entityObject.SetMany(clientNewValues);
           }
         } else {
           // Use a generic message to avoid leaking whether a record exists — distinguishing
@@ -1706,9 +1726,10 @@ export class ResolverBase {
         entityObject.SetMany(clientNewValues);
       }
 
-      // Reconstruct the client-side restore context, if any, on this server
+      // Reconstruct the client-side restore/clone context, if any, on this server
       // entity so the data provider writes the lineage columns on Save().
       this.applyRestoreContext(entityObject, input);
+      this.applyCloneContext(entityObject, input);
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
 

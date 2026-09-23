@@ -1,0 +1,33 @@
+{
+  "name": "@memberjunction/record-cloning-base",
+  "type": "module",
+  "version": "6.1.0",
+  "description": "MemberJunction: Record Cloning Base - types, contracts, policy resolver, name templates, key classifiers, JSON remap, and config validation. Client-safe.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/core": "6.1.0",
+    "@memberjunction/global": "6.1.0",
+    "@memberjunction/record-graph": "6.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

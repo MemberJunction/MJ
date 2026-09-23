@@ -22,7 +22,7 @@ import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
 import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
-import { resolveCollectionRelationship } from '../lib/collection-resolver';
+import { resolveCollectionRelationship } from '@memberjunction/record-graph';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 // Parallelism is across JSON-root graphs (independent Actions), not flattened rows.
@@ -2571,28 +2571,20 @@ export class PushService {
           }
         }
 
-        // Dynamically register collection companion if entity supports DeclareRelatedRecords
-        if (!collectionCompanion && typeof (entity as unknown as { DeclareRelatedRecords?: unknown }).DeclareRelatedRecords === 'function') {
+        // Dynamically register collection companion if entity supports DeclareRelatedRecordsDynamic
+        if (!collectionCompanion && typeof (entity as BaseEntity).DeclareRelatedRecordsDynamic === 'function') {
           const entityInfo = entity.EntityInfo ?? new Metadata().EntityByName(entityName);
           const resolved = resolveCollectionRelationship(entityInfo, colName);
           if (resolved) {
-            const colOpts: {
-              Name: string;
-              RelatedEntity: string;
-              RelatedEntityJoinField: string;
-              Load?: string;
-              OnRemove?: string;
-              OrderBy?: string;
-            } = {
+            const colOpts = {
               Name: resolved.collectionName,
               RelatedEntity: resolved.relatedEntity,
               RelatedEntityJoinField: resolved.joinField,
-              Load: resolved.load,
-              OnRemove: resolved.onRemove,
+              Load: resolved.load as 'lazy' | 'eager' | undefined,
+              OnRemove: resolved.onRemove as 'orphan' | 'cascade' | undefined,
               ...(resolved.orderBy ? { OrderBy: resolved.orderBy } : {}),
             };
-            const declareFn = (entity as unknown as { DeclareRelatedRecords: (options: unknown) => unknown }).DeclareRelatedRecords.bind(entity);
-            collectionCompanion = declareFn(colOpts) as typeof collectionCompanion;
+            collectionCompanion = (entity as BaseEntity).DeclareRelatedRecordsDynamic(colOpts) as typeof collectionCompanion;
           }
         }
 

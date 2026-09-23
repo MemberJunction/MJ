@@ -9,14 +9,18 @@ import {
     LogStatus,
 } from '@memberjunction/core';
 import { MJRecordChangeEntity, MJVersionLabelItemEntity } from '@memberjunction/core-entities';
-import { CaptureError, CaptureResult, CreateLabelProgressCallback, DependencyNode, WalkOptions } from './types';
-import { DependencyGraphWalker } from './DependencyGraphWalker';
+import { CaptureError, CaptureResult, CreateLabelProgressCallback } from './types';
 import {
-    ENTITY_VERSION_LABEL_ITEMS,
-    ENTITY_RECORD_CHANGES,
+    DependencyGraphWalker,
+    DependencyNode,
+    WalkOptions,
     buildCompositeKeyFromRecord,
     sqlEquals,
     escapeSqlString,
+} from '@memberjunction/record-graph';
+import {
+    ENTITY_VERSION_LABEL_ITEMS,
+    ENTITY_RECORD_CHANGES,
 } from './constants';
 
 // =============================================================================

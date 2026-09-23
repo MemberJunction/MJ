@@ -1511,12 +1511,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     EntityName
                     RelatedEntityName
                     FieldName
-                    CompositeKey {
+                    PrimaryKey {
                         KeyValuePairs {
                             FieldName
                             Value
                         }
                     }
+                    IsSoftLink
+                    EntityIDFieldName
                 }
             }`
 
@@ -1527,7 +1529,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
             const data = await this.ExecuteGQL(query, vars);
 
-            return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
+            if (data?.GetRecordDependencies && Array.isArray(data.GetRecordDependencies)) {
+                return data.GetRecordDependencies.map((raw: {
+                    EntityName: string;
+                    RelatedEntityName: string;
+                    FieldName: string;
+                    PrimaryKey?: { KeyValuePairs?: KeyValuePair[] };
+                    IsSoftLink?: boolean | null;
+                    EntityIDFieldName?: string | null;
+                }): RecordDependency => {
+                    const dep = new RecordDependency();
+                    dep.EntityName = raw.EntityName;
+                    dep.RelatedEntityName = raw.RelatedEntityName;
+                    dep.FieldName = raw.FieldName;
+                    const kvps = (raw.PrimaryKey?.KeyValuePairs ?? []).map(kv => new KeyValuePair(kv.FieldName, kv.Value));
+                    const pk = new CompositeKey(kvps);
+                    if (pk.KeyValuePairs.length === 0 && kvps.length > 0) {
+                        pk.KeyValuePairs = kvps;
+                    }
+                    dep.PrimaryKey = pk;
+                    dep.IsSoftLink = raw.IsSoftLink ?? undefined;
+                    dep.EntityIDFieldName = raw.EntityIDFieldName ?? undefined;
+                    return dep;
+                });
+            }
+            return [];
         }
         catch (e) {
             LogError(e);
@@ -2048,6 +2074,33 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 vars.input['RestoreContext___'] = {
                     SourceChangeID: clientRestoreContext.SourceChangeID,
                     Reason: clientRestoreContext.Reason,
+                };
+            }
+
+            // Carry clone lineage across the network.
+            // BaseEntity._cloneContext is a client-side-only field — it doesn't
+            // serialize through GraphQL automatically. When set, mirror it onto the
+            // mutation input as CloneContext___ so the server-side resolver can
+            // call SetCloneContext() on the freshly-constructed BaseEntity before
+            // Save(). Without this, the data provider on the server reads
+            // entity.CloneContext as null and writes Source='Internal' —
+            // i.e., the clone audit trail is silently lost.
+            const clientCloneContext = entity.CloneContext;
+            if (clientCloneContext) {
+                vars.input['CloneContext___'] = {
+                    CloneLogID: clientCloneContext.CloneLogID,
+                    SourceEntityName: clientCloneContext.SourceEntityName,
+                    SourceRecordID: clientCloneContext.SourceRecordID,
+                    RootEntityName: clientCloneContext.RootEntityName,
+                    RootSourceRecordID: clientCloneContext.RootSourceRecordID,
+                    RootTargetRecordID: clientCloneContext.RootTargetRecordID,
+                    Depth: clientCloneContext.Depth,
+                    Route: clientCloneContext.Route,
+                    FieldChangeSummary: (clientCloneContext.FieldChangeSummary ?? []).map(f => ({
+                        Kind: f.Kind,
+                        Fields: f.Fields,
+                    })),
+                    Reason: clientCloneContext.Reason,
                 };
             }
 

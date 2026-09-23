@@ -1,0 +1,38 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on RecordCloneLog.PlanJSON so CodeGen emits a",
+      "strongly-typed PlanJSONObject accessor returning",
+      "MJRecordCloneLogEntity_IClonePlan. The column carries the full serialized",
+      "clone execution plan detailing nodes, edges, field changes, and effective options.",
+      "Added by migration V202609211955__v6.2.x__Record_Cloning_Logs_And_WorkType.sql."
+    ],
+    "fields": {
+      "Name": "MJ: Record Clone Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IClonePlan",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IClonePlan.ts"
+          },
+          "_comments": [
+            "PlanJSON — serialized clone execution plan (Nodes, Edges, Counts, Warnings, EffectiveOptions)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Clone Logs&Name=PlanJSON"
+          },
+          "sync": {
+            "lastModified": "2026-09-22T00:07:53.308Z",
+            "checksum": "670ffb3e1d8889320e991f77fdc1a984e6f9bb407af6eb235266920fecbaabfb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Logs"
+    }
+  }
+]

@@ -1,13 +1,14 @@
-import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewChild, ElementRef, ChangeDetectorRef, OnInit } from '@angular/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
-import { CompositeKey, Metadata, EntityInfo } from '@memberjunction/core';
+import { CompositeKey, Metadata, EntityInfo, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
 import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { SaveViewAsListResult } from '@memberjunction/ng-list-management';
+import { filter, takeUntil } from 'rxjs/operators';
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -164,6 +165,28 @@ export class UserViewResource extends BaseResourceComponent {
         private exportService: ExportService
     ) {
         super();
+    }
+
+    public override ngOnInit(): void {
+        super.ngOnInit();
+
+        MJGlobal.Instance.GetEventListener()
+            .pipe(
+                filter(
+                    (event) =>
+                        event.event === MJEventType.ComponentEvent &&
+                        event.eventCode === BaseEntity.BaseEventCode &&
+                        ((event.args as BaseEntityEvent)?.type === 'save' || (event.args as BaseEntityEvent)?.type === 'delete')
+                ),
+                takeUntil(this.destroy$)
+            )
+            .subscribe((event) => {
+                const entityEvent = event.args as BaseEntityEvent;
+                const affectedName = (entityEvent?.baseEntity?.EntityInfo?.Name ?? entityEvent?.entityName)?.trim().toLowerCase();
+                if (affectedName && affectedName === this.entityInfo?.Name?.trim().toLowerCase()) {
+                    this.entityViewerRef?.Refresh();
+                }
+            });
     }
 
     override set Data(value: ResourceData) {

@@ -51,6 +51,7 @@
     "@memberjunction/graphql-dataprovider": "6.1.0",
     "@memberjunction/network-utils": "6.1.0",
     "@memberjunction/postgresql-dataprovider": "6.1.0",
+    "@memberjunction/record-graph": "6.1.0",
     "@memberjunction/server-bootstrap-lite": "6.1.0",
     "@memberjunction/sql-dialect": "6.1.0",
     "@memberjunction/sqlserver-dataprovider": "6.1.0",

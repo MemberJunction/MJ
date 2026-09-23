@@ -1,0 +1,30 @@
+{
+  "name": "@memberjunction/record-graph",
+  "type": "module",
+  "version": "6.1.0",
+  "description": "MemberJunction: Generalized record dependency graph walker, relationship collection resolver, topological sort, link value encoding, and graph models. Shared by Version History, Record Cloning, and Metadata Sync.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/core": "6.1.0",
+    "@memberjunction/global": "6.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

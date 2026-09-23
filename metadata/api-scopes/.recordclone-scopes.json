@@ -1,0 +1,48 @@
+[
+  {
+    "fields": {
+      "Name": "recordclone",
+      "FullPath": "recordclone",
+      "ParentID": null,
+      "Category": "Record Cloning",
+      "Description": "Parent scope for Record Cloning operations (plan, describe, lineage, and execute via Remote Operations).",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-clone",
+        "color": "#7c5295"
+      }
+    },
+    "primaryKey": {
+      "ID": "53085FD0-2EEE-47B2-AE8D-6BC42E1DBDBA"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "recordclone:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=recordclone",
+      "Category": "Record Cloning",
+      "Description": "Inspect clone eligibility, calculate clone execution plans, and query lineage graph — the RecordClone.Describe, RecordClone.Plan, and RecordClone.GetLineage Remote Operations.",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "498708CA-8A31-43EC-A6C3-C11BD6BF928B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "execute",
+      "FullPath": "recordclone:execute",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=recordclone",
+      "Category": "Record Cloning",
+      "Description": "Execute a record cloning operation — the RecordClone.Execute Remote Operation.",
+      "ResourceType": null,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "FC103573-2E09-4415-AFCE-184082B3F8D2"
+    }
+  }
+]

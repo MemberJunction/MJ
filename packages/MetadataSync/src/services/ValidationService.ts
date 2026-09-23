@@ -21,7 +21,7 @@ import {
   extractKeywordValue
 } from '../constants/metadata-keywords';
 import { EntityConfig } from '../config';
-import { resolveCollectionRelationship } from '../lib/collection-resolver';
+import { resolveCollectionRelationship } from '@memberjunction/record-graph';
 
 // Type aliases for clarity
 type EntityData = RecordData;

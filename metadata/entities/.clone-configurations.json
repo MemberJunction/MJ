@@ -1,0 +1,1801 @@
+[
+  {
+    "_comments": [
+      "Marks MJ: Record Clone Logs as NotCloneable so the cloning engine will never copy log headers."
+    ],
+    "fields": {
+      "Name": "MJ: Record Clone Logs",
+      "Configuration": {
+        "Clone": {
+          "NotCloneable": true,
+          "NotCloneableReason": "Clone audit logs cannot be cloned."
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Logs"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:52.990Z",
+      "checksum": "a48ad55393953f06ca82bbac9f9c275cac0f14dfc31fc0871a98abe0cc33b26b"
+    }
+  },
+  {
+    "_comments": [
+      "Marks MJ: Record Clone Log Items as NotCloneable so the cloning engine will never copy log items."
+    ],
+    "fields": {
+      "Name": "MJ: Record Clone Log Items",
+      "Configuration": {
+        "Clone": {
+          "NotCloneable": true,
+          "NotCloneableReason": "Clone audit log items cannot be cloned."
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Log Items"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:52.984Z",
+      "checksum": "5028358b4bf32274cd14b6ea0a9689c5c37dae8e0ecef57c6611ee901e11020f"
+    }
+  },
+  {
+    "_comments": [
+      "Cloning configuration for MJ: Users — Onboard a user like Alice with same roles, apps, and settings, inactive, owner-only."
+    ],
+    "fields": {
+      "Name": "MJ: Users",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "RequiredUserType": "Owner",
+          "MaxDepth": 2,
+          "MaxRecords": 500,
+          "Naming": {
+            "Strategy": "prompt",
+            "Fields": ["Email"]
+          },
+          "Fields": {
+            "Strict": true,
+            "PromptFor": ["Email", "FirstName", "LastName"],
+            "Reset": {
+              "Type": "User",
+              "IsActive": false,
+              "LinkedEntityID": null,
+              "LinkedEntityRecordID": null,
+              "LinkedRecordType": "None",
+              "EmployeeID": null,
+              "UserImageURL": null,
+              "UserImageIconClass": null
+            },
+            "Rules": {
+              "Rules": [
+                {
+                  "TargetField": "Name",
+                  "Source": {
+                    "Kind": "field",
+                    "Field": "Email"
+                  }
+                }
+              ]
+            },
+            "Copy": ["Title"]
+          },
+          "Relationships": {
+            "MJ: User Roles": { "Policy": "Deep", "Locked": true },
+            "MJ: User Applications": { "Policy": "Deep" },
+            "MJ: User Settings": { "Policy": "Deep" },
+            "MJ: User Notification Preferences": { "Policy": "Deep" },
+            "MJ: User Views": {
+              "Policy": "Skip",
+              "Fields": {
+                "Reset": {
+                  "IsDefault": false,
+                  "IsShared": false
+                }
+              }
+            },
+            "MJ: User Favorites": { "Policy": "Skip" },
+            "MJ: User Notifications": { "Policy": "Skip", "Locked": true },
+            "MJ: User Record Logs": { "Policy": "Skip", "Locked": true },
+            "MJ: User View Runs": { "Policy": "Skip", "Locked": true },
+            "MJ: Audit Logs": { "Policy": "Skip", "Locked": true },
+            "MJ: Record Changes": { "Policy": "Skip", "Locked": true },
+            "MJ: User Routines": { "Policy": "Skip", "Locked": true },
+            "MJ: Conversations": { "Policy": "Skip", "Locked": true },
+            "MJ: Conversation Details": { "Policy": "Skip", "Locked": true },
+            "MJ: Dashboards": { "Policy": "Skip", "Locked": true },
+            "MJ: Lists": { "Policy": "Skip", "Locked": true },
+            "MJ: Templates": { "Policy": "Skip", "Locked": true },
+            "MJ: Queries": { "Policy": "Skip", "Locked": true },
+            "MJ: Workspaces": { "Policy": "Skip", "Locked": true },
+            "MJ: Reports": { "Policy": "Skip", "Locked": true },
+            "MJ: AI Agent Notes": { "Policy": "Skip", "Locked": true },
+            "MJ: AI Agent Requests": { "Policy": "Skip", "Locked": true },
+            "MJ: AI Agent Examples": { "Policy": "Skip", "Locked": true },
+            "MJ: Test Runs": { "Policy": "Skip", "Locked": true },
+            "MJ: Scheduled Jobs": { "Policy": "Skip", "Locked": true }
+          },
+          "Descendants": {
+            "MJ: User Applications": {
+              "Fields": {
+                "Copy": ["Sequence", "IsActive"]
+              }
+            }
+          },
+          "Hooks": {
+            "EntityActions": "suppress"
+          },
+          "Presets": [
+            {
+              "Key": "with-views",
+              "Label": "Include saved views",
+              "Options": {
+                "MaxDepth": 2
+              }
+            }
+          ],
+          "UI": {
+            "Label": "Clone user",
+            "Icon": "fa-solid fa-user-plus",
+            "ConfirmationMessage": "The new user is created inactive and must be activated after review."
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Users"
+    }
+  },
+  {
+    "_comments": [
+      "Cloning configuration for MJ: AI Prompts — deep clone of owned template and prompt models while skipping runs and cache."
+    ],
+    "fields": {
+      "Name": "MJ: AI Prompts",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 3,
+          "Naming": {
+            "Template": "{Name} (copy)",
+            "Strategy": "suffix"
+          },
+          "Fields": {
+            "Reset": {
+              "Status": "Pending"
+            }
+          },
+          "Relationships": {
+            "MJ: Templates": { "Policy": "Deep", "Locked": true },
+            "MJ: AI Prompt Models": { "Policy": "Deep" },
+            "MJ: AI Prompt Runs": { "Policy": "Skip", "Locked": true },
+            "MJ: AI Result Cache": { "Policy": "Skip", "Locked": true }
+          },
+          "Descendants": {
+            "MJ: Templates": {
+              "Fields": {
+                "Ownership": ["UserID"],
+                "Reset": {
+                  "ActiveAt": null,
+                  "DisabledAt": null
+                }
+              },
+              "Naming": {
+                "Template": "{Name} (copy)"
+              }
+            },
+            "MJ: Template Contents": {
+              "Fields": {
+                "Copy": ["TypeID", "TemplateText", "Priority", "IsActive"]
+              }
+            }
+          },
+          "UI": {
+            "Label": "Clone prompt",
+            "Icon": "fa-solid fa-clone"
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompts"
+    }
+  },
+  {
+    "_comments": [
+      "Cloning configuration for MJ: Templates — clone template standalone with its contents and template-level params."
+    ],
+    "fields": {
+      "Name": "MJ: Templates",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "Fields": {
+            "Ownership": ["UserID"]
+          },
+          "Naming": {
+            "Template": "{Name} (copy)",
+            "Strategy": "suffix"
+          },
+          "Relationships": {
+            "MJ: Template Contents": { "Policy": "Deep" },
+            "MJ: Template Params": { "Policy": "Deep" }
+          },
+          "UI": {
+            "Label": "Clone template",
+            "Icon": "fa-solid fa-file-lines"
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Templates"
+    }
+  },
+  {
+    "_comments": [
+      "Cloning configuration for MJ: AI Agents — fork an agent, including its sub-agent tree, steps, paths, and configurations."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agents",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 4,
+          "MaxRecords": 1000,
+          "Hierarchy": "subtree",
+          "Naming": {
+            "Template": "{Name} (copy)",
+            "Strategy": "suffix"
+          },
+          "Fields": {
+            "Ownership": ["OwnerUserID"],
+            "Reset": {
+              "Status": "Pending"
+            },
+            "JsonRemap": [
+              {
+                "Field": "RerankerConfiguration",
+                "Path": "$.rerankPromptId",
+                "EntityName": "MJ: AI Prompts"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: AI Agents": { "Policy": "Deep" },
+            "MJ: AI Agent Prompts": { "Policy": "Deep" },
+            "MJ: AI Agent Actions": { "Policy": "Deep" },
+            "MJ: AI Agent Steps": { "Policy": "Deep" },
+            "MJ: AI Agent Step Paths": { "Policy": "Deep" },
+            "MJ: AI Agent Relationships": { "Policy": "Deep" },
+            "MJ: AI Agent Artifact Types": { "Policy": "Deep" },
+            "MJ: AI Agent Skills": { "Policy": "Deep" },
+            "MJ: AI Agent Models": { "Policy": "Deep" },
+            "MJ: AI Agent Modalities": { "Policy": "Deep" },
+            "MJ: AI Agent Search Scopes": { "Policy": "Deep" },
+            "MJ: AI Agent Client Tools": { "Policy": "Deep" },
+            "MJ: AI Agent Credentials": { "Policy": "Deep" },
+            "MJ: AI Agent Channels": { "Policy": "Deep" },
+            "MJ: AI Agent Personas": { "Policy": "Deep" },
+            "MJ: AI Agent Harnesses": { "Policy": "Deep" },
+            "MJ: AI Agent Co Agents": { "Policy": "Deep" },
+            "MJ: AI Agent Data Sources": { "Policy": "Deep" },
+            "MJ: AI Agent Configurations": { "Policy": "Deep" },
+            "MJ: AI Agent Permissions": { "Policy": "Skip" },
+            "MJ: AI Agent Notes": { "Policy": "Skip", "Locked": true },
+            "MJ: AI Agent Examples": { "Policy": "Skip", "Locked": true },
+            "MJ: AI Agent Learning Cycles": { "Policy": "Skip", "Locked": true },
+            "MJ: AI Agent Runs": { "Policy": "Skip", "Locked": true }
+          },
+          "Presets": {
+            "deep-prompts": {
+              "Description": "Deep-clone associated AI prompts rather than referencing them",
+              "Relationships": {
+                "MJ: AI Prompts": { "Policy": "Deep" }
+              }
+            },
+            "with-permissions": {
+              "Description": "Clone agent permissions along with the agent",
+              "Relationships": {
+                "MJ: AI Agent Permissions": { "Policy": "Deep" }
+              }
+            }
+          },
+          "Hooks": {
+            "EntityActions": "suppress"
+          },
+          "UI": {
+            "Label": "Clone agent",
+            "Icon": "fa-solid fa-robot"
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: AI Agent Notes is learned memory with embeddings — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Notes",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Learned memory with embeddings"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Notes"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: AI Agent Examples is learned memory with embeddings — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Examples",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Learned memory with embeddings"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Examples"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: AI Agent Learning Cycles is learned memory — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Learning Cycles",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Learned memory with embeddings"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Learning Cycles"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: AI Agent Runs is runtime execution history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Runs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime execution history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Actions clone configuration (Phase 4.4, IT94 RC8 and IT95 RCU5)"
+    ],
+    "fields": {
+      "Name": "MJ: Actions",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 4,
+          "MaxRecords": 1000,
+          "Hierarchy": "subtree",
+          "Naming": {
+            "Strategy": "suffix",
+            "Template": "{Name} (copy)"
+          },
+          "Fields": {
+            "Reset": {
+              "Status": "Pending",
+              "CodeApprovalStatus": "Pending",
+              "CodeApprovedByUserID": null,
+              "CodeApprovedAt": null,
+              "CreatedByAgentID": null,
+              "ForceCodeGeneration": false
+            },
+            "UniqueKeys": [
+              {
+                "Fields": [
+                  "Name",
+                  "CategoryID",
+                  "ParentID"
+                ],
+                "Scope": "Global"
+              }
+            ],
+            "JsonRemap": [
+              {
+                "Field": "RuntimeActionConfiguration",
+                "Rules": [
+                  {
+                    "Path": "allowedEntities[*].id",
+                    "Mode": "remap",
+                    "OnMissing": "reuse"
+                  },
+                  {
+                    "Path": "allowedActions[*].id",
+                    "Mode": "remap",
+                    "OnMissing": "reuse"
+                  },
+                  {
+                    "Path": "allowedAgents[*].id",
+                    "Mode": "remap",
+                    "OnMissing": "reuse"
+                  }
+                ]
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Action Params": {
+              "Policy": "Deep"
+            },
+            "MJ: Action Result Codes": {
+              "Policy": "Deep"
+            },
+            "MJ: Action Libraries": {
+              "Policy": "Deep"
+            },
+            "MJ: Action Authorizations": {
+              "Policy": "Deep"
+            },
+            "MJ: Action Contexts": {
+              "Policy": "Deep"
+            },
+            "MJ: Action Filters": {
+              "Policy": "Deep"
+            },
+            "MJ: Action Categories": {
+              "Policy": "Reference"
+            },
+            "MJ: Actions": {
+              "Policy": "Deep"
+            },
+            "MJ: Action Execution Logs": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Entity Actions": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: AI Agent Actions": {
+              "Policy": "Skip"
+            }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Queries clone configuration (Phase 4.4, IT95 RCU6)"
+    ],
+    "fields": {
+      "Name": "MJ: Queries",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 3,
+          "MaxRecords": 500,
+          "Naming": {
+            "Strategy": "suffix",
+            "Template": "{Name} (copy)"
+          },
+          "Fields": {
+            "Reset": {
+              "Status": "Pending",
+              "EmbeddingVector": null,
+              "EmbeddingModelID": null,
+              "Feedback": null,
+              "IsMaterialized": false
+            },
+            "UniqueKeys": [
+              {
+                "Fields": [
+                  "Name",
+                  "CategoryID"
+                ],
+                "Scope": "Parent",
+                "ScopeField": "CategoryID"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Query SQLs": {
+              "Policy": "Deep"
+            },
+            "MJ: Query Permissions": {
+              "Policy": "Deep"
+            },
+            "MJ: Query Categories": {
+              "Policy": "Reference"
+            },
+            "MJ: Query Dependencies": {
+              "Policy": "Skip"
+            },
+            "MJ: Query Fields": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Query Parameters": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Query Entities": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Materialized Result Queries": {
+              "Policy": "Skip"
+            }
+          },
+          "Hooks": {
+            "ServerGeneratedChildren": [
+              "MJ: Query Fields",
+              "MJ: Query Parameters",
+              "MJ: Query Entities"
+            ]
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Queries"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Scheduled Jobs clone configuration (Phase 4.4, IT95 RCU7)"
+    ],
+    "fields": {
+      "Name": "MJ: Scheduled Jobs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 2,
+          "MaxRecords": 100,
+          "Naming": {
+            "Strategy": "suffix",
+            "Template": "{Name} (copy)"
+          },
+          "Fields": {
+            "Reset": {
+              "Status": "Pending",
+              "LastRunAt": null,
+              "NextRunAt": null,
+              "RunCount": 0,
+              "SuccessCount": 0,
+              "FailureCount": 0,
+              "LockToken": null,
+              "LockedAt": null,
+              "LockedByInstance": null,
+              "ExpectedCompletionAt": null,
+              "StartAt": null,
+              "EndAt": null
+            },
+            "UniqueKeys": [
+              {
+                "Fields": [
+                  "Name"
+                ],
+                "Scope": "Global"
+              }
+            ],
+            "JsonRemap": [
+              {
+                "Field": "Configuration",
+                "Preset": "scheduled-job-configuration"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Scheduled Job Runs": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Scheduled Job Types": {
+              "Policy": "Reference"
+            }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Scheduled Jobs"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Action Execution Logs is runtime execution logs — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Action Execution Logs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime execution logs"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Scheduled Job Runs is runtime execution history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Scheduled Job Runs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime execution history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Scheduled Job Runs"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Query Dependencies is a generated dependency graph — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Query Dependencies",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Generated dependency graph"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Query Dependencies"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Dashboards clone configuration (Phase 4.5, IT95 RCU8)"
+    ],
+    "fields": {
+      "Name": "MJ: Dashboards",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 2,
+          "MaxRecords": 100,
+          "Naming": {
+            "Strategy": "suffix",
+            "Template": "{Name} (copy)"
+          },
+          "Fields": {
+            "Ownership": [
+              "UserID"
+            ],
+            "Reset": {
+              "Thumbnail": null
+            },
+            "UniqueKeys": [
+              {
+                "Fields": [
+                  "Name",
+                  "UserID"
+                ],
+                "Scope": "Global"
+              }
+            ],
+            "JsonRemap": [
+              {
+                "Field": "UIConfigDetails",
+                "Preset": "dashboard-ui-config"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Dashboard Categories": {
+              "Policy": "Reference"
+            },
+            "MJ: Dashboard Permissions": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Dashboard Category Links": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Dashboard User Preferences": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Dashboard User States": {
+              "Policy": "Skip",
+              "Locked": true
+            }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Dashboards"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: User Views clone configuration (Phase 4.5, IT95 RCU9)"
+    ],
+    "fields": {
+      "Name": "MJ: User Views",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 1,
+          "MaxRecords": 100,
+          "Naming": {
+            "Strategy": "suffix",
+            "Template": "{Name} (copy)"
+          },
+          "Fields": {
+            "Ownership": [
+              "UserID"
+            ],
+            "Reset": {
+              "IsShared": false,
+              "IsDefault": false,
+              "SmartFilterWhereClause": null,
+              "SmartFilterExplanation": null
+            },
+            "UniqueKeys": [
+              {
+                "Fields": [
+                  "Name"
+                ],
+                "Scope": "Parent",
+                "ScopeField": "UserID"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: User View Categories": {
+              "Policy": "Reference"
+            },
+            "MJ: User View Runs": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: User View Run Details": {
+              "Policy": "Skip",
+              "Locked": true
+            }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Views"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Lists clone configuration (Phase 4.5, IT95 RCU10)"
+    ],
+    "fields": {
+      "Name": "MJ: Lists",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 2,
+          "MaxRecords": 1000,
+          "Naming": {
+            "Strategy": "suffix",
+            "Template": "{Name} (copy)"
+          },
+          "Fields": {
+            "Ownership": [
+              "UserID"
+            ],
+            "Reset": {
+              "ExternalSystemRecordID": null,
+              "CompanyIntegrationID": null
+            },
+            "UniqueKeys": [
+              {
+                "Fields": [
+                  "Name",
+                  "UserID"
+                ],
+                "Scope": "Global"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: List Details": {
+              "Policy": "Deep"
+            },
+            "MJ: List Categories": {
+              "Policy": "Reference"
+            },
+            "MJ: List Shares": {
+              "Policy": "Skip",
+              "Locked": true
+            }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Lists"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: List Details clone configuration (Phase 4.5, child of MJ: Lists)"
+    ],
+    "fields": {
+      "Name": "MJ: List Details",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 1,
+          "MaxRecords": 1000,
+          "Fields": {
+            "Reset": {
+              "Status": "Pending"
+            }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: List Details"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Themes clone configuration (Phase 4.5, IT95 RCU11)"
+    ],
+    "fields": {
+      "Name": "MJ: Themes",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 1,
+          "MaxRecords": 10,
+          "Naming": {
+            "Strategy": "suffix",
+            "Template": "{Name} (copy)"
+          },
+          "Fields": {
+            "Reset": {
+              "IsDefault": false
+            },
+            "UniqueKeys": [
+              {
+                "Fields": [
+                  "Name"
+                ],
+                "Scope": "Global"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Themes"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Data Contexts clone configuration (Phase 4.5, IT95 RCU12)"
+    ],
+    "fields": {
+      "Name": "MJ: Data Contexts",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 2,
+          "MaxRecords": 500,
+          "Naming": {
+            "Strategy": "suffix",
+            "Template": "{Name} (copy)"
+          },
+          "Fields": {
+            "Ownership": [
+              "UserID"
+            ],
+            "Reset": {
+              "LastRefreshedAt": null
+            },
+            "UniqueKeys": [
+              {
+                "Fields": [
+                  "Name",
+                  "UserID"
+                ],
+                "Scope": "Global"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Data Context Items": {
+              "Policy": "Deep"
+            }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Data Contexts"
+    }
+  },
+  {
+    "_comments": [
+      "MJ: Data Context Items clone configuration (Phase 4.5, child of MJ: Data Contexts)"
+    ],
+    "fields": {
+      "Name": "MJ: Data Context Items",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "MaxDepth": 1,
+          "MaxRecords": 500,
+          "Fields": {
+            "Reset": {
+              "LastRefreshedAt": null
+            }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Data Context Items"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Dashboard User Preferences is per-user UI preference — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Dashboard User Preferences",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Per-user UI preference"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Dashboard User Preferences"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Dashboard User States is per-user UI state — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Dashboard User States",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Per-user UI state"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Dashboard User States"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: User View Runs is runtime execution history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: User View Runs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime execution history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User View Runs"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: User View Run Details is runtime execution history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: User View Run Details",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime execution history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User View Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "RCU13: MJ: Applications — Application shell duplication with child entities and settings."
+    ],
+    "fields": {
+      "Name": "MJ: Applications",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "Naming": {
+            "Template": "{Name} (copy)",
+            "Strategy": "suffix"
+          },
+          "Fields": {
+            "Reset": {
+              "DefaultForNewUser": false,
+              "Status": "Draft"
+            },
+            "ServerAllocated": ["Path"],
+            "UniqueKeys": [
+              {
+                "Fields": ["Name"],
+                "Scope": "Global"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Application Entities": { "Policy": "Deep" },
+            "MJ: Application Settings": { "Policy": "Deep" },
+            "MJ: Application Roles": { "Policy": "Deep" },
+            "MJ: User Applications": { "Policy": "Skip", "Locked": true },
+            "MJ: Dashboards": { "Policy": "Skip", "Locked": true },
+            "MJ: Conversations": { "Policy": "Skip", "Locked": true },
+            "MJ: Magic Link Invites": { "Policy": "Skip", "Locked": true }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Applications"
+    }
+  },
+  {
+    "_comments": [
+      "RCU13 Child: MJ: Application Entities — Deep cloned with Application."
+    ],
+    "fields": {
+      "Name": "MJ: Application Entities",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "Fields": {
+            "UniqueKeys": [
+              {
+                "Fields": ["ApplicationID", "EntityID"],
+                "Scope": "Parent"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Entities": { "Policy": "Reference" }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Application Entities"
+    }
+  },
+  {
+    "_comments": [
+      "RCU13 Child: MJ: Application Settings — Deep cloned with Application."
+    ],
+    "fields": {
+      "Name": "MJ: Application Settings",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "Fields": {
+            "UniqueKeys": [
+              {
+                "Fields": ["ApplicationID", "Name"],
+                "Scope": "Parent"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Application Settings"
+    }
+  },
+  {
+    "_comments": [
+      "RCU14: MJ: Roles — Pure policy set duplication without copying user memberships."
+    ],
+    "fields": {
+      "Name": "MJ: Roles",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "RequiredUserType": "Owner",
+          "Naming": {
+            "Template": "{Name} (copy)",
+            "Strategy": "suffix"
+          },
+          "Fields": {
+            "Reset": {
+              "DirectoryID": null
+            },
+            "ServerAllocated": ["SQLName"],
+            "UniqueKeys": [
+              {
+                "Fields": ["Name"],
+                "Scope": "Global"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Entity Permissions": { "Policy": "Deep" },
+            "MJ: Query Permissions": { "Policy": "Deep" },
+            "MJ: Authorization Roles": { "Policy": "Deep" },
+            "MJ: Application Roles": { "Policy": "Deep" },
+            "MJ: Entity Field Permissions": { "Policy": "Deep" },
+            "MJ: AI Agent Permissions": { "Policy": "Deep" },
+            "MJ: AI Skill Permissions": { "Policy": "Deep" },
+            "MJ: Search Scope Permissions": { "Policy": "Deep" },
+            "MJ: File Storage Account Permissions": { "Policy": "Deep" },
+            "MJ: MCP Server Connection Permissions": { "Policy": "Deep" },
+            "MJ: Resource Permissions": { "Policy": "Deep" },
+            "MJ: User Roles": { "Policy": "Skip", "Locked": true },
+            "MJ: Employee Roles": { "Policy": "Skip", "Locked": true },
+            "MJ: Magic Link Invite Roles": { "Policy": "Skip", "Locked": true }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Roles"
+    }
+  },
+  {
+    "_comments": [
+      "RCU15: MJ: Components — Clones UI components, resets status to Draft, clears vectors and registry sync timestamps."
+    ],
+    "fields": {
+      "Name": "MJ: Components",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "Naming": {
+            "Template": "{Name} (copy)",
+            "Strategy": "suffix"
+          },
+          "Fields": {
+            "Reset": {
+              "Status": "Draft",
+              "FunctionalRequirementsVector": null,
+              "TechnicalDesignVector": null,
+              "FunctionalRequirementsVectorEmbeddingModelID": null,
+              "TechnicalDesignVectorEmbeddingModelID": null,
+              "SourceRegistryID": null,
+              "ReplicatedAt": null,
+              "LastSyncedAt": null
+            },
+            "UniqueKeys": [
+              {
+                "Fields": ["Name"],
+                "Scope": "Global"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Component Dependencies": { "Policy": "Deep" },
+            "MJ: Component Library Links": { "Policy": "Deep" },
+            "MJ: Component Registries": { "Policy": "Reference" }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Components"
+    }
+  },
+  {
+    "_comments": [
+      "RCU15 Child: MJ: Component Dependencies — Cloned under component."
+    ],
+    "fields": {
+      "Name": "MJ: Component Dependencies",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "Fields": {
+            "UniqueKeys": [
+              {
+                "Fields": ["ComponentID", "DependencyComponentID"],
+                "Scope": "Parent"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Components": { "Policy": "Reference" }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Component Dependencies"
+    }
+  },
+  {
+    "_comments": [
+      "RCU15 Child: MJ: Component Library Links — Cloned under component."
+    ],
+    "fields": {
+      "Name": "MJ: Component Library Links",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "Fields": {
+            "UniqueKeys": [
+              {
+                "Fields": ["ComponentID", "LibraryName"],
+                "Scope": "Parent"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Component Library Links"
+    }
+  },
+  {
+    "_comments": [
+      "RCU16: MJ: Record Processes — Business logic process definitions, reset to Draft, skip run history and watermarks."
+    ],
+    "fields": {
+      "Name": "MJ: Record Processes",
+      "Configuration": {
+        "Clone": {
+          "Enabled": true,
+          "Naming": {
+            "Template": "{Name} (copy)",
+            "Strategy": "suffix"
+          },
+          "Fields": {
+            "Reset": {
+              "Status": "Draft"
+            },
+            "UniqueKeys": [
+              {
+                "Fields": ["Name"],
+                "Scope": "Global"
+              }
+            ]
+          },
+          "Relationships": {
+            "MJ: Entities": { "Policy": "Reference" },
+            "MJ: Actions": { "Policy": "Reference" },
+            "MJ: AI Agents": { "Policy": "Reference" },
+            "MJ: AI Prompts": { "Policy": "Reference" },
+            "MJ: Process Runs": { "Policy": "Skip", "Locked": true },
+            "MJ: Process Run Details": { "Policy": "Skip", "Locked": true },
+            "MJ: Record Process Watermarks": { "Policy": "Skip", "Locked": true }
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Processes"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Process Runs is runtime execution history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Process Runs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime execution history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Process Runs"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Process Run Details is runtime execution history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Process Run Details",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime execution history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Process Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Record Process Watermarks is runtime cursor state — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Record Process Watermarks",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime execution watermark"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Process Watermarks"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: User Applications is user-specific app enrollment — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: User Applications",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Per-user application enrollment"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Applications"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: User Roles is user membership — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: User Roles",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "User role membership"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Roles"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Employee Roles is employee membership — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Employee Roles",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Employee role membership"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Employee Roles"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Magic Link Invite Roles is invitation membership — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Magic Link Invite Roles",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Invitation role membership"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Roles"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Entities is database schema metadata managed by CodeGen — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Entities",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Database schema metadata managed by CodeGen"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entities"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Entity Fields is database schema metadata managed by CodeGen — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Entity Fields",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Database schema metadata managed by CodeGen"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Fields"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Entity Relationships is database schema metadata managed by CodeGen — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Entity Relationships",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Database schema metadata managed by CodeGen"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Relationships"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Entity Field Values is database schema metadata managed by CodeGen — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Entity Field Values",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Database schema metadata managed by CodeGen"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Field Values"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Record Changes is immutable audit history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Record Changes",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Immutable audit history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Changes"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Audit Logs is immutable audit history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Audit Logs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Immutable audit history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Audit Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Error Logs is immutable diagnostic history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Error Logs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Immutable diagnostic history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Error Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: User Record Logs is immutable audit history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: User Record Logs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Immutable audit history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Record Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Record Merge Logs is immutable history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Record Merge Logs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Immutable merge history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Record Merge Deletion Logs is immutable history — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Record Merge Deletion Logs",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Immutable merge history"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Deletion Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Tasks is runtime task execution — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Tasks",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime task execution"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tasks"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Task Dependencies is runtime task execution — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Task Dependencies",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime task execution"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Task Dependencies"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: API Keys contains credentials and secrets — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: API Keys",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Secrets and credentials"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: API Keys"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Credentials contains secrets — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Credentials",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Secrets and credentials"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Credentials"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Encryption Keys contains secrets — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Encryption Keys",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Secrets and credentials"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Encryption Keys"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: OAuth Tokens contains secrets — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: OAuth Tokens",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Secrets and credentials"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: OAuth Tokens"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Magic Link Invites contains secrets — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Magic Link Invites",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Secrets and credentials"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invites"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Conversations is interactive user transcripts — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Conversations",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Interactive transcripts"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: Conversation Details is interactive user transcripts — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: Conversation Details",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Interactive transcripts"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Details"
+    }
+  }
+]

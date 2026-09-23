@@ -1,0 +1,130 @@
+[
+  {
+    "fields": {
+      "Name": "Record Cloning",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Root authorization for all record cloning operations. Users or roles must hold this authorization (or a descendant) to plan or execute record clones."
+    },
+    "primaryKey": {
+      "ID": "AF418D76-E145-4FFC-838A-9EB75689AB7F"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:51.161Z",
+      "checksum": "ddbd26dcb74ccfb90bcab7b08a27d21f6cb4104d89767b104efffaf029d1b45f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Record Cloning",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to execute record clone operations. Evaluated with ancestors; holders pass all schema-level checks unless explicitly restricted."
+    },
+    "primaryKey": {
+      "ID": "4D3F6622-86E4-4165-BF6D-8CDBC31585C7"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:51.181Z",
+      "checksum": "d34549a937f1f0bf54733d4e4378fc8090ddc2267970b98878a0a49d57c57a61"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records in Platform Schema",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Clone Records",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Permits cloning records belonging to core platform entities in the __mj schema."
+    },
+    "primaryKey": {
+      "ID": "4E72DAB8-0974-4BB3-9A52-43758FE0171D"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:51.223Z",
+      "checksum": "53cc1afbbf5fcf3d3b0040baba85b9c51e2dbafb95d60d5db57b01fd3e2dfb33"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records in Custom Schemas",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Clone Records",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Permits cloning records belonging to entities in custom/application schemas."
+    },
+    "primaryKey": {
+      "ID": "6DF9D1FE-1142-4952-83D5-FF6C23D835F8"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:51.221Z",
+      "checksum": "efc2afd8eeefe49b3d1c481c41777fc00891b6188ab6cf8ec1d214f10d1e3b78"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records: Fire Hooks",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Clone Records",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Permits overriding the default hook suppression policy to fire Entity Actions and AI Actions during clone save operations."
+    },
+    "primaryKey": {
+      "ID": "50B8A92E-6287-48DA-AC9B-87E0FEE52B7B"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:51.213Z",
+      "checksum": "c4942cbfdbdc25017ddafa4d43947cc4909d00c59df4f045fcd303e133c138d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records: Batch",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Clone Records",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Permits batch cloning operations across multiple records via the grid multi-select or Record Processes."
+    },
+    "primaryKey": {
+      "ID": "28640F1A-2D0F-4386-8F9E-CB11159E7709"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:51.221Z",
+      "checksum": "f35c8ccc4413be55cbb71750d0beb6aa8df401b57ea200f2de34cb078cf24bdc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Record Changes: Annotate",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Permits updating the Comments column on existing RecordChange rows to annotate history and explain past edits."
+    },
+    "primaryKey": {
+      "ID": "DCD5C54B-4E1F-45EE-B5AC-1AB54044DC00"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:51.152Z",
+      "checksum": "a941a6f341fd1a936655562f32d3f0d454e7171b9cc7e29b33e0b34c0ddd0c18"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manage Authorizations",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Root authorization for managing the authorization hierarchy, role mappings, and security policies."
+    },
+    "primaryKey": {
+      "ID": "7A2CED86-A774-46D4-B3E6-67501BCC48A5"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T00:07:51.162Z",
+      "checksum": "373a2deba232f566d913aa5cc9fa10e6e35cc3b6eb223c391f926bb554c3f224"
+    }
+  }
+]

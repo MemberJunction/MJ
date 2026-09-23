@@ -816,5 +816,97 @@
       "lastModified": "2026-09-03T17:21:12.659Z",
       "checksum": "b294b54f1ae52cd124495dea88232bfa2aab0bf7f11731a69d40b5dcf1eb82ab"
     }
+  },
+  {
+    "fields": {
+      "Name": "Describe Record Clone",
+      "OperationKey": "RecordClone.Describe",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Cloning",
+      "Description": "Inspect an entity or specific record for clone capability, policies, relationship policies, and authorization. Implemented by RecordCloneDescribeServerOperation in @memberjunction/record-cloning.",
+      "InputTypeName": "RecordCloneDescribeInput",
+      "InputTypeDefinition": "@file:types/record-clone-describe.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "RecordCloneDescribeOutput",
+      "OutputTypeDefinition": "@file:types/record-clone-describe.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "recordclone:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C41E8D91-766A-4FE4-A3D4-2D91B24B35E1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Plan Record Clone",
+      "OperationKey": "RecordClone.Plan",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Cloning",
+      "Description": "Plan a deterministic record clone graph traversal with pre-minted target keys and field transformations. Implemented by RecordClonePlanServerOperation in @memberjunction/record-cloning.",
+      "InputTypeName": "RecordClonePlanInput",
+      "InputTypeDefinition": "@file:types/record-clone-plan.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "RecordClonePlanOutput",
+      "OutputTypeDefinition": "@file:types/record-clone-plan.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "recordclone:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C41E8D92-766A-4FE4-A3D4-2D91B24B35E2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Execute Record Clone",
+      "OperationKey": "RecordClone.Execute",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Cloning",
+      "Description": "Execute an entity record clone plan within an entity transaction, staging entities and writing clone logs and links. Implemented by RecordCloneExecuteServerOperation in @memberjunction/record-cloning.",
+      "InputTypeName": "RecordCloneExecuteInput",
+      "InputTypeDefinition": "@file:types/record-clone-execute.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "RecordCloneExecuteOutput",
+      "OutputTypeDefinition": "@file:types/record-clone-execute.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "recordclone:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C41E8D93-766A-4FE4-A3D4-2D91B24B35E3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Record Clone Lineage",
+      "OperationKey": "RecordClone.GetLineage",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Cloning",
+      "Description": "Traverse record links and clone logs to return clone ancestors and descendants for a record. Implemented by RecordCloneGetLineageServerOperation in @memberjunction/record-cloning.",
+      "InputTypeName": "RecordCloneGetLineageInput",
+      "InputTypeDefinition": "@file:types/record-clone-get-lineage.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "RecordCloneGetLineageOutput",
+      "OutputTypeDefinition": "@file:types/record-clone-get-lineage.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "recordclone:read",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C41E8D94-766A-4FE4-A3D4-2D91B24B35E4"
+    }
   }
 ]

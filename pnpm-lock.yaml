@@ -2539,7 +2539,7 @@ importers:
         version: 3.0.7(@azure/identity@4.13.1)
       googleapis:
         specifier: ^144.0.0
-        version: 144.0.0
+        version: 144.0.0(encoding@0.1.13)
 
   packages/AI/RealtimeClient:
     dependencies:
@@ -3685,6 +3685,12 @@ importers:
       '@memberjunction/react-linter':
         specifier: 6.1.0
         version: link:../../React/linter
+      '@memberjunction/record-cloning':
+        specifier: 6.1.0
+        version: link:../../RecordCloning/engine
+      '@memberjunction/record-cloning-base':
+        specifier: 6.1.0
+        version: link:../../RecordCloning/base
       '@memberjunction/record-set-processor':
         specifier: 6.1.0
         version: link:../../RecordSetProcessor/engine
@@ -4058,6 +4064,9 @@ importers:
       '@memberjunction/ng-file-storage':
         specifier: 6.1.0
         version: link:../Generic/file-storage
+      '@memberjunction/ng-record-clone':
+        specifier: 6.1.0
+        version: link:../Generic/record-clone
       '@memberjunction/ng-shared':
         specifier: 6.1.0
         version: link:../Explorer/shared
@@ -8214,6 +8223,61 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/Angular/Generic/record-clone:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@memberjunction/core':
+        specifier: 6.1.0
+        version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0
+        version: link:../../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../../../MJGlobal
+      '@memberjunction/ng-base-forms':
+        specifier: 6.1.0
+        version: link:../base-forms
+      '@memberjunction/ng-base-types':
+        specifier: 6.1.0
+        version: link:../base-types
+      '@memberjunction/ng-deep-diff':
+        specifier: 6.1.0
+        version: link:../deep-diff
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.1.0
+        version: link:../shared
+      '@memberjunction/ng-ui-components':
+        specifier: 6.1.0
+        version: link:../ui-components
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.1.0
+        version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/Angular/Generic/record-merge:
     dependencies:
       '@angular/common':
@@ -11173,9 +11237,159 @@ importers:
       '@inquirer/prompts':
         specifier: ^8.2.0
         version: 8.2.0(@types/node@24.10.11)
+      '@memberjunction/actions':
+        specifier: 6.1.0
+        version: link:../Actions/Engine
+      '@memberjunction/actions-apollo':
+        specifier: 6.1.0
+        version: link:../Actions/ApolloEnrichment
+      '@memberjunction/actions-base':
+        specifier: 6.1.0
+        version: link:../Actions/Base
+      '@memberjunction/actions-bizapps-accounting':
+        specifier: 6.1.0
+        version: link:../Actions/BizApps/Accounting
+      '@memberjunction/actions-bizapps-crm':
+        specifier: 6.1.0
+        version: link:../Actions/BizApps/CRM
+      '@memberjunction/actions-bizapps-formbuilders':
+        specifier: 6.1.0
+        version: link:../Actions/BizApps/FormBuilders
+      '@memberjunction/actions-bizapps-lms':
+        specifier: 6.1.0
+        version: link:../Actions/BizApps/LMS
+      '@memberjunction/actions-bizapps-social':
+        specifier: 6.1.0
+        version: link:../Actions/BizApps/Social
+      '@memberjunction/ai-agent-harness':
+        specifier: 6.1.0
+        version: link:../AI/AgentHarness
+      '@memberjunction/ai-agent-manager':
+        specifier: 6.1.0
+        version: link:../AI/AgentManager/core
+      '@memberjunction/ai-agents':
+        specifier: 6.1.0
+        version: link:../AI/Agents
+      '@memberjunction/ai-anthropic':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Anthropic
+      '@memberjunction/ai-assemblyai':
+        specifier: 6.1.0
+        version: link:../AI/Providers/AssemblyAI
+      '@memberjunction/ai-azure':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Azure
+      '@memberjunction/ai-bedrock':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Bedrock
+      '@memberjunction/ai-betty-bot':
+        specifier: 6.1.0
+        version: link:../AI/Providers/BettyBot
+      '@memberjunction/ai-blackforestlabs':
+        specifier: 6.1.0
+        version: link:../AI/Providers/BlackForestLabs
+      '@memberjunction/ai-cerebras':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Cerebras
       '@memberjunction/ai-cli':
         specifier: 6.1.0
         version: link:../AI/AICLI
+      '@memberjunction/ai-cohere':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Cohere
+      '@memberjunction/ai-core-plus':
+        specifier: 6.1.0
+        version: link:../AI/CorePlus
+      '@memberjunction/ai-elevenlabs':
+        specifier: 6.1.0
+        version: link:../AI/Providers/ElevenLabs
+      '@memberjunction/ai-engine-base':
+        specifier: 6.1.0
+        version: link:../AI/BaseAIEngine
+      '@memberjunction/ai-fireworks':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Fireworks
+      '@memberjunction/ai-form-builder':
+        specifier: 6.1.0
+        version: link:../AI/FormBuilder/core
+      '@memberjunction/ai-gemini':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Gemini
+      '@memberjunction/ai-groq':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Groq
+      '@memberjunction/ai-heygen':
+        specifier: 6.1.0
+        version: link:../AI/Providers/HeyGen
+      '@memberjunction/ai-inception':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Inception
+      '@memberjunction/ai-inworld':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Inworld
+      '@memberjunction/ai-llamacpp':
+        specifier: 6.1.0
+        version: link:../AI/Providers/LlamaCpp
+      '@memberjunction/ai-lmstudio':
+        specifier: 6.1.0
+        version: link:../AI/Providers/LMStudio
+      '@memberjunction/ai-local-embeddings':
+        specifier: 6.1.0
+        version: link:../AI/Providers/LocalEmbeddings
+      '@memberjunction/ai-minimax':
+        specifier: 6.1.0
+        version: link:../AI/Providers/MiniMax
+      '@memberjunction/ai-mistral':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Mistral
+      '@memberjunction/ai-ollama':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Ollama
+      '@memberjunction/ai-openai':
+        specifier: 6.1.0
+        version: link:../AI/Providers/OpenAI
+      '@memberjunction/ai-openrouter':
+        specifier: 6.1.0
+        version: link:../AI/Providers/OpenRouter
+      '@memberjunction/ai-prompts':
+        specifier: 6.1.0
+        version: link:../AI/Prompts
+      '@memberjunction/ai-recommendations-rex':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Recommendations-Rex
+      '@memberjunction/ai-reranker':
+        specifier: 6.1.0
+        version: link:../AI/Reranker
+      '@memberjunction/ai-segmentation':
+        specifier: 6.1.0
+        version: link:../AI/Segmentation
+      '@memberjunction/ai-vector-dupe':
+        specifier: 6.1.0
+        version: link:../AI/Vectors/Dupe
+      '@memberjunction/ai-vectors-memory':
+        specifier: 6.1.0
+        version: link:../AI/Vectors/Memory
+      '@memberjunction/ai-vectors-pgvector':
+        specifier: 6.1.0
+        version: link:../AI/Vectors/Providers/pgvector
+      '@memberjunction/ai-vectors-pinecone':
+        specifier: 6.1.0
+        version: link:../AI/Vectors/Providers/Pinecone
+      '@memberjunction/ai-vectors-qdrant':
+        specifier: 6.1.0
+        version: link:../AI/Vectors/Providers/Qdrant
+      '@memberjunction/ai-vectors-sqlserver':
+        specifier: 6.1.0
+        version: link:../AI/Vectors/Providers/SQLServer
+      '@memberjunction/ai-vertex':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Vertex
+      '@memberjunction/ai-xai':
+        specifier: 6.1.0
+        version: link:../AI/Providers/xAI
+      '@memberjunction/ai-zhipu':
+        specifier: 6.1.0
+        version: link:../AI/Providers/Zhipu
       '@memberjunction/aiengine':
         specifier: 6.1.0
         version: link:../AI/Engine
@@ -11185,24 +11399,72 @@ importers:
       '@memberjunction/codegen-lib':
         specifier: 6.1.0
         version: link:../CodeGenLib
+      '@memberjunction/communication-types':
+        specifier: 6.1.0
+        version: link:../Communication/base-types
       '@memberjunction/config':
         specifier: 6.1.0
         version: link:../Config
+      '@memberjunction/content-autotagging':
+        specifier: 6.1.0
+        version: link:../ContentAutotagging
       '@memberjunction/core':
         specifier: 6.1.0
         version: link:../MJCore
+      '@memberjunction/core-actions':
+        specifier: 6.1.0
+        version: link:../Actions/CoreActions
       '@memberjunction/core-entities':
         specifier: 6.1.0
         version: link:../MJCoreEntities
+      '@memberjunction/core-entities-server':
+        specifier: 6.1.0
+        version: link:../MJCoreEntitiesServer
+      '@memberjunction/data-context-server':
+        specifier: 6.1.0
+        version: link:../MJDataContextServer
       '@memberjunction/db-auto-doc':
         specifier: 6.1.0
         version: link:../DBAutoDoc
+      '@memberjunction/doc-utils':
+        specifier: 6.1.0
+        version: link:../DocUtils
       '@memberjunction/dynamic-packages':
         specifier: 6.1.0
         version: link:../DynamicPackages
+      '@memberjunction/encryption':
+        specifier: 6.1.0
+        version: link:../Encryption
+      '@memberjunction/external-data-source-databricks':
+        specifier: 6.1.0
+        version: link:../ExternalDataSources/Providers/Databricks
+      '@memberjunction/external-data-source-mongodb':
+        specifier: 6.1.0
+        version: link:../ExternalDataSources/Providers/MongoDB
+      '@memberjunction/external-data-source-mysql':
+        specifier: 6.1.0
+        version: link:../ExternalDataSources/Providers/MySQL
+      '@memberjunction/external-data-source-oracle':
+        specifier: 6.1.0
+        version: link:../ExternalDataSources/Providers/Oracle
+      '@memberjunction/external-data-source-postgres':
+        specifier: 6.1.0
+        version: link:../ExternalDataSources/Providers/Postgres
+      '@memberjunction/external-data-source-snowflake':
+        specifier: 6.1.0
+        version: link:../ExternalDataSources/Providers/Snowflake
+      '@memberjunction/external-data-source-sqlserver':
+        specifier: 6.1.0
+        version: link:../ExternalDataSources/Providers/SQLServer
+      '@memberjunction/external-data-sources':
+        specifier: 6.1.0
+        version: link:../ExternalDataSources/Engine
       '@memberjunction/generic-database-provider':
         specifier: 6.1.0
         version: link:../GenericDatabaseProvider
+      '@memberjunction/geo-core':
+        specifier: 6.1.0
+        version: link:../geo/geo-core
       '@memberjunction/global':
         specifier: 6.1.0
         version: link:../MJGlobal
@@ -11215,9 +11477,36 @@ importers:
       '@memberjunction/open-app-engine':
         specifier: 6.1.0
         version: link:../OpenApp/Engine
+      '@memberjunction/predictive-studio':
+        specifier: 6.1.0
+        version: link:../AI/PredictiveStudio/Engine
       '@memberjunction/query-gen':
         specifier: 6.1.0
         version: link:../QueryGen
+      '@memberjunction/queue':
+        specifier: 6.1.0
+        version: link:../MJQueue
+      '@memberjunction/record-cloning':
+        specifier: 6.1.0
+        version: link:../RecordCloning/engine
+      '@memberjunction/record-comparison':
+        specifier: 6.1.0
+        version: link:../RecordComparison
+      '@memberjunction/record-set-processor':
+        specifier: 6.1.0
+        version: link:../RecordSetProcessor/engine
+      '@memberjunction/scheduling-actions':
+        specifier: 6.1.0
+        version: link:../Scheduling/actions
+      '@memberjunction/scheduling-engine':
+        specifier: 6.1.0
+        version: link:../Scheduling/engine
+      '@memberjunction/scheduling-engine-base':
+        specifier: 6.1.0
+        version: link:../Scheduling/base-engine
+      '@memberjunction/search-engine':
+        specifier: 6.1.0
+        version: link:../SearchEngine
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.1.0
         version: link:../ServerBootstrapLite
@@ -11242,9 +11531,27 @@ importers:
       '@memberjunction/standards':
         specifier: 6.1.0
         version: link:../Standards
+      '@memberjunction/storage':
+        specifier: 6.1.0
+        version: link:../MJStorage
+      '@memberjunction/tag-engine-base':
+        specifier: 6.1.0
+        version: link:../AI/Knowledge/TagEngineBase
+      '@memberjunction/task-graph':
+        specifier: 6.1.0
+        version: link:../TaskGraph
+      '@memberjunction/templates':
+        specifier: 6.1.0
+        version: link:../Templates/engine
       '@memberjunction/testing-cli':
         specifier: 6.1.0
         version: link:../TestingFramework/CLI
+      '@memberjunction/testing-engine':
+        specifier: 6.1.0
+        version: link:../TestingFramework/Engine
+      '@memberjunction/testing-integration':
+        specifier: 6.1.0
+        version: link:../TestingFramework/testing-integration
       '@oclif/core':
         specifier: ^3.27.0
         version: 3.27.0
@@ -12748,6 +13055,9 @@ importers:
       '@memberjunction/postgresql-dataprovider':
         specifier: 6.1.0
         version: link:../PostgreSQLDataProvider
+      '@memberjunction/record-graph':
+        specifier: 6.1.0
+        version: link:../RecordGraph
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.1.0
         version: link:../ServerBootstrapLite
@@ -13335,6 +13645,59 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/RecordCloning/base:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0
+        version: link:../../MJCore
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../../MJGlobal
+      '@memberjunction/record-graph':
+        specifier: 6.1.0
+        version: link:../../RecordGraph
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/RecordCloning/engine:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0
+        version: link:../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../../MJGlobal
+      '@memberjunction/record-cloning-base':
+        specifier: 6.1.0
+        version: link:../base
+      '@memberjunction/record-graph':
+        specifier: 6.1.0
+        version: link:../../RecordGraph
+      '@memberjunction/record-set-processor-base':
+        specifier: 6.1.0
+        version: link:../../RecordSetProcessor/base
+    devDependencies:
+      tsc-alias:
+        specifier: ^1.8.16
+        version: 1.8.16
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/RecordComparison:
     dependencies:
       '@memberjunction/core':
@@ -13343,6 +13706,22 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0
         version: link:../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../MJGlobal
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/RecordGraph:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0
+        version: link:../MJCore
       '@memberjunction/global':
         specifier: 6.1.0
         version: link:../MJGlobal
@@ -14095,6 +14474,12 @@ importers:
       '@memberjunction/react-linter':
         specifier: 6.1.0
         version: link:../React/linter
+      '@memberjunction/record-cloning':
+        specifier: 6.1.0
+        version: link:../RecordCloning/engine
+      '@memberjunction/record-cloning-base':
+        specifier: 6.1.0
+        version: link:../RecordCloning/base
       '@memberjunction/record-comparison':
         specifier: 6.1.0
         version: link:../RecordComparison
@@ -15010,6 +15395,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.1.0
         version: link:../MJGlobal
+      '@memberjunction/record-graph':
+        specifier: 6.1.0
+        version: link:../RecordGraph
     devDependencies:
       typescript:
         specifier: ^5.9.3
@@ -43658,7 +44046,7 @@ snapshots:
 
   google-logging-utils@1.1.3: {}
 
-  googleapis-common@7.2.0:
+  googleapis-common@7.2.0(encoding@0.1.13):
     dependencies:
       extend: 3.0.2
       gaxios: 6.7.1(encoding@0.1.13)
@@ -43681,10 +44069,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  googleapis@144.0.0:
+  googleapis@144.0.0(encoding@0.1.13):
     dependencies:
       google-auth-library: 9.15.1(encoding@0.1.13)
-      googleapis-common: 7.2.0
+      googleapis-common: 7.2.0(encoding@0.1.13)
     transitivePeerDependencies:
       - encoding
       - supports-color
