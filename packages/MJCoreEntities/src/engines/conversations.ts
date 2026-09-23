@@ -2479,10 +2479,23 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return true;
         }
 
-        // Projects: a DELETE needs only the id, and hydrating one would cost a read. A save that
-        // got this far has no row on the payload either, so there is nothing to merge regardless.
+        // Projects: a DELETE needs only the id. A SAVE genuinely uses the row — `EnvironmentID` and
+        // `IsArchived` are what decide whether the project stays in the list — so it has to be
+        // hydrated whenever we hold the project.
+        //
+        // The earlier reasoning here ("a save that got this far has nothing to merge regardless")
+        // was true of the MERGE and false of the branch beside it: without the row, `EnvironmentID`
+        // reads as absent, `inLoadedEnvironment` comes out false for any session that has loaded an
+        // environment, and the save REMOVES the project instead. That is precisely the cross-client
+        // case this change exists to serve, so it is gated like conversations are: when we do not
+        // hold the project the remote path does nothing anyway (the append branch below requires
+        // `event.baseEntity`), and the row would be fetched only to be discarded.
         if (normalizedName === 'mj: projects') {
-            return false;
+            if (effectiveType !== 'save') {
+                return false;
+            }
+            const id = this.eventRecordID(event, null);
+            return !!id && this._projects$.value.some(p => UUIDsEqual(p.ID, id));
         }
 
         if (normalizedName === 'mj: conversations') {
@@ -2661,9 +2674,33 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return true;
         }
 
-        // save — only track projects in the loaded environment; drop archived ones
-        const environmentId = data?.['EnvironmentID'] as string | undefined;
-        const isArchived = data?.['IsArchived'] === true;
+        // WITHOUT THE ROW WE KNOW NOTHING, and must not guess. Every field below would read as
+        // absent: `IsArchived` becomes false, which is harmless, but `EnvironmentID` becomes
+        // undefined — and "no environment" is indistinguishable from "moved to another one", so the
+        // branch that DROPS the project is the one that runs. Leaving it untouched is the only
+        // honest response to a row we do not have.
+        //
+        // `eventNeedsRow` is supposed to guarantee this never happens for a project we hold, but
+        // that contract is enforced by a comment and `strictNullChecks` is off in this package, so
+        // the guarantee is restated here where the damage would be done. Hydration can also simply
+        // fail: `ResolveEntityEventRow` returns null rather than throwing.
+        //
+        // KEEPING IT IS DELIBERATE EVEN WHEN THE ROW WAS WITHHELD ON PURPOSE. A null can mean the
+        // re-read was refused — the viewer may no longer read this project — or that it failed.
+        // The two are indistinguishable here, and they want opposite responses, so this takes the
+        // one whose wrong case is recoverable: a stale row in a sidebar is corrected by the next
+        // `LoadProjects`, whereas a project deleted from the UI on a transient read failure is
+        // gone until the user reloads and cannot be told why.
+        if (!data) {
+            return true;
+        }
+
+        // save — only track projects in the loaded environment; drop archived ones.
+        // No `?.` past the guard above: `data` is non-null here, and optional chaining would say
+        // otherwise. It is also what let `mergeDataOntoRecord(…, data)` accept a nullable argument
+        // without complaint, since `strictNullChecks` is off in this package.
+        const environmentId = data['EnvironmentID'] as string | undefined;
+        const isArchived = data['IsArchived'] === true;
         const inLoadedEnvironment =
             !this._lastProjectsEnvironmentId ||
             (environmentId != null && UUIDsEqual(environmentId, this._lastProjectsEnvironmentId));
