@@ -534,19 +534,48 @@ export class RunCodeGenBase {
       }
 
       startSpinner('Running system integrity checks...');
-      const integrityResults = await SystemIntegrityBase.RunIntegrityChecks(conn, true);
-      const integrityFailures = integrityResults.filter((r) => !r.Success);
-      if (integrityFailures.length > 0) {
-        failSpinner(`System integrity checks FAILED: ${integrityFailures.length} check(s) failed`);
-        pipelineSuccess = false;
-        for (const failure of integrityFailures) {
-          const msg = `Integrity check '${failure.Name}' failed: ${failure.Message}`;
-          logError(msg);
+      // Three outcomes, not two. `SystemIntegrityBase.ClassifyResults` owns the distinction and is
+      // unit-tested; this block only reports it. The third case is `none-ran`: `RunIntegrityChecks`
+      // runs only the checks whose `Enabled` is true, so it returns `[]` when they are configured
+      // off, and ticking green there is a green tick over nothing measured — the same defect as
+      // discarding the results, one line further along, and the likelier one, since turning a check
+      // off is the obvious way to quiet it.
+      const integrityOutcome = SystemIntegrityBase.ClassifyResults(
+        await SystemIntegrityBase.RunIntegrityChecks(conn, true),
+      );
+      switch (integrityOutcome.Kind) {
+        case 'none-ran': {
+          // A warning, not a failure: disabling the checks is a legitimate, deliberate
+          // configuration and failing on it would break every repo that has made that choice. The
+          // `reporter.note` is what carries it into the structured run report, which a spinner line
+          // does not reach.
+          const msg =
+            'No system integrity checks ran — integrityChecks.enabled / integrityChecks.entityFieldsSequenceCheck is false. Nothing was verified.';
+          warnSpinner(msg);
           reporter.note(msg);
-          this.commandFailures.push({ context: 'INTEGRITY_CHECK', message: msg });
+          break;
         }
-      } else {
-        succeedSpinner('System integrity checks completed');
+        case 'failed': {
+          // Name the failing checks in the spinner line rather than counting them: the spinner is
+          // what survives in non-verbose output, and a bare "2 check(s) failed" sends the reader
+          // back to the full log to learn which two.
+          failSpinner(
+            `System integrity checks FAILED: ${integrityOutcome.Failures.map((f) => f.Name).join(', ')}`,
+          );
+          pipelineSuccess = false;
+          for (const failure of integrityOutcome.Failures) {
+            const msg = `Integrity check '${failure.Name}' failed: ${failure.Message}`;
+            logError(msg);
+            reporter.note(msg);
+            this.commandFailures.push({ context: 'INTEGRITY_CHECK', message: msg });
+          }
+          break;
+        }
+        case 'passed':
+          succeedSpinner(
+            `System integrity checks completed (${integrityOutcome.Count} check${integrityOutcome.Count === 1 ? '' : 's'})`,
+          );
+          break;
       }
 
       const afterCommands = commands('AFTER');
