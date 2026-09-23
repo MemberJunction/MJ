@@ -15,3 +15,7 @@ export * from './runtime/types';
 export * from './runtime/outcomes';
 export * from './runtime/DeliveryExecution';
 export * from './runtime/ConsumerRuntime';
+export { InMemoryTransport, IN_MEMORY_TRANSPORT_CAPABILITIES } from './memory/InMemoryTransport';
+export type { InMemoryTransportOptions } from './memory/InMemoryTransport';
+export type { InMemoryDeliverySnapshot } from './memory/InMemoryStore';
+export { LEASE_EXPIRED_REASON, MAX_RESOLUTION_NOTE_LENGTH } from './memory/InMemoryStore';
