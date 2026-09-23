@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Option C: Visual Dataflow Canvas — Feature Pipeline Details</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      color-scheme: light;
+      --mj-color-brand-50: #e6f3f9;
+      --mj-color-brand-100: #b3dbed;
+      --mj-color-brand-200: #80c3e1;
+      --mj-color-brand-300: #4dabd5;
+      --mj-color-brand-400: #2699cc;
+      --mj-color-brand-500: #0076b6;
+      --mj-color-brand-600: #006aa3;
+      --mj-color-brand-900: #092340;
+
+      --mj-color-neutral-0: #ffffff;
+      --mj-color-neutral-50: #f8fafc;
+      --mj-color-neutral-100: #f1f5f9;
+      --mj-color-neutral-200: #e2e8f0;
+      --mj-color-neutral-300: #cbd5e1;
+      --mj-color-neutral-400: #94a3b8;
+      --mj-color-neutral-500: #64748b;
+      --mj-color-neutral-600: #475569;
+      --mj-color-neutral-700: #334155;
+      --mj-color-neutral-800: #1e293b;
+      --mj-color-neutral-900: #0f172a;
+
+      --mj-color-success-50: #f0fdf4;
+      --mj-color-success-500: #22c55e;
+      --mj-color-success-700: #15803d;
+
+      --mj-color-warning-50: #fffbeb;
+      --mj-color-warning-500: #f59e0b;
+
+      --mj-color-error-50: #fef2f2;
+      --mj-color-error-500: #ef4444;
+
+      --mj-bg-page: var(--mj-color-neutral-50);
+      --mj-bg-surface: var(--mj-color-neutral-0);
+      --mj-bg-surface-sunken: var(--mj-color-neutral-100);
+      --mj-bg-surface-hover: var(--mj-color-neutral-100);
+
+      --mj-text-primary: var(--mj-color-neutral-800);
+      --mj-text-secondary: var(--mj-color-neutral-600);
+      --mj-text-muted: var(--mj-color-neutral-500);
+      --mj-text-link: var(--mj-color-brand-500);
+
+      --mj-border-default: var(--mj-color-neutral-200);
+      --mj-border-subtle: var(--mj-color-neutral-100);
+
+      --mj-brand-primary: var(--mj-color-brand-500);
+      --mj-brand-primary-subtle: var(--mj-color-brand-50);
+
+      --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mj-font-family-mono: 'JetBrains Mono', monospace;
+
+      --mj-radius-sm: 4px;
+      --mj-radius-md: 8px;
+      --mj-radius-lg: 12px;
+      --mj-radius-full: 9999px;
+
+      --mj-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --mj-bg-page: var(--mj-color-neutral-900);
+      --mj-bg-surface: var(--mj-color-neutral-800);
+      --mj-bg-surface-sunken: var(--mj-color-neutral-950);
+      --mj-bg-surface-hover: var(--mj-color-neutral-700);
+
+      --mj-text-primary: var(--mj-color-neutral-100);
+      --mj-text-secondary: var(--mj-color-neutral-300);
+      --mj-text-muted: var(--mj-color-neutral-400);
+
+      --mj-border-default: var(--mj-color-neutral-700);
+      --mj-border-subtle: var(--mj-color-neutral-800);
+
+      --mj-brand-primary: var(--mj-color-brand-400);
+      --mj-brand-primary-subtle: rgba(77, 171, 213, 0.15);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--mj-font-family);
+      background-color: var(--mj-bg-page);
+      color: var(--mj-text-primary);
+      line-height: 1.5;
+      font-size: 0.875rem;
+    }
+
+    .thesis-banner {
+      background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+      color: #ffffff;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8125rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .thesis-badge {
+      background: #10b981;
+      color: #ffffff;
+      padding: 2px 8px;
+      border-radius: var(--mj-radius-sm);
+      font-weight: 700;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      margin-right: 12px;
+    }
+    .thesis-links a {
+      color: #a7f3d0;
+      text-decoration: none;
+      margin-left: 16px;
+      font-weight: 500;
+    }
+    .thesis-links a:hover {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+    .theme-toggle-btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #ffffff;
+      padding: 4px 10px;
+      border-radius: var(--mj-radius-sm);
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+
+    .mj-chrome-header {
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
+      height: 52px;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+    }
+    .mj-chrome-title {
+      font-weight: 600;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .mj-btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
+      border-radius: var(--mj-radius-sm); font-size: 0.8125rem; font-weight: 500;
+      cursor: pointer; transition: all 0.15s ease; border: 1px solid transparent;
+    }
+    .mj-btn-primary { background: var(--mj-brand-primary); color: #fff; }
+    .mj-btn-secondary { background: var(--mj-bg-surface-sunken); border-color: var(--mj-border-default); color: var(--mj-text-primary); }
+
+    .mj-form-layout {
+      display: flex;
+      min-height: calc(100vh - 95px);
+    }
+    .mj-nav-rail {
+      width: 220px;
+      background: var(--mj-bg-surface);
+      border-right: 1px solid var(--mj-border-default);
+      padding: 16px 0;
+      flex-shrink: 0;
+    }
+    .mj-rail-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+      color: var(--mj-text-secondary); font-size: 0.8125rem; cursor: pointer;
+      border-left: 3px solid transparent; text-decoration: none;
+    }
+    .mj-rail-item.active {
+      background: var(--mj-brand-primary-subtle);
+      color: var(--mj-brand-primary);
+      font-weight: 600;
+      border-left-color: var(--mj-brand-primary);
+    }
+
+    .mj-form-body {
+      flex: 1;
+      padding: 24px 32px;
+      overflow-y: auto;
+      max-width: 1200px;
+    }
+
+    /* Interactive Visual Dataflow Stepper */
+    .flow-canvas {
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-lg);
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      box-shadow: var(--mj-shadow-sm);
+    }
+    .flow-stepper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+    }
+    .flow-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      z-index: 2;
+    }
+    .flow-node {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--mj-radius-full);
+      background: var(--mj-bg-surface-sunken);
+      border: 2px solid var(--mj-border-default);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.125rem;
+      color: var(--mj-text-secondary);
+      transition: all 0.2s ease;
+    }
+    .flow-step:hover .flow-node {
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-brand-primary);
+    }
+    .flow-step.active .flow-node {
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
+      color: #ffffff;
+      box-shadow: 0 0 0 4px var(--mj-brand-primary-subtle);
+    }
+    .flow-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+    }
+    .flow-sub {
+      font-size: 0.6875rem;
+      color: var(--mj-text-muted);
+    }
+    .flow-connector {
+      flex: 1;
+      height: 2px;
+      background: var(--mj-border-default);
+      margin: 0 12px;
+      margin-top: -24px;
+      z-index: 1;
+    }
+
+    /* Cards */
+    .flow-detail-card {
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      margin-bottom: 20px;
+      padding: 20px;
+      box-shadow: var(--mj-shadow-sm);
+    }
+    .flow-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--mj-border-subtle);
+    }
+    .flow-card-title {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .code-preview {
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-sm);
+      padding: 12px 16px;
+      font-family: var(--mj-font-family-mono);
+      font-size: 0.8125rem;
+      color: var(--mj-text-primary);
+    }
+    .pill-chip {
+      display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
+      border-radius: var(--mj-radius-sm); font-size: 0.75rem; background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-secondary); border: 1px solid var(--mj-border-default);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =============================================================================
+       TOP THESIS BANNER
+       ============================================================================= -->
+  <div class="thesis-banner">
+    <div style="display:flex; align-items:center;">
+      <span class="thesis-badge">Option C</span>
+      <strong>Unified Visual Dataflow Canvas</strong>: Visual pipeline stage map from Entity Scope &rarr; Context SQL &rarr; Prompt Model &rarr; Feature Validation &rarr; Target Storage, with stage-jumping and live execution sandbox.
+    </div>
+    <div style="display:flex; align-items:center; gap: 12px;">
+      <button class="theme-toggle-btn" onclick="toggleTheme()">
+        <i class="fa-solid fa-moon"></i> Toggle Dark/Light
+      </button>
+      <div class="thesis-links">
+        <a href="option-a-structured-cards.html"><i class="fa-solid fa-arrow-left"></i> Option A (Cards)</a>
+        <a href="option-b-master-detail-inspector.html"><i class="fa-solid fa-arrow-left"></i> Option B (Inspector)</a>
+      </div>
+    </div>
+  </div>
+
+  <header class="mj-chrome-header">
+    <div class="mj-chrome-title">
+      <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--mj-brand-primary);"></i>
+      <span>Activity Tagging and Sentiment</span>
+      <span class="pill-chip" style="background:var(--mj-brand-primary-subtle); color:var(--mj-brand-primary); font-weight:600;">Infer Pipeline</span>
+    </div>
+    <div style="margin-left:auto; display:flex; gap:8px;">
+      <button class="mj-btn mj-btn-secondary"><i class="fa-solid fa-flask"></i> Test Run Pipeline</button>
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </header>
+
+  <div class="mj-form-layout">
+    <nav class="mj-nav-rail">
+      <div style="font-size:0.6875rem; font-weight:700; text-transform:uppercase; color:var(--mj-text-muted); padding:8px 16px 4px 16px;">Navigation</div>
+      <a class="mj-rail-item" href="#"><i class="fa-solid fa-gauge-high"></i> Overview &amp; Status</a>
+      <a class="mj-rail-item active" href="#"><i class="fa-solid fa-sliders"></i> Details</a>
+      <a class="mj-rail-item" href="#"><i class="fa-solid fa-wand-magic-sparkles"></i> Pipeline Configuration</a>
+      <a class="mj-rail-item" href="#"><i class="fa-solid fa-clock-rotate-left"></i> Prior Runs</a>
+    </nav>
+
+    <main class="mj-form-body">
+      <!-- Top Visual Stepper Flow -->
+      <div class="flow-canvas">
+        <div class="flow-stepper">
+          <!-- Step 1 -->
+          <div class="flow-step" onclick="scrollToStage('stage-scope')">
+            <div class="flow-node"><i class="fa-solid fa-filter"></i></div>
+            <div class="flow-label">1. Scope &amp; Target</div>
+            <div class="flow-sub">14.8k Activities</div>
+          </div>
+          <div class="flow-connector"></div>
+
+          <!-- Step 2 -->
+          <div class="flow-step" onclick="scrollToStage('stage-context')">
+            <div class="flow-node"><i class="fa-solid fa-database"></i></div>
+            <div class="flow-label">2. Context Query</div>
+            <div class="flow-sub">SQL Join vwPersons</div>
+          </div>
+          <div class="flow-connector"></div>
+
+          <!-- Step 3 -->
+          <div class="flow-step active" onclick="scrollToStage('stage-prompt')">
+            <div class="flow-node"><i class="fa-solid fa-brain"></i></div>
+            <div class="flow-label">3. AI Evaluation</div>
+            <div class="flow-sub">Claude 3.5 Sonnet</div>
+          </div>
+          <div class="flow-connector"></div>
+
+          <!-- Step 4 -->
+          <div class="flow-step" onclick="scrollToStage('stage-features')">
+            <div class="flow-node"><i class="fa-solid fa-table-cells"></i></div>
+            <div class="flow-label">4. Schema &amp; Storage</div>
+            <div class="flow-sub">2 Features Mapped</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 1 Details -->
+      <div id="stage-scope" class="flow-detail-card">
+        <div class="flow-card-head">
+          <div class="flow-card-title">
+            <i class="fa-solid fa-filter" style="color: var(--mj-brand-primary);"></i>
+            <span>Stage 1: Target Entity &amp; Scope Ingestion</span>
+          </div>
+          <span class="pill-chip">Target: Activities</span>
+        </div>
+        <div style="font-size:0.8125rem; margin-bottom:8px;">Scope Filter (SQL WHERE Clause):</div>
+        <div class="code-preview">
+          WHERE (Description IS NOT NULL AND LEN(Description) &gt; 10) OR (Details IS NOT NULL AND LEN(Details) &gt; 10)
+        </div>
+      </div>
+
+      <!-- Stage 2 Details -->
+      <div id="stage-context" class="flow-detail-card">
+        <div class="flow-card-head">
+          <div class="flow-card-title">
+            <i class="fa-solid fa-database" style="color: #0284c7;"></i>
+            <span>Stage 2: Context Assembly Query</span>
+          </div>
+          <span class="pill-chip">3 Parameters Bound</span>
+        </div>
+        <div class="code-preview">
+          SELECT a.ID, a.Subject, a.Description, a.ActivityDate, p.Name AS ContactName<br>
+          FROM vwActivities a<br>
+          LEFT JOIN vwPersons p ON a.PersonID = p.ID<br>
+          WHERE a.ID = @ActivityID
+        </div>
+      </div>
+
+      <!-- Stage 3 Details -->
+      <div id="stage-prompt" class="flow-detail-card" style="border-color: var(--mj-brand-primary);">
+        <div class="flow-card-head">
+          <div class="flow-card-title">
+            <i class="fa-solid fa-brain" style="color: #8b5cf6;"></i>
+            <span>Stage 3: AI Model Inference Specification</span>
+          </div>
+          <span class="pill-chip" style="background:#ede9fe; color:#6d28d9; font-weight:600;">Active Model</span>
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; margin-bottom:12px;">
+          <div style="padding:10px; border:1px solid var(--mj-border-default); border-radius:var(--mj-radius-sm);">
+            <div style="font-size:0.6875rem; color:var(--mj-text-muted);">PROMPT TEMPLATE</div>
+            <div style="font-weight:600; font-size:0.875rem; color:var(--mj-text-link);">Activity Sentiment &amp; Tag Extraction</div>
+          </div>
+          <div style="padding:10px; border:1px solid var(--mj-border-default); border-radius:var(--mj-radius-sm);">
+            <div style="font-size:0.6875rem; color:var(--mj-text-muted);">MODEL SELECTION</div>
+            <div style="font-weight:600; font-size:0.875rem;">Claude 3.5 Sonnet (Temp: 0.2)</div>
+          </div>
+          <div style="padding:10px; border:1px solid var(--mj-border-default); border-radius:var(--mj-radius-sm);">
+            <div style="font-size:0.6875rem; color:var(--mj-text-muted);">REASONING CAPTURE</div>
+            <div style="font-weight:600; font-size:0.875rem; color:var(--mj-brand-primary);">AIReasoningNotes (nvarchar)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stage 4 Details -->
+      <div id="stage-features" class="flow-detail-card">
+        <div class="flow-card-head">
+          <div class="flow-card-title">
+            <i class="fa-solid fa-table-cells" style="color: #10b981;"></i>
+            <span>Stage 4: Extracted Features &amp; Entity Field Writeback</span>
+          </div>
+          <span class="pill-chip">&check; 2 Output Fields</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--mj-bg-surface-sunken); border-radius:var(--mj-radius-sm);">
+            <div>
+              <strong>SentimentScore</strong> <span class="pill-chip" style="font-size:0.6875rem;">Numeric Float</span>
+              <div style="font-size:0.75rem; color:var(--mj-text-muted); margin-top:2px;">Bounded to [-1.0, 1.0], writes to <code>Activities.SentimentScore</code></div>
+            </div>
+            <span class="pill-chip" style="color:var(--mj-status-success);">&check; Bound &amp; Type-Checked</span>
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:var(--mj-bg-surface-sunken); border-radius:var(--mj-radius-sm);">
+            <div>
+              <strong>ActivityTags</strong> <span class="pill-chip" style="font-size:0.6875rem;">Categorical Tags</span>
+              <div style="font-size:0.75rem; color:var(--mj-text-muted); margin-top:2px;">Taxonomy: Activities &bull; Conf &ge; 0.80, writes to <code>Activities.Tags</code></div>
+            </div>
+            <span class="pill-chip" style="color:var(--mj-status-success);">&check; Bound &amp; Type-Checked</span>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    }
+    function scrollToStage(id) {
+      document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+    }
+  </script>
+</body>
+</html>

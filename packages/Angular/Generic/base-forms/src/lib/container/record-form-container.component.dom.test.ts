@@ -296,7 +296,21 @@ describe('MjRecordFormContainerComponent (DOM)', () => {
       const f = renderRail({ sources: [source('identity', {}, ['Name'])], showValidation: true, errors: [failure('Name'), failure('Orphan')] });
       expect(f.componentInstance.UnroutedValidationErrorCount).toBe(1);
       expect(f.componentInstance.FormIndicators.ErrorCount).toBe(1);
-      expect(f.nativeElement.querySelector('.mj-forms-chrome-rail-error')).toBeNull();
+      // No GROUP owns it, so no rail item is badged …
+      expect(f.nativeElement.querySelector('.mj-forms-chrome-rail-item .mj-forms-chrome-rail-error')).toBeNull();
+      // … but the expanded rail still shows it on its own row. Before this row existed the
+      // unrouted count reached only the collapsed spine, so an expanded rail sat clean over a
+      // form whose save had just been refused.
+      const row = f.nativeElement.querySelector('.mj-forms-chrome-rail-unrouted') as HTMLElement | null;
+      expect(row).not.toBeNull();
+      expect(row?.querySelector('.mj-forms-chrome-rail-error')?.textContent?.trim()).toBe('1');
+      expect(row?.getAttribute('title')).toBe('1 problem is not in any section shown here');
+    });
+
+    it('renders no unrouted row when every failure has a section', () => {
+      const f = renderRail({ sources: [source('identity', { ErrorCount: 1 }, ['Name'])], showValidation: true, errors: [failure('Name')] });
+      expect(f.nativeElement.querySelector('.mj-forms-chrome-rail-unrouted')).toBeNull();
+      expect(errorBadge(f, 'Details')?.textContent?.trim()).toBe('1');
     });
 
     it('renders the related-grid row count only when it is non-zero', () => {

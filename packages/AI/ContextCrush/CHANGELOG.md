@@ -1,5 +1,7 @@
 # @memberjunction/context-crush
 
+## 6.2.0-edge.0
+
 ## 6.1.0
 
 ## 6.1.0-edge.7

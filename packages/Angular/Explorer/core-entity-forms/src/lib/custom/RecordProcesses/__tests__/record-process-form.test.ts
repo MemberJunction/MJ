@@ -55,7 +55,7 @@ describe('RecordProcessFormPolicy', () => {
         expect(result.Groups.map((g) => g.Key)).toEqual(['processOverview', 'details', 'processRuns']);
     });
 
-    it('returns spec unchanged if processOverview is not present', () => {
+    it('decorates details group as Overview when unified without standalone processOverview group', () => {
         const policy = new RecordProcessFormPolicy();
         const initialSpec: FormChromeSpec = {
             Layout: 'left-nav',
@@ -64,7 +64,14 @@ describe('RecordProcessFormPolicy', () => {
                     Key: 'details',
                     Title: 'Details',
                     Icon: 'fa fa-list',
-                    SectionKeys: ['details'],
+                    SectionKeys: ['processOverview', 'processDefinition'],
+                    IsMore: false,
+                },
+                {
+                    Key: 'processRuns',
+                    Title: 'Prior Runs',
+                    Icon: 'fa fa-history',
+                    SectionKeys: ['processRuns'],
                     IsMore: false,
                 },
             ],
@@ -80,11 +87,15 @@ describe('RecordProcessFormPolicy', () => {
                 Assignments: [],
             },
             Panels: [],
-            PrimarySectionCount: 1,
+            PrimarySectionCount: 2,
         };
 
         const result = policy.DecorateChrome(initialSpec, context);
-        expect(result.Groups.map((g) => g.Key)).toEqual(['details']);
+        expect(result.Groups[0].Key).toBe('details');
+        expect(result.Groups[0].Title).toBe('Overview');
+        expect(result.Groups[0].Icon).toBe('fa-solid fa-gauge-high');
+        expect(result.Groups[0].IsLead).toBe(true);
+        expect(result.Groups.map((g) => g.Key)).toEqual(['details', 'processRuns']);
     });
 
     it('leaves the other groups in their original order behind the lead', () => {

@@ -343,43 +343,49 @@ const checks: NamedCheck[] = [
                 taskComplete: false,
                 nextStep: { type: 'Actions', actions: [{ name: 'Get Weather', params: { location: 'Chicago' } }] }
             }) });
-            registerTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
+            // The ClassFactory registration is process-wide and this suite runs every bundle in one
+            // process: without the restore, later bundles' real prompt calls get this scripted reply.
+            const restoreDrivers = registerTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
+            try {
 
-            const runner = new AIPromptRunner();
-            const result = await runner.ExecutePrompt({ prompt: prompt!, contextUser: ctx.User, skipValidation: true });
-            // Fire-and-forget persistence — settle it exactly as the driver does.
-            await runner.WaitForPendingPromptRunSaves();
-            if (!result.success && (result.errorMessage ?? '').includes('No valid API credentials')) {
-                // Registering TestLLM over the driver classes is NOT enough to make this run
-                // offline: model selection filters candidates on configured credentials before the
-                // ClassFactory ever instantiates a driver, so with no keys every candidate is
-                // rejected and TestLLM is never reached. A CI runner has no keys and this bundle
-                // must not require them, so skip loudly rather than fail.
-                //
-                // Cost of this skip: PE4 provides NO per-PR coverage on a credential-less runner —
-                // it only proves anything on a database that has some. Making it run in CI for real
-                // needs a credential fixture in metadata-optional/integration-test (which CI does
-                // push), not a change here. `errorMessage` is matched as a string because
-                // AIPromptRunResult carries no typed error; base-agent.ts:5253 does the same.
-                console.log('      → skipped: no model-vendor in this database has configured '
-                    + 'credentials (selection rejects every candidate before TestLLM is reached)');
-                return;
+                const runner = new AIPromptRunner();
+                const result = await runner.ExecutePrompt({ prompt: prompt!, contextUser: ctx.User, skipValidation: true });
+                // Fire-and-forget persistence — settle it exactly as the driver does.
+                await runner.WaitForPendingPromptRunSaves();
+                if (!result.success && (result.errorMessage ?? '').includes('No valid API credentials')) {
+                    // Registering TestLLM over the driver classes is NOT enough to make this run
+                    // offline: model selection filters candidates on configured credentials before the
+                    // ClassFactory ever instantiates a driver, so with no keys every candidate is
+                    // rejected and TestLLM is never reached. A CI runner has no keys and this bundle
+                    // must not require them, so skip loudly rather than fail.
+                    //
+                    // Cost of this skip: PE4 provides NO per-PR coverage on a credential-less runner —
+                    // it only proves anything on a database that has some. Making it run in CI for real
+                    // needs a credential fixture in metadata-optional/integration-test (which CI does
+                    // push), not a change here. `errorMessage` is matched as a string because
+                    // AIPromptRunResult carries no typed error; base-agent.ts:5253 does the same.
+                    console.log('      → skipped: no model-vendor in this database has configured '
+                        + 'credentials (selection rejects every candidate before TestLLM is reached)');
+                    return;
+                }
+                Assert(result.success, `Scripted prompt run failed: ${result.errorMessage}`);
+                Assert(llm.CalledModels.length > 0, 'TestLLM was never reached — the ClassFactory did not resolve it');
+
+                // The same extraction PromptEvalDriver performs.
+                const choice = result.chatResult?.data?.choices?.[0];
+                const decision = normalizeDecision({
+                    text: choice?.message?.content ?? result.rawResult ?? '',
+                    toolCalls: choice?.message?.toolCalls?.map((c) => ({ name: c.name, arguments: c.arguments })) ?? null
+                });
+
+                AssertEqual(decision.kind, 'action', 'The scripted envelope must normalize to an action decision');
+                const evaluation = evaluateCorpusExpectation('pe4', { kind: 'action', actions: [{ name: 'Get Weather' }] }, decision);
+                AssertEqual(evaluation.passed, true, `A correct reply must score as correct: ${evaluation.messages.join('; ')}`);
+                AssertEqual(evaluateWellFormed({ decision }).passed, true, 'A correct reply must be well-formed');
+                console.log('      → real runner + scripted reply → decision pass + well-formed pass');
+            } finally {
+                restoreDrivers();
             }
-            Assert(result.success, `Scripted prompt run failed: ${result.errorMessage}`);
-            Assert(llm.CalledModels.length > 0, 'TestLLM was never reached — the ClassFactory did not resolve it');
-
-            // The same extraction PromptEvalDriver performs.
-            const choice = result.chatResult?.data?.choices?.[0];
-            const decision = normalizeDecision({
-                text: choice?.message?.content ?? result.rawResult ?? '',
-                toolCalls: choice?.message?.toolCalls?.map((c) => ({ name: c.name, arguments: c.arguments })) ?? null
-            });
-
-            AssertEqual(decision.kind, 'action', 'The scripted envelope must normalize to an action decision');
-            const evaluation = evaluateCorpusExpectation('pe4', { kind: 'action', actions: [{ name: 'Get Weather' }] }, decision);
-            AssertEqual(evaluation.passed, true, `A correct reply must score as correct: ${evaluation.messages.join('; ')}`);
-            AssertEqual(evaluateWellFormed({ decision }).passed, true, 'A correct reply must be well-formed');
-            console.log('      → real runner + scripted reply → decision pass + well-formed pass');
         }
     },
     {
@@ -439,26 +445,32 @@ const checks: NamedCheck[] = [
             Assert(!!branch, 'anyOf case has no synthesizable branch');
             const llm = new TestLLM();
             llm.Script({ kind: 'succeed', content: JSON.stringify(synthesizeEnvelope(branch!)) });
-            registerTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
+            // The ClassFactory registration is process-wide and this suite runs every bundle in one
+            // process: without the restore, later bundles' real prompt calls get this scripted reply.
+            const restoreDrivers = registerTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
+            try {
 
-            await AIEngine.Instance.Config(false, ctx.User);
-            const testRun = await ctx.Provider.GetEntityObject<MJTestRunEntity>('MJ: Test Runs', ctx.User);
-            testRun.NewRecord();
+                await AIEngine.Instance.Config(false, ctx.User);
+                const testRun = await ctx.Provider.GetEntityObject<MJTestRunEntity>('MJ: Test Runs', ctx.User);
+                testRun.NewRecord();
 
-            // The two oracles the generated record's Configuration asks for, registered the way
-            // TestEngine registers them.
-            const oracleRegistry = new Map<string, IOracle>([
-                ['agent-decision-match', new AgentDecisionOracle()],
-                ['response-well-formed', new ResponseWellFormedOracle()]
-            ]);
-            const driver = new PromptEvalDriver();
-            const result = await driver.Execute({ test, testRun, contextUser: ctx.User, options: {}, oracleRegistry });
+                // The two oracles the generated record's Configuration asks for, registered the way
+                // TestEngine registers them.
+                const oracleRegistry = new Map<string, IOracle>([
+                    ['agent-decision-match', new AgentDecisionOracle()],
+                    ['response-well-formed', new ResponseWellFormedOracle()]
+                ]);
+                const driver = new PromptEvalDriver();
+                const result = await driver.Execute({ test, testRun, contextUser: ctx.User, options: {}, oracleRegistry });
 
-            const decisionOracle = result.oracleResults.find((r) => r.oracleType === 'agent-decision-match');
-            Assert(!!decisionOracle, 'agent-decision-match did not run');
-            Assert(decisionOracle!.passed,
-                `A reply matching an anyOf branch must score correct: ${decisionOracle!.message}`);
-            console.log(`      → generated record '${record.fields.Name}' scored ${result.score} through the real driver`);
+                const decisionOracle = result.oracleResults.find((r) => r.oracleType === 'agent-decision-match');
+                Assert(!!decisionOracle, 'agent-decision-match did not run');
+                Assert(decisionOracle!.passed,
+                    `A reply matching an anyOf branch must score correct: ${decisionOracle!.message}`);
+                console.log(`      → generated record '${record.fields.Name}' scored ${result.score} through the real driver`);
+            } finally {
+                restoreDrivers();
+            }
         }
     },
     {
