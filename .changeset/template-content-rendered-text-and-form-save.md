@@ -1,0 +1,10 @@
+---
+"@memberjunction/ai-vector-sync": patch
+"@memberjunction/ng-core-entity-forms": patch
+---
+
+Two template-content fixes: `EntityRecordDocument.DocumentText` now holds each record's rendered text, and the Templates admin form now saves the content typed into its editor.
+
+**`DocumentText` stored the raw template.** `EntityVectorSyncer.renderAndEmbedBatch()` rendered every record correctly and embedded the rendered text, but the per-record result carried `templateContent.TemplateText` (the Nunjucks source) instead of the rendered output, so every `EntityRecordDocument.DocumentText` row for an entity was the same `Name: {{ (org_name or '') | lower | trim }}` boilerplate (7,095 identical rows on one tenant). Search and duplicate detection were unaffected (the embedding used the right text); the audit trail for "what text was embedded for record X" was unusable. The result now carries the rendered text for that record, i.e. exactly what was embedded. The unused worker-thread copy gets the same fix, and `EmbeddingData.TemplateContent` documents what it holds.
+
+**The Templates form discarded content.** Creating or editing a Template in Data Explorer saved the top-level fields and silently dropped the content from the nested `mj-template-editor`: the form saved each content row on its own after the template save had already reported success, a row whose save returned false only reached `console.error`, no mutation carrying the content was issued, and the editor kept showing "Unsaved changes". The editor now exposes `getPendingChanges()` (its new/dirty contents as `PendingRecordItem`s) and `markContentsSaved()`, and the Templates form folds those into `PopulatePendingRecords()`, so the template and its contents are validated together and committed in one transaction group by the base form's `InternalSaveRecord()`; a content that fails validation now blocks the save with the field painted instead of vanishing. The AI Prompt form already probed the editor for `getPendingChanges` and skipped when it was missing, so its embedded template contents ride along in its save transaction too.

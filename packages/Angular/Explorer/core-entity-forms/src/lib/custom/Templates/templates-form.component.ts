@@ -12,7 +12,7 @@ import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
-import { TemplateEditorConfig } from '../../shared/components/template-editor.component';
+import { TemplateEditorComponent, TemplateEditorConfig } from '../../shared/components/template-editor.component';
 
 @RegisterClass(BaseFormComponent, 'MJ: Templates') 
 @Component({
@@ -42,6 +42,8 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     public supportedLanguages: LanguageDescription[] = languages;
     
     @ViewChild('codeEditor') codeEditor: CodeEditorComponent | null = null;
+    /** The embedded content editor; its dirty contents ride along in this form's save transaction. */
+    @ViewChild('templateEditor') templateEditor: TemplateEditorComponent | undefined;
     private isUpdatingEditorValue = false;
     public isRunningTemplate = false;
     public templateTestResult: string | null = null;
@@ -406,27 +408,20 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         });
     }
 
-    async saveTemplateContents(): Promise<boolean> {
-        try {
-            // Save all template contents that have changes
-            for (const content of this.templateContents) {
-                content.TemplateID = this.record.ID; // Ensure FK is set
-                if (content.Dirty || !content.ID) {
-                    const contentResult = await content.Save();
-                    if (!contentResult) {
-                        console.error('Failed to save template content:', content);
-                        return false;
-                    }
-                }
-            }
-
-            this.isAddingNewContent = false;
-            this.newTemplateContent = null;
-            this.updateUnsavedChangesFlag(); // Update based on current entity states
-            return true;
-        } catch (error) {
-            console.error('Error saving template contents:', error);
-            return false;
+    /**
+     * The embedded editor's new/dirty Template Contents join this form's pending records, so
+     * `InternalSaveRecord()` commits the template and its contents in ONE transaction group (the
+     * template first, so the content's TemplateID resolves) and `Validate()` covers the contents too.
+     *
+     * Before this, the form saved each content on its own AFTER the template save had already been
+     * reported as successful; a content whose `Save()` returned false only reached `console.error`,
+     * no mutation was issued, and the editor kept showing "Unsaved changes" forever.
+     */
+    protected override PopulatePendingRecords(): void {
+        super.PopulatePendingRecords();
+        const editorChanges = this.templateEditor?.getPendingChanges() ?? [];
+        for (const change of editorChanges) {
+            this.PendingRecords.push(change);
         }
     }
 
@@ -487,14 +482,17 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
             const md = this.ProviderToUse;
             this.record.UserID = md.CurrentUser.ID;
         }
+        // The template AND the editor's contents commit together here (see PopulatePendingRecords)
         const templateSaved = await super.SaveRecord(StopEditModeAfterSave);
-        
+
         if (templateSaved) {
-            // Then save all template contents
-            return await this.saveTemplateContents();
+            this.templateEditor?.markContentsSaved();
+            this.isAddingNewContent = false;
+            this.newTemplateContent = null;
+            this.updateUnsavedChangesFlag();
         }
-        
-        return false;
+
+        return templateSaved;
     }
 
     getContentTypeDisplayText(typeId: string): string {

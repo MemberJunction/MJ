@@ -10,7 +10,7 @@ import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
 import { DEFAULT_SYSTEM_PLACEHOLDERS, SystemPlaceholder, SYSTEM_PLACEHOLDER_CATEGORIES, SystemPlaceholderCategory } from '@memberjunction/ai-core-plus';
 
-import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { BaseAngularComponent, PendingRecordItem } from '@memberjunction/ng-base-types';
 export interface TemplateEditorConfig {
     allowEdit?: boolean;
     showRunButton?: boolean;
@@ -439,6 +439,45 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
             console.error('Error saving template contents:', error);
             return false;
         }
+    }
+
+    /**
+     * The content rows a HOST FORM should persist inside its own save: every content that is new or
+     * dirty, each stamped with the template's ID. Forms that embed this editor (Templates, AI Prompts)
+     * call this from their `PopulatePendingRecords()` override, so the template and its contents
+     * commit in one transaction and a content that fails validation blocks the save visibly instead
+     * of being dropped on the floor. A brand-new content nobody typed into is not a change and is
+     * skipped; a read-only editor contributes nothing.
+     */
+    public getPendingChanges(): PendingRecordItem[] {
+        if (!this.config.allowEdit || !this.template) {
+            return [];
+        }
+        const pending: PendingRecordItem[] = [];
+        for (const content of this.templateContents) {
+            // An unsaved entity always reports Dirty; the empty-text guard keeps a default row nobody used out.
+            const untouchedNew = !content.IsSaved && !(content.TemplateText ?? '').trim();
+            if (untouchedNew || !content.Dirty) {
+                continue;
+            }
+            content.TemplateID = this.template.ID;
+            const item = new PendingRecordItem();
+            item.entityObject = content;
+            item.action = 'save';
+            pending.push(item);
+        }
+        return pending;
+    }
+
+    /**
+     * The host form has persisted the rows from {@link getPendingChanges}: clear the local dirty state
+     * and publish the saved set to listeners.
+     */
+    public markContentsSaved(): void {
+        this.isAddingNewContent = false;
+        this.newTemplateContent = null;
+        this.updateUnsavedChangesFlag();
+        this.contentChange.emit(this.templateContents);
     }
 
     getContentTypeDisplayText(typeId: string): string {

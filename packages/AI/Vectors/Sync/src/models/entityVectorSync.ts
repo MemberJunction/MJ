@@ -422,7 +422,10 @@ export class EntityVectorSyncer extends VectorBase {
       EntityDocument: validEntries[index].record.__mj_entityDocument as Record<string, unknown>,
       VectorID: String(validEntries[index].record.VectorID ?? ''),
       VectorIndexID: String(validEntries[index].record.VectorIndexID ?? ''),
-      TemplateContent: templateContent.TemplateText,
+      // The RENDERED text for this record, i.e. exactly what was embedded above. This flows into
+      // EntityRecordDocument.DocumentText, the audit trail for "what text got embedded for record X";
+      // the raw template (templateContent.TemplateText) is the same string for every record.
+      TemplateContent: validEntries[index].text,
     }));
   }
 
