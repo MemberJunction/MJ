@@ -171,6 +171,19 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   @Input() PendingNewViewIsShared: boolean = false;
 
   /**
+   * Pre-populated smart-filter toggle from the quick save dialog (used when DefaultSaveAsNew is
+   * true). Without it, reopening this panel from the dialog would reset the filter the user had
+   * already configured — the traditional filter comes back via {@link ExternalFilterState}, and
+   * this is its smart-mode counterpart.
+   */
+  @Input() PendingNewViewSmartFilterEnabled: boolean = false;
+
+  /**
+   * Pre-populated smart-filter prompt from the quick save dialog (used when DefaultSaveAsNew is true)
+   */
+  @Input() PendingNewViewSmartFilterPrompt: string = '';
+
+  /**
    * Emitted when user wants to duplicate the current view (F-005)
    */
   @Output() Duplicate = new EventEmitter<void>();
@@ -542,7 +555,10 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
         this.SortDirection = 'asc';
         this.SortItems = [];
       }
-      this.SmartFilterPrompt = '';
+      // Carry a smart filter back from the quick-save dialog when continuing a new-view flow;
+      // otherwise start clean. (The traditional filter arrives via ExternalFilterState.)
+      const carryingSmartFilter = this.DefaultSaveAsNew && this.PendingNewViewSmartFilterEnabled;
+      this.SmartFilterPrompt = carryingSmartFilter ? this.PendingNewViewSmartFilterPrompt : '';
       this.SmartFilterExplanation = '';
       this.FilterState = CreateEmptyFilter();
       // Default to smart mode (promote AI filtering)

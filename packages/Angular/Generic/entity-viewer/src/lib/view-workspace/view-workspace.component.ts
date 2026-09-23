@@ -416,6 +416,20 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Summary shown in the quick-save dialog. */
   public quickSaveSummary: ViewConfigSummary | null = null;
 
+  /**
+   * Name pre-filled in the quick-save dialog when it opens as a name prompt for a default-view
+   * Save that carries a filter (see {@link onSaveDefaultViewSettings}). Empty for every other
+   * quick-save, which keeps the field blank as before.
+   */
+  public quickSaveSuggestedName: string = '';
+
+  /**
+   * The config-panel save staged while the user names the view it is being promoted into.
+   * Set only when a Save on the default (unsaved) view carries a filter; consumed by
+   * {@link executeQuickSave}, which merges it with the name the dialog collects.
+   */
+  private pendingDefaultViewSave: ViewSaveEvent | null = null;
+
   /** Summary shown in the duplicate-view dialog. */
   public duplicateSummary: ViewConfigSummary | null = null;
 
@@ -436,6 +450,12 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
   /** Pre-populated sharing preference carried from quick-save dialog into the config panel. */
   public pendingNewViewIsShared: boolean = false;
+
+  /** Smart-filter toggle carried from quick-save dialog back into the config panel. */
+  public pendingNewViewSmartFilterEnabled: boolean = false;
+
+  /** Smart-filter prompt carried from quick-save dialog back into the config panel. */
+  public pendingNewViewSmartFilterPrompt: string = '';
 
   // ----- Filter dialog (rendered at workspace level for full width) -----
 
@@ -781,7 +801,11 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.pendingNewViewName = '';
     this.pendingNewViewDescription = '';
     this.pendingNewViewIsShared = false;
+    this.pendingNewViewSmartFilterEnabled = false;
+    this.pendingNewViewSmartFilterPrompt = '';
     this.defaultSaveAsNew = false;
+    this.pendingDefaultViewSave = null;
+    this.quickSaveSuggestedName = '';
   }
 
   // ----- Filter dialog -----
@@ -947,6 +971,22 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return;
     }
 
+    // A default-view Save that carries a filter is not a preferences save at all — the
+    // `default-view-setting/<Entity>` payload is an IGridState with nowhere to put a filter, so
+    // persisting here would silently drop it (#4220). It is really a view creation missing a
+    // name, so stage it and open the quick-save dialog to collect one. Confirming there routes
+    // through `onSaveView`, which honours `AutoSaveView` for both host modes.
+    if (this.eventHasFilter(event)) {
+      this.pendingDefaultViewSave = event;
+      this.quickSaveSuggestedName = this.buildSuggestedViewName(event);
+      this.quickSaveSummary = this.buildConfigSummary(event);
+      this.defaultSaveAsNew = true;
+      this.isConfigPanelOpen = false;
+      this.showQuickSaveDialog = true;
+      this.cdr.detectChanges();
+      return;
+    }
+
     if (!this.AutoSaveView) {
       this.SaveDefaultsRequested.emit(event);
       this.isConfigPanelOpen = false;
@@ -1062,21 +1102,32 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     await this.executeQuickSave(event);
   }
 
-  /** Build a `ViewSaveEvent` from a `QuickSaveEvent` and delegate to {@link onSaveView}. */
+  /**
+   * Build a `ViewSaveEvent` from a `QuickSaveEvent` and delegate to {@link onSaveView}.
+   *
+   * When a config-panel save is staged — a default-view Save carrying a filter, waiting only on a
+   * name (see {@link onSaveDefaultViewSettings}) — its columns, sort, filter and aggregates are
+   * merged in and the dialog supplies just the name/description/sharing. The smart-filter fields
+   * used to be hard-coded to `false`/`''` here, which dropped a smart filter on this path too
+   * (#4220).
+   */
   private async executeQuickSave(event: QuickSaveEvent): Promise<void> {
+    const staged = this.pendingDefaultViewSave;
+    this.pendingDefaultViewSave = null;
+
     const viewSaveEvent: ViewSaveEvent = {
       Name: event.Name,
       Description: event.Description,
       IsShared: event.IsShared,
       SaveAsNew: event.SaveAsNew,
-      Columns: [],
-      SortField: null,
-      SortDirection: 'asc',
-      SortItems: [],
-      SmartFilterEnabled: false,
-      SmartFilterPrompt: '',
-      FilterState: this.filterDialogState ?? null,
-      AggregatesConfig: null
+      Columns: staged?.Columns ?? [],
+      SortField: staged?.SortField ?? null,
+      SortDirection: staged?.SortDirection ?? 'asc',
+      SortItems: staged?.SortItems ?? [],
+      SmartFilterEnabled: staged?.SmartFilterEnabled ?? false,
+      SmartFilterPrompt: staged?.SmartFilterPrompt ?? '',
+      FilterState: staged?.FilterState ?? this.filterDialogState ?? null,
+      AggregatesConfig: staged?.AggregatesConfig ?? null
     };
     await this.onSaveView(viewSaveEvent);
   }
@@ -1108,6 +1159,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Handle the quick-save dialog close. */
   public onQuickSaveClose(): void {
     this.showQuickSaveDialog = false;
+    // Abandoning the name prompt abandons the promoted save with it — otherwise the staged
+    // filter would surface on whatever the user saved next.
+    this.clearPendingNewViewState();
     this.cdr.detectChanges();
   }
 
@@ -1116,6 +1170,18 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.pendingNewViewName = event.Name;
     this.pendingNewViewDescription = event.Description;
     this.pendingNewViewIsShared = event.IsShared;
+
+    // Hand any staged filter back to the panel, which resets its own filter state on open.
+    // Without this the escape hatch out of the name prompt would silently drop the filter.
+    const staged = this.pendingDefaultViewSave;
+    if (staged) {
+      this.pendingNewViewSmartFilterEnabled = staged.SmartFilterEnabled;
+      this.pendingNewViewSmartFilterPrompt = staged.SmartFilterPrompt;
+      if (staged.FilterState) {
+        this.filterDialogState = staged.FilterState;
+      }
+    }
+
     this.defaultSaveAsNew = true;
     this.showQuickSaveDialog = false;
     this.isConfigPanelOpen = true;
@@ -1362,6 +1428,49 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     return event.FilterState
       ? JSON.stringify(event.FilterState)
       : JSON.stringify({ logic: 'and', filters: [] });
+  }
+
+  /**
+   * Whether a save event carries a filter the user would expect to be kept — a smart prompt with
+   * actual text, or at least one traditional filter. Deliberately stricter than the config panel's
+   * own `hasActiveFilters()`, which only looks at the traditional list.
+   */
+  private eventHasFilter(event: ViewSaveEvent): boolean {
+    const hasSmartFilter = event.SmartFilterEnabled && !!event.SmartFilterPrompt?.trim();
+    const hasTraditionalFilter = (event.FilterState?.filters?.length ?? 0) > 0;
+    return hasSmartFilter || hasTraditionalFilter;
+  }
+
+  /** Longest suggested name we will build before eliding the smart prompt. */
+  private static readonly SUGGESTED_NAME_MAX_LENGTH = 60;
+
+  /**
+   * Propose a name for a view being promoted out of the default view, so the user can accept it
+   * with a single click. A smart prompt describes the view better than anything we could invent,
+   * so it becomes the name (elided if long); a traditional filter gets a plain marker.
+   */
+  private buildSuggestedViewName(event: ViewSaveEvent): string {
+    const entityName = this._entity?.DisplayNameOrName ?? this._entity?.Name ?? 'View';
+    const prompt = event.SmartFilterEnabled ? event.SmartFilterPrompt?.trim() : '';
+    if (!prompt) {
+      return `${entityName} — Filtered`;
+    }
+
+    const budget = ViewWorkspaceComponent.SUGGESTED_NAME_MAX_LENGTH - entityName.length - ' — '.length;
+    const suffix = prompt.length > budget ? `${prompt.slice(0, Math.max(budget - 1, 1)).trimEnd()}…` : prompt;
+    return `${entityName} — ${suffix}`;
+  }
+
+  /** Build a {@link ViewConfigSummary} from a pending save event, for the quick-save dialog. */
+  private buildConfigSummary(event: ViewSaveEvent): ViewConfigSummary {
+    return {
+      ColumnCount: event.Columns.length,
+      FilterCount: event.FilterState?.filters?.length ?? 0,
+      SortCount: event.SortItems.length,
+      SmartFilterActive: event.SmartFilterEnabled && !!event.SmartFilterPrompt?.trim(),
+      SmartFilterPrompt: event.SmartFilterPrompt,
+      AggregateCount: event.AggregatesConfig?.expressions?.filter(a => a.enabled !== false).length ?? 0
+    };
   }
 
   // ========================================

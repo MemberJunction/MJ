@@ -68,6 +68,8 @@
     [PendingNewViewName]="pendingNewViewName"
     [PendingNewViewDescription]="pendingNewViewDescription"
     [PendingNewViewIsShared]="pendingNewViewIsShared"
+    [PendingNewViewSmartFilterEnabled]="pendingNewViewSmartFilterEnabled"
+    [PendingNewViewSmartFilterPrompt]="pendingNewViewSmartFilterPrompt"
     (Close)="onCloseConfigPanel()"
     (Save)="onSaveView($event)"
     (SaveDefaults)="onSaveDefaultViewSettings($event)"
@@ -118,6 +120,7 @@
     [Summary]="quickSaveSummary"
     [IsSaving]="isSavingView"
     [DefaultSaveAsNew]="defaultSaveAsNew"
+    [SuggestedName]="quickSaveSuggestedName"
     (Save)="onQuickSave($event)"
     (Close)="onQuickSaveClose()"
     (OpenAdvanced)="onQuickSaveOpenAdvanced($event)">
