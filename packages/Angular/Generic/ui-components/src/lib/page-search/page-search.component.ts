@@ -114,7 +114,10 @@ import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
   `]
 })
 export class MJPageSearchComponent extends MJNamedControlBase implements AfterViewInit {
-  @Input() Placeholder: string = 'Search...';
+  /** The placeholder a caller gets by having said nothing — it names no particular search. */
+  static readonly GenericPlaceholder = 'Search...';
+
+  @Input() Placeholder: string = MJPageSearchComponent.GenericPlaceholder;
   @Input() Value: string = '';
   @Input() Icon: string = 'fa-solid fa-search';
   @Output() ValueChange = new EventEmitter<string>();
@@ -125,12 +128,19 @@ export class MJPageSearchComponent extends MJNamedControlBase implements AfterVi
 
   /**
    * `placeholderIsName` is passed here and nowhere else: this is a toolbar widget whose placeholder
-   * ("Search templates…") IS the caller's statement of what the box searches, and whose default is
-   * never absent. On a form control a placeholder is not a name — it disappears as soon as the user
-   * types — so those controls warn without one.
+   * ("Search templates…") IS the caller's statement of what the box searches. On a form control a
+   * placeholder is not a name — it disappears as soon as the user types — so those controls warn
+   * without one.
+   *
+   * It is not passed unconditionally, or the guard could never fire here at all: the default
+   * placeholder is non-empty, so accepting any placeholder would accept `'Search...'`, which tells a
+   * screen-reader user nothing about what is being searched. Only a placeholder the caller actually
+   * chose counts.
    */
   public ngAfterViewInit(): void {
-    warnIfUnnamed(this.searchInputEl?.nativeElement, 'mj-page-search', { placeholderIsName: true });
+    warnIfUnnamed(this.searchInputEl?.nativeElement, 'mj-page-search', {
+      placeholderIsName: this.Placeholder !== MJPageSearchComponent.GenericPlaceholder
+    });
   }
 
   public onInput(event: Event): void {

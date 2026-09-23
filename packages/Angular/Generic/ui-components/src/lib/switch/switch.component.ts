@@ -23,8 +23,10 @@ import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
  * {@link MJNamedControlBase.AriaLabelledBy} when a visible label exists,
  * {@link MJNamedControlBase.AriaLabel} when none does; either one overrides that state text.
  *
- * The switch is a `<button>`, not a labelable form element, so
- * {@link MJNamedControlBase.InputId} is a reference target only — NOT a `<label for>` target.
+ * The switch is a `<button>`, which IS a labelable element, so
+ * {@link MJNamedControlBase.InputId} doubles as a `<label for>` target: the label names the switch
+ * — overriding the On/Off text, since an associated label outranks an element's own contents — and
+ * clicking it focuses and toggles the switch, which `AriaLabelledBy` alone does not give you.
  *
  * @example
  * ```html

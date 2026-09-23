@@ -215,10 +215,12 @@ describe('MJSwitchComponent — accessible name (#4116)', () => {
     expect(button(render({ AriaLabelledBy: 'notify-label' })).getAttribute('aria-labelledby')).toBe('notify-label');
   });
 
-  it('exposes InputId on the button so other markup can reference it', () => {
-    // A reference target only. The switch is a <button>, not a labelable form element, so
-    // label[for] would neither name nor focus it — that path is AriaLabelledBy.
-    expect(button(render({ InputId: 'notify-switch' })).getAttribute('id')).toBe('notify-switch');
+  it('exposes InputId on the button, which IS a valid <label for> target', () => {
+    // <button> is a labelable element, so a label[for] pointing here both names the switch and,
+    // on click, focuses and toggles it.
+    const f = render({ InputId: 'notify-switch' });
+    expect(button(f).getAttribute('id')).toBe('notify-switch');
+    expect('labels' in button(f), 'a labelable element exposes a labels collection').toBe(true);
   });
 
   it('passes AriaDescribedBy through for hint and error text', () => {

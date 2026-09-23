@@ -98,12 +98,36 @@ describe('warnIfUnnamed', () => {
     });
   });
 
-  it('stays silent when a <label for> in the document points at the control', () => {
+  it('stays silent when a <label for> points at a LABELABLE control', () => {
     withWarnSpy((warn) => {
       const el = element('<input id="qty-field">');
       document.body.appendChild(element('<label for="qty-field">Quantity</label>'));
       warnIfUnnamed(el, 'mj-numeric-input');
       expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  it('stays silent for a <button>, which is labelable too', () => {
+    // mj-switch's trigger. label[for] both names it — outranking its own On/Off text — and, on
+    // click, focuses and toggles it.
+    withWarnSpy((warn) => {
+      const el = element('<button id="notify-switch" role="switch">Off</button>');
+      document.body.appendChild(element('<label for="notify-switch">Email notifications</label>'));
+      warnIfUnnamed(el, 'mj-switch');
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  it('warns when a <label for> points at a NON-labelable element', () => {
+    // mj-dropdown's trigger is a div[role=combobox]. label[for] associates only with labelable
+    // elements, so this is the markup that looks correct and is not: Blink names the div anyway,
+    // Gecko and WebKit do not, and a name that depends on the browser is the defect this guard is
+    // for. InputId's own documentation warns callers off exactly this wiring.
+    withWarnSpy((warn) => {
+      const el = element('<div id="role-dd" role="combobox" tabindex="0">Administrator</div>');
+      document.body.appendChild(element('<label for="role-dd">Role</label>'));
+      warnIfUnnamed(el, 'mj-dropdown');
+      expect(warn).toHaveBeenCalledOnce();
     });
   });
 
@@ -173,14 +197,21 @@ describe('every named control is wired to the guard', () => {
  * name, placeholder or not.
  */
 describe('mj-page-search and the placeholder fallback', () => {
-  it('stays silent on its default placeholder and warns once the placeholder is cleared', () => {
-    const quiet = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    renderComponentFixture(MJPageSearchComponent, {});
-    expect(quiet).not.toHaveBeenCalled();
-    quiet.mockRestore();
-
+  it('accepts a placeholder the caller chose', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    renderComponentFixture(MJPageSearchComponent, { inputs: { Placeholder: '' } });
+    renderComponentFixture(MJPageSearchComponent, { inputs: { Placeholder: 'Search templates...' } });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it.each([
+    ['the generic default placeholder', {}],
+    ['no placeholder at all', { Placeholder: '' }],
+  ])('warns on %s', (_case, inputs) => {
+    // Inheriting "Search..." is not naming the box: it tells a screen-reader user nothing about
+    // what is being searched, and accepting it would leave this control's guard unable to fire.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    renderComponentFixture(MJPageSearchComponent, { inputs });
     expect(warn).toHaveBeenCalledOnce();
     expect(String(warn.mock.calls[0][0])).toContain('mj-page-search');
     warn.mockRestore();

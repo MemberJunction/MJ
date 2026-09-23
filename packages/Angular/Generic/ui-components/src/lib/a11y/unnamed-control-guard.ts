@@ -98,15 +98,24 @@ function hasResolvedLabelledBy(element: HTMLElement): boolean {
 }
 
 /**
- * True when a `<label for>` in the same document points at this element. Matched by reading each
- * label's `for` rather than by a `label[for="…"]` selector, so an id containing CSS-special
- * characters can't turn a diagnostic into a thrown selector error.
+ * True when a `<label>` names this element through the DOM's own association.
+ *
+ * Read off the element's `labels` collection rather than by scanning for a `label[for]` that
+ * mentions its id, because `label[for]` associates only with LABELABLE elements — button, input,
+ * select, textarea and friends. `mj-dropdown`'s trigger is a `div[role=combobox]`, so a caller who
+ * writes `<label for="role-dd">Role</label><mj-dropdown InputId="role-dd">` gets markup that looks
+ * correct and an association the HTML standard does not make. (Blink names that div anyway; Gecko
+ * and WebKit do not, so the name a user hears depends on their browser — which is a defect to warn
+ * about, not a name to accept.) Matching on the id alone would wave that straight through, and it
+ * is precisely the mistake `InputId`'s own documentation warns callers away from.
+ *
+ * `'labels' in element` is the honest discriminator: the property exists on labelable elements and
+ * is absent on a div, so nothing has to be cast to a type the element may not be.
  */
 function hasAssociatedLabel(element: HTMLElement): boolean {
-  const id = element.getAttribute('id');
-  if (!id) {
+  if (!('labels' in element)) {
     return false;
   }
-  const labels = element.ownerDocument?.querySelectorAll('label[for]') ?? [];
-  return Array.from(labels).some((label) => label.getAttribute('for') === id);
+  const { labels } = element as HTMLElement & { readonly labels: NodeListOf<HTMLLabelElement> | null };
+  return !!labels && labels.length > 0;
 }

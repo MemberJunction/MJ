@@ -39,12 +39,12 @@ export abstract class MJNamedControlBase {
    * `id` for the control's focusable element, so other markup can REFERENCE it — `aria-controls`,
    * hint text, test hooks.
    *
-   * Whether it doubles as a `<label for>` target depends on the control, because `label[for]` only
-   * names and focuses *labelable form elements*: on the input-backed controls (`mj-combobox`,
-   * `mj-numeric-input`, `mj-datepicker`, `mj-page-search`) it lands on a real `<input>` and works;
-   * on `mj-dropdown` it lands on a `div[role=combobox]` and does NOT — wiring `label[for]` there
-   * produces markup that looks correct, passes review, and leaves the control unnamed. Each
-   * control's own docs say which it is.
+   * Whether it doubles as a `<label for>` target depends on the control, because `label[for]`
+   * associates only with LABELABLE elements: it works on the input-backed controls (`mj-combobox`,
+   * `mj-numeric-input`, `mj-datepicker`, `mj-page-search`) and on `mj-switch`, whose `<button>` is
+   * labelable too. It does NOT work on `mj-dropdown`, whose trigger is a `div[role=combobox]` —
+   * wiring `label[for]` there produces markup that looks correct, passes review, and leaves the
+   * control named only in the browsers that guess. Each control's own docs say which it is.
    */
   @Input() InputId = '';
 
