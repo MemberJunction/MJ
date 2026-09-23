@@ -869,6 +869,10 @@ export class IntegrationConnectorCreationPipeline {
                 llmInference: opts.LLMInference,
             });
             emitter.pkClassifierResult(obj.Name, {
+                // How many fields the classifier was actually shown. Zero here names a defect (an
+                // empty or failed catalog read); a non-zero count with no nominee is an honest
+                // "no signal". Without it the two are indistinguishable on the run stream.
+                FieldCount: fields.length,
                 Confident: verdict.Confident,
                 Nominee: verdict.Nominee,
                 Confidence: verdict.Confidence,

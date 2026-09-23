@@ -238,8 +238,26 @@ async function viewRows<T>(
     const rv = new RunView(provider as DatabaseProviderBase | undefined);
     const res = await rv.RunView<BaseEntity>(
         { EntityName: entityName, ExtraFilter: filter, ResultType: 'entity_object' }, contextUser);
-    if (!res?.Success) return [];
+    // A failed read is an ERROR, never an empty catalog. Returning [] here was read by every
+    // consumer as "this object has no fields": the classifier then reported every object
+    // keyless, the schema builder skipped them all, and the run completed green having done
+    // nothing — with the provider's own message, the only diagnosis, discarded.
+    if (!res?.Success) {
+        throw new CompanyIntegrationCatalogReadFailed(entityName, filter, res?.ErrorMessage ?? 'RunView returned no result');
+    }
     return (res.Results ?? []).map(r => proxyRow<T>(r, entityName, guard, aliases));
+}
+
+/** A catalog read that did not succeed: the entity, the filter and the provider's own message. */
+export class CompanyIntegrationCatalogReadFailed extends Error {
+    public readonly EntityName: string;
+    public readonly Filter: string;
+    public constructor(entityName: string, filter: string, message: string) {
+        super(`[CatalogWriter] ${entityName} read failed (filter: ${filter}): ${message}`);
+        this.name = 'CompanyIntegrationCatalogReadFailed';
+        this.EntityName = entityName;
+        this.Filter = filter;
+    }
 }
 
 /** The catalog shared by every connection of a connector. Today's behaviour, unchanged. */
