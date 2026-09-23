@@ -168,9 +168,12 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
   }
 
   /**
-   * Returns the read-only provider if it exists, otherwise returns the original provider if options is not provided or if options.allowFallbackToReadWrite is true.
-   * @param options 
-   * @returns 
+   * Returns the read-only provider if one is configured. Otherwise returns the first (read-write)
+   * provider ONLY when `options.allowFallbackToReadWrite` is true, and `null` when it is omitted.
+   *
+   * The read-only pool exists only when `dbReadOnlyUsername`/`dbReadOnlyPassword` are set, which
+   * most deployments leave unset — so a caller that omits the flag gets `null` on those servers.
+   * Pass it for any pure read.
    */
   export function GetReadOnlyProvider(providers: Array<ProviderInfo>, options?: {allowFallbackToReadWrite: boolean}): DatabaseProviderBase {
     if (!providers || providers.length === 0) 

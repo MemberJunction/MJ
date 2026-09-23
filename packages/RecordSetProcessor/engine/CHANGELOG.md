@@ -1,5 +1,60 @@
 # @memberjunction/record-set-processor
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 42d701e: Extract @memberjunction/entity-documents from @memberjunction/ai-vector-sync to provide reusable entity document parsing and caching across vector sync, autotagging, and feature pipelines.
+- 6e6e3f1: Feature Pipelines: schema migration (V202609212241), data feature spec, runtime constraint validation, and write-back extensions.
+
+### Patch Changes
+
+- 6fd16d2: fix(record-processes): sanitize InferProcessor provider guards and tokenize form styles
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [42d701e]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [e3db74f]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+  - @memberjunction/ai-agents@6.2.0-edge.0
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/entity-documents@6.2.0-edge.0
+  - @memberjunction/feature-pipelines@6.2.0-edge.0
+  - @memberjunction/actions@6.2.0-edge.0
+  - @memberjunction/tag-engine@6.2.0-edge.0
+  - @memberjunction/templates@6.2.0-edge.0
+  - @memberjunction/record-set-processor-base@6.2.0-edge.0
+  - @memberjunction/field-rules-transforms@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

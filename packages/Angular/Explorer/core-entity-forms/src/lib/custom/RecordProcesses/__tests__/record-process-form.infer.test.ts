@@ -35,7 +35,7 @@ describe('Feature Pipeline Details (Option A) — View-Model & Logic Engines', (
                     Type: 'numeric',
                     Min: -1.0,
                     Max: 1.0,
-                    ViolationPolicy: 'null',
+                    OnViolation: 'null',
                 },
             },
             {
