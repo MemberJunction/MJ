@@ -13,7 +13,7 @@ graph TD
     style AIE fill:#2d8659,stroke:#1a5c3a,color:#fff
 
     subgraph "Server Capabilities"
-        LLM["LLM Execution<br/>ChatCompletion, Classify, Summarize"]
+        LLM["LLM Execution<br/>ChatCompletion"]
         style LLM fill:#7c5295,stroke:#563a6b,color:#fff
 
         EMB["Embedding Services<br/>Agent & Action Embeddings"]
@@ -85,20 +85,9 @@ const result = await AIEngine.Instance.ChatCompletion({
     model: 'gpt-4',
     messages: [{ role: 'user', content: 'Explain quantum computing' }]
 });
-
-// Summarize text
-const summary = await AIEngine.Instance.SummarizeText({
-    model: 'gpt-4',
-    text: longDocument
-});
-
-// Classify text
-const classification = await AIEngine.Instance.ClassifyText({
-    model: 'gpt-4',
-    text: inputText,
-    categories: ['positive', 'negative', 'neutral']
-});
 ```
+
+Classification and summarisation run as AI Prompts through `AIPromptRunner` (`@memberjunction/ai-prompts`).
 
 #### Semantic Search
 
