@@ -1,16 +1,19 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, AfterViewInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, AfterViewInit, ElementRef, inject } from '@angular/core';
 import { MJTemplateEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { IsDescendantElement } from '@memberjunction/ng-shared-generic';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { LanguageDescription } from '@codemirror/language';
 import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { DEFAULT_SYSTEM_PLACEHOLDERS, SystemPlaceholder, SYSTEM_PLACEHOLDER_CATEGORIES, SystemPlaceholderCategory } from '@memberjunction/ai-core-plus';
 
-import { BaseAngularComponent, PendingRecordItem } from '@memberjunction/ng-base-types';
+import { BaseAngularComponent, BaseFormComponentEvent, BaseFormComponentEventCodes, PendingRecordItem } from '@memberjunction/ng-base-types';
 export interface TemplateEditorConfig {
     allowEdit?: boolean;
     showRunButton?: boolean;
@@ -56,16 +59,41 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
     private destroy$ = new Subject<void>();
     private get _metadata() { return this.ProviderToUse; }
     private activeTimeouts: number[] = [];
-    
+    private elementRef = inject(ElementRef);
+
     constructor(private notificationService: MJNotificationService, private confirmService: MJConfirmService) {
     super();}
 
     async ngOnInit() {
         this.loadContentTypes();
         this.organizePlaceholdersByCategory();
+        this.listenForHostFormEvents();
         if (this.template) {
             await this.loadTemplateContents();
         }
+    }
+
+    /**
+     * A host form that folds this editor's contents into its pending records (see getPendingChanges)
+     * also reverts them when the user discards the edit: `BaseFormComponent.CancelEdit()` calls
+     * `Revert()` on every pending record and broadcasts REVERT_PENDING_CHANGES. The entities roll back
+     * on their own, but this editor's rows, CodeMirror's text and the dirty flag would not know, so
+     * the screen would keep showing discarded text and the next save would fail on it. Reload from
+     * the saved state when the event comes from a form this editor sits inside.
+     */
+    private listenForHostFormEvents(): void {
+        MJGlobal.Instance.GetEventListener(false).pipe(takeUntil(this.destroy$)).subscribe((e: MJEvent) => {
+            if (e.event !== MJEventType.ComponentEvent || e.eventCode !== BaseFormComponentEventCodes.BASE_CODE) {
+                return;
+            }
+            const formEvent = e.args as BaseFormComponentEvent;
+            if (formEvent.subEventCode !== BaseFormComponentEventCodes.REVERT_PENDING_CHANGES) {
+                return;
+            }
+            if (IsDescendantElement(formEvent.elementRef, this.elementRef)) {
+                void this.refreshAndDiscardChanges();
+            }
+        });
     }
 
     async ngOnChanges(changes: SimpleChanges) {

@@ -203,4 +203,38 @@ describe('MJTemplateFormComponentExtended.SaveRecord persists the editor content
     expect(template.saveCalls).toBe(1);
     expect(tg.submitCalls, 'no transaction is opened for a single record').toBe(0);
   });
+
+  it('saves again on the same form instance without re-saving content the editor no longer reports', async () => {
+    const template = makeTemplate();
+    const content = makeNewContent();
+    const pendingRows = [content];
+    const tg = new FakeTransactionGroup();
+    const form = makeForm(template, fakeEditor(pendingRows), tg);
+
+    expect(await form.SaveRecord(false)).toBe(true);
+    // A real editor reports nothing pending once its rows were saved and marked clean.
+    pendingRows.length = 0;
+    template.Set('Name', 'Welcome email v3');
+
+    expect(await form.SaveRecord(false)).toBe(true);
+    expect(template.saveCalls).toBe(2);
+    expect(content.saveCalls, 'the content is not saved a second time').toBe(1);
+    expect(tg.submitCalls, 'only the first save needed a transaction group').toBe(1);
+  });
+
+  it('retries cleanly after a validation failure: the content is saved exactly once, in one group', async () => {
+    const template = makeTemplate();
+    const content = makeNewContent(null); // TypeID missing, so the first attempt is refused
+    const tg = new FakeTransactionGroup();
+    const form = makeForm(template, fakeEditor([content]), tg);
+
+    expect(await form.SaveRecord(false)).toBe(false);
+    content.Set('TypeID', TYPE_ID);
+
+    expect(await form.SaveRecord(false)).toBe(true);
+    expect(template.saveCalls).toBe(1);
+    expect(content.saveCalls, 'no duplicate pending record survives the failed attempt').toBe(1);
+    expect(tg.submitCalls).toBe(1);
+    expect(form.formContext.showValidation).toBe(false);
+  });
 });

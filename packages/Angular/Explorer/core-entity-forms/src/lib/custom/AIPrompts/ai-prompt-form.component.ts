@@ -11,6 +11,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { AIPromptManagementService } from './ai-prompt-management.service';
 import { MJAIModelEntityExtended, MJAIPromptCategoryEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { dedupePendingRecordsByEntity } from './pending-records';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompts')
 @Component({
@@ -1123,9 +1124,15 @@ export class MJAIPromptFormComponentExtended extends MJAIPromptFormComponent imp
         
         // Add prompt model changes to pending records
         this.addPromptModelsToPendingRecords();
-        
+
         // Handle template content changes through the template editor
         this.addTemplateContentsToPendingRecords();
+
+        // The preserved copy above and the fresh collection can name the same entity (a retry after a
+        // failed save); keep one pending record per entity object.
+        const unique = dedupePendingRecordsByEntity(this.PendingRecords);
+        this.PendingRecords.length = 0;
+        this.PendingRecords.push(...unique);
     }
 
     /**
