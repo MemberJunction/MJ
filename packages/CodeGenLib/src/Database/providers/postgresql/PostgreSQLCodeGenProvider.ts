@@ -9,6 +9,7 @@ import {
     MaterializedColumnSpec,
     PhasedExecutionResult,
     DataSourceResult,
+    excludedBaseViewFieldNames,
 } from '../../codeGenDatabaseProvider';
 import { configInfo, mj_core_schema } from '../../../Config/config';
 import { logError, logStatus, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
@@ -1123,6 +1124,25 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
      *
      * @returns A {@link FullTextSearchResult} with the generated SQL and the search function name.
      */
+    /**
+     * PostgreSQL charges full-text search on the WRITE path, not the read path: the emitted objects
+     * include a row-level `BEFORE INSERT OR UPDATE OF <fields>` trigger that recomputes
+     * `to_tsvector` for the row, a GIN index that is maintained on every one of those writes, and a
+     * one-off backfill `UPDATE` across the existing table at apply time. None of that is reversed by
+     * clearing the entity's full-text flags later — the column, trigger and index stay until someone
+     * drops them.
+     */
+    fullTextSearchCostDisclosure(entity: EntityInfo, searchFields: EntityFieldInfo[]): string | null {
+        const trigName = `trg_fts_${this.toSnakeCase(entity.BaseTable)}`;
+        const indexName = `idx_fts_${this.toSnakeCase(entity.BaseTable)}`;
+        const fields = searchFields.map((f: EntityFieldInfo) => f.Name).join(', ');
+        return `Full-text search on ${entity.SchemaName}.${entity.BaseTable} adds a PERMANENT per-write cost: `
+            + `trigger ${trigName} recomputes to_tsvector on every INSERT and on every UPDATE of (${fields}), `
+            + `GIN index ${indexName} is maintained on each of those writes, and a one-off backfill UPDATE `
+            + `rewrites every existing row when this script is applied. Clearing the entity's full-text flags `
+            + `later does not drop the column, trigger or index.`;
+    }
+
     generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], _primaryKeyIndexName: string): FullTextSearchResult {
         const ftsColName = '__mj_fts_vector';
         const trigName = `trg_fts_${this.toSnakeCase(entity.BaseTable)}`;
@@ -2533,7 +2553,13 @@ WHERE p.prokind IN ('f', 'p')
     private buildBaseViewSelectParts(context: BaseViewGenerationContext, alias: string): string {
         // parentFieldsSelect and rootFieldsSelect have leading commas (e.g. ",\n    Field AS Alias").
         // relatedFieldsSelect does NOT have a leading comma for the first field (starts with "\n    Field...").
-        let select = `${alias}.*`;
+        // `alias.*` unless this entity has a configured base-view column exclusion, in which case the
+        // base-table columns are enumerated instead. See baseTableSelectList / excludedBaseViewFieldNames.
+        let select = this.baseTableSelectList(
+            context.entity,
+            alias,
+            excludedBaseViewFieldNames(context.entity.Name, configInfo?.baseViewExcludedFields ?? [])
+        );
         if (context.parentFieldsSelect) select += context.parentFieldsSelect;
         if (context.relatedFieldsSelect) select += `,${context.relatedFieldsSelect}`;
         if (context.rootFieldsSelect) select += context.rootFieldsSelect;

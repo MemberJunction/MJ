@@ -47,6 +47,13 @@ export function buildHealSchemaRoutineParams(options: {
     authoredExclude: string[];
     includeSchemas?: string[] | null;
     entityIDs?: string[];
+    /**
+     * Field names the prune must never delete. Only meaningful for
+     * `spDeleteUnneededEntityFields`, and only passed when that routine is known to accept
+     * `@ProtectedFieldNames` — see `ManageMetadataBase.pruneSupportsProtectedFieldNames`.
+     * Named `ProtectedFieldNames` on both dialects (PostgreSQL prefixes `p_`).
+     */
+    protectedFieldNames?: string[];
 }): HealSchemaRoutineParams {
     const exclude = options.authoredExclude.join(',');
     const values: string[] = [`'${exclude}'`];
@@ -61,6 +68,12 @@ export function buildHealSchemaRoutineParams(options: {
     if (include.length > 0) {
         values.push(`'${include.join(',')}'`);
         names.push('IncludedSchemaNames');
+    }
+
+    const protectedFields = (options.protectedFieldNames ?? []).map((s) => s.trim()).filter((s) => s.length > 0);
+    if (protectedFields.length > 0) {
+        values.push(`'${protectedFields.join(',').replace(/'/g, "''")}'`);
+        names.push('ProtectedFieldNames');
     }
 
     return { values, names };

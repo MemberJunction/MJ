@@ -1,5 +1,5 @@
 import { SQLDialect, SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
-import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenQueryRow, CodeGenDatabaseProvider, MaterializedColumnSpec } from './codeGenDatabaseProvider';
+import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenQueryRow, CodeGenDatabaseProvider, MaterializedColumnSpec, setBaseViewExclusionsPermitted, baseViewExclusionsPermitted } from './codeGenDatabaseProvider';
 import { analyzeQueryForMaterialization, detectAggregationKeyColumns, detectAdditiveMeasures, MATERIALIZATION_SURROGATE_COLUMN, type ReadFilterSpecEntry } from './materializationAnalysis';
 import { evaluateMaterializationDrift, type MaterializationDriftFacts } from './materializationDrift';
 import { classifyQueryParameters, buildHeldValues, type QueryParamDef, type VariantRenderer } from './materializationParamClassifier';
@@ -2415,6 +2415,11 @@ export class ManageMetadataBase {
          }
       }
 
+      // Settle base-view column exclusions BEFORE anything generates a view. The decision depends on
+      // whether this database's field prune can be told to leave the excluded columns' metadata
+      // alone, which is a database fact and therefore only knowable here.
+      await this.resolveBaseViewExclusionSupport(pool);
+
       // Authored exclude list (sys, staging, …) must be captured BEFORE includeSchemas is
       // compiled into excludeSchemas. Heal EXEC statements use that original list plus
       // @IncludedSchemaNames — never the sibling snapshot of this machine's database.
@@ -4008,14 +4013,105 @@ export class ManageMetadataBase {
       const relCount = relationshipCountMap.get(parentEntityID) || 0;
       const sequence = relCount + 1;
       const newEntityRelationshipUUID = this.createNewUUID();
+      // EntityKeyField names the column on the PARENT (the EntityID side) that carries the join
+      // value. It is NULL for an ordinary FK-to-primary-key relationship, where every consumer
+      // correctly falls back to the parent's PK. It is load-bearing whenever the FK points at a
+      // NON-PK column: see resolveRelationshipEntityKeyField.
+      const entityKeyField = this.resolveRelationshipEntityKeyField(f, parentEntity);
+      const keyFieldColumn = entityKeyField ? `, ${this.qi('EntityKeyField')}` : '';
+      const keyFieldValue = entityKeyField ? `, '${entityKeyField.replace(/'/g, "''")}'` : '';
       const checkQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} WHERE ${this.qi('ID')} = '${newEntityRelationshipUUID}'`;
-      const insertSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityRelationship')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityJoinField')}, ${this.qi('Type')}, ${this.qi('BundleInAPI')}, ${this.qi('DisplayInForm')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
-                    VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', ${this.boolLit(true)}, ${this.boolLit(true)}, ${sequence}, ${this.utcNow()}, ${this.utcNow()})`;
+      const insertSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityRelationship')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityJoinField')}${keyFieldColumn}, ${this.qi('Type')}, ${this.qi('BundleInAPI')}, ${this.qi('DisplayInForm')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
+                    VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}'${keyFieldValue}, 'One To Many', ${this.boolLit(true)}, ${this.boolLit(true)}, ${sequence}, ${this.utcNow()}, ${this.utcNow()})`;
       relationshipCountMap.set(parentEntityID, sequence);
       return `
 /* Create Entity Relationship: ${parentEntity.Name} -> ${e.Name} (One To Many via ${f.Name}) */
    ${this.dbProvider.conditionalInsertSQL(checkQuery, insertSQL)};
                     `;
+   }
+
+   /**
+    * Resolves the `EntityRelationship.EntityKeyField` value for a discovered FK field, or `null`
+    * when the relationship joins the parent's primary key and the column therefore must stay NULL.
+    *
+    * WHY THIS EXISTS. A foreign key does not have to point at a primary key. `EntityField` records
+    * the referenced column in `RelatedEntityFieldName` — populated for declared FKs by the provider
+    * introspection query and for soft FKs by `applySoftPKFKConfig` — but nothing carried it across
+    * into the relationship row. `EntityRelationshipInfo.EntityKeyField` is the only place a consumer
+    * can learn it, and all three consumers fall back to the parent's first primary key when it is
+    * blank (`entityInfo.ts` BuildRelationshipViewParams, `entity-helpers.ts`,
+    * `DependencyGraphWalker.ts`). So a relationship over a non-PK join column silently queried the
+    * wrong column and returned zero rows for every parent record — measured on an imported schema
+    * whose real keys are external ids: 60 relationships, 0 rows each.
+    *
+    * NULL IS THE CORRECT VALUE FOR AN ORDINARY FK, not merely an acceptable one. The PK fallback is
+    * the documented contract, a stored 'ID' would duplicate it, and emitting the column only when it
+    * differs keeps the generated SQL byte-identical for every FK-to-PK relationship — which is all
+    * of them in core MJ.
+    *
+    * Returns null when: no referenced column was recorded; the referenced column IS the parent's
+    * primary key; or the parent has a composite key (a single-column join cannot address it, and
+    * guessing which component to use would be worse than the existing fallback).
+    */
+   protected resolveRelationshipEntityKeyField(f: Record<string, unknown>, parentEntity: EntityInfo): string | null {
+      const referenced = String(f.RelatedEntityFieldName ?? '').trim();
+      if (referenced.length === 0) {
+         return null;
+      }
+      const pkFields = parentEntity.PrimaryKeys ?? [];
+      if (pkFields.length !== 1) {
+         return null;
+      }
+      if (pkFields[0].Name.trim().toLowerCase() === referenced.toLowerCase()) {
+         return null;
+      }
+      // The column must exist on the parent, or the consumer's `record.Get(EntityKeyField)` would
+      // read undefined and build `WHERE col = undefined`. A referenced column MJ has no field for
+      // is a metadata gap to report, not one to encode into a relationship row.
+      const match = parentEntity.Fields.find(pf => pf.Name.trim().toLowerCase() === referenced.toLowerCase());
+      if (!match) {
+         logError(`      > resolveRelationshipEntityKeyField: ${parentEntity.Name} has no field named '${referenced}' (referenced by FK ${f.Name}); leaving EntityKeyField NULL so the primary-key fallback applies.`);
+         return null;
+      }
+      return match.Name.trim();
+   }
+
+   /**
+    * Emits the UPDATE that brings an existing relationship row's `EntityKeyField` into line with the
+    * schema, or `''` when it already agrees.
+    *
+    * This is the half that actually repairs a live database. A relationship whose
+    * `RelatedEntityJoinField` is already correct takes the "exact match" path and is skipped, so
+    * rows created before `EntityKeyField` was written stay blank forever and keep returning zero
+    * rows. Honours `AutoUpdateFromSchema` exactly as the join-field reassignment below does: a row
+    * an operator has taken ownership of is never touched.
+    */
+   protected buildRelationshipEntityKeyFieldHealSQL(
+      r: Record<string, unknown>,
+      f: Record<string, unknown>,
+      md: Metadata
+   ): string {
+      if (!r.AutoUpdateFromSchema) {
+         return '';
+      }
+      const parentEntity = md.Entities.find(e => UUIDsEqual(e.ID, (f.RelatedEntityID as string)));
+      if (!parentEntity) {
+         return '';
+      }
+      const desired = this.resolveRelationshipEntityKeyField(f, parentEntity);
+      const current = String(r.EntityKeyField ?? '').trim();
+      if ((desired ?? '') === current) {
+         return '';
+      }
+      const literal = desired === null ? 'NULL' : `'${desired.replace(/'/g, "''")}'`;
+      logStatus(`      > Healing EntityRelationship key field: '${current}' -> ${desired ?? 'NULL'} (ID: ${r.ID})`);
+      return `
+/* Heal EntityRelationship EntityKeyField from '${current}' to ${desired ?? 'NULL'} (non-PK join column) */
+   UPDATE ${this.qs(mj_core_schema(), 'EntityRelationship')}
+      SET ${this.qi('EntityKeyField')} = ${literal},
+          ${this.qi('__mj_UpdatedAt')} = ${this.utcNow()}
+      WHERE ${this.qi('ID')} = '${r.ID}';
+`;
    }
 
    /**
@@ -4056,6 +4152,13 @@ export class ManageMetadataBase {
 
       // Build sets for matching
       const fkFieldNames = new Set(fkFields.map(f => String(f.Name).trim()));
+      const fkFieldsByName = new Map<string, Record<string, unknown>>();
+      for (const f of fkFields) {
+         const key = String(f.Name).trim();
+         if (!fkFieldsByName.has(key)) {
+            fkFieldsByName.set(key, f);
+         }
+      }
       const matchedRelationshipIDs = new Set<string>();
       const matchedFieldNames = new Set<string>();
 
@@ -4065,6 +4168,13 @@ export class ManageMetadataBase {
          if (fkFieldNames.has(joinField) && !matchedFieldNames.has(joinField)) {
             matchedRelationshipIDs.add(String(r.ID));
             matchedFieldNames.add(joinField);
+            // The join field agrees, so nothing below will look at this row again — but
+            // EntityKeyField may still be stale or (for every row written before it was emitted)
+            // blank. That is the state that returns zero rows on a non-PK join, so heal it here.
+            const matchedField = fkFieldsByName.get(joinField);
+            if (matchedField) {
+               sql += this.buildRelationshipEntityKeyFieldHealSQL(r, matchedField, md);
+            }
          }
       }
 
@@ -4089,6 +4199,10 @@ export class ManageMetadataBase {
       WHERE ${this.qi('ID')} = '${r.ID}';
 `;
          }
+         // Reassigning the join field can also change which parent column the join addresses, so
+         // the key field has to move with it — including back to NULL when the new FK targets the
+         // parent's primary key.
+         sql += this.buildRelationshipEntityKeyFieldHealSQL(r, f, md);
       }
 
       // Pass 3: create new relationships for any remaining unmatched FK fields
@@ -5501,6 +5615,161 @@ export class ManageMetadataBase {
       }
    }
 
+   /**
+    * Returns the names of entities whose BASE VIEW exposes a view-only column that MJ has no
+    * `EntityField` for — the virtual-field drift probe.
+    *
+    * WHY THIS IS NEEDED AND WHY NOTHING ELSE FINDS IT. Pass 2 of `manageEntityFields` is scoped to
+    * `newEntityList ∪ modifiedEntityList`, and the only writer of `modifiedEntityList` is the
+    * reconciler pass — it lists entities something CHANGED on during THIS run. A related-entity name
+    * field whose `EntityField` row was missed once therefore drops out of scope permanently: nothing
+    * changes on that entity again, so it is never in the list, so pass 2 never revisits it, so the
+    * row is never created. The only recovery was `forceRegeneration`, which reprocesses every entity
+    * in the database to heal one.
+    *
+    * The cost of leaving it is not cosmetic. `BaseEntity.InnerLoad` reads the base view and then
+    * looks up each returned column in metadata; a column with no `EntityField` throws, so EVERY
+    * record form for that entity fails — measured at 145 entities on one imported schema.
+    *
+    * WHAT THE PROBE MATCHES. `vwSQLColumnsAndEntityFields` is the catalog view both dialects already
+    * use for exactly this comparison (`EntityFieldID IS NULL` is how `getPendingEntityFieldsSQL`
+    * finds columns needing a field). Adding `IsVirtual <> 0` narrows it to VIEW-ONLY columns: those
+    * are the ones pass 2 exists to create, and they are the ones pass 1 structurally cannot see,
+    * because their names are invented during Step 2's view generation and only exist in the view.
+    * New PHYSICAL columns are excluded — they carry `IsVirtual = 0`, pass 1 already finds them, and
+    * pulling them in here would widen the scoped pass back out to a full scan.
+    *
+    * The observed spelling was a `<fk>_Virtual` alias, but the suffix is incidental (it is only
+    * appended on a name collision, see `sql_codegen.ts` safeAlias); the load-bearing property is
+    * "view-only column with no EntityField", so the probe tests that and not the name.
+    *
+    * `IsVirtual <> 0` rather than `= 1` deliberately: the column is an INTEGER in the PostgreSQL view
+    * and a bit-valued expression in the SQL Server one, and `<> 0` is correct for both.
+    */
+   public async findVirtualFieldDriftEntities(pool: CodeGenConnection, excludeSchemas: string[]): Promise<string[]> {
+      try {
+         const excluded = (excludeSchemas ?? []).filter(sc => sc && sc.trim().length > 0);
+         const schemaFilter = excluded.length > 0
+            ? ` AND ${this.qi('SchemaName')} NOT IN (${excluded.map(sc => `'${sc.replace(/'/g, "''")}'`).join(',')})`
+            : '';
+         const sSQL = `SELECT DISTINCT ${this.qi('Entity')}
+                       FROM ${this.qs(mj_core_schema(), 'vwSQLColumnsAndEntityFields')}
+                       WHERE ${this.qi('EntityFieldID')} IS NULL
+                         AND ${this.qi('IsVirtual')} <> 0
+                         AND ${this.qi('Entity')} IS NOT NULL${schemaFilter}`;
+         const result = await this.runQuery(pool, sSQL);
+         const names = (result.recordset ?? [])
+            .map((r: Record<string, unknown>) => String(r.Entity ?? '').trim())
+            .filter((n: string) => n.length > 0);
+         if (names.length > 0) {
+            logStatus(`      > Virtual-field drift probe: ${names.length} entit${names.length === 1 ? 'y' : 'ies'} carry a view-only column with no EntityField — adding to the Pass 2 scope.`);
+         }
+         return [...new Set(names)];
+      }
+      catch (e) {
+         // A probe that cannot run must not take the run down: the pre-probe behaviour (drift
+         // stays unhealed) is strictly better than a failed CodeGen.
+         logError(`      > Virtual-field drift probe failed; Pass 2 scope is unchanged. ${e as string}`);
+         return [];
+      }
+   }
+
+   /**
+    * Whether this database's `spDeleteUnneededEntityFields` accepts a `ProtectedFieldNames`
+    * parameter. Cached for the run (a routine signature cannot change mid-run).
+    *
+    * This is the interlock for base-view column exclusions. The prune's orphan test is "does this
+    * EntityField have a column in `vwSQLColumnsAndEntityFields`?", and that view resolves columns
+    * VIEW-FIRST (`COALESCE(view_object_id, object_id)`) on both dialects. So excluding a physical
+    * column from a base view makes its `EntityField` row look orphaned, and the next CodeGen run
+    * DELETES it — silently taking out every metadata-mediated read and write of that column.
+    *
+    * CodeGen therefore refuses to apply an exclusion it cannot protect. The PostgreSQL routine ships
+    * with CodeGen (`metadataSupportObjects.ts`) so it always has the parameter; SQL Server's ships in
+    * migrations, so on a database whose migration set predates the parameter the answer is false and
+    * the exclusion is declined with a message naming the prerequisite. Probing rather than
+    * dialect-branching means the SQL Server half activates the moment the migration lands, with no
+    * further code change.
+    *
+    * INFORMATION_SCHEMA.PARAMETERS exists on both platforms. PostgreSQL reports the declared name
+    * with its `p_` prefix; SQL Server reports it with a leading `@`; so the comparison strips both.
+    */
+   private _pruneSupportsProtectedFieldNames: boolean | null = null;
+   protected async pruneSupportsProtectedFieldNames(pool: CodeGenConnection): Promise<boolean> {
+      if (this._pruneSupportsProtectedFieldNames === null) {
+         try {
+            // PARAMETER_MODE = 'IN' matters: a PostgreSQL `RETURNS TABLE` function also reports its
+            // OUTPUT columns here (verified on PG 16), and SQL Server reports input parameters as 'IN'
+            // too, so the filter is both necessary and portable.
+            const sql = `SELECT PARAMETER_NAME FROM INFORMATION_SCHEMA.PARAMETERS ` +
+                        `WHERE SPECIFIC_SCHEMA = '${mj_core_schema()}' ` +
+                        `AND SPECIFIC_NAME LIKE 'spDeleteUnneededEntityFields%' AND PARAMETER_MODE = 'IN'`;
+            const result = await this.runQuery(pool, sql);
+            const rows = (result.recordset ?? []) as Record<string, unknown>[];
+            this._pruneSupportsProtectedFieldNames = rows.some(r => {
+               const raw = String(r.PARAMETER_NAME ?? r.parameter_name ?? '').trim();
+               return raw.replace(/^@/, '').replace(/^p_/i, '').toLowerCase() === 'protectedfieldnames';
+            });
+         }
+         catch (e) {
+            // Cannot prove the parameter exists → treat it as absent. The consequence of guessing
+            // wrong in this direction is "the exclusion is declined"; the other direction is
+            // "metadata is deleted".
+            logError(`      > Could not read spDeleteUnneededEntityFields parameters; base-view column exclusions will be declined. ${e as string}`);
+            this._pruneSupportsProtectedFieldNames = false;
+         }
+      }
+      return this._pruneSupportsProtectedFieldNames;
+   }
+
+   /**
+    * Decides whether base-view column exclusions may be applied in this run, and records the answer
+    * where the (synchronous, connectionless) base-view generators can read it.
+    *
+    * Called during metadata management, which runs BEFORE SQL generation, so the flag is settled by
+    * the time any base view is emitted. A run that never calls this leaves exclusions disabled and
+    * emits `alias.*` exactly as before.
+    */
+   protected async resolveBaseViewExclusionSupport(pool: CodeGenConnection): Promise<void> {
+      const configured = (configInfo.baseViewExcludedFields ?? []).filter(f => f && f.trim().length > 0);
+      if (configured.length === 0) {
+         setBaseViewExclusionsPermitted(false);
+         return;
+      }
+      const supported = await this.pruneSupportsProtectedFieldNames(pool);
+      setBaseViewExclusionsPermitted(supported);
+      if (supported) {
+         logWarning(`   > baseViewExcludedFields is set (${configured.join(', ')}). Affected entities get an EXPLICIT base-view column list instead of SELECT alias.*, those columns are absent from every MJ read of the entity, and the view stops auto-absorbing new physical columns until the next CodeGen run.`);
+      }
+      else {
+         logWarning(`   > baseViewExcludedFields is set (${configured.join(', ')}) but was DECLINED: ${mj_core_schema()}.spDeleteUnneededEntityFields on this database does not accept @ProtectedFieldNames, so excluding a column from a base view would make CodeGen delete its EntityField row on the next run. Base views are emitted unchanged. Apply the migration that adds that parameter to enable exclusions.`);
+      }
+   }
+
+   /** The configured base-view exclusions, as bare field names for the prune's protected list. */
+   protected configuredProtectedFieldNames(): string[] {
+      if (!baseViewExclusionsPermitted()) {
+         return [];
+      }
+      const out = new Set<string>();
+      for (const raw of configInfo.baseViewExcludedFields ?? []) {
+         const entry = raw.trim();
+         if (entry.length === 0) {
+            continue;
+         }
+         // `EntityName.FieldName` narrows WHICH entity the view excludes it from, but the prune
+         // protects by name across entities — a superset, and deliberately so: protecting a field
+         // row that was never at risk costs nothing, while a per-entity protected list would need a
+         // second parameter for the entity ids and buys no safety.
+         const lastDot = entry.lastIndexOf('.');
+         const field = lastDot > 0 && lastDot < entry.length - 1 ? entry.slice(lastDot + 1).trim() : entry;
+         if (field.length > 0) {
+            out.add(field);
+         }
+      }
+      return [...out];
+   }
+
    protected async deleteUnneededEntityFields(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<boolean> {
       try   {
          // One SP call regardless of scope: pass the entire entity ID list as a comma-delimited
@@ -5511,6 +5780,11 @@ export class ManageMetadataBase {
             authoredExclude: getAuthoredExcludeSchemas(excludeSchemas),
             includeSchemas: configInfo.includeSchemas,
             entityIDs,
+            // Base-view column exclusions make their columns look orphaned to this prune (the
+            // catalog view resolves columns view-first), so the excluded names are handed over as a
+            // protected list. Empty unless exclusions are configured AND supported, so the emitted
+            // EXEC is unchanged for every install that does not use them.
+            protectedFieldNames: this.configuredProtectedFieldNames(),
          });
          const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', heal.values, heal.names);
          const isScoped = entityIDs !== undefined && entityIDs.length > 0;
