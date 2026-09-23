@@ -103,3 +103,27 @@ describe('discovery intent reaches the connector through FetchContext', () => {
         expect(c.seen[0].DeadlineMs).toBeUndefined();
     });
 });
+
+describe('a discovery sample never asks for a page larger than its target', () => {
+    beforeEach(() => {
+        vi.spyOn(IntegrationEngineBase, 'Instance', 'get').mockReturnValue({
+            GetIntegrationObjectByID: () => objFlat,
+            GetIntegrationObject: () => objFlat,
+            GetIntegrationObjectFields: (id: string) => FIELDS[id] ?? [],
+            GetActiveIntegrationObjects: () => [objFlat],
+        } as unknown as IntegrationEngineBase);
+    });
+
+    it('caps the page at the target — the sampler stops there, so a bigger page is pure waste', async () => {
+        const c = new CapturingConnector();
+        await c.DiscoverFieldsViaFetch(CI, 'Widgets', USER, { MaxRecords: 50, BatchSize: 500, TimeBudgetMs: 60_000 });
+        expect(c.seen[0].BatchSize).toBe(50);
+        expect(c.seen[0].SampleTargetRecords).toBe(50);
+    });
+
+    it('keeps a page that is already smaller than the target — the sampler walks pages to fill it', async () => {
+        const c = new CapturingConnector();
+        await c.DiscoverFieldsViaFetch(CI, 'Widgets', USER, { MaxRecords: 500, BatchSize: 100, TimeBudgetMs: 60_000 });
+        expect(c.seen[0].BatchSize).toBe(100);
+    });
+});
