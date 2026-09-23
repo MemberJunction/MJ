@@ -9,6 +9,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    },
+    "./testing/vitest": {
+      "types": "./dist/testing/vitest.d.ts",
+      "default": "./dist/testing/vitest.js"
     }
   },
   "files": [
@@ -23,6 +31,14 @@
   },
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
+  "peerDependencies": {
+    "vitest": ">=3.2.0"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "24.10.11",
     "typescript": "^5.9.3",
