@@ -1227,8 +1227,16 @@ describe('ConversationEngine', () => {
 
         beforeEach(() => { rowResolverCalls.count = 0; });
 
-        it('does not read for a project event — ID is the primary key', async () => {
+        it('does not read for a project save we do not hold — the handler would discard it', async () => {
+            // NOT "because ID is the primary key", which was the original justification and was only
+            // ever true of the delete. A save uses EnvironmentID and IsArchived; it is skipped here
+            // solely because a remote save for a project this session does not hold does nothing.
             await dispatch(remote('MJ: Projects', 'save', 'proj-1'));
+            expect(rowResolverCalls.count).toBe(0);
+        });
+
+        it('does not read for a project delete — the id really is all it needs', async () => {
+            await dispatch(remote('MJ: Projects', 'delete', 'proj-1'));
             expect(rowResolverCalls.count).toBe(0);
         });
 
@@ -1341,6 +1349,59 @@ describe('ConversationEngine', () => {
 
             expect(rowResolverCalls.count).toBe(1);   // resolved from the payload, not re-read
             expect(runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects')).toHaveLength(1);
+        });
+
+        // ── Robert's regression (#4595 review) ──────────────────────────────────────────────────
+        // The exact trace he asked for: a remote save for a project we HOLD, with no recordData on
+        // the payload, while an environment is loaded. Before the fix the row was skipped, the
+        // handler read the absent EnvironmentID as "moved away", and the project vanished from the
+        // sidebar of every connected client whenever anyone renamed one. `recordDataBroadcastEntities`
+        // defaults to `[]`, so "no recordData" is the DEFAULT deployment, not an edge case.
+        it('survives a remote save that carries no row, while an environment is loaded', async () => {
+            await loadOneProject();
+            expect((engine as unknown as { _lastProjectsEnvironmentId: string })._lastProjectsEnvironmentId)
+                .toBe('env-1');
+
+            await dispatch({
+                type: 'remote-invalidate',
+                baseEntity: null,
+                entityName: 'MJ: Projects',
+                payload: { action: 'save', primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'p1' }]) },
+            });
+
+            expect(engine.Projects).toHaveLength(1);
+        });
+
+        it('hydrates that save rather than guessing — the row decides, so it must be fetched', async () => {
+            await loadOneProject();
+            rowResolverCalls.count = 0;
+
+            await dispatch({
+                type: 'remote-invalidate',
+                baseEntity: null,
+                entityName: 'MJ: Projects',
+                payload: { action: 'save', primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'p1' }]) },
+            });
+
+            expect(rowResolverCalls.count).toBe(1);
+        });
+
+        it('keeps the project even if hydration comes back empty', async () => {
+            // Belt and braces, and not hypothetical: ResolveEntityEventRow returns null rather than
+            // throwing when a read fails, so the handler must never treat "no row" as "archived or
+            // moved". This is the assertion that survives someone re-optimising eventNeedsRow.
+            await loadOneProject();
+
+            await (engine as unknown as {
+                handleProjectEntityEvent(e: unknown, a: string, d: unknown): boolean;
+            }).handleProjectEntityEvent(
+                { type: 'remote-invalidate', baseEntity: null, entityName: 'MJ: Projects',
+                  payload: { action: 'save', primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'p1' }]) } },
+                'save',
+                null,
+            );
+
+            expect(engine.Projects).toHaveLength(1);
         });
 
         it('a delete still needs no row at all', async () => {
