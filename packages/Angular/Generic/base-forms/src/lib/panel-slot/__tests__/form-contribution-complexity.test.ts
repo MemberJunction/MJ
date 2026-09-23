@@ -22,6 +22,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 import {
     ContributionHiddenSectionKeys,
     FormSectionCamelCase,
+    RelatedEntitySectionKey,
+    RelatedEntitySectionKeyer,
     ResolveFormContributions,
     type FormContributionRelationship,
 } from '../form-contribution';
@@ -98,5 +100,46 @@ describe('form-contribution resolution stays linear in the relationship count', 
         expect(keys).toContain(FormSectionCamelCase('Order Headers BillToUserID'));
         expect(keys).toContain(FormSectionCamelCase('Order Headers ShipToUserID'));
         expect(keys).toContain(FormSectionCamelCase('Related Entity 0'));
+    });
+});
+
+describe('RelatedEntitySectionKeyer', () => {
+    const orders = (id: string, join: string): FormContributionRelationship => ({
+        RelatedEntity: 'Order Headers',
+        RelatedEntityID: id,
+        RelatedEntityJoinField: join,
+        DisplayInForm: true,
+    });
+    const billTo = orders('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'BillToUserID');
+    const shipTo = orders('AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA', '[ShipToUserID]');
+    const peers = [...manyRelationships(20), billTo, shipTo];
+
+    beforeEach(() => {
+        uuidCalls.count = 0;
+    });
+
+    it('agrees with RelatedEntitySectionKey for every peer', () => {
+        const keyOf = RelatedEntitySectionKeyer(peers);
+        for (const peer of peers) {
+            expect(keyOf(peer)).toBe(RelatedEntitySectionKey(peer, peers));
+        }
+        expect(keyOf(billTo)).toBe(FormSectionCamelCase('Order Headers BillToUserID'));
+        expect(keyOf(shipTo)).toBe(FormSectionCamelCase('Order Headers ShipToUserID'));
+        expect(keyOf(peers[0])).toBe(FormSectionCamelCase('Related Entity 0'));
+    });
+
+    it('keys a relationship that is NOT in the peer set by how many peers share its entity', () => {
+        // resolve-form-chrome keys DisplayInForm=false relationships against the full list.
+        const outsider = orders('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'CreatedByUserID');
+        expect(RelatedEntitySectionKeyer(peers)(outsider)).toBe(RelatedEntitySectionKey(outsider, peers));
+        expect(RelatedEntitySectionKeyer([billTo])(outsider)).toBe(FormSectionCamelCase('Order Headers'));
+        expect(RelatedEntitySectionKeyer([])(outsider)).toBe(FormSectionCamelCase('Order Headers'));
+    });
+
+    it('keys a whole peer set with O(n) UUID work', () => {
+        const big = manyRelationships(N);
+        const keyOf = RelatedEntitySectionKeyer(big);
+        for (const peer of big) keyOf(peer);
+        expect(uuidCalls.count).toBeLessThanOrEqual(2 * N);
     });
 });
