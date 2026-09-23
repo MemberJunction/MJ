@@ -25,6 +25,15 @@ let runViewResultQueue: Array<{ Success: boolean; Results: unknown[]; ErrorMessa
 const rowResolverCalls = vi.hoisted(() => ({ count: 0 }));
 
 /**
+ * What the keyed RE-READ returns when a remote event carries no `recordData` — the withheld-row
+ * case, which is the seam this whole change turns on. `null` (the default) stands in for a read
+ * that was refused, found the record gone, or failed; a row stands in for a read this session was
+ * allowed to make. Without this the mock could only express the allowlisted path, and a test named
+ * for the withheld one silently exercised `JSON.parse(recordData)` instead.
+ */
+const reReadFixture = vi.hoisted(() => ({ row: null as Record<string, unknown> | null }));
+
+/**
  * A seam for holding one RunView open, so a test can interleave two in-flight loads.
  * `vi.hoisted` because `vi.mock` factories are lifted above ordinary declarations.
  */
@@ -120,11 +129,11 @@ vi.mock('@memberjunction/core', () => {
             rowResolverCalls.count++;
             if (event?.baseEntity) return event.baseEntity.GetAll();
             const raw = event?.payload?.recordData;
-            if (!raw) return null;
+            if (!raw) return reReadFixture.row;
             try {
                 return JSON.parse(raw);
             } catch {
-                return null;
+                return reReadFixture.row;
             }
         },
         BaseEngine: class MockBaseEngine {
@@ -245,6 +254,13 @@ function createMockConversation(overrides: Record<string, unknown> = {}) {
         Save: vi.fn().mockResolvedValue(true),
         Delete: vi.fn().mockResolvedValue(true),
         GetAll: vi.fn().mockReturnValue({}),
+        // Faithful to BaseEntity.SetMany, which throws on a null object. The engine's
+        // `mergeDataOntoRecord` prefers SetMany when present, so a mock without it took the
+        // `Object.assign(target, null)` branch — a silent no-op that hid a real crash.
+        SetMany(this: Record<string, unknown>, object: Record<string, unknown> | null) {
+            if (!object) throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
+            Object.assign(this, object);
+        },
         LatestResult: { Success: true, Message: '' },
         TransactionGroup: null,
         ...overrides,
@@ -305,6 +321,7 @@ describe('ConversationEngine', () => {
 
     beforeEach(() => {
         vi.restoreAllMocks();
+        reReadFixture.row = null;
 
         engine = ConversationEngine.Instance;
         engine.ClearCache();
@@ -1276,6 +1293,11 @@ describe('ConversationEngine', () => {
             ]);
             await engine.LoadConversationDetails('conv-1', contextUser);
             expect(engine.GetCachedDetails('conv-1')).toBeDefined();
+            rowResolverCalls.count = 0;
+
+            // What the keyed re-read hands back for this session. This is the only place the row
+            // exists — it is deliberately NOT on the payload below.
+            reReadFixture.row = { ID: 'd-new', ConversationID: 'conv-1' };
 
             const dispatcher = engine as unknown as {
                 HandleIndividualBaseEntityEvent(event: Record<string, unknown>): Promise<boolean>;
@@ -1285,15 +1307,84 @@ describe('ConversationEngine', () => {
                 baseEntity: null,
                 entityName: 'MJ: Conversation Details',
                 // No recordData — exactly what the server sends for an entity that is not on the
-                // broadcast allowlist. The mocked resolver stands in for the keyed re-read.
+                // broadcast allowlist. The row above can only have arrived through the re-read.
                 payload: {
                     action: 'save',
                     primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'd-new' }]),
-                    recordData: JSON.stringify({ ID: 'd-new', ConversationID: 'conv-1' }),
                 },
             });
 
+            expect(rowResolverCalls.count).toBe(1);
             expect(engine.GetCachedDetails('conv-1')).toBeUndefined();
+        });
+
+        it('does nothing when the withheld row cannot be re-read', async () => {
+            // A refused read and a deleted record both come back null. Neither may evict: the
+            // detail's ConversationID is unknown, so there is no way to tell whose cache to touch.
+            enqueueDetailsResults([
+                createMockDetail({ ID: 'd1', ConversationID: 'conv-1' }),
+            ]);
+            await engine.LoadConversationDetails('conv-1', contextUser);
+            reReadFixture.row = null;
+
+            await (engine as unknown as {
+                HandleIndividualBaseEntityEvent(event: Record<string, unknown>): Promise<boolean>;
+            }).HandleIndividualBaseEntityEvent({
+                type: 'remote-invalidate',
+                baseEntity: null,
+                entityName: 'MJ: Conversation Details',
+                payload: {
+                    action: 'save',
+                    primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: 'd-new' }]),
+                },
+            });
+
+            expect(engine.GetCachedDetails('conv-1')).toBeDefined();
+        });
+    });
+
+    // ========================================================================
+    // A REMOTE CONVERSATION SAVE WHOSE ROW CANNOT BE RE-READ
+    // ========================================================================
+    // `eventNeedsRow` says yes for a conversation we hold, and the re-read can still come back
+    // null — refused, gone, or failed. The save branch used to hand that null straight to
+    // `BaseEntity.SetMany`, which throws, and nothing above the dispatcher catches it: the list
+    // silently stopped updating. The project handler had this guard; this one did not.
+    describe('remote conversation save (row withheld)', () => {
+        const remoteSave = (id: string) => ({
+            type: 'remote-invalidate',
+            baseEntity: null,
+            entityName: 'MJ: Conversations',
+            payload: { action: 'save', primaryKeyValues: JSON.stringify([{ FieldName: 'ID', Value: id }]) },
+        });
+        const dispatch = (evt: Record<string, unknown>) =>
+            (engine as unknown as {
+                HandleIndividualBaseEntityEvent(e: Record<string, unknown>): Promise<boolean>;
+            }).HandleIndividualBaseEntityEvent(evt);
+
+        it('keeps the conversation, unchanged, when the re-read comes back empty', async () => {
+            runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'c1', Name: 'Original' })] });
+            await engine.LoadConversations('env-1', contextUser);
+            reReadFixture.row = null;
+
+            // The faithful SetMany on the mock is what makes this assertion mean something: with
+            // the guard missing, this rejects instead of resolving.
+            await expect(dispatch(remoteSave('c1'))).resolves.toBe(true);
+
+            expect(engine.GetConversation('c1')?.Name).toBe('Original');
+            expect(engine.Conversations).toHaveLength(1);
+        });
+
+        it('merges the row when the re-read succeeds', async () => {
+            runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'c1', Name: 'Original' })] });
+            await engine.LoadConversations('env-1', contextUser);
+            rowResolverCalls.count = 0;
+            reReadFixture.row = { ID: 'c1', Name: 'Renamed elsewhere' };
+
+            await dispatch(remoteSave('c1'));
+
+            expect(rowResolverCalls.count).toBe(1);
+            expect(engine.GetConversation('c1')?.Name).toBe('Renamed elsewhere');
         });
     });
 
@@ -1346,6 +1437,21 @@ describe('ConversationEngine', () => {
             // The common case for most sessions: someone else's conversation, in some other
             // tenant, on the hottest write path in the product.
             await dispatch(remote('MJ: Conversation Details', 'save', 'd-someone-elses'));
+            expect(rowResolverCalls.count).toBe(0);
+        });
+
+        it('does not read for a detail DELETE even with a conversation cached — the row is gone', async () => {
+            // The re-read of a deleted record can only come back null, and every handler on this
+            // path early-returns on the missing foreign key, so the round trip could never change
+            // an outcome. (That remote deletes cannot be applied here at all is a pre-existing gap:
+            // deletes never carried recordData at either publish site.)
+            enqueueDetailsResults([createMockDetail({ ID: 'd1', ConversationID: 'conv-1' })]);
+            await engine.LoadConversationDetails('conv-1', contextUser);
+            rowResolverCalls.count = 0;
+
+            await dispatch(remote('MJ: Conversation Details', 'delete', 'd1'));
+            await dispatch(remote('MJ: AI Agent Runs', 'delete', 'run-1'));
+            await dispatch(remote('MJ: Conversation Detail Artifacts', 'delete', 'art-1'));
             expect(rowResolverCalls.count).toBe(0);
         });
 

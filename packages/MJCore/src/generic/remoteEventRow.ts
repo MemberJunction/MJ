@@ -62,13 +62,6 @@ export async function ResolveEntityEventRow(
 }
 
 /**
- * The identity of the record an event refers to, without needing the row.
- *
- * Available whatever the broadcast allowlist says — the primary key is never withheld, because it
- * discloses nothing a client cannot already derive and it is what every consumer needs to know
- * *which* record changed. Prefer this over reading an id out of the row.
- */
-/**
  * Can this event's row be obtained WITHOUT a provider round-trip?
  *
  * True for a local event — the row IS the live entity — and for a remote event whose payload
@@ -88,6 +81,13 @@ export function EntityEventRowIsFree(event: BaseEntityEvent): boolean {
     return !!payload?.recordData;
 }
 
+/**
+ * The identity of the record an event refers to, without needing the row.
+ *
+ * Available whatever the broadcast allowlist says — the primary key is never withheld, because it
+ * discloses nothing a client cannot already derive and it is what every consumer needs to know
+ * *which* record changed. Prefer this over reading an id out of the row.
+ */
 export function ResolveEntityEventKey(event: BaseEntityEvent): CompositeKey | null {
     if (event.baseEntity) {
         return event.baseEntity.PrimaryKey ?? null;
