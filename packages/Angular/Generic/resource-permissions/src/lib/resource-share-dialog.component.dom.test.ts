@@ -213,11 +213,19 @@ describe('GenericShareDialogComponent (DOM)', () => {
   it('emits a cancel result (no-op) when Save is clicked with no changes', async () => {
     // onSave first guards on Adapter && Context being present, THEN short-circuits to
     // onCancel() when HasChanges is false. Provide both so we reach the no-op→cancel path.
+    // CreateShare hands back a permission ROW — the grant model is the dialog's own.
     const noopAdapter = {
       LoadShares: async () => [],
-      CreateShare: async () => shareGrant(user('x', 'X'), 'View'),
+      CreateShare: async (): Promise<ResourceSharePermissionModel> => ({
+        PermissionEntity: stubEntity,
+        UserID: 'x',
+        User: user('x', 'X'),
+        Level: 'View',
+        IsNew: true,
+        MarkedForRemoval: false,
+      }),
       SyncLevelToEntity: () => {},
-    };
+    } satisfies ResourceShareAdapter;
     // Render with Visible=false so ngOnChanges does NOT kick off loadData (no backend here);
     // we set Context/Adapter in setup and drive onSave() directly.
     const f = renderComponentFixture(GenericShareDialogComponent, {

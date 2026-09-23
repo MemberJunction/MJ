@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJConversationEntity, MJProjectEntity } from '@memberjunction/core-entities';
+import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import { ConversationListComponent } from './conversation-list.component';
 import { DialogService } from '../../services/dialog.service';
@@ -112,11 +113,13 @@ const render = (
 };
 
 const byId = (id: string) => seeded.find(c => c.ID === id)!;
-const rowFor = (f: never, name: string) =>
+type ListFixture = ComponentFixture<ConversationListComponent>;
+
+const rowFor = (f: ListFixture, name: string) =>
   queryAll(f, '.conversation-item').find(r => r.textContent?.includes(name))!;
-const menuLabels = (f: { nativeElement: HTMLElement }) =>
-  queryAll(f as never, '.list-context-menu .menu-item').map(b => b.textContent?.trim() ?? '');
-const findItem = (f: never, text: string) =>
+const menuLabels = (f: ListFixture) =>
+  queryAll(f, '.list-context-menu .menu-item').map(b => b.textContent?.trim() ?? '');
+const findItem = (f: ListFixture, text: string) =>
   queryAll(f, '.list-context-menu .menu-item').find(b => b.textContent?.includes(text)) as HTMLButtonElement;
 
 const selectRows = (c: ConversationListComponent, ids: string[]) => {
@@ -131,7 +134,7 @@ describe('ConversationListComponent (DOM) — right-click menu on conversations'
 
   it('opens a menu at the pointer and suppresses the browser menu', () => {
     const { f } = render();
-    const event = rightClickOn(f, rowFor(f as never, 'Loose One'));
+    const event = rightClickOn(f, rowFor(f, 'Loose One'));
     expect(query(f, '.list-context-menu')).not.toBeNull();
     expect(event.defaultPrevented).toBe(true);
   });
@@ -143,20 +146,20 @@ describe('ConversationListComponent (DOM) — right-click menu on conversations'
 
   it('acts on the whole selection when the clicked row is part of it', () => {
     const { f } = render((c) => selectRows(c, ['U1', 'U2', 'U3']));
-    rightClickOn(f, rowFor(f as never, 'Loose Two'));
+    rightClickOn(f, rowFor(f, 'Loose Two'));
     expect(query(f, '.list-context-menu .context-menu-header')?.textContent).toContain('3 selected');
     expect(menuLabels(f).some(l => l.includes('Delete 3'))).toBe(true);
   });
 
   it('offers no Rename for a multi-conversation menu', () => {
     const { f } = render((c) => selectRows(c, ['U1', 'U2']));
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
+    rightClickOn(f, rowFor(f, 'Loose One'));
     expect(menuLabels(f).some(l => l.includes('Rename'))).toBe(false);
   });
 
   it('acts on the clicked row alone when it is not part of the selection', () => {
     const { f } = render((c) => selectRows(c, ['U1', 'U2']));
-    rightClickOn(f, rowFor(f as never, 'Work One'));
+    rightClickOn(f, rowFor(f, 'Work One'));
     expect(query(f, '.list-context-menu .context-menu-header')).toBeNull();
     expect(menuLabels(f).some(l => l.includes('Rename'))).toBe(true);
     expect(menuLabels(f).some(l => l === 'Delete')).toBe(true);
@@ -166,15 +169,15 @@ describe('ConversationListComponent (DOM) — right-click menu on conversations'
 
   it('pins every selected conversation from the menu', async () => {
     const { f, engine } = render((c) => selectRows(c, ['U1', 'U2']));
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
-    findItem(f as never, 'Pin').click();
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Pin').click();
     await Promise.resolve();
     expect(engine['PinMultipleConversations']).toHaveBeenCalledWith(['U1', 'U2'], true, currentUser);
   });
 
   it('offers both Pin and Unpin for a multi-conversation menu', () => {
     const { f } = render((c) => selectRows(c, ['U1', 'U2']));
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
+    rightClickOn(f, rowFor(f, 'Loose One'));
     const labels = menuLabels(f);
     expect(labels.some(l => l === 'Pin')).toBe(true);
     expect(labels.some(l => l === 'Unpin')).toBe(true);
@@ -182,27 +185,27 @@ describe('ConversationListComponent (DOM) — right-click menu on conversations'
 
   it('moves the whole selection through the Move to folder submenu', async () => {
     const { f, engine } = render((c) => selectRows(c, ['U1', 'U2']));
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
-    findItem(f as never, 'Move to folder').click();
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Move to folder').click();
     f.detectChanges();
-    findItem(f as never, 'Work').click();
+    findItem(f, 'Work').click();
     await Promise.resolve();
     expect(engine['MoveMultipleConversationsToProject']).toHaveBeenCalledWith(['U1', 'U2'], 'proj1', currentUser);
   });
 
   it('moves only the clicked row when it is not part of the selection', async () => {
     const { f, engine } = render((c) => selectRows(c, ['U1', 'U2']));
-    rightClickOn(f, rowFor(f as never, 'Work One'));
-    findItem(f as never, 'Move to folder').click();
+    rightClickOn(f, rowFor(f, 'Work One'));
+    findItem(f, 'Move to folder').click();
     f.detectChanges();
-    findItem(f as never, 'No folder').click();
+    findItem(f, 'No folder').click();
     await Promise.resolve();
     expect(engine['MoveMultipleConversationsToProject']).toHaveBeenCalledWith(['A1'], null, currentUser);
   });
 
   it('closes on Escape', () => {
     const { f } = render();
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
+    rightClickOn(f, rowFor(f, 'Loose One'));
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     f.detectChanges();
     expect(query(f, '.list-context-menu')).toBeNull();
@@ -248,7 +251,7 @@ describe('ConversationListComponent (DOM) — right-click menu on folders and em
   it('Select All from the empty-space menu selects every conversation', () => {
     const { f } = render();
     rightClickOn(f, query(f, '.list-content') as Element);
-    findItem(f as never, 'Select All').click();
+    findItem(f, 'Select All').click();
     f.detectChanges();
     expect(f.componentInstance.isSelectionMode).toBe(true);
     expect(Array.from(f.componentInstance.selectedConversationIds).sort()).toEqual(['A1', 'U1', 'U2', 'U3']);
@@ -259,7 +262,7 @@ describe('ConversationListComponent (DOM) — right-click menu on folders and em
     const spy = vi.fn();
     f.componentInstance.newConversationRequested.subscribe(spy);
     rightClickOn(f, query(f, '.list-content') as Element);
-    findItem(f as never, 'New Conversation').click();
+    findItem(f, 'New Conversation').click();
     expect(spy).toHaveBeenCalled();
   });
 });
@@ -271,20 +274,20 @@ describe('ConversationListComponent (DOM) — sharing from the menu', () => {
 
   it('offers Share on a single conversation', () => {
     const { f } = render();
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
+    rightClickOn(f, rowFor(f, 'Loose One'));
     expect(menuLabels(f).some(l => l === 'Share')).toBe(true);
   });
 
   it('names the count when several conversations are selected', () => {
     const { f } = render((c) => selectRows(c, ['U1', 'U2', 'U3']));
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
+    rightClickOn(f, rowFor(f, 'Loose One'));
     expect(menuLabels(f).some(l => l.includes('Share 3 conversations'))).toBe(true);
   });
 
   it('opens the bulk dialog with every selected conversation', () => {
     const { f } = render((c) => selectRows(c, ['U1', 'U2', 'U3']));
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
-    findItem(f as never, 'Share').click();
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Share').click();
     f.detectChanges();
     expect(f.componentInstance.shareContexts.map(c => c.ResourceID).sort()).toEqual(['U1', 'U2', 'U3']);
     expect(f.componentInstance.isShareDialogOpen).toBe(true);
@@ -292,24 +295,24 @@ describe('ConversationListComponent (DOM) — sharing from the menu', () => {
 
   it('opens the dialog with just the clicked row when it is not part of the selection', () => {
     const { f } = render((c) => selectRows(c, ['U1', 'U2']));
-    rightClickOn(f, rowFor(f as never, 'Work One'));
-    findItem(f as never, 'Share').click();
+    rightClickOn(f, rowFor(f, 'Work One'));
+    findItem(f, 'Share').click();
     f.detectChanges();
     expect(f.componentInstance.shareContexts.map(c => c.ResourceID)).toEqual(['A1']);
   });
 
   it('closes the menu when Share is chosen', () => {
     const { f } = render();
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
-    findItem(f as never, 'Share').click();
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Share').click();
     f.detectChanges();
     expect(query(f, '.list-context-menu')).toBeNull();
   });
 
   it('closes the dialog when the share finishes', () => {
     const { f } = render();
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
-    findItem(f as never, 'Share').click();
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Share').click();
     f.detectChanges();
     f.componentInstance.onShareDialogResult({ Action: 'save' });
     expect(f.componentInstance.isShareDialogOpen).toBe(false);
@@ -322,8 +325,8 @@ describe('ConversationListComponent (DOM) — sharing from the menu', () => {
       (c as unknown as { rebuildGroups: () => void }).rebuildGroups();
       selectRows(c, ['U1', 'U2']);
     });
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
-    findItem(f as never, 'Share').click();
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Share').click();
     f.detectChanges();
     expect(f.componentInstance.shareContexts.map(c => c.ResourceID)).toEqual(['U1']);
     expect(f.componentInstance.shareNotice).toContain('1 of 2');
@@ -331,8 +334,8 @@ describe('ConversationListComponent (DOM) — sharing from the menu', () => {
 
   it('closes the dialog on cancel', () => {
     const { f } = render();
-    rightClickOn(f, rowFor(f as never, 'Loose One'));
-    findItem(f as never, 'Share').click();
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Share').click();
     f.detectChanges();
     f.componentInstance.onShareDialogResult({ Action: 'cancel' });
     expect(f.componentInstance.isShareDialogOpen).toBe(false);
