@@ -6,7 +6,7 @@ description: Review a MemberJunction PR and post findings that survive scrutiny 
 # Review an MJ pull request
 
 A mechanism pass — "does this code do what I claim it does" — is necessary and **not sufficient**.
-Every review error worth apologising for in this repo has been on a different axis: *whose* bug it
+Every review error worth apologizing for in this repo has been on a different axis: *whose* bug it
 is, *where* it lives, and *how much* it matters. A diff does not show you any of those.
 
 This skill is the gate list. Run the mechanism pass however you like (`/code-review` is fine, and
@@ -31,7 +31,7 @@ all of them, and each costs one command.
 
 ## 0. Set up so the diff is honest
 
-**Work in a worktree.** This checkout is shared — Robert and peer sessions work in it
+**Work in a worktree.** This checkout is shared — other sessions may be working in it
 concurrently. Never check a PR branch out in place.
 
 ```bash
@@ -123,6 +123,9 @@ prevention, but say so rather than implying live breakage.
 State up front when findings are preventive. It is more honest and it makes the real argument
 (a guard with a hole in the control that motivated it) land harder.
 
+Not to be confused with disclosing LLM authorship (§3): that one is a standing line about how the
+whole comment was produced; this one calibrates the severity of a particular finding.
+
 ### Gate 4 — Dataflow, for any alignment or aliasing claim
 
 Before claiming indices misalign, an off-by-one exists, or an object is shared: **read the
@@ -151,6 +154,26 @@ A fix list that is 2-of-3 makes the author redo your search. Say explicitly whic
 ---
 
 ## 3. Writing the comment
+
+**Disclose that the review is LLM-generated, at the top, every time.** The developer is weighing
+these findings against their own knowledge of code they wrote, and they need to know what produced
+them *before* they start — not after the last one. Put it in the first line, in your own words, and
+keep it to a sentence or two.
+
+> Reviewed with Claude Code and checked by hand before posting. It has been wrong before — please
+> push back on anything that looks like a mistake or an overreach rather than taking it at face
+> value.
+
+This is not a formality or a liability notice. The reviews that produced this skill included a
+finding that was flatly backwards and two that blamed the wrong PR, and every one of those reached a
+colleague's thread with full confidence and specific line numbers. **A developer who argues with a
+wrong finding is the last gate, and the only one that runs outside this process** — so say plainly
+that you want that, and mean it. Don't soften it to "AI-assisted," and don't bury it at the bottom
+where it can only serve as an excuse after the fact.
+
+When a developer does push back, check their claim against the code before conceding *or*
+defending. Folding immediately is as unhelpful as digging in: both leave them doing the verification
+you should have done.
 
 - **Lead with what is good, specifically.** Name the thing that was hard and done well. Generic
   praise reads as padding; "the changeset explains why `IgnoreMaxRows` stays on" reads as having
