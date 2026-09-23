@@ -52,7 +52,8 @@ export async function VectorizeEntity(): Promise<void> {
       EntityDocument: context.entityDocument,
       VectorID: String(batch[index].VectorID ?? ''),
       VectorIndexID: String(batch[index].VectorIndexID ?? ''),
-      TemplateContent: templateContent.TemplateText
+      // The rendered text that was embedded for this record, not the shared raw template
+      TemplateContent: processedBatch[index]
     };
   });
 
