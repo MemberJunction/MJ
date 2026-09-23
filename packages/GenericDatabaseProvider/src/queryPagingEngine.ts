@@ -267,9 +267,30 @@ export class QueryPagingEngine {
 
     /**
      * Determines whether the given params indicate paging should be applied.
+     *
+     * A `MaxRows` on its own is enough — a caller asking only to cap a result, rather than
+     * to walk pages, still gets the ceiling applied in SQL. Without that, such a call falls
+     * through to the provider's full-fetch-then-slice path, where the database returns every
+     * row and the whole set crosses the network before being trimmed.
+     *
+     * Matches how RunView decides the same question (`BuildTotalRowCountSQL` treats rows as
+     * limited when `usingPagination || maxRowsForQuery > 0`).
+     *
+     * An absent `StartRow` means page zero; see {@link ResolveStartRow}. A negative one is
+     * rejected.
      */
     static ShouldPage(startRow: number | undefined, maxRows: number | undefined): boolean {
-        return maxRows != null && maxRows > 0 && startRow != null && startRow >= 0;
+        return maxRows != null && maxRows > 0 && (startRow == null || startRow >= 0);
+    }
+
+    /**
+     * The offset to page from: the caller's `StartRow`, or 0 when they named none.
+     *
+     * Kept beside {@link ShouldPage} so the two cannot drift — every site acting on a true
+     * `ShouldPage` needs a concrete offset, and `StartRow` is not guaranteed to be set.
+     */
+    static ResolveStartRow(startRow: number | undefined): number {
+        return startRow != null && startRow >= 0 ? startRow : 0;
     }
 
     // ════════════════════════════════════════════════════════════════════

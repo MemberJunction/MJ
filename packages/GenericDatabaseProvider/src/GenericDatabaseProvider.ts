@@ -4086,7 +4086,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     let matTotalRowCount: number;
                     let matExecutionTime: number;
                     if (matUseSQLPaging) {
-                        const paging = QueryPagingEngine.WrapWithPaging(materializedSQL, params.StartRow!, params.MaxRows!, this.PlatformKey as DatabasePlatform);
+                        const matStartRow = QueryPagingEngine.ResolveStartRow(params.StartRow);
+                        const paging = QueryPagingEngine.WrapWithPaging(materializedSQL, matStartRow, params.MaxRows!, this.PlatformKey as DatabasePlatform);
                         const start = Date.now();
                         const [dataResult, countResult] = await Promise.all([
                             this.ExecuteSQL<Record<string, unknown>>(paging.DataSQL, matPlan.parameters, undefined, contextUser),
@@ -4113,7 +4114,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         Results: rows,
                         RowCount: rows.length,
                         TotalRowCount: matTotalRowCount,
-                        PageNumber: matUseSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                        PageNumber: matUseSQLPaging
+                            ? Math.floor(QueryPagingEngine.ResolveStartRow(params.StartRow) / params.MaxRows!) + 1
+                            : undefined,
                         PageSize: matUseSQLPaging ? params.MaxRows! : undefined,
                         ExecutionTime: matExecutionTime,
                         ErrorMessage: '',
@@ -4164,7 +4167,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
                 const paging = QueryPagingEngine.WrapWithPaging(
                     finalSQL,
-                    params.StartRow!,
+                    QueryPagingEngine.ResolveStartRow(params.StartRow),
                     params.MaxRows!,
                     this.PlatformKey as DatabasePlatform,
                 );
@@ -4222,7 +4225,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Results: paginatedResult,
                 RowCount: paginatedResult.length,
                 TotalRowCount: totalRowCount,
-                PageNumber: useSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                PageNumber: useSQLPaging
+                    ? Math.floor(QueryPagingEngine.ResolveStartRow(params.StartRow) / params.MaxRows!) + 1
+                    : undefined,
                 PageSize: useSQLPaging ? params.MaxRows! : undefined,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
