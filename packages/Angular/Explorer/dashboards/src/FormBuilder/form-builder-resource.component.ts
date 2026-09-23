@@ -666,9 +666,12 @@ export class FormBuilderResourceComponent
                 // Deliberately last: this listener runs for every entity save in the app, so the
                 // read sits behind the entity filter, the loaded-form check and the id match —
                 // strictly fewer reads than the cheapest path that would get Name any other way.
+                // The guard above lets an override-only session through with no SelectedFormName,
+                // and a name we cannot compare against is not worth a read.
+                if (!this.SelectedFormName) return;
                 const lineageName =
                     savedName ?? ((await this.resolveEventRow(evt))?.['Name'] as string | undefined);
-                if (lineageName && this.SelectedFormName && lineageName === this.SelectedFormName) {
+                if (lineageName && lineageName === this.SelectedFormName) {
                     void this.handleAgentEditedActiveForm();
                 }
             } else if (entityName === 'MJ: Entity Form Overrides') {
