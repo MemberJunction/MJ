@@ -86,3 +86,4 @@ packages:
   - 'packages/RecordSetProcessor/*'
   - 'packages/eSignature/*'
   - 'packages/eSignature/Providers/*'
+  - 'packages/WorkQueue/*'
