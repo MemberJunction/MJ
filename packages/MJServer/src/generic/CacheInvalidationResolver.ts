@@ -17,7 +17,8 @@ let allowedRecordDataEntities: readonly string[] = [];
  * module scope, so importing it from this module would drag full config validation into every
  * import chain that touches the resolver — including unit tests, which have no server config and
  * would fail at import with "Configuration validation failed". This module deliberately imports
- * nothing but type-graphql.
+ * nothing from MJServer itself — only type-graphql and `@memberjunction/core` (for the entity
+ * permission check in the subscription filter), neither of which loads config.
  */
 export function ConfigureRecordDataBroadcast(entities: readonly string[] | undefined | null): void {
   // Normalised HERE, once, rather than at each comparison. The wildcard used to be matched raw
