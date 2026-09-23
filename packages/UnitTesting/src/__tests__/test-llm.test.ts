@@ -240,6 +240,22 @@ describe('registerTestLLM — real ClassFactory resolution', () => {
     expect(llm.CalledModels).toEqual(['api-claude', 'api-gpt']); // single recorder across drivers
   });
 
+  // A long-lived process (the integration suite runs every bundle in one process) cannot use
+  // resetMJSingletons() between checks — it would wipe the real providers. Without a restore, a
+  // TestLLM registered by one check kept answering every later check's real prompt calls.
+  it('restore() hands each driver name back to the class it resolved to before', () => {
+    class ProductionAnthropicLLM extends TestLLM {}
+    MJGlobal.Instance.ClassFactory.Register(BaseLLM, ProductionAnthropicLLM, 'AnthropicLLM');
+
+    const restore = registerTestLLM(llm, 'AnthropicLLM');
+    expect(MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'AnthropicLLM', 'sk-test')).toBe(llm);
+
+    restore();
+    const after = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'AnthropicLLM', 'sk-test');
+    expect(after).toBeInstanceOf(ProductionAnthropicLLM);
+    expect(after).not.toBe(llm);
+  });
+
   it('scripting applies to factory-created references (they ARE the scripted instance)', async () => {
     registerTestLLM(llm, 'GroqLLM');
     llm.Script({ kind: 'fail', error: new Error('Service temporarily unavailable') });
