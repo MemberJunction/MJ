@@ -3182,7 +3182,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
                 const paging = QueryPagingEngine.WrapWithPaging(
                     finalSQL,
-                    params.StartRow!,
+                    QueryPagingEngine.ResolveStartRow(params.StartRow),
                     params.MaxRows!,
                     this.PlatformKey as DatabasePlatform,
                 );
@@ -3240,7 +3240,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 Results: paginatedResult,
                 RowCount: paginatedResult.length,
                 TotalRowCount: totalRowCount,
-                PageNumber: useSQLPaging ? Math.floor(params.StartRow! / params.MaxRows!) + 1 : undefined,
+                PageNumber: useSQLPaging
+                    ? Math.floor(QueryPagingEngine.ResolveStartRow(params.StartRow) / params.MaxRows!) + 1
+                    : undefined,
                 PageSize: useSQLPaging ? params.MaxRows! : undefined,
                 ExecutionTime: executionTime,
                 ErrorMessage: '',
