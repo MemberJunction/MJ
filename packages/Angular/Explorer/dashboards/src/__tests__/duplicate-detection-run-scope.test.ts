@@ -20,6 +20,7 @@ import {
     buildRunScopedDetailsQuery,
     detailIDsCoveredByMatchQuery,
     groupMatchesByDetail,
+    pickDefaultEntityDocument,
     selectCurrentRunForEntity,
 } from '../AI/components/duplicates/duplicate-detection-run-scope';
 
@@ -117,22 +118,24 @@ describe('selectCurrentRunForEntity', () => {
         run(RUN_ORGS_OLD, ENTITY_ORGS, 'Complete', '2026-09-01T00:00:00Z'),
     ];
 
-    it("picks the latest Complete run of the requested entity, ignoring other entities' newer runs", () => {
+    it("picks the latest run of the requested entity, ignoring other entities' newer runs", () => {
         expect(selectCurrentRunForEntity(runs, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
         expect(selectCurrentRunForEntity(runs, ENTITY_PEOPLE)?.ID).toBe(RUN_PEOPLE);
     });
 
-    it('prefers a Complete run over a newer one that is still in progress', () => {
-        const withActive = [run('D0000000-0000-0000-0000-00000000000D', ENTITY_ORGS, 'In Progress', '2026-09-22T00:00:00Z'), ...runs];
-        expect(selectCurrentRunForEntity(withActive, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
+    it('shows a newer run even while it is still In Progress (a cancelled run stays In Progress)', () => {
+        // Preferring the older Complete run here would hide the rows the user just watched being produced.
+        const withActive = [...runs, run('D0000000-0000-0000-0000-00000000000D', ENTITY_ORGS, 'In Progress', '2026-09-22T00:00:00Z')];
+        expect(selectCurrentRunForEntity(withActive, ENTITY_ORGS)?.ID).toBe('D0000000-0000-0000-0000-00000000000D');
     });
 
-    it('falls back to the latest run of any status when the entity has no Complete run', () => {
-        const noneComplete = [
+    it('orders by StartedAt, not by the order the rows arrived in', () => {
+        const shuffled = [
             run('F0000000-0000-0000-0000-00000000000F', ENTITY_ORGS, 'Failed', '2026-09-10T00:00:00Z'),
-            run('D0000000-0000-0000-0000-00000000000D', ENTITY_ORGS, 'In Progress', '2026-09-22T00:00:00Z'),
+            run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
+            run(RUN_ORGS_OLD, ENTITY_ORGS, 'Complete', '2026-09-01T00:00:00Z'),
         ];
-        expect(selectCurrentRunForEntity(noneComplete, ENTITY_ORGS)?.ID).toBe('D0000000-0000-0000-0000-00000000000D');
+        expect(selectCurrentRunForEntity(shuffled, ENTITY_ORGS)?.ID).toBe(RUN_ORGS_NEW);
     });
 
     it('returns null when there is no entity, or no run for it', () => {
@@ -144,6 +147,35 @@ describe('selectCurrentRunForEntity', () => {
 
     it('matches the entity ID regardless of casing', () => {
         expect(selectCurrentRunForEntity(runs, ENTITY_ORGS.toLowerCase())?.ID).toBe(RUN_ORGS_NEW);
+    });
+});
+
+describe('pickDefaultEntityDocument', () => {
+    const docs = [
+        { ID: 'DOC-UNRELATED', EntityID: 'E0000009-0000-0000-0000-000000000009' },
+        { ID: 'DOC-ORGS', EntityID: ENTITY_ORGS },
+        { ID: 'DOC-PEOPLE', EntityID: ENTITY_PEOPLE },
+    ];
+
+    it('lands on the document for the entity of the most recent run, not on the first document', () => {
+        const runs = [
+            run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
+            run(RUN_PEOPLE, ENTITY_PEOPLE, 'Complete', '2026-09-20T00:00:00Z'),
+        ];
+        expect(pickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-PEOPLE');
+    });
+
+    it('skips runs whose entity has no document and takes the next newest', () => {
+        const runs = [
+            run('Z0000000-0000-0000-0000-00000000000Z', 'E0000007-0000-0000-0000-000000000007', 'Complete', '2026-09-21T00:00:00Z'),
+            run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z'),
+        ];
+        expect(pickDefaultEntityDocument(docs, runs)?.ID).toBe('DOC-ORGS');
+    });
+
+    it('falls back to the first document when no run matches, and to null with no documents', () => {
+        expect(pickDefaultEntityDocument(docs, [])?.ID).toBe('DOC-UNRELATED');
+        expect(pickDefaultEntityDocument([], [run(RUN_ORGS_NEW, ENTITY_ORGS, 'Complete', '2026-09-15T00:00:00Z')])).toBeNull();
     });
 });
 

@@ -37,14 +37,24 @@ export interface DuplicateRunCandidate {
 /** How many detail IDs go into one matches query; keeps each `IN (...)` list a sane size. */
 export const MATCH_QUERY_DETAIL_CHUNK_SIZE = 500;
 
-const RUN_COMPLETE = 'Complete';
 const DETAIL_COMPLETE = 'Complete';
 
+/** The slice of an entity-document picker option needed to choose a default. */
+export interface EntityDocumentCandidate {
+    ID: string;
+    EntityID: string;
+}
+
 /**
- * Pick the run the board should display for an entity: the most recent COMPLETE run for that entity,
- * or, when the entity has no complete run yet, its most recent run of any status (so a run that is
- * still in progress, or failed part-way, still surfaces what it produced). Runs for other entities
- * are never candidates. Returns null when there is no entity or no run for it.
+ * Pick the run the board should display for an entity: its most recent run, whatever its status.
+ *
+ * Not "most recent Complete run" on purpose. A run the user cancels keeps `ProcessingStatus =
+ * 'In Progress'` (the detector marks it for resumption), and the board's own idle timer can finish a
+ * detection before the server does; both end with a reload while a newer run exists. Preferring an
+ * older Complete run there would hide the rows the user just watched being produced behind the
+ * previous run's. The newest run is what the user is looking at; when it completes, the board
+ * reloads and shows its full set. Runs for other entities are never candidates. Returns null when
+ * there is no entity or no run for it.
  */
 export function selectCurrentRunForEntity<T extends DuplicateRunCandidate>(
     runs: readonly T[],
@@ -53,13 +63,32 @@ export function selectCurrentRunForEntity<T extends DuplicateRunCandidate>(
     if (!entityID) {
         return null;
     }
-    const forEntity = runs
-        .filter(r => UUIDsEqual(r.EntityID, entityID))
-        .sort((a, b) => toTime(b.StartedAt) - toTime(a.StartedAt));
-    if (forEntity.length === 0) {
+    return newestFirst(runs.filter(r => UUIDsEqual(r.EntityID, entityID)))[0] ?? null;
+}
+
+/**
+ * The entity document the board should show before the user picks one: the document for the entity
+ * of the most recent run, so a first visit lands on results that exist. Falls back to the first
+ * document when no run matches any document, and to null when there are no documents at all.
+ */
+export function pickDefaultEntityDocument<D extends EntityDocumentCandidate>(
+    documents: readonly D[],
+    runs: readonly DuplicateRunCandidate[]
+): D | null {
+    if (documents.length === 0) {
         return null;
     }
-    return forEntity.find(r => r.ProcessingStatus === RUN_COMPLETE) ?? forEntity[0];
+    for (const run of newestFirst(runs)) {
+        const match = documents.find(d => UUIDsEqual(d.EntityID, run.EntityID));
+        if (match) {
+            return match;
+        }
+    }
+    return documents[0];
+}
+
+function newestFirst<T extends DuplicateRunCandidate>(runs: readonly T[]): T[] {
+    return [...runs].sort((a, b) => toTime(b.StartedAt) - toTime(a.StartedAt));
 }
 
 /** The completed details of ONE run, newest first. Bounded by the run; `IgnoreMaxRows` per the file comment. */

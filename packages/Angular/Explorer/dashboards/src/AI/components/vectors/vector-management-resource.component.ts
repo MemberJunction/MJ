@@ -1206,7 +1206,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
         this.entityDocuments = engine.EntityDocuments;
         this.vectorDatabases = AIEngineBase.Instance.VectorDatabases;
-        this.vectorIndexes = engine.VectorIndexes;
+        // A copy: resolveOrCreateVectorIndex() appends the index it creates, and the engine's getter
+        // hands out its own cached array, which this component must not mutate.
+        this.vectorIndexes = [...engine.VectorIndexes];
 
         // Build per-EntityDocument aggregate stats (vector count + last synced).
         // Each query fetches only the most recent row (MaxRows: 1) and uses
