@@ -7,7 +7,13 @@ import { MJUserEntity } from '@memberjunction/core-entities';
 import { MJWindowComponent, MJWindowTitlebarComponent, MJEmptyStateComponent, MJAlertComponent } from '@memberjunction/ng-ui-components';
 import { renderComponentFixture, query, queryAll, text, hasClass, click, capture, useFakeGlobalProvider } from '@memberjunction/ng-test-utils';
 import { GenericShareDialogComponent } from './resource-share-dialog.component';
-import { ResourceSharePermissionModel, ResourceShareContext, ResourceShareAdapter } from './resource-share-adapter';
+import {
+  ResourceSharePermissionModel,
+  ResourceShareContext,
+  ResourceShareAdapter,
+  ResourceShareGrant,
+  ResourceShareLevel
+} from './resource-share-adapter';
 
 /**
  * DOM-level spec for <mj-resource-share-dialog>. The dialog is presentational over a
@@ -28,19 +34,35 @@ function user(id: string, name: string, email?: string): MJUserEntity {
 // The PermissionEntity is only touched on save/delete, never during rendering.
 const stubEntity = {} as BaseEntity;
 
-function shareRow(
+/**
+ * One person's access to the single resource under test. The dialog works in
+ * grants (a person plus their row on each resource), so a single-resource grant
+ * carries exactly one row.
+ */
+function shareGrant(
   u: MJUserEntity,
-  level: ResourceSharePermissionModel['Level'],
-  opts: Partial<Pick<ResourceSharePermissionModel, 'IsNew' | 'MarkedForRemoval' | '_InitialLevel'>> = {},
-): ResourceSharePermissionModel {
-  return {
+  level: ResourceShareLevel,
+  opts: { IsNew?: boolean; MarkedForRemoval?: boolean; InitialLevel?: ResourceShareLevel } = {},
+): ResourceShareGrant {
+  const initial = opts.InitialLevel ?? level;
+  const row: ResourceSharePermissionModel = {
     PermissionEntity: stubEntity,
     UserID: u.ID,
     User: u,
     Level: level,
     IsNew: opts.IsNew ?? false,
+    MarkedForRemoval: false,
+    _InitialLevel: initial,
+  };
+  return {
+    User: u,
+    UserID: u.ID,
+    Rows: opts.IsNew ? new Map() : new Map([[CONTEXT.ResourceID, row]]),
+    InitialLevel: initial,
+    Level: level,
+    LevelTouched: level !== initial,
+    IsNew: opts.IsNew ?? false,
     MarkedForRemoval: opts.MarkedForRemoval ?? false,
-    _InitialLevel: opts._InitialLevel ?? level,
   };
 }
 
@@ -94,7 +116,7 @@ describe('GenericShareDialogComponent (DOM)', () => {
 
   it('renders one row per active share with name and email', () => {
     const f = render((c) => {
-      c.UserShares = [shareRow(user('u1', 'Ada Lovelace', 'ada@x.com'), 'View'), shareRow(user('u2', 'Alan Turing', 'alan@x.com'), 'Edit')];
+      c.Grants = [shareGrant(user('u1', 'Ada Lovelace', 'ada@x.com'), 'View'), shareGrant(user('u2', 'Alan Turing', 'alan@x.com'), 'Edit')];
     });
     const rows = queryAll(f, '.share-person:not(.share-owner)');
     expect(rows.length).toBe(2);
@@ -104,7 +126,7 @@ describe('GenericShareDialogComponent (DOM)', () => {
 
   it('marks the active level button for each share row', () => {
     const f = render((c) => {
-      c.UserShares = [shareRow(user('u1', 'Ada'), 'Edit')];
+      c.Grants = [shareGrant(user('u1', 'Ada'), 'Edit')];
     });
     const buttons = queryAll(f, '.share-level-btn');
     expect(buttons.map((b) => b.textContent?.trim())).toEqual(['View', 'Edit', 'Owner']);
@@ -115,7 +137,7 @@ describe('GenericShareDialogComponent (DOM)', () => {
 
   it('applies the share-person-new class to newly added rows', () => {
     const f = render((c) => {
-      c.UserShares = [shareRow(user('u1', 'Ada'), 'View', { IsNew: true })];
+      c.Grants = [shareGrant(user('u1', 'Ada'), 'View', { IsNew: true })];
     });
     expect(hasClass(f, '.share-person:not(.share-owner)', 'share-person-new')).toBe(true);
     expect(query(f, '.share-badge-new')).not.toBeNull();
@@ -123,28 +145,28 @@ describe('GenericShareDialogComponent (DOM)', () => {
 
   it('marks a row modified when its level differs from the loaded level', () => {
     const f = render((c) => {
-      c.UserShares = [shareRow(user('u1', 'Ada'), 'Edit', { _InitialLevel: 'View' })];
+      c.Grants = [shareGrant(user('u1', 'Ada'), 'Edit', { InitialLevel: 'View' })];
     });
     expect(hasClass(f, '.share-person:not(.share-owner)', 'share-person-modified')).toBe(true);
   });
 
   it('changes a share level and emits the active class when a level button is clicked', () => {
     const f = render((c) => {
-      c.UserShares = [shareRow(user('u1', 'Ada'), 'View')];
+      c.Grants = [shareGrant(user('u1', 'Ada'), 'View')];
     });
     // click the Owner button (3rd)
     const ownerBtn = queryAll(f, '.share-level-btn')[2] as HTMLButtonElement;
     ownerBtn.click();
     f.detectChanges();
 
-    expect(f.componentInstance.UserShares[0].Level).toBe('Owner');
+    expect(f.componentInstance.Grants[0].Level).toBe('Owner');
     const active = queryAll(f, '.share-level-btn').filter((b) => b.classList.contains('active'));
     expect(active[0].textContent?.trim()).toBe('Owner');
   });
 
   it('moves a non-new row to the removed section when its remove button is clicked', () => {
     const f = render((c) => {
-      c.UserShares = [shareRow(user('u1', 'Ada'), 'View')];
+      c.Grants = [shareGrant(user('u1', 'Ada'), 'View')];
     });
     click(f, '.share-remove-btn');
     f.detectChanges();
@@ -156,7 +178,7 @@ describe('GenericShareDialogComponent (DOM)', () => {
 
   it('restores a removed row via undo', () => {
     const f = render((c) => {
-      c.UserShares = [shareRow(user('u1', 'Ada'), 'View', { MarkedForRemoval: true })];
+      c.Grants = [shareGrant(user('u1', 'Ada'), 'View', { MarkedForRemoval: true })];
     });
     expect(query(f, '.share-removed-section')).not.toBeNull();
     click(f, '.share-undo-btn');
@@ -168,7 +190,7 @@ describe('GenericShareDialogComponent (DOM)', () => {
 
   it('shows the unsaved-changes hint and enables Save only when there are changes', () => {
     const f = render((c) => {
-      c.UserShares = [shareRow(user('u1', 'Ada'), 'View')]; // unchanged
+      c.Grants = [shareGrant(user('u1', 'Ada'), 'View')]; // unchanged
     });
     expect(query(f, '.share-changes-hint')).toBeNull();
     expect((query(f, '.share-btn-primary') as HTMLButtonElement).disabled).toBe(true);
@@ -193,7 +215,7 @@ describe('GenericShareDialogComponent (DOM)', () => {
     // onCancel() when HasChanges is false. Provide both so we reach the no-op→cancel path.
     const noopAdapter = {
       LoadShares: async () => [],
-      CreateShare: async () => shareRow(user('x', 'X'), 'View'),
+      CreateShare: async () => shareGrant(user('x', 'X'), 'View'),
       SyncLevelToEntity: () => {},
     };
     // Render with Visible=false so ngOnChanges does NOT kick off loadData (no backend here);
@@ -205,7 +227,7 @@ describe('GenericShareDialogComponent (DOM)', () => {
       setup: (c) => {
         c.Context = CONTEXT;
         c.Adapter = noopAdapter;
-        c.UserShares = [shareRow(user('u1', 'Ada'), 'View')]; // unchanged → HasChanges false
+        c.Grants = [shareGrant(user('u1', 'Ada'), 'View')]; // unchanged → HasChanges false
       },
     });
     const results = capture(f.componentInstance.Result);

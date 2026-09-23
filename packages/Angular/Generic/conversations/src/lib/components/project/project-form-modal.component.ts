@@ -440,11 +440,15 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
         this.projectSaved.emit(project);
         this.dialogRef.Close();
       } else {
-        throw new Error('Failed to save project');
+        // Save() records WHY it refused on LatestResult and returns false — a
+        // server refusal, a constraint violation, a failed validation. Reporting
+        // a generic message here would throw the only copy of that reason away.
+        throw new Error(project.LatestResult?.CompleteMessage || 'The save was refused with no reason given.');
       }
     } catch (error) {
       console.error('Error saving project:', error);
-      alert('Failed to save project. Please try again.');
+      const reason = error instanceof Error ? error.message : String(error);
+      alert(`Failed to save folder.\n\n${reason}`);
     }
   }
 

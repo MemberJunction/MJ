@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Component, Input } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
@@ -26,6 +26,16 @@ class StubNotificationBadgeComponent {
   @Input() conversationId: string | null = null;
 }
 
+@Component({ standalone: false, selector: 'mj-resource-share-dialog', template: '' })
+class StubShareDialogComponent {
+  @Input() Visible = false;
+  @Input() Contexts: unknown[] = [];
+  @Input() Adapter: unknown = null;
+  @Input() Notice: string | null = null;
+  @Input() ResourceLabel = '';
+  @Output() Result = new EventEmitter<unknown>();
+}
+
 describe('ConversationListComponent (DOM) — chrome toggles', () => {
   const currentUser = { ID: 'u1' } as unknown as UserInfo;
   const conv = (id: string, name: string) =>
@@ -38,7 +48,7 @@ describe('ConversationListComponent (DOM) — chrome toggles', () => {
   const render = (inputs: Record<string, unknown> = {}, setup?: (c: ConversationListComponent) => void) =>
     renderComponentFixture(ConversationListComponent, {
       imports: [CommonModule, FormsModule],
-      declarations: [ConversationListComponent, StubNotificationBadgeComponent],
+      declarations: [ConversationListComponent, StubNotificationBadgeComponent, StubShareDialogComponent],
       providers: [
         { provide: DialogService, useValue: {} },
         { provide: NotificationService, useValue: {} },

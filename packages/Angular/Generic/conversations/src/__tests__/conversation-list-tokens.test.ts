@@ -95,7 +95,7 @@ describe('conversation-list inline styles — design tokens only', () => {
     expect(styles).toContain('.btn-new-conversation:hover { background: var(--conv-list-accent-hover); }');
     expect(styles).toContain('background: var(--conv-list-accent);'); // btn-new-conversation bg
     expect(styles).toContain('color: var(--conv-list-accent-ink);'); // btn-new-conversation label
-    expect(styles).toContain('accent-color: var(--conv-list-accent);'); // bulk-select checkbox
+    expect(styles).toContain('box-shadow: inset 3px 0 0 var(--conv-list-accent);'); // selected-row bar
     // brand-primary survives in the body ONLY inside the multi-hue message-drag
     // glow's color-mix gradients (deliberately kept) — never as a bare
     // `background:`/`border-color:` on an action element (those route through the

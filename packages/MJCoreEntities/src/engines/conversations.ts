@@ -135,6 +135,18 @@ export interface SharedByInfo {
     Level: 'View' | 'Edit' | 'Owner';
 }
 
+/** Per-item outcome of a bulk conversation operation. */
+export interface ConversationBulkResult {
+    Successful: string[];
+    Failed: Array<{ ID: string; Name: string; Error: string }>;
+}
+
+/** Fields a bulk conversation update may write. */
+export interface ConversationBulkUpdate {
+    ProjectID?: MJConversationEntity['ProjectID'];
+    IsPinned?: MJConversationEntity['IsPinned'];
+}
+
 // ========================================================================
 // QUERY RESULT TYPES (from GetConversationComplete stored query)
 // ========================================================================
@@ -1330,6 +1342,112 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         this.removeMultipleFromList(successful);
 
         return { Successful: successful, Failed: failed };
+    }
+
+    /**
+     * Moves multiple conversations into a folder (project), or out of every folder
+     * when projectId is null. Emits the updated list once for the whole batch.
+     *
+     * @param ids - Conversation IDs to move
+     * @param projectId - Target folder ID, or null for no folder
+     * @param contextUser - The current user context
+     * @returns Per-item successful and failed outcomes
+     */
+    public async MoveMultipleConversationsToProject(
+        ids: string[],
+        projectId: string | null,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        return this.saveMultipleConversations(ids, { ProjectID: projectId }, contextUser);
+    }
+
+    /**
+     * Pins or unpins multiple conversations. Emits the re-sorted list once for the
+     * whole batch, so pinned conversations move to the top in a single UI update.
+     *
+     * @param ids - Conversation IDs to pin or unpin
+     * @param isPinned - True to pin, false to unpin
+     * @param contextUser - The current user context
+     * @returns Per-item successful and failed outcomes
+     */
+    public async PinMultipleConversations(
+        ids: string[],
+        isPinned: boolean,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        return this.saveMultipleConversations(ids, { IsPinned: isPinned }, contextUser);
+    }
+
+    /**
+     * Applies the same field updates to several conversations, one save at a time so
+     * a single rejection cannot fail the batch, then re-emits the list once.
+     * A conversation whose save fails keeps its previous field values in memory.
+     */
+    private async saveMultipleConversations(
+        ids: string[],
+        updates: ConversationBulkUpdate,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        const successful: string[] = [];
+        const failed: Array<{ ID: string; Name: string; Error: string }> = [];
+        if (ids.length === 0) {
+            return { Successful: successful, Failed: failed };
+        }
+
+        const md = this.ProviderToUse;
+        this._selfMutating = true;
+        try {
+            for (const id of ids) {
+                let conversation = this.GetConversation(id);
+                try {
+                    if (!conversation) {
+                        const entity = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+                        const loaded = await entity.Load(id);
+                        if (!loaded) {
+                            failed.push({ ID: id, Name: 'Unknown', Error: 'Conversation not found' });
+                            continue;
+                        }
+                        conversation = entity;
+                    }
+
+                    const previous: ConversationBulkUpdate = {
+                        ProjectID: conversation.ProjectID,
+                        IsPinned: conversation.IsPinned
+                    };
+                    this.applyBulkUpdate(conversation, updates);
+
+                    const saved = await conversation.Save();
+                    if (saved) {
+                        successful.push(conversation.ID);
+                    } else {
+                        this.applyBulkUpdate(conversation, previous);
+                        failed.push({
+                            ID: id,
+                            Name: conversation.Name || 'Unknown',
+                            Error: conversation.LatestResult?.Message || 'Failed to update conversation'
+                        });
+                    }
+                } catch (error) {
+                    failed.push({
+                        ID: id,
+                        Name: conversation?.Name || 'Unknown',
+                        Error: error instanceof Error ? error.message : 'Unknown error'
+                    });
+                }
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        if (successful.length > 0) {
+            this._conversations$.next(this.sortConversations(this._conversations$.value));
+        }
+        return { Successful: successful, Failed: failed };
+    }
+
+    private applyBulkUpdate(conversation: MJConversationEntity, updates: ConversationBulkUpdate): void {
+        if (updates.ProjectID !== undefined) conversation.ProjectID = updates.ProjectID;
+        if (updates.IsPinned !== undefined) conversation.IsPinned = updates.IsPinned;
     }
 
     // ========================================================================

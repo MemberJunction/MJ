@@ -10,12 +10,18 @@
     <mj-window-titlebar>
       <div class="share-dialog-header">
         <i class="fa-solid fa-share-nodes"></i>
-        <span>Share "{{ Context?.ResourceName }}"</span>
+        <span>{{ Title }}</span>
       </div>
     </mj-window-titlebar>
     <div class="share-dialog-body">
       @if (Error) {
         <mj-alert Variant="error">{{ Error }}</mj-alert>
+      }
+      @if (Notice) {
+        <div class="share-notice">
+          <i class="fa-solid fa-circle-info"></i>
+          <span>{{ Notice }}</span>
+        </div>
       }
       <!-- Add Users Section -->
       <div class="share-section">
@@ -52,13 +58,13 @@
       <!-- People with Access -->
       <div class="share-section">
         <div class="share-section-label">People with access</div>
-        @if (Context?.OwnerDisplayName) {
+        @if (PrimaryContext?.OwnerDisplayName) {
           <div class="share-person share-owner">
             <span class="share-avatar share-avatar-owner">
               <i class="fa-solid fa-crown"></i>
             </span>
             <div class="share-person-info">
-              <span class="share-person-name">{{ Context?.OwnerDisplayName }}</span>
+              <span class="share-person-name">{{ PrimaryContext?.OwnerDisplayName }}</span>
               <span class="share-person-role">Owner</span>
             </div>
           </div>
@@ -76,12 +82,15 @@
               @if (share.User.Email) {
                 <span class="share-person-email">{{ share.User.Email }}</span>
               }
+              @if (scopeLabel(share)) {
+                <span class="share-person-scope">{{ scopeLabel(share) }}</span>
+              }
             </div>
             <div class="share-level-select" role="group" aria-label="Permission level">
               @for (level of Levels; track level) {
                 <button type="button"
                         class="share-level-btn"
-                        [class.active]="share.Level === level"
+                        [class.active]="isLevelActive(share, level)"
                         (click)="setLevel(share, level)"
                         [title]="level + ' access'">
                   {{ level }}

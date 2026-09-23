@@ -7,6 +7,7 @@ import {
     RESOURCE_SHARE_LEVELS,
     ResourceShareAdapter,
     ResourceShareContext,
+    ResourceShareGrant,
     ResourceShareLevel,
     ResourceSharePermissionModel
 } from './resource-share-adapter';
@@ -33,19 +34,44 @@ export interface ResourceShareDialogResult {
 })
 export class GenericShareDialogComponent extends BaseAngularComponent implements OnChanges {
     @Input() Visible = false;
+    /** The single resource being shared. Ignored when `Contexts` is supplied. */
     @Input() Context: ResourceShareContext | null = null;
+    /** Several resources to share at once; every action applies to all of them. */
+    @Input() Contexts: ResourceShareContext[] | null = null;
     @Input() Adapter: ResourceShareAdapter | null = null;
+    /** Singular noun for the title when sharing several ("3 conversations"). */
+    @Input() ResourceLabel = 'item';
+    /** Optional line shown above the dialog body — e.g. what the caller left out. */
+    @Input() Notice: string | null = null;
     @Output() Result = new EventEmitter<ResourceShareDialogResult>();
 
     public readonly Levels = RESOURCE_SHARE_LEVELS;
 
-    public UserShares: ResourceSharePermissionModel[] = [];
+    public Grants: ResourceShareGrant[] = [];
     public AvailableUsers: MJUserEntity[] = [];
     private allUsers: MJUserEntity[] = [];
 
     public IsLoading = false;
     public Error: string | null = null;
     public UserSearchFilter = '';
+
+    /** Every resource this dialog is operating on. */
+    public get ActiveContexts(): ResourceShareContext[] {
+        if (this.Contexts && this.Contexts.length > 0) return this.Contexts;
+        return this.Context ? [this.Context] : [];
+    }
+
+    /** The resource whose owner row is shown — only meaningful for a single resource. */
+    public get PrimaryContext(): ResourceShareContext | null {
+        const contexts = this.ActiveContexts;
+        return contexts.length === 1 ? contexts[0] : null;
+    }
+
+    public get Title(): string {
+        const contexts = this.ActiveContexts;
+        if (contexts.length === 1) return `Share "${contexts[0].ResourceName}"`;
+        return `Share ${contexts.length} ${this.ResourceLabel}s`;
+    }
 
     /** Message for the no-results empty-state, echoing the current search term. */
     public get NoUsersFoundMessage(): string {
@@ -56,38 +82,32 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         super();}
 
     ngOnChanges(changes: SimpleChanges): void {
-        if (changes['Visible'] && this.Visible && this.Context && this.Adapter) {
+        if (changes['Visible'] && this.Visible && this.ActiveContexts.length > 0 && this.Adapter) {
             this.resetDialog();
-            this.loadData();
+            void this.Reload();
         }
     }
 
     private resetDialog(): void {
         this.Error = null;
         this.IsLoading = false;
-        this.UserShares = [];
+        this.Grants = [];
         this.AvailableUsers = [];
         this.UserSearchFilter = '';
     }
 
-    private async loadData(): Promise<void> {
-        if (!this.Context || !this.Adapter) return;
+    /** Loads the people list and every resource's existing shares, merged per person. */
+    public async Reload(): Promise<void> {
+        const contexts = this.ActiveContexts;
+        if (contexts.length === 0 || !this.Adapter) return;
 
         this.IsLoading = true;
         this.cdr.detectChanges();
 
         try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const usersResult = await rv.RunView<MJUserEntity>({
-                EntityName: 'MJ: Users',
-                ExtraFilter: 'IsActive = 1',
-                OrderBy: 'Name',
-                ResultType: 'entity_object'
-            });
-            this.allUsers = usersResult.Success ? usersResult.Results : [];
-
-            this.UserShares = await this.Adapter.LoadShares(this.Context);
-            this.UserShares.forEach((s) => (s._InitialLevel = s.Level));
+            await this.loadUsers();
+            const perResource = await Promise.all(contexts.map((ctx) => this.Adapter!.LoadShares(ctx)));
+            this.Grants = this.mergeIntoGrants(contexts, perResource);
             this.updateAvailableUsers();
         } catch (error) {
             console.error('Error loading share data:', error);
@@ -98,18 +118,67 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         }
     }
 
+    private async loadUsers(): Promise<void> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const usersResult = await rv.RunView<MJUserEntity>({
+            EntityName: 'MJ: Users',
+            ExtraFilter: 'IsActive = 1',
+            OrderBy: 'Name',
+            ResultType: 'entity_object'
+        });
+        this.allUsers = usersResult.Success ? usersResult.Results : [];
+    }
+
+    /** One grant per person, carrying their row on each resource that has one. */
+    private mergeIntoGrants(
+        contexts: ResourceShareContext[],
+        perResource: ResourceSharePermissionModel[][]
+    ): ResourceShareGrant[] {
+        const byUser = new Map<string, ResourceShareGrant>();
+
+        perResource.forEach((rows, index) => {
+            const resourceId = contexts[index].ResourceID;
+            for (const row of rows) {
+                row._InitialLevel = row.Level;
+                const key = row.UserID.toLowerCase();
+                const grant = byUser.get(key) ?? {
+                    User: row.User,
+                    UserID: row.UserID,
+                    Rows: new Map<string, ResourceSharePermissionModel>(),
+                    InitialLevel: row.Level,
+                    Level: row.Level,
+                    LevelTouched: false,
+                    IsNew: false,
+                    MarkedForRemoval: false
+                };
+                grant.Rows.set(resourceId, row);
+                if (grant.InitialLevel !== row.Level) {
+                    grant.InitialLevel = null; // levels differ across resources
+                }
+                byUser.set(key, grant);
+            }
+        });
+
+        // A person on some but not all resources has no single level to show either.
+        for (const grant of byUser.values()) {
+            grant.Level = grant.InitialLevel ?? 'View';
+        }
+        return Array.from(byUser.values());
+    }
+
+    /** Everyone who isn't the owner and doesn't already hold a (live) grant. */
     private updateAvailableUsers(): void {
-        if (!this.Context) return;
         const sharedUserIds = new Set(
-            this.UserShares.filter((s) => !s.MarkedForRemoval).map((s) => s.User.ID)
+            this.Grants.filter((g) => !g.MarkedForRemoval).map((g) => g.User.ID)
         );
-        const ownerId = this.Context.OwnerUserID;
+        const ownerId = this.PrimaryContext?.OwnerUserID ?? null;
         this.AvailableUsers = this.allUsers.filter((user) => {
             if (ownerId && UUIDsEqual(user.ID, ownerId)) return false;
             return !sharedUserIds.has(user.ID);
         });
     }
 
+    /** The first ten matches for the search box, or the first ten people. */
     public get FilteredAvailableUsers(): MJUserEntity[] {
         if (!this.UserSearchFilter.trim()) {
             return this.AvailableUsers.slice(0, 10);
@@ -121,57 +190,89 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
     }
 
     public get HasChanges(): boolean {
-        return this.UserShares.some(
-            (s) => s.IsNew || s.MarkedForRemoval || s.Level !== s._InitialLevel
-        );
+        return this.Grants.some((g) => g.IsNew || g.MarkedForRemoval || g.LevelTouched);
     }
 
-    public get ActiveShares(): ResourceSharePermissionModel[] {
-        return this.UserShares.filter((s) => !s.MarkedForRemoval);
+    public get ActiveShares(): ResourceShareGrant[] {
+        return this.Grants.filter((g) => !g.MarkedForRemoval);
     }
 
-    public get RemovedShares(): ResourceSharePermissionModel[] {
-        return this.UserShares.filter((s) => s.MarkedForRemoval);
+    public get RemovedShares(): ResourceShareGrant[] {
+        return this.Grants.filter((g) => g.MarkedForRemoval);
     }
 
-    /** Highlight rows whose level has been changed from their loaded state. */
-    public isModified(share: ResourceSharePermissionModel): boolean {
-        return !share.IsNew && share.Level !== share._InitialLevel;
+    /** Highlight grants whose level has been changed from their loaded state. */
+    public isModified(grant: ResourceShareGrant): boolean {
+        return !grant.IsNew && grant.LevelTouched;
     }
 
+    /** A level button lights up only when the grant has one level to show. */
+    public isLevelActive(grant: ResourceShareGrant, level: ResourceShareLevel): boolean {
+        if (!grant.LevelTouched && grant.InitialLevel === null && !grant.IsNew) return false;
+        return grant.Level === level;
+    }
+
+    /**
+     * Why a grant does not simply read as "everyone, one level": levels that
+     * differ across resources, or access held on only some of them.
+     */
+    public scopeLabel(grant: ResourceShareGrant): string {
+        if (grant.IsNew || this.ActiveContexts.length < 2) return '';
+        const parts: string[] = [];
+        if (!grant.LevelTouched && grant.InitialLevel === null) parts.push('Mixed');
+        if (grant.Rows.size < this.ActiveContexts.length) {
+            parts.push(`${grant.Rows.size} of ${this.ActiveContexts.length}`);
+        }
+        return parts.join(' · ');
+    }
+
+    /** Adds a person, to every resource the dialog is sharing. */
     public async addUserShare(user: MJUserEntity): Promise<void> {
-        if (!this.Context || !this.Adapter) return;
-        const row = await this.Adapter.CreateShare(this.Context, user);
-        row._InitialLevel = row.Level;
-        this.UserShares.push(row);
+        if (this.ActiveContexts.length === 0 || !this.Adapter) return;
+        this.Grants = [
+            ...this.Grants,
+            {
+                User: user,
+                UserID: user.ID,
+                Rows: new Map<string, ResourceSharePermissionModel>(),
+                InitialLevel: null,
+                Level: 'View',
+                LevelTouched: false,
+                IsNew: true,
+                MarkedForRemoval: false
+            }
+        ];
         this.updateAvailableUsers();
         this.UserSearchFilter = '';
         this.cdr.detectChanges();
     }
 
-    public removeUserShare(share: ResourceSharePermissionModel): void {
-        if (share.IsNew) {
-            this.UserShares = this.UserShares.filter((s) => s !== share);
+    public removeUserShare(grant: ResourceShareGrant): void {
+        if (grant.IsNew) {
+            this.Grants = this.Grants.filter((g) => g !== grant);
         } else {
-            share.MarkedForRemoval = true;
+            grant.MarkedForRemoval = true;
         }
         this.updateAvailableUsers();
         this.cdr.detectChanges();
     }
 
-    public undoRemove(share: ResourceSharePermissionModel): void {
-        share.MarkedForRemoval = false;
+    public undoRemove(grant: ResourceShareGrant): void {
+        grant.MarkedForRemoval = false;
         this.updateAvailableUsers();
         this.cdr.detectChanges();
     }
 
-    public setLevel(share: ResourceSharePermissionModel, level: ResourceShareLevel): void {
-        share.Level = level;
+    /** Sets one level for the person across every resource, filling in any gaps. */
+    public setLevel(grant: ResourceShareGrant, level: ResourceShareLevel): void {
+        grant.Level = level;
+        grant.LevelTouched = true;
         this.cdr.detectChanges();
     }
 
     public async onSave(): Promise<void> {
-        if (!this.Adapter || !this.Context) return;
+        const contexts = this.ActiveContexts;
+        if (!this.Adapter || contexts.length === 0) return;
         if (!this.HasChanges) {
             this.onCancel();
             return;
@@ -181,34 +282,17 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
 
         try {
-            for (const share of this.UserShares.filter((s) => s.MarkedForRemoval && !s.IsNew)) {
-                const deleted = await share.PermissionEntity.Delete();
-                if (!deleted) {
-                    throw new Error(
-                        `Failed to remove share for ${share.User.Name}: ${
-                            share.PermissionEntity.LatestResult?.Message ?? 'unknown error'
-                        }`
-                    );
-                }
+            for (const grant of this.Grants.filter((g) => g.MarkedForRemoval && !g.IsNew)) {
+                await this.withdrawGrant(grant);
             }
-
-            const dirtyRows = this.UserShares.filter(
-                (s) => !s.MarkedForRemoval && (s.IsNew || s.Level !== s._InitialLevel)
-            );
-            for (const share of dirtyRows) {
-                this.Adapter.SyncLevelToEntity(share);
-                const saved = await share.PermissionEntity.Save();
-                if (!saved) {
-                    throw new Error(
-                        `Failed to save share for ${share.User.Name}: ${
-                            share.PermissionEntity.LatestResult?.Message ?? 'unknown error'
-                        }`
-                    );
-                }
+            for (const grant of this.Grants.filter((g) => !g.MarkedForRemoval && (g.IsNew || g.LevelTouched))) {
+                await this.applyGrant(grant, contexts);
             }
 
             if (this.Adapter.AfterSave) {
-                await this.Adapter.AfterSave(this.Context);
+                for (const context of contexts) {
+                    await this.Adapter.AfterSave(context);
+                }
             }
 
             this.Result.emit({ Action: 'save' });
@@ -218,6 +302,48 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         } finally {
             this.IsLoading = false;
             this.cdr.detectChanges();
+        }
+    }
+
+    /** Withdraws a person's access from every resource that granted it. */
+    private async withdrawGrant(grant: ResourceShareGrant): Promise<void> {
+        for (const row of grant.Rows.values()) {
+            const deleted = await row.PermissionEntity.Delete();
+            if (!deleted) {
+                throw new Error(
+                    `Failed to remove share for ${grant.User.Name}: ${
+                        row.PermissionEntity.LatestResult?.Message ?? 'unknown error'
+                    }`
+                );
+            }
+        }
+    }
+
+    /**
+     * Writes the grant's level to every resource, creating a permission row for
+     * the ones this person did not already have access to.
+     */
+    private async applyGrant(grant: ResourceShareGrant, contexts: ResourceShareContext[]): Promise<void> {
+        for (const context of contexts) {
+            let row = grant.Rows.get(context.ResourceID);
+            if (!row) {
+                row = await this.Adapter!.CreateShare(context, grant.User);
+                row._InitialLevel = row.Level;
+                grant.Rows.set(context.ResourceID, row);
+            } else if (!grant.LevelTouched) {
+                continue; // nothing changed for this resource
+            }
+
+            row.Level = grant.Level;
+            this.Adapter!.SyncLevelToEntity(row);
+            const saved = await row.PermissionEntity.Save();
+            if (!saved) {
+                throw new Error(
+                    `Failed to save share for ${grant.User.Name}: ${
+                        row.PermissionEntity.LatestResult?.Message ?? 'unknown error'
+                    }`
+                );
+            }
         }
     }
 

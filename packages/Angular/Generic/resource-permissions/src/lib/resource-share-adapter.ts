@@ -37,6 +37,27 @@ export interface ResourceSharePermissionModel {
 }
 
 /**
+ * One person's access across the resources a dialog is sharing. The dialog works
+ * in grants, not rows: a grant carries the loaded permission row per resource, so
+ * every action (add, level change, removal) applies to the whole set at once.
+ */
+export interface ResourceShareGrant {
+    User: MJUserEntity;
+    UserID: string;
+    /** Loaded permission rows, keyed by `ResourceShareContext.ResourceID`. */
+    Rows: Map<string, ResourceSharePermissionModel>;
+    /** Level held on every resource at load time; null when they differ. */
+    InitialLevel: ResourceShareLevel | null;
+    /** Level to apply on save. */
+    Level: ResourceShareLevel;
+    /** True once the user picks a level, which also fills in resources with no grant. */
+    LevelTouched: boolean;
+    /** True when this person held no access on any resource at load time. */
+    IsNew: boolean;
+    MarkedForRemoval: boolean;
+}
+
+/**
  * Per-resource context passed to every adapter call. Kept small and serializable
  * so the generic dialog can stay resource-type-agnostic.
  */
