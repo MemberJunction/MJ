@@ -1,5 +1,6 @@
 import { Type, EventEmitter } from '@angular/core';
 import { EntityInfo, IMetadataProvider } from '@memberjunction/core';
+import { ExportColumn } from '@memberjunction/export-engine';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
@@ -216,6 +217,14 @@ export interface IViewRenderer<TConfig = unknown> {
    * @returns true when the export was initiated, false when it couldn't be (no data / unsupported).
    */
   exportRecords?(format?: 'csv' | 'excel' | 'json'): Promise<boolean>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+  /**
+   * Optional: the columns this renderer is showing, in on-screen order and with on-screen headers.
+   * A host that exports on the renderer's behalf (the workspace toolbar's Export) uses this so its
+   * export matches the screen. Renderers without a column layout (Cards, Map, Timeline) omit it and
+   * the host falls back to the view's saved columns.
+   */
+  GetExportColumns?(): ExportColumn[];
 }
 
 /**
