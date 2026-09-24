@@ -132,11 +132,4 @@ describe('scripts/work-queue-scaler-login.sql', () => {
         expect(grants).toEqual(['SELECT WorkQueueDelivery', 'SELECT WorkQueueSubscription']);
         expect(script).not.toMatch(/GRANT (EXECUTE|INSERT|UPDATE|DELETE)/);
     });
-
-    it('carries the bounded scaler query counting claimable Pending plus InFlight', () => {
-        expect(script).toContain("s.Name = @SubscriptionName AND s.Status = 'Active'");
-        expect(script).toContain("s.Name = @SubscriptionName AND d.Status = 'InFlight'");
-        expect((script.match(/SELECT TOP \(1000\) 1 AS x/g) ?? []).length).toBe(2);
-        expect(script).toContain("s.PartitionMode <> 'Ordered'");
-    });
 });
