@@ -432,51 +432,152 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public AvailableModels: RealtimeModelVoices[] = [];
 
   /** True briefly after the invite link is copied (drives the "Link copied" pill state). */
-  public inviteCopied = false;
+  public InviteCopied = false;
+
+  /** @deprecated Use {@link InviteCopied}. */
+  public get inviteCopied() {
+    return this.InviteCopied;
+  }
+  /** @deprecated Use {@link InviteCopied}. */
+  public set inviteCopied(value) {
+    this.InviteCopied = value;
+  }
 
   /** Whether the floating agents panel is open. */
-  public showAgentsPanel = false;
+  public ShowAgentsPanel = false;
+
+  /** @deprecated Use {@link ShowAgentsPanel}. */
+  public get showAgentsPanel() {
+    return this.ShowAgentsPanel;
+  }
+  /** @deprecated Use {@link ShowAgentsPanel}. */
+  public set showAgentsPanel(value) {
+    this.ShowAgentsPanel = value;
+  }
   /** The agent bots currently bridged into the room (the first is the one started on join). */
-  public agentsInRoom: AgentInRoom[] = [];
+  public AgentsInRoom: AgentInRoom[] = [];
+
+  /** @deprecated Use {@link AgentsInRoom}. */
+  public get agentsInRoom(): AgentInRoom[] {
+    return this.AgentsInRoom;
+  }
+  /** @deprecated Use {@link AgentsInRoom}. */
+  public set agentsInRoom(value: AgentInRoom[]) {
+    this.AgentsInRoom = value;
+  }
   /** The target id chosen in the "Add an agent" picker. */
-  public addTargetId: string | null = null;
+  public AddTargetId: string | null = null;
+
+  /** @deprecated Use {@link AddTargetId}. */
+  public get addTargetId(): string | null {
+    return this.AddTargetId;
+  }
+  /** @deprecated Use {@link AddTargetId}. */
+  public set addTargetId(value: string | null) {
+    this.AddTargetId = value;
+  }
   /** The MODEL override chosen in the "Add an agent" picker (dev-only; null = co-agent/target default). */
-  public addModelId: string | null = null;
+  public AddModelId: string | null = null;
+
+  /** @deprecated Use {@link AddModelId}. */
+  public get addModelId(): string | null {
+    return this.AddModelId;
+  }
+  /** @deprecated Use {@link AddModelId}. */
+  public set addModelId(value: string | null) {
+    this.AddModelId = value;
+  }
   /** The VOICE override chosen in the "Add an agent" picker (dev-only; null = co-agent/target default). */
-  public addVoice: string | null = null;
+  public AddVoice: string | null = null;
+
+  /** @deprecated Use {@link AddVoice}. */
+  public get addVoice(): string | null {
+    return this.AddVoice;
+  }
+  /** @deprecated Use {@link AddVoice}. */
+  public set addVoice(value: string | null) {
+    this.AddVoice = value;
+  }
   /** Exposed for template use — platform-safe UUID equality (SQL upper vs PG lower). */
   public UUIDsEqual = UUIDsEqual;
   /** True while an Add request is in flight. */
-  public addingAgent = false;
+  public AddingAgent = false;
+
+  /** @deprecated Use {@link AddingAgent}. */
+  public get addingAgent() {
+    return this.AddingAgent;
+  }
+  /** @deprecated Use {@link AddingAgent}. */
+  public set addingAgent(value) {
+    this.AddingAgent = value;
+  }
   /** Last add error, shown under the picker. */
-  public addError: string | null = null;
+  public AddError: string | null = null;
+
+  /** @deprecated Use {@link AddError}. */
+  public get addError(): string | null {
+    return this.AddError;
+  }
+  /** @deprecated Use {@link AddError}. */
+  public set addError(value: string | null) {
+    this.AddError = value;
+  }
   /** True while an "End meeting" (stop all agents + leave) is in flight. */
-  public endingMeeting = false;
+  public EndingMeeting = false;
+
+  /** @deprecated Use {@link EndingMeeting}. */
+  public get endingMeeting() {
+    return this.EndingMeeting;
+  }
+  /** @deprecated Use {@link EndingMeeting}. */
+  public set endingMeeting(value) {
+    this.EndingMeeting = value;
+  }
 
   /** The inner Generic room — used to trigger the local disconnect when ending/leaving the meeting. */
   @ViewChild(LiveKitRoomComponent) private roomComponent?: LiveKitRoomComponent;
 
   /** Available agents not already in the room (by target id) — the "Add" picker options. */
-  public get availableToAdd(): { ID: string; Name: string }[] {
-    const present = new Set(this.agentsInRoom.map((a) => (a.TargetAgentID ?? '').toLowerCase()));
+  public get AvailableToAdd(): { ID: string; Name: string }[] {
+    const present = new Set(this.AgentsInRoom.map((a) => (a.TargetAgentID ?? '').toLowerCase()));
     return this.AvailableAgents.filter((a) => !present.has(a.ID.toLowerCase()));
   }
 
+  /** @deprecated Use {@link AvailableToAdd}. */
+  public get availableToAdd(): { ID: string; Name: string }[] {
+    return this.AvailableToAdd;
+  }
+
   /** Voices for the model chosen in the add-agent picker (empty when no model picked or it has none). */
-  public get addVoices(): RealtimeVoiceOption[] {
-    const model = this.AvailableModels.find((m) => UUIDsEqual(m.ModelID, this.addModelId));
+  public get AddVoices(): RealtimeVoiceOption[] {
+    const model = this.AvailableModels.find((m) => UUIDsEqual(m.ModelID, this.AddModelId));
     return model?.Voices ?? [];
   }
 
+  /** @deprecated Use {@link AddVoices}. */
+  public get addVoices(): RealtimeVoiceOption[] {
+    return this.AddVoices;
+  }
+
   /** Records the add-agent MODEL choice; clears the voice so it can't outlive a model switch. */
+  public OnAddModelChange(event: Event): void {
+    this.AddModelId = (event.target as HTMLSelectElement).value || null;
+    this.AddVoice = null;
+  }
+
+  /** @deprecated Use {@link OnAddModelChange}. */
   public onAddModelChange(event: Event): void {
-    this.addModelId = (event.target as HTMLSelectElement).value || null;
-    this.addVoice = null;
+    return this.OnAddModelChange(event);
   }
 
   /** Records the add-agent VOICE choice. */
+  public OnAddVoiceChange(event: Event): void {
+    this.AddVoice = (event.target as HTMLSelectElement).value || null;
+  }
+
+  /** @deprecated Use {@link OnAddVoiceChange}. */
   public onAddVoiceChange(event: Event): void {
-    this.addVoice = (event.target as HTMLSelectElement).value || null;
+    return this.OnAddVoiceChange(event);
   }
 
   // ── Forwarded UI gates (see LiveKitRoomComponent) ────────────────────────────────
@@ -553,19 +654,73 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
 
   // ── View state ─────────────────────────────────────────────────────────────────
   /** Whether the binding is resolving the token/session. */
-  public loading = false;
+  public Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
   /** The token/session-resolution error, if any. */
   public errorMessage: string | null = null;
   /** The resolved LiveKit server URL. */
-  public serverUrl: string | null = null;
+  public ServerUrl: string | null = null;
+
+  /** @deprecated Use {@link ServerUrl}. */
+  public get serverUrl(): string | null {
+    return this.ServerUrl;
+  }
+  /** @deprecated Use {@link ServerUrl}. */
+  public set serverUrl(value: string | null) {
+    this.ServerUrl = value;
+  }
   /** The resolved access token. */
-  public token: string | null = null;
+  public Token: string | null = null;
+
+  /** @deprecated Use {@link Token}. */
+  public get token(): string | null {
+    return this.Token;
+  }
+  /** @deprecated Use {@link Token}. */
+  public set token(value: string | null) {
+    this.Token = value;
+  }
   /** The display name passed to the room. */
-  public resolvedDisplayName: string | null = null;
+  public ResolvedDisplayName: string | null = null;
+
+  /** @deprecated Use {@link ResolvedDisplayName}. */
+  public get resolvedDisplayName(): string | null {
+    return this.ResolvedDisplayName;
+  }
+  /** @deprecated Use {@link ResolvedDisplayName}. */
+  public set resolvedDisplayName(value: string | null) {
+    this.ResolvedDisplayName = value;
+  }
   /** The resolved room name (for recording calls). */
-  public resolvedRoomName: string | null = null;
+  public ResolvedRoomName: string | null = null;
+
+  /** @deprecated Use {@link ResolvedRoomName}. */
+  public get resolvedRoomName(): string | null {
+    return this.ResolvedRoomName;
+  }
+  /** @deprecated Use {@link ResolvedRoomName}. */
+  public set resolvedRoomName(value: string | null) {
+    this.ResolvedRoomName = value;
+  }
   /** Whether a recording is currently in progress. */
-  public isRecording = false;
+  public IsRecording = false;
+
+  /** @deprecated Use {@link IsRecording}. */
+  public get isRecording() {
+    return this.IsRecording;
+  }
+  /** @deprecated Use {@link IsRecording}. */
+  public set isRecording(value) {
+    this.IsRecording = value;
+  }
   /** The active egress id, when recording. */
   private currentEgressId: string | null = null;
 
@@ -574,9 +729,27 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    * (the server registers the egress MP4 and returns its file id) or resolved for an already-recorded room
    * on join. Drives the {@link MJStorageMediaPlayerComponent} playback panel.
    */
-  public recordingFileId: string | null = null;
+  public RecordingFileId: string | null = null;
+
+  /** @deprecated Use {@link RecordingFileId}. */
+  public get recordingFileId(): string | null {
+    return this.RecordingFileId;
+  }
+  /** @deprecated Use {@link RecordingFileId}. */
+  public set recordingFileId(value: string | null) {
+    this.RecordingFileId = value;
+  }
   /** Whether the recording playback panel is shown (dismissable). */
-  public showRecordingPanel = true;
+  public ShowRecordingPanel = true;
+
+  /** @deprecated Use {@link ShowRecordingPanel}. */
+  public get showRecordingPanel() {
+    return this.ShowRecordingPanel;
+  }
+  /** @deprecated Use {@link ShowRecordingPanel}. */
+  public set showRecordingPanel(value) {
+    this.ShowRecordingPanel = value;
+  }
 
   public ngOnInit(): void {
     if (this.AutoStart) {
@@ -597,18 +770,18 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
 
   /** Resolves the connection (mints a token and, in agent mode, starts the agent session). */
   public async Start(): Promise<void> {
-    this.loading = true;
+    this.Loading = true;
     this.errorMessage = null;
     this.cdr.markForCheck();
     try {
       const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
-      this.resolvedDisplayName = this.DisplayName;
+      this.ResolvedDisplayName = this.DisplayName;
       const connect = this.Mode === 'agent' ? this.startAgentSession(client) : this.joinRoom(client);
       await this.withTimeout(connect, this.ConnectTimeoutMs);
     } catch (err) {
       this.fail(err instanceof Error ? err.message : String(err));
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.markForCheck();
     }
   }
@@ -660,22 +833,27 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       this.fail(result.ErrorMessage ?? 'Failed to start the agent session.');
       return;
     }
-    this.serverUrl = result.ServerUrl;
-    this.token = result.ClientToken;
-    this.resolvedRoomName = result.RoomName;
+    this.ServerUrl = result.ServerUrl;
+    this.Token = result.ClientToken;
+    this.ResolvedRoomName = result.RoomName;
     // Surface a prior recording for this resolved room (the server may have generated the room name).
     void this.loadExistingRecording(result.RoomName);
     // Track the agent we just brought in as the first entry in the in-room roster.
-    this.agentsInRoom = [
+    this.AgentsInRoom = [
       { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.TargetAgentID, Name: this.AgentName ?? 'Agent' },
     ];
     this.SessionStarted.emit({ SessionBridgeID: result.SessionBridgeID, RoomName: result.RoomName });
   }
 
   /** Picker selection handler for the in-room "Add an agent" control (native select; no FormsModule dep). */
+  public OnAddTargetChange(event: Event): void {
+    this.AddTargetId = (event.target as HTMLSelectElement).value || null;
+    this.AddError = null;
+  }
+
+  /** @deprecated Use {@link OnAddTargetChange}. */
   public onAddTargetChange(event: Event): void {
-    this.addTargetId = (event.target as HTMLSelectElement).value || null;
-    this.addError = null;
+    return this.OnAddTargetChange(event);
   }
 
   /**
@@ -683,39 +861,39 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    * and appends it to the roster. The new bot joins the live room alongside the existing participants.
    */
   public async AddAgent(): Promise<void> {
-    if (!this.addTargetId || !this.resolvedRoomName || this.addingAgent) {
+    if (!this.AddTargetId || !this.ResolvedRoomName || this.AddingAgent) {
       return;
     }
-    const target = this.AvailableAgents.find((a) => UUIDsEqual(a.ID, this.addTargetId));
-    this.addingAgent = true;
-    this.addError = null;
+    const target = this.AvailableAgents.find((a) => UUIDsEqual(a.ID, this.AddTargetId));
+    this.AddingAgent = true;
+    this.AddError = null;
     this.cdr.markForCheck();
     try {
       const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
       const result = await client.StartAgentRoomSession({
         AgentID: this.AgentID ?? undefined,
         AgentName: target?.Name ?? undefined,
-        TargetAgentID: this.addTargetId,
-        RealtimeModelID: this.addModelId ?? undefined,
-        RealtimeVoice: this.addVoice ?? undefined,
-        RoomName: this.resolvedRoomName,
+        TargetAgentID: this.AddTargetId,
+        RealtimeModelID: this.AddModelId ?? undefined,
+        RealtimeVoice: this.AddVoice ?? undefined,
+        RoomName: this.ResolvedRoomName,
         TurnMode: this.TurnMode ?? undefined,
       });
       if (!result.Success) {
-        this.addError = result.ErrorMessage ?? 'Failed to add the agent.';
+        this.AddError = result.ErrorMessage ?? 'Failed to add the agent.';
         return;
       }
-      this.agentsInRoom = [
-        ...this.agentsInRoom,
-        { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.addTargetId, Name: target?.Name ?? 'Agent' },
+      this.AgentsInRoom = [
+        ...this.AgentsInRoom,
+        { SessionBridgeID: result.SessionBridgeID, TargetAgentID: this.AddTargetId, Name: target?.Name ?? 'Agent' },
       ];
-      this.addTargetId = null;
-      this.addModelId = null;
-      this.addVoice = null;
+      this.AddTargetId = null;
+      this.AddModelId = null;
+      this.AddVoice = null;
     } catch (err) {
-      this.addError = err instanceof Error ? err.message : String(err);
+      this.AddError = err instanceof Error ? err.message : String(err);
     } finally {
-      this.addingAgent = false;
+      this.AddingAgent = false;
       this.cdr.markForCheck();
     }
   }
@@ -731,7 +909,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
       const ok = await client.StopAgentRoomSession(agent.SessionBridgeID);
       if (ok) {
-        this.agentsInRoom = this.agentsInRoom.filter((a) => a.SessionBridgeID !== agent.SessionBridgeID);
+        this.AgentsInRoom = this.AgentsInRoom.filter((a) => a.SessionBridgeID !== agent.SessionBridgeID);
       } else {
         agent.Removing = false;
       }
@@ -751,22 +929,22 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    * billable agent sessions in an empty room.
    */
   public async EndMeeting(): Promise<void> {
-    if (this.endingMeeting) {
+    if (this.EndingMeeting) {
       return;
     }
-    this.endingMeeting = true;
+    this.EndingMeeting = true;
     this.cdr.markForCheck();
     try {
-      if (this.resolvedRoomName) {
+      if (this.ResolvedRoomName) {
         const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
-        await client.EndRoom(this.resolvedRoomName);
+        await client.EndRoom(this.ResolvedRoomName);
       }
-      this.agentsInRoom = [];
+      this.AgentsInRoom = [];
     } catch {
       /* best-effort — fall through and still disconnect the local user */
     } finally {
       await this.roomComponent?.Leave();
-      this.endingMeeting = false;
+      this.EndingMeeting = false;
       this.cdr.markForCheck();
     }
   }
@@ -775,23 +953,28 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
    * Builds the shareable invite URL for THIS room: the current page URL with a `room=<roomName>` query
    * param. Opening it lands the invitee on the Live Room in join mode for the same room.
    */
-  public get inviteUrl(): string {
+  public get InviteUrl(): string {
     const url = new URL(window.location.href);
-    url.searchParams.set('room', this.resolvedRoomName ?? '');
+    url.searchParams.set('room', this.ResolvedRoomName ?? '');
     return url.toString();
+  }
+
+  /** @deprecated Use {@link InviteUrl}. */
+  public get inviteUrl(): string {
+    return this.InviteUrl;
   }
 
   /** Copies {@link inviteUrl} to the clipboard and flips the pill to "Link copied" briefly. */
   public async CopyInvite(): Promise<void> {
-    if (!this.resolvedRoomName) {
+    if (!this.ResolvedRoomName) {
       return;
     }
     try {
-      await navigator.clipboard.writeText(this.inviteUrl);
-      this.inviteCopied = true;
+      await navigator.clipboard.writeText(this.InviteUrl);
+      this.InviteCopied = true;
       this.cdr.markForCheck();
       setTimeout(() => {
-        this.inviteCopied = false;
+        this.InviteCopied = false;
         this.cdr.markForCheck();
       }, 2000);
     } catch {
@@ -810,37 +993,42 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       this.fail(result.ErrorMessage ?? 'Failed to obtain a room token.');
       return;
     }
-    this.serverUrl = result.ServerUrl;
-    this.token = result.Token;
-    this.resolvedRoomName = this.RoomName;
+    this.ServerUrl = result.ServerUrl;
+    this.Token = result.Token;
+    this.ResolvedRoomName = this.RoomName;
   }
 
   /** Toggles room recording via the RealtimeBridge GraphQL surface (server-authorized egress). */
-  public async onToggleRecording(): Promise<void> {
-    if (!this.resolvedRoomName) {
+  public async OnToggleRecording(): Promise<void> {
+    if (!this.ResolvedRoomName) {
       return;
     }
     const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
-    if (!this.isRecording) {
-      const result = await client.StartRecording(this.resolvedRoomName);
+    if (!this.IsRecording) {
+      const result = await client.StartRecording(this.ResolvedRoomName);
       if (result.Success) {
-        this.isRecording = true;
+        this.IsRecording = true;
         this.currentEgressId = result.EgressID;
       } else {
         this.fail(result.ErrorMessage ?? 'Failed to start recording.');
       }
     } else if (this.currentEgressId) {
       const stopped = await client.StopRecording(this.currentEgressId);
-      this.isRecording = false;
+      this.IsRecording = false;
       this.currentEgressId = null;
       // The server registers the egress MP4 as an MJ: Files row on stop and returns its id — surface it
       // in the playback panel. Absent when meeting-recording storage isn't configured server-side.
       if (stopped.Success && stopped.RecordingFileID) {
-        this.recordingFileId = stopped.RecordingFileID;
-        this.showRecordingPanel = true;
+        this.RecordingFileId = stopped.RecordingFileID;
+        this.ShowRecordingPanel = true;
       }
     }
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link OnToggleRecording}. */
+  public async onToggleRecording(): Promise<void> {
+    return this.OnToggleRecording();
   }
 
   /**
@@ -866,7 +1054,7 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
       );
       const fileId = result.Success ? result.Results[0]?.RecordingFileID ?? null : null;
       if (fileId) {
-        this.recordingFileId = fileId;
+        this.RecordingFileId = fileId;
         this.cdr.markForCheck();
       }
     } catch {

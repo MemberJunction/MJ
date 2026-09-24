@@ -41,15 +41,24 @@ export class TestingDashboardTabResourceComponent extends BaseResourceComponent 
   protected override destroy$ = new Subject<void>();
 
   constructor(
-    public testingDialogService: TestingDialogService,
+    public TestingDialogService: TestingDialogService,
     private cdr: ChangeDetectorRef
   ) {
     super();
   }
 
+  /** @deprecated Use {@link TestingDialogService}. */
+  public get testingDialogService(): TestingDialogService {
+    return this.TestingDialogService;
+  }
+  /** @deprecated Use {@link TestingDialogService}. */
+  public set testingDialogService(value: TestingDialogService) {
+    this.TestingDialogService = value;
+  }
+
   ngOnInit(): void {
     super.ngOnInit();
-    this.testingDialogService.PanelStateChanged$.pipe(
+    this.TestingDialogService.PanelStateChanged$.pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
       this.cdr.detectChanges();
@@ -65,7 +74,7 @@ export class TestingDashboardTabResourceComponent extends BaseResourceComponent 
   }
 
   public OnPanelClosed(): void {
-    this.testingDialogService.ClosePanel();
+    this.TestingDialogService.ClosePanel();
     this.cdr.markForCheck();
   }
 

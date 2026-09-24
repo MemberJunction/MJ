@@ -74,6 +74,7 @@ would otherwise fail your PR:
 ```bash
 pnpm run check:ui               # design-token + button gates on changed CSS/SCSS
 pnpm run check:standards        # every adopted MJ standard (see .mj-standards.json)
+pnpm run check:naming           # naming conventions — PascalCase public / camelCase private
 pnpm run check:esm              # native-ESM import guard for "type": "module" packages
 pnpm run check:browser-manifest # server-only packages leaking into the browser bundle
 pnpm run check:codegen-tail     # new-table migrations ship their generated entity

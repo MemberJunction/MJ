@@ -15,7 +15,7 @@ export class OutputFormatter {
     /**
      * Format test run result based on output format
      */
-    static formatTestResult(result: TestRunResult, format: OutputFormat): string {
+    static FormatTestResult(result: TestRunResult, format: OutputFormat): string {
         switch (format) {
             case 'json':
                 return this.formatJSON(result);
@@ -27,10 +27,15 @@ export class OutputFormatter {
         }
     }
 
+    /** @deprecated Use {@link FormatTestResult}. */
+    static formatTestResult(result: TestRunResult, format: OutputFormat): string {
+        return this.FormatTestResult(result, format);
+    }
+
     /**
      * Format suite result based on output format
      */
-    static formatSuiteResult(result: TestSuiteRunResult, format: OutputFormat): string {
+    static FormatSuiteResult(result: TestSuiteRunResult, format: OutputFormat): string {
         switch (format) {
             case 'json':
                 return this.formatSuiteJSON(result);
@@ -40,6 +45,11 @@ export class OutputFormatter {
             default:
                 return this.formatSuiteConsole(result);
         }
+    }
+
+    /** @deprecated Use {@link FormatSuiteResult}. */
+    static formatSuiteResult(result: TestSuiteRunResult, format: OutputFormat): string {
+        return this.FormatSuiteResult(result, format);
     }
 
     /**
@@ -272,7 +282,7 @@ export class OutputFormatter {
     /**
      * Write output to file if specified
      */
-    static writeToFile(content: string, filePath?: string): void {
+    static WriteToFile(content: string, filePath?: string): void {
         if (!filePath) {
             return;
         }
@@ -285,10 +295,15 @@ export class OutputFormatter {
         }
     }
 
+    /** @deprecated Use {@link WriteToFile}. */
+    static writeToFile(content: string, filePath?: string): void {
+        return this.WriteToFile(content, filePath);
+    }
+
     /**
      * Format error message
      */
-    static formatError(message: string, error?: Error): string {
+    static FormatError(message: string, error?: Error): string {
         const lines: string[] = [];
         lines.push(chalk.red.bold('✗ Error: ' + message));
 
@@ -305,24 +320,44 @@ export class OutputFormatter {
         return lines.join('\n');
     }
 
+    /** @deprecated Use {@link FormatError}. */
+    static formatError(message: string, error?: Error): string {
+        return this.FormatError(message, error);
+    }
+
     /**
      * Format success message
      */
-    static formatSuccess(message: string): string {
+    static FormatSuccess(message: string): string {
         return chalk.green.bold('✓ ' + message);
+    }
+
+    /** @deprecated Use {@link FormatSuccess}. */
+    static formatSuccess(message: string): string {
+        return this.FormatSuccess(message);
     }
 
     /**
      * Format warning message
      */
-    static formatWarning(message: string): string {
+    static FormatWarning(message: string): string {
         return chalk.yellow.bold('⚠ ' + message);
+    }
+
+    /** @deprecated Use {@link FormatWarning}. */
+    static formatWarning(message: string): string {
+        return this.FormatWarning(message);
     }
 
     /**
      * Format info message
      */
-    static formatInfo(message: string): string {
+    static FormatInfo(message: string): string {
         return chalk.blue.bold('ℹ ' + message);
+    }
+
+    /** @deprecated Use {@link FormatInfo}. */
+    static formatInfo(message: string): string {
+        return this.FormatInfo(message);
     }
 }

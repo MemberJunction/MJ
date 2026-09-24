@@ -1,7 +1,7 @@
 import { SetProvider, IMetadataProvider } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
-import { loadAIConfig } from '../config';
+import { LoadAIConfig } from '../config';
 import { DiscoverMJConfig, EffectiveProcessId, LoadDynamicPackages, StderrDynamicPackagesLogger } from '@memberjunction/dynamic-packages';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -33,13 +33,13 @@ let cliProvider: IMetadataProvider | null = null;
  *
  * Calling this more than once in a process is idempotent — the cached provider is returned.
  */
-export async function initializeMJProvider(): Promise<IMetadataProvider> {
+export async function InitializeMJProvider(): Promise<IMetadataProvider> {
   if (isInitialized && cliProvider) {
     return cliProvider;
   }
 
   try {
-    const config = await loadAIConfig();
+    const config = await LoadAIConfig();
 
     // Installed Open App server packages register their entity/action subclasses here, before the
     // provider exists. When this CLI runs inside `mj`, the prerun hook has already loaded them and
@@ -168,7 +168,12 @@ For debugging, run with --verbose flag for detailed error information.`);
   throw new Error('initializeMJProvider: unreachable');
 }
 
-export function getConnectionPool(): sql.ConnectionPool {
+/** @deprecated Use {@link InitializeMJProvider}. */
+export async function initializeMJProvider(): Promise<IMetadataProvider> {
+  return InitializeMJProvider();
+}
+
+export function GetConnectionPool(): sql.ConnectionPool {
   if (!connectionPool) {
     throw new Error(`❌ MJ Provider not initialized
 
@@ -180,21 +185,36 @@ This is an internal error. Please report this issue.`);
   return connectionPool;
 }
 
+/** @deprecated Use {@link GetConnectionPool}. */
+export function getConnectionPool(): sql.ConnectionPool {
+  return GetConnectionPool();
+}
+
 /**
  * Returns the bound provider for this CLI process, or null if `initializeMJProvider()`
  * hasn't been called yet. Prefer calling `initializeMJProvider()` and capturing its
  * return value instead of relying on this getter — that keeps callers explicit about
  * provider ownership.
  */
-export function getMJProvider(): IMetadataProvider | null {
+export function GetMJProvider(): IMetadataProvider | null {
   return cliProvider;
 }
 
-export async function closeMJProvider(): Promise<void> {
+/** @deprecated Use {@link GetMJProvider}. */
+export function getMJProvider(): IMetadataProvider | null {
+  return GetMJProvider();
+}
+
+export async function CloseMJProvider(): Promise<void> {
   cliProvider = null;
   if (connectionPool) {
     await connectionPool.close();
     connectionPool = null;
     isInitialized = false;
   }
+}
+
+/** @deprecated Use {@link CloseMJProvider}. */
+export async function closeMJProvider(): Promise<void> {
+  return CloseMJProvider();
 }

@@ -29,7 +29,7 @@ import {
   StorageObjectMetadata,
   StorageProviderConfig,
 } from '../generic/FileStorageBase';
-import { getProviderConfig } from '../config';
+import { GetProviderConfig } from '../config';
 
 /**
  * Azure Blob Storage implementation of the FileStorageBase interface.
@@ -98,7 +98,7 @@ export class AzureFileStorage extends FileStorageBase {
 
     // Read from centralized config, falling back to env vars — WITHOUT `.required()`, so a
     // DB-credential deployment (which initializes after construction) doesn't throw here.
-    const config = getProviderConfig('azure');
+    const config = GetProviderConfig('azure');
     this._container = config?.defaultContainer || env.get('STORAGE_AZURE_CONTAINER').asString() || '';
     this._azureAccountName = config?.accountName || env.get('STORAGE_AZURE_ACCOUNT_NAME').asString() || '';
     const accountKey = config?.accountKey || env.get('STORAGE_AZURE_ACCOUNT_KEY').asString() || '';

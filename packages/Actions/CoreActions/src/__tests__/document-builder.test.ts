@@ -51,7 +51,7 @@ describe('ArtifactBuilderService', () => {
         it('should add operations and return section IDs', () => {
             const handle = service.CreateDocument('pdf');
             const ops: DocumentOperation[] = [
-                { type: 'heading', level: 1, text: 'Title' },
+                { type: 'heading', Level: 1, text: 'Title' },
                 { type: 'paragraph', text: 'Hello world' },
             ];
             const sectionIds = service.AddContent(handle, ops);
@@ -67,7 +67,7 @@ describe('ArtifactBuilderService', () => {
         it('should accumulate multiple sections', () => {
             const handle = service.CreateDocument('docx');
 
-            service.AddContent(handle, [{ type: 'heading', level: 1, text: 'Section 1' }]);
+            service.AddContent(handle, [{ type: 'heading', Level: 1, text: 'Section 1' }]);
             service.AddContent(handle, [{ type: 'paragraph', text: 'Content' }]);
             service.AddContent(handle, [
                 { type: 'table', headers: ['A', 'B'], rows: [['1', '2']] },
@@ -89,7 +89,7 @@ describe('ArtifactBuilderService', () => {
         it('should return detailed section summaries', () => {
             const handle = service.CreateDocument('pdf');
             service.AddContent(handle, [
-                { type: 'heading', level: 1, text: 'Introduction' },
+                { type: 'heading', Level: 1, text: 'Introduction' },
                 { type: 'paragraph', text: 'Some text' },
                 { type: 'paragraph', text: 'More text' },
             ]);
@@ -135,8 +135,8 @@ describe('ArtifactBuilderService', () => {
     describe('RemoveSection', () => {
         it('should remove a section by ID', () => {
             const handle = service.CreateDocument('pdf');
-            const [id1] = service.AddContent(handle, [{ type: 'heading', level: 1, text: 'First' }]);
-            service.AddContent(handle, [{ type: 'heading', level: 2, text: 'Second' }]);
+            const [id1] = service.AddContent(handle, [{ type: 'heading', Level: 1, text: 'First' }]);
+            service.AddContent(handle, [{ type: 'heading', Level: 2, text: 'Second' }]);
 
             expect(service.GetPreview(handle).sectionCount).toBe(2);
 
@@ -156,7 +156,7 @@ describe('ArtifactBuilderService', () => {
         it('should render a PDF document to a buffer', async () => {
             const handle = service.CreateDocument('pdf');
             service.AddContent(handle, [
-                { type: 'heading', level: 1, text: 'Test Document' },
+                { type: 'heading', Level: 1, text: 'Test Document' },
                 { type: 'paragraph', text: 'This is a test paragraph.' },
             ]);
 
@@ -173,9 +173,9 @@ describe('ArtifactBuilderService', () => {
         it('should render a DOCX document to a buffer', async () => {
             const handle = service.CreateDocument('docx', 'test.docx');
             service.AddContent(handle, [
-                { type: 'heading', level: 1, text: 'Report Title' },
+                { type: 'heading', Level: 1, text: 'Report Title' },
                 { type: 'paragraph', text: 'Report body.' },
-                { type: 'list', items: ['Item 1', 'Item 2'], ordered: true },
+                { type: 'list', Items: ['Item 1', 'Item 2'], Ordered: true },
             ]);
 
             const result = await service.Finalize(handle);
@@ -217,13 +217,13 @@ describe('ArtifactBuilderService', () => {
 
             // Turn 2: Add executive summary
             const [summaryId] = service.AddContent(handle, [
-                { type: 'heading', level: 1, text: 'Quarterly Report Q1 2026' },
+                { type: 'heading', Level: 1, text: 'Quarterly Report Q1 2026' },
                 { type: 'paragraph', text: 'This report covers the financial performance of Q1 2026.' },
             ]);
 
             // Turn 3: Add data table
             service.AddContent(handle, [
-                { type: 'heading', level: 2, text: 'Financial Summary' },
+                { type: 'heading', Level: 2, text: 'Financial Summary' },
                 { type: 'table', headers: ['Metric', 'Value', 'Change'], rows: [
                     ['Revenue', '$1.2M', '+12%'],
                     ['Expenses', '$800K', '+5%'],
@@ -238,13 +238,13 @@ describe('ArtifactBuilderService', () => {
 
             // Turn 5: Modify the summary
             service.ReplaceSection(handle, summaryId, [
-                { type: 'heading', level: 1, text: 'Quarterly Report Q1 2026 — FINAL' },
+                { type: 'heading', Level: 1, text: 'Quarterly Report Q1 2026 — FINAL' },
                 { type: 'paragraph', text: 'This FINAL report covers Q1 2026 financial performance.' },
             ]);
 
             // Turn 6: Add conclusion
             service.AddContent(handle, [
-                { type: 'heading', level: 2, text: 'Conclusion' },
+                { type: 'heading', Level: 2, text: 'Conclusion' },
                 { type: 'paragraph', text: 'Q1 exceeded expectations across all metrics.' },
                 { type: 'hr' },
             ]);

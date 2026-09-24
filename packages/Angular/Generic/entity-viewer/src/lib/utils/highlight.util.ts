@@ -19,7 +19,7 @@ export class HighlightUtil {
    * @param searchTerm The search term (may include % wildcards)
    * @returns true if the value matches the search pattern
    */
-  static matches(value: string, searchTerm: string): boolean {
+  static Matches(value: string, searchTerm: string): boolean {
     if (!value || !searchTerm) return false;
 
     const lowerValue = value.toLowerCase();
@@ -51,6 +51,11 @@ export class HighlightUtil {
     return true;
   }
 
+  /** @deprecated Use {@link Matches}. */
+  static matches(value: string, searchTerm: string): boolean {
+    return this.Matches(value, searchTerm);
+  }
+
   /**
    * Highlight matching text in a string based on the filter text.
    * IMPORTANT: Only highlights if the text actually matches the pattern.
@@ -61,18 +66,18 @@ export class HighlightUtil {
    * @param escapeHtml Whether to escape HTML characters (default: true)
    * @returns HTML string with highlighted matches, or the original text if no match
    */
-  static highlight(text: string, searchTerm: string, escapeHtml: boolean = true): string {
+  static Highlight(text: string, searchTerm: string, escapeHtml: boolean = true): string {
     if (!text) return '';
     if (!searchTerm || searchTerm.trim() === '') {
-      return escapeHtml ? this.escapeHtml(text) : text;
+      return escapeHtml ? this.EscapeHtml(text) : text;
     }
 
     const trimmedSearch = searchTerm.trim();
 
     // First check if this text actually matches the pattern
-    if (!this.matches(text, trimmedSearch)) {
+    if (!this.Matches(text, trimmedSearch)) {
       // No match - return text without highlighting
-      return escapeHtml ? this.escapeHtml(text) : text;
+      return escapeHtml ? this.EscapeHtml(text) : text;
     }
 
     // Text matches - now apply highlighting
@@ -83,6 +88,11 @@ export class HighlightUtil {
 
     // Wildcard case: highlight each segment that appears in order
     return this.highlightWildcard(text, trimmedSearch, escapeHtml);
+  }
+
+  /** @deprecated Use {@link Highlight}. */
+  static highlight(text: string, searchTerm: string, escapeHtml: boolean = true): string {
+    return this.Highlight(text, searchTerm, escapeHtml);
   }
 
   /**
@@ -108,14 +118,14 @@ export class HighlightUtil {
   private static highlightWildcard(text: string, searchTerm: string, escapeHtml: boolean): string {
     const segments = searchTerm.split('%').filter(s => s.length > 0);
     if (segments.length === 0) {
-      return escapeHtml ? this.escapeHtml(text) : text;
+      return escapeHtml ? this.EscapeHtml(text) : text;
     }
 
     // Find positions of each segment in order (only the first occurrence that maintains order)
     const matches = this.findOrderedMatchPositions(text, segments);
 
     if (matches.length === 0) {
-      return escapeHtml ? this.escapeHtml(text) : text;
+      return escapeHtml ? this.EscapeHtml(text) : text;
     }
 
     return this.buildHighlightedString(text, matches, escapeHtml);
@@ -197,12 +207,12 @@ export class HighlightUtil {
     for (const range of ranges) {
       // Add text before this match
       const before = text.substring(lastEnd, range.start);
-      result += escapeHtml ? this.escapeHtml(before) : before;
+      result += escapeHtml ? this.EscapeHtml(before) : before;
 
       // Add highlighted match
       const match = text.substring(range.start, range.end);
       result += '<span class="highlight-match">';
-      result += escapeHtml ? this.escapeHtml(match) : match;
+      result += escapeHtml ? this.EscapeHtml(match) : match;
       result += '</span>';
 
       lastEnd = range.end;
@@ -210,7 +220,7 @@ export class HighlightUtil {
 
     // Add remaining text
     const remaining = text.substring(lastEnd);
-    result += escapeHtml ? this.escapeHtml(remaining) : remaining;
+    result += escapeHtml ? this.EscapeHtml(remaining) : remaining;
 
     return result;
   }
@@ -225,7 +235,7 @@ export class HighlightUtil {
   /**
    * Escape HTML special characters to prevent XSS
    */
-  static escapeHtml(text: string): string {
+  static EscapeHtml(text: string): string {
     if (typeof document !== 'undefined') {
       const div = document.createElement('div');
       div.textContent = text;
@@ -238,6 +248,11 @@ export class HighlightUtil {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  /** @deprecated Use {@link EscapeHtml}. */
+  static escapeHtml(text: string): string {
+    return this.EscapeHtml(text);
   }
 }
 

@@ -1378,9 +1378,27 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
   constructor(
     private cdr: ChangeDetectorRef,
     private viewContainerRef: ViewContainerRef,
-    public testingDialogService: TestingDialogService,
-    public instrumentationService: TestingInstrumentationService
+    public TestingDialogService: TestingDialogService,
+    public InstrumentationService: TestingInstrumentationService
   ) { super(); }
+
+  /** @deprecated Use {@link TestingDialogService}. */
+  public get testingDialogService(): TestingDialogService {
+    return this.TestingDialogService;
+  }
+  /** @deprecated Use {@link TestingDialogService}. */
+  public set testingDialogService(value: TestingDialogService) {
+    this.TestingDialogService = value;
+  }
+
+  /** @deprecated Use {@link InstrumentationService}. */
+  public get instrumentationService(): TestingInstrumentationService {
+    return this.InstrumentationService;
+  }
+  /** @deprecated Use {@link InstrumentationService}. */
+  public set instrumentationService(value: TestingInstrumentationService) {
+    this.InstrumentationService = value;
+  }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -1404,7 +1422,7 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
 
     this.subscribeToStateChanges();
 
-    this.testingDialogService.PanelStateChanged$.pipe(
+    this.TestingDialogService.PanelStateChanged$.pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
       this.cdr.detectChanges();
@@ -1588,16 +1606,26 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
   // [actions] with no way to change the field from the UI.
   // ---------------------------------------------------------------------------
 
-  public readonly sortFieldOptions = [
+  public readonly SortFieldOptions = [
     { text: 'Name', value: 'name' },
     { text: 'Updated', value: 'updated' },
     { text: 'Status', value: 'status' },
   ];
 
-  public readonly sortDirectionOptions = [
+  /** @deprecated Use {@link SortFieldOptions}. */
+  public get sortFieldOptions() {
+    return this.SortFieldOptions;
+  }
+
+  public readonly SortDirectionOptions = [
     { text: 'Ascending', value: 'asc' },
     { text: 'Descending', value: 'desc' },
   ];
+
+  /** @deprecated Use {@link SortDirectionOptions}. */
+  public get sortDirectionOptions() {
+    return this.SortDirectionOptions;
+  }
 
   /**
    * Concise-chrome model: every filter (View · Status · Sort) lives behind a
@@ -1605,7 +1633,7 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
    * state is surfaced separately as removable chips (see AppliedFilters), so
    * input (the button) and state (the chips) are cleanly separated.
    */
-  public get filterFields(): FilterFieldConfig[] {
+  public get FilterFields(): FilterFieldConfig[] {
     return [
       { key: 'displayMode', type: 'chips', label: 'View', chipOptions: [
         { text: 'All', value: 'all' },
@@ -1618,13 +1646,18 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
         { text: 'Disabled', value: 'Disabled' },
       ] },
       { key: 'SortField', type: 'dropdown', label: 'Sort by',
-        icon: 'fa-solid fa-arrow-down-wide-short', options: this.sortFieldOptions },
+        icon: 'fa-solid fa-arrow-down-wide-short', options: this.SortFieldOptions },
       { key: 'SortDirection', type: 'dropdown', label: 'Direction',
-        icon: 'fa-solid fa-arrow-up-arrow-down', options: this.sortDirectionOptions },
+        icon: 'fa-solid fa-arrow-up-arrow-down', options: this.SortDirectionOptions },
     ];
   }
 
-  public get filterValues(): Record<string, unknown> {
+  /** @deprecated Use {@link FilterFields}. */
+  public get filterFields(): FilterFieldConfig[] {
+    return this.FilterFields;
+  }
+
+  public get FilterValues(): Record<string, unknown> {
     return {
       displayMode: this.DisplayMode,
       status: Array.from(this.StatusFilters),
@@ -1633,7 +1666,12 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     };
   }
 
-  public onFilterValuesChange(values: Record<string, unknown>): void {
+  /** @deprecated Use {@link FilterValues}. */
+  public get filterValues(): Record<string, unknown> {
+    return this.FilterValues;
+  }
+
+  public OnFilterValuesChange(values: Record<string, unknown>): void {
     if ('displayMode' in values) {
       this._displayMode$.next(values['displayMode'] as DisplayMode);
     }
@@ -1649,16 +1687,31 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     }
   }
 
-  public resetSortFilters(): void {
+  /** @deprecated Use {@link OnFilterValuesChange}. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    return this.OnFilterValuesChange(values);
+  }
+
+  public ResetSortFilters(): void {
     this._sortField$.next('name');
     this._sortDirection$.next('asc');
   }
 
+  /** @deprecated Use {@link ResetSortFilters}. */
+  public resetSortFilters(): void {
+    return this.ResetSortFilters();
+  }
+
   /** Clears every filter (View · Status · Sort) back to defaults. */
-  public resetAllFilters(): void {
+  public ResetAllFilters(): void {
     this._displayMode$.next('all');
     this._statusFilters$.next(new Set<string>());
-    this.resetSortFilters();
+    this.ResetSortFilters();
+  }
+
+  /** @deprecated Use {@link ResetAllFilters}. */
+  public resetAllFilters(): void {
+    return this.ResetAllFilters();
   }
 
   /** Active sort changes from defaults — contributes to the filter badge + chips. */
@@ -1677,15 +1730,15 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
 
 
   RunTest(testId: string): void {
-    this.testingDialogService.OpenTestPanel(testId);
+    this.TestingDialogService.OpenTestPanel(testId);
   }
 
   RunSuite(suiteId: string): void {
-    this.testingDialogService.OpenSuitePanel(suiteId);
+    this.TestingDialogService.OpenSuitePanel(suiteId);
   }
 
   OnPanelClosed(): void {
-    this.testingDialogService.ClosePanel();
+    this.TestingDialogService.ClosePanel();
     this.cdr.detectChanges();
   }
 

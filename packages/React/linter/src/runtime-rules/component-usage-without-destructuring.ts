@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -34,7 +34,7 @@ export class ComponentUsageWithoutDestructuringRule extends BaseLintRule {
     // Track what's been destructured from components prop
     const destructuredComponents = new Set<string>();
 
-    traverse(ast, {
+    Traverse(ast, {
       // Track destructuring from components
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {

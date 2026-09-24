@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -30,7 +30,7 @@ export class StringReplaceAllOccurrencesRule extends BaseLintRule {
       { pattern: /<[^>]+>/, example: '<field>', desc: 'single angle brackets' },
     ];
 
-    traverse(ast, {
+    Traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
         const callee = path.node.callee;
 

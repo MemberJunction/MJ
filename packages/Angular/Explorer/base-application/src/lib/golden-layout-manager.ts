@@ -378,9 +378,9 @@ export class GoldenLayoutManager {
     // Retry setSize after delays to handle timing issues with flexbox layout
     // Initial page load can take time for container to have final dimensions
     // Use increasing delays to catch both fast and slow layout calculations
-    setTimeout(() => this.updateSize(), 50);
-    setTimeout(() => this.updateSize(), 150);
-    setTimeout(() => this.updateSize(), 300);
+    setTimeout(() => this.UpdateSize(), 50);
+    setTimeout(() => this.UpdateSize(), 150);
+    setTimeout(() => this.UpdateSize(), 300);
   }
 
   /**
@@ -389,7 +389,7 @@ export class GoldenLayoutManager {
    * This is useful for handling flexbox timing issues on page load
    * or when the container size changes due to external factors.
    */
-  updateSize(): void {
+  UpdateSize(): void {
     if (this.layout && this.containerElement) {
       const rect = this.containerElement.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
@@ -397,6 +397,11 @@ export class GoldenLayoutManager {
       }
       this.updateStripNudges();
     }
+  }
+
+  /** @deprecated Use {@link UpdateSize}. */
+  updateSize(): void {
+    return this.UpdateSize();
   }
 
   /**

@@ -43,7 +43,7 @@ function invalid(options: NormalizeServerExtensionOptions | undefined, message: 
  * Invalid entries are skipped (not thrown) so one bad Open App declaration
  * cannot take down server boot.
  */
-export function normalizeServerExtensionConfigs(
+export function NormalizeServerExtensionConfigs(
     raw: unknown,
     options?: NormalizeServerExtensionOptions
 ): ServerExtensionConfig[] {
@@ -74,7 +74,7 @@ export function normalizeServerExtensionConfigs(
             invalid(options, `serverExtensions[${i}] ('${driverClass}') missing RootPath${source}`);
             continue;
         }
-        const rootError = validateServerExtensionRootPath(rootPath);
+        const rootError = ValidateServerExtensionRootPath(rootPath);
         if (rootError) {
             invalid(options, `serverExtensions[${i}] ('${driverClass}') ${rootError}${source}`);
             continue;
@@ -113,10 +113,18 @@ export function normalizeServerExtensionConfigs(
     return result;
 }
 
+/** @deprecated Use {@link NormalizeServerExtensionConfigs}. */
+export function normalizeServerExtensionConfigs(
+    raw: unknown,
+    options?: NormalizeServerExtensionOptions
+): ServerExtensionConfig[] {
+    return NormalizeServerExtensionConfigs(raw, options);
+}
+
 /**
  * Read `MJ_SERVER_EXTENSIONS` from an already-imported Open App server module.
  */
-export function extractServerExtensionsFromModule(
+export function ExtractServerExtensionsFromModule(
     mod: Record<string, unknown> | null | undefined,
     options?: NormalizeServerExtensionOptions
 ): ServerExtensionConfig[] {
@@ -126,13 +134,21 @@ export function extractServerExtensionsFromModule(
     if (!(MJ_SERVER_EXTENSIONS_EXPORT in mod)) {
         return [];
     }
-    return normalizeServerExtensionConfigs(mod[MJ_SERVER_EXTENSIONS_EXPORT], options);
+    return NormalizeServerExtensionConfigs(mod[MJ_SERVER_EXTENSIONS_EXPORT], options);
+}
+
+/** @deprecated Use {@link ExtractServerExtensionsFromModule}. */
+export function extractServerExtensionsFromModule(
+    mod: Record<string, unknown> | null | undefined,
+    options?: NormalizeServerExtensionOptions
+): ServerExtensionConfig[] {
+    return ExtractServerExtensionsFromModule(mod, options);
 }
 
 /**
  * Read `memberjunction.serverExtensions` from a parsed `package.json`.
  */
-export function extractServerExtensionsFromPackageJson(
+export function ExtractServerExtensionsFromPackageJson(
     pkgJson: unknown,
     options?: NormalizeServerExtensionOptions
 ): ServerExtensionConfig[] {
@@ -143,10 +159,18 @@ export function extractServerExtensionsFromPackageJson(
     if (memberjunction == null || typeof memberjunction !== 'object' || Array.isArray(memberjunction)) {
         return [];
     }
-    return normalizeServerExtensionConfigs(
+    return NormalizeServerExtensionConfigs(
         (memberjunction as Record<string, unknown>).serverExtensions,
         options
     );
+}
+
+/** @deprecated Use {@link ExtractServerExtensionsFromPackageJson}. */
+export function extractServerExtensionsFromPackageJson(
+    pkgJson: unknown,
+    options?: NormalizeServerExtensionOptions
+): ServerExtensionConfig[] {
+    return ExtractServerExtensionsFromPackageJson(pkgJson, options);
 }
 
 /**
@@ -160,7 +184,7 @@ export function extractServerExtensionsFromPackageJson(
  * - A host `Enabled: false` entry is kept so the loader skips that DriverClass
  *   rather than falling back to the discovered one.
  */
-export function mergeServerExtensionConfigs(
+export function MergeServerExtensionConfigs(
     discovered: readonly ServerExtensionConfig[] | null | undefined,
     host: readonly ServerExtensionConfig[] | null | undefined
 ): ServerExtensionConfig[] {
@@ -203,6 +227,14 @@ export function mergeServerExtensionConfigs(
     }
 
     return order.map((key) => byClass.get(key)!);
+}
+
+/** @deprecated Use {@link MergeServerExtensionConfigs}. */
+export function mergeServerExtensionConfigs(
+    discovered: readonly ServerExtensionConfig[] | null | undefined,
+    host: readonly ServerExtensionConfig[] | null | undefined
+): ServerExtensionConfig[] {
+    return MergeServerExtensionConfigs(discovered, host);
 }
 
 /** Exact RootPaths that must never be claimed by an extension (they are the whole tree or a core endpoint). */
@@ -249,7 +281,7 @@ function foldRoot(rootPath: string): string {
  * so this check cannot drift from `serve()`. Discovery-time normalize uses only the
  * static baseline; `prepareServerExtensionConfigs` passes the extras.
  */
-export function validateServerExtensionRootPath(
+export function ValidateServerExtensionRootPath(
     rootPath: string,
     extraReservedRoots?: readonly string[]
 ): string | null {
@@ -281,21 +313,34 @@ export function validateServerExtensionRootPath(
             continue;
         }
         seen.add(foldedPrefix);
-        if (serverExtensionRootsOverlap(raw, prefix)) {
+        if (ServerExtensionRootsOverlap(raw, prefix)) {
             return `RootPath '${raw}' collides with the reserved prefix '${normalizeRoot(prefix)}'`;
         }
     }
     return null;
 }
 
+/** @deprecated Use {@link ValidateServerExtensionRootPath}. */
+export function validateServerExtensionRootPath(
+    rootPath: string,
+    extraReservedRoots?: readonly string[]
+): string | null {
+    return ValidateServerExtensionRootPath(rootPath, extraReservedRoots);
+}
+
 /** True when two roots are equal or one is a nested path of the other (case-insensitive). */
-export function serverExtensionRootsOverlap(a: string, b: string): boolean {
+export function ServerExtensionRootsOverlap(a: string, b: string): boolean {
     const na = foldRoot(a);
     const nb = foldRoot(b);
     if (na === nb) {
         return true;
     }
     return na.startsWith(`${nb}/`) || nb.startsWith(`${na}/`);
+}
+
+/** @deprecated Use {@link ServerExtensionRootsOverlap}. */
+export function serverExtensionRootsOverlap(a: string, b: string): boolean {
+    return ServerExtensionRootsOverlap(a, b);
 }
 
 export interface PrepareServerExtensionOptions extends NormalizeServerExtensionOptions {
@@ -313,13 +358,13 @@ export interface PrepareServerExtensionOptions extends NormalizeServerExtensionO
  * two *enabled* extensions claim overlapping paths. Disabled entries are kept so the
  * loader can skip them by DriverClass (host `Enabled: false` stays visible).
  */
-export function prepareServerExtensionConfigs(
+export function PrepareServerExtensionConfigs(
     configs: readonly ServerExtensionConfig[] | null | undefined,
     options?: PrepareServerExtensionOptions
 ): ServerExtensionConfig[] {
     const kept: ServerExtensionConfig[] = [];
     for (const entry of configs ?? []) {
-        const rootError = validateServerExtensionRootPath(entry.RootPath ?? '', options?.extraReservedRoots);
+        const rootError = ValidateServerExtensionRootPath(entry.RootPath ?? '', options?.extraReservedRoots);
         if (rootError) {
             invalid(options, `Dropping server extension '${entry.DriverClass}': ${rootError}`);
             continue;
@@ -330,7 +375,7 @@ export function prepareServerExtensionConfigs(
     const enabled = kept.filter((c) => c.Enabled);
     for (let i = 0; i < enabled.length; i++) {
         for (let j = i + 1; j < enabled.length; j++) {
-            if (serverExtensionRootsOverlap(enabled[i].RootPath, enabled[j].RootPath)) {
+            if (ServerExtensionRootsOverlap(enabled[i].RootPath, enabled[j].RootPath)) {
                 options?.onOverlap?.(
                     `Enabled server extensions '${enabled[i].DriverClass}' (${enabled[i].RootPath}) and '${enabled[j].DriverClass}' (${enabled[j].RootPath}) have overlapping RootPaths`
                 );
@@ -340,12 +385,25 @@ export function prepareServerExtensionConfigs(
     return kept;
 }
 
+/** @deprecated Use {@link PrepareServerExtensionConfigs}. */
+export function prepareServerExtensionConfigs(
+    configs: readonly ServerExtensionConfig[] | null | undefined,
+    options?: PrepareServerExtensionOptions
+): ServerExtensionConfig[] {
+    return PrepareServerExtensionConfigs(configs, options);
+}
+
 /**
  * One-line inventory of a server-extension mount. All extension routes are installed
  * BEFORE MJServer's auth middleware — the operator must be able to see that at boot.
  */
-export function describeServerExtensionMount(config: ServerExtensionConfig): string {
+export function DescribeServerExtensionMount(config: ServerExtensionConfig): string {
     const state = config.Enabled ? 'enabled' : 'disabled';
     const phase = (config.Phase ?? 'pre-auth').toUpperCase();
     return `${config.DriverClass} at ${config.RootPath} (${state}, ${phase}; host mj.config.cjs serverExtensions[] can set Enabled: false to suppress)`;
+}
+
+/** @deprecated Use {@link DescribeServerExtensionMount}. */
+export function describeServerExtensionMount(config: ServerExtensionConfig): string {
+    return DescribeServerExtensionMount(config);
 }

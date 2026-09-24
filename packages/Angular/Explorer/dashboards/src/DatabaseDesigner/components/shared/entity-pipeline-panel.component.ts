@@ -107,10 +107,10 @@ export class EntityPipelinePanelComponent implements AfterViewInit {
             // restart would drop the connection before the response arrives.  The agent path
             // (EntitySchemaBuilder) uses the same flag for the same reason.
             const result = this.ModificationType === 'create'
-                ? await this.service.createEntity(this.TableDefinition, { skipRestart: true })
+                ? await this.service.createEntity(this.TableDefinition, { SkipRestart: true })
                 : await this.service.modifyEntity(this.TableDefinition, {
-                    existingEntityId: this.ExistingEntityId ?? '',
-                    skipRestart: true,
+                    ExistingEntityId: this.ExistingEntityId ?? '',
+                    SkipRestart: true,
                 });
 
             this.PipelineResult = result;

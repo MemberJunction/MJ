@@ -14,7 +14,7 @@ const warned = new Set<string>();
  * Returns a warning when no `BaseEntity` subclass is registered for `entityName` in this
  * process, or `null` when one is. Each entity is reported once; later calls return `null`.
  */
-export function describeMissingEntitySubclass(entityName: string, options: { dryRun?: boolean } = {}): string | null {
+export function DescribeMissingEntitySubclass(entityName: string, options: { dryRun?: boolean } = {}): string | null {
   const key = entityName.trim().toLowerCase();
   if (!key || warned.has(key)) {
     return null;
@@ -36,7 +36,17 @@ export function describeMissingEntitySubclass(entityName: string, options: { dry
   );
 }
 
+/** @deprecated Use {@link DescribeMissingEntitySubclass}. */
+export function describeMissingEntitySubclass(entityName: string, options: { dryRun?: boolean } = {}): string | null {
+  return DescribeMissingEntitySubclass(entityName, options);
+}
+
 /** Test seam: forget which entities have been reported. */
-export function resetMissingEntitySubclassWarnings(): void {
+export function ResetMissingEntitySubclassWarnings(): void {
   warned.clear();
+}
+
+/** @deprecated Use {@link ResetMissingEntitySubclassWarnings}. */
+export function resetMissingEntitySubclassWarnings(): void {
+  return ResetMissingEntitySubclassWarnings();
 }

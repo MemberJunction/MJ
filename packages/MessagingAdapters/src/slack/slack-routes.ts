@@ -38,7 +38,7 @@ const MAX_REQUEST_AGE_SECONDS = 300;
  * });
  * ```
  */
-export function verifySlackSignature(req: Request, signingSecret: string): boolean {
+export function VerifySlackSignature(req: Request, signingSecret: string): boolean {
     const timestamp = req.headers['x-slack-request-timestamp'] as string | undefined;
     const signature = req.headers['x-slack-signature'] as string | undefined;
 
@@ -57,6 +57,11 @@ export function verifySlackSignature(req: Request, signingSecret: string): boole
 
     // Use timing-safe comparison to prevent timing attacks
     return safeCompare(expectedSignature, signature);
+}
+
+/** @deprecated Use {@link VerifySlackSignature}. */
+export function verifySlackSignature(req: Request, signingSecret: string): boolean {
+    return VerifySlackSignature(req, signingSecret);
 }
 
 /**

@@ -34,11 +34,11 @@ import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 
 export interface LoadedCheckModulesSummary {
     /** Specifiers that imported successfully. */
-    loaded: string[];
+    Loaded: string[];
     /** Specifier → error message for imports that failed (non-fatal, reported). */
-    failed: Array<{ specifier: string; error: string }>;
+    Failed: Array<{ specifier: string; error: string }>;
     /** Bundle names newly present on the registry after loading. */
-    newBundles: string[];
+    NewBundles: string[];
 }
 
 /**
@@ -50,9 +50,9 @@ export interface LoadedCheckModulesSummary {
  * produce an actionable report line, and the driver's own "Unknown integration check
  * bundle" oracle stays the backstop for anything that truly never registered.
  */
-export async function loadCheckModules(specifiers: string[], cwd: string = process.cwd()): Promise<LoadedCheckModulesSummary> {
+export async function LoadCheckModules(specifiers: string[], cwd: string = process.cwd()): Promise<LoadedCheckModulesSummary> {
     const before = new Set(IntegrationCheckRegistry.Instance.GetBundleNames());
-    const summary: LoadedCheckModulesSummary = { loaded: [], failed: [], newBundles: [] };
+    const summary: LoadedCheckModulesSummary = { Loaded: [], Failed: [], NewBundles: [] };
 
     for (const specifier of specifiers) {
         try {
@@ -68,12 +68,17 @@ export async function loadCheckModules(specifiers: string[], cwd: string = proce
                 // in-repo; node_modules in an adopter's project).
                 await import(specifier);
             }
-            summary.loaded.push(specifier);
+            summary.Loaded.push(specifier);
         } catch (err) {
-            summary.failed.push({ specifier, error: err instanceof Error ? err.message : String(err) });
+            summary.Failed.push({ specifier, error: err instanceof Error ? err.message : String(err) });
         }
     }
 
-    summary.newBundles = IntegrationCheckRegistry.Instance.GetBundleNames().filter(b => !before.has(b));
+    summary.NewBundles = IntegrationCheckRegistry.Instance.GetBundleNames().filter(b => !before.has(b));
     return summary;
+}
+
+/** @deprecated Use {@link LoadCheckModules}. */
+export async function loadCheckModules(specifiers: string[], cwd: string = process.cwd()): Promise<LoadedCheckModulesSummary> {
+    return LoadCheckModules(specifiers, cwd);
 }

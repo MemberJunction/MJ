@@ -55,7 +55,7 @@ import {
  * @param action The Base action to translate; narrow on `action.Kind`.
  * @returns The equivalent computer-use {@link BrowserAction}.
  */
-export function mapRemoteBrowserAction(action: RemoteBrowserAction): BrowserAction {
+export function MapRemoteBrowserAction(action: RemoteBrowserAction): BrowserAction {
     switch (action.Kind) {
         case 'navigate': {
             const mapped = new NavigateAction();
@@ -118,6 +118,11 @@ export function mapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
     }
 }
 
+/** @deprecated Use {@link MapRemoteBrowserAction}. */
+export function mapRemoteBrowserAction(action: RemoteBrowserAction): BrowserAction {
+    return MapRemoteBrowserAction(action);
+}
+
 /**
  * Maps a single Base {@link RemoteBrowserHumanInput} (a human-takeover pointer/key event) to the
  * computer-use {@link BrowserAction} the adapter executes. Exhaustive over `input.Kind`.
@@ -138,7 +143,7 @@ export function mapRemoteBrowserAction(action: RemoteBrowserAction): BrowserActi
  * @param input The Base human-takeover input to translate; narrow on `input.Kind`.
  * @returns The equivalent computer-use {@link BrowserAction}.
  */
-export function mapHumanInput(input: RemoteBrowserHumanInput): BrowserAction {
+export function MapHumanInput(input: RemoteBrowserHumanInput): BrowserAction {
     switch (input.Kind) {
         case 'pointer-move': {
             const mapped = new MouseMoveAction();
@@ -204,6 +209,11 @@ export function mapHumanInput(input: RemoteBrowserHumanInput): BrowserAction {
             // Exhaustive: `input` is `never` here.
             return assertNeverHumanInput(input);
     }
+}
+
+/** @deprecated Use {@link MapHumanInput}. */
+export function mapHumanInput(input: RemoteBrowserHumanInput): BrowserAction {
+    return MapHumanInput(input);
 }
 
 /**

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { DropboxSignSignatureProvider, mapDropboxSignStatus } from '../DropboxSignSignatureProvider';
+import { DropboxSignSignatureProvider, MapDropboxSignStatus } from '../DropboxSignSignatureProvider';
 import type { SignatureProviderConfig } from '@memberjunction/esignature';
 
 const VALID_CONFIG: SignatureProviderConfig = {
@@ -38,7 +38,7 @@ describe('mapDropboxSignStatus', () => {
         ['error', 'Unknown'],
         ['', 'Unknown'],
     ] as const)('maps %s -> %s', (input, expected) => {
-        expect(mapDropboxSignStatus(input)).toBe(expected);
+        expect(MapDropboxSignStatus(input)).toBe(expected);
     });
 });
 

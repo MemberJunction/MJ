@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers } from './ExpressionHelpers.js';
+import { ConvertIdentifiers } from './ExpressionHelpers.js';
 
 export class GrantRule implements IConversionRule {
   Name = 'GrantRule';
@@ -11,7 +11,7 @@ export class GrantRule implements IConversionRule {
   BypassJustification = 'T-SQL GRANT EXEC → PG GRANT EXECUTE renaming, plus wrapping each GRANT in DO $ EXCEPTION blocks so the grant tolerates missing roles or functions during fresh installs. sqlglot does not apply this idempotency wrapping or rename EXEC → EXECUTE.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
-    let result = convertIdentifiers(sql);
+    let result = ConvertIdentifiers(sql);
     // Remove N prefix from strings
     result = result.replace(/(?<![a-zA-Z])N'/g, "'");
 

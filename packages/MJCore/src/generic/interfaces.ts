@@ -20,7 +20,7 @@ import { EntityTransactionScope } from "./entityTransactionScope";
 export class ProviderConfigDataBase<D = any> {
     private _includeSchemas: string[] = [];
     private _excludeSchemas: string[] = [];
-    private _MJCoreSchemaName: string = '__mj';
+    private _mJCoreSchemaName: string = '__mj';
     private _data: D;
     private _ignoreExistingMetadata: boolean = false;
 
@@ -31,7 +31,7 @@ export class ProviderConfigDataBase<D = any> {
         return this._includeSchemas;
     }
     public get MJCoreSchemaName(): string {
-        return this._MJCoreSchemaName;
+        return this._mJCoreSchemaName;
     }
     public get ExcludeSchemas(): string[] {
         return this._excludeSchemas;
@@ -50,7 +50,7 @@ export class ProviderConfigDataBase<D = any> {
      */
     constructor(data: D, MJCoreSchemaName: string = '__mj', includeSchemas?: string[], excludeSchemas?: string[], ignoreExistingMetadata: boolean = true) {
         this._data = data;
-        this._MJCoreSchemaName = MJCoreSchemaName;
+        this._mJCoreSchemaName = MJCoreSchemaName;
         if (includeSchemas)
             this._includeSchemas = includeSchemas;
         if (excludeSchemas)

@@ -5,7 +5,7 @@ import { configInfo } from "../config.js";
 import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityType, MJApplicationEntityEntityType, UserInfoEngine } from "@memberjunction/core-entities";
 
 export class NewUserBase {
-    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<MJUserEntity | null> {
+    public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<MJUserEntity | null> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         try {
             const contextUser: UserInfo | null = ResolveConfiguredPrincipal(
                 configInfo?.userHandling?.contextUserForNewUserCreation,

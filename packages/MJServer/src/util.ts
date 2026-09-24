@@ -23,7 +23,7 @@ type StreamCallback = (jsonObject: any) => void;
  * @param {StreamCallback} [streamCallback] - Optional callback for handling streaming JSON objects.
  * @returns {Promise<any[]>} - A promise that resolves to an array of all JSON objects received during the streaming process.
  */
-export async function sendPostRequest(url: string, payload: any, useCompression: boolean, headers: Record<string, string> | null, streamCallback?: StreamCallback): Promise<any[]> {
+export async function SendPostRequest(url: string, payload: any, useCompression: boolean, headers: Record<string, string> | null, streamCallback?: StreamCallback): Promise<any[]> {
   return new Promise(async (resolve, reject) => {
     try {
       const { protocol, hostname, port, pathname } = new URL(url);
@@ -144,6 +144,11 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
   );
 }
 
+/** @deprecated Use {@link SendPostRequest}. */
+export async function sendPostRequest(url: string, payload: any, useCompression: boolean, headers: Record<string, string> | null, streamCallback?: StreamCallback): Promise<any[]> {
+  return SendPostRequest(url, payload, useCompression, headers, streamCallback);
+}
+
 
   /**
    * Returns the read-only data source if it exists, otherwise returns the read-write data source if options is not provided or if options.allowFallbackToReadWrite is true.
@@ -154,14 +159,14 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
   export function GetReadOnlyDataSource(dataSources: DataSourceInfo[], options?: {allowFallbackToReadWrite: boolean}): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
     const readOnlyDataSource = dataSources.find((ds) => ds.type === 'Read-Only');
     if (readOnlyDataSource) {
-      return extendConnectionPoolWithQuery(readOnlyDataSource.dataSource);
+      return ExtendConnectionPoolWithQuery(readOnlyDataSource.dataSource);
     } 
     else if (!options || options.allowFallbackToReadWrite) {
       // default behavior for backward compatibility prior to MJ 2.22.3 where we introduced this functionality was to have a single
       // connection, so for back-compatability, if we don't have a read-only data source, we'll fall back to the read-write data source
       const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
       if (readWriteDataSource) {
-        return extendConnectionPoolWithQuery(readWriteDataSource.dataSource);
+        return ExtendConnectionPoolWithQuery(readWriteDataSource.dataSource);
       }
     }
     throw new Error('No suitable data source found');
@@ -220,7 +225,7 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
   export function GetReadWriteDataSource(dataSources: DataSourceInfo[]): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
     const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
     if (readWriteDataSource) {
-      return extendConnectionPoolWithQuery(readWriteDataSource.dataSource);
+      return ExtendConnectionPoolWithQuery(readWriteDataSource.dataSource);
     }
     throw new Error('No suitable read-write data source found');
   }
@@ -229,7 +234,7 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
    * Extends a ConnectionPool with a query method that returns results in the format expected by generated code
    * This provides backwards compatibility with code that expects TypeORM-style query results
    */
-  export function extendConnectionPoolWithQuery(pool: sql.ConnectionPool): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
+  export function ExtendConnectionPoolWithQuery(pool: sql.ConnectionPool): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
     const extendedPool = pool as any;
     extendedPool.query = async (sqlQuery: string, parameters?: any): Promise<any[]> => {
       const request = new sql.Request(pool);
@@ -249,3 +254,8 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
     };
     return extendedPool;
   }
+
+/** @deprecated Use {@link ExtendConnectionPoolWithQuery}. */
+export function extendConnectionPoolWithQuery(pool: sql.ConnectionPool): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
+  return ExtendConnectionPoolWithQuery(pool);
+}

@@ -296,13 +296,18 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     public CurrentVendor: string = '';
 
     /** SortBy options for Model Performance leaderboard. */
-    public readonly sortByOptions = [
+    public readonly SortByOptions = [
         { text: 'By Performance', value: 'cost-efficiency' },
         { text: 'By Cost',        value: 'cost' },
         { text: 'By Speed',       value: 'speed' },
         { text: 'By Reliability', value: 'reliability' },
         { text: 'By Usage',       value: 'usage-volume' }
     ];
+
+    /** @deprecated Use {@link SortByOptions}. */
+    public get sortByOptions() {
+        return this.SortByOptions;
+    }
 
     // ── Precomputed option lists ────────────────────────────────────────────
     // Built ONCE from AIEngineBase's (process-cached, load-once) lists in
@@ -317,8 +322,13 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     private _vendorOptions: { text: string; value: string }[] = [];
 
     /** Vendor options, built from AIEngineBase for the Model Performance leaderboard. */
-    public get vendorOptions(): { text: string; value: string }[] {
+    public get VendorOptions(): { text: string; value: string }[] {
         return this._vendorOptions;
+    }
+
+    /** @deprecated Use {@link VendorOptions}. */
+    public get vendorOptions(): { text: string; value: string }[] {
+        return this.VendorOptions;
     }
 
     /** Per-section filter-bar config — switched on ActiveSection. */
@@ -365,7 +375,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     }
 
     /** Status options used by the popover dropdown when the section has ShowStatusFilter. */
-    public readonly statusOptions = [
+    public readonly StatusOptions = [
         { text: 'Success',  value: 'Success' },
         { text: 'Error',    value: 'Error' },
         { text: 'Running',  value: 'Running' },
@@ -373,17 +383,37 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         { text: 'Canceled', value: 'Canceled' },
     ];
 
+    /** @deprecated Use {@link StatusOptions}. */
+    public get statusOptions() {
+        return this.StatusOptions;
+    }
+
     /** Built from AIEngineBase (see recomputeOptionLists). */
-    public get modelOptions(): { text: string; value: string }[] {
+    public get ModelOptions(): { text: string; value: string }[] {
         return this._modelOptions;
     }
 
-    public get agentOptions(): { text: string; value: string }[] {
+    /** @deprecated Use {@link ModelOptions}. */
+    public get modelOptions(): { text: string; value: string }[] {
+        return this.ModelOptions;
+    }
+
+    public get AgentOptions(): { text: string; value: string }[] {
         return this._agentOptions;
     }
 
-    public get promptOptions(): { text: string; value: string }[] {
+    /** @deprecated Use {@link AgentOptions}. */
+    public get agentOptions(): { text: string; value: string }[] {
+        return this.AgentOptions;
+    }
+
+    public get PromptOptions(): { text: string; value: string }[] {
         return this._promptOptions;
+    }
+
+    /** @deprecated Use {@link PromptOptions}. */
+    public get promptOptions(): { text: string; value: string }[] {
+        return this.PromptOptions;
     }
 
     /**
@@ -413,12 +443,26 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     }
 
     /** Time-range chip options for the toolbar slot. */
-    public get timeRangeChipOptions(): { text: string; value: string }[] {
+    public get TimeRangeChipOptions(): { text: string; value: string }[] {
         return this.FilterBarConfig.TimeRangeOptions.map(t => ({ text: t, value: t }));
     }
 
+    /** @deprecated Use {@link TimeRangeChipOptions}. */
+    public get timeRangeChipOptions(): { text: string; value: string }[] {
+        return this.TimeRangeChipOptions;
+    }
+
     /** Compare-mode visual state (kept on the shell now that analytics-filter-bar is gone). */
-    public compareActive = false;
+    public CompareActive = false;
+
+    /** @deprecated Use {@link CompareActive}. */
+    public get compareActive() {
+        return this.CompareActive;
+    }
+    /** @deprecated Use {@link CompareActive}. */
+    public set compareActive(value) {
+        this.CompareActive = value;
+    }
 
     /**
      * Precomputed popover field config for the active section. Recomputed only when
@@ -429,8 +473,13 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     private _analyticsFilterFields: FilterFieldConfig[] = [];
 
     /** Field config for the popover, based on the active section (precomputed). */
-    public get analyticsFilterFields(): FilterFieldConfig[] {
+    public get AnalyticsFilterFields(): FilterFieldConfig[] {
         return this._analyticsFilterFields;
+    }
+
+    /** @deprecated Use {@link AnalyticsFilterFields}. */
+    public get analyticsFilterFields(): FilterFieldConfig[] {
+        return this.AnalyticsFilterFields;
     }
 
     /** Rebuild {@link _analyticsFilterFields} for the current section from the option lists. */
@@ -443,8 +492,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 type: 'dropdown',
                 label: 'Model',
                 icon: 'fa-solid fa-microchip',
-                filterable: this.modelOptions.length > 10,
-                options: [{ text: 'All Models', value: '' }, ...this.modelOptions],
+                filterable: this.ModelOptions.length > 10,
+                options: [{ text: 'All Models', value: '' }, ...this.ModelOptions],
             });
         }
         if (cfg.ShowAgentFilter) {
@@ -453,8 +502,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 type: 'dropdown',
                 label: 'Agent',
                 icon: 'fa-solid fa-robot',
-                filterable: this.agentOptions.length > 10,
-                options: [{ text: 'All Agents', value: '' }, ...this.agentOptions],
+                filterable: this.AgentOptions.length > 10,
+                options: [{ text: 'All Agents', value: '' }, ...this.AgentOptions],
             });
         }
         if (cfg.ShowPromptFilter) {
@@ -463,8 +512,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 type: 'dropdown',
                 label: 'Prompt',
                 icon: 'fa-solid fa-comment-dots',
-                filterable: this.promptOptions.length > 10,
-                options: [{ text: 'All Prompts', value: '' }, ...this.promptOptions],
+                filterable: this.PromptOptions.length > 10,
+                options: [{ text: 'All Prompts', value: '' }, ...this.PromptOptions],
             });
         }
         if (cfg.ShowStatusFilter) {
@@ -473,7 +522,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 type: 'dropdown',
                 label: 'Status',
                 icon: 'fa-solid fa-toggle-on',
-                options: [{ text: 'All Statuses', value: '' }, ...this.statusOptions],
+                options: [{ text: 'All Statuses', value: '' }, ...this.StatusOptions],
             });
         }
         if (cfg.ShowSortBy) {
@@ -482,7 +531,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 type: 'dropdown',
                 label: 'Sort By',
                 icon: 'fa-solid fa-arrow-down-wide-short',
-                options: this.sortByOptions,
+                options: this.SortByOptions,
             });
         }
         if (cfg.ShowVendor) {
@@ -491,15 +540,15 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 type: 'dropdown',
                 label: 'Vendor',
                 icon: 'fa-solid fa-building',
-                filterable: this.vendorOptions.length > 10,
-                options: [{ text: 'All Vendors', value: '' }, ...this.vendorOptions],
+                filterable: this.VendorOptions.length > 10,
+                options: [{ text: 'All Vendors', value: '' }, ...this.VendorOptions],
             });
         }
         this._analyticsFilterFields = fields;
     }
 
     /** Single-value flattened state for the centralized panel (the panel takes scalar values; we hold arrays in CurrentFilters). */
-    public get analyticsFilterValues(): Record<string, unknown> {
+    public get AnalyticsFilterValues(): Record<string, unknown> {
         return {
             Models:   this.CurrentFilters.Models?.[0]   ?? '',
             Agents:   this.CurrentFilters.Agents?.[0]   ?? '',
@@ -510,8 +559,13 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         };
     }
 
+    /** @deprecated Use {@link AnalyticsFilterValues}. */
+    public get analyticsFilterValues(): Record<string, unknown> {
+        return this.AnalyticsFilterValues;
+    }
+
     /** Receive popover updates and translate scalar → array shape used by GlobalFilterState. */
-    public onAnalyticsFilterValuesChange(values: Record<string, unknown>): void {
+    public OnAnalyticsFilterValuesChange(values: Record<string, unknown>): void {
         const next: GlobalFilterState = {
             Models:   values['Models']   ? [values['Models']   as string] : [],
             Agents:   values['Agents']   ? [values['Agents']   as string] : [],
@@ -527,14 +581,24 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         }
     }
 
+    /** @deprecated Use {@link OnAnalyticsFilterValuesChange}. */
+    public onAnalyticsFilterValuesChange(values: Record<string, unknown>): void {
+        return this.OnAnalyticsFilterValuesChange(values);
+    }
+
     /** Reset only the popover filters — leaves TimeRange and CompareActive alone. */
-    public resetPopoverFilters(): void {
+    public ResetPopoverFilters(): void {
         this.OnFiltersChange({ Models: [], Agents: [], Prompts: [], Statuses: [] });
         // SortBy + Vendor reset only when Model Performance is the active section.
         if (this.ActiveSection === 'model-performance') {
             this.CurrentSortBy = 'cost-efficiency';
             this.CurrentVendor = '';
         }
+    }
+
+    /** @deprecated Use {@link ResetPopoverFilters}. */
+    public resetPopoverFilters(): void {
+        return this.ResetPopoverFilters();
     }
 
     /** Active filter count for the popover badge. */
@@ -548,8 +612,13 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     }
 
     /** Toggle Compare mode — the mjButton directive owns the [(selected)] flip, so this handler only forwards the new value. */
+    public ToggleCompare(): void {
+        this.OnCompareToggled(this.CompareActive);
+    }
+
+    /** @deprecated Use {@link ToggleCompare}. */
     public toggleCompare(): void {
-        this.OnCompareToggled(this.compareActive);
+        return this.ToggleCompare();
     }
 
     readonly NavItems: NavItem[] = [
@@ -585,8 +654,13 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
      * source of truth (NavItems) used both to build the rail and to render
      * per-section identity.
      */
-    get currentSection(): NavItem | undefined {
+    get CurrentSection(): NavItem | undefined {
         return this.NavItems.find(n => n.Key === this.ActiveSection);
+    }
+
+    /** @deprecated Use {@link CurrentSection}. */
+    get currentSection(): NavItem | undefined {
+        return this.CurrentSection;
     }
 
     /**
@@ -595,7 +669,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
      * group) — the rail's natural section break replaces the bespoke
      * `.nav-divider` line.
      */
-    get navSections(): MJLeftNavSection[] {
+    get NavSections(): MJLeftNavSection[] {
         const sections: MJLeftNavSection[] = [{ items: [] }];
         for (const item of this.NavItems) {
             if (item.Key.startsWith('divider')) {
@@ -611,9 +685,19 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         return sections;
     }
 
+    /** @deprecated Use {@link NavSections}. */
+    get navSections(): MJLeftNavSection[] {
+        return this.NavSections;
+    }
+
     /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
-    onNavItemClicked(item: MJLeftNavItem): void {
+    OnNavItemClicked(item: MJLeftNavItem): void {
         this.OnSectionChange(item.id);
+    }
+
+    /** @deprecated Use {@link OnNavItemClicked}. */
+    onNavItemClicked(item: MJLeftNavItem): void {
+        return this.OnNavItemClicked(item);
     }
 
     async ngOnInit(): Promise<void> {

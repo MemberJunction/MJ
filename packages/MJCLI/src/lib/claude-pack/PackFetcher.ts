@@ -16,7 +16,7 @@
 import { createHash } from 'node:crypto';
 import https from 'node:https';
 import type { Manifest, ManifestEntry } from './PackTypes.js';
-import { buildRemoteUrlPrefix } from './PackPaths.js';
+import { BuildRemoteUrlPrefix } from './PackPaths.js';
 
 // ---------------------------------------------------------------------------
 // HTTP injection point
@@ -29,8 +29,8 @@ import { buildRemoteUrlPrefix } from './PackPaths.js';
  * both accept `Uint8Array` directly.
  */
 export interface HttpResponse {
-    statusCode: number;
-    body: Uint8Array;
+    StatusCode: number;
+    Body: Uint8Array;
 }
 
 /** Promise-based GET. Production = node:https; tests = mock. */
@@ -44,13 +44,13 @@ export type HttpGetter = (url: string) => Promise<HttpResponse>;
  * (`Buffer`) doesn't cleanly assign to `Uint8Array` in the strict @types/node
  * generics that ship with v20+, even though Buffer extends Uint8Array.
  */
-export const realHttpGet: HttpGetter = (url) =>
+export const RealHttpGet: HttpGetter = (url) =>
     new Promise<HttpResponse>((resolve, reject) => {
         const req = https.get(url, (res) => {
             const chunks: Uint8Array[] = [];
             res.on('data', (chunk: Uint8Array) => chunks.push(chunk));
             res.on('end', () => {
-                resolve({ statusCode: res.statusCode ?? 0, body: concatBytes(chunks) });
+                resolve({ StatusCode: res.statusCode ?? 0, Body: concatBytes(chunks) });
             });
             res.on('error', reject);
         });
@@ -59,6 +59,9 @@ export const realHttpGet: HttpGetter = (url) =>
             req.destroy(new Error(`Timed out after 30s fetching ${url}`));
         });
     });
+
+/** @deprecated Use {@link RealHttpGet}. */
+export const realHttpGet: HttpGetter = RealHttpGet;
 
 function concatBytes(chunks: readonly Uint8Array[]): Uint8Array {
     const total = chunks.reduce((s, c) => s + c.byteLength, 0);
@@ -76,7 +79,7 @@ function concatBytes(chunks: readonly Uint8Array[]): Uint8Array {
 // ---------------------------------------------------------------------------
 
 export class PackFetchError extends Error {
-    constructor(message: string, public url?: string, public statusCode?: number) {
+    constructor(message: string, public url?: string, public statusCode?: number) {  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
         super(message);
         this.name = 'PackFetchError';
     }
@@ -86,8 +89,8 @@ export class PackChecksumError extends Error {
     constructor(
         message: string,
         public path: string,
-        public expected: string,
-        public actual: string
+        public expected: string,  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+        public actual: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     ) {
         super(message);
         this.name = 'PackChecksumError';
@@ -141,8 +144,8 @@ export interface FetchedPack {
  * sha256 along the way. Falls back from a specific tag to `main` if the
  * manifest 404s.
  */
-export async function fetchPack(opts: FetchPackOptions): Promise<FetchedPack> {
-    const httpGet = opts.HttpGet ?? realHttpGet;
+export async function FetchPack(opts: FetchPackOptions): Promise<FetchedPack> {
+    const httpGet = opts.HttpGet ?? RealHttpGet;
     const requestedRef = opts.Ref ?? 'main';
     const onProgress = opts.OnProgress ?? (() => {});
 
@@ -162,18 +165,23 @@ export async function fetchPack(opts: FetchPackOptions): Promise<FetchedPack> {
         const url = baseUrl + entry.path;
         onProgress(`fetching ${entry.path}`);
         const res = await httpGet(url);
-        if (res.statusCode !== 200) {
+        if (res.StatusCode !== 200) {
             throw new PackFetchError(
-                `Failed to fetch ${entry.path}: HTTP ${res.statusCode}`,
+                `Failed to fetch ${entry.path}: HTTP ${res.StatusCode}`,
                 url,
-                res.statusCode
+                res.StatusCode
             );
         }
-        verifyChecksum(entry, res.body);
-        files.set(entry.path, res.body);
+        verifyChecksum(entry, res.Body);
+        files.set(entry.path, res.Body);
     }
 
     return { Manifest: manifest, Files: files, RefUsed: refUsed, BaseUrl: baseUrl };
+}
+
+/** @deprecated Use {@link FetchPack}. */
+export async function fetchPack(opts: FetchPackOptions): Promise<FetchedPack> {
+    return FetchPack(opts);
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +195,7 @@ async function fetchManifestWithFallback(
     onProgress: (m: string) => void
 ): Promise<{ manifest: Manifest; refUsed: string; baseUrl: string }> {
     const tryRef = async (ref: string) => {
-        const baseUrl = buildRemoteUrlPrefix(major, ref);
+        const baseUrl = BuildRemoteUrlPrefix(major, ref);
         const manifestUrl = baseUrl + '.claude/mj/MANIFEST.json';
         onProgress(`fetching manifest from ref=${ref}`);
         const res = await httpGet(manifestUrl);
@@ -196,9 +204,9 @@ async function fetchManifestWithFallback(
 
     // First attempt: requested ref
     const first = await tryRef(requestedRef);
-    if (first.res.statusCode === 200) {
+    if (first.res.StatusCode === 200) {
         return {
-            manifest: parseManifest(first.res.body, first.manifestUrl),
+            manifest: parseManifest(first.res.Body, first.manifestUrl),
             refUsed: requestedRef,
             baseUrl: first.baseUrl,
         };
@@ -208,27 +216,27 @@ async function fetchManifestWithFallback(
     // Other status codes (5xx, network errors) propagate immediately —
     // fallback is for "this tag doesn't have the pack yet", not for "the
     // network is broken".
-    if (first.res.statusCode === 404 && requestedRef !== 'main') {
+    if (first.res.StatusCode === 404 && requestedRef !== 'main') {
         onProgress(`ref ${requestedRef} 404; falling back to main`);
         const second = await tryRef('main');
-        if (second.res.statusCode === 200) {
+        if (second.res.StatusCode === 200) {
             return {
-                manifest: parseManifest(second.res.body, second.manifestUrl),
+                manifest: parseManifest(second.res.Body, second.manifestUrl),
                 refUsed: 'main',
                 baseUrl: second.baseUrl,
             };
         }
         throw new PackFetchError(
-            `Failed to fetch manifest from both ${requestedRef} and main (HTTP ${second.res.statusCode})`,
+            `Failed to fetch manifest from both ${requestedRef} and main (HTTP ${second.res.StatusCode})`,
             second.manifestUrl,
-            second.res.statusCode
+            second.res.StatusCode
         );
     }
 
     throw new PackFetchError(
-        `Failed to fetch manifest from ${requestedRef}: HTTP ${first.res.statusCode}`,
+        `Failed to fetch manifest from ${requestedRef}: HTTP ${first.res.StatusCode}`,
         first.manifestUrl,
-        first.res.statusCode
+        first.res.StatusCode
     );
 }
 

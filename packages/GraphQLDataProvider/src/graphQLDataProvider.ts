@@ -364,7 +364,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * 
      * @param sessionId The session ID to store
      */
-    private async SaveStoredSessionID(sessionId: string): Promise<void> {
+    private async saveStoredSessionID(sessionId: string): Promise<void> {
         try {
             const ls = this.LocalStorageProvider;
             if (ls) {
@@ -415,7 +415,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
                 // Store the session ID for this connection
-                await this.SaveStoredSessionID(this._sessionId);
+                await this.saveStoredSessionID(this._sessionId);
             }
             else {
                 // Update the singleton instance
@@ -430,7 +430,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
 
                 // Store the session ID for the global instance
-                await GraphQLDataProvider.Instance.SaveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+                await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
 
                 // CRITICAL: Sync this instance with the singleton
                 // This ensures ExecuteGQL() can use this._client.request()
@@ -1718,7 +1718,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         let progressSub: { unsubscribe(): void } | undefined;
         if (options.onProgress) {
             progressChannelId = this.GenerateUUID();
-            progressSub = this.subscribe(REMOTE_OP_PROGRESS_SUBSCRIPTION, { channelId: progressChannelId }).subscribe({
+            progressSub = this.Subscribe(REMOTE_OP_PROGRESS_SUBSCRIPTION, { channelId: progressChannelId }).subscribe({
                 next: (data: { RemoteOperationProgress?: { ProgressJSON?: string } }) => {
                     const json = data?.RemoteOperationProgress?.ProgressJSON;
                     if (json) {
@@ -1835,7 +1835,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * metadata filtering lands (issue #3485). What makes a response correct regardless is the
      * server's own `ReadableFields___`; see {@link ApplyServerFieldAccess}.
      */
-    private GetDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
+    private getDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
         if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
             return new Set<string>();
         }
@@ -1857,7 +1857,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * the two must match versions, which is the narrow and acceptable coupling: restricting a
      * non-nullable column is broken on such a server regardless.
      */
-    private FieldSecurityTransportSelection(entityInfo: EntityInfo): string {
+    private fieldSecurityTransportSelection(entityInfo: EntityInfo): string {
         return entityInfo?.EnableFieldLevelSecurity ? ReadableFieldsTransportKey : '';
     }
 
@@ -1901,7 +1901,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return row;
         }
 
-        const denied = this.GetDeniedReadFieldNamesForCurrentUser(entityInfo);
+        const denied = this.getDeniedReadFieldNamesForCurrentUser(entityInfo);
         if (denied.size === 0) return row;
         for (const field of entityInfo.Fields) {
             if (!denied.has(field.Name.trim().toLowerCase())) continue;
@@ -1976,7 +1976,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // dropped server-side (ApplyFieldLevelCreateSuppression). Filtering either verb
             // here would replace a visible refusal with a silent success.
             const isaPromotionCreate = !entity.IsSaved && entity.EntityInfo.IsChildType && entity.ISAParent?.IsSaved === true;
-            const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
+            const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
             const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
             const filteredFields = entity.Fields.filter(f =>
                 (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaPromotionCreate))) &&
@@ -1984,7 +1984,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.filter(f => !isDeniedRead(f.Name))
                     .map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
-                    ${this.FieldSecurityTransportSelection(entity.EntityInfo)}
+                    ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -2197,7 +2197,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // optimization, NOT the correctness mechanism: it is only as good as this client's
             // metadata. `ReadableFields___` (requested just below) is what makes the result
             // correct when that metadata is stale. Empty set for unrestricted users — no change.
-            const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
+            const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
                                     ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType && !deniedReadFields.has(f.Name.trim().toLowerCase()))
@@ -2210,7 +2210,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                         }
                                       })
                                       .join('\n                    ')}
-                    ${this.FieldSecurityTransportSelection(entity.EntityInfo)}
+                    ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
                     ${rel}
                 }
             }
@@ -3051,7 +3051,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param preservedKeys localStorage keys to keep across logout (e.g. theme preference).
      *        Defaults to an empty set.
      */
-    public static async clearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
+    public static async ClearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
         // Clear all localStorage except explicitly preserved keys
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -3069,6 +3069,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             req.onerror = () => resolve();
             req.onblocked = () => resolve();
         });
+    }
+
+    /** @deprecated Use {@link ClearClientCache}. */
+    public static async clearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
+        return this.ClearClientCache(preservedKeys);
     }
 
     protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string, userAPIKey?: string): GraphQLClient {
@@ -3407,7 +3412,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param variables Variables to pass to the subscription
      * @returns Observable that emits subscription data
      */
-    public subscribe(subscription: string, variables?: any): Observable<any> {
+    public Subscribe(subscription: string, variables?: any): Observable<any> {
         return new Observable((observer) => {
             const client = this.getOrCreateWSClient();
             this._activeSubscriptionCount++;
@@ -3459,6 +3464,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 unsubscribe();
             };
         });
+    }
+
+    /** @deprecated Use {@link Subscribe}. */
+    public subscribe(subscription: string, variables?: any): Observable<any> {
+        return this.Subscribe(subscription, variables);
     }
 
     public PushStatusUpdates(sessionId: string = null): Observable<string> {
@@ -3699,7 +3709,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         subscription.add(
             // `subscribe()` already owns the WS client lifecycle, JWT refresh, and reconnect
             // posture — riding it keeps one implementation of that machinery.
-            this.subscribe(SUBSCRIBE_TO_FRAMES, { parentTaskId }).subscribe({
+            this.Subscribe(SUBSCRIBE_TO_FRAMES, { parentTaskId }).subscribe({
                 next: (data: { taskGraphFrames?: TaskGraphFrameEvent }) => {
                     if (data?.taskGraphFrames) {
                         subject.next(data.taskGraphFrames);
@@ -3727,7 +3737,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Public method to dispose of WebSocket resources
      * Call this when shutting down the provider or on logout
      */
-    public disposeWebSocketResources(): void {
+    public DisposeWebSocketResources(): void {
         // Stop cleanup timer
         if (this._subscriptionCleanupTimer) {
             clearInterval(this._subscriptionCleanupTimer);
@@ -3745,6 +3755,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Dispose WebSocket client
         this.disposeWSClient();
+    }
+
+    /** @deprecated Use {@link DisposeWebSocketResources}. */
+    public disposeWebSocketResources(): void {
+        return this.DisposeWebSocketResources();
     }
 
     /**************************************************************************
@@ -3790,7 +3805,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             }
         `;
-        return this.subscribe(query, { sessionID: sessionId });
+        return this.Subscribe(query, { sessionID: sessionId });
     }
 
     public SubscribeToCacheInvalidation(): void {
@@ -3814,7 +3829,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`;
 
-        const observable = this.subscribe(CACHE_INVALIDATION_SUB);
+        const observable = this.Subscribe(CACHE_INVALIDATION_SUB);
 
         this._cacheInvalidationSubscription = observable.subscribe({
             next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string }>) => {

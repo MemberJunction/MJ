@@ -8,7 +8,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { HttpGet } from '@memberjunction/network-utils';
 import { BaseWebSearchProvider } from '../BaseWebSearchProvider';
 import { WebSearchCapabilities, WebSearchHit, WebSearchParams, WebSearchProviderResponse } from '../types';
-import { classifyHttpFailure, failure } from './httpFailure';
+import { ClassifyHttpFailure, Failure } from './httpFailure';
 
 interface DDGRelatedTopic {
     Text?: string;
@@ -77,7 +77,7 @@ export class DuckDuckGoWebSearchProvider extends BaseWebSearchProvider {
             });
 
             if (!response.Data) {
-                return failure('transient', 'Empty response from DuckDuckGo.');
+                return Failure('transient', 'Empty response from DuckDuckGo.');
             }
 
             const maxResults = this.ResolveMaxResults(params.MaxResults);
@@ -97,7 +97,7 @@ export class DuckDuckGoWebSearchProvider extends BaseWebSearchProvider {
             // gap instead of a failure it might retry.
             return { Success: true, Hits: hits.slice(0, maxResults) };
         } catch (e) {
-            return classifyHttpFailure(e, 'DuckDuckGo');
+            return ClassifyHttpFailure(e, 'DuckDuckGo');
         }
     }
 
