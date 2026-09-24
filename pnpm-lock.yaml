@@ -7094,6 +7094,9 @@ importers:
       '@memberjunction/actions-base':
         specifier: 6.2.0-edge.0
         version: link:../../../Actions/Base
+      '@memberjunction/communication-types':
+        specifier: 6.2.0-edge.0
+        version: link:../../../Communication/base-types
       '@memberjunction/core':
         specifier: 6.2.0-edge.0
         version: link:../../../MJCore

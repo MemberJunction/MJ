@@ -165,7 +165,7 @@ export class CacheInvalidationResolver {
      * Subscription that broadcasts cache invalidation events to connected clients, so cross-server
      * cache invalidation reaches browsers.
      *
-     * Delivery is filtered only by ENTITY-level read permission (see {@link cacheInvalidationFilter}).
+     * Delivery is filtered only by ENTITY-level read permission (see {@link CacheInvalidationFilter}).
      * Every session that may read an entity at all still receives every event for it, from every
      * other session and tenant.
      *
