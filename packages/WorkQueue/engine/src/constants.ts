@@ -28,8 +28,11 @@ export const DEDUPLICATION_KEY_INDEX = 'UQ_WorkQueueDeduplication_Topic_Key';
 /** Lifetime of a Reserved ledger row while a cloud send is in progress (03 §2.1). */
 export const DEDUP_RESERVATION_SECONDS = 120;
 
-/** Deliveries per INSERT statement (4 bound values per row, well under SQL Server's 2,100 parameter limit). */
+/** Deliveries per spWorkQueueInsertDeliveries call: bounds the JSON argument and the rows locked per round trip. */
 export const DELIVERY_INSERT_CHUNK = 250;
+
+/** Rows one sweeper expire pass moves per call (spWorkQueueExpireLeasesAll); the next cycle continues. */
+export const EXPIRE_LEASES_BATCH = 500;
 
 /** Backlog and scaler counts stop here (03 §7 "Bounded work"): an autoscaler never needs more. */
 export const BACKLOG_COUNT_CAP = 1000;
@@ -37,5 +40,5 @@ export const BACKLOG_COUNT_CAP = 1000;
 /** How long a publish waits for a per-key publish-order lock before failing as retryable (03 §7). */
 export const PUBLISH_LOCK_TIMEOUT_MS = 5000;
 
-/** Session-level application lock that lets one sweeper run at a time (03 §7). */
+/** Transaction-owned application lock that lets one sweeper run at a time (03 §7). */
 export const SWEEP_LOCK_RESOURCE = 'mj-wq-sweep';

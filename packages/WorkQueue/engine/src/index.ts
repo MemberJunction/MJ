@@ -2,3 +2,8 @@ export * from './constants';
 export * from './sql/WorkQueueSqlExecutor';
 export * from './sql/SqlParamList';
 export * from './sql/sqlExecution';
+export * from './sql/rows';
+export * from './sql/procedures';
+export * from './sql/WorkQueueSqlBuilder';
+export * from './sql/ProcedureCallBuilder';
+export * from './sql/WorkQueuePublishSql';

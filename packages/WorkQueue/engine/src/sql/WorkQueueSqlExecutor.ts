@@ -34,8 +34,8 @@ export interface WorkQueueExecutorSource extends WorkQueueTransactionalExecutor 
     CreateIndependentInstance(): Promise<WorkQueueIndependentExecutor>;
 }
 
-/** What a statement builder needs: quoting, schema and placeholders — never execution. */
-export type SqlBuilderContext = Pick<WorkQueueSqlExecutor, 'MJCoreSchemaName' | 'QuoteIdentifier' | 'BuildParameterPlaceholder'>;
+/** What a call builder needs: the platform, its dialect, schema, quoting and placeholders — never execution. */
+export type SqlBuilderContext = Pick<WorkQueueSqlExecutor, 'PlatformKey' | 'Dialect' | 'MJCoreSchemaName' | 'QuoteIdentifier' | 'BuildParameterPlaceholder'>;
 
 export function IsWorkQueueTransactionalExecutor(value: object | null | undefined): value is WorkQueueTransactionalExecutor {
     return value != null
