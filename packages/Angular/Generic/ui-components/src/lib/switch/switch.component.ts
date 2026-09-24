@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { MJNamedControlBase } from '../a11y/named-control.base';
-import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
+import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-switch — Toggle switch. Replaces `<kendo-switch>`.
@@ -93,7 +93,7 @@ export class MJSwitchComponent extends MJNamedControlBase implements ControlValu
     this.cdr.markForCheck();
   }
 
-  ngAfterViewInit(): void { warnIfUnnamed(this.switchButtonEl?.nativeElement, 'mj-switch'); }
+  ngAfterViewInit(): void { WarnIfUnnamed(this.switchButtonEl?.nativeElement, 'mj-switch'); }
 
   Toggle(): void { if (!this.IsDisabled) { this.Value = !this.Value; this.onChange(this.Value); } }
   OnTouched(): void { this.onTouched(); }

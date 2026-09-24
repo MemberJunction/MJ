@@ -1,7 +1,7 @@
 import { isDevMode } from '@angular/core';
 
 /**
- * Options for {@link warnIfUnnamed}.
+ * Options for {@link WarnIfUnnamed}.
  */
 export type UnnamedControlGuardOptions = {
   /**
@@ -15,7 +15,7 @@ export type UnnamedControlGuardOptions = {
    * True only for `mj-page-search`, a toolbar widget whose placeholder ("Search templates…") IS the
    * caller's statement of what the box searches, and whose default placeholder is never absent.
    */
-  placeholderIsName?: boolean;
+  PlaceholderIsName?: boolean;
 };
 
 /**
@@ -31,7 +31,7 @@ export type UnnamedControlGuardOptions = {
  *
  * **What counts as a name here** is what the accessible-name computation would actually resolve on
  * the element: an `aria-labelledby` whose ids resolve to real elements, `aria-label`, an associated
- * `<label for>`, `title`, and — only where {@link UnnamedControlGuardOptions.placeholderIsName} says
+ * `<label for>`, `title`, and — only where {@link UnnamedControlGuardOptions.PlaceholderIsName} says
  * so — a `placeholder`. A dangling `aria-labelledby` does NOT count: an idref pointing at an element
  * that was renamed or is not rendered yet computes to an empty name, and that silent half-wiring is
  * exactly the failure this guard is for.
@@ -51,7 +51,7 @@ export type UnnamedControlGuardOptions = {
  * @param selector the control's tag, for the message prefix (`mj-combobox`)
  * @param options per-control naming rules; see {@link UnnamedControlGuardOptions}
  */
-export function warnIfUnnamed(
+export function WarnIfUnnamed(
   element: HTMLElement | null | undefined,
   selector: string,
   options: UnnamedControlGuardOptions = {}
@@ -76,7 +76,7 @@ export function warnIfUnnamed(
 
 /** True when the accessible-name computation would resolve any name for this element. */
 function hasAccessibleName(element: HTMLElement, options: UnnamedControlGuardOptions): boolean {
-  const attributes = options.placeholderIsName ? ['aria-label', 'title', 'placeholder'] : ['aria-label', 'title'];
+  const attributes = options.PlaceholderIsName ? ['aria-label', 'title', 'placeholder'] : ['aria-label', 'title'];
   const named = attributes.some((attribute) => element.getAttribute(attribute)?.trim());
   return named || hasResolvedLabelledBy(element) || hasAssociatedLabel(element);
 }

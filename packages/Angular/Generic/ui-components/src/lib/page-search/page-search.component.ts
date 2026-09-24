@@ -8,7 +8,7 @@ import {
   ViewChild
 } from '@angular/core';
 import { MJNamedControlBase } from '../a11y/named-control.base';
-import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
+import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-page-search — Canonical in-page search input for dashboard headers and toolbars.
@@ -136,7 +136,7 @@ export class MJPageSearchComponent extends MJNamedControlBase implements AfterVi
   }
 
   /**
-   * `placeholderIsName` is passed here and nowhere else: this is a toolbar widget whose placeholder
+   * `PlaceholderIsName` is passed here and nowhere else: this is a toolbar widget whose placeholder
    * ("Search templates…") IS the caller's statement of what the box searches. On a form control a
    * placeholder is not a name — it disappears as soon as the user types — so those controls warn
    * without one.
@@ -147,8 +147,8 @@ export class MJPageSearchComponent extends MJNamedControlBase implements AfterVi
    * chose counts.
    */
   public ngAfterViewInit(): void {
-    warnIfUnnamed(this.searchInputEl?.nativeElement, 'mj-page-search', {
-      placeholderIsName: this.Placeholder !== MJPageSearchComponent.GenericPlaceholder
+    WarnIfUnnamed(this.searchInputEl?.nativeElement, 'mj-page-search', {
+      PlaceholderIsName: this.Placeholder !== MJPageSearchComponent.GenericPlaceholder
     });
   }
 

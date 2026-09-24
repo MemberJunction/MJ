@@ -16,5 +16,5 @@ naming source.
 where focus actually lands, and gains `aria-activedescendant` so the arrow-key highlight is
 announced rather than being a CSS class alone.
 
-A new dev-mode `warnIfUnnamed` guard warns once per control that renders with no accessible name,
+A new dev-mode `WarnIfUnnamed` guard warns once per control that renders with no accessible name,
 alongside the existing `mjButton` and `mjClickable` guards, and is a no-op in production.

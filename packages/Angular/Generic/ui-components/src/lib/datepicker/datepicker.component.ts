@@ -3,7 +3,7 @@ import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLabel } from '../calendar/calendar-utils';
 import { MJNamedControlBase } from '../a11y/named-control.base';
-import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
+import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-datepicker — Date picker with calendar popup. Replaces `<kendo-datepicker>`.
@@ -157,7 +157,7 @@ export class MJDatepickerComponent extends MJNamedControlBase implements Control
   /** `aria-label` for the calendar grid in the no-visible-label case. */
   get CalendarLabel(): string { return this.SecondaryLabel('Calendar for', 'Calendar'); }
 
-  ngAfterViewInit(): void { warnIfUnnamed(this.dateInputEl?.nativeElement, 'mj-datepicker'); }
+  ngAfterViewInit(): void { WarnIfUnnamed(this.dateInputEl?.nativeElement, 'mj-datepicker'); }
 
   Toggle(): void { if (this.IsDisabled) return; this.IsOpen ? this.Close() : this.Open(); }
   Open(): void {

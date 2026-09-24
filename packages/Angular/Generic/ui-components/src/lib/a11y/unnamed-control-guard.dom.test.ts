@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { Type } from '@angular/core';
 import { renderComponentFixture, clearOverlayContainers } from '@memberjunction/ng-test-utils';
-import { warnIfUnnamed } from './unnamed-control-guard';
+import { WarnIfUnnamed } from './unnamed-control-guard';
 import type { MJNamedControlBase } from './named-control.base';
 import { MJDropdownComponent } from '../dropdown/dropdown.component';
 import { MJComboboxComponent } from '../combobox/combobox.component';
@@ -17,7 +17,7 @@ import { MJPageSearchComponent } from '../page-search/page-search.component';
  * calls it. The second half is what keeps the guard from quietly covering five controls and
  * missing the sixth.
  */
-describe('warnIfUnnamed', () => {
+describe('WarnIfUnnamed', () => {
   const withWarnSpy = (fn: (warn: ReturnType<typeof vi.spyOn>) => void): void => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
@@ -40,7 +40,7 @@ describe('warnIfUnnamed', () => {
 
   it('warns for a control with no naming attribute at all', () => {
     withWarnSpy((warn) => {
-      warnIfUnnamed(element('<input type="text">'), 'mj-page-search');
+      WarnIfUnnamed(element('<input type="text">'), 'mj-page-search');
       expect(warn).toHaveBeenCalledOnce();
       expect(String(warn.mock.calls[0][0])).toContain('mj-page-search');
     });
@@ -51,7 +51,7 @@ describe('warnIfUnnamed', () => {
     ['title', '<input title="Quantity">'],
   ])('stays silent when the name comes from %s', (_source, html) => {
     withWarnSpy((warn) => {
-      warnIfUnnamed(element(html), 'mj-numeric-input');
+      WarnIfUnnamed(element(html), 'mj-numeric-input');
       expect(warn).not.toHaveBeenCalled();
     });
   });
@@ -59,7 +59,7 @@ describe('warnIfUnnamed', () => {
   it('stays silent when aria-labelledby resolves to a real element', () => {
     withWarnSpy((warn) => {
       document.body.appendChild(element('<span id="qty-label">Quantity</span>'));
-      warnIfUnnamed(element('<input aria-labelledby="qty-label">'), 'mj-numeric-input');
+      WarnIfUnnamed(element('<input aria-labelledby="qty-label">'), 'mj-numeric-input');
       expect(warn).not.toHaveBeenCalled();
     });
   });
@@ -68,7 +68,7 @@ describe('warnIfUnnamed', () => {
     // The half-wiring case: the label was renamed or removed, the attribute stayed. The accessible
     // name computes to empty, so markup that looks correct leaves the control unnamed.
     withWarnSpy((warn) => {
-      warnIfUnnamed(element('<input aria-labelledby="qty-label">'), 'mj-numeric-input');
+      WarnIfUnnamed(element('<input aria-labelledby="qty-label">'), 'mj-numeric-input');
       expect(warn).toHaveBeenCalledOnce();
     });
   });
@@ -76,7 +76,7 @@ describe('warnIfUnnamed', () => {
   it('stays silent when ONE of several aria-labelledby ids resolves', () => {
     withWarnSpy((warn) => {
       document.body.appendChild(element('<span id="qty-label">Quantity</span>'));
-      warnIfUnnamed(element('<input aria-labelledby="missing-word qty-label">'), 'mj-numeric-input');
+      WarnIfUnnamed(element('<input aria-labelledby="missing-word qty-label">'), 'mj-numeric-input');
       expect(warn).not.toHaveBeenCalled();
     });
   });
@@ -86,14 +86,14 @@ describe('warnIfUnnamed', () => {
     // guard for most of the controls it exists to catch: nearly every mj-combobox and mj-datepicker
     // call site in this repo already passes a Placeholder.
     withWarnSpy((warn) => {
-      warnIfUnnamed(element('<input placeholder="Select a category">'), 'mj-combobox');
+      WarnIfUnnamed(element('<input placeholder="Select a category">'), 'mj-combobox');
       expect(warn).toHaveBeenCalledOnce();
     });
   });
 
   it('counts a placeholder only for the control that opts in', () => {
     withWarnSpy((warn) => {
-      warnIfUnnamed(element('<input placeholder="Search templates...">'), 'mj-page-search', { placeholderIsName: true });
+      WarnIfUnnamed(element('<input placeholder="Search templates...">'), 'mj-page-search', { PlaceholderIsName: true });
       expect(warn).not.toHaveBeenCalled();
     });
   });
@@ -102,7 +102,7 @@ describe('warnIfUnnamed', () => {
     withWarnSpy((warn) => {
       const el = element('<input id="qty-field">');
       document.body.appendChild(element('<label for="qty-field">Quantity</label>'));
-      warnIfUnnamed(el, 'mj-numeric-input');
+      WarnIfUnnamed(el, 'mj-numeric-input');
       expect(warn).not.toHaveBeenCalled();
     });
   });
@@ -113,7 +113,7 @@ describe('warnIfUnnamed', () => {
     withWarnSpy((warn) => {
       const el = element('<button id="notify-switch" role="switch">Off</button>');
       document.body.appendChild(element('<label for="notify-switch">Email notifications</label>'));
-      warnIfUnnamed(el, 'mj-switch');
+      WarnIfUnnamed(el, 'mj-switch');
       expect(warn).not.toHaveBeenCalled();
     });
   });
@@ -126,14 +126,14 @@ describe('warnIfUnnamed', () => {
     withWarnSpy((warn) => {
       const el = element('<div id="role-dd" role="combobox" tabindex="0">Administrator</div>');
       document.body.appendChild(element('<label for="role-dd">Role</label>'));
-      warnIfUnnamed(el, 'mj-dropdown');
+      WarnIfUnnamed(el, 'mj-dropdown');
       expect(warn).toHaveBeenCalledOnce();
     });
   });
 
   it('warns for an id that no label points at — an id is not a name', () => {
     withWarnSpy((warn) => {
-      warnIfUnnamed(element('<input id="qty-field">'), 'mj-numeric-input');
+      WarnIfUnnamed(element('<input id="qty-field">'), 'mj-numeric-input');
       expect(warn).toHaveBeenCalledOnce();
     });
   });
@@ -142,22 +142,22 @@ describe('warnIfUnnamed', () => {
     // A div[role=combobox]'s text is the selected value and a role=switch's is its state. Counting
     // it would silence the guard for exactly the controls it exists to catch.
     withWarnSpy((warn) => {
-      warnIfUnnamed(element('<div role="combobox">Gamma</div>'), 'mj-dropdown');
+      WarnIfUnnamed(element('<div role="combobox">Gamma</div>'), 'mj-dropdown');
       expect(warn).toHaveBeenCalledOnce();
     });
   });
 
   it('treats an empty attribute as no name — absent and empty are the same thing here', () => {
     withWarnSpy((warn) => {
-      warnIfUnnamed(element('<input aria-label="   ">'), 'mj-page-search');
+      WarnIfUnnamed(element('<input aria-label="   ">'), 'mj-page-search');
       expect(warn).toHaveBeenCalledOnce();
     });
   });
 
   it('is a no-op for a missing element rather than throwing', () => {
     withWarnSpy((warn) => {
-      expect(() => warnIfUnnamed(null, 'mj-switch')).not.toThrow();
-      expect(() => warnIfUnnamed(undefined, 'mj-switch')).not.toThrow();
+      expect(() => WarnIfUnnamed(null, 'mj-switch')).not.toThrow();
+      expect(() => WarnIfUnnamed(undefined, 'mj-switch')).not.toThrow();
       expect(warn).not.toHaveBeenCalled();
     });
   });
@@ -192,7 +192,7 @@ describe('every named control is wired to the guard', () => {
 
 /**
  * mj-page-search is deliberately absent from the table above: it is the one control that opts into
- * `placeholderIsName`, because its placeholder ("Search templates…") IS the caller's statement of
+ * `PlaceholderIsName`, because its placeholder ("Search templates…") IS the caller's statement of
  * what the box searches and its default is never absent. Every other control warns without a real
  * name, placeholder or not.
  */

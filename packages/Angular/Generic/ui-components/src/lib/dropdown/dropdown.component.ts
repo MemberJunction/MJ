@@ -18,7 +18,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 import { MJNamedControlBase } from '../a11y/named-control.base';
-import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
+import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-dropdown — Dropdown select component using CDK Overlay.
@@ -410,7 +410,7 @@ export class MJDropdownComponent extends MJNamedControlBase implements ControlVa
 
   OnBlur(): void { this.onTouched(); }
 
-  ngAfterViewInit(): void { warnIfUnnamed(this.triggerEl?.nativeElement, 'mj-dropdown'); }
+  ngAfterViewInit(): void { WarnIfUnnamed(this.triggerEl?.nativeElement, 'mj-dropdown'); }
 
   GetItemText(item: unknown): string {
     if (item == null) return '';

@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { MJNamedControlBase } from '../a11y/named-control.base';
-import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
+import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-numeric-input — Numeric input with min/max/step. Replaces `<kendo-numerictextbox>`.
@@ -88,7 +88,7 @@ export class MJNumericInputComponent extends MJNamedControlBase implements Contr
   private onChange: (value: number | null) => void = () => {};
   private onTouched: () => void = () => {};
 
-  ngAfterViewInit(): void { warnIfUnnamed(this.numericInputEl?.nativeElement, 'mj-numeric-input'); }
+  ngAfterViewInit(): void { WarnIfUnnamed(this.numericInputEl?.nativeElement, 'mj-numeric-input'); }
 
   OnInput(event: Event): void {
     const raw = (event.target as HTMLInputElement).value;

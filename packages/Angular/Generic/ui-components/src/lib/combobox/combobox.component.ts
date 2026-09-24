@@ -18,7 +18,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 import { MJNamedControlBase } from '../a11y/named-control.base';
-import { warnIfUnnamed } from '../a11y/unnamed-control-guard';
+import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-combobox — Editable dropdown with filtering and optional custom values.
@@ -497,7 +497,7 @@ export class MJComboboxComponent extends MJNamedControlBase implements ControlVa
   registerOnChange(fn: (value: unknown) => void): void { this.onChange = fn; }
   registerOnTouched(fn: () => void): void { this.onTouched = fn; }
   setDisabledState(isDisabled: boolean): void { this.formDisabled = isDisabled; this.syncDisabled(); }
-  ngAfterViewInit(): void { warnIfUnnamed(this.ComboInput?.nativeElement, 'mj-combobox'); }
+  ngAfterViewInit(): void { WarnIfUnnamed(this.ComboInput?.nativeElement, 'mj-combobox'); }
   ngOnDestroy(): void { this.Close(); }
 
   private getDisplayText(): string {
