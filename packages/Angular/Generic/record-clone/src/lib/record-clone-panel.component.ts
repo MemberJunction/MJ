@@ -60,6 +60,10 @@ import {
     CompositeKeyToRecordCloneKey,
 } from './record-clone-types';
 
+/** Plan options the scope step edits. */
+type ScopeOptionKey = 'MaxDepth' | 'MaxRecords' | 'Subtypes' | 'Hierarchy' | 'SoftLinks' | 'EntityActions';
+const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 'Subtypes', 'Hierarchy', 'SoftLinks', 'EntityActions'];
+
 /**
  * Embeddable clone wizard for one source record.
  *
@@ -125,13 +129,13 @@ import {
                         <mj-clone-scope-controls
                             [Presets]="AvailablePresets"
                             [SelectedPreset]="SelectedPreset"
-                            [MaxDepth]="ScopeOptions.MaxDepth ?? 3"
-                            [Subtypes]="ScopeOptions.Subtypes ?? 'include'"
-                            [Hierarchy]="ScopeOptions.Hierarchy ?? 'subtree'"
-                            [SoftLinks]="ScopeOptions.SoftLinks ?? 'skip'"
-                            [EntityActions]="ScopeOptions.EntityActions ?? 'suppress'"
+                            [MaxDepth]="DisplayedScope.MaxDepth"
+                            [Subtypes]="DisplayedScope.Subtypes"
+                            [Hierarchy]="DisplayedScope.Hierarchy"
+                            [SoftLinks]="DisplayedScope.SoftLinks"
+                            [EntityActions]="DisplayedScope.EntityActions"
                             [CanFireHooks]="CanFireHooks"
-                            [MaxRecords]="ScopeOptions.MaxRecords ?? 500"
+                            [MaxRecords]="DisplayedScope.MaxRecords"
                             (ScopeChanged)="OnScopeOptionsChanged($event)">
                         </mj-clone-scope-controls>
 
@@ -515,13 +519,16 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
     public ExecutionResult: RecordCloneExecuteOutput | null = null;
     public ExecutionProgress: CloneProgressUpdate | null = null;
 
-    /** Plan options sent with every plan and execute request. */
-    public ScopeOptions: RecordClonePlanOptions = RecordClonePanelComponent.defaultScopeOptions();
+    /**
+     * Plan options sent with every plan and execute request. Holds only what the user changed (plus
+     * the preset and entered values); everything else comes from the entity's clone configuration.
+     */
+    public ScopeOptions: RecordClonePlanOptions = {};
     public AvailablePresets: string[] = [];
     public SelectedPreset?: string;
     /**
-     * Whether the Fire Hooks toggle is offered. Stays false until the server reports the
-     * `Clone Records: Fire Hooks` authorization for the user (plan §9); the server re-checks either way.
+     * Whether the Fire Hooks toggle is offered: `RecordClone.Describe` reports whether the user holds
+     * `Clone Records: Fire Hooks` (plan §9). The server re-checks and keeps hooks suppressed without it.
      */
     public CanFireHooks = false;
 
@@ -590,7 +597,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
     /** Clears the values entered so far and starts over (used by "Clone another"). */
     public Reset(): Promise<void> {
         // Values folded into the options on the way to Review belong to the previous run.
-        this.ScopeOptions = RecordClonePanelComponent.defaultScopeOptions();
+        this.ScopeOptions = {};
         this.SelectedPreset = undefined;
         this.ActivePlan = null;
         this.ExecutionResult = null;
@@ -699,8 +706,30 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
     // ── Template handlers ────────────────────────────────────────────────
 
+    /** Scope values the controls show: the server's effective options once a plan exists. */
+    public get DisplayedScope(): Required<Pick<RecordClonePlanOptions, ScopeOptionKey>> {
+        return { ...RecordClonePanelComponent.builtInScope(), ...(this.ActivePlan?.EffectiveOptions ?? {}) };
+    }
+
+    /**
+     * Keeps only the scope values the user changed from what is displayed, so the entity's
+     * configured defaults (and a preset's options) are not overwritten by values nobody chose.
+     * Picking a preset clears earlier scope changes so the preset's options apply.
+     */
     public OnScopeOptionsChanged(options: RecordClonePlanOptions): void {
-        this.ScopeOptions = { ...options };
+        const next: RecordClonePlanOptions = { ...this.ScopeOptions };
+        if (options.Preset !== this.SelectedPreset) {
+            for (const k of SCOPE_OPTION_KEYS) delete next[k];
+            next.Preset = options.Preset;
+        } else {
+            const shown = this.DisplayedScope;
+            for (const k of SCOPE_OPTION_KEYS) {
+                if (options[k] !== undefined && options[k] !== shown[k]) {
+                    (next as Record<ScopeOptionKey, unknown>)[k] = options[k];
+                }
+            }
+        }
+        this.ScopeOptions = next;
         this.SelectedPreset = options.Preset;
         void this.replanOrFail();
     }
@@ -764,8 +793,8 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
     // ── Internals ────────────────────────────────────────────────────────
 
-    /** Options a fresh wizard starts with; the server narrows them to the entity's configuration. */
-    private static defaultScopeOptions(): RecordClonePlanOptions {
+    /** What the controls show before the first plan arrives; the server's effective options replace it. */
+    private static builtInScope(): Required<Pick<RecordClonePlanOptions, ScopeOptionKey>> {
         return {
             MaxDepth: 3,
             MaxRecords: 500,
@@ -825,6 +854,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
             }
 
             this.AvailablePresets = describe.Presets || [];
+            this.CanFireHooks = describe.CanFireHooks === true;
 
             this.LoadingMessage = 'Computing dependency graph and plan...';
             this.cdr.markForCheck();

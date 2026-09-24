@@ -13,11 +13,8 @@ import {
 } from '@memberjunction/record-cloning-base';
 import { ClonePlanner } from './ClonePlanner';
 import { CloneExecutor } from './CloneExecutor';
-import {
-    RecordCloneDescribeOutput,
-    RecordCloneGetLineageOutput,
-    RecordCloneOperationsHandler,
-} from './operations';
+import type { RecordCloneDescribeOutput, RecordCloneGetLineageOutput, RecordCloneKey } from '@memberjunction/core-entities';
+import { RecordCloneOperationsHandler } from './operations';
 
 export class RecordCloneEngine {
     private _provider?: IMetadataProvider;
@@ -54,12 +51,8 @@ export class RecordCloneEngine {
     /**
      * Inspects clone capabilities and policies for an entity or record.
      */
-    public async Describe(
-        entityName: string,
-        user: UserInfo,
-        recordId?: string
-    ): Promise<RecordCloneDescribeOutput> {
-        return this._handler.Describe({ EntityName: entityName, RecordID: recordId }, user);
+    public async Describe(entityName: string, user: UserInfo, key?: RecordCloneKey): Promise<RecordCloneDescribeOutput> {
+        return this._handler.Describe({ EntityName: entityName, Key: key }, user);
     }
 
     /**
@@ -67,13 +60,10 @@ export class RecordCloneEngine {
      */
     public async GetLineage(
         entityName: string,
-        recordId: string,
+        key: RecordCloneKey,
         user: UserInfo,
         direction?: 'up' | 'down' | 'both'
     ): Promise<RecordCloneGetLineageOutput> {
-        return this._handler.GetLineage(
-            { EntityName: entityName, RecordID: recordId, Direction: direction },
-            user
-        );
+        return this._handler.GetLineage({ EntityName: entityName, Key: key, Direction: direction }, user);
     }
 }

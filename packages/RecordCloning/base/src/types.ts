@@ -85,7 +85,13 @@ export type CloneWarningCode =
     | 'SERVER_GENERATED_CHILD_SKIPPED'
     | 'INTRA_PLAN_COLLISION'
     | 'REQUIRED_USER_TYPE_MISMATCH'
-    | 'PLAN_CHANGED';
+    | 'PLAN_CHANGED'
+    /** The user lacks the clone authorization for this entity (plan §9.1). */
+    | 'FORBIDDEN'
+    /** Hooks were requested but the user lacks `Clone Records: Fire Hooks`; they stay suppressed. */
+    | 'HOOKS_FORBIDDEN'
+    /** A request option was ignored because the entity's `UserEditable` does not allow it. */
+    | 'OPTION_OVERRIDE_IGNORED';
 
 /**
  * Warning or notification emitted by the planning or execution engine.

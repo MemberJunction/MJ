@@ -13,3 +13,4 @@ export * from './JsonRemapEngine';
 export * from './ClonePolicyResolver';
 export * from './CloneFieldMapper';
 export * from './CloneConfigValidator';
+export * from './EffectiveOptions';

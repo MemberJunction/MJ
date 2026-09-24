@@ -13,6 +13,7 @@ import {
 import { CloneConfigValidator } from '@memberjunction/record-cloning-base';
 import { ClonePlanner } from '../ClonePlanner';
 import { CloneExecutor } from '../CloneExecutor';
+import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 // Mock RunView
 const mockRunViewInstance = vi.fn();
@@ -1097,6 +1098,7 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
     } as unknown as IEntityDataProvider;
 
     const mockMetadata: IMetadataProvider = {
+        Authorizations: GrantedCloneAuthorizations(),
         Entities: Object.values(mockEntities),
         EntityByName: (name: string) => mockEntities[name] || null,
         EntityByID: (id: string) => Object.values(mockEntities).find((e) => e.ID === id) || null,

@@ -55,11 +55,17 @@
           "MaxRecords": 500,
           "Naming": {
             "Strategy": "prompt",
-            "Fields": ["Email"]
+            "Fields": [
+              "Email"
+            ]
           },
           "Fields": {
             "Strict": true,
-            "PromptFor": ["Email", "FirstName", "LastName"],
+            "PromptFor": [
+              "Email",
+              "FirstName",
+              "LastName"
+            ],
             "Reset": {
               "Type": "User",
               "IsActive": false,
@@ -81,13 +87,24 @@
                 }
               ]
             },
-            "Copy": ["Title"]
+            "Copy": [
+              "Title"
+            ]
           },
           "Relationships": {
-            "MJ: User Roles": { "Policy": "Deep", "Locked": true },
-            "MJ: User Applications": { "Policy": "Deep" },
-            "MJ: User Settings": { "Policy": "Deep" },
-            "MJ: User Notification Preferences": { "Policy": "Deep" },
+            "MJ: User Roles": {
+              "Policy": "Deep",
+              "Locked": true
+            },
+            "MJ: User Applications": {
+              "Policy": "Deep"
+            },
+            "MJ: User Settings": {
+              "Policy": "Deep"
+            },
+            "MJ: User Notification Preferences": {
+              "Policy": "Deep"
+            },
             "MJ: User Views": {
               "Policy": "Skip",
               "Fields": {
@@ -97,30 +114,89 @@
                 }
               }
             },
-            "MJ: User Favorites": { "Policy": "Skip" },
-            "MJ: User Notifications": { "Policy": "Skip", "Locked": true },
-            "MJ: User Record Logs": { "Policy": "Skip", "Locked": true },
-            "MJ: User View Runs": { "Policy": "Skip", "Locked": true },
-            "MJ: Audit Logs": { "Policy": "Skip", "Locked": true },
-            "MJ: Record Changes": { "Policy": "Skip", "Locked": true },
-            "MJ: User Routines": { "Policy": "Skip", "Locked": true },
-            "MJ: Conversations": { "Policy": "Skip", "Locked": true },
-            "MJ: Conversation Details": { "Policy": "Skip", "Locked": true },
-            "MJ: Dashboards": { "Policy": "Skip", "Locked": true },
-            "MJ: Lists": { "Policy": "Skip", "Locked": true },
-            "MJ: Templates": { "Policy": "Skip", "Locked": true },
-            "MJ: Queries": { "Policy": "Skip", "Locked": true },
-            "MJ: Workspaces": { "Policy": "Skip", "Locked": true },
-            "MJ: AI Agent Notes": { "Policy": "Skip", "Locked": true },
-            "MJ: AI Agent Requests": { "Policy": "Skip", "Locked": true },
-            "MJ: AI Agent Examples": { "Policy": "Skip", "Locked": true },
-            "MJ: Test Runs": { "Policy": "Skip", "Locked": true },
-            "MJ: Scheduled Jobs": { "Policy": "Skip", "Locked": true }
+            "MJ: User Favorites": {
+              "Policy": "Skip"
+            },
+            "MJ: User Notifications": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: User Record Logs": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: User View Runs": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Audit Logs": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Record Changes": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: User Routines": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Conversations": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Conversation Details": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Dashboards": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Lists": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Templates": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Queries": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Workspaces": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: AI Agent Notes": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: AI Agent Requests": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: AI Agent Examples": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Test Runs": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Scheduled Jobs": {
+              "Policy": "Skip",
+              "Locked": true
+            }
           },
           "Descendants": {
             "MJ: User Applications": {
               "Fields": {
-                "Copy": ["Sequence", "IsActive"]
+                "Copy": [
+                  "Sequence",
+                  "IsActive"
+                ]
               }
             }
           },
@@ -146,6 +222,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Users"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.142Z",
+      "checksum": "c9cfab57320811da730687a018da671f616ce141a60c87a52a15b31bdfcdc0f9"
     }
   },
   {
@@ -168,15 +248,28 @@
             }
           },
           "Relationships": {
-            "MJ: Templates": { "Policy": "Deep", "Locked": true },
-            "MJ: AI Prompt Models": { "Policy": "Deep" },
-            "MJ: AI Prompt Runs": { "Policy": "Skip", "Locked": true },
-            "MJ: AI Result Cache": { "Policy": "Skip", "Locked": true }
+            "MJ: Templates": {
+              "Policy": "Deep",
+              "Locked": true
+            },
+            "MJ: AI Prompt Models": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Prompt Runs": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: AI Result Cache": {
+              "Policy": "Skip",
+              "Locked": true
+            }
           },
           "Descendants": {
             "MJ: Templates": {
               "Fields": {
-                "Ownership": ["UserID"],
+                "Ownership": [
+                  "UserID"
+                ],
                 "Reset": {
                   "ActiveAt": null,
                   "DisabledAt": null
@@ -188,7 +281,12 @@
             },
             "MJ: Template Contents": {
               "Fields": {
-                "Copy": ["TypeID", "TemplateText", "Priority", "IsActive"]
+                "Copy": [
+                  "TypeID",
+                  "TemplateText",
+                  "Priority",
+                  "IsActive"
+                ]
               }
             }
           },
@@ -201,6 +299,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompts"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.166Z",
+      "checksum": "0b818d7a11887b1f37f948f445f3d980530342dafe64f0695482c84e56354f82"
     }
   },
   {
@@ -213,15 +315,21 @@
         "Clone": {
           "Enabled": true,
           "Fields": {
-            "Ownership": ["UserID"]
+            "Ownership": [
+              "UserID"
+            ]
           },
           "Naming": {
             "Template": "{Name} (copy)",
             "Strategy": "suffix"
           },
           "Relationships": {
-            "MJ: Template Contents": { "Policy": "Deep" },
-            "MJ: Template Params": { "Policy": "Deep" }
+            "MJ: Template Contents": {
+              "Policy": "Deep"
+            },
+            "MJ: Template Params": {
+              "Policy": "Deep"
+            }
           },
           "UI": {
             "Label": "Clone template",
@@ -232,6 +340,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Templates"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.192Z",
+      "checksum": "a2ce4182fcd65bfc5c19656de1898c77e5ec2d7892b7cc6de48d72e618b6c704"
     }
   },
   {
@@ -251,7 +363,9 @@
             "Strategy": "suffix"
           },
           "Fields": {
-            "Ownership": ["OwnerUserID"],
+            "Ownership": [
+              "OwnerUserID"
+            ],
             "Reset": {
               "Status": "Pending"
             },
@@ -264,45 +378,106 @@
             ]
           },
           "Relationships": {
-            "MJ: AI Agents": { "Policy": "Deep" },
-            "MJ: AI Agent Prompts": { "Policy": "Deep" },
-            "MJ: AI Agent Actions": { "Policy": "Deep" },
-            "MJ: AI Agent Steps": { "Policy": "Deep" },
-            "MJ: AI Agent Step Paths": { "Policy": "Deep" },
-            "MJ: AI Agent Relationships": { "Policy": "Deep" },
-            "MJ: AI Agent Artifact Types": { "Policy": "Deep" },
-            "MJ: AI Agent Skills": { "Policy": "Deep" },
-            "MJ: AI Agent Models": { "Policy": "Deep" },
-            "MJ: AI Agent Modalities": { "Policy": "Deep" },
-            "MJ: AI Agent Search Scopes": { "Policy": "Deep" },
-            "MJ: AI Agent Client Tools": { "Policy": "Deep" },
-            "MJ: AI Agent Credentials": { "Policy": "Deep" },
-            "MJ: AI Agent Channels": { "Policy": "Deep" },
-            "MJ: AI Agent Personas": { "Policy": "Deep" },
-            "MJ: AI Agent Harnesses": { "Policy": "Deep" },
-            "MJ: AI Agent Co Agents": { "Policy": "Deep" },
-            "MJ: AI Agent Data Sources": { "Policy": "Deep" },
-            "MJ: AI Agent Configurations": { "Policy": "Deep" },
-            "MJ: AI Agent Permissions": { "Policy": "Skip" },
-            "MJ: AI Agent Notes": { "Policy": "Skip", "Locked": true },
-            "MJ: AI Agent Examples": { "Policy": "Skip", "Locked": true },
-            "MJ: AI Agent Learning Cycles": { "Policy": "Skip", "Locked": true },
-            "MJ: AI Agent Runs": { "Policy": "Skip", "Locked": true }
-          },
-          "Presets": {
-            "deep-prompts": {
-              "Description": "Deep-clone associated AI prompts rather than referencing them",
-              "Relationships": {
-                "MJ: AI Prompts": { "Policy": "Deep" }
-              }
+            "MJ: AI Agents": {
+              "Policy": "Deep"
             },
-            "with-permissions": {
-              "Description": "Clone agent permissions along with the agent",
-              "Relationships": {
-                "MJ: AI Agent Permissions": { "Policy": "Deep" }
-              }
+            "MJ: AI Agent Prompts": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Actions": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Steps": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Step Paths": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Relationships": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Artifact Types": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Skills": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Models": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Modalities": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Search Scopes": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Client Tools": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Credentials": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: AI Agent Channels": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Personas": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Harnesses": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Co Agents": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Data Sources": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Configurations": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Permissions": {
+              "Policy": "Skip"
+            },
+            "MJ: AI Agent Notes": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: AI Agent Examples": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: AI Agent Learning Cycles": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: AI Agent Runs": {
+              "Policy": "Skip",
+              "Locked": true
             }
           },
+          "Presets": [
+            {
+              "Key": "deep-prompts",
+              "Label": "Copy prompts too",
+              "Description": "Deep-clone associated AI prompts rather than referencing them",
+              "Relationships": {
+                "MJ: AI Prompts": {
+                  "Policy": "Deep"
+                }
+              }
+            },
+            {
+              "Key": "with-permissions",
+              "Label": "Copy permissions too",
+              "Description": "Clone agent permissions along with the agent",
+              "Relationships": {
+                "MJ: AI Agent Permissions": {
+                  "Policy": "Deep"
+                }
+              }
+            }
+          ],
           "Hooks": {
             "EntityActions": "suppress"
           },
@@ -315,6 +490,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T19:19:15.236Z",
+      "checksum": "227fc0a27c580c0bbbd8ef3af9cc63e2df1fd935aad03e8c9427323019584f19"
     }
   },
   {
@@ -333,6 +512,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Notes"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.239Z",
+      "checksum": "f741d34308e8cbfd6d0b741de1239ffb0e6e01a51f5ec8facee9b1f7f045454c"
     }
   },
   {
@@ -351,6 +534,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Examples"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.262Z",
+      "checksum": "f8264a72f33a205d50798b847fcd813147aef6d6afd24a645f00ae4a0e60512e"
     }
   },
   {
@@ -369,6 +556,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Learning Cycles"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.283Z",
+      "checksum": "773b185afde5ae5d0d9e24358508c5988ae434173ee1696a2b4b3fce15c97bb5"
     }
   },
   {
@@ -387,6 +578,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.307Z",
+      "checksum": "020b4a5271f5bfdae2968c84bf106485c746c78d2ef7671c78a82ab24ff43454"
     }
   },
   {
@@ -489,6 +684,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.330Z",
+      "checksum": "dab0be37895c494f4c061dec79c106d29742cbd9397d0e16641a085a6672e1b6"
     }
   },
   {
@@ -566,6 +765,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Queries"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.355Z",
+      "checksum": "1209a2efa46d723399bf856d8cf777b2277d3c556104286564d138a8d2a9a7d2"
     }
   },
   {
@@ -627,6 +830,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Scheduled Jobs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.378Z",
+      "checksum": "1d175395b1bf45cdcff9aa98bb80c6ea66985a378149418a1ece52336509e414"
     }
   },
   {
@@ -645,6 +852,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.401Z",
+      "checksum": "614ef8f06894dfb862df3b5d21bb8ad3d1d286f48ac7905bd218c3afffb2fea8"
     }
   },
   {
@@ -663,6 +874,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Scheduled Job Runs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.424Z",
+      "checksum": "c0768684eae6090f923c1fc5e33ae969fdba75c8ee4838e3e96213d5beaaa57d"
     }
   },
   {
@@ -681,6 +896,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Query Dependencies"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.454Z",
+      "checksum": "e09be0d4c9a5174c088ed0be86be653f009eea43a8b2f735ab8375b1dc7e1d63"
     }
   },
   {
@@ -747,6 +966,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Dashboards"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.480Z",
+      "checksum": "000ab1f39e7ce042b177694d2961ae661c773a818f317cf25d1934623d7dde6b"
     }
   },
   {
@@ -802,6 +1025,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Views"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.506Z",
+      "checksum": "77445dd42be9928c2832aed9e8e8749d1deebe188c914532ffab7d6b1abe006d"
     }
   },
   {
@@ -847,6 +1074,10 @@
             "MJ: List Shares": {
               "Policy": "Skip",
               "Locked": true
+            },
+            "MJ: List Invitations": {
+              "Policy": "Skip",
+              "Locked": true
             }
           }
         }
@@ -854,6 +1085,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Lists"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T19:20:02.077Z",
+      "checksum": "bc694a18c150d29aca2b16bdef8cbf9774518a74c765f09e374c2b65888d265d"
     }
   },
   {
@@ -877,6 +1112,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: List Details"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.558Z",
+      "checksum": "0d4b8bd993bf270169e574e10f797ef1b057bd3291dd6b285c94fb820a82dd67"
     }
   },
   {
@@ -912,6 +1151,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Themes"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.589Z",
+      "checksum": "a506971e523d3fdb9d641c72a1a6fc3d08c2c7afded88b512ae5ad0a73074b3e"
     }
   },
   {
@@ -956,6 +1199,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Data Contexts"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.611Z",
+      "checksum": "121407a1ed444348384a901b1880484e166ec97501debc3ab6141776f67f3eaf"
     }
   },
   {
@@ -979,6 +1226,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Data Context Items"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.634Z",
+      "checksum": "d83eba4fa79ac427812aab4e65dcb7c50fd9c7d5e67158f3569f68ae54d8820a"
     }
   },
   {
@@ -997,6 +1248,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Dashboard User Preferences"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.661Z",
+      "checksum": "33b91c47be3154b619637129ed6f6050f19ed5c941437f42617d775cf635cd92"
     }
   },
   {
@@ -1015,6 +1270,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Dashboard User States"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.685Z",
+      "checksum": "65b7fec5b79640bfd76a2d96684158f0b8f44320c68f5cf5701473065b214047"
     }
   },
   {
@@ -1033,6 +1292,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User View Runs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.708Z",
+      "checksum": "296b6c47e9f46855729644b66514cb613e16dcd60a74f4a511b4f41294721f7b"
     }
   },
   {
@@ -1051,6 +1314,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User View Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.733Z",
+      "checksum": "f13ea064b473191c8810578b43f55158b6c891eda10b9e1cb7aaed3fa27a404d"
     }
   },
   {
@@ -1071,28 +1338,58 @@
               "DefaultForNewUser": false,
               "Status": "Draft"
             },
-            "ServerAllocated": ["Path"],
+            "ServerAllocated": [
+              "Path"
+            ],
             "UniqueKeys": [
               {
-                "Fields": ["Name"],
+                "Fields": [
+                  "Name"
+                ],
                 "Scope": "Global"
               }
             ]
           },
           "Relationships": {
-            "MJ: Application Entities": { "Policy": "Deep" },
-            "MJ: Application Settings": { "Policy": "Deep" },
-            "MJ: Application Roles": { "Policy": "Deep" },
-            "MJ: User Applications": { "Policy": "Skip", "Locked": true },
-            "MJ: Dashboards": { "Policy": "Skip", "Locked": true },
-            "MJ: Conversations": { "Policy": "Skip", "Locked": true },
-            "MJ: Magic Link Invites": { "Policy": "Skip", "Locked": true }
+            "MJ: Application Entities": {
+              "Policy": "Deep"
+            },
+            "MJ: Application Settings": {
+              "Policy": "Deep"
+            },
+            "MJ: Application Roles": {
+              "Policy": "Deep"
+            },
+            "MJ: User Applications": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Dashboards": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Conversations": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Magic Link Invites": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Magic Link Invite Applications": {
+              "Policy": "Skip",
+              "Locked": true
+            }
           }
         }
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Applications"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T19:20:02.116Z",
+      "checksum": "36e52a7c486799b8c363be539935ccb77262f5dc0d7693dcda8d83fd5cb63bd9"
     }
   },
   {
@@ -1107,19 +1404,28 @@
           "Fields": {
             "UniqueKeys": [
               {
-                "Fields": ["ApplicationID", "EntityID"],
+                "Fields": [
+                  "ApplicationID",
+                  "EntityID"
+                ],
                 "Scope": "Parent"
               }
             ]
           },
           "Relationships": {
-            "MJ: Entities": { "Policy": "Reference" }
+            "MJ: Entities": {
+              "Policy": "Reference"
+            }
           }
         }
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Application Entities"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.786Z",
+      "checksum": "236ef2cb1e6a8fe5e95070e989fbb018e3bedfc3ba56ab050f43b9582b94c545"
     }
   },
   {
@@ -1134,7 +1440,10 @@
           "Fields": {
             "UniqueKeys": [
               {
-                "Fields": ["ApplicationID", "Name"],
+                "Fields": [
+                  "ApplicationID",
+                  "Name"
+                ],
                 "Scope": "Parent"
               }
             ]
@@ -1144,6 +1453,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Application Settings"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.812Z",
+      "checksum": "c3f4cac024f92b0e8b54639cbb9a085bc9f7a1e9c72627a6193e5b5cfe895393"
     }
   },
   {
@@ -1164,35 +1477,74 @@
             "Reset": {
               "DirectoryID": null
             },
-            "ServerAllocated": ["SQLName"],
+            "ServerAllocated": [
+              "SQLName"
+            ],
             "UniqueKeys": [
               {
-                "Fields": ["Name"],
+                "Fields": [
+                  "Name"
+                ],
                 "Scope": "Global"
               }
             ]
           },
           "Relationships": {
-            "MJ: Entity Permissions": { "Policy": "Deep" },
-            "MJ: Query Permissions": { "Policy": "Deep" },
-            "MJ: Authorization Roles": { "Policy": "Deep" },
-            "MJ: Application Roles": { "Policy": "Deep" },
-            "MJ: Entity Field Permissions": { "Policy": "Deep" },
-            "MJ: AI Agent Permissions": { "Policy": "Deep" },
-            "MJ: AI Skill Permissions": { "Policy": "Deep" },
-            "MJ: Search Scope Permissions": { "Policy": "Deep" },
-            "MJ: File Storage Account Permissions": { "Policy": "Deep" },
-            "MJ: MCP Server Connection Permissions": { "Policy": "Deep" },
-            "MJ: Resource Permissions": { "Policy": "Deep" },
-            "MJ: User Roles": { "Policy": "Skip", "Locked": true },
-            "MJ: Employee Roles": { "Policy": "Skip", "Locked": true },
-            "MJ: Magic Link Invite Roles": { "Policy": "Skip", "Locked": true }
+            "MJ: Entity Permissions": {
+              "Policy": "Deep"
+            },
+            "MJ: Query Permissions": {
+              "Policy": "Deep"
+            },
+            "MJ: Authorization Roles": {
+              "Policy": "Deep"
+            },
+            "MJ: Application Roles": {
+              "Policy": "Deep"
+            },
+            "MJ: Entity Field Permissions": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Agent Permissions": {
+              "Policy": "Deep"
+            },
+            "MJ: AI Skill Permissions": {
+              "Policy": "Deep"
+            },
+            "MJ: Search Scope Permissions": {
+              "Policy": "Deep"
+            },
+            "MJ: File Storage Account Permissions": {
+              "Policy": "Deep"
+            },
+            "MJ: MCP Server Connection Permissions": {
+              "Policy": "Deep"
+            },
+            "MJ: Resource Permissions": {
+              "Policy": "Deep"
+            },
+            "MJ: User Roles": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Employee Roles": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Magic Link Invite Roles": {
+              "Policy": "Skip",
+              "Locked": true
+            }
           }
         }
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Roles"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.835Z",
+      "checksum": "f295d275fe04f0046da5f6db64567a3c78b6b57f1f68e7a4e0df2ce0a69d5c40"
     }
   },
   {
@@ -1221,21 +1573,33 @@
             },
             "UniqueKeys": [
               {
-                "Fields": ["Name"],
+                "Fields": [
+                  "Name"
+                ],
                 "Scope": "Global"
               }
             ]
           },
           "Relationships": {
-            "MJ: Component Dependencies": { "Policy": "Deep" },
-            "MJ: Component Library Links": { "Policy": "Deep" },
-            "MJ: Component Registries": { "Policy": "Reference" }
+            "MJ: Component Dependencies": {
+              "Policy": "Deep"
+            },
+            "MJ: Component Library Links": {
+              "Policy": "Deep"
+            },
+            "MJ: Component Registries": {
+              "Policy": "Reference"
+            }
           }
         }
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Components"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.858Z",
+      "checksum": "bf5738ee973aa5771f42e780213798630404e4572fdb3239976f40965303f40c"
     }
   },
   {
@@ -1250,19 +1614,28 @@
           "Fields": {
             "UniqueKeys": [
               {
-                "Fields": ["ComponentID", "DependencyComponentID"],
+                "Fields": [
+                  "ComponentID",
+                  "DependencyComponentID"
+                ],
                 "Scope": "Parent"
               }
             ]
           },
           "Relationships": {
-            "MJ: Components": { "Policy": "Reference" }
+            "MJ: Components": {
+              "Policy": "Reference"
+            }
           }
         }
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Component Dependencies"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.880Z",
+      "checksum": "0a46b5f20a0e92be476c44ef70ccd048bd1305dca5d2112800cc914e38dbf371"
     }
   },
   {
@@ -1277,7 +1650,10 @@
           "Fields": {
             "UniqueKeys": [
               {
-                "Fields": ["ComponentID", "LibraryName"],
+                "Fields": [
+                  "ComponentID",
+                  "LibraryName"
+                ],
                 "Scope": "Parent"
               }
             ]
@@ -1287,6 +1663,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Component Library Links"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.902Z",
+      "checksum": "949cfbf72435b8f792c162307e844546f4b44166460516d7c2d34277f639b404"
     }
   },
   {
@@ -1308,25 +1688,48 @@
             },
             "UniqueKeys": [
               {
-                "Fields": ["Name"],
+                "Fields": [
+                  "Name"
+                ],
                 "Scope": "Global"
               }
             ]
           },
           "Relationships": {
-            "MJ: Entities": { "Policy": "Reference" },
-            "MJ: Actions": { "Policy": "Reference" },
-            "MJ: AI Agents": { "Policy": "Reference" },
-            "MJ: AI Prompts": { "Policy": "Reference" },
-            "MJ: Process Runs": { "Policy": "Skip", "Locked": true },
-            "MJ: Process Run Details": { "Policy": "Skip", "Locked": true },
-            "MJ: Record Process Watermarks": { "Policy": "Skip", "Locked": true }
+            "MJ: Entities": {
+              "Policy": "Reference"
+            },
+            "MJ: Actions": {
+              "Policy": "Reference"
+            },
+            "MJ: AI Agents": {
+              "Policy": "Reference"
+            },
+            "MJ: AI Prompts": {
+              "Policy": "Reference"
+            },
+            "MJ: Process Runs": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Process Run Details": {
+              "Policy": "Skip",
+              "Locked": true
+            },
+            "MJ: Record Process Watermarks": {
+              "Policy": "Skip",
+              "Locked": true
+            }
           }
         }
       }
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Processes"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.925Z",
+      "checksum": "4aab96b217132913aa42a774f9caf5ef335d4a740c316b18cea27b1bab60d8c7"
     }
   },
   {
@@ -1345,6 +1748,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Process Runs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.947Z",
+      "checksum": "fd4127353cc487483918fb092bbe01e5b583819fe9d8f8b53d52d9f3df2a74e8"
     }
   },
   {
@@ -1363,6 +1770,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Process Run Details"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.968Z",
+      "checksum": "d9cc78cbdd8d1e01d526848941c60baf6efa58ee936e52c0d7a8bf99cd848f86"
     }
   },
   {
@@ -1381,6 +1792,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Process Watermarks"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:53.988Z",
+      "checksum": "684b7ada816ae01cef4c2eb4b20dfbb05ba2918e66976ae0ce44027d834ec897"
     }
   },
   {
@@ -1399,6 +1814,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Applications"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.008Z",
+      "checksum": "015cb51d87c99d584406281230a14d8d302e8d60ad186402eb0dd7ba86e250f2"
     }
   },
   {
@@ -1417,6 +1836,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Roles"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.030Z",
+      "checksum": "6907f7be1475be620cde17e2663545e7307e9cdc532bf6a5c1a2853713aba116"
     }
   },
   {
@@ -1435,6 +1858,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Employee Roles"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.051Z",
+      "checksum": "c82bd7df4d199f7565129ae80866987fd2c8481f4f09e70534fb1a8e16c36627"
     }
   },
   {
@@ -1453,6 +1880,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Roles"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.073Z",
+      "checksum": "0c2125e5d65abcd6d2d3931bbf0dac679cac1648ab8f9f7470ebd54e99c914e4"
     }
   },
   {
@@ -1471,6 +1902,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Entities"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.096Z",
+      "checksum": "c7844f6e26017b64fd093b9a39d05cb46bbad36427a838d94e64e89f17db190c"
     }
   },
   {
@@ -1489,6 +1924,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Entity Fields"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.117Z",
+      "checksum": "feeda442cbe7b94fb47aa277b3b18f3dbd26a71996104bb841fefe292c7f428b"
     }
   },
   {
@@ -1507,6 +1946,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Entity Relationships"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.137Z",
+      "checksum": "432c3d348c8587bfb39b16810afa9630b5beba308ccb1f44e519ded70b90907a"
     }
   },
   {
@@ -1525,6 +1968,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Entity Field Values"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.160Z",
+      "checksum": "8062f68ec4f564dbe7d8e2b66d5cba4a24582f0d7add22fe09137b533d138662"
     }
   },
   {
@@ -1543,6 +1990,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Changes"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.181Z",
+      "checksum": "82fae40b7d6e27869f74c1f375289cd0696902e9916b0ec166b3eab4a73a1463"
     }
   },
   {
@@ -1561,6 +2012,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Audit Logs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.205Z",
+      "checksum": "8ba2f71d3250b342cac19bb3befc237aab845574ee1dd5ae1347eaae36becfa5"
     }
   },
   {
@@ -1579,6 +2034,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Error Logs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.225Z",
+      "checksum": "e708ca615b44817723bacfe7c1b00dc38b103a8a025180c6b45ab1df9b90f7a2"
     }
   },
   {
@@ -1597,6 +2056,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Record Logs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.247Z",
+      "checksum": "f9c48c3b2a5fbb2823bf19de0891a1cae24428e968a39a9cd1f8191d506fbbd5"
     }
   },
   {
@@ -1615,6 +2078,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Logs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.269Z",
+      "checksum": "c599e9cf0f2cbf7ab2484ea037a0a4c36e2a6b0739e765b1d7444ee1b0fe986d"
     }
   },
   {
@@ -1633,6 +2100,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Deletion Logs"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.292Z",
+      "checksum": "670c90505894720750214c0c59c7d61cb0e1d69e122139d9f01c611eccdda47d"
     }
   },
   {
@@ -1651,6 +2122,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Tasks"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.315Z",
+      "checksum": "e2ee7b1e96fe77172c7f1a1b8afcb14777bf025ae3727a1a40fbc968ecb9b159"
     }
   },
   {
@@ -1669,6 +2144,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Task Dependencies"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.336Z",
+      "checksum": "4393bd97b907c55f07b5c1501f673d75b37a219f6001e6a9f90e4b1ad9939aac"
     }
   },
   {
@@ -1687,6 +2166,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: API Keys"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.357Z",
+      "checksum": "4adc6b02227c8fb0779e79646c0ef138198e51ceac8612216f420a6b6b018884"
     }
   },
   {
@@ -1705,6 +2188,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Credentials"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.379Z",
+      "checksum": "cadcca7d423f793ff76ce5fa0335ba991bbd3e107fa76e6bb71a004dde5dc8a5"
     }
   },
   {
@@ -1723,6 +2210,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Encryption Keys"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.400Z",
+      "checksum": "4e86ab37d0bb3d2de0909e2de28953d73c87fd180be54ec7867f10994da38dbd"
     }
   },
   {
@@ -1741,6 +2232,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: O Auth Tokens"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.423Z",
+      "checksum": "51755c909939302e934e901787ccf23629525a40e9d05247b0907a1143fd0b73"
     }
   },
   {
@@ -1759,6 +2254,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invites"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.445Z",
+      "checksum": "b55f275d16955f77e53269891a08b1c2e3637330a076cfcdaa3ffc657c65865c"
     }
   },
   {
@@ -1777,6 +2276,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.469Z",
+      "checksum": "2d26ba6d6fedc86b5e85559f2e2e9c6386c779564e4a42dd433d630c1982222d"
     }
   },
   {
@@ -1795,6 +2298,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Details"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T18:58:54.490Z",
+      "checksum": "65a5a9ef92f85a2f3591b4d97bdc299e09f5e5318898f0fd0ff94f48989f8602"
     }
   }
 ]

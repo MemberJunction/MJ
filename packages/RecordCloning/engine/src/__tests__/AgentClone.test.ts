@@ -13,6 +13,7 @@ import {
 import { CloneConfigValidator } from '@memberjunction/record-cloning-base';
 import { ClonePlanner } from '../ClonePlanner';
 import { CloneExecutor } from '../CloneExecutor';
+import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 // Mock RunView
 const mockRunViewInstance = vi.fn();
@@ -73,7 +74,7 @@ describe('Phase 4.3: MJ: AI Agents Record Cloning Use Case', () => {
             'MJ: AI Agent Modalities': { Policy: 'Deep' as const },
             'MJ: AI Agent Search Scopes': { Policy: 'Deep' as const },
             'MJ: AI Agent Client Tools': { Policy: 'Deep' as const },
-            'MJ: AI Agent Credentials': { Policy: 'Deep' as const },
+            'MJ: AI Agent Credentials': { Policy: 'Skip' as const, Locked: true },
             'MJ: AI Agent Channels': { Policy: 'Deep' as const },
             'MJ: AI Agent Personas': { Policy: 'Deep' as const },
             'MJ: AI Agent Harnesses': { Policy: 'Deep' as const },
@@ -86,20 +87,24 @@ describe('Phase 4.3: MJ: AI Agents Record Cloning Use Case', () => {
             'MJ: AI Agent Learning Cycles': { Policy: 'Skip' as const, Locked: true },
             'MJ: AI Agent Runs': { Policy: 'Skip' as const, Locked: true },
         },
-        Presets: {
-            'deep-prompts': {
+        Presets: [
+            {
+                Key: 'deep-prompts',
+                Label: 'Copy prompts too',
                 Description: 'Deep-clone associated AI prompts rather than referencing them',
                 Relationships: {
                     'MJ: AI Prompts': { Policy: 'Deep' as const },
                 },
             },
-            'with-permissions': {
+            {
+                Key: 'with-permissions',
+                Label: 'Copy permissions too',
                 Description: 'Clone agent permissions along with the agent',
                 Relationships: {
                     'MJ: AI Agent Permissions': { Policy: 'Deep' as const },
                 },
             },
-        },
+        ],
         Hooks: {
             EntityActions: 'suppress' as const,
         },
@@ -457,6 +462,7 @@ describe('Phase 4.3: MJ: AI Agents Record Cloning Use Case', () => {
     };
 
     const mockMetadata: IMetadataProvider = {
+        Authorizations: GrantedCloneAuthorizations(),
         Entities: Object.values(mockEntities),
         EntityByName: (name: string) => mockEntities[name] || null,
         EntityByID: (id: string) => Object.values(mockEntities).find((e) => e.ID === id) || null,

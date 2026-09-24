@@ -28,7 +28,10 @@ import {
     PlannedRecordNode,
     RecordCloneRequest,
     ResolveEdgePolicy,
+    ResolveEffectiveCloneOptions,
+    NormalizeClonePresets,
 } from '@memberjunction/record-cloning-base';
+import { CloneAuthorizer } from './CloneAuthorization';
 
 export interface ClonePlannerOptions {
     Provider?: IMetadataProvider;
@@ -76,19 +79,54 @@ export class ClonePlanner {
         let planBlocked = false;
 
         const rootConfig = rootEntityInfo.CloneConfig ?? (rootEntityInfo as unknown as { CloneConfiguration?: import('@memberjunction/core').IEntityCloneConfiguration }).CloneConfiguration ?? null;
-        const maxDepth = request.Options?.MaxDepth ?? rootConfig?.MaxDepth ?? 3;
-        const maxRecords = request.Options?.MaxRecords ?? rootConfig?.MaxRecords ?? 500;
+        const authorizer = new CloneAuthorizer(md);
 
-        const effectiveOptions: ClonePlan['EffectiveOptions'] = {
-            MaxDepth: maxDepth,
-            MaxRecords: maxRecords,
-            Subtypes: (request.Options?.Subtypes ?? 'include') as 'include' | 'exclude',
-            Hierarchy: (request.Options?.Hierarchy ?? 'subtree') as 'subtree' | 'node',
-            SoftLinks: (request.Options?.SoftLinks ?? 'skip') as 'skip' | 'include',
-            EntityActions: (request.Options?.EntityActions ?? 'suppress') as 'suppress' | 'fire',
-            AIActions: (request.Options?.AIActions ?? 'suppress') as 'suppress' | 'fire',
-            Embeddings: (request.Options?.Embeddings ?? 'copy') as 'copy' | 'regenerate',
-        };
+        // A preset (Clone.Presets, looked up by Key) contributes options under the request's own
+        // options and edge policy overrides by related entity name.
+        const presetKey = request.Preset || request.Options?.Preset;
+        const preset = presetKey ? NormalizeClonePresets(rootConfig?.Presets).find((p) => p.Key === presetKey) : undefined;
+        if (presetKey && !preset) {
+            warnings.push({
+                Code: 'OPTION_OVERRIDE_IGNORED',
+                Severity: 'Warning',
+                Field: 'Preset',
+                Message: `Preset '${presetKey}' is not defined for '${entityName}'.`,
+            });
+        }
+        const requestOptions: CloneRequestOptions = { ...(preset?.Options ?? {}), ...(request.Options ?? {}) };
+        const presetEdgeOverrides: Array<{ ChildEntityName?: string; RelationshipID?: string; Policy: CloneEdgePolicy }> | undefined =
+            preset?.Relationships
+                ? Object.entries(preset.Relationships).map(([ChildEntityName, cfg]) => ({ ChildEntityName, Policy: cfg.Policy }))
+                : undefined;
+
+        // The entity's configuration supplies the defaults; UserEditable and the Fire Hooks
+        // authorization decide which request values may change them (plan §4.1, §9.4).
+        const resolved = ResolveEffectiveCloneOptions(rootConfig, requestOptions, authorizer.CanFireHooks(contextUser));
+        const effectiveOptions: ClonePlan['EffectiveOptions'] = resolved.Options;
+        warnings.push(...resolved.Warnings);
+        const maxDepth = effectiveOptions.MaxDepth;
+        const maxRecords = effectiveOptions.MaxRecords;
+
+        // An entity is a clone ROOT only when its configuration enables it (plan §4.1).
+        if (rootConfig?.Enabled !== true || rootConfig?.NotCloneable === true) {
+            warnings.push({
+                Code: 'NOT_CLONEABLE',
+                Severity: 'Error',
+                Message: rootConfig?.NotCloneableReason
+                    || `Cloning is not enabled for '${entityName}'. Set Configuration.Clone.Enabled on its MJ: Entities record.`,
+            });
+            planBlocked = true;
+        }
+
+        const rootAuth = authorizer.CanCloneEntity(rootEntityInfo, contextUser);
+        if (!rootAuth.Granted) {
+            warnings.push({
+                Code: 'FORBIDDEN',
+                Severity: 'Error',
+                Message: `Cloning '${entityName}' requires the '${rootAuth.Name}' authorization.`,
+            });
+            planBlocked = true;
+        }
 
         // Verify root authorization / RequiredUserType
         if (rootConfig?.RequiredUserType && contextUser.Type?.trim() !== rootConfig.RequiredUserType?.trim()) {
@@ -157,25 +195,6 @@ export class ClonePlanner {
         const walker = new DependencyGraphWalker(md);
         const candidateEdges: ClonePlanEdge[] = [];
         const excludedNodes: Array<{ EntityName: string; SourceKey: string; Reason: string }> = [];
-
-        // Resolve preset overrides
-        const presetName = request.Preset || request.Options?.Preset;
-        let presetEdgeOverrides: Array<{ ChildEntityName?: string; RelationshipID?: string; Policy: CloneEdgePolicy }> | undefined;
-        if (presetName && rootConfig?.Presets) {
-            let presetObj: { Relationships?: Record<string, { Policy?: CloneEdgePolicy } | CloneEdgePolicy> } | undefined;
-            if (Array.isArray(rootConfig.Presets)) {
-                const presetsList = rootConfig.Presets as unknown as Array<{ Name?: string; Relationships?: Record<string, { Policy?: CloneEdgePolicy } | CloneEdgePolicy> }>;
-                presetObj = presetsList.find((p) => p.Name === presetName);
-            } else if (typeof rootConfig.Presets === 'object' && presetName in rootConfig.Presets) {
-                presetObj = (rootConfig.Presets as Record<string, { Relationships?: Record<string, { Policy?: CloneEdgePolicy } | CloneEdgePolicy> }>)[presetName];
-            }
-            if (presetObj?.Relationships) {
-                presetEdgeOverrides = Object.entries(presetObj.Relationships).map(([ChildEntityName, cfg]) => ({
-                    ChildEntityName,
-                    Policy: (typeof cfg === 'string' ? cfg : cfg.Policy) as CloneEdgePolicy,
-                }));
-            }
-        }
 
         // Traverse graph with EdgePolicy callback
         const rootNode = await walker.WalkDependents(
@@ -419,6 +438,20 @@ export class ClonePlanner {
                     Severity: 'Error',
                     NodeKey: nodeKey,
                     Message: `User lacks CanCreate permission on entity '${depNode.EntityName}'.`,
+                });
+                nodeBlocked = true;
+                planBlocked = true;
+            }
+
+            // Every created row is checked against its own entity's clone authorization (plan §9.1).
+            // The root's own check ran above; repeating it would only duplicate the warning.
+            const nodeAuth = isRoot ? rootAuth : authorizer.CanCloneEntity(entInfo, contextUser);
+            if (!isRoot && !nodeAuth.Granted) {
+                warnings.push({
+                    Code: 'FORBIDDEN',
+                    Severity: 'Error',
+                    NodeKey: nodeKey,
+                    Message: `Copying '${depNode.EntityName}' rows requires the '${nodeAuth.Name}' authorization. Set that relationship to Reference or Skip, or ask for the authorization.`,
                 });
                 nodeBlocked = true;
                 planBlocked = true;

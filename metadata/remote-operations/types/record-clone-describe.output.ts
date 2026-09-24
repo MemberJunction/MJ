@@ -29,4 +29,6 @@ export interface RecordCloneDescribeOutput {
         Name: string;
         Granted: boolean;
     };
+    /** Whether the calling user holds `Clone Records: Fire Hooks`, so the UI may offer the Fire Entity Actions toggle. */
+    CanFireHooks?: boolean;
 }

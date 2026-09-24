@@ -9,6 +9,7 @@ import {
 } from '@memberjunction/core';
 import { CloneExecutor } from '../CloneExecutor';
 import { ClonePlan, ComputeClonePlanHash } from '@memberjunction/record-cloning-base';
+import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 class MockEntity extends BaseEntity {
     protected override CheckPermissions(): boolean {
@@ -69,6 +70,7 @@ describe('CloneExecutor', () => {
     } as unknown as IEntityDataProvider;
 
     const mockMetadataProvider: IMetadataProvider = {
+        Authorizations: GrantedCloneAuthorizations(),
         Entities: [parentEntityInfo as EntityInfo],
         EntityByName: (name: string) => (name === 'ParentEntity' ? (parentEntityInfo as EntityInfo) : null),
         EntityByID: (id: string) => (id === 'ent-p-id' ? (parentEntityInfo as EntityInfo) : null),
@@ -192,6 +194,70 @@ describe('CloneExecutor', () => {
         expect(root.CloneContext).toBeDefined();
         expect(root.CloneContext?.CloneLogID).toBeDefined();
         expect(root.CloneContext?.SourceRecordID).toBe('src-1');
+    });
+
+    it('writes the clone log and a ClonedFrom link under their MJ: entity names', async () => {
+        const provenanceInfo = { ID: 'ent-prov', Name: 'provenance' } as EntityInfo;
+        const requested: string[] = [];
+        const provider = {
+            ...mockMetadataProvider,
+            EntityByName: (name: string) =>
+                name === 'ParentEntity' ? (parentEntityInfo as EntityInfo)
+                    : name === 'MJ: Record Links' || name === 'MJ: Record Clone Logs' ? provenanceInfo
+                    : null,
+            GetEntityObject: async <T extends BaseEntity>(entityName: string): Promise<T> => {
+                requested.push(entityName);
+                return mockDataProvider.GetEntityObject<T>(entityName);
+            },
+        } as unknown as IMetadataProvider;
+        const executor = new CloneExecutor({ Provider: provider });
+
+        const sourceRoot = new MockEntity(parentEntityInfo as EntityInfo, mockDataProvider);
+        sourceRoot.NewRecord();
+        sourceRoot.Set('ID', 'src-1');
+        const nodes = [
+            {
+                NodeKey: 'node-root', EntityName: 'ParentEntity', SourceKey: 'src-1', TargetKey: 'tgt-1',
+                Action: 'Create' as const, Depth: 0, Blocked: false, Route: 'RootSave' as const, FieldChanges: [],
+            },
+        ];
+        const plan: ClonePlan = {
+            RootEntityName: 'ParentEntity', RootSourceKey: 'src-1', RootTargetKey: 'tgt-1',
+            PlanHash: ComputeClonePlanHash({ Nodes: nodes, Edges: [], Excluded: [] }),
+            Blocked: false, Warnings: [], Nodes: nodes, Edges: [], Excluded: [],
+        };
+
+        const result = await executor.Execute(plan, mockUser, new Map([['src-1', sourceRoot]]));
+
+        expect(result.Success).toBe(true);
+        expect(requested).toContain('MJ: Record Links');
+        expect(requested).toContain('MJ: Record Clone Logs');
+        const log = savedEntities.find((e) => (e as unknown as { Status?: string }).Status === 'Complete') as unknown as { StartedAt?: Date; ID?: string };
+        expect(log?.StartedAt).toBeInstanceOf(Date);
+        const link = savedEntities.find((e) => (e as unknown as { LinkType?: string }).LinkType === 'ClonedFrom') as unknown as { Metadata?: string };
+        expect(JSON.parse(link!.Metadata!)).toEqual({ CloneLogID: result.CloneLogID });
+    });
+
+    it('suppresses Entity Actions and AI Actions on clone saves unless the plan fires them', async () => {
+        const run = async (effective?: Record<string, string>) => {
+            savedEntities = [];
+            const sourceRoot = new MockEntity(parentEntityInfo as EntityInfo, mockDataProvider);
+            sourceRoot.NewRecord();
+            sourceRoot.Set('ID', 'src-1');
+            const nodes = [{ NodeKey: 'node-root', EntityName: 'ParentEntity', SourceKey: 'src-1', TargetKey: 'tgt-1', Action: 'Create' as const, Depth: 0, Blocked: false, Route: 'RootSave' as const, FieldChanges: [] }];
+            const plan = {
+                RootEntityName: 'ParentEntity', RootSourceKey: 'src-1', RootTargetKey: 'tgt-1',
+                PlanHash: ComputeClonePlanHash({ Nodes: nodes, Edges: [], Excluded: [] }),
+                Blocked: false, Warnings: [], Nodes: nodes, Edges: [], Excluded: [],
+                EffectiveOptions: effective,
+            } as unknown as ClonePlan;
+            await new CloneExecutor({ Provider: mockMetadataProvider }).Execute(plan, mockUser, new Map([['src-1', sourceRoot]]));
+            const save = vi.mocked(savedEntities[0].Save);
+            return save.mock.calls[0][0];
+        };
+
+        expect(await run()).toMatchObject({ SkipEntityActions: true, SkipEntityAIActions: true });
+        expect(await run({ EntityActions: 'fire', AIActions: 'suppress' })).toMatchObject({ SkipEntityActions: false, SkipEntityAIActions: true });
     });
 
     it('handles save failure by rolling back and returning error message', async () => {

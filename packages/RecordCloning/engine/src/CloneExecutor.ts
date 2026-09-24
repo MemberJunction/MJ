@@ -9,7 +9,9 @@
 import {
     BaseEntity,
     CompositeKey,
+    EntitySaveOptions,
     IMetadataProvider,
+    LogError,
     Metadata,
     RunInEntityTransaction,
     UserInfo,
@@ -124,6 +126,8 @@ export class CloneExecutor {
         }
 
         const cloneLogId = GenerateUUID();
+        const startedAt = new Date();
+        const saveOptions = CloneExecutor.saveOptionsFor(plan);
         const materializer = new CloneMaterializer(md);
 
         try {
@@ -159,7 +163,7 @@ export class CloneExecutor {
                 // 4b. Save Prerequisites in dependency order (e.g. ForwardFK targets needed before rootEntity can be saved)
                 const prereqEntities = prerequisiteEntities ?? [];
                 for (const prereq of prereqEntities) {
-                    const prereqSaved = await prereq.Save();
+                    const prereqSaved = await prereq.Save(saveOptions);
                     if (!prereqSaved) {
                         const errorMsg =
                             prereq.LatestResult?.CompleteMessage ||
@@ -169,7 +173,7 @@ export class CloneExecutor {
                 }
 
                 // 5. Atomic Save via root.Save()
-                const rootSaved = await rootEntity.Save();
+                const rootSaved = await rootEntity.Save(saveOptions); // forwarded to every child in the save plan
                 if (!rootSaved) {
                     const errorMsg =
                         rootEntity.LatestResult?.CompleteMessage ||
@@ -190,7 +194,7 @@ export class CloneExecutor {
                         Route: 'Sidecar',
                         FieldChangeSummary: [],
                     });
-                    const sidecarSaved = await sidecar.Save();
+                    const sidecarSaved = await sidecar.Save(saveOptions);
                     if (!sidecarSaved) {
                         const errorMsg =
                             sidecar.LatestResult?.CompleteMessage ||
@@ -200,7 +204,7 @@ export class CloneExecutor {
                 }
 
                 // 7. Write Provenance Records (§10)
-                await this.writeProvenance(plan, cloneLogId, stagedEntities, contextUser, rootEntity, sidecarEntities);
+                await this.writeProvenance(plan, cloneLogId, startedAt, stagedEntities, contextUser, rootEntity, sidecarEntities);
 
                 const clonedCount = stagedEntities.size + sidecarEntities.length;
                 const rootTargetKey = rootEntity.PrimaryKey?.ToCompactURLSegment?.() ?? rootEntity.PrimaryKey?.ToConcatenatedString?.() ?? plan.RootTargetKey;
@@ -256,11 +260,23 @@ export class CloneExecutor {
     }
 
     /**
+     * Save options for the clone's own rows. Entity Actions and AI Actions are suppressed unless the
+     * plan's effective options say 'fire', which the planner only allows for Fire Hooks holders (plan §8.4).
+     */
+    private static saveOptionsFor(plan: ClonePlan): EntitySaveOptions {
+        const options = new EntitySaveOptions();
+        options.SkipEntityActions = plan.EffectiveOptions?.EntityActions !== 'fire';
+        options.SkipEntityAIActions = plan.EffectiveOptions?.AIActions !== 'fire';
+        return options;
+    }
+
+    /**
      * Writes Record Links and Clone Log provenance records.
      */
     private async writeProvenance(
         plan: ClonePlan,
         cloneLogId: string,
+        startedAt: Date,
         stagedEntities: Map<string, BaseEntity>,
         contextUser: UserInfo,
         rootEntity: BaseEntity,
@@ -268,15 +284,19 @@ export class CloneExecutor {
     ): Promise<void> {
         const md = this.Provider;
 
-        // A. Record Links (LinkType = 'ClonedFrom')
-        const recordLinksInfo = md.EntityByName('Record Links');
+        // Provenance is non-fatal to the clone, but a failure is logged rather than swallowed:
+        // an unresolvable entity name here once meant no log or link was ever written.
+
+        // A. Record Links (LinkType = 'ClonedFrom'): Source = the new clone, Target = its original.
+        const recordLinksInfo = md.EntityByName('MJ: Record Links');
+        if (!recordLinksInfo) LogError(`[RecordCloning] 'MJ: Record Links' not found; clone ${cloneLogId} has no lineage links.`);
         if (recordLinksInfo) {
             for (const [nodeKey, entity] of stagedEntities.entries()) {
                 const planNode = plan.Nodes.find((n) => (n.NodeKey ?? n.Key) === nodeKey);
                 if (!planNode) continue;
 
                 try {
-                    const linkEntity = await md.GetEntityObject<MJRecordLinkEntity>('Record Links', contextUser);
+                    const linkEntity = await md.GetEntityObject<MJRecordLinkEntity>('MJ: Record Links', contextUser);
                     linkEntity.NewRecord();
                     linkEntity.LinkType = 'ClonedFrom';
                     linkEntity.SourceEntityID = entity.EntityInfo.ID;
@@ -284,21 +304,25 @@ export class CloneExecutor {
                     linkEntity.TargetEntityID = entity.EntityInfo.ID;
                     linkEntity.TargetRecordID = toScalarKey(planNode.SourceKey);
                     linkEntity.Metadata = JSON.stringify({ CloneLogID: cloneLogId });
-                    await linkEntity.Save();
-                } catch {
-                    // Non-fatal provenance logging
+                    if (!(await linkEntity.Save())) {
+                        LogError(`[RecordCloning] Record link for ${nodeKey} not saved: ${linkEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    }
+                } catch (err) {
+                    LogError(`[RecordCloning] Record link for ${nodeKey} not saved: ${err instanceof Error ? err.message : String(err)}`);
                 }
             }
         }
 
         // B. Record Clone Logs
-        const cloneLogsInfo = md.EntityByName('Record Clone Logs');
+        const cloneLogsInfo = md.EntityByName('MJ: Record Clone Logs');
+        if (!cloneLogsInfo) LogError(`[RecordCloning] 'MJ: Record Clone Logs' not found; clone ${cloneLogId} has no log.`);
         if (cloneLogsInfo) {
             try {
-                const logEntity = await md.GetEntityObject<MJRecordCloneLogEntity>('Record Clone Logs', contextUser);
+                const logEntity = await md.GetEntityObject<MJRecordCloneLogEntity>('MJ: Record Clone Logs', contextUser);
                 logEntity.NewRecord();
                 logEntity.ID = cloneLogId;
                 logEntity.Status = 'Complete';
+                logEntity.StartedAt = startedAt;
                 logEntity.InitiatedByUserID = contextUser?.ID ?? '';
                 logEntity.RootEntityID = md.EntityByName(plan.RootEntityName ?? '')?.ID ?? '';
                 logEntity.RootSourceRecordID = toScalarKey(plan.RootSourceKey) ?? '';
@@ -309,9 +333,12 @@ export class CloneExecutor {
                 logEntity.ReferencedCount = plan.Nodes.filter((n) => n.Action === 'Reference').length;
                 logEntity.SkippedCount = plan.Nodes.filter((n) => n.Action === 'Skip').length;
                 logEntity.EndedAt = new Date();
-                await logEntity.Save();
-            } catch {
-                // Non-fatal provenance logging
+                logEntity.OptionsJSON = JSON.stringify(plan.EffectiveOptions);
+                if (!(await logEntity.Save())) {
+                    LogError(`[RecordCloning] Clone log ${cloneLogId} not saved: ${logEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            } catch (err) {
+                LogError(`[RecordCloning] Clone log ${cloneLogId} not saved: ${err instanceof Error ? err.message : String(err)}`);
             }
         }
     }

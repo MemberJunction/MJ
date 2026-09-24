@@ -8,6 +8,7 @@ import type {
 } from '@memberjunction/core';
 import { ClonePlanner } from '../ClonePlanner';
 import { RecordCloneRequest } from '@memberjunction/record-cloning-base';
+import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 // Mock RunView before tests execute
 const mockRunViewInstance = vi.fn();
@@ -106,6 +107,7 @@ describe('ClonePlanner', () => {
     const entitiesList: EntityInfo[] = [parentEntity as EntityInfo, childEntity as EntityInfo];
 
     const mockProvider: IMetadataProvider = {
+        Authorizations: GrantedCloneAuthorizations(),
         Entities: entitiesList,
         EntityByName: (name: string) => entitiesList.find((e) => e.Name.toLowerCase() === name.toLowerCase()) ?? null,
         EntityByID: (id: string) => entitiesList.find((e) => e.ID === id) ?? null,
@@ -196,6 +198,7 @@ describe('ClonePlanner', () => {
         } as EntityInfo;
 
         const provider: IMetadataProvider = {
+            Authorizations: GrantedCloneAuthorizations(),
             ...mockProvider,
             Entities: [restrictedParent, childEntity as EntityInfo],
             EntityByName: (name: string) => (name === 'ParentEntity' ? restrictedParent : childEntity as EntityInfo),
@@ -236,6 +239,7 @@ describe('ClonePlanner', () => {
         } as EntityInfo;
 
         const provider: IMetadataProvider = {
+            Authorizations: GrantedCloneAuthorizations(),
             ...mockProvider,
             Entities: [parentEntity as EntityInfo, unauthorizedChild],
             EntityByName: (name: string) => (name === 'ChildEntity' ? unauthorizedChild : parentEntity as EntityInfo),
@@ -263,6 +267,71 @@ describe('ClonePlanner', () => {
         expect(plan.Warnings.some((w) => w.Code === 'NO_CREATE_PERMISSION')).toBe(true);
     });
 
+    describe('authorization (plan §9)', () => {
+        const withAuths = (auths: ReturnType<typeof GrantedCloneAuthorizations>): IMetadataProvider =>
+            ({ ...mockProvider, Authorizations: auths }) as IMetadataProvider;
+        const request: RecordCloneRequest = { EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } };
+        const mockTwoRows = () =>
+            mockRunViewInstance
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'parent-1', Name: 'Parent' }] })
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'child-1', Name: 'Child', ParentID: 'parent-1' }] });
+
+        it('blocks the plan with FORBIDDEN when the user lacks the clone authorization', async () => {
+            const plan = await new ClonePlanner({ Provider: withAuths(GrantedCloneAuthorizations(false)) }).Plan(request, standardUser);
+            expect(plan.Blocked).toBe(true);
+            const forbidden = plan.Warnings.find((w) => w.Code === 'FORBIDDEN');
+            expect(forbidden?.Message).toContain("'Clone Records in Custom Schemas'");
+        });
+
+        it('fails closed when the authorization metadata is missing', async () => {
+            const plan = await new ClonePlanner({ Provider: withAuths([]) }).Plan(request, standardUser);
+            expect(plan.Blocked).toBe(true);
+            expect(plan.Warnings.some((w) => w.Code === 'FORBIDDEN')).toBe(true);
+        });
+
+        it('checks each created child against its own per-entity leaf authorization', async () => {
+            const auths = [
+                ...GrantedCloneAuthorizations(),
+                { ID: 'auth-leaf-child', Name: 'Clone Records: ChildEntity', ParentID: null, IsActive: true, UserCanExecute: () => false },
+            ] as unknown as ReturnType<typeof GrantedCloneAuthorizations>;
+            mockTwoRows();
+            const plan = await new ClonePlanner({ Provider: withAuths(auths) }).Plan(request, standardUser);
+
+            expect(plan.Blocked).toBe(true);
+            const forbidden = plan.Warnings.filter((w) => w.Code === 'FORBIDDEN');
+            expect(forbidden).toHaveLength(1);
+            expect(forbidden[0].NodeKey).toBeDefined();
+            expect(forbidden[0].Message).toContain("'Clone Records: ChildEntity'");
+            expect(plan.Nodes.find((n) => n.EntityName === 'ChildEntity')?.Action).toBe('Blocked');
+        });
+
+        it('keeps hooks suppressed with HOOKS_FORBIDDEN for a user granted only the schema-level node', async () => {
+            // Checks walk ancestors, so a 'Clone Records' holder would also pass Fire Hooks; grant only the leaf.
+            const auths = GrantedCloneAuthorizations(false).map((a) =>
+                a.Name === 'Clone Records in Custom Schemas' ? ({ ...a, UserCanExecute: () => true } as typeof a) : a
+            );
+            mockTwoRows();
+            const plan = await new ClonePlanner({ Provider: withAuths(auths) }).Plan(
+                { ...request, Options: { EntityActions: 'fire' } },
+                standardUser
+            );
+            expect(plan.EffectiveOptions.EntityActions).toBe('suppress');
+            expect(plan.Warnings.some((w) => w.Code === 'HOOKS_FORBIDDEN')).toBe(true);
+            expect(plan.Blocked).toBe(false);
+        });
+
+        it('refuses a root whose clone configuration is not enabled', async () => {
+            const disabledParent = { ...parentEntity, CloneConfiguration: { MaxDepth: 3 } } as EntityInfo;
+            const provider = {
+                ...mockProvider,
+                EntityByName: (name: string) => (name === 'ParentEntity' ? disabledParent : (childEntity as EntityInfo)),
+            } as IMetadataProvider;
+            const plan = await new ClonePlanner({ Provider: provider }).Plan(request, standardUser);
+            expect(plan.Blocked).toBe(true);
+            expect(plan.Warnings.find((w) => w.Code === 'NOT_CLONEABLE')?.Message).toContain('Configuration.Clone.Enabled');
+        });
+    });
+
     it('skips server-generated children with warning', async () => {
         const parentWithHook: EntityInfo = {
             ...parentEntity,
@@ -275,6 +344,7 @@ describe('ClonePlanner', () => {
         } as EntityInfo;
 
         const provider: IMetadataProvider = {
+            Authorizations: GrantedCloneAuthorizations(),
             ...mockProvider,
             Entities: [parentWithHook, childEntity as EntityInfo],
             EntityByName: (name: string) => (name === 'ParentEntity' ? parentWithHook : childEntity as EntityInfo),

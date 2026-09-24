@@ -270,10 +270,20 @@ export interface ICloneCreationPath {
     OutputKeyParam: string;
 }
 
+/**
+ * A named clone scope a user can pick instead of adjusting options one by one.
+ * `Options` apply as if the request had sent them (so `UserEditable` still limits them);
+ * `Relationships` override edge policies by related entity name, like `Clone.Relationships`.
+ */
 export interface IClonePreset {
+    /** Stable identifier sent by clients in `Options.Preset`. */
     Key: string;
+    /** Name shown in the preset picker. */
     Label: string;
     Description?: string;
-    Options: Record<string, unknown>;
+    /** Plan options this preset sets, e.g. `{ "MaxDepth": 2 }`. */
+    Options?: Record<string, unknown>;
+    /** Edge policy overrides, keyed by related entity name. */
+    Relationships?: Record<string, { Policy: 'Deep' | 'Reference' | 'Skip' }>;
 }
 

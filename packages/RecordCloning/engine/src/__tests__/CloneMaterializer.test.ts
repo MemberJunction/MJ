@@ -9,6 +9,7 @@ import {
 } from '@memberjunction/core';
 import { CloneMaterializer } from '../CloneMaterializer';
 import { ClonePlan } from '@memberjunction/record-cloning-base';
+import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 class MockEntity extends BaseEntity {
     protected override CheckPermissions(): boolean {
@@ -64,6 +65,7 @@ describe('CloneMaterializer', () => {
     } as unknown as IEntityDataProvider;
 
     const mockMetadataProvider: IMetadataProvider = {
+        Authorizations: GrantedCloneAuthorizations(),
         Entities: [parentEntityInfo as EntityInfo, childEntityInfo as EntityInfo],
         EntityByName: (name: string) => {
             if (name === 'ParentEntity') return parentEntityInfo as EntityInfo;

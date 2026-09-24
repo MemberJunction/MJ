@@ -296,4 +296,51 @@ describe('RecordClonePanelComponent (DOM)', () => {
         expect(panel.CurrentState).toBe('failed');
         expect(failed).toMatchObject({ Message: 'FORBIDDEN: soft links' });
     });
+
+    it('offers the Fire Hooks toggle only when Describe says the user may fire hooks', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        await fixture.componentInstance.Start();
+        expect(fixture.componentInstance.CanFireHooks).toBe(false);
+
+        vi.mocked(mockService.DescribeRecord).mockResolvedValue({ ...MOCK_DESCRIBE, CanFireHooks: true });
+        await fixture.componentInstance.Start();
+        expect(fixture.componentInstance.CanFireHooks).toBe(true);
+    });
+
+    it('shows the effective options and sends only the scope values the user changed', async () => {
+        vi.mocked(mockService.PlanClone).mockResolvedValue({
+            Plan: { ...MOCK_PLAN.Plan, EffectiveOptions: { ...MOCK_PLAN.Plan.EffectiveOptions, MaxDepth: 2 } },
+        });
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+
+        expect(vi.mocked(mockService.PlanClone).mock.calls[0][0].Options).toEqual({});
+        expect(panel.DisplayedScope.MaxDepth).toBe(2);
+
+        panel.OnScopeOptionsChanged({ ...panel.DisplayedScope, SoftLinks: 'include' });
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(vi.mocked(mockService.PlanClone).mock.calls.at(-1)![0].Options).toEqual({ SoftLinks: 'include' });
+    });
+
+    it('clears earlier scope changes when a preset is picked so the preset applies', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        panel.OnScopeOptionsChanged({ ...panel.DisplayedScope, MaxDepth: 5 });
+        panel.OnScopeOptionsChanged({ ...panel.DisplayedScope, MaxDepth: 5, Preset: 'Standard' });
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(vi.mocked(mockService.PlanClone).mock.calls.at(-1)![0].Options).toEqual({ Preset: 'Standard' });
+    });
 });

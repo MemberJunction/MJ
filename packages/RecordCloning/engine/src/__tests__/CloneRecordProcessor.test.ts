@@ -9,6 +9,7 @@ import { RecordProcessorRegistry, RecordProcessorContext } from '@memberjunction
 import { CloneRecordProcessor, RegisterCloneRecordProcessor } from '../CloneRecordProcessor';
 import { ClonePlanner } from '../ClonePlanner';
 import { CloneExecutor } from '../CloneExecutor';
+import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 describe('CloneRecordProcessor', () => {
     const mockUser: UserInfo = {
@@ -26,6 +27,7 @@ describe('CloneRecordProcessor', () => {
     };
 
     const mockProvider: IMetadataProvider = {
+        Authorizations: GrantedCloneAuthorizations(),
         Entities: [mockEntity as EntityInfo],
         EntityByName: (n: string) => (n === 'TestEntity' ? (mockEntity as EntityInfo) : null),
         EntityByID: (id: string) => (id === 'ent-1' ? (mockEntity as EntityInfo) : null),
