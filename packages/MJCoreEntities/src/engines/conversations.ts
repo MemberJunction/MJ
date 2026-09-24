@@ -595,6 +595,19 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * True when the user may grant others access to the conversation: they own it,
+     * or hold an Owner-level grant on it. Mirrors the server's share gate in
+     * `MJResourcePermissionEntityExtended`, so the UI never offers a share the save
+     * would refuse.
+     */
+    public CanShareConversation(conversation: MJConversationEntity, userId: string): boolean {
+        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
+            return true;
+        }
+        return this.GetSharedByInfo(conversation.ID)?.Level === 'Owner';
+    }
+
+    /**
      * Guard flag: set true while the engine itself is performing a mutation.
      * Prevents the entity event handler from re-processing our own saves/deletes,
      * which would cause redundant cache updates or infinite loops.

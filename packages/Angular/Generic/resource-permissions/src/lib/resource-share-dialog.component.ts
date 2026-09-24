@@ -166,14 +166,16 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         return Array.from(byUser.values());
     }
 
-    /** Everyone who isn't the owner and doesn't already hold a (live) grant. */
+    /** Everyone who owns none of the resources and doesn't already hold a (live) grant. */
     private updateAvailableUsers(): void {
         const sharedUserIds = new Set(
             this.Grants.filter((g) => !g.MarkedForRemoval).map((g) => g.User.ID)
         );
-        const ownerId = this.PrimaryContext?.OwnerUserID ?? null;
+        const ownerIds = this.ActiveContexts
+            .map((ctx) => ctx.OwnerUserID)
+            .filter((id): id is string => !!id);
         this.AvailableUsers = this.allUsers.filter((user) => {
-            if (ownerId && UUIDsEqual(user.ID, ownerId)) return false;
+            if (ownerIds.some((ownerId) => UUIDsEqual(user.ID, ownerId))) return false;
             return !sharedUserIds.has(user.ID);
         });
     }
@@ -305,23 +307,29 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         }
     }
 
-    /** Withdraws a person's access from every resource that granted it. */
+    /**
+     * Withdraws a person's access from every resource that granted it. Each row
+     * leaves the grant once deleted, so a retry after a failure deletes only the
+     * rows still left.
+     */
     private async withdrawGrant(grant: ResourceShareGrant): Promise<void> {
-        for (const row of grant.Rows.values()) {
+        for (const [resourceId, row] of Array.from(grant.Rows.entries())) {
             const deleted = await row.PermissionEntity.Delete();
             if (!deleted) {
                 throw new Error(
                     `Failed to remove share for ${grant.User.Name}: ${
-                        row.PermissionEntity.LatestResult?.Message ?? 'unknown error'
+                        row.PermissionEntity.LatestResult?.CompleteMessage ?? 'unknown error'
                     }`
                 );
             }
+            grant.Rows.delete(resourceId);
         }
     }
 
     /**
      * Writes the grant's level to every resource, creating a permission row for
-     * the ones this person did not already have access to.
+     * the ones this person did not already have access to. A row stays `IsNew`
+     * until it saves, so a retry after a failure saves the rows still unsaved.
      */
     private async applyGrant(grant: ResourceShareGrant, contexts: ResourceShareContext[]): Promise<void> {
         for (const context of contexts) {
@@ -330,7 +338,7 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
                 row = await this.Adapter!.CreateShare(context, grant.User);
                 row._InitialLevel = row.Level;
                 grant.Rows.set(context.ResourceID, row);
-            } else if (!grant.LevelTouched) {
+            } else if (!grant.LevelTouched && !row.IsNew) {
                 continue; // nothing changed for this resource
             }
 
@@ -340,10 +348,11 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
             if (!saved) {
                 throw new Error(
                     `Failed to save share for ${grant.User.Name}: ${
-                        row.PermissionEntity.LatestResult?.Message ?? 'unknown error'
+                        row.PermissionEntity.LatestResult?.CompleteMessage ?? 'unknown error'
                     }`
                 );
             }
+            row.IsNew = false;
         }
     }
 

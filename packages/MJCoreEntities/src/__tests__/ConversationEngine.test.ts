@@ -236,6 +236,7 @@ vi.mock('../engines/artifacts', () => ({
 // Import the module under test AFTER mocks
 // ---------------------------------------------------------------------------
 import { ConversationEngine } from '../engines/conversations';
+import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
 import { UserInfo } from '@memberjunction/core';
 
 // ---------------------------------------------------------------------------
@@ -809,6 +810,48 @@ describe('ConversationEngine', () => {
             sub.unsubscribe();
 
             expect(emitted).toHaveLength(1);
+        });
+    });
+
+    // ========================================================================
+    // CAN SHARE CONVERSATION
+    // ========================================================================
+    describe('CanShareConversation', () => {
+        /** Loads c-mine (owned), c-owner (Owner grant), c-edit (Edit grant) and c-view (View grant). */
+        const loadWithGrants = async () => {
+            vi.mocked(ResourcePermissionEngine.Instance.GetUserAvailableResources).mockReturnValueOnce([
+                { ResourceRecordID: 'c-owner', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'Owner' },
+                { ResourceRecordID: 'c-edit', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'Edit' },
+                { ResourceRecordID: 'c-view', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'View' },
+            ] as unknown as ReturnType<typeof ResourcePermissionEngine.Instance.GetUserAvailableResources>);
+            runViewResultQueue.push({
+                Success: true,
+                Results: [
+                    createMockConversation({ ID: 'c-mine', UserID: 'user-1' }),
+                    createMockConversation({ ID: 'c-owner', UserID: 'user-2' }),
+                    createMockConversation({ ID: 'c-edit', UserID: 'user-2' }),
+                    createMockConversation({ ID: 'c-view', UserID: 'user-2' }),
+                ],
+            });
+            await engine.LoadConversations('env-1', contextUser);
+        };
+        const conversation = (id: string) =>
+            engine.GetConversation(id) as unknown as Parameters<typeof engine.CanShareConversation>[0];
+
+        it('lets the owner share, matching the user ID regardless of case', async () => {
+            await loadWithGrants();
+            expect(engine.CanShareConversation(conversation('c-mine'), 'USER-1')).toBe(true);
+        });
+
+        it('lets a person with an Owner-level grant share', async () => {
+            await loadWithGrants();
+            expect(engine.CanShareConversation(conversation('c-owner'), 'user-1')).toBe(true);
+        });
+
+        it('refuses a person with an Edit or View grant', async () => {
+            await loadWithGrants();
+            expect(engine.CanShareConversation(conversation('c-edit'), 'user-1')).toBe(false);
+            expect(engine.CanShareConversation(conversation('c-view'), 'user-1')).toBe(false);
         });
     });
 

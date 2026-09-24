@@ -38,12 +38,24 @@ const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
 /** What a right-click menu was opened on. */
 type ListContextMenuKind = 'conversation' | 'folder' | 'background';
 
+/**
+ * Where a menu opens: its preferred top-left corner, and the line its bottom
+ * edge sits on when there is no room below and it opens upward instead.
+ */
+interface MenuAnchor {
+  x: number;
+  y: number;
+  flipBottom: number;
+}
+
 /** An open right-click menu: where it sits, and what it acts on. */
 interface ListContextMenu {
   kind: ListContextMenuKind;
-  /** Viewport coordinates of the pointer (or of the ⋯ button). */
+  /** Viewport position the menu renders at: its anchor, moved to stay inside the window. */
   x: number;
   y: number;
+  /** The pointer (or button) the menu was opened from. */
+  anchor: MenuAnchor;
   /** The clicked conversation, for a conversation menu. */
   conversation: MJConversationEntity | null;
   /** The clicked folder, for a folder menu. */
@@ -56,71 +68,102 @@ interface ListContextMenu {
   standalone: false,
   selector: 'mj-conversation-list',
   template: `
-    <div class="conversation-list">
-      <!-- Header strip gated as a whole so an empty bordered band never renders:
-           the ⋯ menu also hides during selection mode, so it only counts toward
-           the strip when actually visible. -->
-      @if (showSearch || (showHeaderMenu && !isSelectionMode)) {
+    <div class="conversation-list" [class.is-selecting]="isSelectionMode">
+      <!-- Header strip gated as a whole so an empty bordered band never renders.
+           While a selection exists its top row becomes the selection bar, which
+           shows even for a host that hides the rest of the chrome. -->
+      @if (showSearch || showHeaderMenu || isSelectionMode) {
       <div class="list-header">
         <div class="header-top">
-          @if (showSearch) {
-            <div class="search-box">
-              <input
-                #searchInput
-                type="text"
-                class="search-input"
-                placeholder="Search conversations..."
-                [(ngModel)]="searchQuery"
-                (keydown)="onSearchKeydown($event)">
-              @if (isSearching) {
-                <button class="search-clear" (click)="clearSearch()" title="Clear search">
-                  <i class="fas fa-xmark"></i>
-                </button>
-              }
-            </div>
-          }
-          @if (showHeaderMenu && !isSelectionMode) {
-            <div class="header-menu-container">
-              <button class="btn-menu" (click)="toggleHeaderMenu($event)" title="Options">
-                <i class="fas fa-ellipsis-v"></i>
+          @if (isSelectionMode) {
+            <div class="selection-bar" role="toolbar" aria-label="Selected conversations">
+              <button class="selection-bar-btn" (click)="clearSelection()" title="Clear selection" aria-label="Clear selection">
+                <i class="fas fa-xmark"></i>
               </button>
-              @if (isHeaderMenuOpen) {
-                <div class="header-dropdown-menu">
-                  <button class="dropdown-item" (click)="onRefreshConversationsClick($event)" [disabled]="isRefreshing">
-                    <i class="fas fa-sync-alt" [class.fa-spin]="isRefreshing"></i>
-                    <span>{{ isRefreshing ? 'Refreshing...' : 'Refresh' }}</span>
-                  </button>
-                  <button class="dropdown-item" (click)="onToggleGroupByClick($event)">
-                    <i class="fas" [class.fa-folder-tree]="groupBy !== 'project'" [class.fa-list]="groupBy === 'project'"></i>
-                    <span>{{ groupBy === 'project' ? 'Show as flat list' : 'Group by folder' }}</span>
-                  </button>
-                  @if (!isMobileView) {
-                    <button class="dropdown-item" (click)="onUnpinSidebarClick($event)">
-                      <i class="fas fa-table-columns"></i>
-                      <span>Hide Sidebar</span>
-                    </button>
-                  }
-                </div>
-              }
+              <span class="selection-count">{{ selectedConversationIds.size }} selected</span>
+              <button class="selection-bar-btn"
+                      (click)="barSetPinned()"
+                      [title]="selectionHasUnpinned() ? 'Pin' : 'Unpin'"
+                      [attr.aria-label]="selectionHasUnpinned() ? 'Pin' : 'Unpin'">
+                <i class="fas fa-thumbtack" [class.fa-rotate-90]="!selectionHasUnpinned()"></i>
+              </button>
+              <button class="selection-bar-btn" (click)="barOpenMoveMenu($event)" title="Move to folder" aria-label="Move to folder">
+                <i class="fas fa-folder-tree"></i>
+              </button>
+              <button class="selection-bar-btn"
+                      (click)="barShare()"
+                      [disabled]="!canShareAny(selectedIds)"
+                      [title]="canShareAny(selectedIds) ? 'Share' : ShareRefusedReason"
+                      aria-label="Share">
+                <i class="fas fa-user-plus"></i>
+              </button>
+              <button class="selection-bar-btn danger" (click)="barDelete()" title="Delete" aria-label="Delete">
+                <i class="fas fa-trash"></i>
+              </button>
             </div>
+          } @else {
+            @if (showSearch) {
+              <div class="search-box">
+                <input
+                  #searchInput
+                  type="text"
+                  class="search-input"
+                  placeholder="Search conversations..."
+                  [(ngModel)]="searchQuery"
+                  (keydown)="onSearchKeydown($event)">
+                @if (isSearching) {
+                  <button class="search-clear" (click)="clearSearch()" title="Clear search">
+                    <i class="fas fa-xmark"></i>
+                  </button>
+                }
+              </div>
+            }
+            @if (showHeaderMenu) {
+              <div class="header-menu-container">
+                <button class="btn-menu" (click)="toggleHeaderMenu($event)" title="Options">
+                  <i class="fas fa-ellipsis-v"></i>
+                </button>
+                @if (isHeaderMenuOpen) {
+                  <div class="header-dropdown-menu">
+                    <button class="dropdown-item" (click)="onRefreshConversationsClick($event)" [disabled]="isRefreshing">
+                      <i class="fas fa-sync-alt" [class.fa-spin]="isRefreshing"></i>
+                      <span>{{ isRefreshing ? 'Refreshing...' : 'Refresh' }}</span>
+                    </button>
+                    <button class="dropdown-item" (click)="onToggleGroupByClick($event)">
+                      <i class="fas" [class.fa-folder-tree]="groupBy !== 'project'" [class.fa-list]="groupBy === 'project'"></i>
+                      <span>{{ groupBy === 'project' ? 'Show as flat list' : 'Group by folder' }}</span>
+                    </button>
+                    @if (!isMobileView) {
+                      <button class="dropdown-item" (click)="onUnpinSidebarClick($event)">
+                        <i class="fas fa-table-columns"></i>
+                        <span>Hide Sidebar</span>
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+            }
           }
         </div>
         <!-- Sort controls. Live in the header strip, so a host that hides all
-             chrome (showSearch + showHeaderMenu both false) gets no sort row. -->
-        <div class="sort-row">
-          <button class="sort-btn" [class.active]="sortBy === 'date'"
-                  (click)="setSort('date')"
-                  [title]="sortBy === 'date' ? (sortDirection === 'asc' ? 'Oldest first' : 'Newest first') : 'Sort by date'">
-            <i class="fas" [ngClass]="sortIcon('date')"></i>
-            <span>Date</span>
-          </button>
-          <button class="sort-btn" [class.active]="sortBy === 'name'"
-                  (click)="setSort('name')"
-                  [title]="sortBy === 'name' ? (sortDirection === 'asc' ? 'A to Z' : 'Z to A') : 'Sort by name'">
-            <i class="fas" [ngClass]="sortIcon('name')"></i>
-            <span>Name</span>
-          </button>
-        </div>
+             chrome (showSearch + showHeaderMenu both false) gets no sort row.
+             They stay put while selecting, so the list does not jump. -->
+        @if (showSearch || showHeaderMenu) {
+          <div class="sort-row">
+            <button class="sort-btn" [class.active]="sortBy === 'date'"
+                    (click)="setSort('date')"
+                    [title]="sortBy === 'date' ? (sortDirection === 'asc' ? 'Oldest first' : 'Newest first') : 'Sort by date'">
+              <i class="fas" [ngClass]="sortIcon('date')"></i>
+              <span>Date</span>
+            </button>
+            <button class="sort-btn" [class.active]="sortBy === 'name'"
+                    (click)="setSort('name')"
+                    [title]="sortBy === 'name' ? (sortDirection === 'asc' ? 'A to Z' : 'Z to A') : 'Sort by name'">
+              <i class="fas" [ngClass]="sortIcon('name')"></i>
+              <span>Name</span>
+            </button>
+          </div>
+        }
       </div>
       }
       @if (showNewConversationButton) {
@@ -281,8 +324,21 @@ interface ListContextMenu {
            (dragover)="onConversationRowDragOver(conversation, $event)"
            (dragleave)="onDragLeave(conversationDropTargetId(conversation))"
            (drop)="onConversationRowDrop(conversation, $event)"
+           (pointerdown)="onRowPointerDown(conversation, $event)"
+           (pointermove)="onRowPointerMove($event)"
+           (pointerup)="cancelLongPress()"
+           (pointercancel)="cancelLongPress()"
            (click)="handleConversationClick(conversation, $event)"
            (contextmenu)="onConversationContextMenu(conversation, $event)">
+        <button class="row-check"
+                role="checkbox"
+                [class.checked]="IsConversationSelected(conversation)"
+                [attr.aria-checked]="IsConversationSelected(conversation)"
+                [attr.aria-label]="'Select ' + (conversation.Name || 'conversation')"
+                [style.left.px]="(depth || 0) * 14 + 4"
+                (click)="onRowCheckboxClick(conversation, $event)">
+          <i class="fas fa-check"></i>
+        </button>
         <div class="conversation-icon-wrapper">
           @if (hasActiveTasks(conversation.ID)) {
             <div class="conversation-icon has-tasks">
@@ -322,9 +378,10 @@ interface ListContextMenu {
 
     <!-- One menu for every right-click target: a conversation row (the clicked
          row, or the whole selection when it is part of it), a folder row, or the
-         empty space of the list. Fixed-positioned at the pointer. -->
+         empty space of the list. Fixed-positioned at the pointer, and moved as
+         needed to stay inside the window. -->
     @if (contextMenu) {
-      <div class="list-context-menu"
+      <div class="list-context-menu" #contextMenuEl
            [style.left.px]="contextMenu.x"
            [style.top.px]="contextMenu.y"
            (click)="$event.stopPropagation()"
@@ -378,7 +435,10 @@ interface ListContextMenu {
                 <span>Move to folder</span>
                 <i class="fas fa-chevron-right submenu-arrow"></i>
               </button>
-              <button class="menu-item" (click)="contextShare()">
+              <button class="menu-item"
+                      (click)="contextShare()"
+                      [disabled]="!canShareAny(contextMenu.targets)"
+                      [attr.title]="canShareAny(contextMenu.targets) ? null : ShareRefusedReason">
                 <i class="fas fa-user-plus"></i>
                 <span>{{ contextMenu.targets.length > 1 ? 'Share ' + contextMenu.targets.length + ' conversations' : 'Share' }}</span>
               </button>
@@ -592,13 +652,48 @@ interface ListContextMenu {
     .conversation-item:hover { background: var(--conv-list-hover-bg); color: var(--conv-list-ink); }
     .conversation-item:hover .conversation-actions { opacity: 1; }
     .conversation-item.active { background: var(--conv-list-active-bg); color: var(--conv-list-active-ink); }
-    /* Selected rows carry the state themselves (no checkbox column). The inset
-       bar is a box-shadow, not a border, so it never shifts the row's indent —
-       folder depth is applied as padding-left. The open conversation keeps its
-       solid .active fill, so a row that is both still reads as the open one. */
-    .conversation-item.selected { background: color-mix(in srgb, var(--conv-list-accent) 16%, transparent); box-shadow: inset 3px 0 0 var(--conv-list-accent); }
+    /* A selected row is marked by its ticked checkbox and an accent tint. The
+       open conversation keeps its solid .active fill, so a row that is both
+       still reads as the open one. */
+    .conversation-item.selected { background: color-mix(in srgb, var(--conv-list-accent) 16%, transparent); }
     .conversation-item.selected:hover { background: color-mix(in srgb, var(--conv-list-accent) 24%, transparent); }
     .conversation-item.active.selected { background: var(--conv-list-active-bg); }
+    /* Row checkbox: the mouse route to a selection. It sits in the row's left
+       padding, hidden until the row is hovered, and shows on every row while a
+       selection exists (on touch too, where there is no hover). */
+    .row-check {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 14px;
+      height: 14px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1.5px solid color-mix(in srgb, var(--conv-list-ink) 45%, transparent);
+      border-radius: 3px;
+      color: transparent;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+      z-index: 2;
+    }
+    .row-check i { font-size: 8px; }
+    .conversation-list.is-selecting .row-check { opacity: 1; pointer-events: auto; }
+    @media (hover: hover) {
+      .conversation-item:hover .row-check { opacity: 1; pointer-events: auto; }
+    }
+    .row-check.checked {
+      background: var(--conv-list-accent);
+      border-color: var(--conv-list-accent);
+      color: var(--conv-list-accent-ink);
+    }
+    .conversation-item.active .row-check:not(.checked) {
+      border-color: color-mix(in srgb, var(--conv-list-active-ink) 70%, transparent);
+    }
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }
     .conversation-icon { font-size: 12px; width: 16px; text-align: center; }
     .conversation-icon.has-tasks { color: var(--mj-status-warning); }
@@ -650,6 +745,10 @@ interface ListContextMenu {
     .conversation-item:hover .conversation-actions { opacity: 1; pointer-events: auto; }
     .conversation-item.active .conversation-actions { opacity: 1; pointer-events: auto; }
     .conversation-actions > * { pointer-events: auto; }
+    /* No hover on touch, so the ⋯ button is always shown there. */
+    @media (hover: none) {
+      .conversation-actions { opacity: 1; pointer-events: auto; }
+    }
     .pinned-icon { color: var(--mj-brand-accent); font-size: 12px; }
 
     /* Task Indicator */
@@ -719,21 +818,6 @@ interface ListContextMenu {
       color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
       border-bottom: 1px solid color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
       margin-bottom: 4px;
-    }
-
-    .context-menu {
-      position: absolute;
-      top: 100%;
-      right: 0;
-      margin-top: 4px;
-      min-width: 160px;
-      background: var(--conv-list-bg);
-      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
-      border-radius: 8px;
-      box-shadow: var(--mj-shadow-lg);
-      z-index: 1001;
-      overflow: hidden;
-      pointer-events: auto;
     }
 
     .menu-item {
@@ -831,11 +915,58 @@ interface ListContextMenu {
       }
     }
 
-    /* Selection Mode Styles */
+    /* Header top row: the search box and ⋯ menu, or the selection bar while a
+       selection exists. A fixed minimum height keeps the list from jumping
+       when one replaces the other. */
     .header-top {
       display: flex;
       gap: 8px;
       align-items: center;
+      min-height: 36px;
+    }
+
+    .selection-bar {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .selection-count {
+      flex: 1;
+      min-width: 0;
+      padding: 0 6px;
+      color: var(--conv-list-ink);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .selection-bar-btn {
+      width: 32px;
+      height: 32px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: color-mix(in srgb, var(--conv-list-ink) 75%, transparent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .selection-bar-btn i { font-size: 13px; }
+    .selection-bar-btn:hover:not(:disabled) { background: var(--conv-list-hover-bg); color: var(--conv-list-ink); }
+    .selection-bar-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .selection-bar-btn.danger:hover:not(:disabled) {
+      background: color-mix(in srgb, var(--mj-status-error) 15%, transparent);
+      color: var(--mj-status-error);
     }
 
     /* Header menu button and dropdown */
@@ -939,140 +1070,6 @@ interface ListContextMenu {
     }
 
 
-    .selection-action-bar {
-      position: sticky;
-      bottom: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 16px;
-      background: var(--conv-list-bg);
-      border-top: 1px solid color-mix(in srgb, var(--conv-list-ink) 15%, transparent);
-      gap: 12px;
-      flex-wrap: wrap;
-      flex-shrink: 0;
-    }
-
-    .selection-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: color-mix(in srgb, var(--conv-list-ink) 90%, transparent);
-      font-size: 14px;
-      font-weight: 500;
-      flex: 1 1 auto;
-      min-width: 150px;
-    }
-
-    .selection-count {
-      color: var(--conv-list-ink);
-    }
-
-    .link-btn {
-      background: none;
-      border: none;
-      color: var(--mj-brand-accent);
-      cursor: pointer;
-      font-size: 13px;
-      text-decoration: underline;
-      padding: 0;
-      transition: color 0.2s;
-    }
-
-    .link-btn:hover {
-      color: var(--conv-list-ink);
-    }
-
-    .selection-actions {
-      display: flex;
-      gap: 8px;
-      flex: 0 0 auto;
-    }
-
-    .btn-cancel {
-      padding: 8px 16px;
-      background: transparent;
-      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
-      border-radius: 6px;
-      color: color-mix(in srgb, var(--conv-list-ink) 70%, transparent);
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      transition: all 0.2s;
-    }
-
-    .btn-cancel:hover {
-      background: color-mix(in srgb, var(--conv-list-ink) 10%, transparent);
-      color: var(--conv-list-ink);
-    }
-
-    .btn-delete-bulk {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      background: var(--mj-status-error);
-      border: none;
-      border-radius: 6px;
-      /* Deliberately NOT --conv-list-ink: this ink sits on the error-red button,
-         not the panel, so it must not follow a panel remap. (brand-on-secondary
-         stays light in both modes; text-inverse flips dark in dark mode.) */
-      color: var(--mj-brand-on-secondary);
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 600;
-      transition: all 0.2s;
-    }
-
-    .btn-delete-bulk:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--mj-status-error) 80%, black);
-    }
-
-    .btn-delete-bulk:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .btn-delete-bulk i {
-      font-size: 12px;
-    }
-
-    .bulk-move-container { position: relative; }
-
-    .btn-bulk {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 12px;
-      background: transparent;
-      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
-      border-radius: 6px;
-      color: color-mix(in srgb, var(--conv-list-ink) 80%, transparent);
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      transition: all 0.2s;
-    }
-
-    .btn-bulk i { font-size: 12px; }
-    .btn-bulk:hover:not(:disabled) { background: var(--conv-list-hover-bg); color: var(--conv-list-ink); }
-    .btn-bulk:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .bulk-move-menu {
-      position: absolute;
-      bottom: calc(100% + 4px);
-      left: 0;
-      min-width: 200px;
-      max-height: 260px;
-      overflow-y: auto;
-      background: var(--conv-list-bg);
-      border: 1px solid color-mix(in srgb, var(--conv-list-ink) 20%, transparent);
-      border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-      z-index: 20;
-      padding: 4px 0;
-    }
-
     /* Folders */
     .section-action-btn {
       width: 24px;
@@ -1142,42 +1139,6 @@ interface ListContextMenu {
       padding-left: 6px;
       text-align: right;
     }
-    .folder-actions {
-      position: absolute;
-      right: 6px;
-      top: 50%;
-      transform: translateY(-50%);
-      display: flex;
-      gap: 2px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s;
-      z-index: 5;
-    }
-    .folder-row:hover .folder-actions { opacity: 1; pointer-events: auto; }
-    .folder-row:hover .folder-count { opacity: 0; }
-    .folder-action-btn {
-      width: 22px;
-      height: 22px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: none;
-      border-radius: 4px;
-      color: color-mix(in srgb, var(--conv-list-ink) 60%, transparent);
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .folder-action-btn:hover {
-      background: color-mix(in srgb, var(--conv-list-ink) 18%, transparent);
-      color: var(--conv-list-ink);
-    }
-    .folder-action-btn.danger:hover {
-      background: color-mix(in srgb, var(--mj-status-error) 18%, transparent);
-      color: var(--mj-status-error);
-    }
-    .folder-action-btn i { font-size: 11px; }
     .folder-children { display: block; }
     .folder-empty-hint {
       padding: 6px 16px;
@@ -1191,8 +1152,9 @@ interface ListContextMenu {
       border-radius: 6px;
     }
 
-    /* Dragging state */
-    .conversation-item { user-select: none; }
+    /* Dragging state. Rows never select text or raise the touch callout, so a
+       long-press can select the row instead. */
+    .conversation-item { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
     .conversation-item.dragging { opacity: 0.4; }
 
     /* Move-to-folder submenu */
@@ -1264,11 +1226,38 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /** Row a Shift-click ranges from — the last row picked without Shift. */
   private selectionAnchorId: string | null = null;
 
+  /** Why Share is unavailable, shown on its disabled button. */
+  public readonly ShareRefusedReason = 'Only the owner, or someone with Owner access, can share a conversation';
+
+  /** How long a touch must rest on a row before it selects the row. */
+  private static readonly LongPressDelayMs = 500;
+
+  /** How far a touch may drift, in pixels, before it counts as a scroll rather than a press. */
+  private static readonly LongPressMoveTolerancePx = 10;
+
+  /** Space kept between the right-click menu and the edges of the window. */
+  private static readonly MenuViewportMargin = 8;
+
+  /** The touch press waiting to become a long-press, or null. */
+  private longPress: {
+    conversation: MJConversationEntity;
+    x: number;
+    y: number;
+    timer: ReturnType<typeof setTimeout>;
+  } | null = null;
+
+  /** Pointer type of the latest press on a row. On touch, a tap while selecting toggles the row. */
+  private lastRowPointerType = 'mouse';
+
+  /** Set by a completed long-press, so the click that ends the same press does nothing. */
+  private ignoreNextRowClick = false;
+
   public isHeaderMenuOpen: boolean = false;
 
   public isRefreshing: boolean = false;
 
   @ViewChild('searchInput') private searchInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('contextMenuEl') private contextMenuEl?: ElementRef<HTMLElement>;
 
   /** UserInfoEngine key for persisting folder collapse state + group-by mode. */
   private static readonly FolderPrefsKey = 'mj.conversations.folderPrefs.v1';
@@ -1328,6 +1317,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   set searchQuery(value: string) {
     this._searchQuery = value ?? '';
     this.rebuildGroups();
+    this.dropHiddenRowsFromSelection();
   }
 
   /** True when a search filter is active. */
@@ -1347,11 +1337,6 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       event.stopPropagation();
       this.clearSearch();
     }
-  }
-
-  /** Conversations matching the current search (used by selection-mode helpers). */
-  get filteredConversations(): MJConversationEntity[] {
-    return this.filterConversations(this.engine.Conversations);
   }
 
   private filterConversations(conversations: MJConversationEntity[]): MJConversationEntity[] {
@@ -1376,10 +1361,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     // (pin, archive, rename, move-to-folder, folder create/rename/delete, etc.).
     this.engine.Conversations$.pipe(
       takeUntil(this.destroy$)
-    ).subscribe(() => {
-      this.rebuildGroups();
-      this.cdr.detectChanges();
-    });
+    ).subscribe(() => this.onConversationListChanged());
 
     this.engine.Projects$.pipe(
       takeUntil(this.destroy$)
@@ -1398,8 +1380,16 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.cancelLongPress();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  /** Rebuilds the groupings from the engine's list, first dropping selected conversations that left it. */
+  private onConversationListChanged(): void {
+    this.dropRemovedConversationsFromSelection();
+    this.rebuildGroups();
+    this.cdr.detectChanges();
   }
 
   @HostListener('document:click')
@@ -1472,18 +1462,22 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   public toggleDirectMessages(): void {
     this.directMessagesExpanded = !this.directMessagesExpanded;
+    this.dropHiddenRowsFromSelection();
   }
 
   public togglePinned(): void {
     this.pinnedExpanded = !this.pinnedExpanded;
+    this.dropHiddenRowsFromSelection();
   }
 
   public toggleFolders(): void {
     this.foldersExpanded = !this.foldersExpanded;
+    this.dropHiddenRowsFromSelection();
   }
 
   public toggleUngrouped(): void {
     this.ungroupedExpanded = !this.ungroupedExpanded;
+    this.dropHiddenRowsFromSelection();
   }
 
   // ========================================================================
@@ -1630,12 +1624,14 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       this.collapsedFolderIds.add(key);
     }
     this.saveFolderPrefs();
+    this.dropHiddenRowsFromSelection();
   }
 
   public toggleGroupBy(): void {
     this.groupBy = this.groupBy === 'project' ? 'none' : 'project';
     this.saveFolderPrefs();
     this.rebuildGroups();
+    this.dropHiddenRowsFromSelection();
   }
 
   private loadFolderPrefs(): void {
@@ -1680,9 +1676,15 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   /**
    * Starts a conversation drag. Grabbing a row that is part of the current
    * selection drags the whole selection; grabbing any other row drags that row
-   * alone and leaves the selection untouched.
+   * alone and leaves the selection untouched. A touch press that lifts the row
+   * selects it instead, since on touch a long-press means select.
    */
   public onConversationDragStart(conversation: MJConversationEntity, event: DragEvent): void {
+    if (this.lastRowPointerType === 'touch') {
+      event.preventDefault();
+      this.completeLongPress();
+      return;
+    }
     this.draggedFolderId = null;
     this.draggedConversationIds = this.selectedConversationIds.has(conversation.ID)
       ? Array.from(this.selectedConversationIds)
@@ -1919,30 +1921,30 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   public onConversationContextMenu(conversation: MJConversationEntity, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
+    if (this.lastRowPointerType === 'touch') {
+      // Some touch browsers report a long-press as a right-click; it selects instead.
+      this.completeLongPress();
+      return;
+    }
     const targets = this.selectedConversationIds.has(conversation.ID)
       ? Array.from(this.selectedConversationIds)
       : [conversation.ID];
-    this.openContextMenu({ kind: 'conversation', conversation, folder: null, targets }, event.clientX, event.clientY);
+    this.openContextMenu({ kind: 'conversation', conversation, folder: null, targets }, this.pointerAnchor(event));
   }
 
   /** The row's ⋯ button opens the same menu, anchored under the button. */
   public openRowMenu(conversation: MJConversationEntity, event: MouseEvent): void {
     event.stopPropagation();
-    const rect = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect();
     const targets = this.selectedConversationIds.has(conversation.ID)
       ? Array.from(this.selectedConversationIds)
       : [conversation.ID];
-    this.openContextMenu(
-      { kind: 'conversation', conversation, folder: null, targets },
-      rect ? rect.left : event.clientX,
-      rect ? rect.bottom + 2 : event.clientY
-    );
+    this.openContextMenu({ kind: 'conversation', conversation, folder: null, targets }, this.buttonAnchor(event));
   }
 
   public onFolderContextMenu(project: MJProjectEntity, event: MouseEvent): void {
     event.preventDefault();
     event.stopPropagation();
-    this.openContextMenu({ kind: 'folder', conversation: null, folder: project, targets: [] }, event.clientX, event.clientY);
+    this.openContextMenu({ kind: 'folder', conversation: null, folder: project, targets: [] }, this.pointerAnchor(event));
   }
 
   /** Empty space: a click that landed on a row or folder is theirs, not the list's. */
@@ -1950,12 +1952,55 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     const target = event.target as HTMLElement | null;
     if (target?.closest('.conversation-item, .folder-row')) return;
     event.preventDefault();
-    this.openContextMenu({ kind: 'background', conversation: null, folder: null, targets: [] }, event.clientX, event.clientY);
+    this.openContextMenu({ kind: 'background', conversation: null, folder: null, targets: [] }, this.pointerAnchor(event));
   }
 
-  private openContextMenu(menu: Omit<ListContextMenu, 'x' | 'y'>, x: number, y: number): void {
-    this.isMoveSubmenuOpen = false;
-    this.contextMenu = { ...menu, x, y };
+  /** A menu opened at the pointer opens upward from the pointer when it must. */
+  private pointerAnchor(event: MouseEvent): MenuAnchor {
+    return { x: event.clientX, y: event.clientY, flipBottom: event.clientY };
+  }
+
+  /** A menu opened from a button sits under it, or above it when there is no room below. */
+  private buttonAnchor(event: MouseEvent): MenuAnchor {
+    const rect = (event.currentTarget as HTMLElement | null)?.getBoundingClientRect();
+    if (!rect) return this.pointerAnchor(event);
+    return { x: rect.left, y: rect.bottom + 2, flipBottom: rect.top - 2 };
+  }
+
+  private openContextMenu(
+    menu: Omit<ListContextMenu, 'x' | 'y' | 'anchor'>,
+    anchor: MenuAnchor,
+    showFolderPicker = false
+  ): void {
+    this.isMoveSubmenuOpen = showFolderPicker;
+    this.contextMenu = { ...menu, anchor, x: anchor.x, y: anchor.y };
+    this.fitContextMenuInViewport();
+  }
+
+  /**
+   * Keeps the open menu inside the window: it opens upward from its anchor when
+   * there is no room below, and moves left when there is no room to the right.
+   * Runs again whenever the folder picker changes the menu's height.
+   */
+  private fitContextMenuInViewport(): void {
+    if (!this.contextMenu) return;
+    this.cdr.detectChanges(); // render the menu so it can be measured
+    const menuElement = this.contextMenuEl?.nativeElement;
+    if (!menuElement) return;
+
+    const { width, height } = menuElement.getBoundingClientRect();
+    const { anchor } = this.contextMenu;
+    const margin = ConversationListComponent.MenuViewportMargin;
+
+    let y = anchor.y;
+    if (y + height > window.innerHeight - margin) {
+      const above = anchor.flipBottom - height;
+      y = above >= margin ? above : Math.max(margin, window.innerHeight - margin - height);
+    }
+    const x = Math.max(margin, Math.min(anchor.x, window.innerWidth - margin - width));
+
+    this.contextMenu = { ...this.contextMenu, x, y };
+    this.cdr.detectChanges();
   }
 
   public closeContextMenu(): void {
@@ -1966,11 +2011,13 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   public openMoveSubmenu(event: Event): void {
     event.stopPropagation();
     this.isMoveSubmenuOpen = true;
+    this.fitContextMenuInViewport();
   }
 
   public closeMoveSubmenu(event: Event): void {
     event.stopPropagation();
     this.isMoveSubmenuOpen = false;
+    this.fitContextMenuInViewport();
   }
 
   /** Marks the folder a single conversation already sits in. Never marks a multi-target menu. */
@@ -2009,22 +2056,29 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     void this.bulkSetPinned(!conversation.IsPinned);
   }
 
-  /**
-   * Shares the menu's targets — the whole selection, or just the clicked row —
-   * through the same dialog the chat header uses. Only an owner can grant access,
-   * so conversations belonging to someone else are left out and reported.
-   */
+  /** Shares the menu's targets — the whole selection, or just the clicked row. */
   public contextShare(): void {
     const ids = this.actionTargetIds();
     this.closeContextMenu();
+    this.shareConversations(ids);
+  }
 
+  /**
+   * Opens the dialog the chat header uses for the conversations the user may
+   * share, and reports how many were left out. Says why when there are none.
+   */
+  private shareConversations(ids: string[]): void {
     const conversations = ids
       .map(id => this.engine.GetConversation(id))
       .filter((c): c is MJConversationEntity => !!c);
-    const mine = conversations.filter(c => !!c.UserID && UUIDsEqual(c.UserID, this.currentUser?.ID));
-    const skipped = conversations.length - mine.length;
+    const shareable = conversations.filter(c => this.canShare(c));
+    if (shareable.length === 0) {
+      void this.dialogService.alert('Cannot Share', `${this.ShareRefusedReason}.`);
+      return;
+    }
 
-    this.shareContexts = mine.map(c => ({
+    const skipped = conversations.length - shareable.length;
+    this.shareContexts = shareable.map(c => ({
       ResourceID: c.ID,
       ResourceName: c.Name ?? 'Conversation',
       OwnerUserID: c.UserID ?? null,
@@ -2032,9 +2086,19 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       CurrentUserID: this.currentUser?.ID ?? null
     }));
     this.shareNotice = skipped > 0
-      ? `${skipped} of ${conversations.length} left out — you can only share conversations you own.`
+      ? `${skipped} of ${conversations.length} left out — ${this.ShareRefusedReason.toLowerCase()}.`
       : null;
-    this.isShareDialogOpen = this.shareContexts.length > 0;
+    this.isShareDialogOpen = true;
+  }
+
+  /** True when at least one of the conversations can be shared by the current user. */
+  public canShareAny(ids: string[]): boolean {
+    return ids.some(id => this.canShare(this.engine.GetConversation(id)));
+  }
+
+  private canShare(conversation: MJConversationEntity | undefined): boolean {
+    if (!conversation || !this.currentUser) return false;
+    return this.engine.CanShareConversation(conversation, this.currentUser.ID);
   }
 
   public onShareDialogResult(_result: ResourceShareDialogResult): void {
@@ -2309,11 +2373,52 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.selectionAnchorId = null;
   }
 
+  /** Ends selection mode from the selection bar's clear button. */
+  public clearSelection(): void {
+    this.exitSelectionMode();
+  }
+
   /** Selection mode closes itself once the last row is deselected. */
   private exitSelectionModeIfEmpty(): void {
     if (this.selectedConversationIds.size === 0) {
       this.exitSelectionMode();
     }
+  }
+
+  /** Adds or removes one row and makes it the range anchor, ending the mode when nothing is left. */
+  private toggleRowSelection(conversationId: string): void {
+    this.toggleConversationSelection(conversationId);
+    this.selectionAnchorId = conversationId;
+    this.exitSelectionModeIfEmpty();
+  }
+
+  /**
+   * Drops selected rows the view no longer shows — after a search edit, a
+   * collapse, or a grouping change — so no action can reach a row the user
+   * cannot see. A list rebuild alone does not call this: a move into a
+   * collapsed folder keeps its rows selected for a follow-up action.
+   */
+  private dropHiddenRowsFromSelection(): void {
+    if (this.selectedConversationIds.size === 0) return;
+    const visible = new Set(this.visibleConversationIds().map(id => NormalizeUUID(id)));
+    this.removeFromSelection(id => !visible.has(NormalizeUUID(id)));
+  }
+
+  /** Drops selected conversations that are no longer in the engine's list at all. */
+  private dropRemovedConversationsFromSelection(): void {
+    if (this.selectedConversationIds.size === 0) return;
+    const listed = new Set(this.engine.Conversations.map(c => NormalizeUUID(c.ID)));
+    this.removeFromSelection(id => !listed.has(NormalizeUUID(id)));
+  }
+
+  /** Removes the selected IDs that match, and ends selection mode if none remain. */
+  private removeFromSelection(shouldRemove: (conversationId: string) => boolean): void {
+    for (const id of Array.from(this.selectedConversationIds)) {
+      if (shouldRemove(id)) {
+        this.selectedConversationIds.delete(id);
+      }
+    }
+    this.exitSelectionModeIfEmpty();
   }
 
   /**
@@ -2397,9 +2502,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Selects every row on screen — never rows hidden by the search or a collapsed folder or section. */
   selectAll(): void {
-    this.filteredConversations.forEach(c => {
-      this.selectedConversationIds.add(c.ID);
+    this.visibleConversationIds().forEach(id => {
+      this.selectedConversationIds.add(id);
     });
   }
 
@@ -2408,11 +2514,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Moves every selected conversation into one folder, or out of all folders when
-   * projectId is null. The selection survives so a second bulk action can follow.
+   * Moves the conversations into one folder, or out of all folders when projectId
+   * is null. The selection survives so a second bulk action can follow.
    */
-  async bulkMoveToFolder(projectId: string | null): Promise<void> {
-    const ids = this.actionTargetIds();
+  async bulkMoveToFolder(projectId: string | null, ids: string[] = this.actionTargetIds()): Promise<void> {
     this.closeContextMenu();
     if (ids.length === 0) return;
 
@@ -2426,9 +2531,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  /** Pins or unpins every selected conversation, keeping the selection. */
-  async bulkSetPinned(isPinned: boolean): Promise<void> {
-    const ids = this.actionTargetIds();
+  /** Pins or unpins the conversations, keeping the selection. */
+  async bulkSetPinned(isPinned: boolean, ids: string[] = this.actionTargetIds()): Promise<void> {
     this.closeContextMenu();
     if (ids.length === 0) return;
 
@@ -2457,8 +2561,12 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     );
   }
 
-  async bulkDeleteConversations(): Promise<void> {
-    const ids = this.actionTargetIds();
+  /**
+   * Deletes the conversations after confirmation. Only the deleted ones leave the
+   * selection: deleting a row outside it leaves it alone, and rows that failed
+   * stay selected so the user can try again.
+   */
+  async bulkDeleteConversations(ids: string[] = this.actionTargetIds()): Promise<void> {
     const count = ids.length;
     this.closeContextMenu();
 
@@ -2470,50 +2578,168 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       okText: 'Delete',
       cancelText: 'Cancel'
     });
+    if (!confirmed) return;
 
-    if (confirmed) {
-      try {
-        const result = await this.engine.DeleteMultipleConversations(ids, this.currentUser);
-
-        if (result.Failed.length > 0 && result.Successful.length > 0) {
-          // Partial success
-          const failedNames = result.Failed.map(f => `"${f.Name}"`).join(', ');
-          await this.dialogService.alert(
-            'Partial Success',
-            `Deleted ${result.Successful.length} of ${count} conversations.\n\n` +
-            `${result.Failed.length} could not be deleted: ${failedNames}`
-          );
-        } else if (result.Failed.length > 0 && result.Successful.length === 0) {
-          // All failed
-          await this.dialogService.alert(
-            'Delete Failed',
-            `None of the ${count} conversations could be deleted. They may have already been removed.`
-          );
-        }
-
-        // Emit deleted events for successful deletions
-        for (const id of result.Successful) {
-          this.conversationDeleted.emit(id);
-        }
-
-      } catch (error) {
-        console.error('Error deleting conversations:', error);
-        await this.dialogService.alert('Error', 'Failed to delete conversations. Please try again.');
-      } finally {
-        // Always exit selection mode after an attempt, whether success or failure
-        this.selectedConversationIds.clear();
-        this.isSelectionMode = false;
-        this.cdr.detectChanges();
+    try {
+      const result = await this.engine.DeleteMultipleConversations(ids, this.currentUser);
+      await this.reportDeleteOutcome(result, count);
+      for (const id of result.Successful) {
+        this.conversationDeleted.emit(id);
       }
+      const deleted = new Set(result.Successful.map(id => NormalizeUUID(id)));
+      this.removeFromSelection(id => deleted.has(NormalizeUUID(id)));
+    } catch (error) {
+      console.error('Error deleting conversations:', error);
+      await this.dialogService.alert('Error', 'Failed to delete conversations. Please try again.');
+    } finally {
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Reports the conversations a bulk delete could not remove. Silent on full success. */
+  private async reportDeleteOutcome(
+    result: { Successful: string[]; Failed: Array<{ ID: string; Name: string; Error: string }> },
+    count: number
+  ): Promise<void> {
+    if (result.Failed.length === 0) return;
+    if (result.Successful.length === 0) {
+      await this.dialogService.alert(
+        'Delete Failed',
+        `None of the ${count} conversations could be deleted. They may have already been removed.`
+      );
+      return;
+    }
+    const failedNames = result.Failed.map(f => `"${f.Name}"`).join(', ');
+    await this.dialogService.alert(
+      'Partial Success',
+      `Deleted ${result.Successful.length} of ${count} conversations.\n\n` +
+      `${result.Failed.length} could not be deleted: ${failedNames}`
+    );
+  }
+
+  // ========================================================================
+  // SELECTION BAR — stands in for the search row while a selection exists
+  // ========================================================================
+
+  /** The selected conversation IDs, in the order they were picked. */
+  public get selectedIds(): string[] {
+    return Array.from(this.selectedConversationIds);
+  }
+
+  /** True when any selected conversation is unpinned, so the bar's pin button pins rather than unpins. */
+  public selectionHasUnpinned(): boolean {
+    return this.selectedIds.some(id => !this.engine.GetConversation(id)?.IsPinned);
+  }
+
+  /** The bar acts on the selection even while a menu for another row is open. */
+  public barSetPinned(): void {
+    void this.bulkSetPinned(this.selectionHasUnpinned(), this.selectedIds);
+  }
+
+  public barShare(): void {
+    this.closeContextMenu();
+    this.shareConversations(this.selectedIds);
+  }
+
+  public barDelete(): void {
+    void this.bulkDeleteConversations(this.selectedIds);
+  }
+
+  /** Opens the folder picker for the selection, under the bar's Move button. */
+  public barOpenMoveMenu(event: MouseEvent): void {
+    event.stopPropagation(); // the document click would close the picker straight away
+    const ids = this.selectedIds;
+    const conversation = ids.length === 1 ? this.engine.GetConversation(ids[0]) ?? null : null;
+    this.openContextMenu({ kind: 'conversation', conversation, folder: null, targets: ids }, this.buttonAnchor(event), true);
+  }
+
+  // ========================================================================
+  // ROW CLICKS, CHECKBOXES AND TOUCH PRESSES
+  // ========================================================================
+
+  /**
+   * The row checkbox adds or removes its row without opening it — the mouse
+   * route to a selection that needs no keyboard. Shift-click extends a range.
+   * Unlike a Ctrl-click it never takes the open conversation along, so the
+   * checkboxes show exactly what is picked.
+   */
+  public onRowCheckboxClick(conversation: MJConversationEntity, event: MouseEvent): void {
+    event.stopPropagation();
+    this.isSelectionMode = true;
+    if (event.shiftKey) {
+      this.selectRangeTo(conversation.ID);
+      return;
+    }
+    this.toggleRowSelection(conversation.ID);
+  }
+
+  /**
+   * Starts timing a touch press on a row; held long enough, it selects the row.
+   * Presses on the row's own buttons (the checkbox and ⋯) are theirs to handle.
+   */
+  public onRowPointerDown(conversation: MJConversationEntity, event: PointerEvent): void {
+    this.lastRowPointerType = event.pointerType;
+    this.ignoreNextRowClick = false;
+    this.cancelLongPress();
+    if (event.pointerType !== 'touch') return;
+    if ((event.target as HTMLElement | null)?.closest('button')) return;
+
+    this.longPress = {
+      conversation,
+      x: event.clientX,
+      y: event.clientY,
+      timer: setTimeout(() => this.completeLongPress(), ConversationListComponent.LongPressDelayMs)
+    };
+  }
+
+  /** A touch that drifts is a scroll, not a press. */
+  public onRowPointerMove(event: PointerEvent): void {
+    if (!this.longPress) return;
+    const distance = Math.hypot(event.clientX - this.longPress.x, event.clientY - this.longPress.y);
+    if (distance > ConversationListComponent.LongPressMoveTolerancePx) {
+      this.cancelLongPress();
+    }
+  }
+
+  public cancelLongPress(): void {
+    if (this.longPress) {
+      clearTimeout(this.longPress.timer);
+      this.longPress = null;
     }
   }
 
   /**
-   * Routes a row click: Ctrl/Cmd toggles one row, Shift extends from the anchor,
-   * a plain click opens the conversation (or toggles the row while in selection
-   * mode). Either modifier starts selection mode when it is off.
+   * Completes the press in progress, if any: selects its row and starts
+   * selection mode, as a long-press does in Gmail. The click that ends the same
+   * press is then ignored, so it does not undo the selection.
+   */
+  private completeLongPress(): void {
+    const press = this.longPress;
+    if (!press) return;
+    this.cancelLongPress();
+    this.ignoreNextRowClick = true;
+    this.isSelectionMode = true;
+    this.selectedConversationIds.add(press.conversation.ID);
+    this.selectionAnchorId = press.conversation.ID;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Routes a row click. Ctrl/Cmd toggles one row and Shift extends from the
+   * anchor, either one starting selection mode. On touch, while selecting, a tap
+   * adds or removes the row. Any other click collapses the selection and opens
+   * the conversation.
    */
   handleConversationClick(conversation: MJConversationEntity, event?: MouseEvent): void {
+    if (this.ignoreNextRowClick) {
+      this.ignoreNextRowClick = false;
+      return;
+    }
+    if (this.isSelectionMode && this.lastRowPointerType === 'touch') {
+      this.toggleRowSelection(conversation.ID);
+      return;
+    }
+
     const isRangeClick = !!event?.shiftKey;
     const isToggleClick = !!event && (event.ctrlKey || event.metaKey);
 

@@ -95,14 +95,14 @@ describe('ConversationListComponent (DOM) — chrome toggles', () => {
     expect(query(f, '.list-header')).toBeNull();
   });
 
-  it('removes the header strip in selection mode when only the ⋯ menu would occupy it', () => {
-    // showSearch=false leaves the ⋯ menu as the strip's only occupant — and the
-    // menu hides during selection mode, so the strip must not render as an
-    // empty bordered band.
+  it('swaps the ⋯ menu for the selection bar in selection mode', () => {
+    // showSearch=false leaves the ⋯ menu as the strip's only occupant; while
+    // selecting, the strip holds the selection bar instead.
     const f = render({ showSearch: false }, (c) => {
       c.isSelectionMode = true;
     });
-    expect(query(f, '.list-header')).toBeNull();
+    expect(query(f, '.list-header .selection-bar')).not.toBeNull();
+    expect(query(f, '.list-header .btn-menu')).toBeNull();
   });
 
   it('flipping showSearch off clears an active search filter', () => {

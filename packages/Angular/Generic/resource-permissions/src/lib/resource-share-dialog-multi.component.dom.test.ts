@@ -218,3 +218,98 @@ describe('GenericShareDialogComponent (DOM) — several resources at once', () =
     expect((adapter.LoadShares as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(3);
   });
 });
+
+describe('GenericShareDialogComponent (DOM) — the owners are never offered', () => {
+  const OLIVE = user('owner', 'Olive Owner', 'olive@example.com');
+
+  const openWithOwnerListed = async (contexts: ResourceShareContext[]) => {
+    const { adapter } = makeAdapter();
+    const f = render({ Contexts: contexts, Adapter: adapter }, (c) => {
+      (c as unknown as { allUsers: MJUserEntity[] }).allUsers = [OLIVE, AMY, BOB];
+    });
+    await flush();
+    f.detectChanges();
+    return f;
+  };
+
+  it('leaves the owner out of "Add people" when sharing several resources', async () => {
+    const f = await openWithOwnerListed(CONTEXTS);
+    expect(f.componentInstance.AvailableUsers.map(u => u.ID)).toEqual(['u-amy', 'u-bob']);
+  });
+
+  it('leaves out every owner when the resources belong to different people', async () => {
+    const bobs = { ...context('r4', 'Fourth'), OwnerUserID: 'u-bob', OwnerDisplayName: 'Bob Brown' };
+    const f = await openWithOwnerListed([...CONTEXTS, bobs]);
+    expect(f.componentInstance.AvailableUsers.map(u => u.ID)).toEqual(['u-amy']);
+  });
+});
+
+describe('GenericShareDialogComponent (DOM) — a retry after a partly failed save', () => {
+  /** Adapter whose `failOn` row fails its first save or delete, then succeeds. */
+  function makeFlakyAdapter(
+    existing: Record<string, MJUserEntity[]>,
+    failOn: { resourceId: string; op: 'save' | 'delete' }
+  ) {
+    const calls: Array<{ resourceId: string; op: 'save' | 'delete'; ok: boolean }> = [];
+    let failed = false;
+    const attempt = (resourceId: string, op: 'save' | 'delete') => {
+      const ok = failed || resourceId !== failOn.resourceId || op !== failOn.op;
+      if (!ok) failed = true;
+      calls.push({ resourceId, op, ok });
+      return ok;
+    };
+    const makeRow = (resourceId: string, u: MJUserEntity, isNew: boolean): ResourceSharePermissionModel => ({
+      PermissionEntity: {
+        Save: vi.fn(async () => attempt(resourceId, 'save')),
+        Delete: vi.fn(async () => attempt(resourceId, 'delete')),
+        LatestResult: { CompleteMessage: 'refused' }
+      } as unknown as BaseEntity,
+      UserID: u.ID,
+      User: u,
+      Level: 'View',
+      IsNew: isNew,
+      MarkedForRemoval: false,
+      _InitialLevel: 'View'
+    });
+    const adapter: ResourceShareAdapter = {
+      LoadShares: vi.fn(async (ctx: ResourceShareContext) =>
+        (existing[ctx.ResourceID] ?? []).map(u => makeRow(ctx.ResourceID, u, false))),
+      CreateShare: vi.fn(async (ctx: ResourceShareContext, u: MJUserEntity) => makeRow(ctx.ResourceID, u, true)),
+      SyncLevelToEntity: vi.fn()
+    };
+    return { adapter, calls };
+  }
+
+  const succeeded = (calls: Array<{ resourceId: string; op: string; ok: boolean }>, op: string) =>
+    calls.filter(c => c.op === op && c.ok).map(c => c.resourceId).sort();
+
+  it('deletes only the rows still left, and finishes the removal', async () => {
+    const { adapter, calls } = makeFlakyAdapter({ r1: [AMY], r2: [AMY], r3: [AMY] }, { resourceId: 'r2', op: 'delete' });
+    const f = await open(CONTEXTS, adapter);
+    const result = vi.fn();
+    f.componentInstance.Result.subscribe(result);
+    (query(f, '.share-person:not(.share-owner) .share-remove-btn') as Element)
+      .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    await f.componentInstance.onSave();
+    expect(f.componentInstance.Error).toContain('Amy Adams');
+    await f.componentInstance.onSave();
+
+    expect(calls.filter(c => c.resourceId === 'r1' && c.op === 'delete')).toHaveLength(1);
+    expect(succeeded(calls, 'delete')).toEqual(['r1', 'r2', 'r3']);
+    expect(result).toHaveBeenCalledWith({ Action: 'save' });
+  });
+
+  it('saves the rows a failed add left unsaved', async () => {
+    const { adapter, calls } = makeFlakyAdapter({}, { resourceId: 'r2', op: 'save' });
+    const f = await open(CONTEXTS, adapter);
+    await f.componentInstance.addUserShare(BOB);
+
+    await f.componentInstance.onSave();
+    expect(f.componentInstance.Error).toContain('Bob Brown');
+    await f.componentInstance.onSave();
+
+    expect(succeeded(calls, 'save')).toEqual(['r1', 'r2', 'r3']);
+    expect(calls.filter(c => c.resourceId === 'r1' && c.op === 'save')).toHaveLength(1);
+  });
+});

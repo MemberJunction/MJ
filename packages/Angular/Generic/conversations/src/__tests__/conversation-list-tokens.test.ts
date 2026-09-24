@@ -82,11 +82,9 @@ describe('conversation-list inline styles — design tokens only', () => {
     expect(styles).toContain('--conv-list-hover-bg: var(--mj-chat-list-hover-bg, color-mix(in srgb, var(--conv-list-ink) 8%, transparent))');
     expect(styles).toContain('.conversation-item:hover { background: var(--conv-list-hover-bg);');
     // …and no rule may bypass the indirection by using the raw brand tokens for
-    // panel background/ink. Exactly ONE deliberate on-secondary use survives:
-    // the bulk-delete button's ink sits on the error-red button, not the panel
-    // (see the comment at that rule) — anything beyond that is a regression.
+    // panel background/ink.
     expect(bodyAfterHost).not.toContain('var(--mj-brand-secondary)');
-    expect(bodyAfterHost.match(/var\(--mj-brand-on-secondary\)/g) ?? []).toHaveLength(1);
+    expect(bodyAfterHost).not.toContain('var(--mj-brand-on-secondary)');
   });
 
   it('routes the panel action surfaces through the accent token, not raw brand-primary', () => {
@@ -95,7 +93,9 @@ describe('conversation-list inline styles — design tokens only', () => {
     expect(styles).toContain('.btn-new-conversation:hover { background: var(--conv-list-accent-hover); }');
     expect(styles).toContain('background: var(--conv-list-accent);'); // btn-new-conversation bg
     expect(styles).toContain('color: var(--conv-list-accent-ink);'); // btn-new-conversation label
-    expect(styles).toContain('box-shadow: inset 3px 0 0 var(--conv-list-accent);'); // selected-row bar
+    // A selected row is marked by its ticked checkbox and tint — no edge strip,
+    // which would crowd the checkbox on top-level rows.
+    expect(styles).not.toMatch(/\.conversation-item\.selected \{[^}]*box-shadow/);
     // brand-primary survives in the body ONLY inside the multi-hue message-drag
     // glow's color-mix gradients (deliberately kept) — never as a bare
     // `background:`/`border-color:` on an action element (those route through the

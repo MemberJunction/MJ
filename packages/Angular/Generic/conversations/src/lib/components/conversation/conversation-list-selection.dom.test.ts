@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import type { MJConversationEntity, MJProjectEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import { ConversationListComponent } from './conversation-list.component';
@@ -69,6 +70,7 @@ const stubEngine = (
   Conversations: conversations,
   Projects: projects,
   GetSharedByInfo: () => null,
+  CanShareConversation: ConversationEngine.prototype.CanShareConversation,
   GetConversation: (id: string) => conversations.find(c => c.ID === id),
   ...overrides
 });
@@ -374,7 +376,7 @@ describe('ConversationListComponent (DOM) — bulk move and pin', () => {
   });
 });
 
-describe('ConversationListComponent (DOM) — selection is shown on the row, not by a checkbox', () => {
+describe('ConversationListComponent (DOM) — selection is shown on the row', () => {
   beforeEach(() => {
     vi.spyOn(ConversationListComponent.prototype, 'ngOnInit').mockImplementation(() => {});
   });
@@ -387,12 +389,6 @@ describe('ConversationListComponent (DOM) — selection is shown on the row, not
     f.detectChanges();
     return f;
   };
-
-  it('renders no checkbox while in selection mode', () => {
-    const f = renderInSelectionMode((c) => c.selectedConversationIds.add('U1'));
-    expect(query(f, '.conversation-checkbox')).toBeNull();
-    expect(query(f, 'input[type="checkbox"]')).toBeNull();
-  });
 
   it('marks selected rows and leaves the rest unmarked', () => {
     const f = renderInSelectionMode((c) => c.selectedConversationIds.add('U1'));
@@ -713,6 +709,94 @@ describe('ConversationListComponent (DOM) — dropping onto a conversation adopt
     f.componentInstance.onConversationDragStart(byId('A1'), dragEvt());
     await f.componentInstance.onConversationRowDrop(byId('A2'), dragEvt()); // both already in Work
     expect(move).not.toHaveBeenCalled();
+  });
+});
+
+describe('ConversationListComponent (DOM) — the selection only holds rows on screen', () => {
+  beforeEach(() => {
+    vi.spyOn(ConversationListComponent.prototype, 'ngOnInit').mockImplementation(() => {});
+  });
+
+  const renderSelected = (ids: string[], setup?: (c: ConversationListComponent) => void) =>
+    render({}, (c) => {
+      setup?.(c);
+      c.toggleSelectionMode();
+      ids.forEach(id => c.selectedConversationIds.add(id));
+    });
+
+  it('Select All skips rows hidden in a collapsed folder or section', () => {
+    const f = render({}, (c) => {
+      c.toggleFolder('proj2'); // hides B1
+      c.pinnedExpanded = false; // hides P1
+    });
+    f.componentInstance.contextSelectAll();
+    expect(selected(f.componentInstance)).toEqual(['A1', 'A2', 'U1', 'U2']);
+  });
+
+  it('Select All selects only the rows a search leaves on screen', () => {
+    const f = render({}, (c) => {
+      c.searchQuery = 'Loose';
+    });
+    f.componentInstance.contextSelectAll();
+    expect(selected(f.componentInstance)).toEqual(['U1', 'U2']);
+  });
+
+  it('a search drops the selected rows it hides', () => {
+    const f = renderSelected(['A1', 'U1', 'U2']);
+    f.componentInstance.searchQuery = 'Loose';
+    expect(selected(f.componentInstance)).toEqual(['U1', 'U2']);
+  });
+
+  it('clearing the search does not bring dropped rows back', () => {
+    const f = renderSelected(['A1', 'U1']);
+    f.componentInstance.searchQuery = 'Loose';
+    f.componentInstance.searchQuery = '';
+    expect(selected(f.componentInstance)).toEqual(['U1']);
+  });
+
+  it('collapsing a folder drops the selected rows inside it, subfolders included', () => {
+    const f = renderSelected(['A1', 'B1', 'U1']);
+    f.componentInstance.toggleFolder('proj1');
+    expect(selected(f.componentInstance)).toEqual(['U1']);
+  });
+
+  it('collapsing a section drops the selected rows inside it', () => {
+    const f = renderSelected(['P1', 'U1']);
+    f.componentInstance.togglePinned();
+    expect(selected(f.componentInstance)).toEqual(['U1']);
+  });
+
+  it('switching to folder grouping drops selected rows that land in a collapsed folder', () => {
+    const f = renderSelected(['B1', 'U1'], (c) => {
+      c.toggleFolder('proj2');
+      c.groupBy = 'none';
+      (c as unknown as { rebuildGroups: () => void }).rebuildGroups();
+    });
+    f.componentInstance.toggleGroupBy();
+    expect(selected(f.componentInstance)).toEqual(['U1']);
+  });
+
+  it('leaves selection mode when a view change hides every selected row', () => {
+    const f = renderSelected(['A1']);
+    f.componentInstance.toggleFolder('proj1');
+    expect(f.componentInstance.isSelectionMode).toBe(false);
+  });
+
+  it('drops a selected conversation once it leaves the list', () => {
+    const f = renderSelected(['U1', 'U2']);
+    const engine = (f.componentInstance as unknown as { engine: { Conversations: MJConversationEntity[] } }).engine;
+    engine.Conversations = seeded.filter(c => c.ID !== 'U2');
+    (f.componentInstance as unknown as { onConversationListChanged: () => void }).onConversationListChanged();
+    expect(selected(f.componentInstance)).toEqual(['U1']);
+  });
+
+  it('keeps selected rows that a list update only moved out of sight', () => {
+    const f = renderSelected(['U1', 'U2'], (c) => c.toggleFolder('proj1'));
+    const engine = (f.componentInstance as unknown as { engine: { Conversations: MJConversationEntity[] } }).engine;
+    // A move into the collapsed Work folder must not undo the selection.
+    engine.Conversations = seeded.map(c => (c.ID === 'U1' || c.ID === 'U2') ? conv(c.ID, c.Name!, { ProjectID: 'proj1' }) : c);
+    (f.componentInstance as unknown as { onConversationListChanged: () => void }).onConversationListChanged();
+    expect(selected(f.componentInstance)).toEqual(['U1', 'U2']);
   });
 });
 
