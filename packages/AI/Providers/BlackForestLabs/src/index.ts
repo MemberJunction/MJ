@@ -68,8 +68,13 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     /**
      * Configure polling behavior for async task completion
      */
-    public setPollingConfig(config: Partial<BFLPollingConfig>): void {
+    public SetPollingConfig(config: Partial<BFLPollingConfig>): void {
         this._pollingConfig = { ...this._pollingConfig, ...config };
+    }
+
+    /** @deprecated Use {@link SetPollingConfig}. */
+    public setPollingConfig(config: Partial<BFLPollingConfig>): void {
+        return this.SetPollingConfig(config);
     }
 
     /**
@@ -351,6 +356,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
             });
 
             if (!response.ok) {
+                await response.body?.cancel().catch(() => { /* nothing to drain */ });
                 throw new Error(`BFL API error checking result: ${response.status}`);
             }
 
@@ -376,6 +382,7 @@ export class FLUXImageGenerator extends BaseImageGenerator {
         const response = await fetch(url);
 
         if (!response.ok) {
+            await response.body?.cancel().catch(() => { /* nothing to drain */ });
             throw new Error(`Failed to download image: ${response.status}`);
         }
 

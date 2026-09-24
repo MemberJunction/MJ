@@ -1,22 +1,23 @@
-import { Component, ChangeDetectorRef, ElementRef, OnInit } from '@angular/core';
-import { EventEntity, SubmissionEntity } from 'mj_generatedentities';
+import { Component, ChangeDetectorRef, ElementRef, OnInit, inject } from '@angular/core';
+import { EventsEventEntity, EventsSubmissionEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { SharedService } from '@memberjunction/ng-shared';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-event-form',
   templateUrl: './event-form.component.html',
   styleUrls: ['../shared/form-styles.css', './event-form.component.css']
 })
 @RegisterClass(BaseFormComponent, 'Events')
 export class EventFormComponent extends BaseFormComponent implements OnInit {
-  public record!: EventEntity;
+  private readonly router = inject(Router);
+  public record!: EventsEventEntity;
 
   // Submissions data
-  public submissions: SubmissionEntity[] = [];
+  public submissions: EventsSubmissionEntity[] = [];
   public loadingSubmissions = false;
 
   // Status options (from entity metadata)
@@ -34,15 +35,6 @@ export class EventFormComponent extends BaseFormComponent implements OnInit {
     metadata: false
   };
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    router: Router,
-    route: ActivatedRoute,
-    cdr: ChangeDetectorRef
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
 
   override async ngOnInit() {
     await super.ngOnInit();
@@ -58,7 +50,7 @@ export class EventFormComponent extends BaseFormComponent implements OnInit {
     try {
       const rv = new RunView();
       const md = new Metadata();
-      const result = await rv.RunView<SubmissionEntity>({
+      const result = await rv.RunView<EventsSubmissionEntity>({
         EntityName: 'Submissions',
         ExtraFilter: `EventID='${this.record.ID}'`,
         OrderBy: 'SubmittedAt DESC',
@@ -70,7 +62,7 @@ export class EventFormComponent extends BaseFormComponent implements OnInit {
       }
     } catch (error) {
       console.error('Error loading submissions:', error);
-      this.sharedService.CreateSimpleNotification('Error loading submissions', 'error', 3000);
+      this.Notification.emit({ Message: 'Error loading submissions', Type: 'error', Duration: 3000 });
     } finally {
       this.loadingSubmissions = false;
       this.cdr.detectChanges();
@@ -146,7 +138,7 @@ export class EventFormComponent extends BaseFormComponent implements OnInit {
 
   public openSubmissionRecord(submissionId: string): void {
     if (submissionId) {
-      this.sharedService.OpenEntityRecord('Submissions', CompositeKey.FromID(submissionId));
+      this.Navigate.emit({ Kind: 'record', EntityName: 'Submissions', PrimaryKey: CompositeKey.FromID(submissionId) });
     }
   }
 

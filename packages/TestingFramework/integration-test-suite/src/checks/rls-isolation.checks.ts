@@ -38,7 +38,8 @@
  * absent and the whole suite skips-as-pass (correct — the invariant is unexercised, not violated).
  */
 import { RunView, LocalCacheManager, EntityPermissionType } from '@memberjunction/core';
-import type { IMetadataProvider, RunViewParams, RowLevelSecurityFilterInfo } from '@memberjunction/core';
+import { RowLevelSecurityFilterInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -84,7 +85,7 @@ function skipIfUnusable(fx: RlsFixture | undefined, checkId: string): fx is RlsF
  * failed, every scoped query would carry a broken predicate. Needs only a `{{UserID}}`
  * filter + the run's context user; skips-as-pass when no such filter exists.
  */
-export async function CheckRls1_TokenSubstitution(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls1TokenSubstitution(ctx: IntegrationCheckContext): Promise<void> {
     const filter = ctx.RlsFixture?.TokenFilter;
     if (!filter) {
         console.warn('  ⚠ rls-isolation.RLS1 SKIPPED — no {{UserID}}-scoped RLS filter in metadata; token substitution not exercised.');
@@ -95,13 +96,18 @@ export async function CheckRls1_TokenSubstitution(ctx: IntegrationCheckContext):
     Assert(!markup.includes('{{UserID}}'), `token left unsubstituted: ${markup}`);
 }
 
+/** @deprecated Use {@link CheckRls1TokenSubstitution}. */
+export async function CheckRls1_TokenSubstitution(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls1TokenSubstitution(ctx);
+}
+
 /**
  * RLS2 — two users get DIFFERENT self-scoped predicate TEXT (deterministic, no DB read).
  * The SQL-level complement of the RLS3 fingerprint check: prove segregation at the predicate
  * itself (each marked-up filter embeds its own user's id, and the two texts differ). Needs a
  * `{{UserID}}` filter + two distinct users; skips-as-pass when either is unavailable.
  */
-export async function CheckRls2_DistinctPredicateText(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls2DistinctPredicateText(ctx: IntegrationCheckContext): Promise<void> {
     const fx = ctx.RlsFixture;
     const filter = fx?.TokenFilter;
     if (!filter) {
@@ -118,13 +124,18 @@ export async function CheckRls2_DistinctPredicateText(ctx: IntegrationCheckConte
     Assert(ma.includes(fx.UserA.ID) && mb.includes(fx.UserB.ID), 'each predicate is scoped to its own user');
 }
 
+/** @deprecated Use {@link CheckRls2DistinctPredicateText}. */
+export async function CheckRls2_DistinctPredicateText(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls2DistinctPredicateText(ctx);
+}
+
 /**
  * RLS3 — fingerprint divergence (the core cache proof; deterministic, no DB read).
  * Two users with different effective RLS clauses MUST produce different cache
  * fingerprints for the SAME params. Directly exercises the third arg of
  * GenerateRunViewFingerprint (the `rls:<hash>` segment).
  */
-export async function CheckRls3_FingerprintDiverges(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls3FingerprintDiverges(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.RlsFixture, 'rls-isolation.RLS3')) {
         return;
     }
@@ -146,6 +157,11 @@ export async function CheckRls3_FingerprintDiverges(ctx: IntegrationCheckContext
         `User B could be served User A's cached rows.`);
 }
 
+/** @deprecated Use {@link CheckRls3FingerprintDiverges}. */
+export async function CheckRls3_FingerprintDiverges(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls3FingerprintDiverges(ctx);
+}
+
 /**
  * RLS4 — server superset slot cannot cross-serve (live, mutation-free).
  * Warm the cache as User A, then read the SAME params as User B. User B's different RLS
@@ -153,7 +169,7 @@ export async function CheckRls3_FingerprintDiverges(ctx: IntegrationCheckContext
  * slot — and no A-scoped rows may leak into B's result. Counters are scoped to
  * 'RunViewCache' (the registry index lives in another category).
  */
-export async function CheckRls4_ServerSupersetNoCrossServe(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls4ServerSupersetNoCrossServe(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.RlsFixture, 'rls-isolation.RLS4')) {
         return;
     }
@@ -184,13 +200,18 @@ export async function CheckRls4_ServerSupersetNoCrossServe(ctx: IntegrationCheck
     }
 }
 
+/** @deprecated Use {@link CheckRls4ServerSupersetNoCrossServe}. */
+export async function CheckRls4_ServerSupersetNoCrossServe(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls4ServerSupersetNoCrossServe(ctx);
+}
+
 /**
  * RLS5 — live RunView as a non-exempt user returns ONLY rows satisfying its RLS predicate.
  * The end-to-end proof (not just the fingerprint / predicate text): run a real, cache-bypassing
  * RunView as a discovered non-exempt user and assert no row carries another user's UserID.
  * Needs the single-user LivePair; skips-as-pass when every available user is RLS-exempt (admins).
  */
-export async function CheckRls5_LiveRunViewScoping(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls5LiveRunViewScoping(ctx: IntegrationCheckContext): Promise<void> {
     const pair = ctx.RlsFixture?.LivePair;
     if (!pair) {
         console.warn('  ⚠ rls-isolation.RLS5 SKIPPED — all available users are RLS-exempt (admins); live scoping not observable here (RLS1/RLS3 prove the mechanism).');
@@ -209,6 +230,11 @@ export async function CheckRls5_LiveRunViewScoping(ctx: IntegrationCheckContext)
     }
 }
 
+/** @deprecated Use {@link CheckRls5LiveRunViewScoping}. */
+export async function CheckRls5_LiveRunViewScoping(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls5LiveRunViewScoping(ctx);
+}
+
 /**
  * RLS6 — the COMPLEMENT of RLS3, and always-runnable (no two-user discovery needed).
  * RLS3/RLS4 SKIP whenever the DB has no two users with distinct RLS clauses (the common
@@ -220,7 +246,7 @@ export async function CheckRls5_LiveRunViewScoping(ctx: IntegrationCheckContext)
  *   - a NON-EMPTY clause MUST alter it (the isolation half RLS3 proves for two users).
  * Exactly one branch runs per deployment, but the check always executes and always asserts.
  */
-export async function CheckRls6_EmptyClauseSharesSlot(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls6EmptyClauseSharesSlot(ctx: IntegrationCheckContext): Promise<void> {
     const entityName = 'MJ: User Settings';
     const entity = ctx.Provider.EntityByName(entityName);
     Assert(entity != null, `${entityName} must exist in provider metadata`);
@@ -240,6 +266,11 @@ export async function CheckRls6_EmptyClauseSharesSlot(ctx: IntegrationCheckConte
     }
 }
 
+/** @deprecated Use {@link CheckRls6EmptyClauseSharesSlot}. */
+export async function CheckRls6_EmptyClauseSharesSlot(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls6EmptyClauseSharesSlot(ctx);
+}
+
 /**
  * RLS8 — DETERMINISTIC divergence on the seeded scoped users (no discovery guesswork).
  * The two purpose-built users (it-rls-a / it-rls-b), each in ONLY the scoped role, MUST get
@@ -247,7 +278,7 @@ export async function CheckRls6_EmptyClauseSharesSlot(ctx: IntegrationCheckConte
  * fingerprints. This is RLS3's guarantee pinned to a known, version-controlled two-user scenario
  * so it runs on any DB the seed metadata was pushed to. Skips-as-pass when the seed is absent.
  */
-export async function CheckRls8_SeededScopedDivergence(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls8SeededScopedDivergence(ctx: IntegrationCheckContext): Promise<void> {
     const a = ctx.RlsFixture?.SeededScopedA;
     const b = ctx.RlsFixture?.SeededScopedB;
     if (!a || !b) {
@@ -274,13 +305,18 @@ export async function CheckRls8_SeededScopedDivergence(ctx: IntegrationCheckCont
     Assert(fpA !== fpB, `RLS LEAK RISK: seeded users A/B collide on one cache fingerprint (${fpA})`);
 }
 
+/** @deprecated Use {@link CheckRls8SeededScopedDivergence}. */
+export async function CheckRls8_SeededScopedDivergence(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls8SeededScopedDivergence(ctx);
+}
+
 /**
  * RLS9 — DETERMINISTIC live no-leak on a seeded scoped user.
  * A real cache-bypassing RunView on the seeded entity as user A returns ONLY rows whose UserID is A's
  * (0 rows is a valid pass — a fresh test user owns none — and still proves nothing else leaks through).
  * Skips-as-pass when the seed is absent.
  */
-export async function CheckRls9_SeededLiveNoLeak(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls9SeededLiveNoLeak(ctx: IntegrationCheckContext): Promise<void> {
     const a = ctx.RlsFixture?.SeededScopedA;
     if (!a) {
         console.warn(`  ⚠ rls-isolation.RLS9 SKIPPED — seeded scoped user ${SEEDED_SCOPED_A_EMAIL} not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
@@ -294,6 +330,11 @@ export async function CheckRls9_SeededLiveNoLeak(ctx: IntegrationCheckContext): 
     Assert(leaks.length === 0, `RLS LEAK on '${SEEDED_RLS_ENTITY}': ${leaks.length} row(s) with another user's UserID reached ${a.Email}`);
 }
 
+/** @deprecated Use {@link CheckRls9SeededLiveNoLeak}. */
+export async function CheckRls9_SeededLiveNoLeak(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls9SeededLiveNoLeak(ctx);
+}
+
 /**
  * RLS10 — DETERMINISTIC negative case: a user with NO read grant is served NO rows.
  * The seeded no-grant user (it-nogrant, no roles) has no permission on the seeded entity, so a live
@@ -301,7 +342,7 @@ export async function CheckRls9_SeededLiveNoLeak(ctx: IntegrationCheckContext): 
  * the deterministic replacement for the old incidental reliance on anonymous@magic-link.local.
  * Skips-as-pass when the seed is absent.
  */
-export async function CheckRls10_NoGrantUserDenied(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls10NoGrantUserDenied(ctx: IntegrationCheckContext): Promise<void> {
     const nogrant = ctx.RlsFixture?.SeededNoGrant;
     if (!nogrant) {
         console.warn(`  ⚠ rls-isolation.RLS10 SKIPPED — seeded no-grant user ${SEEDED_NOGRANT_EMAIL} not in the user cache; run \`${SEED_FIXTURES_COMMAND}\` to enable.`);
@@ -316,6 +357,11 @@ export async function CheckRls10_NoGrantUserDenied(ctx: IntegrationCheckContext)
     Assert(rows === 0, `RLS LEAK: no-grant user ${nogrant.Email} was served ${rows} row(s) of '${SEEDED_RLS_ENTITY}' (must be denied all)`);
 }
 
+/** @deprecated Use {@link CheckRls10NoGrantUserDenied}. */
+export async function CheckRls10_NoGrantUserDenied(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls10NoGrantUserDenied(ctx);
+}
+
 /**
  * RLS7 — client smart-cache validation cannot cross-serve (client transport, needs MJAPI).
  * On the client (GraphQLDataProvider, TrustLocalCacheCompletely = false ⇒ opt-in
@@ -325,7 +371,7 @@ export async function CheckRls10_NoGrantUserDenied(ctx: IntegrationCheckContext)
  * (the 'rls-isolation-client' bundle), like the client-cache suite — parked until MJAPI
  * is provisioned, exactly as IT03 is.
  */
-export async function CheckRls7_ClientSmartCacheNoCrossServe(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls7ClientSmartCacheNoCrossServe(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.RlsFixture, 'rls-isolation-client.RLS7')) {
         return;
     }
@@ -379,52 +425,122 @@ export async function CheckRls7_ClientSmartCacheNoCrossServe(ctx: IntegrationChe
     Assert(bRes.Success, `User B client RunView failed: ${bRes.ErrorMessage}`);
 }
 
+/** @deprecated Use {@link CheckRls7ClientSmartCacheNoCrossServe}. */
+export async function CheckRls7_ClientSmartCacheNoCrossServe(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls7ClientSmartCacheNoCrossServe(ctx);
+}
+
 /** The 'rls-isolation' bundle (server transport): RLS1–RLS6 (discovery) + RLS8–RLS10 (seeded, deterministic). */
+
+/**
+ * RLS11 — a `$` in a substituted user property must not rewrite the predicate (#3171).
+ *
+ * `MarkupFilterText` substitutes user properties into an RLS predicate, and the result is
+ * AND-ed into every RunView read and every Create/Update check by
+ * `GetEffectiveRowFilterWhereClause`. It used to do that with a STRING replacement, so
+ * `$$`, `$&`, `` $` `` and `$'` in a user property were expanded by
+ * `String.prototype.replace` instead of inserted — rewriting the predicate, which is the
+ * exact outcome the `'`-escaping on the same line exists to prevent.
+ *
+ * Unit tests already prove the substituted STRING is byte-exact. They cannot prove the
+ * result is SQL the server accepts and scopes correctly, which is the half that matters
+ * once the predicate reaches a database. This check closes that: it marks up a
+ * `{{UserName}}`-scoped filter with each hostile value, asserts byte-exactness, and then
+ * EXECUTES the predicate so a malformed one fails loudly rather than silently widening a
+ * result set.
+ *
+ * The principal is a CLONE with the hostile name stamped in memory — the same carrier the
+ * KF checks use — so nothing is written and teardown stays a no-op.
+ */
+export async function CheckRls11DollarInUserProperty(ctx: IntegrationCheckContext): Promise<void> {
+    // `$` before an ordinary character is NOT special; it must survive too.
+    const HOSTILE = ['a$$b', 'a$&b', 'a$`b', "a$'b", 'a$1b', 'a$b', "x$&$`$'$$y"];
+    // Core entities carry the `MJ: ` prefix as of v5.0; the bare name is kept as a
+    // fallback rather than a guess. This ASSERTS instead of skipping: a database with
+    // no Users entity is broken, not a database where the fixture happens to be
+    // unavailable — and a check that skips for a mistyped name is the very failure
+    // mode RLS1/RLS2 sat in.
+    const usersEntity = ctx.Provider.EntityByName('MJ: Users') ?? ctx.Provider.EntityByName('Users');
+    Assert(usersEntity != null, 'RLS11: neither "MJ: Users" nor "Users" resolves in provider metadata');
+    const entityName = usersEntity!.Name;
+
+    for (const value of HOSTILE) {
+        const filter = new RowLevelSecurityFilterInfo({ FilterText: "Name = '{{UserName}}'" });
+        const principal = Object.assign(Object.create(Object.getPrototypeOf(ctx.User)), ctx.User, { Name: value });
+
+        const markup = filter.MarkupFilterText(principal);
+        // The contract is verbatim AFTER SQL quote-escaping: `'`-doubling is deliberate
+        // and must survive; only the `$` expansion was ever the defect.
+        const expected = `Name = '${value.replace(/'/g, "''")}'`;
+        AssertEqual(markup, expected, `RLS predicate corrupted for user name ${JSON.stringify(value)}`);
+
+        // And it has to be SQL. A rewritten predicate can still parse, so assert the
+        // scoping too: no real user carries these names, so the answer must be zero rows.
+        const probe = await new RunView().RunView<Record<string, unknown>>(
+            { EntityName: entityName, ExtraFilter: markup, ResultType: 'simple', MaxRows: 5, BypassCache: true },
+            ctx.User,
+        );
+        Assert(probe.Success, `RLS predicate for ${JSON.stringify(value)} was not valid SQL: ${probe.ErrorMessage}`);
+        AssertEqual(probe.Results.length, 0,
+            `RLS predicate for ${JSON.stringify(value)} matched ${probe.Results.length} row(s) — it does not mean what it says`);
+    }
+}
+
+/** @deprecated Use {@link CheckRls11DollarInUserProperty}. */
+export async function CheckRls11_DollarInUserProperty(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckRls11DollarInUserProperty(ctx);
+}
+
 export const RlsIsolationChecks: NamedCheck[] = [
     {
         Id: 'rls-isolation.RLS1',
         Name: 'RLS1: the marked-up predicate embeds the user\'s own UserID (token substitution)',
-        Fn: CheckRls1_TokenSubstitution
+        Fn: CheckRls1TokenSubstitution
     },
     {
         Id: 'rls-isolation.RLS2',
         Name: 'RLS2: two different users get DIFFERENT self-scoped predicate text (SQL-level segregation)',
-        Fn: CheckRls2_DistinctPredicateText
+        Fn: CheckRls2DistinctPredicateText
     },
     {
         Id: 'rls-isolation.RLS3',
         Name: 'RLS3: two distinct RLS clauses yield distinct cache fingerprints (no cross-user collision)',
-        Fn: CheckRls3_FingerprintDiverges
+        Fn: CheckRls3FingerprintDiverges
     },
     {
         Id: 'rls-isolation.RLS4',
         Name: 'RLS4: server superset slot does not cross-serve — User B is a separate cold slot, no A-scoped rows leak',
-        Fn: CheckRls4_ServerSupersetNoCrossServe
+        Fn: CheckRls4ServerSupersetNoCrossServe
     },
     {
         Id: 'rls-isolation.RLS5',
         Name: 'RLS5: a live RunView as a non-exempt user returns ONLY rows satisfying its RLS predicate',
-        Fn: CheckRls5_LiveRunViewScoping
+        Fn: CheckRls5LiveRunViewScoping
+    },
+    {
+        Id: 'rls-isolation.RLS11',
+        Name: 'RLS11: a $ in a substituted user property does not rewrite the predicate (#3171)',
+        Fn: CheckRls11DollarInUserProperty
     },
     {
         Id: 'rls-isolation.RLS6',
         Name: 'RLS6: empty RLS clause shares the slot / non-empty diverges (always-runnable fingerprint invariant)',
-        Fn: CheckRls6_EmptyClauseSharesSlot
+        Fn: CheckRls6EmptyClauseSharesSlot
     },
     {
         Id: 'rls-isolation.RLS8',
         Name: 'RLS8: two SEEDED scoped users get distinct non-empty clauses + distinct fingerprints (deterministic)',
-        Fn: CheckRls8_SeededScopedDivergence
+        Fn: CheckRls8SeededScopedDivergence
     },
     {
         Id: 'rls-isolation.RLS9',
         Name: 'RLS9: a live RunView as a SEEDED scoped user returns ONLY its own rows (deterministic no-leak)',
-        Fn: CheckRls9_SeededLiveNoLeak
+        Fn: CheckRls9SeededLiveNoLeak
     },
     {
         Id: 'rls-isolation.RLS10',
         Name: 'RLS10: a SEEDED no-grant user is served ZERO rows (deterministic negative — no unauthorized set)',
-        Fn: CheckRls10_NoGrantUserDenied
+        Fn: CheckRls10NoGrantUserDenied
     }
 ];
 
@@ -433,7 +549,7 @@ export const RlsIsolationClientChecks: NamedCheck[] = [
     {
         Id: 'rls-isolation-client.RLS7',
         Name: 'RLS7: client smart-cache validation does not cross-serve User A\'s slot to User B',
-        Fn: CheckRls7_ClientSmartCacheNoCrossServe
+        Fn: CheckRls7ClientSmartCacheNoCrossServe
     }
 ];
 

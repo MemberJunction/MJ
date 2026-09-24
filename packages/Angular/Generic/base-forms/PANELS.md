@@ -5,15 +5,23 @@ panels to a form via the slot system. -->
 
 # BaseFormPanel: dynamic slot-based form extensions
 
-Related grids are **not** all parked in More. The container ranks
-`DisplayInForm` relationships (`Entity.Configuration.UI.Form.RelatedRolePolicy`,
-default `'smart'`) and only folds the overflow into one More group. Explicit
-`EntityRelationship.Configuration.UI.FormRole` always wins. In **left-nav**
-the rail is Details (all field panels) + each Primary related + More; the
-body shows only the selected group, locked open. See
-[FORMS_ARCHITECTURE_GUIDE.md §7d](../../../guides/FORMS_ARCHITECTURE_GUIDE.md)
-and [`plans/form-chrome-policy.md`](../../../plans/form-chrome-policy.md).
- Optional `BaseFormPolicy` is the last-wins chrome override.
+Related grids appear on the parent form through the chrome stack in
+[FORMS_ARCHITECTURE_GUIDE.md §7d](../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more):
+L1 `inclusion` (`Primary` / `More` / `None`), L2 ranker on Auto leftovers,
+L3 `MJ: Form Chrome Rules`, L4 user order. `None` is not a More item.
+In **left-nav** the rail is Primary contributions (lead band, e.g. Overview)
++ Details (leftover field panels) + each Primary related + More; the body
+shows only the selected group, locked open. `inclusion: 'Primary'` on a
+contribution is its own rail item — it does **not** fold into Details.
+A persisted user section order can override that; the generated
+`form.sections` list is not a custom order and does not.
+First-class related items (and non-lead contributions) sort by
+`UI.sortKey` / registration `sortKey` descending, then explicit
+Primary, then ranker score. The left/right rail width is user-resizable
+and persisted per entity (`mj.formChrome.<entity>.railWidth`); collapsed
+is always the 36px spine.
+`BaseFormPolicy.DecorateChrome` is cosmetics only — it cannot change
+membership.
 
 Add panels to entity edit forms WITHOUT replacing the generated form. Panels
 self-register against well-known slots and `<mj-form-panel-slot>` mounts them
@@ -56,7 +64,11 @@ Every `<mj-form-panel-slot>` host:
 - Queries `MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(BaseFormPanel, ...)` to find panels for its `(entity, slot)` pair.
 - Sorts results by `metadata.sortKey` desc, then `Priority` desc, then registration order.
 - Mounts each registered panel via `ViewContainerRef.createComponent`, wiring `[Record]` / `[FormComponent]` / `[FormContext]`.
+- Sets the slot host (and `BaseFormPanel` itself) to `display: contents` so left-nav leftover height reaches the related grid, not a wrapper.
 - Coordinates with siblings via the per-container `FormSlotCoordinator` to handle fallbacks (see below).
+
+Related grids call `FormComponent.NewRecordValues(relatedEntity, joinField)`
+so **New** prefills every join field that filters the grid.
 
 ## Available slots
 
@@ -205,6 +217,29 @@ public get IsWebsiteSourceType(): boolean {
 ```
 
 The panel still mounts and pays the registration cost, but renders nothing — cheap. Conditional registration ("only register if record.SomeField === X") doesn't work because the slot host queries by entity name, not by per-record state.
+
+## Section indicators (unsaved dot + invalid count) on your panel
+
+Wrap your content in `<mj-collapsible-panel>` and the section gets the same marks a
+generated section gets — an amber dot when one of its `mj-form-field`s is edited, a red
+count when one is invalid or required-and-empty — on the accordion header and on the
+left-nav rail item, with no code. The panel derives them from its projected fields
+and registers itself with the container's `FormSectionIndicatorCoordinator`.
+
+Content that is not `mj-form-field` (a grid editor, a designer) reports through the
+`[Indicators]` input; counts are added to the derived ones:
+
+```html
+<mj-collapsible-panel SectionKey="lineItems" SectionName="Line Items" [Form]="FormComponent" [FormContext]="FormContext"
+    [Indicators]="{ DirtyCount: EditedRows, ErrorCount: InvalidRows }">
+```
+
+Failed-save errors whose `Source` is a graph path (`Lines[2].Amount`) route to the panel
+whose `SectionKey` matches the leading segment; declare `ValidationSources="Lines"` when
+the names differ. A hero that is not a collapsible panel is not a rail item and needs
+nothing; a custom rail section that is not a collapsible panel can implement
+`FormSectionIndicatorSource` and register with the coordinator directly. See
+[Forms Architecture §7d — Section indicators](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more).
 
 ## Reusing panels outside the slot system (composition)
 

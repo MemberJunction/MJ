@@ -4,38 +4,43 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Per-action tests for the TikTok provider.
  *
  * Boundary mocking: BaseOAuthAction is mocked (OAuth succeeds, a test access
- * token is always available) and axios is mocked so
- * `axiosInstance.request(config)` captures the exact endpoint/method/payload
+ * token is always available) and the HTTP layer is mocked so
+ * `httpClient.request(config)` captures the exact endpoint/method/payload
  * each action sends via `makeTikTokRequest`.
  */
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => {
@@ -108,7 +113,7 @@ import { SearchVideosAction } from '../providers/tiktok/actions/search-videos.ac
 const contextUser = { ID: 'user-1', Name: 'Test User', Email: 'test@example.com' } as unknown as UserInfo;
 
 type RunnableAction = { InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> };
-type RequestConfig = { url: string; method: string; data?: unknown; params?: Record<string, unknown> };
+type RequestConfig = { Url: string; Method: string; Body?: unknown; Query?: Record<string, unknown> };
 
 function inputs(values: Record<string, unknown>, outputs: string[] = []): ActionParam[] {
   const params = Object.entries(values).map(
@@ -130,19 +135,19 @@ function outParam(result: ActionResultSimple, name: string): unknown {
 }
 
 function mockRequests(routes: Array<{ method?: string; url: string; response: unknown }>): void {
-  http.instance.request.mockImplementation((config: RequestConfig) => {
+  http.instance.Request.mockImplementation((config: RequestConfig) => {
     for (const route of routes) {
-      const methodMatches = !route.method || route.method.toUpperCase() === String(config.method).toUpperCase();
-      if (methodMatches && config.url === route.url) {
-        return Promise.resolve({ data: route.response, headers: {} });
+      const methodMatches = !route.method || route.method.toUpperCase() === String(config.Method).toUpperCase();
+      if (methodMatches && config.Url === route.url) {
+        return Promise.resolve({ Data: route.response, Headers: {}, Status: 200 });
       }
     }
-    return Promise.reject(new Error(`Unmocked request ${config.method} ${config.url}`));
+    return Promise.reject(new Error(`Unmocked request ${config.Method} ${config.Url}`));
   });
 }
 
 function requestCalls(): RequestConfig[] {
-  return http.instance.request.mock.calls.map((call) => call[0] as RequestConfig);
+  return http.instance.Request.mock.calls.map((call) => call[0] as RequestConfig);
 }
 
 const sampleVideo = {
@@ -160,7 +165,7 @@ const sampleVideo = {
 };
 
 beforeEach(() => {
-  http.instance.request.mockReset();
+  http.instance.Request.mockReset();
 });
 
 // ─── CreateVideoPostAction ──────────────────────────────────────────────────
@@ -197,7 +202,7 @@ describe('TikTok CreateVideoPostAction', () => {
     expect(result.Message).toContain('special API approval');
     const alternatives = outParam(result, 'Alternatives') as { manualProcess: string[] };
     expect(alternatives.manualProcess.length).toBeGreaterThan(0);
-    expect(http.instance.request).not.toHaveBeenCalled();
+    expect(http.instance.Request).not.toHaveBeenCalled();
   });
 
   it('should POST /v2/video/upload/ when upload approval is granted', async () => {
@@ -225,8 +230,8 @@ describe('TikTok CreateVideoPostAction', () => {
     );
 
     const call = requestCalls()[0];
-    expect(call.url).toBe('/v2/video/upload/');
-    expect(call.data).toEqual(
+    expect(call.Url).toBe('/v2/video/upload/');
+    expect(call.Body).toEqual(
       expect.objectContaining({
         video_url: 'https://example.com/v.mp4',
         title: 'T',
@@ -309,8 +314,8 @@ describe('TikTok GetCommentsAction', () => {
     );
 
     const call = requestCalls()[0];
-    expect(call.url).toBe('/v2/video/comment/list/');
-    expect(call.params).toEqual({ video_id: 'vid-1', max_count: 100, sort_by: 'time' });
+    expect(call.Url).toBe('/v2/video/comment/list/');
+    expect(call.Query).toEqual({ video_id: 'vid-1', max_count: 100, sort_by: 'time' });
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     const comments = outParam(result, 'Comments') as Array<{ id: string; text: string; likes: number }>;
@@ -359,8 +364,8 @@ describe('TikTok GetUserVideosAction', () => {
     );
 
     const call = requestCalls()[0];
-    expect(call.url).toBe('/v2/video/list/');
-    expect(call.params).toEqual(
+    expect(call.Url).toBe('/v2/video/list/');
+    expect(call.Query).toEqual(
       expect.objectContaining({ max_count: 100 }), // capped at TikTok limit
     );
     expect(result.Success).toBe(true);
@@ -423,8 +428,8 @@ describe('TikTok GetVideoAnalyticsAction', () => {
     );
 
     const call = requestCalls()[0];
-    expect(call.url).toBe('/v2/video/data/');
-    expect(call.data).toEqual({ video_id: 'vid-1', fields: 'views,likes,comments,shares' });
+    expect(call.Url).toBe('/v2/video/data/');
+    expect(call.Body).toEqual({ video_id: 'vid-1', fields: 'views,likes,comments,shares' });
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Successfully retrieved analytics for 1 videos');
@@ -458,7 +463,7 @@ describe('TikTok SearchVideosAction', () => {
 
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', Query: 'Fun' }, ['Videos', 'Summary']));
 
-    expect(requestCalls()[0].url).toBe('/v2/video/list/');
+    expect(requestCalls()[0].Url).toBe('/v2/video/list/');
     expect(result.Success).toBe(true);
   });
 });

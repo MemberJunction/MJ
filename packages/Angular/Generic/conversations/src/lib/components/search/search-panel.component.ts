@@ -34,41 +34,130 @@ import {
   styleUrls: ['./search-panel.component.css']
 })
 export class SearchPanelComponent implements OnInit, OnDestroy {
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
+  @Input() EnvironmentId!: string;
 
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
   /** Term to open with, e.g. handed over from a narrower filter the user had already typed. */
-  @Input() initialQuery: string = '';
+  @Input() InitialQuery: string = '';
+
+  /** @deprecated Use {@link InitialQuery}. */
+  @Input() set initialQuery(value: string) {
+    this.InitialQuery = value;
+  }
+  /** @deprecated Use {@link InitialQuery}. */
+  get initialQuery(): string {
+    return this.InitialQuery;
+  }
 
   private _isOpen: boolean = false;
 
   /**
    * A setter rather than ngOnChanges so only an actual open transition acts — ngOnChanges
-   * fires for every input, so a currentUser or environmentId re-emit while the panel was
+   * fires for every input, so a CurrentUser or EnvironmentId re-emit while the panel was
    * open yanked focus back out of whatever field the user was in.
    */
   @Input()
-  set isOpen(value: boolean) {
+  set IsOpen(value: boolean) {
     const wasOpen = this._isOpen;
     this._isOpen = value;
     if (value && !wasOpen) {
       this.onOpened();
     }
   }
-  get isOpen(): boolean {
+  get IsOpen(): boolean {
     return this._isOpen;
   }
 
+  /** @deprecated Use {@link IsOpen}. */
+  @Input() set isOpen(value: boolean) {
+    this.IsOpen = value;
+  }
+  /** @deprecated Use {@link IsOpen}. */
+  get isOpen(): boolean {
+    return this.IsOpen;
+  }
+
   @Output() close = new EventEmitter<void>();
-  @Output() resultSelected = new EventEmitter<SearchResult>();
+  @Output() ResultSelected = new EventEmitter<SearchResult>();
 
-  @ViewChild('searchInput') searchInput?: ElementRef<HTMLInputElement>;
+  /**
+   * @deprecated Use {@link ResultSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (resultSelected) keeps working. Must stay AFTER ResultSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() resultSelected = this.ResultSelected;
 
-  public searchQuery: string = '';
-  public activeFilter: SearchFilter = 'all';
-  public dateRange: DateRange = { start: null, end: null };
-  public isSearching: boolean = false;
-  public results: GroupedSearchResults = {
+  @ViewChild('searchInput') SearchInput?: ElementRef<HTMLInputElement>;
+
+  /** @deprecated Use {@link SearchInput}. */
+  get searchInput(): ElementRef<HTMLInputElement> | undefined {
+    return this.SearchInput;
+  }
+  /** @deprecated Use {@link SearchInput}. */
+  set searchInput(value: ElementRef<HTMLInputElement> | undefined) {
+    this.SearchInput = value;
+  }
+
+  public SearchQuery: string = '';
+
+  /** @deprecated Use {@link SearchQuery}. */
+  public get searchQuery(): string {
+    return this.SearchQuery;
+  }
+  /** @deprecated Use {@link SearchQuery}. */
+  public set searchQuery(value: string) {
+    this.SearchQuery = value;
+  }
+  public ActiveFilter: SearchFilter = 'all';
+
+  /** @deprecated Use {@link ActiveFilter}. */
+  public get activeFilter(): SearchFilter {
+    return this.ActiveFilter;
+  }
+  /** @deprecated Use {@link ActiveFilter}. */
+  public set activeFilter(value: SearchFilter) {
+    this.ActiveFilter = value;
+  }
+  public DateRange: DateRange = { start: null, end: null };
+
+  /** @deprecated Use {@link DateRange}. */
+  public get dateRange(): DateRange {
+    return this.DateRange;
+  }
+  /** @deprecated Use {@link DateRange}. */
+  public set dateRange(value: DateRange) {
+    this.DateRange = value;
+  }
+  public IsSearching: boolean = false;
+
+  /** @deprecated Use {@link IsSearching}. */
+  public get isSearching(): boolean {
+    return this.IsSearching;
+  }
+  /** @deprecated Use {@link IsSearching}. */
+  public set isSearching(value: boolean) {
+    this.IsSearching = value;
+  }
+  public Results: GroupedSearchResults = {
     conversations: [],
     messages: [],
     artifacts: [],
@@ -76,19 +165,46 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     tasks: [],
     total: 0
   };
-  public recentSearches: string[] = [];
-  public selectedIndex: number = -1;
+
+  /** @deprecated Use {@link Results}. */
+  public get results(): GroupedSearchResults {
+    return this.Results;
+  }
+  /** @deprecated Use {@link Results}. */
+  public set results(value: GroupedSearchResults) {
+    this.Results = value;
+  }
+  public RecentSearches: string[] = [];
+
+  /** @deprecated Use {@link RecentSearches}. */
+  public get recentSearches(): string[] {
+    return this.RecentSearches;
+  }
+  /** @deprecated Use {@link RecentSearches}. */
+  public set recentSearches(value: string[]) {
+    this.RecentSearches = value;
+  }
+  public SelectedIndex: number = -1;
+
+  /** @deprecated Use {@link SelectedIndex}. */
+  public get selectedIndex(): number {
+    return this.SelectedIndex;
+  }
+  /** @deprecated Use {@link SelectedIndex}. */
+  public set selectedIndex(value: number) {
+    this.SelectedIndex = value;
+  }
 
   /**
-   * Flat view of `results`, rebuilt only on each results emission. The template binds
-   * isResultSelected() once per row, so deriving this on demand allocated a fresh array of
+   * Flat view of `Results`, rebuilt only on each results emission. The template binds
+   * IsResultSelected() once per row, so deriving this on demand allocated a fresh array of
    * every result for every row on every change-detection pass.
    */
   private flatResults: SearchResult[] = [];
 
   /** Message for the "no results" empty state, echoing the search term. */
   public get NoResultsMessage(): string {
-    return `No results found for "${this.searchQuery}"`;
+    return `No results found for "${this.SearchQuery}"`;
   }
 
   private destroy$ = new Subject<void>();
@@ -142,7 +258,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(isSearching => {
         this.applyState(() => {
-          this.isSearching = isSearching;
+          this.IsSearching = isSearching;
         });
       });
 
@@ -150,7 +266,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(results => {
         this.applyState(() => {
-          this.results = results;
+          this.Results = results;
           this.flatResults = [
             ...results.conversations,
             ...results.messages,
@@ -158,7 +274,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
             ...results.collections,
             ...results.tasks
           ];
-          this.selectedIndex = -1;
+          this.SelectedIndex = -1;
         });
       });
 
@@ -166,7 +282,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(filter => {
         this.applyState(() => {
-          this.activeFilter = filter;
+          this.ActiveFilter = filter;
         });
       });
 
@@ -174,7 +290,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(range => {
         this.applyState(() => {
-          this.dateRange = range;
+          this.DateRange = range;
         });
       });
   }
@@ -183,18 +299,23 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    * Load recent searches
    */
   private loadRecentSearches(): void {
-    this.recentSearches = this.searchService.getRecentSearches();
+    this.RecentSearches = this.searchService.getRecentSearches();
   }
 
   /**
    * Handle search input
    */
-  public onSearchInput(): void {
-    if (this.searchQuery.trim()) {
+  public OnSearchInput(): void {
+    if (this.SearchQuery.trim()) {
       this.performSearch();
     } else {
       this.searchService.clearResults();
     }
+  }
+
+  /** @deprecated Use {@link OnSearchInput}. */
+  public onSearchInput(): void {
+    return this.OnSearchInput();
   }
 
   /**
@@ -202,78 +323,108 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    */
   private async performSearch(): Promise<void> {
     await this.searchService.search(
-      this.searchQuery,
-      this.environmentId,
-      this.currentUser
+      this.SearchQuery,
+      this.EnvironmentId,
+      this.CurrentUser
     );
   }
 
   /**
    * Set search filter
    */
-  public setFilter(filter: SearchFilter): void {
+  public SetFilter(filter: SearchFilter): void {
     this.searchService.setSearchFilter(filter);
-    if (this.searchQuery.trim()) {
+    if (this.SearchQuery.trim()) {
       this.performSearch();
     }
+  }
+
+  /** @deprecated Use {@link SetFilter}. */
+  public setFilter(filter: SearchFilter): void {
+    return this.SetFilter(filter);
   }
 
   /**
    * Clear search
    */
-  public clearSearch(): void {
-    this.searchQuery = '';
+  public ClearSearch(): void {
+    this.SearchQuery = '';
     this.searchService.clearResults();
     this.focusSearchInput();
+  }
+
+  /** @deprecated Use {@link ClearSearch}. */
+  public clearSearch(): void {
+    return this.ClearSearch();
   }
 
   /**
    * Select a result
    */
+  public SelectResult(result: SearchResult): void {
+    this.ResultSelected.emit(result);
+    this.ClosePanel();
+  }
+
+  /** @deprecated Use {@link SelectResult}. */
   public selectResult(result: SearchResult): void {
-    this.resultSelected.emit(result);
-    this.closePanel();
+    return this.SelectResult(result);
   }
 
   /**
    * Use recent search
    */
-  public useRecentSearch(query: string): void {
-    this.searchQuery = query;
+  public UseRecentSearch(query: string): void {
+    this.SearchQuery = query;
     this.performSearch();
+  }
+
+  /** @deprecated Use {@link UseRecentSearch}. */
+  public useRecentSearch(query: string): void {
+    return this.UseRecentSearch(query);
   }
 
   /**
    * Clear recent searches
    */
-  public clearRecentSearches(): void {
+  public ClearRecentSearches(): void {
     this.searchService.clearRecentSearches();
-    this.recentSearches = [];
+    this.RecentSearches = [];
+  }
+
+  /** @deprecated Use {@link ClearRecentSearches}. */
+  public clearRecentSearches(): void {
+    return this.ClearRecentSearches();
   }
 
   /**
    * Close panel
    */
-  public closePanel(): void {
+  public ClosePanel(): void {
     this.close.emit();
+  }
+
+  /** @deprecated Use {@link ClosePanel}. */
+  public closePanel(): void {
+    return this.ClosePanel();
   }
 
   /**
    * Seed and focus the box once the panel is open.
    *
-   * Deferred to the next task so the @if(isOpen) view exists (there is no input to focus
+   * Deferred to the next task so the @if(IsOpen) view exists (there is no input to focus
    * before it renders) and so every input bound in the same pass has been set — this reads
-   * initialQuery, which the host may bind after isOpen.
+   * InitialQuery, which the host may bind after IsOpen.
    */
   private onOpened(): void {
     setTimeout(() => {
-      const seed = this.initialQuery?.trim();
-      if (seed && seed !== this.searchQuery) {
-        this.searchQuery = seed;
-        this.onSearchInput();
+      const seed = this.InitialQuery?.trim();
+      if (seed && seed !== this.SearchQuery) {
+        this.SearchQuery = seed;
+        this.OnSearchInput();
         this.cdr.detectChanges();
       }
-      this.searchInput?.nativeElement.focus();
+      this.SearchInput?.nativeElement.focus();
     }, 0);
   }
 
@@ -282,7 +433,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    */
   private focusSearchInput(): void {
     setTimeout(() => {
-      this.searchInput?.nativeElement.focus();
+      this.SearchInput?.nativeElement.focus();
     }, 0);
   }
 
@@ -291,36 +442,36 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    */
   @HostListener('keydown', ['$event'])
   public handleKeyboard(event: KeyboardEvent): void {
-    if (!this.isOpen) return;
+    if (!this.IsOpen) return;
 
     const allResults = this.flatResults;
 
     switch (event.key) {
       case 'Escape':
         event.preventDefault();
-        this.closePanel();
+        this.ClosePanel();
         break;
 
       case 'ArrowDown':
         event.preventDefault();
         if (allResults.length > 0) {
-          this.selectedIndex = Math.min(this.selectedIndex + 1, allResults.length - 1);
+          this.SelectedIndex = Math.min(this.SelectedIndex + 1, allResults.length - 1);
         }
         break;
 
       case 'ArrowUp':
         event.preventDefault();
-        if (this.selectedIndex > 0) {
-          this.selectedIndex--;
+        if (this.SelectedIndex > 0) {
+          this.SelectedIndex--;
         } else {
-          this.selectedIndex = -1;
+          this.SelectedIndex = -1;
         }
         break;
 
       case 'Enter':
         event.preventDefault();
-        if (this.selectedIndex >= 0 && allResults[this.selectedIndex]) {
-          this.selectResult(allResults[this.selectedIndex]);
+        if (this.SelectedIndex >= 0 && allResults[this.SelectedIndex]) {
+          this.SelectResult(allResults[this.SelectedIndex]);
         }
         break;
     }
@@ -329,15 +480,20 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
   /**
    * Check if result is selected
    */
-  public isResultSelected(result: SearchResult): boolean {
-    const selected = this.flatResults[this.selectedIndex];
+  public IsResultSelected(result: SearchResult): boolean {
+    const selected = this.flatResults[this.SelectedIndex];
     return !!selected && selected.id === result.id && selected.type === result.type;
+  }
+
+  /** @deprecated Use {@link IsResultSelected}. */
+  public isResultSelected(result: SearchResult): boolean {
+    return this.IsResultSelected(result);
   }
 
   /**
    * Get icon for result type
    */
-  public getResultIcon(type: string): string {
+  public GetResultIcon(type: string): string {
     switch (type) {
       case 'conversation':
         return 'fa-comments';
@@ -354,10 +510,15 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** @deprecated Use {@link GetResultIcon}. */
+  public getResultIcon(type: string): string {
+    return this.GetResultIcon(type);
+  }
+
   /**
    * Get filter display text
    */
-  public getFilterText(filter: SearchFilter): string {
+  public GetFilterText(filter: SearchFilter): string {
     switch (filter) {
       case 'all':
         return 'All';
@@ -374,6 +535,11 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
       default:
         return 'All';
     }
+  }
+
+  /** @deprecated Use {@link GetFilterText}. */
+  public getFilterText(filter: SearchFilter): string {
+    return this.GetFilterText(filter);
   }
 
   /**
@@ -393,29 +559,43 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
   }
 
   /** Highlight matched text in result. Output is bound to `[innerHTML]` in the template. */
-  public highlightMatch(text: string, query: string): string {
+  public HighlightMatch(text: string, query: string): string {
     return HighlightSearchMatches(text, query);
+  }
+
+  /** @deprecated Use {@link HighlightMatch}. */
+  public highlightMatch(text: string, query: string): string {
+    return this.HighlightMatch(text, query);
   }
 
   /**
    * Handle date range change
    */
-  public onDateRangeChange(): void {
-    this.searchService.setDateRange(this.dateRange);
-    if (this.searchQuery.trim()) {
+  public OnDateRangeChange(): void {
+    this.searchService.setDateRange(this.DateRange);
+    if (this.SearchQuery.trim()) {
       this.performSearch();
     }
+  }
+
+  /** @deprecated Use {@link OnDateRangeChange}. */
+  public onDateRangeChange(): void {
+    return this.OnDateRangeChange();
   }
 
   /**
    * Clear date range
    */
-  public clearDateRange(): void {
-    this.dateRange = { start: null, end: null };
+  public ClearDateRange(): void {
+    this.DateRange = { start: null, end: null };
     this.searchService.setDateRange({ start: null, end: null });
-    if (this.searchQuery.trim()) {
+    if (this.SearchQuery.trim()) {
       this.performSearch();
     }
   }
 
+  /** @deprecated Use {@link ClearDateRange}. */
+  public clearDateRange(): void {
+    return this.ClearDateRange();
+  }
 }

@@ -33,8 +33,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDatasetItems', sectionName: 'Dataset Items', isExpanded: false },
             { sectionKey: 'mJDuplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
             { sectionKey: 'mJEntities', sectionName: 'Entities', isExpanded: false },
-            { sectionKey: 'mJEntityActionsEntityID', sectionName: 'Entity Actions', isExpanded: false },
             { sectionKey: 'mJEntityAIActionsOutputEntityID', sectionName: 'AI Actions', isExpanded: false },
+            { sectionKey: 'mJEntityActionsEntityID', sectionName: 'Entity Actions', isExpanded: false },
             { sectionKey: 'mJEntityCommunicationMessageTypes', sectionName: 'Entity Communication Message Types', isExpanded: false },
             { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false },
             { sectionKey: 'mJEntityFieldsEntityID', sectionName: 'Fields', isExpanded: false },
@@ -59,10 +59,9 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJUserViewCategories', sectionName: 'User View Categories', isExpanded: false },
             { sectionKey: 'mJUserViews', sectionName: 'User Views', isExpanded: false },
             { sectionKey: 'mJUsers', sectionName: 'Users', isExpanded: false },
-            { sectionKey: 'mJBizAppsCommonAddressLinks', sectionName: 'MJ_BizApps_Common: Address Links', isExpanded: false },
-            { sectionKey: 'mJAccessControlRules', sectionName: 'Access Control Rules', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
+            { sectionKey: 'mJAccessControlRules', sectionName: 'Access Control Rules', isExpanded: false },
             { sectionKey: 'mJEntityAIActionsEntityID', sectionName: 'Entity AI Actions (Entity ID)', isExpanded: false },
             { sectionKey: 'mJEntityOrganicKeyRelatedEntities', sectionName: 'Entity Organic Key Related Entities', isExpanded: false },
             { sectionKey: 'mJEntityOrganicKeys', sectionName: 'Entity Organic Keys', isExpanded: false },
@@ -88,9 +87,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJClusterAnalysis', sectionName: 'Cluster Analysis', isExpanded: false },
             { sectionKey: 'mJSignatureRequests', sectionName: 'Signature Requests', isExpanded: false },
             { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
-            { sectionKey: 'mJBizAppsTasksTaskAssignments', sectionName: 'Task Assignments', isExpanded: false },
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
-            { sectionKey: 'mJBizAppsTasksTaskLinks', sectionName: 'Task Links', isExpanded: false },
             { sectionKey: 'mJRecordProcessWatermarks', sectionName: 'Record Process Watermarks', isExpanded: false },
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
             { sectionKey: 'mJMLTrainingPipelines', sectionName: 'ML Training Pipelines', isExpanded: false },
@@ -101,10 +98,11 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJActionExecutionLogs', sectionName: 'Action Execution Logs', isExpanded: false },
             { sectionKey: 'mJEntityActionsScopeEntityID', sectionName: 'Entity Actions (Scope Entity ID)', isExpanded: false },
             { sectionKey: 'mJMaterializedResultsSourceEntityID', sectionName: 'Materialized Results (Source Entity ID)', isExpanded: false },
-            { sectionKey: 'mJBizAppsAccountingGLAccountLinks', sectionName: 'GL Account Links', isExpanded: false },
             { sectionKey: 'mJMaterializedResultsGeneratedEntityID', sectionName: 'Materialized Results (Generated Entity ID)', isExpanded: false },
-            { sectionKey: 'mJBizAppsAccountingJournalEntries', sectionName: 'Journal Entries', isExpanded: false },
-            { sectionKey: 'mJBizAppsOrdersOrderLinePriceComponents', sectionName: 'Order Line Price Components', isExpanded: false }
+            { sectionKey: 'mJFormChromeRulesEntityID', sectionName: 'Form Chrome Rules (Parent Entity)', isExpanded: false },
+            { sectionKey: 'mJFormChromeRulesRelatedEntityID', sectionName: 'Form Chrome Rules (Related Entity)', isExpanded: false },
+            { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false },
+            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }
 }

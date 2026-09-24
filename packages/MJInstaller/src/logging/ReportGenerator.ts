@@ -47,11 +47,15 @@ const SENSITIVE_AUTH_FIELDS: ReadonlySet<string> = new Set([
  * Matches both exact keys and patterns.
  */
 const SENSITIVE_ENV_PATTERNS: ReadonlyArray<string | RegExp> = [
+  // Broad substring patterns for standard credential naming
+  /(KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|PRIVATE|AUTH)/i,
   'CODEGEN_DB_PASSWORD',
   'DB_PASSWORD',
   'MJ_BASE_ENCRYPTION_KEY',
   'AUTH0_CLIENT_SECRET',
   /^AI_VENDOR_API_KEY__/,
+  /^(OPENAI|ANTHROPIC|GEMINI|GROQ|MISTRAL|COHERE)_API_KEY/,
+  /^(GITHUB|GITLAB|BITBUCKET)_TOKEN/,
   'MJ_INSTALL_CODEGEN_PASSWORD',
   'MJ_INSTALL_API_PASSWORD',
   'MJ_INSTALL_OPENAI_KEY',
@@ -110,6 +114,8 @@ const KEY_FILES: ReadonlyArray<{ Path: string; Description: string }> = [
   { Path: 'mj.config.cjs', Description: 'MJ configuration' },
   { Path: 'package.json', Description: 'Root package.json' },
   { Path: 'package-lock.json', Description: 'npm lock file' },
+  { Path: 'pnpm-lock.yaml', Description: 'pnpm lock file' },
+  { Path: 'pnpm-workspace.yaml', Description: 'pnpm workspace definition' },
   { Path: 'node_modules', Description: 'Dependencies installed' },
   { Path: 'mj-db-setup.sql', Description: 'Database setup script' },
   { Path: 'mj-db-validate.sql', Description: 'Database validation script' },
@@ -377,6 +383,23 @@ export class ReportGenerator {
     return false;
   }
 
+  /**
+   * Scan text for high-entropy token shapes (e.g. sk-..., Bearer tokens, GitHub tokens)
+   * and replace them with redaction placeholders.
+   */
+  public SanitizeValuePatterns(text: string): string {
+    return text
+      .replace(/\bsk-[a-zA-Z0-9_\-]{20,}\b/g, '[REDACTED_API_KEY]')
+      .replace(/\bgh[pousr]_[a-zA-Z0-9]{36,}\b/g, '[REDACTED_GH_TOKEN]')
+      .replace(/Bearer\s+[a-zA-Z0-9_\-\.]{20,}/gi, 'Bearer [REDACTED_TOKEN]')
+      .replace(/\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b/g, '[REDACTED_JWT]');
+  }
+
+  /** @deprecated Use {@link SanitizeValuePatterns}. */
+  public sanitizeValuePatterns(text: string): string {
+    return this.SanitizeValuePatterns(text);
+  }
+
   // -------------------------------------------------------------------------
   // Markdown rendering
   // -------------------------------------------------------------------------
@@ -422,7 +445,7 @@ export class ReportGenerator {
       sections.push(this.renderEventLog(data.EventLog));
     }
 
-    return sections.join('\n\n');
+    return this.SanitizeValuePatterns(sections.join('\n\n'));
   }
 
   private renderHeader(data: ReportData): string {
@@ -446,6 +469,9 @@ export class ReportGenerator {
       `| OS | ${env.OS} |`,
       `| Node.js | ${env.NodeVersion} |`,
       `| npm | ${env.NpmVersion} |`,
+      ...(env.PackageManager
+        ? [`| Package manager | ${[env.PackageManager, env.PackageManagerVersion].filter(Boolean).join(' ')} |`]
+        : []),
       `| Architecture | ${env.Architecture} |`,
     ].join('\n');
   }
@@ -625,13 +651,14 @@ export class ReportGenerator {
       }
 
       if (log.Output.length > 0) {
+        const sanitizedLines = log.Output.slice(-100).map((l) => this.SanitizeValuePatterns(l));
         lines.push(
           '',
           '<details>',
           '<summary>Click to expand output</summary>',
           '',
           '```',
-          ...log.Output.slice(-100), // Last 100 lines
+          ...sanitizedLines,
           '```',
           '',
           '</details>',

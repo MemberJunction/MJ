@@ -5,18 +5,18 @@ import { TextFormatter } from './text-formatter';
 export type OutputFormat = 'compact' | 'json' | 'table';
 
 export interface AgentInfo {
-  name: string;
-  description?: string;
-  status: 'available' | 'disabled';
-  lastUsed?: string;
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  description?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: 'available' | 'disabled';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  lastUsed?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ActionInfo {
-  name: string;
-  description?: string;
-  status: 'available' | 'disabled';
-  lastUsed?: string;
-  parameters?: Array<{
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  description?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: 'available' | 'disabled';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  lastUsed?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  parameters?: Array<{  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     name: string;
     type: string;
     required: boolean;
@@ -25,57 +25,100 @@ export interface ActionInfo {
 }
 
 export interface ExecutionResult {
-  success: boolean;
-  entityName: string;
-  prompt?: string;
-  result?: any;
-  error?: string;
-  duration: number;
-  steps?: number;
-  executionId?: string;
-  logFilePath?: string;
+  success: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  prompt?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  result?: any;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  error?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  duration: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  steps?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  executionId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  logFilePath?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class OutputFormatter {
   constructor(private format: OutputFormat) {}
 
-  public formatAgentList(agents: AgentInfo[]): string {
-    if (agents.length === 0) {
-      return chalk.yellow('No agents found.');
-    }
-
+  public FormatAgentList(agents: AgentInfo[]): string {
+    // The empty case is still a RESULT, not a message. Answering it above the switch
+    // meant `--format=json` returned the prose "No agents found." — unparseable, and
+    // indistinguishable to a caller from the command having failed. An empty list is
+    // `[]`; only the human renderings get a sentence.
     switch (this.format) {
       case 'json':
         return JSON.stringify(agents, null, 2);
-      
+
       case 'table':
-        return this.formatAgentTable(agents);
-      
+        return agents.length === 0 ? chalk.yellow('No agents found.') : this.formatAgentTable(agents);
+
       case 'compact':
       default:
-        return this.formatAgentCompact(agents);
+        return agents.length === 0 ? chalk.yellow('No agents found.') : this.formatAgentCompact(agents);
     }
   }
 
-  public formatActionList(actions: ActionInfo[]): string {
-    if (actions.length === 0) {
-      return chalk.yellow('No actions found.');
+  /** @deprecated Use {@link FormatAgentList}. */
+  public formatAgentList(agents: AgentInfo[]): string {
+    return this.FormatAgentList(agents);
+  }
+
+  /**
+   * Renders what `mj ai actions run --dry-run` *would* execute.
+   *
+   * A dry run is the one place a caller is most likely to be a program — it exists to
+   * be inspected before committing — so it has to honour the resolved format like every
+   * other output path. Printing coloured prose here regardless of `--format=json` put a
+   * banner and ANSI codes into what an agent was parsing.
+   */
+  public FormatActionDryRun(actionName: string, parameters: Record<string, string>): string {
+    if (this.format === 'json') {
+      return JSON.stringify({ dryRun: true, action: actionName, parameters }, null, 2);
     }
 
+    const lines = [
+      chalk.yellow('Dry-run mode: Action would be executed with these parameters:'),
+      chalk.cyan(`Action: ${actionName}`),
+    ];
+
+    const entries = Object.entries(parameters);
+    if (entries.length === 0) {
+      lines.push(chalk.gray('No parameters provided'));
+    } else {
+      lines.push(chalk.cyan('Parameters:'));
+      for (const [key, value] of entries) {
+        lines.push(`  ${key}: ${value}`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  /** @deprecated Use {@link FormatActionDryRun}. */
+  public formatActionDryRun(actionName: string, parameters: Record<string, string>): string {
+    return this.FormatActionDryRun(actionName, parameters);
+  }
+
+  public FormatActionList(actions: ActionInfo[]): string {
+    // See formatAgentList: an empty result must stay machine-readable in json mode.
     switch (this.format) {
       case 'json':
         return JSON.stringify(actions, null, 2);
-      
+
       case 'table':
-        return this.formatActionTable(actions);
-      
+        return actions.length === 0 ? chalk.yellow('No actions found.') : this.formatActionTable(actions);
+
       case 'compact':
       default:
-        return this.formatActionCompact(actions);
+        return actions.length === 0 ? chalk.yellow('No actions found.') : this.formatActionCompact(actions);
     }
   }
 
-  public formatAgentResult(result: ExecutionResult): string {
+  /** @deprecated Use {@link FormatActionList}. */
+  public formatActionList(actions: ActionInfo[]): string {
+    return this.FormatActionList(actions);
+  }
+
+  public FormatAgentResult(result: ExecutionResult): string {
     switch (this.format) {
       case 'json':
         return JSON.stringify(result, null, 2);
@@ -89,7 +132,12 @@ export class OutputFormatter {
     }
   }
 
-  public formatActionResult(result: ExecutionResult): string {
+  /** @deprecated Use {@link FormatAgentResult}. */
+  public formatAgentResult(result: ExecutionResult): string {
+    return this.FormatAgentResult(result);
+  }
+
+  public FormatActionResult(result: ExecutionResult): string {
     switch (this.format) {
       case 'json':
         return JSON.stringify(result, null, 2);
@@ -103,7 +151,12 @@ export class OutputFormatter {
     }
   }
 
-  public formatPromptResult(result: ExecutionResult): string {
+  /** @deprecated Use {@link FormatActionResult}. */
+  public formatActionResult(result: ExecutionResult): string {
+    return this.FormatActionResult(result);
+  }
+
+  public FormatPromptResult(result: ExecutionResult): string {
     switch (this.format) {
       case 'json':
         return JSON.stringify(result, null, 2);
@@ -115,6 +168,11 @@ export class OutputFormatter {
       default:
         return this.formatPromptResultCompact(result);
     }
+  }
+
+  /** @deprecated Use {@link FormatPromptResult}. */
+  public formatPromptResult(result: ExecutionResult): string {
+    return this.FormatPromptResult(result);
   }
 
   private formatAgentTable(agents: AgentInfo[]): string {
@@ -296,9 +354,9 @@ export class OutputFormatter {
         output += chalk.bold('Result:') + '\n';
         if (typeof result.result === 'string') {
           const formatted = TextFormatter.formatText(result.result, {
-            maxWidth: 80,
-            indent: 2,
-            preserveParagraphs: true
+            MaxWidth: 80,
+            Indent: 2,
+            PreserveParagraphs: true
           });
           output += formatted + '\n';
         } else {

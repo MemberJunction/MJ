@@ -124,17 +124,98 @@ import { Subject, takeUntil, distinctUntilChanged, combineLatest } from 'rxjs';
   encapsulation: ViewEncapsulation.None
 })
 export class ChatCollectionsResource extends BaseResourceComponent implements OnInit, OnDestroy {
-  public currentUser: any = null;
+  public CurrentUser: any = null;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  public get currentUser(): any {
+    return this.CurrentUser;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  public set currentUser(value: any) {
+    this.CurrentUser = value;
+  }
 
   // Artifact panel state
-  public isArtifactPanelOpen: boolean = false;
-  public activeCollectionId: string | null = null;
-  public activeArtifactId: string | null = null;
-  public activeVersionNumber: number | null = null;
-  public canShareActiveArtifact: boolean = false;
-  public canEditActiveArtifact: boolean = false;
-  public artifactPanelWidth: number = 40; // Default 40% width (percentage-based)
-  public isArtifactPanelMaximized: boolean = false;
+  public IsArtifactPanelOpen: boolean = false;
+
+  /** @deprecated Use {@link IsArtifactPanelOpen}. */
+  public get isArtifactPanelOpen(): boolean {
+    return this.IsArtifactPanelOpen;
+  }
+  /** @deprecated Use {@link IsArtifactPanelOpen}. */
+  public set isArtifactPanelOpen(value: boolean) {
+    this.IsArtifactPanelOpen = value;
+  }
+  public ActiveCollectionId: string | null = null;
+
+  /** @deprecated Use {@link ActiveCollectionId}. */
+  public get activeCollectionId(): string | null {
+    return this.ActiveCollectionId;
+  }
+  /** @deprecated Use {@link ActiveCollectionId}. */
+  public set activeCollectionId(value: string | null) {
+    this.ActiveCollectionId = value;
+  }
+  public ActiveArtifactId: string | null = null;
+
+  /** @deprecated Use {@link ActiveArtifactId}. */
+  public get activeArtifactId(): string | null {
+    return this.ActiveArtifactId;
+  }
+  /** @deprecated Use {@link ActiveArtifactId}. */
+  public set activeArtifactId(value: string | null) {
+    this.ActiveArtifactId = value;
+  }
+  public ActiveVersionNumber: number | null = null;
+
+  /** @deprecated Use {@link ActiveVersionNumber}. */
+  public get activeVersionNumber(): number | null {
+    return this.ActiveVersionNumber;
+  }
+  /** @deprecated Use {@link ActiveVersionNumber}. */
+  public set activeVersionNumber(value: number | null) {
+    this.ActiveVersionNumber = value;
+  }
+  public CanShareActiveArtifact: boolean = false;
+
+  /** @deprecated Use {@link CanShareActiveArtifact}. */
+  public get canShareActiveArtifact(): boolean {
+    return this.CanShareActiveArtifact;
+  }
+  /** @deprecated Use {@link CanShareActiveArtifact}. */
+  public set canShareActiveArtifact(value: boolean) {
+    this.CanShareActiveArtifact = value;
+  }
+  public CanEditActiveArtifact: boolean = false;
+
+  /** @deprecated Use {@link CanEditActiveArtifact}. */
+  public get canEditActiveArtifact(): boolean {
+    return this.CanEditActiveArtifact;
+  }
+  /** @deprecated Use {@link CanEditActiveArtifact}. */
+  public set canEditActiveArtifact(value: boolean) {
+    this.CanEditActiveArtifact = value;
+  }
+  public ArtifactPanelWidth: number = 40;
+
+  /** @deprecated Use {@link ArtifactPanelWidth}. */
+  public get artifactPanelWidth(): number {
+    return this.ArtifactPanelWidth;
+  }
+  /** @deprecated Use {@link ArtifactPanelWidth}. */
+  public set artifactPanelWidth(value: number) {
+    this.ArtifactPanelWidth = value;
+  } // Default 40% width (percentage-based)
+  public IsArtifactPanelMaximized: boolean = false;
+
+  /** @deprecated Use {@link IsArtifactPanelMaximized}. */
+  public get isArtifactPanelMaximized(): boolean {
+    return this.IsArtifactPanelMaximized;
+  }
+  /** @deprecated Use {@link IsArtifactPanelMaximized}. */
+  public set isArtifactPanelMaximized(value: boolean) {
+    this.IsArtifactPanelMaximized = value;
+  }
   private artifactPanelWidthBeforeMaximize: number = 40; // Store width before maximizing
 
   // Resize state
@@ -146,14 +227,23 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
 
   private artifactState = inject(ArtifactStateService);
   private artifactPermissionService = inject(ArtifactPermissionService);
-  public collectionState = inject(CollectionStateService);
+  public CollectionState = inject(CollectionStateService);
+
+  /** @deprecated Use {@link CollectionState}. */
+  public get collectionState() {
+    return this.CollectionState;
+  }
+  /** @deprecated Use {@link CollectionState}. */
+  public set collectionState(value) {
+    this.CollectionState = value;
+  }
   private cdr = inject(ChangeDetectorRef);
   private analyzeService = inject(AnalyzeArtifactService);
 
   ngOnInit() {
     super.ngOnInit();
     const md = this.ProviderToUse;
-    this.currentUser = md.CurrentUser;
+    this.CurrentUser = md.CurrentUser;
 
     // Subscribe to artifact state changes
     this.subscribeToArtifactState();
@@ -168,12 +258,12 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     this.subscribeToUrlStateChanges();
 
     // Subscribe to collection and artifact changes to update tab title
-    this.collectionState.activeCollectionId$
+    this.CollectionState.activeCollectionId$
       .pipe(takeUntil(this.destroy$), distinctUntilChanged())
       .subscribe(collectionId => {
-        this.activeCollectionId = collectionId;
+        this.ActiveCollectionId = collectionId;
         // Only update if no artifact is open (artifact title takes priority)
-        if (!this.activeArtifactId) {
+        if (!this.ActiveArtifactId) {
           this.updateCollectionTabTitle(collectionId);
         }
         this.cdr.detectChanges();
@@ -186,7 +276,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
           this.NotifyDisplayNameChanged(artifact.Name);
         } else {
           // Artifact closed — fall back to collection name
-          this.updateCollectionTabTitle(this.collectionState.activeCollectionId);
+          this.updateCollectionTabTitle(this.CollectionState.activeCollectionId);
         }
       });
 
@@ -199,7 +289,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     // here would strip the deep link from the URL before that delivery lands.
     // Once state is set (synchronously when params are already present, or via the
     // reactive delivery), subscribeToUrlStateChanges() pushes the normalized URL.
-    if (this.collectionState.activeCollectionId || this.activeArtifactId) {
+    if (this.CollectionState.activeCollectionId || this.ActiveArtifactId) {
       this.pushStateToUrl();
     }
 
@@ -223,7 +313,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
       : config?.versionNumber ? (config.versionNumber as number) : undefined;
 
     if (collectionId) {
-      this.collectionState.setActiveCollection(collectionId);
+      this.CollectionState.setActiveCollection(collectionId);
     }
     if (artifactId) {
       this.artifactState.openArtifact(artifactId, versionNumber);
@@ -239,9 +329,9 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     const versionNumber = params['versionNumber'] ? parseInt(params['versionNumber'], 10) : undefined;
 
     if (collectionId) {
-      this.collectionState.setActiveCollection(collectionId);
+      this.CollectionState.setActiveCollection(collectionId);
     } else {
-      this.collectionState.setActiveCollection(null);
+      this.CollectionState.setActiveCollection(null);
     }
 
     if (artifactId) {
@@ -256,7 +346,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
    */
   private subscribeToUrlStateChanges(): void {
     combineLatest([
-      this.collectionState.activeCollectionId$.pipe(distinctUntilChanged()),
+      this.CollectionState.activeCollectionId$.pipe(distinctUntilChanged()),
       this.artifactState.activeArtifactId$.pipe(distinctUntilChanged()),
       this.artifactState.activeVersionNumber$.pipe(distinctUntilChanged())
     ])
@@ -274,12 +364,12 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
   private pushStateToUrl(): void {
     const queryParams: Record<string, string | null> = {};
 
-    const collectionId = this.collectionState.activeCollectionId;
+    const collectionId = this.CollectionState.activeCollectionId;
     queryParams['collectionId'] = collectionId || null;
 
-    if (this.activeArtifactId) {
-      queryParams['artifactId'] = this.activeArtifactId;
-      queryParams['versionNumber'] = this.activeVersionNumber ? this.activeVersionNumber.toString() : null;
+    if (this.ActiveArtifactId) {
+      queryParams['artifactId'] = this.ActiveArtifactId;
+      queryParams['versionNumber'] = this.ActiveVersionNumber ? this.ActiveVersionNumber.toString() : null;
     } else {
       queryParams['artifactId'] = null;
       queryParams['versionNumber'] = null;
@@ -327,7 +417,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     this.artifactState.isPanelOpen$
       .pipe(takeUntil(this.destroy$))
       .subscribe(isOpen => {
-        this.isArtifactPanelOpen = isOpen;
+        this.IsArtifactPanelOpen = isOpen;
         this.cdr.detectChanges();
       });
 
@@ -335,12 +425,12 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     this.artifactState.activeArtifactId$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async id => {
-        this.activeArtifactId = id;
+        this.ActiveArtifactId = id;
         if (id) {
           await this.loadArtifactPermissions(id);
         } else {
-          this.canShareActiveArtifact = false;
-          this.canEditActiveArtifact = false;
+          this.CanShareActiveArtifact = false;
+          this.CanEditActiveArtifact = false;
         }
         this.cdr.detectChanges();
       });
@@ -349,7 +439,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     this.artifactState.activeVersionNumber$
       .pipe(takeUntil(this.destroy$))
       .subscribe(versionNumber => {
-        this.activeVersionNumber = versionNumber;
+        this.ActiveVersionNumber = versionNumber;
       });
   }
 
@@ -357,51 +447,61 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
    * Load permissions for the active artifact
    */
   private async loadArtifactPermissions(artifactId: string): Promise<void> {
-    if (!artifactId || !this.currentUser) {
-      this.canShareActiveArtifact = false;
-      this.canEditActiveArtifact = false;
+    if (!artifactId || !this.CurrentUser) {
+      this.CanShareActiveArtifact = false;
+      this.CanEditActiveArtifact = false;
       return;
     }
 
     try {
-      const permissions = await this.artifactPermissionService.getUserPermissions(artifactId, this.currentUser);
-      this.canShareActiveArtifact = permissions.canShare;
-      this.canEditActiveArtifact = permissions.canEdit;
+      const permissions = await this.artifactPermissionService.getUserPermissions(artifactId, this.CurrentUser);
+      this.CanShareActiveArtifact = permissions.canShare;
+      this.CanEditActiveArtifact = permissions.canEdit;
     } catch (error) {
       console.error('Failed to load artifact permissions:', error);
-      this.canShareActiveArtifact = false;
-      this.canEditActiveArtifact = false;
+      this.CanShareActiveArtifact = false;
+      this.CanEditActiveArtifact = false;
     }
   }
 
   /**
    * Close the artifact panel
    */
-  closeArtifactPanel(): void {
+  CloseArtifactPanel(): void {
     this.artifactState.closeArtifact();
+  }
+
+  /** @deprecated Use {@link CloseArtifactPanel}. */
+  closeArtifactPanel(): void {
+    return this.CloseArtifactPanel();
   }
 
   /**
    * Toggle maximize/restore state for artifact panel
    */
-  toggleMaximizeArtifactPanel(): void {
-    if (this.isArtifactPanelMaximized) {
+  ToggleMaximizeArtifactPanel(): void {
+    if (this.IsArtifactPanelMaximized) {
       // Restore to previous width
-      this.artifactPanelWidth = this.artifactPanelWidthBeforeMaximize;
-      this.isArtifactPanelMaximized = false;
+      this.ArtifactPanelWidth = this.artifactPanelWidthBeforeMaximize;
+      this.IsArtifactPanelMaximized = false;
     } else {
       // Maximize - store current width and set to 100%
-      this.artifactPanelWidthBeforeMaximize = this.artifactPanelWidth;
-      this.artifactPanelWidth = 100;
-      this.isArtifactPanelMaximized = true;
+      this.artifactPanelWidthBeforeMaximize = this.ArtifactPanelWidth;
+      this.ArtifactPanelWidth = 100;
+      this.IsArtifactPanelMaximized = true;
     }
+  }
+
+  /** @deprecated Use {@link ToggleMaximizeArtifactPanel}. */
+  toggleMaximizeArtifactPanel(): void {
+    return this.ToggleMaximizeArtifactPanel();
   }
 
   /**
    * Handle navigation request from artifact viewer panel.
    * Converts the link event to a generic navigation request and uses NavigationService.
    */
-  onNavigateToLink(event: {
+  OnNavigateToLink(event: {
     type: 'conversation' | 'collection';
     id: string;
     artifactId?: string;
@@ -438,11 +538,22 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     this.navigationService.OpenNavItemByName(navItemName, params, undefined, { queryParams });
   }
 
+  /** @deprecated Use {@link OnNavigateToLink}. */
+  onNavigateToLink(event: {
+    type: 'conversation' | 'collection';
+    id: string;
+    artifactId?: string;
+    versionNumber?: number;
+    versionId?: string;
+  }): void {
+    return this.OnNavigateToLink(event);
+  }
+
   /**
    * Open the conversation an artifact was produced in (from the Collections view's
    * right-click "Open source conversation"). Routes to the Conversations nav item.
    */
-  onOpenConversation(event: { conversationId: string }): void {
+  OnOpenConversation(event: { conversationId: string }): void {
     // Pass conversationId BOTH as configuration (read by a fresh tab's ngOnInit) AND as
     // queryParams (drives OnQueryParamsChanged on the already-open/cached Conversations tab).
     // Without the queryParams, switching to an existing Conversations tab opens the app but
@@ -455,12 +566,22 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     );
   }
 
+  /** @deprecated Use {@link OnOpenConversation}. */
+  onOpenConversation(event: { conversationId: string }): void {
+    return this.OnOpenConversation(event);
+  }
+
   /**
    * Handle entity record open request from artifact viewer (from React component grids).
    * Uses NavigationService to open the record in a new tab.
    */
-  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+  OnOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    return this.OnOpenEntityRecord(event);
   }
 
   /**
@@ -469,14 +590,14 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
    * with the snapshot attached as an input artifact, and routes the user
    * to the Conversations nav item for the new conversation.
    */
-  async onAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
-    if (!this.currentUser) return;
+  async OnAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+    if (!this.CurrentUser) return;
 
     try {
       const result = await this.analyzeService.StartAnalysisConversation({
         snapshot: event.snapshot,
-        currentUser: this.currentUser,
-        environmentId: this.environmentId,
+        currentUser: this.CurrentUser,
+        environmentId: this.EnvironmentId,
       });
 
       await this.navigationService.OpenNavItemByName(
@@ -491,11 +612,21 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     }
   }
 
+  /** @deprecated Use {@link OnAnalyzeRequested}. */
+  async onAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+    return this.OnAnalyzeRequested(event);
+  }
+
   /**
    * Get the environment ID from configuration or use default
    */
-  get environmentId(): string {
+  get EnvironmentId(): string {
     return this.Data?.Configuration?.environmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID;
+  }
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
   }
 
   /**
@@ -526,15 +657,20 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
   private boundOnResizeMove: (e: MouseEvent) => void = () => {};
   private boundOnResizeEnd: (e: MouseEvent) => void = () => {};
 
-  onResizeStart(event: MouseEvent): void {
+  OnResizeStart(event: MouseEvent): void {
     this.isResizing = true;
     this.resizeStartX = event.clientX;
-    this.resizeStartWidth = this.artifactPanelWidth;
+    this.resizeStartWidth = this.ArtifactPanelWidth;
     window.addEventListener('mousemove', this.boundOnResizeMove);
     window.addEventListener('mouseup', this.boundOnResizeEnd);
     event.preventDefault();
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
+  }
+
+  /** @deprecated Use {@link OnResizeStart}. */
+  onResizeStart(event: MouseEvent): void {
+    return this.OnResizeStart(event);
   }
 
   private onResizeMove(event: MouseEvent): void {
@@ -550,7 +686,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
 
     // Constrain between 20% and 80%
     newWidth = Math.max(20, Math.min(80, newWidth));
-    this.artifactPanelWidth = newWidth;
+    this.ArtifactPanelWidth = newWidth;
   }
 
   private onResizeEnd(event: MouseEvent): void {

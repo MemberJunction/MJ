@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { AfterViewInit, Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { BehaviorSubject } from 'rxjs';
@@ -8,12 +9,12 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
 
 /**
  * DOM coverage for <mj-server-connectivity-banner> — a standalone banner that shows only while the
- * server is disconnected. It subscribes to `ServerConnectivityService.IsConnected$` in ngOnInit and
- * flips `@if (!IsConnected)`. A fake service exposes a controllable BehaviorSubject.
+ * server is disconnected. It tracks `ServerConnectivityService.IsConnected$` through a `toSignal`
+ * and flips `@if (!IsConnected())`. A fake service exposes a controllable BehaviorSubject.
  *
- * `detectChanges(false)` + `markForCheck` are used because the subscription mutates a plain property
- * across the `@if` boundary (a strict checkNoChanges would flag the connected→disconnected flip), and
- * the banner uses a `@slideDown` animation so noop animations are provided.
+ * Because the state is a signal, a write marks the view dirty on its own: these specs use the plain
+ * `detectChanges()` (check-no-changes included) with no `markForCheck` nursing. The banner animates
+ * with `@slideDown`, so noop animations are provided.
  */
 
 function render(connected: boolean): { fixture: ComponentFixture<ServerConnectivityBannerComponent>; connected$: BehaviorSubject<boolean> } {
@@ -23,9 +24,7 @@ function render(connected: boolean): { fixture: ComponentFixture<ServerConnectiv
     providers: [provideNoopAnimations(), { provide: ServerConnectivityService, useValue: { IsConnected$: connected$ } }],
   });
   const fixture = TestBed.createComponent(ServerConnectivityBannerComponent);
-  fixture.detectChanges(false);
-  fixture.componentRef.changeDetectorRef.markForCheck();
-  fixture.detectChanges(false);
+  fixture.detectChanges();
   return { fixture, connected$ };
 }
 
@@ -44,8 +43,43 @@ describe('ServerConnectivityBannerComponent (DOM)', () => {
     const { fixture, connected$ } = render(true);
     expect(query(fixture, '.connectivity-banner')).toBeNull();
     connected$.next(false);
-    fixture.componentRef.changeDetectorRef.markForCheck();
-    fixture.detectChanges(false);
+    fixture.detectChanges();
+    expect(query(fixture, '.connectivity-banner')).not.toBeNull();
+  });
+});
+
+/**
+ * Host that drops the connection from `ngAfterViewInit` — a hook Angular runs *inside* the
+ * change-detection pass, after the banner's own view has already been checked. That is the
+ * real-world shape of the bug: graphql-ws reports the socket closed while a pass is in flight.
+ */
+@Component({
+  standalone: true,
+  imports: [ServerConnectivityBannerComponent],
+  template: `<mj-server-connectivity-banner></mj-server-connectivity-banner>`,
+})
+class ConnectivityHostComponent implements AfterViewInit {
+  /** Assigned by the spec before the first change-detection pass. */
+  public DropConnection: (() => void) | null = null;
+
+  ngAfterViewInit(): void {
+    this.DropConnection?.();
+  }
+}
+
+describe('ServerConnectivityBannerComponent (mid-change-detection drop)', () => {
+  it('renders the banner without NG0100 when the drop lands inside the CD pass', () => {
+    const connected$ = new BehaviorSubject<boolean>(true);
+    TestBed.configureTestingModule({
+      imports: [ConnectivityHostComponent],
+      providers: [provideNoopAnimations(), { provide: ServerConnectivityService, useValue: { IsConnected$: connected$ } }],
+    });
+    const fixture = TestBed.createComponent(ConnectivityHostComponent);
+    fixture.componentInstance.DropConnection = () => connected$.next(false);
+
+    // The default `detectChanges()` runs the dev-mode check-no-changes pass. Before the fix this
+    // threw NG0100 "Previous value: '-1'" — the `@if` branch index meaning "no branch rendered".
+    expect(() => fixture.detectChanges()).not.toThrow();
     expect(query(fixture, '.connectivity-banner')).not.toBeNull();
   });
 });

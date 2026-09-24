@@ -1,0 +1,144 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+    ShouldEmitCascadeForRelatedEntity,
+    EntityInCustomBaseViewRefreshScope,
+} from '../Database/schema-filters';
+import {
+    BuildHealSchemaRoutineParams,
+    SnapshotAuthoredExcludeSchemas,
+    GetAuthoredExcludeSchemas,
+    ResetAuthoredExcludeSnapshot,
+} from '../Database/heal-schema-params';
+import { ApplyIncludeSchemaScope } from '../Database/schema-scope';
+import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
+import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
+
+describe('shouldEmitCascadeForRelatedEntity', () => {
+    it('emits intra-schema cascade when the flag is off', () => {
+        expect(ShouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__mj_BizAppsCommon', false)).toBe(true);
+    });
+
+    it('does not emit inter-schema cascade when the flag is off', () => {
+        expect(ShouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__mj_BizAppsOrders', false)).toBe(false);
+    });
+
+    it('matches schema names case-insensitively', () => {
+        expect(ShouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__MJ_BIZAPPSCOMMON', false)).toBe(true);
+    });
+
+    it('emits inter-schema cascade only when the flag is on', () => {
+        expect(ShouldEmitCascadeForRelatedEntity('__mj_BizAppsCommon', '__mj_BizAppsOrders', true)).toBe(true);
+    });
+});
+
+describe('entityInCustomBaseViewRefreshScope', () => {
+    it('drops schemas in excludeSchemas even with no include list', () => {
+        expect(EntityInCustomBaseViewRefreshScope('sys', ['sys', 'staging'])).toBe(false);
+        expect(EntityInCustomBaseViewRefreshScope('__mj', ['sys', 'staging'])).toBe(true);
+    });
+
+    it('with includeSchemas set, keeps only that list (minus excludes)', () => {
+        expect(EntityInCustomBaseViewRefreshScope(
+            '__mj_BizAppsCommon',
+            ['sys', 'staging'],
+            ['__mj_BizAppsCommon'],
+        )).toBe(true);
+        expect(EntityInCustomBaseViewRefreshScope(
+            '__mj_BizAppsOrders',
+            ['sys', 'staging'],
+            ['__mj_BizAppsCommon'],
+        )).toBe(false);
+    });
+
+    it('still drops an included schema that is also excluded', () => {
+        expect(EntityInCustomBaseViewRefreshScope(
+            '__mj_BizAppsCommon',
+            ['__mj_BizAppsCommon'],
+            ['__mj_BizAppsCommon'],
+        )).toBe(false);
+    });
+});
+
+describe('buildHealSchemaRoutineParams', () => {
+    it('omits IncludedSchemaNames when includeSchemas is empty (classic MJ)', () => {
+        const p = BuildHealSchemaRoutineParams({
+            authoredExclude: ['sys', 'staging'],
+        });
+        expect(p.Names).toEqual(['ExcludedSchemaNames']);
+        expect(p.Values).toEqual([`'sys,staging'`]);
+    });
+
+    it('adds IncludedSchemaNames from includeSchemas and never a sibling snapshot', () => {
+        const p = BuildHealSchemaRoutineParams({
+            authoredExclude: ['sys', 'staging'],
+            includeSchemas: ['__mj_BizAppsCommon'],
+        });
+        expect(p.Names).toEqual(['ExcludedSchemaNames', 'IncludedSchemaNames']);
+        expect(p.Values).toEqual([`'sys,staging'`, `'__mj_BizAppsCommon'`]);
+        expect(p.Values.join(',')).not.toContain('Orders');
+        expect(p.Values.join(',')).not.toContain('Accounting');
+    });
+
+    it('places EntityIDs before IncludedSchemaNames', () => {
+        const p = BuildHealSchemaRoutineParams({
+            authoredExclude: ['sys'],
+            includeSchemas: ['__mj_BizAppsCommon'],
+            entityIDs: ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'],
+        });
+        expect(p.Names).toEqual(['ExcludedSchemaNames', 'EntityIDs', 'IncludedSchemaNames']);
+    });
+
+    it('SQL Server named EXEC with include does not list sibling Open Apps', () => {
+        const p = BuildHealSchemaRoutineParams({
+            authoredExclude: ['sys', 'staging'],
+            includeSchemas: ['__mj_BizAppsCommon'],
+        });
+        const sql = new SQLServerCodeGenProvider().callRoutineSQL(
+            '__mj',
+            'spUpdateExistingEntitiesFromSchema',
+            p.Values,
+            p.Names,
+        );
+        expect(sql).toBe(
+            `EXEC [__mj].[spUpdateExistingEntitiesFromSchema] @ExcludedSchemaNames='sys,staging', @IncludedSchemaNames='__mj_BizAppsCommon'`,
+        );
+        expect(sql).not.toMatch(/BizAppsOrders/);
+    });
+});
+
+describe('authored exclude snapshot vs include compile', () => {
+    beforeEach(() => {
+        ResetAuthoredExcludeSnapshot();
+    });
+
+    it('heal params keep sys,staging after includeSchemas compiles siblings into excludeSchemas', () => {
+        const config = {
+            includeSchemas: ['__mj_BizAppsCommon'],
+            excludeSchemas: ['sys', 'staging'],
+        };
+        SnapshotAuthoredExcludeSchemas(config.excludeSchemas);
+        ApplyIncludeSchemaScope(
+            ['__mj_BizAppsCommon', '__mj_BizAppsOrders', '__mj_BizAppsAccounting', 'sys', 'staging'],
+            config,
+        );
+        expect(config.excludeSchemas).toContain('__mj_BizAppsOrders');
+        expect(GetAuthoredExcludeSchemas()).toEqual(['sys', 'staging']);
+
+        const p = BuildHealSchemaRoutineParams({
+            authoredExclude: GetAuthoredExcludeSchemas(),
+            includeSchemas: config.includeSchemas,
+        });
+        expect(p.Values[0]).toBe(`'sys,staging'`);
+        expect(p.Values.join(',')).not.toContain('Orders');
+    });
+});
+
+describe('PostgreSQL metadata support objects include the new parameter', () => {
+    it('declares p_IncludedSchemaNames on the heal functions', () => {
+        const sql = new PostgreSQLCodeGenProvider().getMetadataSupportObjectsSQL('__mj');
+        expect(sql).toBeTruthy();
+        expect(sql!).toContain('p_IncludedSchemaNames');
+        expect(sql!).toContain('spUpdateExistingEntitiesFromSchema');
+        expect(sql!).toContain('spDeleteUnneededEntityFields');
+    });
+});

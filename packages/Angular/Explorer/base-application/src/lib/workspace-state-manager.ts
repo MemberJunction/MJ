@@ -6,7 +6,7 @@ import { UserInfoEngine, MJWorkspaceEntity } from '@memberjunction/core-entities
 import {
   WorkspaceConfiguration,
   WorkspaceTab,
-  createDefaultWorkspaceConfiguration
+  CreateDefaultWorkspaceConfiguration
 } from './interfaces/workspace-configuration.interface';
 import { TabRequest } from './interfaces/tab-request.interface';
 
@@ -61,6 +61,29 @@ export class WorkspaceStateManager {
   /** True when the tab may be consumed as OpenTab's replaceable temp tab */
   private isTempTabConsumable(tab: WorkspaceTab): boolean {
     return this.TempTabConsumptionFilter ? this.TempTabConsumptionFilter(tab) : true;
+  }
+
+  /**
+   * Optional predicate identifying members of the records REGION — the second
+   * temp-tab pool. Requests carrying `TempScope: 'records'` consume and cascade
+   * within this set only, which is what gives records preview-tab behavior
+   * without letting a nav click touch a record (TempTabConsumptionFilter keeps
+   * guarding that direction) or a record open touch the nav tab.
+   * Settable predicate for the same layering reason as MainLayoutTabFilter.
+   * NOTE: record tabs DOCKED to the workspace ("Move to Workspace") must FAIL
+   * this filter — docking is an act of investment, and a docked record is a
+   * main-layout tab that nothing in either pool may consume.
+   */
+  public RecordsRegionTabFilter: ((tab: WorkspaceTab) => boolean) | null = null;
+
+  /**
+   * True when the tab belongs to the records region. A null filter means no
+   * records region is active, so the pool is EMPTY — the inverse default from
+   * isMainLayoutTab, and deliberately so: under the classic style a
+   * records-scoped request must consume nothing rather than everything.
+   */
+  private isRecordsRegionTab(tab: WorkspaceTab): boolean {
+    return this.RecordsRegionTabFilter ? this.RecordsRegionTabFilter(tab) : false;
   }
 
   /**
@@ -188,7 +211,7 @@ export class WorkspaceStateManager {
       // Test mode — skip server load entirely. Just emit a default config so the
       // workspace starts clean for this BrowserContext. No MJWorkspaceEntity is
       // created or read; the DB row (if any) is ignored.
-      this.configuration$.next(createDefaultWorkspaceConfiguration());
+      this.configuration$.next(CreateDefaultWorkspaceConfiguration());
       return;
     }
     // Use UserInfoEngine for centralized, cached workspace loading
@@ -197,7 +220,7 @@ export class WorkspaceStateManager {
     // Permission-denied ≠ empty — don't auto-create a workspace for denied users.
     if (engine.IsPermissionConstrained) {
       LogStatus('[WorkspaceStateManager] UserInfoEngine is permission-constrained, using default workspace configuration');
-      this.configuration$.next(createDefaultWorkspaceConfiguration());
+      this.configuration$.next(CreateDefaultWorkspaceConfiguration());
       return;
     }
 
@@ -212,7 +235,7 @@ export class WorkspaceStateManager {
 
       const config = configJson
         ? JSON.parse(configJson) as WorkspaceConfiguration
-        : createDefaultWorkspaceConfiguration();
+        : CreateDefaultWorkspaceConfiguration();
 
       this.configuration$.next(config);
     }
@@ -222,13 +245,13 @@ export class WorkspaceStateManager {
       const workspace = await md.GetEntityObject<MJWorkspaceEntity>('MJ: Workspaces', md.CurrentUser);
       workspace.UserID = userId;
       workspace.Name = 'Default';
-      workspace.Configuration = JSON.stringify(createDefaultWorkspaceConfiguration());
+      workspace.Configuration = JSON.stringify(CreateDefaultWorkspaceConfiguration());
 
       const saveResult = await workspace.Save();
 
       if (saveResult) {
         this.workspace$.next(workspace);
-        this.configuration$.next(createDefaultWorkspaceConfiguration());
+        this.configuration$.next(CreateDefaultWorkspaceConfiguration());
       } else {
         console.error('[WorkspaceStateManager.loadWorkspace] Failed to save workspace');
         throw new Error('Failed to create default workspace');
@@ -274,7 +297,7 @@ export class WorkspaceStateManager {
    * Used for recovery when stale or corrupted workspace data prevents startup.
    */
   async ResetConfiguration(): Promise<void> {
-    const defaultConfig = createDefaultWorkspaceConfiguration();
+    const defaultConfig = CreateDefaultWorkspaceConfiguration();
     this.configuration$.next(defaultConfig);
     await this.persistConfiguration();
   }
@@ -357,12 +380,19 @@ export class WorkspaceStateManager {
       configuration: request.Configuration || {}
     };
 
-    // CRITICAL: If creating a temporary tab, pin all existing temporary tabs first
-    // This ensures only ONE temporary tab exists at any time.
-    // PreservePinState opts out (records-style record tabs live in a separate
-    // layout region and must not disturb the nav tab's temp status).
+    // CRITICAL: If creating a temporary tab, pin all existing temporary tabs
+    // first. This ensures only ONE temporary tab exists at any time — per POOL,
+    // now that the records region has its own (see TabRequest.TempScope).
+    //
+    // A records-scoped forced open (shift-click on a record) promotes the
+    // region's previous temp record and leaves the nav temp tab alone; that
+    // scoping is what replaced the blunt PreservePinState opt-out record opens
+    // used to pass. PreservePinState still opts out of the cascade entirely.
+    const inCascadeScope = request.TempScope === 'records'
+      ? (tab: WorkspaceTab) => this.isRecordsRegionTab(tab)
+      : () => true;
     const updatedTabs = !newTab.isPinned && !request.PreservePinState
-      ? config.tabs.map(tab => !tab.isPinned ? { ...tab, isPinned: true } : tab)
+      ? config.tabs.map(tab => !tab.isPinned && inCascadeScope(tab) ? { ...tab, isPinned: true } : tab)
       : config.tabs;
 
     this.UpdateConfiguration({
@@ -456,11 +486,19 @@ export class WorkspaceStateManager {
       return existingTab.id;
     }
 
-    // Find temporary tab (unpinned tab from ANY app) to replace.
-    // NEVER consume a non-main-layout tab (e.g. an open record under the
-    // records style — they're deliberately unpinned, and replacing one here
-    // would silently destroy an open record with zero user feedback).
-    const tempTab = config.tabs.find(tab => !tab.isPinned && this.isMainLayoutTab(tab) && this.isTempTabConsumable(tab));
+    // Find the temporary tab to replace, within THIS request's pool.
+    //
+    // 'main' (the default): an unpinned tab from any app. NEVER consume a
+    // non-main-layout tab (e.g. an open record under the records style —
+    // they're deliberately unpinned, and replacing one here would silently
+    // destroy an open record with zero user feedback).
+    //
+    // 'records': the records region's own temporary tab. Region membership,
+    // not record identity, so a record docked to the workspace is excluded
+    // from this pool as well as from the main one.
+    const tempTab = request.TempScope === 'records'
+      ? config.tabs.find(tab => !tab.isPinned && this.isRecordsRegionTab(tab))
+      : config.tabs.find(tab => !tab.isPinned && this.isMainLayoutTab(tab) && this.isTempTabConsumable(tab));
 
     if (tempTab) {
       // Replace temporary tab

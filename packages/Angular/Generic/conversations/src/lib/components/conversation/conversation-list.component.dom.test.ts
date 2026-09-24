@@ -198,7 +198,7 @@ describe('ConversationListComponent (DOM) — search escalation', () => {
     });
 
     const emitted: string[] = [];
-    f.componentInstance.searchEscalated.subscribe((q: string) => emitted.push(q));
+    f.componentInstance.SearchEscalated.subscribe((q: string) => emitted.push(q));
     query(f, '.search-escalate')!.click();
 
     expect(emitted).toEqual(['poem']);

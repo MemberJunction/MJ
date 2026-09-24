@@ -44,14 +44,19 @@ export * from './engines/GeoDataEngine';
 export * from './engines/PermissionEngine';
 export * from './engines/AuditLogTypeEngine';
 export * from './engines/ResourceTypeEngine';
+export * from './engines/IdentityClaimEngine';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
+export * from './custom/operations/EvaluateAuthorizationChecks';
+export { AuthorizationCheckServerOperation, LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
 
 export * from './artifact-extraction/artifact-extract-rules';
 export * from './artifact-extraction/artifact-extractor';
 
 import { LoadPermissionProviders } from './custom/PermissionProviders';
 import { LoadPermissionEntityExtensions } from './custom/Permissions';
+import { LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
 LoadPermissionProviders();
 LoadPermissionEntityExtensions();
+LoadAuthorizationCheckOperation();

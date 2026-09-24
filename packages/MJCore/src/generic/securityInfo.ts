@@ -242,7 +242,7 @@ export class UserInfo extends BaseInfo {
      */
     EmployeeSupervisorEmail: string = null
 
-    private _TenantContext?: TenantContext = undefined;
+    private _tenantContext?: TenantContext = undefined;
 
     /**
      * Tenant context for multi-tenant data isolation.
@@ -254,13 +254,13 @@ export class UserInfo extends BaseInfo {
      * and TenantContext is not a database/GraphQL field.
      */
     public get TenantContext(): TenantContext | undefined {
-        return this._TenantContext;
+        return this._tenantContext;
     }
     public set TenantContext(value: TenantContext | undefined) {
-        this._TenantContext = value;
+        this._tenantContext = value;
     }
 
-    private _MagicLinkScope?: MagicLinkScope = undefined;
+    private _magicLinkScope?: MagicLinkScope = undefined;
 
     /**
      * Per-session resource scope for a magic-link share. Set at request time from the
@@ -272,13 +272,13 @@ export class UserInfo extends BaseInfo {
      * TenantContext — it is not a database/GraphQL field.
      */
     public get MagicLinkScope(): MagicLinkScope | undefined {
-        return this._MagicLinkScope;
+        return this._magicLinkScope;
     }
     public set MagicLinkScope(value: MagicLinkScope | undefined) {
-        this._MagicLinkScope = value;
+        this._magicLinkScope = value;
     }
 
-    private _APIKeyActingContext?: APIKeyActingContext = undefined;
+    private _aPIKeyActingContext?: APIKeyActingContext = undefined;
 
     /**
      * Per-request acting context for an API-key session. Set server-side in the
@@ -290,13 +290,13 @@ export class UserInfo extends BaseInfo {
      * not a DB/GraphQL field, and it must NEVER be exposed via a resolver.
      */
     public get APIKeyActingContext(): APIKeyActingContext | undefined {
-        return this._APIKeyActingContext;
+        return this._aPIKeyActingContext;
     }
     public set APIKeyActingContext(value: APIKeyActingContext | undefined) {
-        this._APIKeyActingContext = value;
+        this._aPIKeyActingContext = value;
     }
 
-    private _APIKeyRowFilters?: APIKeyRowFilterBinding[] = undefined;
+    private _aPIKeyRowFilters?: APIKeyRowFilterBinding[] = undefined;
 
     /**
      * Row-filter bindings for the API key this session authenticated with,
@@ -309,13 +309,13 @@ export class UserInfo extends BaseInfo {
      * exposed to or settable by a client.
      */
     public get APIKeyRowFilters(): APIKeyRowFilterBinding[] | undefined {
-        return this._APIKeyRowFilters;
+        return this._aPIKeyRowFilters;
     }
     public set APIKeyRowFilters(value: APIKeyRowFilterBinding[] | undefined) {
-        this._APIKeyRowFilters = value;
+        this._aPIKeyRowFilters = value;
     }
 
-    private _ReturningVisitorContext?: ReturningVisitorContext = undefined;
+    private _returningVisitorContext?: ReturningVisitorContext = undefined;
 
     /**
      * Returning-visitor context for a public web-widget guest session. Set at request time from the
@@ -325,13 +325,13 @@ export class UserInfo extends BaseInfo {
      * client-side. Same getter/setter (non-enumerable) rationale as MagicLinkScope — not a DB/GraphQL field.
      */
     public get ReturningVisitorContext(): ReturningVisitorContext | undefined {
-        return this._ReturningVisitorContext;
+        return this._returningVisitorContext;
     }
     public set ReturningVisitorContext(value: ReturningVisitorContext | undefined) {
-        this._ReturningVisitorContext = value;
+        this._returningVisitorContext = value;
     }
 
-    private _WidgetGuestContext?: WidgetGuestContext = undefined;
+    private _widgetGuestContext?: WidgetGuestContext = undefined;
 
     /**
      * Widget-instance identity for a public web-widget guest session. Set at request time from the
@@ -340,13 +340,13 @@ export class UserInfo extends BaseInfo {
      * id). Same getter/setter (non-enumerable) rationale as MagicLinkScope — not a DB/GraphQL field.
      */
     public get WidgetGuestContext(): WidgetGuestContext | undefined {
-        return this._WidgetGuestContext;
+        return this._widgetGuestContext;
     }
     public set WidgetGuestContext(value: WidgetGuestContext | undefined) {
-        this._WidgetGuestContext = value;
+        this._widgetGuestContext = value;
     }
 
-    private _IsMagicLinkAnonymous: boolean = false;
+    private _isMagicLinkAnonymous: boolean = false;
 
     /**
      * True when this request resolves to the shared Anonymous magic-link principal whose
@@ -357,13 +357,13 @@ export class UserInfo extends BaseInfo {
      * rationale as TenantContext/MagicLinkScope — it is not a database/GraphQL field.
      */
     public get IsMagicLinkAnonymous(): boolean {
-        return this._IsMagicLinkAnonymous;
+        return this._isMagicLinkAnonymous;
     }
     public set IsMagicLinkAnonymous(value: boolean) {
-        this._IsMagicLinkAnonymous = value;
+        this._isMagicLinkAnonymous = value;
     }
 
-    private _UserRoles: UserRoleInfo[] = []
+    private _UserRoles: UserRoleInfo[] = []  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
     /**
      * Gets the roles assigned to this user.
      * @returns {UserRoleInfo[]} Array of user role assignments
@@ -523,7 +523,7 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
     /**
      * Lazily parses and caches the PlatformVariants JSON.
      */
-    private get ParsedVariants(): PlatformVariantsJSON | null {
+    private get parsedVariants(): PlatformVariantsJSON | null {
         if (this._parsedVariants === undefined) {
             this._parsedVariants = ParsePlatformVariants(this.PlatformVariants);
         }
@@ -537,7 +537,7 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
      * @returns The appropriate filter text for the platform
      */
     public GetPlatformFilterText(platform: DatabasePlatform): string {
-        const variant = ResolvePlatformVariant(this.ParsedVariants, 'FilterText', platform);
+        const variant = ResolvePlatformVariant(this.parsedVariants, 'FilterText', platform);
         return variant ?? this.FilterText;
     }
 
@@ -563,15 +563,23 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
                     // containing an apostrophe must not break (or rewrite) the predicate —
                     // the same defect class as the tenant-header injection, in the engine
                     // every RLS filter depends on.
-                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), String(val).replace(/'/g, "''"))
+                    const escaped = String(val).replace(/'/g, "''");
+                    // ...and pass it as a replacement FUNCTION, so `$&`/`` $` ``/`$'`/`$$`
+                    // inside the value are data rather than splice directives. A string
+                    // replacement here rewrote the predicate the quote-escaping above is
+                    // there to protect. See issue #3171.
+                    ret = ret.replace(new RegExp(`{{User${key}}}`, 'g'), () => escaped)
                 }
             }
             // Per-session magic-link resource scope. Fail-closed: an absent scope resolves
             // to '' so a resource-pinned predicate (e.g. ID = '{{ScopeResourceID}}') matches
             // NO rows rather than leaking — a session without the scope sees nothing.
             const scope = user.MagicLinkScope;
-            ret = ret.replace(/\{\{ScopeResourceID\}\}/g, (scope?.ResourceID ?? '').replace(/'/g, "''"));
-            ret = ret.replace(/\{\{ScopeResourceType\}\}/g, (scope?.ResourceType ?? '').replace(/'/g, "''"));
+            // Replacement functions — see the note on the user-token loop above (#3171).
+            const scopeID = (scope?.ResourceID ?? '').replace(/'/g, "''");
+            const scopeType = (scope?.ResourceType ?? '').replace(/'/g, "''");
+            ret = ret.replace(/\{\{ScopeResourceID\}\}/g, () => scopeID);
+            ret = ret.replace(/\{\{ScopeResourceType\}\}/g, () => scopeType);
 
             ret = this.resolveActingTokens(ret, user);
         }
@@ -609,7 +617,9 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
         ];
         for (const [token, value] of scalars) {
             if (value != null && value.length > 0) {
-                ret = ret.replace(new RegExp(`\\{\\{${token}\\}\\}`, 'g'), value.replace(/'/g, "''"));
+                // Replacement function — see the note in MarkupFilterText (#3171).
+                const escaped = value.replace(/'/g, "''");
+                ret = ret.replace(new RegExp(`\\{\\{${token}\\}\\}`, 'g'), () => escaped);
             }
         }
         const companies = acting?.ActingCompanyIDs;
@@ -618,7 +628,7 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
                 .sort()
                 .map(c => `'${c.replace(/'/g, "''")}'`)
                 .join(',');
-            ret = ret.replace(/\{\{ActingCompanyIDs\}\}/g, rendered);
+            ret = ret.replace(/\{\{ActingCompanyIDs\}\}/g, () => rendered);
         }
         return ret;
     }
@@ -813,17 +823,22 @@ export class AuthorizationRoleInfo extends BaseInfo {
      */
     Role: string
 
-    private _RoleInfo: RoleInfo = null
+    private _roleInfo: RoleInfo = null
     public get RoleInfo(): RoleInfo {
-        return this._RoleInfo
+        return this._roleInfo
     }
 
     public AuthorizationType(): AuthorizationRoleType {
         return this.Type.trim().toLowerCase() === 'allow' ? AuthorizationRoleType.Allow : AuthorizationRoleType.Deny
     }
 
+    SetRole(role: RoleInfo) {
+        this._roleInfo = role
+    }
+
+    /** @deprecated Use {@link SetRole}. */
     _setRole(role: RoleInfo) {
-        this._RoleInfo = role
+        return this.SetRole(role);
     }
 
     constructor (initData: any) {

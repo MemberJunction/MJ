@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AgentToolAdapter, createAgentToolAdapter } from '../AgentToolAdapter.js';
+import { AgentToolAdapter, CreateAgentToolAdapter } from '../AgentToolAdapter.js';
 import { MCPClientManager } from '../MCPClientManager.js';
 import type { UserInfo } from '@memberjunction/core';
 import type { MCPListToolsResult, MCPToolCallResult } from '../types.js';
@@ -55,7 +55,7 @@ describe('AgentToolAdapter', () => {
 
     describe('createAgentToolAdapter', () => {
         it('should create an adapter using factory function', () => {
-            const factoryAdapter = createAgentToolAdapter(mockUser);
+            const factoryAdapter = CreateAgentToolAdapter(mockUser);
             expect(factoryAdapter).toBeInstanceOf(AgentToolAdapter);
         });
     });

@@ -5,9 +5,10 @@
  *    field mapping, transactional role / application / application-entity
  *    provisioning, and every rollback path.
  *  - verifyUserRecord (auth/index.ts): the authorization gate in front of it —
- *    autoCreateNewUsers on/off, authorized-domain restrictions (including
- *    wildcard patterns and suffix/prefix-confusion attempts), cache-refresh
- *    retry, and the UserRoles the created user is stamped with.
+ *    autoCreateNewUsers on/off, authorized-domain restrictions against the
+ *    verified identity's email domain (including wildcards, suffix/prefix
+ *    confusion, and a forged Origin), cache-refresh retry, and the UserRoles
+ *    the created user is stamped with.
  *
  * Both production modules run unmodified; mocking happens at the package
  * boundaries (@memberjunction/core, generic-database-provider, core-entities)
@@ -20,7 +21,7 @@ import type { UserInfo } from '@memberjunction/core';
 const {
     mockConfig,
     mockCacheUsers,
-    mockUserByName,
+    mockSystemUserId,
     mockRefresh,
     mockGetEntityObject,
     mockRunViewFn,
@@ -38,6 +39,7 @@ const {
         Name: string;
         Email: string;
         Type: string;
+        IsActive?: boolean;
     }
     return {
         mockConfig: {
@@ -54,7 +56,11 @@ const {
             },
         },
         mockCacheUsers: [] as HoistedCacheUser[],
-        mockUserByName: vi.fn(),
+        // The system user's ID as the cache reports it. A well-formed UUID that matches NO fixture
+        // below, so the resolver's system rung stays inert unless a test opts into it. Well-formed
+        // matters: `UUIDsEqual` is a string compare with no shape check, so a malformed value here
+        // would read as real data while being unrepresentable in the column it stands for.
+        mockSystemUserId: { value: '00000000-0000-0000-0000-00000000d1f5' },
         mockRefresh: vi.fn(),
         mockGetEntityObject: vi.fn(),
         mockRunViewFn: vi.fn(),
@@ -75,9 +81,11 @@ vi.mock('../config.js', () => ({ configInfo: mockConfig }));
 
 vi.mock('@memberjunction/generic-database-provider', () => {
     const instance = {
-        UserByName: mockUserByName,
         get Users() {
             return mockCacheUsers;
+        },
+        get SYSTEM_USER_ID() {
+            return mockSystemUserId.value;
         },
         Refresh: mockRefresh,
         GetSystemUser: vi.fn(),
@@ -160,7 +168,8 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 });
 
-vi.mock('../auth/initializeProviders.js', () => ({ initializeAuthProviders: vi.fn() }));
+vi.mock('../auth/initializeProviders.js', () => ({ InitializeAuthProviders: vi.fn(),
+    get initializeAuthProviders() { return this.InitializeAuthProviders; } }));
 
 vi.mock('@memberjunction/auth-providers', () => ({
     AuthProviderFactory: {
@@ -187,7 +196,7 @@ vi.mock('@memberjunction/api-keys', () => ({
 
 // ─── Import after mocks ─────────────────────────────────────────────────────
 import { NewUserBase } from '../auth/newUsers.js';
-import { verifyUserRecord } from '../auth/index.js';
+import { VerifyUserRecord } from '../auth/index.js';
 
 // ─── Mock-entity plumbing ───────────────────────────────────────────────────
 
@@ -233,7 +242,9 @@ function entitiesOf(name: string): MockEntity[] {
     return createdEntities.filter((e) => e.TestEntityName === name);
 }
 
-const CONTEXT_USER = { ID: 'sys-1', Name: 'system@test.com', Email: 'system@test.com', Type: 'Owner' } as unknown as UserInfo;
+/** The cache row for the configured context user; `CONTEXT_USER` is the same object, typed. */
+const CONTEXT_USER_ROW = { ID: 'sys-1', Name: 'system@test.com', Email: 'system@test.com', Type: 'Owner', IsActive: true };
+const CONTEXT_USER = CONTEXT_USER_ROW as unknown as UserInfo;
 
 function resetConfig(): void {
     mockConfig.userHandling = {
@@ -260,14 +271,22 @@ beforeEach(() => {
     getEntityObjectCalls = [];
     saveBehavior = {};
     entitySeq = 0;
+    // defineProperty rather than assignment: one test replaces this with a throwing getter.
+    Object.defineProperty(mockSystemUserId, 'value', {
+        value: '00000000-0000-0000-0000-00000000d1f5',
+        writable: true,
+        configurable: true,
+    });
+    // The configured context user must be IN the cache: resolution reads the cache directly rather
+    // than going through a UserByName stub that answered regardless of what the cache held.
     mockCacheUsers.length = 0;
+    mockCacheUsers.push(CONTEXT_USER_ROW);
 
     mockRolesArray.length = 0;
     mockRolesArray.push({ ID: 'role-ui', Name: 'UI' }, { ID: 'role-dev', Name: 'Developer' });
     mockApplicationsArray.length = 0;
     mockApplicationsArray.push({ ID: 'app-crm', Name: ' CRM ' }, { ID: 'app-admin', Name: 'Admin' });
 
-    mockUserByName.mockImplementation((name: string) => (name === 'system@test.com' ? CONTEXT_USER : undefined));
     mockGetEntityObject.mockImplementation(async (entityName: string, contextUser?: UserInfo) => {
         const entity = makeMockEntity(entityName);
         createdEntities.push(entity);
@@ -289,7 +308,6 @@ describe('NewUserBase.createNewUser', () => {
             const user = await create();
 
             expect(user).not.toBeNull();
-            expect(mockUserByName).toHaveBeenCalledWith('system@test.com');
             expect(getEntityObjectCalls[0]).toEqual({ entityName: 'MJ: Users', contextUser: CONTEXT_USER });
             // Role records are scoped to the same creation context user
             for (const call of getEntityObjectCalls) {
@@ -298,9 +316,9 @@ describe('NewUserBase.createNewUser', () => {
         });
 
         it('falls back to an Owner-typed cache user (case-insensitive, trimmed) when the configured user is missing', async () => {
-            mockUserByName.mockReturnValue(undefined);
-            const owner = { ID: 'owner-9', Name: 'Fallback Owner', Email: 'owner@x.com', Type: '  OWNER  ' };
-            mockCacheUsers.push({ ID: 'u-1', Name: 'Plain', Email: 'p@x.com', Type: 'User' }, owner);
+            const owner = { ID: 'owner-9', Name: 'Fallback Owner', Email: 'owner@x.com', Type: '  OWNER  ', IsActive: true };
+            mockCacheUsers.length = 0; // the configured user is absent from this deployment
+            mockCacheUsers.push({ ID: 'u-1', Name: 'Plain', Email: 'p@x.com', Type: 'User', IsActive: true }, owner);
 
             const user = await create();
 
@@ -310,8 +328,8 @@ describe('NewUserBase.createNewUser', () => {
         });
 
         it('returns null without opening a transaction when no context user can be resolved at all', async () => {
-            mockUserByName.mockReturnValue(undefined);
-            mockCacheUsers.push({ ID: 'u-1', Name: 'Plain', Email: 'p@x.com', Type: 'User' });
+            mockCacheUsers.length = 0; // no configured user, no system user, no Owner
+            mockCacheUsers.push({ ID: 'u-1', Name: 'Plain', Email: 'p@x.com', Type: 'User', IsActive: true });
 
             const user = await create();
 
@@ -321,8 +339,12 @@ describe('NewUserBase.createNewUser', () => {
         });
 
         it('returns undefined (outer catch) when context resolution throws', async () => {
-            mockUserByName.mockImplementation(() => {
-                throw new Error('cache exploded');
+            // A cache that cannot report its own system user id fails resolution outright.
+            Object.defineProperty(mockSystemUserId, 'value', {
+                get() {
+                    throw new Error('cache exploded');
+                },
+                configurable: true,
             });
 
             const user = await create();
@@ -536,7 +558,7 @@ describe('verifyUserRecord', () => {
     }
 
     it('returns undefined when no email is supplied', async () => {
-        const user = await verifyUserRecord(undefined, 'A', 'B');
+        const user = await VerifyUserRecord(undefined, 'A', 'B');
 
         expect(user).toBeUndefined();
         expect(mockGetEntityObject).not.toHaveBeenCalled();
@@ -545,7 +567,7 @@ describe('verifyUserRecord', () => {
     it('returns the cached user, matching email case-insensitively and trimmed', async () => {
         addCacheUser('someone@example.com');
 
-        const user = await verifyUserRecord('  SomeOne@Example.COM  ', 'A', 'B');
+        const user = await VerifyUserRecord('  SomeOne@Example.COM  ', 'A', 'B');
 
         expect(user).toBeDefined();
         expect((user as unknown as { Email: string }).Email).toBe('someone@example.com');
@@ -556,7 +578,7 @@ describe('verifyUserRecord', () => {
         mockCacheUsers.push({ ID: 'broken-1', Name: 'Broken', Email: '  ', Type: 'User' });
         const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-        const user = await verifyUserRecord('missing@example.com', undefined, undefined);
+        const user = await VerifyUserRecord('missing@example.com', undefined, undefined);
 
         expect(user).toBeUndefined();
         expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('broken-1'));
@@ -566,15 +588,15 @@ describe('verifyUserRecord', () => {
         it('does NOT create a user when autoCreateNewUsers is false', async () => {
             mockConfig.userHandling.autoCreateNewUsers = false;
 
-            const user = await verifyUserRecord('new@example.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('does NOT create a user when firstName or lastName is missing', async () => {
-            const missingFirst = await verifyUserRecord('new@example.com', undefined, 'User');
-            const missingLast = await verifyUserRecord('new@example.com', 'New', undefined);
+            const missingFirst = await VerifyUserRecord('new@example.com', undefined, 'User');
+            const missingLast = await VerifyUserRecord('new@example.com', 'New', undefined);
 
             expect(missingFirst).toBeUndefined();
             expect(missingLast).toBeUndefined();
@@ -584,7 +606,7 @@ describe('verifyUserRecord', () => {
         it('creates the user when enabled and domains are unrestricted, stamping config roles onto the returned UserInfo', async () => {
             mockConfig.userHandling.newUserRoles = ['UI', 'Developer'];
 
-            const user = await verifyUserRecord('new@example.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeDefined();
             const stamped = user as unknown as { Email: string; UserRoles: Array<{ Role: string; RoleID: string; UserID: string }> };
@@ -600,10 +622,12 @@ describe('verifyUserRecord', () => {
         it('returns undefined when the underlying createNewUser fails', async () => {
             saveBehavior['MJ: Users'] = () => false;
 
-            const user = await verifyUserRecord('new@example.com', 'New', 'User');
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeUndefined();
-            expect(mockCacheUsers).toHaveLength(0);
+            // The cache is no longer empty at rest (it holds the configured context user), so
+            // assert the thing that actually matters: the failed user was not added to it.
+            expect(mockCacheUsers.some((u) => u.Email === 'new@example.com')).toBe(false);
         });
     });
 
@@ -613,61 +637,84 @@ describe('verifyUserRecord', () => {
             mockConfig.userHandling.newUserAuthorizedDomains = ['example.com'];
         });
 
-        it('creates the user when the request domain matches an authorized domain', async () => {
-            const user = await verifyUserRecord('new@example.com', 'New', 'User', 'example.com');
+        it('creates the user when the email domain is authorized', async () => {
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User');
 
             expect(user).toBeDefined();
             expect(entitiesOf('MJ: Users')).toHaveLength(1);
         });
 
-        it('does NOT create when the request domain matches no authorized domain', async () => {
-            const user = await verifyUserRecord('new@evil.com', 'New', 'User', 'evil.com');
+        it('does NOT create when the email domain is not authorized', async () => {
+            const user = await VerifyUserRecord('new@evil.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
-        it('does NOT create when restricted and no request domain is supplied', async () => {
-            const user = await verifyUserRecord('new@example.com', 'New', 'User', undefined);
+        it('creates when restricted and no request Origin is supplied, if the email domain is authorized', async () => {
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User', undefined);
+
+            expect(user).toBeDefined();
+            expect(entitiesOf('MJ: Users')).toHaveLength(1);
+        });
+
+        it('does NOT create when a forged Origin is authorized but the email domain is not', async () => {
+            const user = await VerifyUserRecord('new@evil.com', 'New', 'User', 'example.com');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
-        it('matches domains case-insensitively', async () => {
-            const user = await verifyUserRecord('new@example.com', 'New', 'User', 'EXAMPLE.COM');
+        it('matches email domains case-insensitively', async () => {
+            const user = await VerifyUserRecord('new@EXAMPLE.COM', 'New', 'User');
 
             expect(user).toBeDefined();
         });
 
-        it('supports wildcard patterns for subdomains', async () => {
+        it('supports wildcard patterns for email subdomains', async () => {
             mockConfig.userHandling.newUserAuthorizedDomains = ['*.example.com'];
 
-            const user = await verifyUserRecord('new@example.com', 'New', 'User', 'teams.example.com');
+            const user = await VerifyUserRecord('new@mail.example.com', 'New', 'User');
 
             expect(user).toBeDefined();
+        });
+
+        it('does NOT match the apex against "*.example.com" (pattern is matched in full)', async () => {
+            mockConfig.userHandling.newUserAuthorizedDomains = ['*.example.com'];
+
+            const user = await VerifyUserRecord('new@example.com', 'New', 'User');
+
+            expect(user).toBeUndefined();
+            expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('rejects prefix confusion: "*.example.com" does not match "evilexample.com" (dot is escaped)', async () => {
             mockConfig.userHandling.newUserAuthorizedDomains = ['*.example.com'];
 
-            const user = await verifyUserRecord('new@evilexample.com', 'New', 'User', 'evilexample.com');
+            const user = await VerifyUserRecord('new@evilexample.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('rejects suffix confusion: the pattern is anchored, so "example.com.evil.com" is not authorized', async () => {
-            const user = await verifyUserRecord('new@example.com.evil.com', 'New', 'User', 'example.com.evil.com');
+            const user = await VerifyUserRecord('new@example.com.evil.com', 'New', 'User');
 
             expect(user).toBeUndefined();
             expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
 
         it('rejects "evilexample.com" against the plain "example.com" pattern (anchored at both ends)', async () => {
-            const user = await verifyUserRecord('x@evilexample.com', 'New', 'User', 'evilexample.com');
+            const user = await VerifyUserRecord('x@evilexample.com', 'New', 'User');
 
             expect(user).toBeUndefined();
+        });
+
+        it('does NOT create when the identity has no email domain (username-only IdP)', async () => {
+            const user = await VerifyUserRecord('bare-username', 'New', 'User');
+
+            expect(user).toBeUndefined();
+            expect(mockGetEntityObject).not.toHaveBeenCalled();
         });
     });
 
@@ -681,7 +728,7 @@ describe('verifyUserRecord', () => {
             });
             const dataSource = {} as unknown as import('mssql').ConnectionPool;
 
-            const user = await verifyUserRecord('late@example.com', undefined, undefined, undefined, dataSource);
+            const user = await VerifyUserRecord('late@example.com', undefined, undefined, undefined, dataSource);
 
             expect(user).toBeDefined();
             expect((user as unknown as { Email: string }).Email).toBe('late@example.com');
@@ -693,7 +740,7 @@ describe('verifyUserRecord', () => {
             mockConfig.userHandling.updateCacheWhenNotFound = true;
             const dataSource = {} as unknown as import('mssql').ConnectionPool;
 
-            const user = await verifyUserRecord('never@example.com', undefined, undefined, undefined, dataSource);
+            const user = await VerifyUserRecord('never@example.com', undefined, undefined, undefined, dataSource);
 
             expect(user).toBeUndefined();
             expect(mockRefresh).toHaveBeenCalledTimes(1);

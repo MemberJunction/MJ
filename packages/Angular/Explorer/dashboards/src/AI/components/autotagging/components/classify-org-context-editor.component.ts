@@ -49,12 +49,17 @@ export class ClassifyOrgContextEditorComponent extends BaseAngularComponent {
     }
 
     /** React to the accordion expand/collapse, lazy-loading the value the first time. */
-    public async onExpandedChange(expanded: boolean): Promise<void> {
+    public async OnExpandedChange(expanded: boolean): Promise<void> {
         this.Expanded = expanded;
         if (this.Expanded && !this.loaded) {
             await this.load();
         }
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnExpandedChange}. */
+    public async onExpandedChange(expanded: boolean): Promise<void> {
+        return this.OnExpandedChange(expanded);
     }
 
     private async resolveKnowledgeHubApplicationID(): Promise<string | null> {

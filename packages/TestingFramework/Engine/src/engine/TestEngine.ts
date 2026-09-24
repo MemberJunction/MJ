@@ -27,6 +27,8 @@ import { BaseTestDriver } from '../drivers/BaseTestDriver';
 import { IOracle } from '../oracles/IOracle';
 import { SchemaValidatorOracle } from '../oracles/SchemaValidatorOracle';
 import { TraceValidatorOracle } from '../oracles/TraceValidatorOracle';
+import { TraceSubAgentValidatorOracle } from '../oracles/TraceSubAgentValidatorOracle';
+import { AgentDecisionOracle, ResponseWellFormedOracle } from '../oracles/AgentDecisionOracle';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
@@ -42,9 +44,9 @@ import {
     SuiteFixtureContext
 } from '../types';
 import {
-    gatherExecutionContext,
-    getMachineName,
-    getMachineIdentifier
+    GatherExecutionContext,
+    GetMachineName,
+    GetMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
 
@@ -651,6 +653,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     private async registerBuiltInOracles(): Promise<void> {
         this.RegisterOracle(new SchemaValidatorOracle());
         this.RegisterOracle(new TraceValidatorOracle());
+        this.RegisterOracle(new TraceSubAgentValidatorOracle());
+        this.RegisterOracle(new AgentDecisionOracle());
+        this.RegisterOracle(new ResponseWellFormedOracle());
         this.RegisterOracle(new LLMJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
@@ -848,11 +853,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         }
 
         // Set execution context fields for cross-server aggregation
-        testRun.MachineName = getMachineName();
-        testRun.MachineID = getMachineIdentifier() || null;
+        testRun.MachineName = GetMachineName();
+        testRun.MachineID = GetMachineIdentifier() || null;
         testRun.RunByUserName = contextUser.Name;
         testRun.RunByUserEmail = contextUser.Email;
-        testRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
+        testRun.RunContextDetails = JSON.stringify(GatherExecutionContext());
 
         const saved = await testRun.Save();
         if (!saved) {
@@ -890,11 +895,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         }
 
         // Set execution context fields for cross-server aggregation
-        suiteRun.MachineName = getMachineName();
-        suiteRun.MachineID = getMachineIdentifier() || null;
+        suiteRun.MachineName = GetMachineName();
+        suiteRun.MachineID = GetMachineIdentifier() || null;
         suiteRun.RunByUserName = contextUser.Name;
         suiteRun.RunByUserEmail = contextUser.Email;
-        suiteRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
+        suiteRun.RunContextDetails = JSON.stringify(GatherExecutionContext());
 
         const saved = await suiteRun.Save();
         if (!saved) {
@@ -1320,6 +1325,17 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             errorMessage: driverResult.errorMessage,
             resolvedVariables
         };
+
+        // Tiering telemetry, when the driver reports it. Without this the fields
+        // exist on TestRunResult and are never populated, so reporting cannot
+        // segment tier mix or replay share and the drift signal survives only
+        // inside TestRun.ActualOutputData.
+        if (driverResult.tier !== undefined) {
+            result.tier = driverResult.tier;
+        }
+        if (driverResult.replay !== undefined) {
+            result.replay = driverResult.replay;
+        }
 
         // Add sequence if this is a repeated test iteration
         if (sequence && sequence > 1) {

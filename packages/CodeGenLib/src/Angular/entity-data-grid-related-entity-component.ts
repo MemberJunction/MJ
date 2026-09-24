@@ -53,7 +53,7 @@ export class EntityDataGridRelatedEntityGenerator extends RelatedEntityDisplayCo
 
         const template = `<mj-explorer-entity-data-grid
     [Params]="BuildRelationshipViewParamsByEntityName('${input.RelationshipInfo!.RelatedEntity.trim()}','${input.RelationshipInfo!.RelatedEntityJoinField.trim()}')"
-    [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity.trim()}')"
+    [NewRecordValues]="NewRecordValues('${input.RelationshipInfo!.RelatedEntity.trim()}','${input.RelationshipInfo!.RelatedEntityJoinField.trim()}')"
     [AllowLoad]="${allowLoadCheck}"
     [ShowToolbar]="true"
     (Navigate)="OnFormNavigate($event)"${afterDataLoadEvent ? `\n    ${afterDataLoadEvent}` : ''}

@@ -11,7 +11,7 @@ import {
   Metadata, RunViewParams, LogError,
   RecordDependency, BaseEntityEvent, CompositeKey, RunView, RunViewResult
 } from '@memberjunction/core';
-import { MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
+import { DeserializeValidationErrors, MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
 import { FormEditingCompleteEvent, PendingRecordItem, BaseFormComponentEventCodes } from '@memberjunction/ng-base-types';
 import { MJListEntity } from '@memberjunction/core-entities';
 
@@ -23,6 +23,7 @@ import {
   FormContext,
   FormNotificationEvent,
   RecordSavedEvent,
+  RecordRefreshedEvent,
   RecordDeletedEvent,
   RecordSaveFailedEvent,
   RecordDeleteFailedEvent,
@@ -30,6 +31,7 @@ import {
 } from './types/form-types';
 import { FormStateService } from './form-state.service';
 import { EntityFormConfig } from './types/entity-form-config';
+import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs } from './types/form-toolbar-item';
 import { CollectFormPanelRegistrations } from './panel-slot/collect-form-panel-registrations';
 import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 
@@ -52,6 +54,7 @@ import { ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 @Directive()
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
   public EditMode: boolean = false;
+  public IsRefreshing: boolean = false;
   public FavoriteInitDone: boolean = false;
 
   /**
@@ -125,6 +128,94 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   private _pendingRecords: PendingRecordItem[] = [];
+  private _registeredToolbarItems = new Map<string, FormToolbarItemConfig>();
+  private _toolbarItemOverrides = new Map<string, Partial<FormToolbarItemConfig>>();
+
+  /**
+   * Registers a dynamic toolbar action item / button.
+   * Can be called during ngOnInit or at runtime.
+   */
+  public RegisterToolbarItem(item: FormToolbarItemConfig): void {
+    this._registeredToolbarItems.set(item.Key, { ...item });
+    this.cdr?.markForCheck();
+  }
+
+  /**
+   * Unregisters a previously registered dynamic toolbar item by key.
+   */
+  public UnregisterToolbarItem(key: string): void {
+    if (this._registeredToolbarItems.delete(key)) {
+      this.cdr?.markForCheck();
+    }
+  }
+
+  /**
+   * Configures overrides for any toolbar item (standard built-in items like 'edit',
+   * 'delete', 'favorite', 'history', etc., or custom items).
+   * Allows dynamically changing visibility, disabled state, tooltips, order, icon, etc.
+   */
+  public ConfigureToolbarItem(key: FormToolbarItemKey, overrides: Partial<FormToolbarItemConfig>): void {
+    const existing = this._toolbarItemOverrides.get(key) || {};
+    this._toolbarItemOverrides.set(key, { ...existing, ...overrides });
+    this.cdr?.markForCheck();
+  }
+
+  /**
+   * Dynamically hides a toolbar item by key.
+   */
+  public HideToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Visible: false });
+  }
+
+  /**
+   * Dynamically shows a toolbar item by key.
+   */
+  public ShowToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Visible: true });
+  }
+
+  /**
+   * Dynamically disables a toolbar item by key, with an optional reason string for the tooltip.
+   */
+  public DisableToolbarItem(key: FormToolbarItemKey, reason?: string): void {
+    this.ConfigureToolbarItem(key, { Disabled: reason ?? true });
+  }
+
+  /**
+   * Dynamically enables a toolbar item by key.
+   */
+  public EnableToolbarItem(key: FormToolbarItemKey): void {
+    this.ConfigureToolbarItem(key, { Disabled: false });
+  }
+
+  /**
+   * Sets the numeric display order for a toolbar item (lower numbers appear earlier).
+   */
+  public SetToolbarItemOrder(key: FormToolbarItemKey, order: number): void {
+    this.ConfigureToolbarItem(key, { Order: order });
+  }
+
+  /**
+   * Returns all dynamically registered toolbar items.
+   */
+  public get RegisteredToolbarItems(): FormToolbarItemConfig[] {
+    return Array.from(this._registeredToolbarItems.values());
+  }
+
+  /**
+   * Returns the map of toolbar item overrides.
+   */
+  public get ToolbarItemOverrides(): ReadonlyMap<string, Partial<FormToolbarItemConfig>> {
+    return this._toolbarItemOverrides;
+  }
+
+  /**
+   * Hook invoked when a custom or dynamic toolbar item is clicked.
+   * Subclasses can override this method to handle custom button clicks.
+   */
+  public OnCustomToolbarButtonClick(event: FormToolbarItemClickEventArgs): void {
+    // Subclasses can override
+  }
 
   // #region Injected Dependencies (no constructor params)
 
@@ -144,6 +235,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   /** Emitted after a record is saved successfully */
   @Output() RecordSaved = new EventEmitter<RecordSavedEvent>();
+
+  /** Emitted after a record is refreshed from the database successfully */
+  @Output() RecordRefreshed = new EventEmitter<RecordRefreshedEvent>();
 
   /** Emitted after a record is deleted successfully */
   @Output() RecordDeleted = new EventEmitter<RecordDeletedEvent>();
@@ -169,7 +263,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   /** Subscription to form state changes */
   private formStateSubscription?: Subscription;
 
-  @ViewChildren(MjCollapsiblePanelComponent) collapsiblePanels!: QueryList<MjCollapsiblePanelComponent>;
+  @ViewChildren(MjCollapsiblePanelComponent)
+  collapsiblePanels!: QueryList<MjCollapsiblePanelComponent>;
 
   async ngOnInit() {
     if (this.record) {
@@ -348,47 +443,53 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         // ignore blur errors
       }
 
-      if (this.record) {
-        this.PopulatePendingRecords();
-        const valResults = this.Validate();
-        if (valResults.Success) {
-          const result = await this.InternalSaveRecord();
-          if (result) {
-            this._pendingRecords = [];
-            this.clearValidationState();
-            if (StopEditModeAfterSave)
-              this.EndEditMode();
-
-            this.Notification.emit({ Message: 'Record saved successfully', Type: 'success', Duration: 2500 });
-            this.RecordSaved.emit({
-              EntityName: this.record.EntityInfo.Name,
-              RecordId: this.record.PrimaryKey.ToString(),
-              Result: { Success: true }
-            });
-            return true;
-          } else {
-            const serverMsg = this.record.LatestResult?.Message || '';
-            const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
-            this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
-            this.RecordSaveFailed.emit({ EntityName: this.record.EntityInfo.Name, ErrorMessage: errorMsg });
-          }
-        } else {
-          // Broadcast validation errors to all fields via FormContext
-          this._showValidation = true;
-          this._validationErrors = valResults.Errors;
-          this.cdr.markForCheck();
-
-          const errorMessages = valResults.Errors.map(x => x.Message);
-          this.Notification.emit({
-            Message: 'Validation Errors\n' + errorMessages.join('\n'),
-            Type: 'warning',
-            Duration: 5000
-          });
-          this.ValidationFailed.emit({ EntityName: this.record.EntityInfo.Name, Errors: errorMessages });
-        }
+      if (!this.record) {
+        // The only failure this method cannot show the user: with no record there is nothing to
+        // validate, toast about or paint. Every other refusal below is already reported through
+        // the toast and the fields, so it is NOT logged again here — a second, generic line
+        // ("Record not found") on a create that failed validation sent readers hunting for an
+        // ID or routing fault that did not exist.
+        LogError('Could not save record: the form has no record bound to it');
+        return false;
       }
 
-      LogError("Could not save record: Record not found");
+      this.PopulatePendingRecords();
+      const valResults = this.Validate();
+      if (!valResults.Success) {
+        this.publishValidationFailure(valResults.Errors);
+        return false;
+      }
+
+      const result = await this.InternalSaveRecord();
+      if (result) {
+        this._pendingRecords = [];
+        this.clearValidationState();
+        if (StopEditModeAfterSave)
+          this.EndEditMode();
+
+        this.Notification.emit({ Message: 'Record saved successfully', Type: 'success', Duration: 2500 });
+        this.RecordSaved.emit({
+          EntityName: this.record.EntityInfo.Name,
+          RecordId: this.record.PrimaryKey.ToString(),
+          Result: { Success: true }
+        });
+        return true;
+      }
+
+      const serverMsg = this.record.LatestResult?.Message || '';
+      const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
+      // A server-side Validate()/ValidateAsync() refusal comes back with its field-named
+      // reasons in LatestResult.Errors (rehydrated by the provider). When any of them names a
+      // field on this record, publish them through the SAME path the local Validate() branch
+      // uses above, so the field paints red with its message instead of the user getting a
+      // toast and a form with nothing marked. Errors with no field source stay toast-only.
+      const serverErrors = this.fieldSourcedServerErrors();
+      if (serverErrors.length > 0) {
+        this.publishValidationFailure(serverErrors);
+      } else {
+        this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
+      }
+      this.RecordSaveFailed.emit({ EntityName: this.record.EntityInfo.Name, ErrorMessage: errorMsg });
       return false;
     } catch (e) {
       const errorMsg = 'Error saving record: ' + e;
@@ -431,6 +532,86 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       if (wasNeverSaved) {
         this.Navigate.emit({ Kind: 'dismiss', Reason: 'new-record-discarded' });
       }
+    }
+  }
+
+  /**
+   * Re-fetches the current record from the database, updating field values
+   * in-place and resetting dirty flags. No-op in edit mode or on an unsaved
+   * record. Related-entity grids are notified via the form container's
+   * {@link FormRecordRefreshCoordinator} after this emits {@link RecordRefreshed}.
+   *
+   * @returns true if the record was reloaded from the database.
+   */
+  public async RefreshRecord(): Promise<boolean> {
+    if (!this.canRefreshRecord()) {
+      return false;
+    }
+
+    this.IsRefreshing = true;
+    this.cdr.markForCheck();
+
+    try {
+      return await this.executeRecordRefresh();
+    } finally {
+      this.IsRefreshing = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  private canRefreshRecord(): boolean {
+    return !!this.record && this.record.IsSaved && !this.EditMode;
+  }
+
+  private async executeRecordRefresh(): Promise<boolean> {
+    const record = this.record;
+    if (!record) {
+      return false;
+    }
+
+    try {
+      const ok = await record.Refresh();
+      if (!ok) {
+        this.Notification.emit({
+          Message: 'Failed to refresh record from database',
+          Type: 'error',
+          Duration: 5000,
+        });
+        return false;
+      }
+
+      await this.reloadFavoriteStatusAfterRefresh(record);
+      this.Notification.emit({
+        Message: 'Record refreshed from database',
+        Type: 'info',
+        Duration: 2000,
+      });
+      this.RecordRefreshed.emit({
+        EntityName: record.EntityInfo.Name,
+        Record: record,
+      });
+      return true;
+    } catch (e) {
+      const detail = e instanceof Error ? e.message : String(e);
+      this.Notification.emit({
+        Message: 'Error refreshing record: ' + detail,
+        Type: 'error',
+        Duration: 5000,
+      });
+      return false;
+    }
+  }
+
+  private async reloadFavoriteStatusAfterRefresh(record: BaseEntity): Promise<void> {
+    const md = this.ProviderToUse;
+    try {
+      this._isFavorite = await md.GetRecordFavoriteStatus(
+        md.CurrentUser.ID,
+        record.EntityInfo.Name,
+        record.PrimaryKey,
+      );
+    } catch {
+      // Non-critical — favorite status remains as is
     }
   }
 
@@ -578,12 +759,37 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return undefined;
   }
 
-  public NewRecordValues(relatedEntityName: string): Record<string, unknown> {
-    const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName);
-    if (eri)
-      return this.NewRecordValuesByEntityRelationship(eri);
-    else
-      return {};
+  /**
+   * Default values for a new related-entity record so it links back here.
+   * Pass `relatedEntityJoinField` when more than one relationship targets the
+   * same entity (Bill-To vs Ship-To). When omitted and several matches exist,
+   * every matching FK is set — same fields the related grid is filtering on.
+   */
+  public NewRecordValues(relatedEntityName: string, relatedEntityJoinField?: string): Record<string, unknown> {
+    if (!this.record) return {};
+    if (relatedEntityJoinField) {
+      const eri = this.GetEntityRelationshipByRelatedEntityName(relatedEntityName, relatedEntityJoinField);
+      if (eri) return this.NewRecordValuesByEntityRelationship(eri);
+      return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(this.record, [relatedEntityJoinField]);
+    }
+    const matches = this.record.EntityInfo.RelatedEntities.filter(
+      (x) => x.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase(),
+    );
+    if (matches.length === 0) return {};
+    if (matches.length === 1) return this.NewRecordValuesByEntityRelationship(matches[0]);
+    return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(
+      this.record,
+      matches.map((m) => m.RelatedEntityJoinField),
+    );
+  }
+
+  /**
+   * Default values for a new related record, setting every listed join field
+   * to this record's key. Pair with {@link BuildRelationshipViewParamsForJoinFields}.
+   */
+  public NewRecordValuesForJoinFields(relatedEntityName: string, joinFields: readonly string[]): Record<string, unknown> {
+    if (!this.record || !relatedEntityName) return {};
+    return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(this.record, joinFields);
   }
 
   public NewRecordValuesByEntityRelationship(item: EntityRelationshipInfo): Record<string, unknown> {
@@ -755,6 +961,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       showEmptyFields: this.showEmptyFields,
       showValidation: this._showValidation,
       validationErrors: this._validationErrors,
+      validationRevision: this._validationRevision,
       collapsibleSections: this.Config?.CollapsibleSections,
       enableRecordLinks: this.Config?.EnableRecordLinks,
       showRelatedEntities: this.Config?.ShowRelatedEntities,
@@ -796,6 +1003,50 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (!this.Config) return true;
     if (this.Config.Toolbar === null) return false;
     return this.Config.Toolbar?.AllowSectionReorder ?? true;
+  }
+
+  /**
+   * Bumped on every {@link publishValidationFailure}; published as `FormContext.validationRevision`
+   * so a field can tell an edit made before the failure from one made after it.
+   */
+  private _validationRevision = 0;
+
+  /**
+   * The ONE way validation errors reach the fields and the user — used by both the local
+   * `Validate()` refusal and a server-side refusal that came back on `LatestResult.Errors`, so the
+   * two cannot drift: broadcast through `FormContext` (fields match `Source === FieldName`), bump
+   * the revision, toast the messages, and raise `ValidationFailed`.
+   */
+  private publishValidationFailure(errors: ValidationErrorInfo[]): void {
+    this._showValidation = true;
+    this._validationErrors = errors;
+    this._validationRevision++;
+    this.cdr.markForCheck();
+
+    const errorMessages = errors.map(x => x.Message);
+    this.Notification.emit({
+      Message: 'Validation Errors\n' + errorMessages.join('\n'),
+      Type: 'warning',
+      Duration: 5000
+    });
+    this.ValidationFailed.emit({ EntityName: this.record.EntityInfo.Name, Errors: errorMessages });
+  }
+
+  /**
+   * The structured errors of the last failed save, when at least one names a field on this record.
+   *
+   * `LatestResult.Errors` is untyped and may hold anything a provider put there, so it is normalised
+   * through `DeserializeValidationErrors` first. Returns `[]` unless some entry's `Source` is one of
+   * this record's field names — a refusal that is purely record-level ("the database timed out",
+   * "not authorised") has nothing to paint and keeps the plain error toast. When there IS a
+   * field-sourced entry, the WHOLE set is returned: field-agnostic entries paint nothing (no field
+   * matches an empty Source) but still belong in the toast.
+   */
+  private fieldSourcedServerErrors(): ValidationErrorInfo[] {
+    const errors = DeserializeValidationErrors(this.record?.LatestResult?.Errors);
+    if (errors.length === 0) return [];
+    const fieldNames = new Set(this.record.EntityInfo.Fields.map(f => f.Name));
+    return errors.some(e => e.Source.length > 0 && fieldNames.has(e.Source)) ? errors : [];
   }
 
   /** Clears all validation display state (called on save success, cancel, end edit) */
@@ -862,10 +1113,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public SetSectionRowCount(sectionKey: string, rowCount: number): void {
-    const section = this.sectionMap.get(sectionKey);
-    if (section) {
+    let section = this.sectionMap.get(sectionKey);
+    if (!section) {
+      // Contribution panels use their own SectionKey (e.g. 'orders') which
+      // is never seeded by generated initSections(). Upsert so the left-nav
+      // rail badge can read the count the same way baked grids do.
+      section = new BaseFormSectionInfo(sectionKey, sectionKey, false, rowCount);
+      this.sections.push(section);
+      this.sectionMap.set(sectionKey, section);
+    } else {
       section.rowCount = rowCount;
     }
+    this.cdr.markForCheck();
   }
 
   public GetSectionPanelHeight(sectionKey: string): number | undefined {

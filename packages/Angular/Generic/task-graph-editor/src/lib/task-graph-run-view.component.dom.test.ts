@@ -1,11 +1,33 @@
 import { describe, it, expect } from 'vitest';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { IMetadataProvider, RunViewParams } from '@memberjunction/core';
 import { createFakeProvider } from '@memberjunction/ng-test-utils';
 import type { TaskRunEdge, TaskRunRow } from '@memberjunction/ai-core-plus';
+import { AngularSplitModule } from 'angular-split';
 import { TaskGraphEditorModule } from './task-graph-editor.module';
 import { TaskGraphRunViewComponent, TaskGraphRunNodeSelectedEvent } from './task-graph-run-view.component';
 import { TaskGraphSelectionChangedEventArgs } from './task-graph-editor-events';
+
+/**
+ * angular-split's SplitComponent inject()s DOCUMENT. In the M5 joined
+ * workspace that hits NG0203 (two @angular/core copies). These specs cover
+ * the run-view summary/canvas, not the splitter.
+ */
+@Component({ selector: 'as-split', standalone: true, template: '<ng-content></ng-content>' })
+class AsSplitStub {
+  @Input() direction: unknown;
+  @Input() unit: unknown;
+  @Input() gutterSize: unknown;
+  @Output() dragEnd = new EventEmitter<{ sizes: number[] }>();
+}
+
+@Component({ selector: 'as-split-area', standalone: true, template: '<ng-content></ng-content>' })
+class AsSplitAreaStub {
+  @Input() size: unknown;
+  @Input() minSize: unknown;
+  @Input() visible: unknown;
+}
 
 /**
  * DOM-level spec for `<mj-task-graph-run-view>`.
@@ -58,7 +80,10 @@ describe('TaskGraphRunViewComponent (DOM)', () => {
         parentTaskID: string | null,
         beforeLoad?: (component: TaskGraphRunViewComponent) => void,
     ): ComponentFixture<TaskGraphRunViewComponent> {
-        TestBed.configureTestingModule({ imports: [TaskGraphEditorModule] });
+        TestBed.configureTestingModule({ imports: [TaskGraphEditorModule] }).overrideModule(TaskGraphEditorModule, {
+            remove: { imports: [AngularSplitModule] },
+            add: { imports: [AsSplitStub, AsSplitAreaStub] },
+        });
         const fixture = TestBed.createComponent(TaskGraphRunViewComponent);
         fixture.componentRef.setInput('Provider', provider);
         beforeLoad?.(fixture.componentInstance);

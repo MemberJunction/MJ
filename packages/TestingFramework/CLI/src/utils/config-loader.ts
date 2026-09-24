@@ -8,9 +8,18 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { CLIConfig } from '../types';
 
-// Load environment variables BEFORE loading config
-// This ensures process.env is populated when mj.config.cjs is evaluated
-dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true, quiet: true });
+// Load environment variables BEFORE loading config, so process.env is populated
+// when mj.config.cjs is evaluated.
+//
+// `override` is deliberately FALSE (dotenv's default): a variable already set in
+// the environment must win over `.env`. With `override: true`, an explicit
+// `DB_DATABASE=MJ_scratch mj test ...` was silently discarded and the suite ran —
+// including mutation tests — against whatever `.env` pointed at. That makes the
+// "one database per agent" rule (migrations/CLAUDE.md) unenforceable, and it
+// diverged from every other `mj` command (`migrate`, `codegen`, `sync push` all
+// honour the environment). Filling in only what is unset preserves the original
+// intent without hijacking a deliberate override.
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), quiet: true });
 
 export interface MJConfig {
     // Database settings
@@ -19,16 +28,16 @@ export interface MJConfig {
      * behaviour; `initializeMJProvider` falls back to the DB_PLATFORM env var when this is unset,
      * which is how a repo whose mj.config.cjs predates this key still switches platform.
      */
-    dbPlatform?: 'sqlserver' | 'postgresql';
-    dbHost?: string;
-    dbDatabase?: string;
-    dbPort?: number | string;
-    dbUsername?: string;
-    dbPassword?: string;
-    coreSchema?: string;
+    dbPlatform?: 'sqlserver' | 'postgresql';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    dbHost?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    dbDatabase?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    dbPort?: number | string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    dbUsername?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    dbPassword?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    coreSchema?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     // Testing CLI specific settings
-    testing?: {
+    testing?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         /**
          * Module specifiers side-effect-imported before `mj test` resolves any integration
          * bundle — each import registers its check bundles on the IntegrationCheckRegistry.
@@ -45,7 +54,7 @@ export interface MJConfig {
     };
 
     // Legacy format database config
-    database?: {
+    database?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         host?: string;
         name?: string;
         port?: number;
@@ -62,7 +71,7 @@ let cachedConfig: MJConfig | null = null;
  *
  * @returns Full MJ configuration
  */
-export async function loadMJConfig(): Promise<MJConfig> {
+export async function LoadMJConfig(): Promise<MJConfig> {
     if (cachedConfig) {
         return cachedConfig;
     }
@@ -88,12 +97,17 @@ export async function loadMJConfig(): Promise<MJConfig> {
     return cachedConfig;
 }
 
+/** @deprecated Use {@link LoadMJConfig}. */
+export async function loadMJConfig(): Promise<MJConfig> {
+    return LoadMJConfig();
+}
+
 /**
  * Load testing CLI configuration with defaults
  *
  * @returns CLI configuration
  */
-export function loadCLIConfig(): CLIConfig {
+export function LoadCLIConfig(): CLIConfig {
     // Synchronous version for backward compatibility
     // Uses cached config if available, otherwise returns defaults
     const testingConfig = cachedConfig?.testing || {};
@@ -114,4 +128,9 @@ export function loadCLIConfig(): CLIConfig {
             schema: cachedConfig?.coreSchema || '__mj'
         }
     };
+}
+
+/** @deprecated Use {@link LoadCLIConfig}. */
+export function loadCLIConfig(): CLIConfig {
+    return LoadCLIConfig();
 }

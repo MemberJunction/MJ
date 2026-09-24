@@ -25,7 +25,7 @@ import type { FormContributionWinner } from './form-contribution';
             @if (Record.IsSaved) {
                 <mj-explorer-entity-data-grid
                     [Params]="FormComponent.BuildRelationshipViewParamsByEntityName(Contribution.RelatedEntity!, Contribution.RelatedJoinField)"
-                    [NewRecordValues]="FormComponent.NewRecordValues(Contribution.RelatedEntity!)"
+                    [NewRecordValues]="FormComponent.NewRecordValues(Contribution.RelatedEntity!, Contribution.RelatedJoinField)"
                     [AllowLoad]="FormComponent.IsSectionExpanded(Contribution.BakedSectionKey)"
                     [ShowToolbar]="true"
                     (Navigate)="FormComponent.OnFormNavigate($event)"
@@ -42,8 +42,13 @@ export class RelatedEntityGridPanelComponent {
     @Input() FormComponent!: BaseFormComponent;
     @Input() FormContext?: FormContext;
 
-    public onDataLoad(event: AfterDataLoadEventArgs): void {
+    public OnDataLoad(event: AfterDataLoadEventArgs): void {
         this.FormComponent.SetSectionRowCount(this.Contribution.BakedSectionKey, event.totalRowCount);
+    }
+
+    /** @deprecated Use {@link OnDataLoad}. */
+    public onDataLoad(event: AfterDataLoadEventArgs): void {
+        return this.OnDataLoad(event);
     }
 
     public get GridIcon(): string {

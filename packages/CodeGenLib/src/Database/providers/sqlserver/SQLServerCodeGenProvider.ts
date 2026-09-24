@@ -9,11 +9,11 @@ import {
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
-import { RegisterClass } from '@memberjunction/global';
-import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
-import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
-import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
-import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
+import { ordinalCompare, RegisterClass } from '@memberjunction/global';
+import { SortBySequenceAndCreatedAt } from '../../../Misc/util';
+import { configInfo, dbDatabase, MjCoreSchema } from '../../../Config/config';
+import { MSSQLConnection, GetSqlConfig } from '../../../Config/db-connection';
+import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
@@ -57,9 +57,9 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
      * mean touching the orchestrator.
      */
     async SetupDataSource(): Promise<DataSourceResult> {
-        startSpinner('Initializing database connection...');
+        StartSpinner('Initializing database connection...');
         const pool = await MSSQLConnection();
-        const config = new SQLServerProviderConfigData(pool, mj_core_schema());
+        const config = new SQLServerProviderConfigData(pool, MjCoreSchema());
         // CodeGen is a short-lived process ⇒ 'task' entry-point default: skip engine
         // pre-warm; MJ_STARTUP_MODE or mj.config.cjs startup.mode can override
         const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'task' });
@@ -70,7 +70,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         // MSSQLConnection() above. The non-null assertion is safe because the
         // call to MSSQLConnection on the line above is what guarantees the
         // accessor has a value to return.
-        const cfg = getSqlConfig()!;
+        const cfg = GetSqlConfig()!;
         let connectionInfo = cfg.server;
         if (cfg.port) connectionInfo += ':' + cfg.port;
         if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
@@ -80,7 +80,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
         const currentUser = userMatch ?? UserCache.Users[0];
 
-        succeedSpinner('SQL Server connection initialized: ' + connectionInfo);
+        SucceedSpinner('SQL Server connection initialized: ' + connectionInfo);
         return { provider, connection: conn, currentUser, connectionInfo };
     }
 
@@ -189,6 +189,21 @@ AS
 SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
     }
 
+    /**
+     * SQL Server create-or-replace for a config-declared view. `CREATE OR ALTER VIEW`
+     * (SQL Server 2016 SP1+) replaces the definition in place whatever its column shape, so
+     * a changed body needs no drop and existing grants survive.
+     *
+     * Returns a single GO-free batch (executed via `ds.query`); the caller adds the file
+     * batch separator. `CREATE OR ALTER VIEW` must be the sole statement in its batch.
+     */
+    override generateCreateOrReplaceViewSQL(schema: string, viewName: string, selectSQL: string): string {
+        const esc = (n: string) => n.replace(/\]/g, ']]');
+        return `CREATE OR ALTER VIEW [${esc(schema)}].[${esc(viewName)}]
+AS
+${this.trimStatementTerminator(selectSQL)}`;
+    }
+
     /** SQL Server synthetic surrogate key: an auto-incrementing IDENTITY column. */
     getMaterializedSurrogateColumnType(): string {
         return 'int IDENTITY(1,1)';
@@ -222,7 +237,8 @@ SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
      */
     generateCRUDCreate(entity: EntityInfo): string {
         const spName = this.getCRUDRoutineName(entity, 'Create');
-        const firstKey = entity.FirstPrimaryKey;
+        const firstKey = entity.FirstPrimaryKey; // first-pk-ok: read only inside the UNIQUEIDENTIFIER branch, which is guarded by entity.PrimaryKeys.length === 1; the IDENTITY and composite branches iterate entity.PrimaryKeys
+        const identityKey = entity.PrimaryKeys.find(k => k.AutoIncrement);
         const efString = this.generateCRUDParamString(entity.Fields, false);
         const permissions = this.generateCRUDPermissions(entity, spName, 'Create');
 
@@ -232,8 +248,15 @@ SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
         let additionalFieldList = '';
         let additionalValueList = '';
 
-        if (firstKey.AutoIncrement) {
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = SCOPE_IDENTITY()`;
+        if (identityKey) {
+            // IDENTITY key. On a composite key such as (TenantID, ID IDENTITY) the remaining key
+            // columns are caller-supplied: they must be inserted and included in the row lookup.
+            // For a single-column identity key callerSuppliedKeys is empty and nothing is added.
+            const callerSuppliedKeys = entity.PrimaryKeys.filter(k => !k.AutoIncrement);
+            additionalFieldList = callerSuppliedKeys.map(k => `[${k.Name}]`).join(',\n                ');
+            additionalValueList = callerSuppliedKeys.map(k => `@${k.CodeName}`).join(',\n                ');
+            const callerSuppliedKeyPredicates = callerSuppliedKeys.map(k => ` AND [${k.Name}] = @${k.CodeName}`).join('');
+            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${identityKey.Name}] = SCOPE_IDENTITY()${callerSuppliedKeyPredicates}`;
         } else if (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' && entity.PrimaryKeys.length === 1) {
             const hasDefaultValue = firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0;
 
@@ -576,6 +599,37 @@ IF NOT EXISTS (
 CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`;
     }
 
+    protected softPrimaryKeyIndexPrefix(): string {
+        return 'IDX_AUTO_MJ_SOFTPK_';
+    }
+
+    /**
+     * SQL Server refuses `NVARCHAR(MAX)` (and the other LOB types) as an index KEY column
+     * outright, regardless of the data it holds. `Length === -1` is how MJ spells MAX.
+     *
+     * Note the trap this closes: a source schema that declares a key column with no explicit
+     * length maps to `NVARCHAR(MAX)`, and the index then vanishes without complaint. The base
+     * class turns that into a comment in the generated file naming the offending columns,
+     * rather than an empty one.
+     */
+    protected isIndexableKeyColumn(f: EntityFieldInfo): boolean {
+        return f.Length !== -1;
+    }
+
+    protected formatCompositeIndexStatement(entity: EntityInfo, fields: EntityFieldInfo[], indexName: string): string {
+        const cols = fields.map(f => `[${f.Name}]`).join(', ');
+        return `-- Index for the soft primary key (${fields.map(f => f.Name).join(', ')}) in table ${entity.BaseTable}.
+-- The key is metadata-only — no PRIMARY KEY constraint — so without this the per-record
+-- existence check on the create path scans the whole table.
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = '${indexName}'
+    AND object_id = OBJECT_ID('[${entity.SchemaName}].[${entity.BaseTable}]')
+)
+CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] (${cols});`;
+    }
+
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
 
     /**
@@ -670,9 +724,257 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
      * `fn{BaseTable}{FieldName}_GetRootID` and returns a single-column result (`RootID`),
      * designed to be consumed via `OUTER APPLY` in the entity's base view.
      */
+    // ─── RECURSIVE HIERARCHY FUNCTIONS ──────────────────────────────────
+
+    /**
+     * Generates a SQL Server inline table-valued function (ITVF) that calculates hierarchy metadata
+     * (RootID, Depth, Path, IsLeaf, ChildCount) for a record in a table with a self-referencing foreign key.
+     * The function is named `fn{BaseTable}{FieldName}_GetHierarchyMeta`.
+     */
+    generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+        const fieldName = field.Name;
+        const functionName = `fn${entity.BaseTable}${fieldName}_GetHierarchyMeta`;
+
+        return `------------------------------------------------------------
+----- HIERARCHY METADATA FUNCTION FOR: [${tableName}].[${fieldName}]
+------------------------------------------------------------
+IF OBJECT_ID('[${schemaName}].[${functionName}]', 'IF') IS NOT NULL
+    DROP FUNCTION [${schemaName}].[${functionName}];
+GO
+
+CREATE FUNCTION [${schemaName}].[${functionName}]
+(
+    @RecordID ${primaryKeyType},
+    @ParentID ${primaryKeyType}
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_Ancestors AS (
+        SELECT
+            [${primaryKey}],
+            [${fieldName}],
+            0 AS [Depth],
+            CAST('/' + CAST([${primaryKey}] AS NVARCHAR(36)) + '/' AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}]
+        WHERE
+            [${primaryKey}] = @RecordID
+
+        UNION ALL
+
+        SELECT
+            p.[${primaryKey}],
+            p.[${fieldName}],
+            c.[Depth] + 1 AS [Depth],
+            CAST('/' + CAST(p.[${primaryKey}] AS NVARCHAR(36)) + c.[Path] AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}] p
+        INNER JOIN
+            CTE_Ancestors c ON p.[${primaryKey}] = c.[${fieldName}]
+        WHERE
+            c.[Depth] < 100
+    )
+    SELECT TOP 1
+        a.[${primaryKey}] AS [RootID],
+        (SELECT MAX([Depth]) FROM CTE_Ancestors) AS [Depth],
+        (SELECT TOP 1 [Path] FROM CTE_Ancestors ORDER BY [Depth] DESC) AS [Path],
+        CAST(CASE WHEN EXISTS (SELECT 1 FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
+        (SELECT COUNT(1) FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = @RecordID) AS [ChildCount]
+    FROM
+        CTE_Ancestors a
+    WHERE
+        a.[${fieldName}] IS NULL OR @ParentID IS NULL
+    ORDER BY
+        a.[Depth] DESC
+);
+GO
+`;
+    }
+
+    /**
+     * Generates a SQL Server inline TVF that returns all descendant records of an arbitrary root node
+     * with an optional maximum relative depth parameter.
+     * The function is named `fn{BaseTable}{FieldName}_GetDescendants`.
+     */
+    generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+        const fieldName = field.Name;
+        const functionName = `fn${entity.BaseTable}${fieldName}_GetDescendants`;
+
+        return `------------------------------------------------------------
+----- DESCENDANTS FUNCTION FOR: [${tableName}].[${fieldName}]
+------------------------------------------------------------
+IF OBJECT_ID('[${schemaName}].[${functionName}]', 'IF') IS NOT NULL
+    DROP FUNCTION [${schemaName}].[${functionName}];
+GO
+
+CREATE FUNCTION [${schemaName}].[${functionName}]
+(
+    @RootID ${primaryKeyType},
+    @MaxDepth INT = NULL
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_Descendants AS (
+        SELECT
+            [${primaryKey}],
+            [${fieldName}],
+            0 AS [RelativeDepth],
+            CAST('/' + CAST([${primaryKey}] AS NVARCHAR(36)) + '/' AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}]
+        WHERE
+            [${primaryKey}] = @RootID
+
+        UNION ALL
+
+        SELECT
+            c.[${primaryKey}],
+            c.[${fieldName}],
+            p.[RelativeDepth] + 1 AS [RelativeDepth],
+            CAST(p.[Path] + CAST(c.[${primaryKey}] AS NVARCHAR(36)) + '/' AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}] c
+        INNER JOIN
+            CTE_Descendants p ON c.[${fieldName}] = p.[${primaryKey}]
+        WHERE
+            (@MaxDepth IS NULL OR p.[RelativeDepth] < @MaxDepth)
+            AND p.[RelativeDepth] < 100
+    )
+    SELECT
+        d.[${primaryKey}] AS [ID],
+        d.[RelativeDepth] AS [Depth],
+        d.[Path],
+        CAST(CASE WHEN EXISTS (SELECT 1 FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = d.[${primaryKey}]) THEN 0 ELSE 1 END AS BIT) AS [IsLeaf],
+        (SELECT COUNT(1) FROM [${schemaName}].[${tableName}] WHERE [${fieldName}] = d.[${primaryKey}]) AS [ChildCount]
+    FROM
+        CTE_Descendants d
+);
+GO
+`;
+    }
+
+    /**
+     * Generates a SQL Server inline TVF that returns all ancestors of an arbitrary node walking upward.
+     * The function is named `fn{BaseTable}{FieldName}_GetAncestors`.
+     */
+    generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+        const fieldName = field.Name;
+        const functionName = `fn${entity.BaseTable}${fieldName}_GetAncestors`;
+
+        return `------------------------------------------------------------
+----- ANCESTORS FUNCTION FOR: [${tableName}].[${fieldName}]
+------------------------------------------------------------
+IF OBJECT_ID('[${schemaName}].[${functionName}]', 'IF') IS NOT NULL
+    DROP FUNCTION [${schemaName}].[${functionName}];
+GO
+
+CREATE FUNCTION [${schemaName}].[${functionName}]
+(
+    @RecordID ${primaryKeyType}
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_Ancestors AS (
+        SELECT
+            [${primaryKey}],
+            [${fieldName}],
+            0 AS [LevelUp],
+            CAST('/' + CAST([${primaryKey}] AS NVARCHAR(36)) + '/' AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}]
+        WHERE
+            [${primaryKey}] = @RecordID
+
+        UNION ALL
+
+        SELECT
+            p.[${primaryKey}],
+            p.[${fieldName}],
+            c.[LevelUp] + 1 AS [LevelUp],
+            CAST('/' + CAST(p.[${primaryKey}] AS NVARCHAR(36)) + c.[Path] AS NVARCHAR(MAX)) AS [Path]
+        FROM
+            [${schemaName}].[${tableName}] p
+        INNER JOIN
+            CTE_Ancestors c ON p.[${primaryKey}] = c.[${fieldName}]
+        WHERE
+            c.[LevelUp] < 100
+    )
+    SELECT
+        a.[${primaryKey}] AS [ID],
+        a.[LevelUp],
+        a.[Path]
+    FROM
+        CTE_Ancestors a
+);
+GO
+`;
+    }
+
+    /** @inheritdoc */
+    generateHierarchyFieldSelect(_entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
+        const rootFieldName = `Root${field.Name}`;
+        const depthFieldName = `${field.Name}Depth`;
+        const pathFieldName = `${field.Name}Path`;
+        const isLeafFieldName = `${field.Name}IsLeaf`;
+        const childCountFieldName = `${field.Name}ChildCount`;
+        return `${alias}.RootID AS [${rootFieldName}],
+    ${alias}.Depth AS [${depthFieldName}],
+    ${alias}.Path AS [${pathFieldName}],
+    ${alias}.IsLeaf AS [${isLeafFieldName}],
+    ${alias}.ChildCount AS [${childCountFieldName}]`;
+    }
+
+    /**
+     * Generates a SQL Server `OUTER APPLY` clause to join the hierarchy metadata inline TVF
+     * into the entity's base view.
+     */
+    generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
+        const classNameFirstChar = entity.BaseTableCodeName.charAt(0).toLowerCase();
+        const schemaName = entity.SchemaName;
+        const functionName = `fn${entity.BaseTable}${field.Name}_GetHierarchyMeta`;
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: hierarchy TVF argument; sql_codegen.getHierarchyFKs skips composite-key entities and the TVF generator throws for them
+        return `OUTER APPLY\n    [${schemaName}].[${functionName}]([${classNameFirstChar}].[${primaryKey}], [${classNameFirstChar}].[${field.Name}]) AS ${alias}`;
+    }
+
+    /**
+     * Generates a SQL Server inline table-valued function (ITVF) that calculates the top-level root
+     * record ID for a self-referencing foreign key hierarchy. The function is named
+     * `fn{BaseTable}{FieldName}_GetRootID` and returns a single-column result (`RootID`),
+     * designed to be consumed via `OUTER APPLY` in the entity's base view.
+     */
     generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string {
-        const primaryKey = entity.FirstPrimaryKey.Name;
-        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
+        if (entity.PrimaryKeys.length !== 1) {
+            throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
+        }
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
         const schemaName = entity.SchemaName;
         const tableName = entity.BaseTable;
         const fieldName = field.Name;
@@ -747,11 +1049,108 @@ GO
         const classNameFirstChar = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const schemaName = entity.SchemaName;
         const functionName = `fn${entity.BaseTable}${field.Name}_GetRootID`;
-        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: hierarchy TVF argument; sql_codegen.getHierarchyFKs skips composite-key entities and the TVF generator throws for them
         return `OUTER APPLY\n    [${schemaName}].[${functionName}]([${classNameFirstChar}].[${primaryKey}], [${classNameFirstChar}].[${field.Name}]) AS ${alias}`;
     }
 
     // ─── PERMISSIONS ─────────────────────────────────────────────────────
+
+    /**
+     * B3: roles with a blank `SQLName` are app-tier-only BY DESIGN (decision D3a) — the grant
+     * emitters skip them, and this makes the skip visible: one INFO line per role per run, so
+     * "why doesn't my role work for direct SQL?" is answerable without reading provider source.
+     */
+    private _appTierOnlyRolesLogged = new Set<string>();
+    private logAppTierOnlyRoleSkip(roleName: string | null | undefined): void {
+        const name = (roleName ?? '').trim();
+        if (!name || this._appTierOnlyRolesLogged.has(name)) return;
+        this._appTierOnlyRolesLogged.add(name);
+        logStatus(`   ℹ️  Role '${name}' is app-tier-only (no SQLName); no DB grants emitted.`);
+    }
+
+    /** Service-protected DENY skips are warned once per role per run (see generateFieldSecurityDenies). */
+    private _serviceProtectedDenySkipsWarned = new Set<string>();
+
+    /**
+     * Reconciliation preamble (decision D7): REVOKE every live catalog permission entry on
+     * this object held by a MANAGED role, so the GRANTs/DENYs that follow re-assert exactly
+     * the current desired state. This is what makes REMOVAL take effect — deleting an
+     * `EntityPermission` or `EntityFieldPermission` row stops the assert, and the standing
+     * REVOKE clears the stale grant/deny on the next run (the assert-only model never revoked
+     * anything; a deleted Deny row would otherwise block direct users forever). Removing a
+     * DENY is also spelled REVOKE. Grants to principals outside the managed scope are not in
+     * the snapshot and are never touched. Empty when no run context (e.g. catalog unreadable)
+     * — emission degrades to the historical assert-only behavior.
+     */
+    private generateManagedPermissionRevokes(schemaName: string, objectName: string): string {
+        const context = this._fieldSecurityRunContext;
+        if (!context) return '';
+        const entries = context.CatalogPermissions.get(`${schemaName}.${objectName}`.toLowerCase());
+        if (!entries || entries.length === 0) return '';
+        let sOutput = '';
+        for (const entry of entries) {
+            const column = entry.ColumnName ? ` ([${entry.ColumnName}])` : '';
+            sOutput += `\nREVOKE ${entry.PermissionName}${column} ON [${schemaName}].[${objectName}] FROM [${entry.RoleName}]`;
+        }
+        return sOutput;
+    }
+
+    /**
+     * Field-level security column DENYs: for each role holding a `ReadAccess = 'Deny'` row on
+     * this entity's fields, emit `DENY SELECT ([col], ...) ON [schema].[BaseView] TO [role]` so
+     * a SQL user connecting DIRECTLY with that role cannot read the denied columns. Constraints:
+     *  - **Only when the entity has `EnableFieldLevelSecurity`.** Rows on a disabled entity are
+     *    retained but inactive at the app tier, so mirroring them would make the two tiers
+     *    disagree — and the DB tier is the one an administrator cannot see. Disabling an entity
+     *    revokes its DENYs on the next run via the reconciliation pass below.
+     *  - **Explicit `ReadAccess = 'Deny'` only** — never synthesized from a `No Access` or a
+     *    missing row. `No Access` is neutral and blocks nothing on its own, so mirroring it
+     *    would make the DB tier stricter than the app tier rather than the conservative subset
+     *    it is meant to be. The emitted pattern stays object-level GRANT + column-level DENY,
+     *    avoiding SQL Server's column-GRANT-overrides-object-DENY quirk entirely.
+     *  - **Custom roles only** — the orchestrator's run context excludes the standard
+     *    UI/Developer/Integration roles from `RoleSQLNameByID`, so Deny rows against them are
+     *    app-tier-enforced only (MJ_Connect keeps its cdp_* memberships).
+     *  - **Service-login backstop**: a role any protected principal is a member of is skipped
+     *    with a prominent warning — a DENY there would strip the column from the API service
+     *    login itself (DENY beats every sibling role's GRANT).
+     *  - **Unrestrictable targets** (PKs, `__mj_` columns, the security/identity entities) are
+     *    filtered defensively even though save-time guards should make such rows impossible.
+     */
+    private generateFieldSecurityDenies(entity: EntityInfo): string {
+        const context = this._fieldSecurityRunContext;
+        if (!context) return '';
+        if (!entity.EnableFieldLevelSecurity) return ''; // rules retained but inactive — mirror nothing
+        const deniedColumnsByRole = new Map<string, string[]>();
+        for (const field of entity.Fields) {
+            if (!field.HasFieldPermissions) continue;
+            if (field.IsUnrestrictableField || field.IsOnUnrestrictableEntity) continue; // defensive — save-time guards should prevent these rows
+            for (const fp of field.FieldPermissions) {
+                if ((fp.ReadAccess ?? '').trim().toLowerCase() !== 'deny') continue;
+                const sqlName = context.RoleSQLNameByID.get((fp.RoleID ?? '').trim().toLowerCase());
+                if (!sqlName) continue; // blank SQLName (app-tier-only) or standard role (never DB-mirrored)
+                if (context.ServiceProtectedRoleSQLNames.has(sqlName.trim().toLowerCase())) {
+                    if (!this._serviceProtectedDenySkipsWarned.has(sqlName)) {
+                        this._serviceProtectedDenySkipsWarned.add(sqlName);
+                        LogWarning(
+                            `   ⚠️  SKIPPED field-security DENY to role '${sqlName}': a protected service login is a member of this role. ` +
+                            `A column DENY here would strip the column from the service login itself (DENY beats every sibling GRANT) and break the API for all users. ` +
+                            `Remove the service login from the role to enable DB-tier enforcement; app-tier enforcement is unaffected.`
+                        );
+                    }
+                    continue;
+                }
+                const columns = deniedColumnsByRole.get(sqlName) ?? [];
+                if (!columns.includes(field.Name)) columns.push(field.Name);
+                deniedColumnsByRole.set(sqlName, columns);
+            }
+        }
+        let sOutput = '';
+        for (const [sqlName, columns] of [...deniedColumnsByRole.entries()].sort(([a], [b]) => ordinalCompare(a, b))) {
+            sOutput += `\nDENY SELECT (${columns.map(c => `[${c}]`).join(', ')}) ON [${entity.SchemaName}].[${entity.BaseView}] TO [${sqlName}]`;
+        }
+        return sOutput;
+    }
 
     /** @inheritdoc */
     generateViewPermissions(entity: EntityInfo): string {
@@ -759,15 +1158,23 @@ GO
         for (const ep of entity.Permissions) {
             if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
                 sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${entity.BaseView}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+            } else {
+                this.logAppTierOnlyRoleSkip(ep.Role);
             }
         }
-        return (sOutput === '' ? '' : '\n') + sOutput;
+        // Order matters: wipe (REVOKE within the managed scope) → assert grants → assert
+        // field-security DENYs. The whole body executes every run via applyPermissions.
+        const revokes = this.generateManagedPermissionRevokes(entity.SchemaName, entity.BaseView);
+        const grants = (sOutput === '' ? '' : '\n') + sOutput;
+        const denies = this.generateFieldSecurityDenies(entity);
+        return revokes + grants + denies;
     }
 
     /**
      * Generates `GRANT EXECUTE` SQL for a CRUD stored procedure, granting permission only
      * to roles whose `EntityPermission` record allows the specified CRUD operation type.
-     * Produces a single comma-separated `GRANT EXECUTE ON ... TO [role1], [role2]` statement.
+     * Produces a single comma-separated `GRANT EXECUTE ON ... TO [role1], [role2]` statement,
+     * preceded by the managed-scope reconciliation REVOKEs (see generateManagedPermissionRevokes).
      */
     generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string {
         let sOutput = '';
@@ -781,9 +1188,12 @@ GO
                 if (hasPermission) {
                     sOutput += (sOutput === '' ? `GRANT EXECUTE ON [${entity.SchemaName}].[${routineName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
                 }
+            } else {
+                this.logAppTierOnlyRoleSkip(ep.Role);
             }
         }
-        return (sOutput === '' ? '' : '\n') + sOutput;
+        const revokes = this.generateManagedPermissionRevokes(entity.SchemaName, routineName);
+        return revokes + (sOutput === '' ? '' : '\n') + sOutput;
     }
 
     /** @inheritdoc */
@@ -793,10 +1203,13 @@ GO
             if (ep.CanRead) {
                 if (ep.RoleSQLName && ep.RoleSQLName.length > 0) {
                     sOutput += (sOutput === '' ? `GRANT SELECT ON [${entity.SchemaName}].[${functionName}] TO ` : ', ') + `[${ep.RoleSQLName}]`;
+                } else {
+                    this.logAppTierOnlyRoleSkip(ep.Role);
                 }
             }
         }
-        return (sOutput === '' ? '' : '\n') + sOutput;
+        const revokes = this.generateManagedPermissionRevokes(entity.SchemaName, functionName);
+        return revokes + (sOutput === '' ? '' : '\n') + sOutput;
     }
 
     // ─── CASCADE DELETES ─────────────────────────────────────────────────
@@ -818,7 +1231,13 @@ GO
     private generateCascadeCursorDelete(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
         const qi = this.Dialect.QuoteIdentifier.bind(this.Dialect);
         const qs = this.Dialect.QuoteSchema.bind(this.Dialect);
-        const whereClause = `${qi(fkField.CodeName)} = @${parentEntity.FirstPrimaryKey.CodeName}`;
+        const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
+        if (!parentKey) {
+            const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
+            LogWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
+            return '\n' + warning;
+        }
+        const whereClause = `${qi(fkField.CodeName)} = @${parentKey.CodeName}`;
         const spName = this.getCRUDRoutineName(relatedEntity, 'Delete');
         const variablePrefix = `${relatedEntity.CodeName}_${fkField.CodeName}`;
         const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, variablePrefix);
@@ -854,7 +1273,13 @@ GO
     private generateCascadeCursorUpdate(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
         const qi = this.Dialect.QuoteIdentifier.bind(this.Dialect);
         const qs = this.Dialect.QuoteSchema.bind(this.Dialect);
-        const whereClause = `${qi(fkField.CodeName)} = @${parentEntity.FirstPrimaryKey.CodeName}`;
+        const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
+        if (!parentKey) {
+            const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
+            LogWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
+            return '\n' + warning;
+        }
+        const whereClause = `${qi(fkField.CodeName)} = @${parentKey.CodeName}`;
         const variablePrefix = `${relatedEntity.CodeName}_${fkField.CodeName}`;
         const spName = this.getCRUDRoutineName(relatedEntity, 'Update');
         const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, variablePrefix);
@@ -917,7 +1342,7 @@ GO
         allParams = pkComponents.routineParams;
 
         // Then, add all updateable fields with the same prefix
-        const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+        const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
         for (const ef of sortedFields) {
             if (!ef.IsPrimaryKey && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement && !ef.IsSpecialDateField) {
                 if (declarations !== '')
@@ -973,6 +1398,16 @@ GO
     // ─── PARAMETER / FIELD HELPERS ───────────────────────────────────────
 
     // ─── ROUTINE NAMING ──────────────────────────────────────────────────
+
+    /** @inheritdoc */
+    getRoutineNamesBySchemaSQL(schemas: string[]): string {
+        if (schemas.length === 0) return '';
+        const inList = schemas.map(s => `'${s.replace(/'/g, "''")}'`).join(', ');
+        return `SELECT s.name AS schema_name, p.name AS routine_name
+FROM sys.procedures p
+INNER JOIN sys.schemas s ON s.schema_id = p.schema_id
+WHERE s.name IN (${inList})`;
+    }
 
     /** @inheritdoc */
     getCRUDRoutineName(entity: EntityInfo, type: CRUDType): string {
@@ -1441,9 +1876,9 @@ ORDER BY
      *    PK, and unique key detection.
      * 3. **Cleanup**: Drops the temp tables.
      */
-    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         return this.buildPendingFieldsTempTables(mjCoreSchema) +
-            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs) +
+            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs, excludeSchemas) +
             this.buildPendingFieldsCleanup();
     }
 
@@ -1479,12 +1914,18 @@ FROM [${schema}].[vwTableUniqueKeys];
      * Uses MaxSequences CTE to calculate proper field ordering and NumberedRows
      * CTE to deduplicate results.
      */
-    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[]): string {
+    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         // When scoped, narrow the scan to specific entities. SQL injection isn't a concern
         // here — entityIDs are MJ-internal UUIDs from the metadata cache, not user input —
         // but we quote each ID anyway for SQL Server's UUID literal syntax.
         const scopeFilter = entityIDs && entityIDs.length > 0
             ? `AND sf.EntityID IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
+        // includeSchemas is compiled into excludeSchemas before this query runs. Without this
+        // filter, Pass 1 (unscoped entityIDs) inserts pending fields for EVERY schema in the
+        // database — e.g. a Forms CodeGen run emitted Common Activity Files EntityField rows.
+        const schemaFilter = excludeSchemas && excludeSchemas.length > 0
+            ? `AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `WITH MaxSequences AS (
    SELECT
@@ -1499,11 +1940,9 @@ NumberedRows AS (
    SELECT
       sf.EntityID,
       ISNULL(ms.MaxSequence, 0) + 100000 + sf.Sequence AS Sequence,
-      -- The RAW schema ordinal, carried alongside the temporary Sequence above. The INSERT emitter
-      -- adds it to an apply-time MAX(), so the ordering of newly discovered fields is encoded in the
-      -- emitted VALUE rather than depending on the order the INSERT statements happen to execute.
-      -- (Sequence above stays as-is: it is what this query ORDERs BY, and what the renumber pass
-      -- later overwrites from the schema.)
+      -- The RAW schema ordinal. The INSERT emitter uses it for DefaultInView only; the emitted
+      -- Sequence is an apply-time MAX()+1 subquery. (Sequence above is only this query's ORDER BY
+      -- key — never inserted — and the renumber pass overwrites every row from the schema.)
       sf.Sequence AS SourceOrdinal,
       sf.FieldName,
       sf.Description,
@@ -1552,6 +1991,7 @@ NumberedRows AS (
    WHERE
       EntityFieldID IS NULL
       ${scopeFilter}
+      ${schemaFilter}
    )
    SELECT *
    FROM NumberedRows
@@ -1617,7 +2057,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
                     await pool.request().query(batch);
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    logWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
+                    LogWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
                 }
             }
 

@@ -1,6 +1,6 @@
 import { SummarizeParams, SummarizeResult } from "./summarize.types";
 import { BaseModel, ModelUsage } from "./baseModel";
-import { ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage } from "./chat.types";
+import { ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
 import { ErrorAnalyzer } from "./errorAnalyzer";
 
@@ -75,13 +75,35 @@ export abstract class BaseLLM extends BaseModel {
             params.enableCaching = true; // default to true            
         }
 
+        // Catch an orphaned tool result here rather than letting the provider reject it with an
+        // error that names only an opaque id. Scoped to tool-capable drivers because a driver that
+        // ignores tools cannot be tripped by the mistake.
+        if (this.SupportsTools) {
+            ValidateToolConversation(params.messages);
+        }
+
+        // Native tool calling is non-streaming only: streaming tool-call delta assembly
+        // differs substantially per provider and is deferred. When a caller asks for both, tools
+        // win and we quietly take the non-streaming path — the same shape as the existing
+        // "streaming unsupported -> non-streaming" fallback — recording it on the result so the
+        // downgrade is visible rather than mysterious.
+        const toolsRequested = this.SupportsTools && params.tools != null && params.tools.length > 0;
+        const streamingSuppressedForTools = toolsRequested && params.streaming === true;
+
         // Check if streaming is requested and if we support it
-        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming) {
+        if (params.streaming && params.streamingCallbacks && this.SupportsStreaming && !streamingSuppressedForTools) {
             return this.handleStreamingChatCompletion(params);
         }
-        
+
         // Continue with normal non-streaming implementation
-        return this.nonStreamingChatCompletion(params);
+        const result = await this.nonStreamingChatCompletion(params);
+        if (streamingSuppressedForTools) {
+            result.modelSpecificResponseDetails = {
+                ...result.modelSpecificResponseDetails,
+                streamingSuppressedForTools: true
+            };
+        }
+        return result;
     }
     
     /**
@@ -168,6 +190,24 @@ export abstract class BaseLLM extends BaseModel {
      */
     public get SupportsStreaming(): boolean {
         // Default to false, providers that support streaming should override
+        return false;
+    }
+
+    /**
+     * Whether this driver implements native tool/function calling — i.e. whether it maps
+     * `ChatParams.tools` onto its SDK and normalizes tool calls back into
+     * `ChatCompletionMessage.toolCalls`.
+     *
+     * This is a CODE-level capability ("has the mapping been written for this driver?"), distinct
+     * from the METADATA-level capability `ModelConfiguration.LLM.SupportsNativeToolCalling`
+     * ("does this model, on this vendor, support tools at all?"). Both must hold for native mode.
+     *
+     * A driver returning false ignores any `tools` passed to it and records the fact in the
+     * result's `modelSpecificResponseDetails` — the prompt runner's gate should keep that from
+     * happening, but the layer is safe standalone.
+     */
+    public get SupportsTools(): boolean {
+        // Default to false; drivers that implement the tool mapping override this.
         return false;
     }
 

@@ -29,6 +29,12 @@ const loadNgDashboardsAiDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
 };
 
+// --- @memberjunction/ng-dashboards → ./archiving-dashboards.module (2 entries) ---
+const loadNgDashboardsArchivingDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/archiving-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/archiving-dashboards.module').then(() => {})
+};
+
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
 const loadNgDashboardsCommunicationDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/communication-dashboards.module',
@@ -77,7 +83,7 @@ const loadNgDashboardsMcpModule = {
   load: () => import('@memberjunction/ng-dashboards/mcp.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./module (3 entries) ---
+// --- @memberjunction/ng-dashboards → ./module (1 entries) ---
 const loadNgDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/module',
   load: () => import('@memberjunction/ng-dashboards/module').then(() => {})
@@ -125,12 +131,6 @@ const loadNgFileStorageFileStorageModule = {
   load: () => import('@memberjunction/ng-file-storage/file-storage.module').then(() => {})
 };
 
-// --- @memberjunction/ng-react → . (1 entries) ---
-const loadNgReact = {
-  chunkId: '@memberjunction/ng-react',
-  load: () => import('@memberjunction/ng-react').then(() => {})
-};
-
 /**
  * Complete mapping of compound keys (BaseClassName::Key) to their chunk descriptor.
  * Covers all @RegisterClass decorated classes in lazy-loaded packages.
@@ -163,14 +163,18 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::VectorManagementResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::VisualizationResource': loadNgDashboardsAiDashboardsModule,
 
+  // @memberjunction/ng-dashboards → ./archiving-dashboards.module
+  'BaseResourceComponent::ArchiveConfigResource': loadNgDashboardsArchivingDashboardsModule,
+  'BaseResourceComponent::ArchiveRunsResource': loadNgDashboardsArchivingDashboardsModule,
+
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
   'BaseDashboard::CommunicationDashboard': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationLogsResource': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationMonitorResource': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationProvidersResource': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationRunsResource': loadNgDashboardsCommunicationDashboardsModule,
-  'BaseResourceComponent::CommunicationsNewMessageResource': loadNgDashboardsCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationTemplatesResource': loadNgDashboardsCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationsNewMessageResource': loadNgDashboardsCommunicationDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./component-studio-dashboards.module
   'BaseDashboard::ComponentStudioDashboard': loadNgDashboardsComponentStudioDashboardsModule,
@@ -182,13 +186,13 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseDashboard::EntityAdmin': loadNgDashboardsCoreDashboardsModule,
   'BaseDashboard::ThemeManagerDashboard': loadNgDashboardsCoreDashboardsModule,
   'BaseDashboard::ThemeStudioDashboard': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::APIKeysResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminDataSchema': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminDeveloperTools': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminIdentityAccess': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AdminMonitoring': loadNgDashboardsCoreDashboardsModule,
-  'BaseResourceComponent::APIKeysResource': loadNgDashboardsCoreDashboardsModule,
-  'BaseResourceComponent::ApplicationRolesResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::AppStateInspector': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::ApplicationRolesResource': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::BulkOperationsContainer': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::BulkOperationsOperations': loadNgDashboardsCoreDashboardsModule,
   'BaseResourceComponent::BulkOperationsRunHistory': loadNgDashboardsCoreDashboardsModule,
@@ -247,8 +251,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::MCPResource': loadNgDashboardsMcpModule,
 
   // @memberjunction/ng-dashboards → ./module
-  'BaseResourceComponent::ArchiveConfigResource': loadNgDashboardsModule,
-  'BaseResourceComponent::ArchiveRunsResource': loadNgDashboardsModule,
   'BaseResourceComponent::DatabaseDesignerDashboard': loadNgDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
@@ -289,9 +291,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   // @memberjunction/ng-file-storage → ./file-storage.module
   'BaseResourceComponent::FileBrowserResource': loadNgFileStorageFileStorageModule,
 
-  // @memberjunction/ng-react → .
-  'RuntimeUtilities::RuntimeUtilities': loadNgReact,
-
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 118;
+export const LAZY_FEATURE_CONFIG_COUNT = 117;

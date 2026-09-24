@@ -27,8 +27,8 @@ vi.mock('@memberjunction/ai-agents', () => ({
     },
 }));
 
-import { makeAIClient } from '../checks/agent-live-shared';
-import { resolveClient } from '../checks/_it-live-agent-harness';
+import { MakeAIClient } from '../checks/agent-live-shared';
+import { ResolveClient } from '../checks/_it-live-agent-harness';
 
 /** A provider stub exposing only the CurrentUser the invoker reads as a last resort. */
 function providerWithCurrentUser(currentUser: UserInfo | null): IMetadataProvider {
@@ -46,7 +46,7 @@ describe('makeAIClient — contextUser threading (WI1, #3251)', () => {
 
     it('threads the bound user into RunAgent as contextUser when params carries none', async () => {
         const bound = user('bound-user');
-        const client = makeAIClient(providerWithCurrentUser(null), bound);
+        const client = MakeAIClient(providerWithCurrentUser(null), bound);
         await client.RunAIAgent(baseParams());
         expect(runAgentMock).toHaveBeenCalledTimes(1);
         expect(runAgentMock.mock.calls[0][0].contextUser).toBe(bound);
@@ -55,7 +55,7 @@ describe('makeAIClient — contextUser threading (WI1, #3251)', () => {
     it('lets an explicit params.contextUser win over the bound user', async () => {
         const bound = user('bound-user');
         const explicit = user('explicit-user');
-        const client = makeAIClient(providerWithCurrentUser(null), bound);
+        const client = MakeAIClient(providerWithCurrentUser(null), bound);
         await client.RunAIAgent({ ...baseParams(), contextUser: explicit });
         expect(runAgentMock.mock.calls[0][0].contextUser).toBe(explicit);
     });
@@ -65,7 +65,7 @@ describe('makeAIClient — contextUser threading (WI1, #3251)', () => {
         // loudly, not hand a null user to BaseAgent. And it must fail as a REJECTION: RunAIAgent
         // returns a Promise, so a sync throw would escape a `client.RunAIAgent(p).catch(...)` caller.
         const noUser = undefined as Partial<UserInfo> as UserInfo;
-        const client = makeAIClient(providerWithCurrentUser(null), noUser);
+        const client = MakeAIClient(providerWithCurrentUser(null), noUser);
         let syncThrew = false;
         let p: Promise<unknown> | undefined;
         try { p = client.RunAIAgent(baseParams()); } catch { syncThrew = true; }
@@ -79,7 +79,7 @@ describe('makeAIClient — contextUser threading (WI1, #3251)', () => {
         // re-blur exactly the contract #3251 tightened (and could run as the wrong user on a
         // client provider). A provider WITH a CurrentUser must still reject when no user is bound.
         const noUser = undefined as Partial<UserInfo> as UserInfo;
-        const client = makeAIClient(providerWithCurrentUser(user('ambient-provider-user')), noUser);
+        const client = MakeAIClient(providerWithCurrentUser(user('ambient-provider-user')), noUser);
         await expect(client.RunAIAgent(baseParams())).rejects.toThrow(/integration harness: no contextUser/);
         expect(runAgentMock).not.toHaveBeenCalled();
     });
@@ -90,7 +90,7 @@ describe('resolveClient — contextUser threading (WI1, #3251)', () => {
 
     it('threads the bound user into RunAgent as contextUser when params carries none', async () => {
         const bound = user('bound-user');
-        const client = resolveClient(providerWithCurrentUser(null), bound);
+        const client = ResolveClient(providerWithCurrentUser(null), bound);
         await client.RunAIAgent(baseParams());
         expect(runAgentMock).toHaveBeenCalledTimes(1);
         expect(runAgentMock.mock.calls[0][0].contextUser).toBe(bound);
@@ -99,14 +99,14 @@ describe('resolveClient — contextUser threading (WI1, #3251)', () => {
     it('lets an explicit params.contextUser win over the bound user', async () => {
         const bound = user('bound-user');
         const explicit = user('explicit-user');
-        const client = resolveClient(providerWithCurrentUser(null), bound);
+        const client = ResolveClient(providerWithCurrentUser(null), bound);
         await client.RunAIAgent({ ...baseParams(), contextUser: explicit });
         expect(runAgentMock.mock.calls[0][0].contextUser).toBe(explicit);
     });
 
     it('rejects with a harness-attributed error (never runs the agent) when no user can be resolved — async, never a sync throw', async () => {
         const noUser = undefined as Partial<UserInfo> as UserInfo;
-        const client = resolveClient(providerWithCurrentUser(null), noUser);
+        const client = ResolveClient(providerWithCurrentUser(null), noUser);
         let syncThrew = false;
         let p: Promise<unknown> | undefined;
         try { p = client.RunAIAgent(baseParams()); } catch { syncThrew = true; }
@@ -117,7 +117,7 @@ describe('resolveClient — contextUser threading (WI1, #3251)', () => {
 
     it('never falls back to provider.CurrentUser — the contract is params.contextUser ?? bound user, else reject', async () => {
         const noUser = undefined as Partial<UserInfo> as UserInfo;
-        const client = resolveClient(providerWithCurrentUser(user('ambient-provider-user')), noUser);
+        const client = ResolveClient(providerWithCurrentUser(user('ambient-provider-user')), noUser);
         await expect(client.RunAIAgent(baseParams())).rejects.toThrow(/integration harness: no contextUser/);
         expect(runAgentMock).not.toHaveBeenCalled();
     });

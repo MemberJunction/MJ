@@ -12,38 +12,38 @@ export type ArtifactDeliveryMode = 'Inline' | 'ToolsOnly';
 
 export interface ArtifactRoutingInput {
     /** The Artifact Type's DefaultDeliveryMode. */
-    typeDefault: ArtifactDeliveryMode;
+    TypeDefault: ArtifactDeliveryMode;
     /** Per-instance opt-out — `true` forces tools regardless of typeDefault. */
-    forceToolsOnly: boolean;
+    ForceToolsOnly: boolean;
     /** MIME type of the artifact content (e.g. 'image/png'). */
-    mimeType: string;
+    mimeType: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Size of the content in bytes. */
-    sizeBytes: number;
+    SizeBytes: number;
     /** Maximum inline size in bytes; over this, even Inline-default artifacts go to tools. */
-    inlineSizeCap: number;
+    InlineSizeCap: number;
     /** Predicate: does the active model driver support the given MIME modality inline? */
-    modelSupportsModality: (mimeType: string) => boolean;
+    ModelSupportsModality: (mimeType: string) => boolean;
     /** Model name used in error messages — never used to make decisions. */
-    modelName: string;
+    ModelName: string;
     /** Artifact type name used in error messages. */
-    artifactTypeName: string;
+    ArtifactTypeName: string;
 }
 
 export type ArtifactRoutingDecision =
-    | { delivery: 'inline' }
-    | { delivery: 'tools'; annotation?: string }
-    | { delivery: 'error'; message: string };
+    | { delivery: 'inline' }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { delivery: 'tools'; Annotation?: string }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { delivery: 'error'; message: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 export function RouteArtifact(input: ArtifactRoutingInput): ArtifactRoutingDecision {
     const {
-        typeDefault,
-        forceToolsOnly,
+        TypeDefault: typeDefault,
+        ForceToolsOnly: forceToolsOnly,
         mimeType,
-        sizeBytes,
-        inlineSizeCap,
-        modelSupportsModality,
-        modelName,
-        artifactTypeName,
+        SizeBytes: sizeBytes,
+        InlineSizeCap: inlineSizeCap,
+        ModelSupportsModality: modelSupportsModality,
+        ModelName: modelName,
+        ArtifactTypeName: artifactTypeName,
     } = input;
 
     // Path 1: ToolsOnly default or per-instance opt-out — always tools.
@@ -71,7 +71,7 @@ export function RouteArtifact(input: ArtifactRoutingInput): ArtifactRoutingDecis
     if (sizeBytes >= inlineSizeCap) {
         return {
             delivery: 'tools',
-            annotation: `Artifact type "${artifactTypeName}" is configured for Inline delivery but content size (${sizeBytes} bytes) exceeds the inline cap (${inlineSizeCap} bytes); delivered via tools instead.`,
+            Annotation: `Artifact type "${artifactTypeName}" is configured for Inline delivery but content size (${sizeBytes} bytes) exceeds the inline cap (${inlineSizeCap} bytes); delivered via tools instead.`,
         };
     }
 

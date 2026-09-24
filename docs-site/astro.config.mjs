@@ -42,7 +42,7 @@ export default defineConfig({
   integrations: [
     starlight({
       title: 'MemberJunction',
-      description: 'The open-source, AI-native data platform — unify your data, add intelligence, build AI-native apps on top of it.',
+      description: 'The AI-native data platform — unify your data, add intelligence, build AI-native apps on top of it.',
       /*
        * Horizontal lockup (948x132). The previous stacked pair was 200px wide,
        * which renders soft on retina and reads as a tiny mark once the header
@@ -106,6 +106,7 @@ export default defineConfig({
         },
         { label: 'Ecosystem', slug: 'ecosystem' },
         { label: 'Community', slug: 'community' },
+        { label: 'MemberJunction Certified', slug: 'mjcertified' },
         {
           label: 'MJ Central — hosted MJ ↗',
           link: 'https://central.memberjunction.com',

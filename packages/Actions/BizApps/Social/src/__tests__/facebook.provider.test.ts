@@ -5,38 +5,43 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *
  * Facebook actions return structured validation results (no thrown errors for
  * missing params), so validation paths assert the exact ResultCode + Message
- * pairs. The HTTP boundary is the axios module mock: `axiosInstance.*` calls
- * (via axios.create) and direct `axios.post/get` calls (page-token flows) are
+ * pairs. The HTTP boundary is the @memberjunction/network-utils module mock: `httpClient.*` calls
+ * (via `new HttpClient()`) and direct `HttpPost`/`HttpGet` calls (page-token flows) are
  * both captured.
  */
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => {
@@ -142,10 +147,10 @@ const fbPost = {
 };
 
 beforeEach(() => {
-  http.instance.get.mockReset();
-  http.instance.post.mockReset();
-  http.axiosDefault.get.mockReset();
-  http.axiosDefault.post.mockReset();
+  http.instance.Get.mockReset();
+  http.instance.Post.mockReset();
+  http.standalone.HttpGet.mockReset();
+  http.standalone.HttpPost.mockReset();
 });
 
 // ─── FacebookCreatePostAction ───────────────────────────────────────────────
@@ -198,19 +203,19 @@ describe('FacebookCreatePostAction', () => {
   });
 
   it('should POST to /{pageId}/feed with the page access token on happy path', async () => {
-    http.instance.get.mockImplementation((url: string) => {
-      if (url === '/me/accounts') return Promise.resolve({ data: pageList, headers: {} });
-      if (url === `/${fbPost.id}`) return Promise.resolve({ data: fbPost, headers: {} });
+    http.instance.Get.mockImplementation((url: string) => {
+      if (url === '/me/accounts') return Promise.resolve({ Data: pageList, Headers: {}, Status: 200 });
+      if (url === `/${fbPost.id}`) return Promise.resolve({ Data: fbPost, Headers: {}, Status: 200 });
       return Promise.reject(new Error(`Unmocked GET ${url}`));
     });
-    http.axiosDefault.post.mockResolvedValue({ data: { id: fbPost.id }, headers: {} });
+    http.standalone.HttpPost.mockResolvedValue({ Data: { id: fbPost.id }, Headers: {}, Status: 200 });
 
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', PageID: 'page-1', Content: 'Hello Facebook' }));
 
-    expect(http.axiosDefault.post).toHaveBeenCalledWith(
+    expect(http.standalone.HttpPost).toHaveBeenCalledWith(
       `${API}/page-1/feed`,
       { message: 'Hello Facebook', published: true },
-      { params: { access_token: 'page-token-1' } },
+      { Query: { access_token: 'page-token-1' } },
     );
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
@@ -395,21 +400,21 @@ describe('FacebookGetPagePostsAction', () => {
   });
 
   it('should GET /{pageId}/posts with the page access token', async () => {
-    http.instance.get.mockImplementation((url: string) => {
-      if (url === '/me/accounts') return Promise.resolve({ data: pageList, headers: {} });
+    http.instance.Get.mockImplementation((url: string) => {
+      if (url === '/me/accounts') return Promise.resolve({ Data: pageList, Headers: {}, Status: 200 });
       return Promise.reject(new Error(`Unmocked GET ${url}`));
     });
-    http.axiosDefault.get.mockResolvedValue({ data: { data: [fbPost] }, headers: {} });
+    http.standalone.HttpGet.mockResolvedValue({ Data: { data: [fbPost] }, Headers: {}, Status: 200 });
 
     const result = await run(
       action,
       inputs({ CompanyIntegrationID: 'ci-1', PageID: 'page-1', Limit: 25 }, ['Posts', 'Summary']),
     );
 
-    expect(http.axiosDefault.get).toHaveBeenCalledWith(
+    expect(http.standalone.HttpGet).toHaveBeenCalledWith(
       `${API}/page-1/posts`,
       expect.objectContaining({
-        params: expect.objectContaining({ access_token: 'page-token-1', limit: 25 }),
+        Query: expect.objectContaining({ access_token: 'page-token-1', limit: 25 }),
       }),
     );
     expect(result.Success).toBe(true);

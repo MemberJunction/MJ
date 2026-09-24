@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -44,7 +44,7 @@ export class StylesValidationRule extends BaseLintRule {
     const violations: Violation[] = [];
     const analyzer = getStylesAnalyzer();
 
-    traverse(ast, {
+    Traverse(ast, {
       MemberExpression(path: NodePath<t.MemberExpression>) {
         // Build the complete property chain first
         const propertyChain: string[] = [];

@@ -17,7 +17,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
-import { CodeGenDatabaseProvider, resolveCodeGenDatabaseProvider, type DataSourceResult } from '../Database/codeGenDatabaseProvider';
+import { CodeGenDatabaseProvider, ResolveCodeGenDatabaseProvider, type DataSourceResult } from '../Database/codeGenDatabaseProvider';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
 class TestProviderFake extends CodeGenDatabaseProvider {
@@ -62,7 +62,7 @@ describe('resolveCodeGenDatabaseProvider — factory dispatch', () => {
             .mockReturnValue(fake as unknown as CodeGenDatabaseProvider);
 
         try {
-            const provider = resolveCodeGenDatabaseProvider('sqlserver' as DatabasePlatform);
+            const provider = ResolveCodeGenDatabaseProvider('sqlserver' as DatabasePlatform);
             expect(provider).toBe(fake);
             // Verify the factory was actually consulted with the right key.
             expect(spy).toHaveBeenCalledWith(CodeGenDatabaseProvider, 'sqlserver');
@@ -87,9 +87,9 @@ describe('resolveCodeGenDatabaseProvider — factory dispatch', () => {
             .mockReturnValue(fakeBase as CodeGenDatabaseProvider);
 
         try {
-            expect(() => resolveCodeGenDatabaseProvider('unknown-platform' as DatabasePlatform))
+            expect(() => ResolveCodeGenDatabaseProvider('unknown-platform' as DatabasePlatform))
                 .toThrow(/dbPlatform='unknown-platform' not found/);
-            expect(() => resolveCodeGenDatabaseProvider('unknown-platform' as DatabasePlatform))
+            expect(() => ResolveCodeGenDatabaseProvider('unknown-platform' as DatabasePlatform))
                 .toThrow(/@RegisterClass\(CodeGenDatabaseProvider, 'unknown-platform'\)/);
         } finally {
             spy.mockRestore();
@@ -102,7 +102,7 @@ describe('resolveCodeGenDatabaseProvider — factory dispatch', () => {
             .mockReturnValue(null as unknown as CodeGenDatabaseProvider);
 
         try {
-            expect(() => resolveCodeGenDatabaseProvider('postgresql' as DatabasePlatform))
+            expect(() => ResolveCodeGenDatabaseProvider('postgresql' as DatabasePlatform))
                 .toThrow(/dbPlatform='postgresql' not found/);
         } finally {
             spy.mockRestore();
@@ -116,7 +116,7 @@ describe('resolveCodeGenDatabaseProvider — factory dispatch', () => {
             .mockReturnValue(fake as unknown as CodeGenDatabaseProvider);
 
         try {
-            resolveCodeGenDatabaseProvider('postgresql' as DatabasePlatform);
+            ResolveCodeGenDatabaseProvider('postgresql' as DatabasePlatform);
             expect(spy).toHaveBeenCalledWith(CodeGenDatabaseProvider, 'postgresql');
         } finally {
             spy.mockRestore();

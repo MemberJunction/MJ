@@ -19,10 +19,28 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class SchedulingJobsComponent implements OnInit, OnDestroy {
-  @Input() initialState: Record<string, unknown> = {};
+  @Input() InitialState: Record<string, unknown> = {};
+
+  /** @deprecated Use {@link InitialState}. */
+  @Input() set initialState(value: Record<string, unknown>) {
+    this.InitialState = value;
+  }
+  /** @deprecated Use {@link InitialState}. */
+  get initialState(): Record<string, unknown> {
+    return this.InitialState;
+  }
   /** When true, the inner toolbar is hidden — the parent shell is rendering it in `<mj-page-header>` instead. */
   @Input() HideToolbar = false;
-  @Output() stateChange = new EventEmitter<Record<string, unknown>>();
+  @Output() StateChange = new EventEmitter<Record<string, unknown>>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
 
   public Jobs: JobStatistics[] = [];
   public FilteredJobs: JobStatistics[] = [];
@@ -131,10 +149,10 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
   }
 
   private restoreState(): void {
-    if (this.initialState) {
-      if (this.initialState['searchTerm']) this.SearchTerm = this.initialState['searchTerm'] as string;
-      if (this.initialState['statusFilter']) this.StatusFilter = this.initialState['statusFilter'] as string;
-      if (this.initialState['typeFilter']) this.TypeFilter = this.initialState['typeFilter'] as string;
+    if (this.InitialState) {
+      if (this.InitialState['searchTerm']) this.SearchTerm = this.InitialState['searchTerm'] as string;
+      if (this.InitialState['statusFilter']) this.StatusFilter = this.InitialState['statusFilter'] as string;
+      if (this.InitialState['typeFilter']) this.TypeFilter = this.InitialState['typeFilter'] as string;
     }
   }
 
@@ -316,9 +334,7 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
   }
 
   public OpenEntityRecord(job: JobStatistics): void {
-    const compositeKey = new CompositeKey();
-    compositeKey.LoadFromSingleKeyValuePair('ID', job.jobId);
-    SharedService.Instance.OpenEntityRecord('MJ: Scheduled Jobs', compositeKey);
+    SharedService.Instance.OpenEntityRecord('MJ: Scheduled Jobs', CompositeKey.FromID(job.jobId));
   }
 
   public GetStatusClass(status: string): string {
@@ -386,7 +402,7 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
   }
 
   private emitState(): void {
-    this.stateChange.emit({
+    this.StateChange.emit({
       searchTerm: this.SearchTerm,
       statusFilter: this.StatusFilter,
       typeFilter: this.TypeFilter

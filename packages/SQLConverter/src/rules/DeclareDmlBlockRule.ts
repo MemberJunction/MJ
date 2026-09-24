@@ -16,12 +16,13 @@
  *   - @var references → local variable references
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
+import { GAP_MARKER_UNPARSED } from './types.js';
 import {
-  convertIdentifiers, removeNPrefix, convertCommonFunctions, quotePascalCaseIdentifiers,
-  convertTopToLimit,
-  castBooleanInsertValues, convertBooleanLiteralComparisons,
+  ConvertIdentifiers, RemoveNPrefix, ConvertCommonFunctions, QuotePascalCaseIdentifiers,
+  ConvertTopToLimit,
+  CastBooleanInsertValues, ConvertBooleanLiteralComparisons,
 } from './ExpressionHelpers.js';
-import { resolveType } from './TypeResolver.js';
+import { ResolveType } from './TypeResolver.js';
 
 export class DeclareDmlBlockRule implements IConversionRule {
   Name = 'DeclareDmlBlockRule';
@@ -54,13 +55,13 @@ export class DeclareDmlBlockRule implements IConversionRule {
     result = result.replace(/^\s*SET\s+NOCOUNT\s+ON\s*;?\s*\n?/gim, '');
 
     // Convert bracket identifiers: [schema].[table] → schema."table"
-    result = convertIdentifiers(result);
+    result = ConvertIdentifiers(result);
 
     // Remove N prefix from string literals
-    result = removeNPrefix(result);
+    result = RemoveNPrefix(result);
 
     // Convert common functions (ISNULL → COALESCE, etc.)
-    result = convertCommonFunctions(result);
+    result = ConvertCommonFunctions(result);
 
     // Table variables have no PL/pgSQL declaration form — rewrite them to temp tables
     // BEFORE convertDeclare, so they land in the block body, not the DECLARE section.
@@ -93,15 +94,15 @@ export class DeclareDmlBlockRule implements IConversionRule {
     result = this.convertDynamicExec(result);
 
     // Quote PascalCase identifiers (ID, Name, etc.) outside string literals
-    result = quotePascalCaseIdentifiers(result);
+    result = QuotePascalCaseIdentifiers(result);
 
     // Cast SS BIT literals (0/1) → PG FALSE/TRUE at boolean-column positions, exactly
     // as InsertRule does for standalone statements. A DECLARE/DML block reaches PG as
     // one batch, so its INSERTs never pass through InsertRule; without this they keep
     // integer literals and PG rejects them ("column is of type boolean but expression
     // is of type integer"). castBooleanInsertValues rewrites every INSERT in the block.
-    result = castBooleanInsertValues(result, context.TableColumns);
-    result = convertBooleanLiteralComparisons(result, context.TableColumns);
+    result = CastBooleanInsertValues(result, context.TableColumns);
+    result = ConvertBooleanLiteralComparisons(result, context.TableColumns);
 
     // Convert IF condition BEGIN ... END → IF condition THEN ... END IF;
     result = this.convertIfBlocks(result);
@@ -164,9 +165,12 @@ export class DeclareDmlBlockRule implements IConversionRule {
     const init = eq >= 0 ? item.slice(eq + 1).trim() : null;
 
     const m = decl.match(/^@(\w+)\s+([\w\s(),]+)$/i);
-    if (!m) return `${indent}  -- Could not parse: ${item}`;
+    // The declaration is dropped and a marker left in its place. Emitted via the shared
+    // GAP_MARKER_UNPARSED (identical text) so `convertFile`'s gap scan and this emitter
+    // cannot drift — a drifted marker is an uncounted gap, i.e. issue #3857 again.
+    if (!m) return `${indent}  ${GAP_MARKER_UNPARSED}: ${item}`;
 
-    const pgType = resolveType(m[2].trim());
+    const pgType = ResolveType(m[2].trim());
     if (!init) return `${indent}v_${m[1]} ${pgType};`;
 
     // The initializer is an expression the block's other passes never see — the whole item used
@@ -174,7 +178,7 @@ export class DeclareDmlBlockRule implements IConversionRule {
     // left verbatim it reaches PG as `syntax error at or near "n"`. convertTopToLimit puts LIMIT on
     // its own line, which would split this declaration across lines and break the line-based
     // DECLARE-section split below, so the result is folded back onto one line.
-    const pgInit = convertTopToLimit(init).replace(/\s*\n\s*/g, ' ');
+    const pgInit = ConvertTopToLimit(init).replace(/\s*\n\s*/g, ' ');
     return `${indent}v_${m[1]} ${pgType} := ${pgInit};`;
   }
 
@@ -620,7 +624,7 @@ export class DeclareDmlBlockRule implements IConversionRule {
       const col = m[3];
 
       // Convert [schema].[table] or ${flyway:defaultSchema}.table → __mj."table"
-      table = convertIdentifiers(table);
+      table = ConvertIdentifiers(table);
 
       const quotedCol = col.startsWith('"') ? col : `"${col}"`;
       lines.push(`ALTER TABLE ${table} ALTER COLUMN ${quotedCol} SET DEFAULT ${value};`);
@@ -629,10 +633,10 @@ export class DeclareDmlBlockRule implements IConversionRule {
     // Preserve any standalone DML (UPDATE/INSERT) that follows the default changes
     const dmlMatch = sql.match(/\b(UPDATE|INSERT)\b[\s\S]*$/im);
     if (dmlMatch) {
-      let dml = convertIdentifiers(dmlMatch[0]);
-      dml = removeNPrefix(dml);
-      dml = convertCommonFunctions(dml);
-      dml = quotePascalCaseIdentifiers(dml);
+      let dml = ConvertIdentifiers(dmlMatch[0]);
+      dml = RemoveNPrefix(dml);
+      dml = ConvertCommonFunctions(dml);
+      dml = QuotePascalCaseIdentifiers(dml);
       lines.push('');
       lines.push(dml.trim());
     }

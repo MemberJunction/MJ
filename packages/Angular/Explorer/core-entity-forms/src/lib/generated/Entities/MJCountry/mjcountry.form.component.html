@@ -140,9 +140,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: State Provinces','CountryID')"
-                [NewRecordValues]="NewRecordValues('MJ: State Provinces')"
+                [NewRecordValues]="NewRecordValues('MJ: State Provinces','CountryID')"
                 [AllowLoad]="IsSectionExpanded('mJStateProvinces')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJStateProvinces', $event.totalRowCount)"
                 >
@@ -165,9 +165,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Geo Codes','CountryID')"
-                [NewRecordValues]="NewRecordValues('MJ: Record Geo Codes')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Geo Codes','CountryID')"
                 [AllowLoad]="IsSectionExpanded('mJRecordGeoCodes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordGeoCodes', $event.totalRowCount)"
                 >

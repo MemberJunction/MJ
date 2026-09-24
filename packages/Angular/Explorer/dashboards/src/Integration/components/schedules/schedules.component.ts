@@ -5,15 +5,15 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJCompanyIntegrationEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { IntegrationDataService, ResolveIntegrationIcon } from '../../services/integration-data.service';
 import {
-  buildSchedulesAgentContext,
-  resolveIntegrationSurface,
-  navLabelForSurface,
-  resolveIntegrationRecord,
-  buildIntegrationNotFoundError,
+  BuildSchedulesAgentContext,
+  ResolveIntegrationSurface,
+  NavLabelForSurface,
+  ResolveIntegrationRecord,
+  BuildIntegrationNotFoundError,
   ScheduleSummary,
   NamedIntegrationRecord,
 } from '../../integration-agent-context';
-import { AgentToolResult, validateStringParam } from '../../../shared/agent-tool-validation';
+import { AgentToolResult, ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 // ---------------------------------------------------------------------------
 // Data interfaces
@@ -160,7 +160,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   }
 
   private emitAgentContext(): void {
-    const context = buildSchedulesAgentContext({
+    const context = BuildSchedulesAgentContext({
       KPIs: {
         TotalIntegrations: this.Schedules.length,
         ActiveSyncs: 0,
@@ -208,11 +208,11 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   }
 
   private async toolSwitchSurface(params: Record<string, unknown>): Promise<AgentToolResult> {
-    const surface = resolveIntegrationSurface(params['surface']);
+    const surface = ResolveIntegrationSurface(params['surface']);
     if (!surface) {
       return { Success: false, ErrorMessage: 'Invalid surface. Expected one of: Overview, Connections, Activity, Schedules.' };
     }
-    const tabId = await this.navigationService.OpenNavItemByName(navLabelForSurface(surface));
+    const tabId = await this.navigationService.OpenNavItemByName(NavLabelForSurface(surface));
     if (!tabId) {
       return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
     }
@@ -220,7 +220,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   }
 
   private toolOpenScheduleRecord(params: Record<string, unknown>): AgentToolResult {
-    const check = validateStringParam(params['integration'], 'integration');
+    const check = ValidateStringParam(params['integration'], 'integration');
     if (!check.ok) {
       return check.result;
     }
@@ -228,9 +228,9 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
       ID: s.ID,
       Name: s.Integration ?? s.Name,
     }));
-    const match = resolveIntegrationRecord(check.value, candidates);
+    const match = ResolveIntegrationRecord(check.value, candidates);
     if (!match) {
-      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'integration') };
+      return { Success: false, ErrorMessage: BuildIntegrationNotFoundError(check.value, candidates, 'integration') };
     }
     this.navigationService.OpenEntityRecord('MJ: Company Integrations', CompositeKey.FromID(match.ID));
     return { Success: true };
@@ -391,7 +391,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
       if (changes.CronExpression !== undefined) entity.Set('CronExpression', changes.CronExpression);
 
       // Create/update/disable the linked ScheduledJob so the scheduler actually fires
-      await this.SyncScheduledJob(entity, scheduleEnabled, scheduleType, cronExpression, intervalMinutes, integrationID);
+      await this.syncScheduledJob(entity, scheduleEnabled, scheduleType, cronExpression, intervalMinutes, integrationID);
 
       const saved = await entity.Save();
       if (saved) {
@@ -417,7 +417,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
    * When enabled with a real schedule type, ensures an Active ScheduledJob exists.
    * When disabled or set to Manual, marks the ScheduledJob as Disabled (if one exists).
    */
-  private async SyncScheduledJob(
+  private async syncScheduledJob(
     entity: MJCompanyIntegrationEntity,
     enabled: boolean,
     scheduleType: 'Manual' | 'Interval' | 'Cron',
@@ -425,33 +425,33 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
     intervalMinutes: number | null,
     integrationID: string
   ): Promise<void> {
-    const effectiveCron = this.ResolveCronExpression(scheduleType, cronExpression, intervalMinutes);
+    const effectiveCron = this.resolveCronExpression(scheduleType, cronExpression, intervalMinutes);
     const existingJobID = entity.Get('ScheduledJobID') as string | null;
     const shouldBeActive = enabled && scheduleType !== 'Manual' && !!effectiveCron;
 
     if (shouldBeActive) {
-      const jobID = await this.UpsertScheduledJob(existingJobID, entity, effectiveCron!, integrationID);
+      const jobID = await this.upsertScheduledJob(existingJobID, entity, effectiveCron!, integrationID);
       if (jobID !== existingJobID) {
         entity.Set('ScheduledJobID', jobID);
       }
     } else if (existingJobID) {
-      await this.DisableScheduledJob(existingJobID);
+      await this.disableScheduledJob(existingJobID);
     }
   }
 
   /** Converts schedule type + config into a cron expression. */
-  private ResolveCronExpression(
+  private resolveCronExpression(
     scheduleType: 'Manual' | 'Interval' | 'Cron',
     cronExpression: string | null,
     intervalMinutes: number | null
   ): string | null {
     if (scheduleType === 'Cron') return cronExpression;
-    if (scheduleType === 'Interval' && intervalMinutes) return this.IntervalToCron(intervalMinutes);
+    if (scheduleType === 'Interval' && intervalMinutes) return this.intervalToCron(intervalMinutes);
     return null;
   }
 
   /** Converts an interval in minutes to an equivalent cron expression. */
-  private IntervalToCron(minutes: number): string {
+  private intervalToCron(minutes: number): string {
     if (minutes < 60) return `*/${minutes} * * * *`;
     const hours = minutes / 60;
     if (Number.isInteger(hours)) return hours === 1 ? '0 * * * *' : `0 */${hours} * * *`;
@@ -462,7 +462,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
    * Creates a new ScheduledJob or updates the existing one.
    * Returns the ID of the job (new or existing).
    */
-  private async UpsertScheduledJob(
+  private async upsertScheduledJob(
     existingJobID: string | null,
     entity: MJCompanyIntegrationEntity,
     cronExpression: string,
@@ -501,7 +501,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   }
 
   /** Sets an existing ScheduledJob to Disabled so it stops firing. */
-  private async DisableScheduledJob(jobID: string): Promise<void> {
+  private async disableScheduledJob(jobID: string): Promise<void> {
     const md = this.ProviderToUse;
     const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
     const loaded = await job.Load(jobID);

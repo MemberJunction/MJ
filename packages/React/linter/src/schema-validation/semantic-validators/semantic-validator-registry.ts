@@ -53,11 +53,16 @@ export class SemanticValidatorRegistry {
    *
    * @returns The singleton registry instance
    */
-  static getInstance(): SemanticValidatorRegistry {
+  static GetInstance(): SemanticValidatorRegistry {
     if (!SemanticValidatorRegistry.instance) {
       SemanticValidatorRegistry.instance = new SemanticValidatorRegistry();
     }
     return SemanticValidatorRegistry.instance;
+  }
+
+  /** @deprecated Use {@link GetInstance}. */
+  static getInstance(): SemanticValidatorRegistry {
+    return this.GetInstance();
   }
 
   /**
@@ -67,9 +72,9 @@ export class SemanticValidatorRegistry {
    * Registers the core validators that ship with the linter.
    */
   private registerBuiltInValidators(): void {
-    this.register(new SubsetOfEntityFieldsValidator());
-    this.register(new SqlWhereClauseValidator());
-    this.register(new RequiredWhenValidator());
+    this.Register(new SubsetOfEntityFieldsValidator());
+    this.Register(new SqlWhereClauseValidator());
+    this.Register(new RequiredWhenValidator());
   }
 
   /**
@@ -86,12 +91,17 @@ export class SemanticValidatorRegistry {
    * registry.register(new MyCustomValidator());
    * ```
    */
-  register(validator: SemanticValidator): void {
+  Register(validator: SemanticValidator): void {
     // Get the constraint type from the validator's @RegisterClass decorator
     // For now, we extract it from the class name by convention
     // In the future, this could be read from metadata
     const type = this.getValidatorType(validator);
     this.validators.set(type, validator);
+  }
+
+  /** @deprecated Use {@link Register}. */
+  register(validator: SemanticValidator): void {
+    return this.Register(validator);
   }
 
   /**
@@ -138,8 +148,13 @@ export class SemanticValidatorRegistry {
    * }
    * ```
    */
-  get(type: string): SemanticValidator | undefined {
+  Get(type: string): SemanticValidator | undefined {
     return this.validators.get(type);
+  }
+
+  /** @deprecated Use {@link Get}. */
+  get(type: string): SemanticValidator | undefined {
+    return this.Get(type);
   }
 
   /**
@@ -155,8 +170,13 @@ export class SemanticValidatorRegistry {
    * }
    * ```
    */
-  getAll(): Map<string, SemanticValidator> {
+  GetAll(): Map<string, SemanticValidator> {
     return new Map(this.validators);
+  }
+
+  /** @deprecated Use {@link GetAll}. */
+  getAll(): Map<string, SemanticValidator> {
+    return this.GetAll();
   }
 
   /**
@@ -165,8 +185,13 @@ export class SemanticValidatorRegistry {
    * @param type - Constraint type to check
    * @returns True if a validator is registered
    */
-  has(type: string): boolean {
+  Has(type: string): boolean {
     return this.validators.has(type);
+  }
+
+  /** @deprecated Use {@link Has}. */
+  has(type: string): boolean {
+    return this.Has(type);
   }
 
   /**
@@ -174,7 +199,12 @@ export class SemanticValidatorRegistry {
    *
    * @returns Array of constraint type strings
    */
-  getTypes(): string[] {
+  GetTypes(): string[] {
     return Array.from(this.validators.keys());
+  }
+
+  /** @deprecated Use {@link GetTypes}. */
+  getTypes(): string[] {
+    return this.GetTypes();
   }
 }

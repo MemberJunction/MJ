@@ -8,24 +8,38 @@ import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, Code
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare } from "@memberjunction/global"
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
+    ParseEntityFieldConfiguration,
+    ReadRelationshipJoinFields,
     type IEntityConfiguration,
     type IEntityRelationshipConfiguration,
+    type IEntityFieldConfiguration,
 } from "./entityConfiguration"
+import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 
 /**
- * Valid values for EntityField.ExtendedType.
- * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL, or geo address).
+ * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
+ * truth; {@link EntityFieldExtendedType} is derived from it. CodeGen validates LLM suggestions
+ * against {@link EntityFieldInfo.ExtendedTypes} rather than duplicating the list.
+ *
+ * `Image` — the value is an image URL, a `data:image/...` URI, or raw image base64. UI surfaces
+ * render a thumbnail and (in edit mode) allow replacing it with an upload capped at the field's
+ * MaxLength.
+ * `Color` — the value is a CSS color (hex / rgb / hsl).
+ * `JSON` — the value is a JSON document; validated on save and pretty-printed in forms.
  */
-export type EntityFieldExtendedType =
-    | 'Code' | 'Email' | 'FaceTime' | 'Geo'
-    | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
-    | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
-    | 'HTML' | 'Icon' | 'Markdown'
-    | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
+export const EntityFieldExtendedTypes = [
+    'Code', 'Color', 'Email', 'FaceTime', 'Geo',
+    'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+    'GeoCity', 'GeoPostalCode', 'GeoAddress',
+    'HTML', 'Icon', 'Image', 'JSON', 'Markdown',
+    'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg',
+] as const;
+
+export type EntityFieldExtendedType = typeof EntityFieldExtendedTypes[number];
 
 /**
  * The possible status values for a record change
@@ -114,6 +128,16 @@ export class EntityRelationshipInfo extends BaseInfo  {
     AutoUpdateFromSchema: boolean = true
 
     /**
+     * Comma-delimited list of extra related-entity fields to project in base views.
+     */
+    AdditionalFieldsToInclude: string = null
+
+    /**
+     * Whether CodeGen automatically updates AdditionalFieldsToInclude from schema metadata.
+     */
+    AutoUpdateAdditionalFieldsToInclude: boolean = true
+
+    /**
     * * Field Name: RelatedRecordCollection
     * * SQL Data Type: nvarchar(MAX), nullable
     *
@@ -136,25 +160,44 @@ export class EntityRelationshipInfo extends BaseInfo  {
     RelatedRecordCollection: string = null
 
     /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityRelationshipConfiguration | null | undefined = undefined;
+
+    /**
      * Optional JSON configuration bag (shape = {@link IEntityRelationshipConfiguration}).
-     * Nested `UI.FormRole` is Primary (first-class chrome), Detail (parked in More),
-     * or omitted (the smart ranker decides). Distinct from RelatedRecordCollection,
-     * DisplayComponentConfiguration, and AdditionalFieldsToInclude.
+     * Nested `UI.inclusion` is Primary, More, or None (omit = Auto ranker).
+     * `UI.FormRole` is an accepted alias (`Detail` = More). Distinct from
+     * RelatedRecordCollection, DisplayComponentConfiguration, and AdditionalFieldsToInclude.
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
      *
      * @see packages/MJCore/src/generic/entityConfiguration.ts
      */
-    Configuration: string = null
-
-    private _configurationObject: IEntityRelationshipConfiguration | null | undefined = undefined;
+    get Configuration(): IEntityRelationshipConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityRelationshipConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityRelationshipConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
 
     /**
      * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
      */
     get ConfigurationObject(): IEntityRelationshipConfiguration | null {
-        if (this._configurationObject === undefined) {
-            this._configurationObject = ParseEntityRelationshipConfiguration(this.Configuration);
-        }
-        return this._configurationObject;
+        return this.Configuration;
     }
 
     // virtual fields - returned by the database VIEW
@@ -198,7 +241,7 @@ export class EntityOrganicKeyInfo extends BaseInfo {
     // virtual fields from the database view
     Entity: string = null
 
-    private _RelatedEntities: EntityOrganicKeyRelatedEntityInfo[] = []
+    private _RelatedEntities: EntityOrganicKeyRelatedEntityInfo[] = []  // case-violation-ok-legacy-back-compat: a class in the same hierarchy already declares the camelCase name — TypeScript rejects two declarations of one private property (TS2415)
 
     /**
      * Gets the related entities configured for this organic key.
@@ -227,7 +270,7 @@ export class EntityOrganicKeyInfo extends BaseInfo {
                 sorted.sort((a, b) => {
                     const aSeq = (a.Sequence as number) ?? 999999;
                     const bSeq = (b.Sequence as number) ?? 999999;
-                    return aSeq - bSeq;
+                    return (aSeq - bSeq) || ordinalCompare(a.RelatedEntity as string, b.RelatedEntity as string) || ordinalCompare(a.ID as string, b.ID as string);
                 });
                 for (const item of sorted) {
                     this._RelatedEntities.push(new EntityOrganicKeyRelatedEntityInfo(item));
@@ -361,6 +404,16 @@ export class EntityPermissionInfo extends BaseInfo{
      * materialized before the column existed.
      */
     Type: string = 'Allow'
+
+    /**
+     * True when this row is a Deny row (`Type = 'Deny'`, compared case- and whitespace-insensitively;
+     * a null/blank Type — rows created before the column existed — is Allow). On a Deny row a set
+     * `Can*` flag means "deny that operation", so nothing that reads a `Can*` flag as a GRANT may
+     * look at a Deny row: `GetUserPermisions` subtracts these, and the RLS readers skip them.
+     */
+    public get IsDeny(): boolean {
+        return (this.Type || 'Allow').trim().toLowerCase() === 'deny';
+    }
     CanCreate: boolean = null
     CanRead: boolean = null
     CanUpdate: boolean = null
@@ -420,6 +473,246 @@ export class EntityPermissionInfo extends BaseInfo{
         this.copyInitData(initData);
     }
 }
+
+/**
+ * The three states a single field-level permission verb can hold, modelled on SQL Server's
+ * posture:
+ *
+ * - `No Access` — neutral, and the default. Grants nothing and blocks nothing; another role's
+ *   Allow still wins.
+ * - `Allow` — grants the action for this role.
+ * - `Deny` — trumps everything. One Deny across any of the user's roles wins no matter how
+ *   many Allows sit beside it.
+ */
+export const FieldPermissionAccess = {
+    Allow: 'Allow',
+    Deny: 'Deny',
+    NoAccess: 'No Access',
+} as const;
+
+export type FieldPermissionAccess = typeof FieldPermissionAccess[keyof typeof FieldPermissionAccess];
+
+/**
+ * The three trinary verbs of a single field-permission rule, on their own.
+ *
+ * Both `EntityFieldPermissionInfo` (metadata) and the generated `MJ: Entity Field Permissions`
+ * entity satisfy this structurally, so callers can ask about a stored rule or a prospective one
+ * without converting between the two.
+ */
+export type FieldPermissionRuleVerbs = {
+    ReadAccess: FieldPermissionAccess;
+    UpdateAccess: FieldPermissionAccess;
+    CreateAccess: FieldPermissionAccess;
+};
+
+/**
+ * A field-permission rule together with the role it binds to — the minimum
+ * {@link EntityFieldInfo.AggregateFieldRulesForUser} needs to decide whether a rule applies.
+ *
+ * Structurally satisfied by `EntityFieldPermissionInfo` (metadata) and by the generated
+ * `MJ: Entity Field Permissions` entity alike, so a caller can aggregate stored rules, prospective
+ * ones, or a mix of both.
+ */
+export type FieldPermissionRuleForRole = FieldPermissionRuleVerbs & {
+    RoleID: string;
+};
+
+/**
+ * The transport-only key carrying the server's authoritative answer to "which fields on this
+ * entity may the caller of THIS request read".
+ *
+ * **Why it lists READABLE fields rather than denied ones.** The two carry the same information
+ * only while the client already holds the full permission matrix, which it does today — the
+ * `MJ_Metadata` dataset ships `MJ: Entity Fields` and `MJ: Entity Field Permissions` unfiltered.
+ * That is scheduled to change (MJ issue #3485, metadata filtering for restricted users), and a
+ * payload that named DENIED fields would hand back exactly what such filtering exists to withhold:
+ * the names of columns you are not allowed to know about. A readable list names only fields the
+ * caller may already see, so it discloses nothing under any filtering design.
+ *
+ * **Why it is needed at all.** The server omits denied fields from the response object, but
+ * GraphQL emits every SELECTED field regardless — so a denied field the client asked for arrives
+ * as an explicit `null`, indistinguishable from a genuine one. The client cannot settle that from
+ * its own metadata: in the window after a permission change (and permanently, once metadata is
+ * filtered) the client's copy disagrees with the server's. This key is the server stating it
+ * in-band, for the request that actually ran.
+ *
+ * Suffixed `___` following the established transport-only convention (`OldValues___`,
+ * `RestoreContext___`) so it cannot collide with a real column name.
+ */
+export const ReadableFieldsTransportKey = 'ReadableFields___';
+
+/**
+ * True when a rule takes access AWAY rather than granting or abstaining.
+ *
+ * `Deny` is the only restricting value *within a single rule*. `No Access` is the aggregation's
+ * identity element: it can leave a role without access, but it can never remove access one of the
+ * user's other roles granted.
+ *
+ * **This answers a question about one rule, not about a change.** Whether a CHANGE restricts a
+ * user is a property of the aggregate across every role they hold — setting each of a user's roles
+ * to `No Access` in turn writes no `Deny` anywhere and still ends with the field denied. So this
+ * is sound for an INSERT, which can only add rules and therefore cannot remove an existing
+ * `Allow`, and is NOT sufficient for an edit or a delete. Those must project the resulting rule
+ * set and aggregate it — see {@link EntityFieldInfo.AggregateFieldRulesForUser}.
+ */
+export function IsRestrictingFieldRule(rule: FieldPermissionRuleVerbs | null | undefined): boolean {
+    return (
+        rule?.ReadAccess === FieldPermissionAccess.Deny ||
+        rule?.UpdateAccess === FieldPermissionAccess.Deny ||
+        rule?.CreateAccess === FieldPermissionAccess.Deny
+    );
+}
+
+/**
+ * The single wording for "you cannot use this field", modelled on SQL Server's posture of never
+ * disclosing whether an object is missing or merely inaccessible.
+ *
+ * Naming the field is safe — the caller supplied it, so it tells them nothing they did not
+ * already know. Naming the REASON is not: confirming "this field exists and is restricted"
+ * turns any predicate into an oracle for probing which columns a deployment considers
+ * sensitive. The ambiguity also stays correct after
+ * [#3485](https://github.com/MemberJunction/MJ/issues/3485) tiers metadata and restricted fields
+ * stop shipping to clients at all, at which point "does not exist" becomes literally true from
+ * the client's vantage point.
+ *
+ * Lives here rather than on `ProviderBase` so the write path in `BaseEntity` can reach it
+ * without importing the provider layer, which imports `BaseEntity` in turn.
+ */
+export function FieldSecurityDenialMessage(fieldName: string, entityName: string): string {
+    return `Field '${fieldName}' does not exist on entity '${entityName}' or you do not have access to it.`;
+}
+
+/**
+ * The wording for "you may not WRITE this field" — used only when the caller can READ it.
+ *
+ * Naming the reason here discloses nothing. The caller can see the field and its values, so
+ * both facts the ambiguous wording withholds — that the column exists, and that it is
+ * restricted for them — are already theirs. All this adds is *which* permission is missing,
+ * which they would learn by trying anyway.
+ *
+ * The two justifications behind {@link FieldSecurityDenialMessage} do not reach this case:
+ * predicate probing is a question about columns the caller cannot READ, and the
+ * [#3485](https://github.com/MemberJunction/MJ/issues/3485) argument — that "does not exist"
+ * becomes literally true once restricted fields stop shipping to clients — is false for a
+ * readable field, which keeps shipping. Ambiguity there does not age into truth; it just tells
+ * someone that a field they are looking at might not exist.
+ *
+ * A field the caller cannot read must still use the ambiguous wording. That is not hypothetical:
+ * `SetMany` deliberately skips the readability assertion (it is the hydration and resolver-apply
+ * path), so server-side code can dirty a read-denied field and reach the update gate.
+ */
+export function FieldSecurityWriteDenialMessage(fieldName: string, entityName: string): string {
+    return `You do not have permission to update field '${fieldName}' on entity '${entityName}'.`;
+}
+
+/**
+ * The error thrown when field-level security refuses a request — a caller-authored predicate
+ * naming an unreadable field, a typed accessor touching one, or a save modifying a field the
+ * caller may not write.
+ *
+ * A DISTINCT class because its message is the one security rejection that is deliberately safe
+ * to show a caller: both {@link FieldSecurityDenialMessage} and
+ * {@link FieldSecurityWriteDenialMessage} were designed for exactly that surface and disclose
+ * nothing (see their docs). Transport layers that rightly swallow arbitrary resolver errors
+ * (whose messages can carry SQL text or internal state) recognize this one and let it through,
+ * so the intended wording reaches the wire instead of degenerating into a generic transport
+ * error.
+ *
+ * Recognize it by `name === FieldSecurityError.ErrorName` rather than `instanceof` where
+ * bundling might duplicate the class.
+ */
+export class FieldSecurityError extends Error {
+    public static readonly ErrorName = 'FieldSecurityError';
+    /**
+     * Defaults to the ambiguous wording, which is correct for every READ denial. Pass `message`
+     * only through a named factory such as {@link FieldSecurityError.WriteDenial}, so the choice
+     * of wording is always a deliberate, reviewable decision rather than an inline string.
+     */
+    constructor(fieldName: string, entityName: string, message?: string) {
+        super(message ?? FieldSecurityDenialMessage(fieldName, entityName));
+        this.name = FieldSecurityError.ErrorName;
+    }
+
+    /**
+     * A write refusal on a field the caller CAN read — names the missing permission instead of
+     * hiding behind "or it does not exist", which would be actively misleading about a field
+     * whose values they are looking at. Callers must confirm readability first; see
+     * {@link FieldSecurityWriteDenialMessage}.
+     */
+    public static WriteDenial(fieldName: string, entityName: string): FieldSecurityError {
+        return new FieldSecurityError(fieldName, entityName, FieldSecurityWriteDenialMessage(fieldName, entityName));
+    }
+}
+
+/**
+ * Field-level (column-level) security settings. Maps an entity FIELD to a role, carrying three
+ * independent trinary verbs — Read, Update and Create. One row per (field, role).
+ *
+ * These rows are only consulted when the parent entity has
+ * {@link EntityInfo.EnableFieldLevelSecurity} set. Aggregation across the roles a user holds,
+ * per verb: `effective = (any matching row Allows) AND NOT (any matching row Denies)`. See
+ * {@link EntityFieldInfo.GetUserFieldPermissions}.
+ */
+export class EntityFieldPermissionInfo extends BaseInfo {
+    ID: string = null
+
+    EntityFieldID: string = null
+    RoleID: string = null
+    /**
+     * Whether this role may READ the field's values. The aggregation normalizes defensively and
+     * treats anything unrecognized as `No Access`, so a bad value off the wire fails closed
+     * rather than granting.
+     */
+    ReadAccess: FieldPermissionAccess = FieldPermissionAccess.NoAccess
+    /**
+     * Whether this role may modify the field's value on an EXISTING record.
+     *
+     * Requires {@link ReadAccess} = Allow — a field a user cannot see is one they cannot
+     * change. Enforced per row by a CHECK constraint, and again after aggregation because the
+     * constraint cannot see across roles.
+     */
+    UpdateAccess: FieldPermissionAccess = FieldPermissionAccess.NoAccess
+    /**
+     * Whether this role may supply the field's value when INSERTing a record. Requires
+     * {@link ReadAccess} = Allow, on the same two-layer basis as {@link UpdateAccess}.
+     *
+     * A user who may not create a field does not get an error — the supplied value is dropped
+     * and the column takes its default, matching the read path where a denied field is simply
+     * absent.
+     */
+    CreateAccess: FieldPermissionAccess = FieldPermissionAccess.NoAccess
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields - returned by the database VIEW
+    EntityField: string = null
+    Role: string = null
+
+    /**
+     * @param initData raw metadata row off the wire. `BaseInfo.copyInitData` only ever reads
+     * `Object.keys()` off it, so a plain record is wide enough.
+     */
+    constructor (initData: Record<string, unknown> | null = null) {
+        super();
+        this.copyInitData(initData);
+    }
+}
+
+/**
+ * The effective field-level access a specific user has to a specific field, after trinary
+ * aggregation across all of the roles that user holds.
+ *
+ * Narrower than {@link EntityUserPermissionInfo}: Delete has no field-level meaning — you
+ * delete rows, not columns.
+ *
+ * The three flags are not independent on the way out. Read is required for Update and Create,
+ * so a `false` CanRead always arrives with `false` CanUpdate and CanCreate.
+ */
+export type EntityFieldUserPermissionInfo = {
+    CanRead: boolean;
+    CanUpdate: boolean;
+    CanCreate: boolean;
+};
 
 export const EntityFieldTSType = {
     String: 'string',
@@ -553,6 +846,18 @@ export class EntityFieldInfo extends BaseInfo {
     DisplayName: string = null 
     Description: string = null 
     /**
+     * Whether CodeGen automatically updates Description from the underlying schema object.
+     */
+    AutoUpdateDescription: boolean = true
+    /**
+     * Whether CodeGen automatically updates UserSearchPredicateAPI from schema heuristics.
+     */
+    AutoUpdateUserSearchPredicate: boolean = true
+    /**
+     * Whether CodeGen automatically updates FullTextSearchEnabled from schema indexes.
+     */
+    AutoUpdateFullTextSearch: boolean = true 
+    /**
      * If true, the field is the primary key for the entity. There must be one primary key field per entity.
      */
     IsPrimaryKey: boolean = null
@@ -579,6 +884,10 @@ export class EntityFieldInfo extends BaseInfo {
     DefaultValue: string = null
     AutoIncrement: boolean = null
     ValueListType: string = null
+    /**
+     * Runtime domain for {@link ExtendedType}. Same array as {@link EntityFieldExtendedTypes}.
+     */
+    static readonly ExtendedTypes: readonly EntityFieldExtendedType[] = EntityFieldExtendedTypes
     ExtendedType: EntityFieldExtendedType | null = null
     DefaultInView: boolean = null 
     ViewCellTemplate: string = null
@@ -624,6 +933,22 @@ export class EntityFieldInfo extends BaseInfo {
      */
     RelatedEntityJoinFields: string = null
     /**
+     * Optional JSON policy object declaring this foreign-key field as a first-class
+     * **embedded record** — a 1:1 peer that loads, validates and persists as one
+     * unit with its owner. Shape is `IEmbeddedRecordConfig` (`OnClear`, `LoadNested`).
+     *
+     * `RelatedEntityID` and this field's `Name` are the join; they are deliberately
+     * not repeated inside the JSON. `AllowsNull` on this same field decides whether
+     * `GetEntityObject` provisions the object (required FK) or the caller uses
+     * `{FieldName}_EnsureObject()` (nullable FK).
+     *
+     * `null` (the default, and every pre-feature row) means the field is an ordinary
+     * FK: nothing is generated and nothing is constructed at `GetEntityObject` time.
+     *
+     * @see packages/MJCore/docs/embedded-records.md
+     */
+    EmbeddedRecord: string = null
+    /**
      * The name of the TypeScript interface/type for this JSON field.
      * When set, CodeGen will emit a strongly-typed getter/setter using this type
      * instead of the default string getter/setter.
@@ -641,7 +966,77 @@ export class EntityFieldInfo extends BaseInfo {
      */
     JSONTypeDefinition: string = null;
 
+    /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityFieldConfiguration | null | undefined = undefined;
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityFieldConfiguration}).
+     * Defines field-level configurations such as Hierarchy options (IsHierarchy, MaxDepth).
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
+     */
+    get Configuration(): IEntityFieldConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityFieldConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityFieldConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityFieldConfiguration | null {
+        return this.Configuration;
+    }
+
+    /**
+     * Returns true if this field is explicitly configured as an intentional recursive tree hierarchy.
+     */
+    get IsHierarchy(): boolean {
+        return this.ConfigurationObject?.Hierarchy?.IsHierarchy === true;
+    }
+
+    /**
+     * Maximum recursion depth configured for this hierarchy field (defaults to 100).
+     */
+    get HierarchyMaxDepth(): number {
+        return this.ConfigurationObject?.Hierarchy?.MaxDepth ?? 100;
+    }
+
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
+
+    /**
+    * * Field Name: RelatedEntityFilter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional SQL WHERE fragment applied to every lookup on this foreign key
+    *   (e.g. `Status = 'Active'`), AND-ed with whatever the user types. Scopes a picker from
+    *   metadata rather than from every form template that renders the field. Authored, not
+    *   derived from the catalog.
+    */
+    RelatedEntityFilter: string = null
+
+    /**
+    * * Field Name: RelatedEntityOrderBy
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional ORDER BY fragment for the empty-query browse list on this foreign
+    *   key. Defaults to the related entity's name field.
+    */
+    RelatedEntityOrderBy: string = null
+
     EntityIDFieldName: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
@@ -866,28 +1261,92 @@ export class EntityFieldInfo extends BaseInfo {
 
     // These are not in the database view and are added in code
     IsFloat: boolean
-    _RelatedEntityTableAlias: string
-    _RelatedEntityNameFieldIsVirtual: boolean
+    RelatedEntityTableAlias: string
+
+    /** @deprecated Use {@link RelatedEntityTableAlias}. */
+    get _RelatedEntityTableAlias(): string {
+        return this.RelatedEntityTableAlias;
+    }
+    /** @deprecated Use {@link RelatedEntityTableAlias}. */
+    set _RelatedEntityTableAlias(value: string) {
+        this.RelatedEntityTableAlias = value;
+    }
+    RelatedEntityNameFieldIsVirtual: boolean
+
+    /** @deprecated Use {@link RelatedEntityNameFieldIsVirtual}. */
+    get _RelatedEntityNameFieldIsVirtual(): boolean {
+        return this.RelatedEntityNameFieldIsVirtual;
+    }
+    /** @deprecated Use {@link RelatedEntityNameFieldIsVirtual}. */
+    set _RelatedEntityNameFieldIsVirtual(value: boolean) {
+        this.RelatedEntityNameFieldIsVirtual = value;
+    }
     /**
      * Mirror of `IsComputed` on the related entity's Name Field. Tracked alongside
      * `_RelatedEntityNameFieldIsVirtual` so that base-view JOIN-target selection can
      * prefer the related entity's base table when the Name Field is a SQL computed/
      * generated column (physically present in the base table even though IsVirtual=1).
      */
-    _RelatedEntityNameFieldIsComputed: boolean
+    RelatedEntityNameFieldIsComputed: boolean
+
+    /** @deprecated Use {@link RelatedEntityNameFieldIsComputed}. */
+    get _RelatedEntityNameFieldIsComputed(): boolean {
+        return this.RelatedEntityNameFieldIsComputed;
+    }
+    /** @deprecated Use {@link RelatedEntityNameFieldIsComputed}. */
+    set _RelatedEntityNameFieldIsComputed(value: boolean) {
+        this.RelatedEntityNameFieldIsComputed = value;
+    }
     private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
     private _entityFieldValuesConstructed = false;
-    _EntityFieldValues: EntityFieldValueInfo[];
-    _RelatedEntityNameFieldMap: string
+    /**
+     * Memoized state for value-list validation. NOTE THE NAMES: none of these may be the getter's
+     * name minus its underscore. `BaseInfo.toJSON` walks own keys, and for a `_`-prefixed one it
+     * looks for a public getter of the matching PascalCase name and serializes THROUGH it. A memo
+     * called `_valueListValuesForDisplay` would therefore add `ValueListValuesForDisplay` to every
+     * serialized field — including the ~5,700 MJ core fields with no value list — bloating the
+     * browser metadata cache and forcing EntityFieldValues hydration purely to serialize a string
+     * that only ever appears in an error message. Hence `_valueListDisplayCache`.
+     */
+    private _normalizedValueListValues: Set<string> | undefined = undefined;
+    /** Memoized message form of the value list, built on first validation failure. */
+    private _valueListDisplayCache: string | undefined = undefined;
+    /** Latches the broken-metadata error so a bulk load cannot emit it once per row. */
+    private _loggedEmptyValueList: boolean = false;
+    /** Latches the unsupported-value-type error for the same reason. */
+    private _loggedUnsupportedValueListType: boolean = false;
+    /** Memoized yyyy-mm-dd keys for a `date` field's value list; null when it cannot be compared. */
+    private _valueListDateKeys: Set<string> | null | undefined = undefined;
+    _EntityFieldValues: EntityFieldValueInfo[];  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    _RelatedEntityNameFieldMap: string  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     /**
      * Collection of all joined field mappings from the related entity.
      */
-    _RelatedEntityJoinFieldMappings: Array<{
+    RelatedEntityJoinFieldMappings: Array<{
         sourceField: string;
         alias: string;
         isVirtual: boolean;
         isComputed: boolean;
     }>;
+
+    /** @deprecated Use {@link RelatedEntityJoinFieldMappings}. */
+    get _RelatedEntityJoinFieldMappings(): Array<{
+        sourceField: string;
+        alias: string;
+        isVirtual: boolean;
+        isComputed: boolean;
+    }> {
+        return this.RelatedEntityJoinFieldMappings;
+    }
+    /** @deprecated Use {@link RelatedEntityJoinFieldMappings}. */
+    set _RelatedEntityJoinFieldMappings(value: Array<{
+        sourceField: string;
+        alias: string;
+        isVirtual: boolean;
+        isComputed: boolean;
+    }>) {
+        this.RelatedEntityJoinFieldMappings = value;
+    }
 
     /**
      * Cached parsed RelatedEntityJoinFieldsConfig to avoid repeated JSON.parse calls.
@@ -943,6 +1402,227 @@ export class EntityFieldInfo extends BaseInfo {
         return this._EntityFieldValues;
     }
 
+    private _fieldPermissions: EntityFieldPermissionInfo[] = [];
+
+    /**
+     * Field-level (column-level) security records configured for THIS field, across all roles.
+     * Empty for the overwhelming majority of fields — see {@link HasFieldPermissions}.
+     */
+    public get FieldPermissions(): EntityFieldPermissionInfo[] {
+        return this._fieldPermissions;
+    }
+
+    /**
+     * True when at least one {@link EntityFieldPermissionInfo} record exists for this field.
+     *
+     * **Not an enforcement gate** — it answers "does any configuration target this field",
+     * which CodeGen's DB-tier emission and the system-user entanglement guard both need. The
+     * access decision is {@link EntityInfo.EnableFieldLevelSecurity} plus the aggregation; on an
+     * enabled entity a field with no records is denied, not open.
+     */
+    public get HasFieldPermissions(): boolean {
+        return this._fieldPermissions.length > 0;
+    }
+
+    /**
+     * Entities whose fields can never be restricted by field-level security.
+     *
+     * Two distinct reasons, both amounting to "a configuration that cannot be undone through
+     * the product":
+     *
+     * 1. **The security-configuration surface** (Entities, Entity Fields, Entity Permissions,
+     *    Entity Field Permissions, Roles). Restricting `CanRead` on the Entity Field Permissions
+     *    entity itself would leave the admin screen unable to render the very rows needed to
+     *    reverse the restriction — recovery would require direct SQL against the database.
+     * 2. **The identity surface** (Users, User Roles). Role resolution and the auth path read
+     *    these on every request; restricting a column here degrades far more than one screen.
+     *
+     * Note this is deliberately a guard on WHICH ENTITIES are restrictable, not an exemption for
+     * particular USERS. No user is above a Deny — that would undercut the entire point of the
+     * feature for the confidentiality use cases (compensation, donor giving) that motivate it.
+     *
+     * Stored lowercased; compare with a trimmed, lowercased entity name.
+     */
+    private static readonly unrestrictableEntityNames: ReadonlySet<string> = new Set<string>([
+        'mj: entities',
+        'mj: entity fields',
+        'mj: entity permissions',
+        'mj: entity field permissions',
+        'mj: roles',
+        'mj: users',
+        'mj: user roles',
+    ]);
+
+    /**
+     * True when this field belongs to an entity that field-level security may never restrict.
+     * See {@link EntityFieldInfo.UnrestrictableEntityNames} for the rationale.
+     */
+    public get IsOnUnrestrictableEntity(): boolean {
+        return EntityFieldInfo.unrestrictableEntityNames.has((this.Entity ?? '').trim().toLowerCase());
+    }
+
+    /**
+     * True for fields that must remain readable regardless of any permission record:
+     * primary keys (hard or soft) and `__mj_` system columns.
+     *
+     * Stripping a primary key from a result breaks entity load, {@link CompositeKey}
+     * construction, relationship resolution, and cache fingerprinting — the failure surfaces
+     * far from the permission record that caused it. This is enforced here AND at save time on
+     * the permission record itself, so a row inserted outside the entity path still cannot take
+     * a primary key out of a result set.
+     */
+    public get IsUnrestrictableField(): boolean {
+        return this.IsPrimaryKey === true || this.IsSoftPrimaryKey === true || (this.Name ?? '').startsWith('__mj_');
+    }
+
+    /**
+     * Returns the effective field-level access this user has to this field, aggregating the
+     * field's permission records across every role the user holds.
+     *
+     * **PRECONDITION: the caller has already established that the parent entity has
+     * {@link EntityInfo.EnableFieldLevelSecurity} set.** The flag is a required parameter rather
+     * than something this method looks up, because `EntityFieldInfo` holds its entity's NAME and
+     * not a reference to the `EntityInfo` — and a method that silently answered "denied" for a
+     * field on a non-FLS entity would be a trap. Pass `false` and every field comes back fully
+     * open.
+     *
+     * Per verb, across the user's matching roles:
+     * `effective = (any row Allows) AND NOT (any row Denies)`. Deny is absorbing and No Access
+     * is the identity, so three states collapse to that one expression.
+     *
+     * Outcomes:
+     * - **Field security disabled on the entity** → fully open.
+     * - **No records on the field** (enabled) → fully closed. Snapshot initialization creates a
+     *   row for every (field, role) that should have one, so a missing row means reconciliation
+     *   has not run — failing closed makes that visible.
+     * - **Records exist, none match the user's roles** → fully closed, for want of an Allow.
+     *
+     * **There is no exempt user — not even the MJ system user.** Every account, including the
+     * one the server runs its own background work as, gets its access from the rows. The system
+     * user stays working because it holds the standard roles (UI, Developer, Integration),
+     * snapshot initialization writes them `Allow` rows like any other role holding entity read,
+     * and the save-time configuration guards refuse a `Deny` aimed at a role it holds. That is a
+     * constraint on what can be CONFIGURED, which an administrator can see and reason about —
+     * unlike a runtime bypass, which is invisible at the point where access is decided and has
+     * to be trusted rather than checked.
+     *
+     * PERFORMANCE: this is the per-FIELD primitive. Enforcement points must never call it
+     * inside a per-row loop — `MapFieldNamesToCodeNames` runs once per row, so a naive call
+     * site costs `fields x rows` aggregations. Compute the denied-field Set once per
+     * (entity, user) per request and pass it into the row loop.
+     *
+     * @param user the user whose effective access is being resolved
+     * @param entityFieldSecurityEnabled the parent entity's `EnableFieldLevelSecurity` flag
+     */
+    public GetUserFieldPermissions(user: UserInfo, entityFieldSecurityEnabled: boolean): EntityFieldUserPermissionInfo {
+        if (!entityFieldSecurityEnabled) {
+            return EntityFieldInfo.fullyOpenFieldPermissions();
+        }
+
+        // Records on an unrestrictable entity are ignored entirely rather than half-applied.
+        // Save-time validation rejects such rows, so reaching here means they were written
+        // outside the entity path.
+        if (this.IsOnUnrestrictableEntity) {
+            return EntityFieldInfo.fullyOpenFieldPermissions();
+        }
+
+        // Primary keys and __mj_ system columns are forced open BEFORE aggregation rather than
+        // patched afterwards: a half-corrected result (readable but not creatable) would break
+        // inserts on entities whose primary key the caller supplies.
+        if (this.IsUnrestrictableField) {
+            return EntityFieldInfo.fullyOpenFieldPermissions();
+        }
+
+        return this.aggregateUserFieldPermissions(user);
+    }
+
+    /**
+     * The "field security does not apply here" answer, named so the policy exits above cannot
+     * drift apart from one another.
+     */
+    private static fullyOpenFieldPermissions(): EntityFieldUserPermissionInfo {
+        return { CanRead: true, CanUpdate: true, CanCreate: true };
+    }
+
+    /**
+     * Trinary aggregation across the user's roles. Split out of
+     * {@link GetUserFieldPermissions} so the guards there read as policy and this reads as
+     * arithmetic.
+     */
+    private aggregateUserFieldPermissions(user: UserInfo): EntityFieldUserPermissionInfo {
+        return EntityFieldInfo.AggregateFieldRulesForUser(this._fieldPermissions, user);
+    }
+
+    /**
+     * The same aggregation {@link GetUserFieldPermissions} performs, over a rule list the caller
+     * supplies rather than this field's stored one.
+     *
+     * Exists so save-time guards can evaluate a **prospective** outcome — the rules as they would
+     * stand after a proposed insert, edit or delete — instead of classifying a single row in
+     * isolation. That distinction is load-bearing: whether a change restricts a user is a property
+     * of the AGGREGATE across all the roles they hold, not of any one rule. A rule reading
+     * `No Access` restricts nobody on its own, yet setting every one of a user's roles to
+     * `No Access` leaves no `Allow` standing and denies the field outright.
+     *
+     * @param rules the rules to aggregate — any shape carrying a `RoleID` and the three verbs
+     * @param user the user whose roles select which rules apply
+     */
+    public static AggregateFieldRulesForUser(
+        rules: readonly FieldPermissionRuleForRole[],
+        user: UserInfo
+    ): EntityFieldUserPermissionInfo {
+        const allow = { CanRead: false, CanUpdate: false, CanCreate: false };
+        const deny = { CanRead: false, CanUpdate: false, CanCreate: false };
+
+        for (const fp of rules) {
+            const roleMatch: UserRoleInfo = user?.UserRoles?.find((r) => UUIDsEqual(r.RoleID, fp.RoleID));
+            if (!roleMatch) {
+                continue; // user does not hold this role
+            }
+            EntityFieldInfo.applyAccessToBuckets(fp.ReadAccess, allow, deny, 'CanRead');
+            EntityFieldInfo.applyAccessToBuckets(fp.UpdateAccess, allow, deny, 'CanUpdate');
+            EntityFieldInfo.applyAccessToBuckets(fp.CreateAccess, allow, deny, 'CanCreate');
+        }
+
+        const effective: EntityFieldUserPermissionInfo = {
+            CanRead: allow.CanRead && !deny.CanRead,
+            CanUpdate: allow.CanUpdate && !deny.CanUpdate,
+            CanCreate: allow.CanCreate && !deny.CanCreate,
+        };
+
+        // Read is required for Update and Create. A CHECK constraint enforces this per ROW and
+        // cannot enforce it here: role A granting Read+Update and role B denying Read are each
+        // individually legal, yet a user holding both aggregates to read-denied +
+        // update-allowed. This clamp is what makes that combination unreachable at runtime.
+        if (!effective.CanRead) {
+            effective.CanUpdate = false;
+            effective.CanCreate = false;
+        }
+        return effective;
+    }
+
+    /**
+     * Folds one trinary verb into the Allow/Deny buckets. Anything unrecognized is treated as
+     * `No Access`, so a value reaching here outside the CHECK constraint grants nothing.
+     */
+    private static applyAccessToBuckets(
+        access: FieldPermissionAccess,
+        allow: EntityFieldUserPermissionInfo,
+        deny: EntityFieldUserPermissionInfo,
+        verb: keyof EntityFieldUserPermissionInfo
+    ): void {
+        switch ((access ?? '').trim().toLowerCase()) {
+            case 'allow':
+                allow[verb] = true;
+                break;
+            case 'deny':
+                deny[verb] = true;
+                break;
+            default:
+                break; // 'No Access', and anything unrecognized: neutral
+        }
+    }
+
     /**
      * Returns the ValueListType using the EntityFieldValueListType enum.
      */
@@ -958,6 +1638,258 @@ export class EntityFieldInfo extends BaseInfo {
                 }
             }
         }
+    }
+
+    /**
+     * Upper bound on how many legal values a validation message enumerates before it truncates.
+     * A long list would otherwise produce an error message no user can read.
+     */
+    public static readonly MaxValueListValuesInErrorMessage: number = 25;
+
+    /**
+     * Normalizes a value for comparison against a value list: stringified, trimmed, lower-cased.
+     *
+     * Each part earns its place, and the reasons are NOT equally strong — stated precisely, because
+     * a future maintainer will use this to decide whether to tighten the comparison:
+     *   * **Lower-casing is load-bearing on MJ core itself.** Not merely defensive: the default-value
+     *     path puts a field's SQL default into a new record (`EntityField`'s constructor assigns
+     *     `DefaultValue` when no value is supplied), and two MJ core fields have a default that
+     *     matches their value list by CASE ALONE — `MJ: Entity AI Actions`.TriggerEvent defaults to
+     *     `'After Save'` against a list of `before save | after save`, and its OutputType defaults to
+     *     `'FIeld'` against `entity | field`. Under a case-sensitive comparison, creating either
+     *     record at its database default would fail validation. Separately, SQL Server's default
+     *     collation is case-insensitive, so `Status = 'active'` is accepted by
+     *     `CHECK (Status IN ('Active', ...))` and refusing it here would turn a save that succeeds
+     *     today into a failure. (PostgreSQL IS case-sensitive, so on PG a case variant is still
+     *     refused — by its CHECK, not by this rung.)
+     *   * **Stringifying is required.** `EntityFieldValue.Value` is always a string in metadata while
+     *     the field's runtime value may be a number, so a strict `===` would reject every legal value
+     *     on a numeric list. It is not lossless: `String(1.0)` is `'1'`, so a metadata value written
+     *     as `'1.0'` would fail closed. No numeric value lists exist today (CodeGen cannot produce
+     *     one — see the note in ValueIsPermittedByValueList), so this is recorded rather than solved.
+     *   * **Trimming is cheap insurance, NOT the load-bearing rule it was first documented as.** An
+     *     earlier version of this comment claimed an untrimmed comparison would reject 9,301 existing
+     *     rows in fixed-width `nchar` columns (`MJ: Action Params`.Type, `MJ: Record Changes`.Status
+     *     and others). That measurement was taken over RAW SQL ROWS and does not describe this code
+     *     path: `EntityField`'s value setter already strips trailing padding on fixed-width columns
+     *     (see `FixedWidthColumn`), and hydration assigns through that setter, so the padding is gone
+     *     before `Validate()` ever reads the value. Trimming is kept because it still covers LEADING
+     *     whitespace, stray spaces on the metadata side, and any caller that assigns a padded value
+     *     directly — none of which the setter handles.
+     */
+    public static NormalizeValueListValue(value: unknown): string {
+        return String(value).trim().toLowerCase();
+    }
+
+    /**
+     * Whether `value` is permitted by this field's exhaustive value list (MJ issue #3969).
+     *
+     * A field whose `ValueListType` is `List` carries an exhaustive set of legal values in
+     * `__mj.EntityFieldValue`, and for an `IN (...)` CHECK constraint that list is the ONLY runtime
+     * representation CodeGen produces — `ParseCheckConstraints` emits the value list rather than a
+     * generated `Validate()` method, since the list is also what the UI needs to render a dropdown.
+     * So this is the only place such a constraint can be caught before the database refuses it as a
+     * raw violation attributed to no field.
+     *
+     * The normalized set is built ONCE per field and reused, because it derives from metadata that
+     * is immutable after load and is shared by every `EntityField` instance of this field — at
+     * import scale (thousands to millions of rows) rebuilding it per record is pure waste.
+     *
+     * Four boundaries keep the rule safe to apply everywhere:
+     *   * `ListOrUserEntry` is never checked — that mode exists precisely to permit values outside
+     *     the list, so validating it would break every field that opted into free text.
+     *   * A `List` field with no `EntityFieldValue` rows permits everything. Strictly it describes
+     *     a field where nothing is legal, which should never exist; it means the metadata is
+     *     broken, not that every value is wrong, so this logs loudly (once per EntityFieldInfo
+     *     instance, which means it re-arms after a metadata refresh rather than being once ever)
+     *     and permits rather than failing every save on the field.
+     *   * Null/undefined is the nullability check's job, so one mistake never produces two errors.
+     *     An EMPTY or whitespace-only string is NOT absence: SQL Server pads on comparison, so
+     *     `''` and `'   '` are the same value to a CHECK constraint and it refuses both. Skipping
+     *     them would leave a hole exactly where a blanked-out field lands.
+     *   * Only string and number values are checked, and the gate fails OPEN — an unsupported type
+     *     skips validation rather than manufacturing a failure. Nothing in the schema restricts
+     *     which columns may carry a value list (`CK_EntityField_ValueListType_New` constrains the
+     *     mode, not the column type), but in practice every one is a string column: measured on a
+     *     current 6.x instance, 455 nvarchar + 7 nchar and nothing else, which follows from
+     *     CodeGen's constraint parser only ever extracting quoted literals. `number` is admitted
+     *     because the generated union type anticipates a non-quoted list via `NeedsQuotes`.
+     *     Booleans and Dates are excluded deliberately: a bit column carrying a `'1'`/`'0'` list
+     *     would see `String(true) === 'true'` and reject every legal value, and a Date has no sane
+     *     string form to compare — so guessing there would break saves rather than guard them.
+     *
+     * TWO PRODUCERS, ONE OF WHICH HAS NO DATABASE FLOOR. A CHECK-derived list is safe by
+     * construction: the database refuses anything this rung refuses, so validating can only move a
+     * failure earlier. The other producer is `applyValueListConfig` in CodeGen, which applies
+     * DBAutoDoc's LLM enum detection from `additionalSchemaInfo` — those fields have NO CHECK
+     * constraint, so for them this rung converts a sampled, confidence-scored guess into a hard save
+     * refusal for any value the model did not see. It is opt-in (the config must exist) and arguably
+     * the intended reading of `List` as a closed set, with `ListOrUserEntry` available when unsure —
+     * but it means "MJ never refuses what the database would accept" holds for the first producer
+     * only.
+     *
+     * @param value the field's current runtime value
+     * @returns true when the value is permitted, INCLUDING when the rule does not apply
+     */
+    public ValueIsPermittedByValueList(value: unknown): boolean {
+        if (this.ValueListTypeEnum !== EntityFieldValueListType.List) {
+            return true;
+        }
+        if (this._normalizedValueListValues === undefined) {
+            const values = this.EntityFieldValues ?? [];
+            this._normalizedValueListValues = new Set<string>(
+                values.map(v => EntityFieldInfo.NormalizeValueListValue(v.Value))
+            );
+        }
+
+        // The broken-metadata report comes FIRST, before the null and type gates, so that it is
+        // value-independent: a `List` field with no values whose column happens to hold null (or a
+        // boolean) would otherwise never report at all, making "loud" mean "loud if someone happens
+        // to set a string". The cost is building one memoized set on a field that would build it
+        // anyway.
+        if (this._normalizedValueListValues.size === 0) {
+            if (!this._loggedEmptyValueList) {
+                this._loggedEmptyValueList = true; // latched: one report per field, not per row
+                LogError(
+                    `Entity field ${this.Entity}.${this.Name} has ValueListType='List' but no EntityFieldValue rows. ` +
+                    `That describes a field where no value is legal, which is broken metadata rather than a rule, ` +
+                    `so value-list validation is being SKIPPED for this field. Re-run CodeGen for the entity, or ` +
+                    `set ValueListType='None' if the field is not meant to be constrained.`
+                );
+            }
+            return true;
+        }
+
+        if (value === null || value === undefined) {
+            return true; // an unset nullable field or a new record — the nullability check's business
+        }
+
+        // Dates are compared on the calendar date rather than the string form — see
+        // dateValueIsPermittedByValueList. A `date` column CAN carry a value list: SQL Server stores
+        // `CHECK (D IN ('2026-01-01','2026-07-01'))` as quoted literals, which is exactly the shape
+        // CodeGen's parser captures, so this is a reachable case rather than a hypothetical one.
+        if (value instanceof Date) {
+            return this.dateValueIsPermittedByValueList(value);
+        }
+
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            // The rule cannot be applied to this type at all, and that is a mismatch rather than a
+            // state to absorb: either the field should not declare a value list (one on a bit column
+            // — which CodeGen never produces, since SQL Server renders `IN (0,1)` as unquoted
+            // `([B]=(1) OR [B]=(0))`, the same reason no NUMERIC list exists either; see MJ #3978)
+            // or a caller assigned the wrong type. Skipping it silently would
+            // leave the caller believing a guard is on when it is not, which is the exact failure
+            // mode this rung was added to fix — so it is reported, once per field.
+            this.reportUnsupportedValueListValue(
+                `a ${typeof value} value (SQL type ${this.SQLFullType})`,
+                'value-list validation compares strings, numbers and dates only — comparing anything ' +
+                'else would reject legal values rather than guard them'
+            );
+            return true;
+        }
+
+        return this._normalizedValueListValues.has(EntityFieldInfo.NormalizeValueListValue(value));
+    }
+
+    /**
+     * Value-list membership for a `Date` runtime value, compared on the CALENDAR DATE rather than
+     * the instant.
+     *
+     * Only `date` columns are compared. A column carrying a time component is deliberately skipped:
+     * the metadata value has no timezone, so deciding whether `'2026-01-01T00:00:00'` is the same
+     * instant as the value read back would mean guessing the database's interpretation, and guessing
+     * wrong rejects a legal value.
+     *
+     * For a `date` column the comparison accepts EITHER the value's UTC calendar date or its LOCAL
+     * one. That asymmetry is deliberate: a value read back from SQL Server arrives as UTC midnight,
+     * while application code that builds a date with `new Date(2026, 6, 1)` produces LOCAL midnight —
+     * whose UTC calendar date is the previous day west of Greenwich. Insisting on one representation
+     * would refuse legal values for half the world, so a date is in the list if either reading of it
+     * is. The cost is that an adjacent day can slip through when both days are in the list, which is
+     * a far better trade than a false failure.
+     */
+    private dateValueIsPermittedByValueList(value: Date): boolean {
+        if (this._valueListDateKeys === undefined) {
+            this._valueListDateKeys = this.buildValueListDateKeys();
+        }
+        if (this._valueListDateKeys === null) {
+            this.reportUnsupportedValueListValue(
+                `a Date value (SQL type ${this.SQLFullType})`,
+                'only a `date` column whose value list is entirely yyyy-mm-dd literals can be ' +
+                'compared — anything else would require guessing how the database interprets a ' +
+                'time-zone-less literal'
+            );
+            return true;
+        }
+        if (Number.isNaN(value.getTime())) {
+            return true; // an Invalid Date is not an out-of-list value; leave it to the date check
+        }
+        return this._valueListDateKeys.has(value.toISOString().slice(0, 10)) ||
+               this._valueListDateKeys.has(EntityFieldInfo.localCalendarDate(value));
+    }
+
+    /**
+     * Builds the set of yyyy-mm-dd keys for a `date` field's value list, or null when the field is
+     * not a plain `date` column or any of its values is not a yyyy-mm-dd literal. Reads the already
+     * normalized values, so it costs no extra pass over the metadata (lower-casing cannot affect a
+     * numeric date literal).
+     */
+    private buildValueListDateKeys(): Set<string> | null {
+        if ((this.Type ?? '').trim().toLowerCase() !== 'date') {
+            return null;
+        }
+        const keys = new Set<string>();
+        for (const normalized of this._normalizedValueListValues ?? []) {
+            const match = /^(\d{4}-\d{2}-\d{2})$/.exec(normalized);
+            if (!match) {
+                return null; // not a date list — refuse to guess rather than reject legal values
+            }
+            keys.add(match[1]);
+        }
+        return keys.size > 0 ? keys : null;
+    }
+
+    /** The Date's LOCAL calendar date as yyyy-mm-dd (its UTC one is `toISOString().slice(0, 10)`). */
+    private static localCalendarDate(value: Date): string {
+        const pad = (n: number): string => String(n).padStart(2, '0');
+        return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+    }
+
+    /**
+     * Reports, once per field, that a value could not be checked against the field's value list.
+     * Latched because the metadata is shared by every record: a bulk load would otherwise emit the
+     * same line per row, which is the noise the memoization elsewhere in this class exists to avoid.
+     */
+    private reportUnsupportedValueListValue(received: string, reason: string): void {
+        if (this._loggedUnsupportedValueListType) {
+            return;
+        }
+        this._loggedUnsupportedValueListType = true;
+        LogError(
+            `Entity field ${this.Entity}.${this.Name} has ValueListType='List' but was given ${received}: ` +
+            `${reason}, so value-list validation is being SKIPPED for this field. Either the field's ` +
+            `metadata should not declare a value list, or the caller is assigning the wrong type.`
+        );
+    }
+
+    /**
+     * This field's legal values formatted for a validation message, truncated past
+     * {@link MaxValueListValuesInErrorMessage}. Memoized — a bad bulk load fails on the same field
+     * repeatedly, and the string never changes.
+     */
+    get ValueListValuesForDisplay(): string {
+        if (this._valueListDisplayCache !== undefined) {
+            return this._valueListDisplayCache;
+        }
+        // De-duplicated: EntityFieldValue rows are not unique in practice (`MJ: Action Params`.ValueType
+        // carries repeats today), and listing the same value twice — or double-counting it in the
+        // "(N total)" tail — makes the message look like a bug in the message.
+        const values: string[] = [...new Set((this.EntityFieldValues ?? []).map(v => v.Value))];
+        const max = EntityFieldInfo.MaxValueListValuesInErrorMessage;
+        this._valueListDisplayCache = values.length > max ?
+            `${values.slice(0, max).join(', ')}, ... (${values.length} total)` :
+            values.join(', ');
+        return this._valueListDisplayCache;
     }
 
     get GeneratedFormSectionType(): GeneratedFormSectionType {
@@ -1101,6 +2033,42 @@ export class EntityFieldInfo extends BaseInfo {
         return !this.AllowUpdateAPI ||
                this.IsPrimaryKey ||
                this.IsSpecialDateField;
+    }
+
+    /**
+     * True when {@link ExtendedType} is any Geo* tag (`Geo`, `GeoLatitude`, `GeoAddress`, …).
+     * Used by maps, distance, and GeoCodeSyncService. Display-only virtuals still count.
+     */
+    get IsGeoExtendedType(): boolean {
+        const t = this.ExtendedType;
+        return typeof t === 'string' && t.startsWith('Geo');
+    }
+
+    /**
+     * A Geo* field that can be written on Save. GeoCodeSyncService only runs when the
+     * entity has at least one of these. Virtual / AllowUpdateAPI=0 fields (PrimaryAddress*,
+     * `__mj_Latitude`, embedded `__mj_Latitude_{FK}`) are display-only — maps still use them.
+     */
+    get IsWritableGeoField(): boolean {
+        return this.IsGeoExtendedType && !this.IsVirtual && !!this.AllowUpdateAPI;
+    }
+
+    /**
+     * Native (table) latitude column — `ExtendedType=GeoLatitude`, or legacy `Geo` named Latitude.
+     */
+    get IsNativeLatitudeField(): boolean {
+        if (this.IsVirtual) return false;
+        if (this.ExtendedType === 'GeoLatitude') return true;
+        return this.ExtendedType === 'Geo' && /^lat(itude)?$/i.test(this.Name);
+    }
+
+    /**
+     * Native (table) longitude column — `ExtendedType=GeoLongitude`, or legacy `Geo` named Long*.
+     */
+    get IsNativeLongitudeField(): boolean {
+        if (this.IsVirtual) return false;
+        if (this.ExtendedType === 'GeoLongitude') return true;
+        return this.ExtendedType === 'Geo' && /^(lng|lon|long|longitude)$/i.test(this.Name);
     }
 
     /**
@@ -1310,6 +2278,16 @@ export class EntityFieldInfo extends BaseInfo {
             } else {
                 this._EntityFieldValues = [];
                 this._entityFieldValuesConstructed = true;
+            }
+
+            // Field-level security records. Constructed eagerly rather than lazily (unlike
+            // EntityFieldValues above) because the array is empty for virtually every field in
+            // every deployment — there is no ~36,000-object construction cost to defer, and
+            // HasFieldPermissions is read on enforcement paths where a lazy hydration check
+            // would cost more than the construction it avoids.
+            const efp = initData.EntityFieldPermissions || initData._FieldPermissions || initData.FieldPermissions;
+            if (efp && efp.length > 0) {
+                this._fieldPermissions = efp.map((p: Record<string, unknown>) => new EntityFieldPermissionInfo(p));
             }
         }
     }
@@ -1598,6 +2576,38 @@ export class EntityInfo extends BaseInfo {
      */
     AllowMultipleSubtypes: boolean = false
     /**
+     * Optional JSON configuration specifying declarative prospective subtype resolution on an entity.
+     * Stored in the SubtypeSelector column of Entity (shape = IEntitySubtypeSelectorConfig).
+     */
+    SubtypeSelector: string = null
+
+    private _subtypeSelectorConfig: IEntitySubtypeSelectorConfig | null | undefined = undefined;
+
+    /**
+     * Parsed SubtypeSelector configuration, if configured.
+     */
+    get SubtypeSelectorConfig(): IEntitySubtypeSelectorConfig | null {
+        if (this._subtypeSelectorConfig === undefined) {
+            if (this.SubtypeSelector && typeof this.SubtypeSelector === 'string') {
+                try {
+                    const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
+                    if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
+                        this._subtypeSelectorConfig = { Path: parsed['Path'].trim() };
+                    } else {
+                        LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
+                        this._subtypeSelectorConfig = null;
+                    }
+                } catch (err) {
+                    LogError(`EntityInfo '${this.Name}': failed to parse SubtypeSelector JSON '${this.SubtypeSelector}': ${err instanceof Error ? err.message : String(err)}`);
+                    this._subtypeSelectorConfig = null;
+                }
+            } else {
+                this._subtypeSelectorConfig = null;
+            }
+        }
+        return this._subtypeSelectorConfig;
+    }
+    /**
      * Whether to audit when users access records from this entity
      */
     AuditRecordAccess: boolean = null
@@ -1621,6 +2631,19 @@ export class EntityInfo extends BaseInfo {
      * client-side IndexedDB cache. Zero overhead on hot save/query paths.
      */
     AllowCaching: boolean = false
+    /**
+     * Whether field-level (column-level) security is enforced for this entity.
+     *
+     * This is the single gate every field-security enforcement point checks first, and it is
+     * explicit — never inferred from whether permission rows happen to exist. It is `false` for
+     * nearly every entity in nearly every deployment, so enforcement collapses to one boolean
+     * test: no field iteration, no aggregation, no allocation.
+     *
+     * Turning it on snapshots the entity's existing entity-level permissions into per-field
+     * rows, so enabling changes no behavior until an administrator tightens a field. Turning it
+     * off leaves the rows in place, inactive, so re-enabling does not lose the configuration.
+     */
+    EnableFieldLevelSecurity: boolean = false
     /**
      * Whether this entity is available through the GraphQL API
      */
@@ -1691,9 +2714,21 @@ export class EntityInfo extends BaseInfo {
      */
     AllowUserSearchAPI: boolean = false
     /**
-     * Whether full-text search is enabled for this entity
+     * Whether full text search is enabled for this entity
      */
-    FullTextSearchEnabled: boolean = false
+    public FullTextSearchEnabled: boolean = null
+    /**
+     * Whether CodeGen automatically updates FullTextSearchEnabled from database catalog/index availability.
+     */
+    public AutoUpdateFullTextSearch: boolean = true
+    /**
+     * Whether CodeGen automatically updates AllowUserSearchAPI from schema rules.
+     */
+    public AutoUpdateAllowUserSearchAPI: boolean = true
+    /**
+     * Whether external changes to records are detected.
+     */
+    public DetectExternalChanges: boolean = false
     /**
      * Name of the SQL Server full-text catalog used for searching
      */
@@ -1719,11 +2754,19 @@ export class EntityInfo extends BaseInfo {
      */
     FullTextSearchFunctionGenerated: boolean = true
     /**
-     * When true, this entity supports geocoding — CodeGen generates geo-aware subclass code,
-     * adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows
-     * a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields.
+     * When true, this entity participates in geo **read** features: map view, distance
+     * calculations, and similar. That is independent of whether GeoCodeSyncService runs
+     * on Save — the service only fires when {@link HasWritableGeoSourceFields} is true.
+     * Auto-set by CodeGen when LLM detects geo-capable fields.
      */
     SupportsGeoCoding: boolean = false
+    /**
+     * True when at least one field is a writable Geo* source (street and/or native lat/lng).
+     * Person/Org PrimaryAddress* are virtual display fields and do **not** count.
+     */
+    get HasWritableGeoSourceFields(): boolean {
+        return (this.Fields ?? []).some(f => f.IsWritableGeoField);
+    }
     /**
      * When true (default), CodeGen can automatically set SupportsGeoCoding based on
      * LLM analysis of entity fields. Set to false to lock the value.
@@ -1736,27 +2779,81 @@ export class EntityInfo extends BaseInfo {
     /**
      * Name of the stored procedure for creating records
      */
-    spCreate: string = null
+    SpCreate: string = null
+
+    /** @deprecated Use {@link SpCreate}. */
+    get spCreate(): string {
+        return this.SpCreate;
+    }
+    /** @deprecated Use {@link SpCreate}. */
+    set spCreate(value: string) {
+        this.SpCreate = value;
+    }
     /**
      * Name of the stored procedure for updating records
      */
-    spUpdate: string = null
+    SpUpdate: string = null
+
+    /** @deprecated Use {@link SpUpdate}. */
+    get spUpdate(): string {
+        return this.SpUpdate;
+    }
+    /** @deprecated Use {@link SpUpdate}. */
+    set spUpdate(value: string) {
+        this.SpUpdate = value;
+    }
     /**
      * Name of the stored procedure for deleting records
      */
-    spDelete: string = null
+    SpDelete: string = null
+
+    /** @deprecated Use {@link SpDelete}. */
+    get spDelete(): string {
+        return this.SpDelete;
+    }
+    /** @deprecated Use {@link SpDelete}. */
+    set spDelete(value: string) {
+        this.SpDelete = value;
+    }
     /**
      * Whether the create stored procedure is generated by CodeGen
      */
-    spCreateGenerated: boolean = null
+    SpCreateGenerated: boolean = null
+
+    /** @deprecated Use {@link SpCreateGenerated}. */
+    get spCreateGenerated(): boolean {
+        return this.SpCreateGenerated;
+    }
+    /** @deprecated Use {@link SpCreateGenerated}. */
+    set spCreateGenerated(value: boolean) {
+        this.SpCreateGenerated = value;
+    }
     /**
      * Whether the update stored procedure is generated by CodeGen
      */
-    spUpdateGenerated: boolean = null
+    SpUpdateGenerated: boolean = null
+
+    /** @deprecated Use {@link SpUpdateGenerated}. */
+    get spUpdateGenerated(): boolean {
+        return this.SpUpdateGenerated;
+    }
+    /** @deprecated Use {@link SpUpdateGenerated}. */
+    set spUpdateGenerated(value: boolean) {
+        this.SpUpdateGenerated = value;
+    }
     /**
      * Whether the delete stored procedure is generated by CodeGen
      */
-    spDeleteGenerated: boolean = null
+    SpDeleteGenerated: boolean = null
+
+    /** @deprecated Use {@link SpDeleteGenerated}. */
+    get spDeleteGenerated(): boolean {
+        return this.SpDeleteGenerated;
+    }
+    /** @deprecated Use {@link SpDeleteGenerated}. */
+    set spDeleteGenerated(value: boolean) {
+        this.SpDeleteGenerated = value;
+    }
     /**
      * Whether to automatically delete related records when a parent is deleted
      */
@@ -1772,7 +2869,16 @@ export class EntityInfo extends BaseInfo {
     /**
      * Name of the stored procedure used for matching/duplicate detection
      */
-    spMatch: string = null
+    SpMatch: string = null
+
+    /** @deprecated Use {@link SpMatch}. */
+    get spMatch(): string {
+        return this.SpMatch;
+    }
+    /** @deprecated Use {@link SpMatch}. */
+    set spMatch(value: string) {
+        this.SpMatch = value;
+    }
     /**
      * Default display type for relationships: Search (type-ahead) or Dropdown
      */
@@ -1799,24 +2905,43 @@ export class EntityInfo extends BaseInfo {
     Icon: string = null
 
     /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityConfiguration | null | undefined = undefined;
+
+    /**
      * Optional JSON configuration bag (shape = {@link IEntityConfiguration}).
      * Nested `UI.Form` holds generated-form chrome: layout, auto left-nav
      * threshold, related-role policy, and the Primary related budget.
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
      *
      * @see packages/MJCore/src/generic/entityConfiguration.ts
      */
-    Configuration: string = null
-
-    private _configurationObject: IEntityConfiguration | null | undefined = undefined;
+    get Configuration(): IEntityConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
 
     /**
      * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
      */
     get ConfigurationObject(): IEntityConfiguration | null {
-        if (this._configurationObject === undefined) {
-            this._configurationObject = ParseEntityConfiguration(this.Configuration);
-        }
-        return this._configurationObject;
+        return this.Configuration;
     }
     /**
      * Date and time when this entity was created
@@ -1928,17 +3053,62 @@ export class EntityInfo extends BaseInfo {
     ParentBaseView: string = null 
 
     // These are not in the database view and are added in code
-    private _Fields: EntityFieldInfo[]
-    private _RelatedEntities: EntityRelationshipInfo[]
-    private _Permissions: EntityPermissionInfo[]
-    private _Settings: EntitySettingInfo[]
-    private _FieldCategories: Record<string, FieldCategoryInfo> | null = null
-    private _OrganicKeys: EntityOrganicKeyInfo[] = []
-    _hasIdField: boolean = false
-    _virtualCount: number = 0
-    _manyToManyCount: number = 0
-    _oneToManyCount: number = 0
-    _floatCount: number = 0
+    private _fields: EntityFieldInfo[]
+    private _relatedEntities: EntityRelationshipInfo[]
+    private _permissions: EntityPermissionInfo[]
+    private _settings: EntitySettingInfo[]
+    private _fieldCategories: Record<string, FieldCategoryInfo> | null = null
+    private _organicKeys: EntityOrganicKeyInfo[] = []
+    HasIdField: boolean = false
+
+    /** @deprecated Use {@link HasIdField}. */
+    get _hasIdField(): boolean {
+        return this.HasIdField;
+    }
+    /** @deprecated Use {@link HasIdField}. */
+    set _hasIdField(value: boolean) {
+        this.HasIdField = value;
+    }
+    VirtualCount: number = 0
+
+    /** @deprecated Use {@link VirtualCount}. */
+    get _virtualCount(): number {
+        return this.VirtualCount;
+    }
+    /** @deprecated Use {@link VirtualCount}. */
+    set _virtualCount(value: number) {
+        this.VirtualCount = value;
+    }
+    ManyToManyCount: number = 0
+
+    /** @deprecated Use {@link ManyToManyCount}. */
+    get _manyToManyCount(): number {
+        return this.ManyToManyCount;
+    }
+    /** @deprecated Use {@link ManyToManyCount}. */
+    set _manyToManyCount(value: number) {
+        this.ManyToManyCount = value;
+    }
+    OneToManyCount: number = 0
+
+    /** @deprecated Use {@link OneToManyCount}. */
+    get _oneToManyCount(): number {
+        return this.OneToManyCount;
+    }
+    /** @deprecated Use {@link OneToManyCount}. */
+    set _oneToManyCount(value: number) {
+        this.OneToManyCount = value;
+    }
+    FloatCount: number = 0
+
+    /** @deprecated Use {@link FloatCount}. */
+    get _floatCount(): number {
+        return this.FloatCount;
+    }
+    /** @deprecated Use {@link FloatCount}. */
+    set _floatCount(value: number) {
+        this.FloatCount = value;
+    }
 
     // --- Lazy caches for immutable field-derived collections ---------------------------------
     // `_Fields` is populated once in the constructor and never reassigned, so these caches never
@@ -1952,6 +3122,147 @@ export class EntityInfo extends BaseInfo {
     private _encryptedFieldsCache: EntityFieldInfo[] | null = null;
     private _datetimeFieldsCache: EntityFieldInfo[] | null = null;
     private _nameFieldCache: EntityFieldInfo | null | undefined = undefined;
+
+    /**
+     * The set of field names this user may NOT READ on this entity — the per-request primitive
+     * every field-security enforcement point is built on.
+     *
+     * Compute this ONCE per (entity, user) per request and pass the Set into any row loop.
+     * `GetUserFieldPermissions` is the per-FIELD primitive; calling it per row costs
+     * `fields x rows` aggregations (40,000 for a 1,000-row x 40-column result), each of which
+     * re-scans `user.UserRoles` and allocates. A Set lookup costs neither.
+     *
+     * Names are lowercased so callers can match case-insensitively, consistent with
+     * {@link ProjectRowsToFields}. Returns an EMPTY set — never null — both when the entity has
+     * field security switched off and when the user is denied nothing, so callers can treat
+     * `size === 0` as the single "nothing to do" condition.
+     */
+    public GetDeniedReadFields(user: UserInfo): Set<string> {
+        return this.getDeniedFields(user, (p) => !p.CanRead);
+    }
+
+    /**
+     * Whether this user may READ the named field — the single-field question, answered the same
+     * way {@link GetDeniedReadFields} answers it in bulk.
+     *
+     * Exists for **display code that is about to read a value it did not choose**: a form
+     * toolbar rendering the entity's Name field, an FK control rendering the joined display
+     * column, an IS-A card walking a sibling record's fields. `BaseEntity.Get()` throws for a
+     * denied field, so those call sites have to ask before they read or they take out the whole
+     * screen instead of hiding one value.
+     *
+     * This is a PREDICATE, deliberately — not a value accessor that quietly returns nothing.
+     * The caller still decides what to render in place of the value, which is the part that
+     * differs per surface and should not be hidden inside a getter.
+     *
+     * **Fails open** on a missing user, a missing field name, or an entity with field security
+     * switched off — matching `BaseEntity`'s own gate and `MjFormFieldComponent`. The server is
+     * the real boundary; a UI that blanked out fields because no user had resolved yet would be
+     * worse than one that shows them.
+     *
+     * PERFORMANCE: this delegates to {@link GetDeniedReadFields}, which walks every field on the
+     * entity. Fine for the handful of chrome reads it exists for; do NOT call it per row in a
+     * grid loop — compute the denied set once and test against it.
+     *
+     * @param fieldName the field about to be read
+     * @param user the acting user
+     */
+    public IsFieldReadableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
+        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+            return true;
+        }
+        return !this.GetDeniedReadFields(user).has(fieldName.trim().toLowerCase());
+    }
+
+    /**
+     * Whether this user may UPDATE the named field. Companion to
+     * {@link IsFieldReadableByUser}, for UI that needs to render a control read-only rather than
+     * let a user type into something the server will reject on save. Fails open on the same
+     * three conditions.
+     */
+    public IsFieldUpdatableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
+        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+            return true;
+        }
+        return !this.GetDeniedUpdateFields(user).has(fieldName.trim().toLowerCase());
+    }
+
+    /**
+     * Whether this user may supply a value for the named field when CREATING a record.
+     * Companion to {@link IsFieldReadableByUser}. Fails open on the same three conditions.
+     *
+     * Note the server does not REJECT a create-denied value — it drops it and takes the column
+     * default. So a UI that leaves such a field editable on a new record silently discards what
+     * the user typed, which is the case this exists to prevent.
+     */
+    public IsFieldCreatableByUser(fieldName: string | null | undefined, user: UserInfo | null | undefined): boolean {
+        if (!this.EnableFieldLevelSecurity || !fieldName || !user) {
+            return true;
+        }
+        return !this.GetDeniedCreateFields(user).has(fieldName.trim().toLowerCase());
+    }
+
+    /**
+     * The set of field names this user may NOT UPDATE on this entity. Same per-request
+     * precompute contract as {@link GetDeniedReadFields}.
+     *
+     * A field can be readable and not updatable. The reverse cannot happen — Read is required
+     * for Update — so denied-read is always a subset of denied-update, but ask for the set you
+     * actually need rather than relying on that.
+     */
+    public GetDeniedUpdateFields(user: UserInfo): Set<string> {
+        return this.getDeniedFields(user, (p) => !p.CanUpdate);
+    }
+
+    /**
+     * The set of field names this user may NOT supply a value for when CREATING a record. Same
+     * per-request precompute contract as {@link GetDeniedReadFields}.
+     *
+     * Unlike the update set, this does not drive a rejection: a value supplied for a
+     * create-denied field is dropped and the column takes its default.
+     */
+    public GetDeniedCreateFields(user: UserInfo): Set<string> {
+        return this.getDeniedFields(user, (p) => !p.CanCreate);
+    }
+
+    /**
+     * Shared walk behind {@link GetDeniedReadFields} / {@link GetDeniedUpdateFields} /
+     * {@link GetDeniedCreateFields}, short-circuiting on {@link EnableFieldLevelSecurity}.
+     *
+     * Every field is aggregated, including those carrying no permission records — on an enabled
+     * entity those are denied. Unrestrictable fields (primary keys, `__mj_` columns) come back
+     * open, decided inside `GetUserFieldPermissions` rather than skipped here.
+     *
+     * **Carries BOTH `Name` and `CodeName`**, because the callers do not all live in the same key
+     * space and a set holding only one of them silently no-ops in the other. `BaseEntity` and the
+     * predicate gate ask about field *Names*; the row projections
+     * (`ProviderBase.OmitFieldsFromRows`, the Record Changes payload projector) match against a
+     * *row's own keys*, and rows are keyed by `CodeName` — `getRunTimeViewFieldString` emits
+     * `[Name] AS [CodeName]` whenever the two differ, and `CodeNameFromString` replaces every
+     * `[^a-zA-Z0-9_]` with `_`. So for a column named `Base Salary` a Name-only set holds
+     * `base salary` while the rows are keyed `Base_Salary`, nothing matches, and the denied values
+     * are returned in full. Every shipped MJ field name is already a valid identifier, so the two
+     * coincide throughout core and no fixture caught this; it needs a customer entity with a
+     * column like `Base Salary` or `Emp #` — which is the population this feature exists for.
+     *
+     * Widening cannot over-deny. The only way an extra entry could catch an innocent field is if a
+     * DENIED field's `CodeName` equalled a different, permitted field's `Name` — but two fields
+     * that collide on `CodeName` already collide on their generated property, which is not a
+     * schema CodeGen can emit.
+     */
+    private getDeniedFields(user: UserInfo, isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean): Set<string> {
+        const denied = new Set<string>();
+        if (!this.EnableFieldLevelSecurity) {
+            return denied;
+        }
+        for (const field of this._fields) {
+            if (isDenied(field.GetUserFieldPermissions(user, true))) {
+                denied.add(field.Name.trim().toLowerCase());
+                denied.add(field.CodeName.trim().toLowerCase());
+            }
+        }
+        return denied;
+    }
 
     /**
      * O(1) case-insensitive field lookup by name. Use this instead of `Fields.find(f => f.Name === name)`
@@ -1968,7 +3279,7 @@ export class EntityInfo extends BaseInfo {
         if (name == null) return undefined;
         if (this._fieldByNameMap === null) {
             const map = new Map<string, EntityFieldInfo>();
-            for (const f of this._Fields) {
+            for (const f of this._fields) {
                 if (f.Name != null) map.set(f.Name.trim().toLowerCase(), f);
             }
             this._fieldByNameMap = map;
@@ -1979,8 +3290,14 @@ export class EntityInfo extends BaseInfo {
     /**
      * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
+     *
+     * This is a single-column convenience for the places MJ is single-column *by design* — foreign-key
+     * targets, keyset `ORDER BY`, IS-A shared keys, and the bare-value shorthand `CompositeKey.LoadFromURLSegment`
+     * accepts. Do not use it to *construct* a load key for an arbitrary entity: that silently drops every
+     * column but the first on a composite key. Build keys with `CompositeKey.FromURLSegment(entityInfo, recordId)`
+     * or `CompositeKey.FromEntityRecord(entityInfo, row)`, which honor all of `PrimaryKeys`.
      */
-    get FirstPrimaryKey(): EntityFieldInfo {
+    get FirstPrimaryKey(): EntityFieldInfo { // first-pk-ok: the accessor itself
         if (this._firstPrimaryKeyCache === undefined) {
             this._firstPrimaryKeyCache = this.Fields.find((f) => f.IsPrimaryKey);
         }
@@ -2049,10 +3366,11 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityFieldInfo[]} Array of all entity fields
      */
     get Fields(): EntityFieldInfo[] {
-        return this._Fields;
+        return this._fields;
     }
 
     private _hasInactiveFields: boolean | undefined = undefined;
+    private _hasSearchFields: boolean | undefined = undefined;
     /**
      * Returns true if ANY field on this entity is `Deprecated` or `Disabled` (i.e. not `Active`).
      *
@@ -2066,30 +3384,57 @@ export class EntityInfo extends BaseInfo {
      */
     get HasInactiveFields(): boolean {
         if (this._hasInactiveFields === undefined) {
-            this._hasInactiveFields = this._Fields.some(f => f.Status === 'Deprecated' || f.Status === 'Disabled');
+            this._hasInactiveFields = this._fields.some(f => f.Status === 'Deprecated' || f.Status === 'Disabled');
         }
         return this._hasInactiveFields;
+    }
+
+    /**
+     * Returns true if ANY field on this entity participates in `UserSearchString` matching
+     * (`EntityField.IncludeInUserSearchAPI`).
+     *
+     * Computed once on first access and cached for the lifetime of this EntityInfo. Like
+     * {@link HasInactiveFields} this is a property of the entity DEFINITION, shared across every
+     * record instance, so an entity is scanned at most once however many searches run against it.
+     *
+     * It answers "does this entity have a search surface at all", which is NOT the same question as
+     * "did this search produce a predicate". A field can be excluded from a particular search at
+     * runtime — denied by field-level security, or not a sensible text-search target — on an entity
+     * that does declare searchable fields. Providers use the distinction to tell "the caller asked
+     * to filter by something this entity does not have" (ignore the term) from "every candidate
+     * field dropped out" (match nothing). See MJ#4581.
+     *
+     * Caching assumes `EntityField.IncludeInUserSearchAPI` is not mutated in place after this
+     * EntityInfo is built — the same assumption {@link HasInactiveFields} makes about `Status`.
+     * A metadata refresh constructs new EntityInfo objects rather than editing existing ones, and
+     * the cache is reset wherever `_Fields` is (re)assigned, so both paths stay correct.
+     */
+    get HasSearchFields(): boolean {
+        if (this._hasSearchFields === undefined) {
+            this._hasSearchFields = this._fields.some(f => f.IncludeInUserSearchAPI);
+        }
+        return this._hasSearchFields;
     }
     /**
      * Gets all relationships where other entities reference this entity.
      * @returns {EntityRelationshipInfo[]} Array of entity relationships
      */
     get RelatedEntities(): EntityRelationshipInfo[] {
-        return this._RelatedEntities;
+        return this._relatedEntities;
     }
     /**
      * Gets the security permissions for this entity by role.
      * @returns {EntityPermissionInfo[]} Array of permission settings
      */
     get Permissions(): EntityPermissionInfo[] {
-        return this._Permissions;
+        return this._permissions;
     }
     /**
      * Gets custom configuration settings for this entity.
      * @returns {EntitySettingInfo[]} Array of entity-specific settings
      */
     get Settings(): EntitySettingInfo[] {
-        return this._Settings;
+        return this._settings;
     }
 
     /**
@@ -2098,7 +3443,7 @@ export class EntityInfo extends BaseInfo {
      * during EntityInfo construction. Returns null if no category info is configured.
      */
     get FieldCategories(): Record<string, FieldCategoryInfo> | null {
-        return this._FieldCategories;
+        return this._fieldCategories;
     }
 
     /**
@@ -2108,7 +3453,7 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityOrganicKeyInfo[]} Array of organic key definitions with their related entities
      */
     get OrganicKeys(): EntityOrganicKeyInfo[] {
-        return this._OrganicKeys;
+        return this._organicKeys;
     }
 
     private static __createdAtFieldName = '__mj_CreatedAt';
@@ -2291,6 +3636,85 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Returns true when this entity is the ROOT of an IS-A hierarchy: it has subtypes below it and
+     * no parent type above it. The root is where the shared primary key originates and where
+     * `AllowMultipleSubtypes` is decided, so it is the row most IS-A questions resolve back to.
+     */
+    get IsRootType(): boolean {
+        return this.IsParentType && !this.IsChildType;
+    }
+
+    /**
+     * Returns true when this entity is a LEAF of an IS-A hierarchy: it has a parent type and no
+     * subtypes of its own. A leaf is the only kind of IS-A entity that can be created by promotion
+     * without also being something else's parent.
+     */
+    get IsLeafType(): boolean {
+        return this.IsChildType && !this.IsParentType;
+    }
+
+    /**
+     * Returns true when this entity takes part in an IS-A hierarchy at all, in any role.
+     *
+     * The cheap guard for "does IS-A apply here?", which otherwise gets written as
+     * `IsChildType || IsParentType` at every call site — and gets written as just `IsChildType`
+     * about half the time, which silently skips every root and intermediate type.
+     */
+    get ParticipatesInIsA(): boolean {
+        return this.IsChildType || this.IsParentType;
+    }
+
+    /**
+     * This entity's role in the IS-A graph as ONE value, for the common "what is this?" lookup.
+     *
+     * `Intermediate` is the case that makes booleans awkward: an entity can be a child AND a parent
+     * at once (Webinars IS-A Meetings IS-A Products makes Meetings both), so code that branches on
+     * `IsChildType` alone quietly mishandles the middle of every chain deeper than two.
+     */
+    get IsARole(): 'None' | 'Root' | 'Intermediate' | 'Leaf' {
+        if (!this.ParticipatesInIsA) return 'None';
+        if (!this.IsChildType) return 'Root';
+        return this.IsParentType ? 'Intermediate' : 'Leaf';
+    }
+
+    /**
+     * The ROOT entity of this entity's IS-A hierarchy — itself when it is already the root, and
+     * `null` when it takes part in no hierarchy.
+     *
+     * Saves every caller the "walk up until ParentEntityInfo is null" loop, which is where the
+     * cycle guard gets forgotten. Backed by {@link ParentChain}, which is cached and cycle-safe.
+     */
+    get RootEntityInfo(): EntityInfo | null {
+        if (!this.ParticipatesInIsA) return null;
+        const chain = this.ParentChain;
+        return chain.length > 0 ? chain[chain.length - 1] : this;
+    }
+
+    /**
+     * Every entity BELOW this one in the IS-A graph, at any depth — the downward twin of
+     * {@link ParentChain}, which already walks upward.
+     *
+     * {@link ChildEntities} is DIRECT children only, and that distinction is a trap: on
+     * Products → Meetings → Webinars, `Products.ChildEntities` omits Webinars entirely, so a
+     * "find every subtype" written against it misses everything past the first level. Not cached,
+     * because subtypes are discovered by scanning all entities and this is not a hot path; guarded
+     * against cycles the same way `ParentChain` is.
+     */
+    get DescendantEntities(): EntityInfo[] {
+        const descendants: EntityInfo[] = [];
+        const visited = new Set<string>();
+        const queue: EntityInfo[] = [...this.ChildEntities];
+        while (queue.length > 0) {
+            const next = queue.shift()!;
+            if (visited.has(next.ID)) continue;
+            visited.add(next.ID);
+            descendants.push(next);
+            queue.push(...next.ChildEntities);
+        }
+        return descendants;
+    }
+
+    /**
      * Returns all fields from all parent entities in the IS-A chain, excluding primary keys,
      * virtual fields, and timestamp fields (__mj_ prefixed). These represent the inherited
      * fields that should be available on child entities.
@@ -2364,7 +3788,7 @@ export class EntityInfo extends BaseInfo {
             const allow = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
             const deny = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
             for (const ep of permissionList) {
-                const isDeny = (ep.Type || 'Allow').trim().toLowerCase() === 'deny';
+                const isDeny = ep.IsDeny;
                 const bucket = isDeny ? deny : allow;
                 bucket.CanCreate = bucket.CanCreate || !!ep.CanCreate;
                 bucket.CanRead   = bucket.CanRead   || !!ep.CanRead;
@@ -2393,7 +3817,15 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Determines if a given user, for a given permission type, is exempt from RowLevelSecurity or not
+     * Determines if a given user, for a given permission type, is exempt from RowLevelSecurity or not.
+     *
+     * A permission row confers an exemption only for an operation it GRANTS (the matching `Can*`
+     * flag is true) and leaves unfiltered. A row that does not grant the operation has no filter
+     * for it either, and that absence means "not applicable", not "unrestricted" — so it must not
+     * lift a filter that another of the user's roles binds. Without the `Can*` check, a role that
+     * grants only reads (CanCreate=false, hence CreateRLSFilterID=null) made every holder of that
+     * role exempt from CREATE row-level security, which is the shape of the 'UI' role every
+     * authenticated user holds on nearly every entity.
      * @param user 
      * @param type 
      * @returns 
@@ -2401,23 +3833,26 @@ export class EntityInfo extends BaseInfo {
     public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
+            if (ep.IsDeny) {
+                continue; // a Deny row's Can* flags are denials, never grants — it cannot exempt anyone
+            }
             const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
             if (roleMatch) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
-                        if (!ep.CreateRLSFilterID)
+                        if (ep.CanCreate && !ep.CreateRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Read:
-                        if (!ep.ReadRLSFilterID)
+                        if (ep.CanRead && !ep.ReadRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Update:
-                        if (!ep.UpdateRLSFilterID)
+                        if (ep.CanUpdate && !ep.UpdateRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Delete:
-                        if (!ep.DeleteRLSFilterID)
+                        if (ep.CanDelete && !ep.DeleteRLSFilterID)
                             return true;
                         break;
                 }
@@ -2428,7 +3863,18 @@ export class EntityInfo extends BaseInfo {
     }
     
     /**
-     * Returns RLS security info attributes for a given user and permission type
+     * Returns RLS security info attributes for a given user and permission type.
+     *
+     * Only permission rows that GRANT the operation contribute a filter: an Allow row whose matching
+     * `Can*` flag is true. Deny rows are skipped outright — on a Deny row a set `Can*` flag means
+     * "deny that operation", and a user carrying one fails the permission gate before this runs
+     * (`GetUserPermisions` subtracts Deny from Allow), so reading it as a grant would be wrong even
+     * though it is unreachable. The filters of a user's roles are OR'd together by the caller, so a filter collected
+     * from a row that does not grant the operation would WIDEN the clause: a user granted Create by
+     * role A (bound to filter F1) would create against `F1 OR F2` when role B keeps a leftover
+     * `CreateRLSFilterID = F2` beside `CanCreate = false`. `GetUserPermisions` aggregates the flags
+     * across roles, so such a user passes the permission gate on role A alone; nothing else stops
+     * F2 from applying. A user with no granting row gets no clause here — and no permission either.
      * @param user 
      * @param type 
      * @returns 
@@ -2437,24 +3883,27 @@ export class EntityInfo extends BaseInfo {
         const rlsList: RowLevelSecurityFilterInfo[] = [];
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
+            if (ep.IsDeny) {
+                continue; // never a grant — see the doc comment
+            }
             const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
             if (roleMatch) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
                     case EntityPermissionType.Create:
-                        if (ep.CreateRLSFilterID)
+                        if (ep.CanCreate && ep.CreateRLSFilterID)
                             matchObject = ep.CreateRLSFilterObject;
                         break;
                     case EntityPermissionType.Read:
-                        if (ep.ReadRLSFilterID)
+                        if (ep.CanRead && ep.ReadRLSFilterID)
                             matchObject = ep.ReadRLSFilterObject;
                         break;
                     case EntityPermissionType.Update:
-                        if (ep.UpdateRLSFilterID)
+                        if (ep.CanUpdate && ep.UpdateRLSFilterID)
                             matchObject = ep.UpdateRLSFilterObject;
                         break;
                     case EntityPermissionType.Delete:
-                        if (ep.DeleteRLSFilterID)
+                        if (ep.CanDelete && ep.DeleteRLSFilterID)
                             matchObject = ep.DeleteRLSFilterObject;
                         break;
                 }
@@ -2576,6 +4025,15 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public static BuildRelationshipViewParams(record: BaseEntity, relationship: EntityRelationshipInfo, filter?: string, maxRecords?: number): RunViewParams {
+        const joinFields = ReadRelationshipJoinFields(relationship.Configuration);
+        if (joinFields && joinFields.length > 1) {
+            const multi = EntityInfo.BuildRelationshipViewParamsForJoinFields(record, relationship.RelatedEntity, joinFields);
+            if (filter && filter.length > 0 && multi.ExtraFilter) {
+                multi.ExtraFilter = `(${multi.ExtraFilter}) AND (${filter})`;
+            }
+            if (maxRecords && maxRecords > 0) multi.MaxRows = maxRecords;
+            return multi;
+        }
         const params: RunViewParams = {}
         let quotes: string = '';
         let keyValue: string = '';
@@ -2585,7 +4043,7 @@ export class EntityInfo extends BaseInfo {
         }
         else {
             // currently we only support a single value for FOREIGN KEYS, so we can just grab the first value in the primary key
-            const firstKey = record.FirstPrimaryKey;
+            const firstKey = record.FirstPrimaryKey; // first-pk-ok: FK target — a relationship's join field references one parent key column
             keyValue = firstKey.Value;
             //When creating a new record, the keyValue is null and the quotes are not needed
             quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
@@ -2619,7 +4077,6 @@ export class EntityInfo extends BaseInfo {
 
     /**
      * One related-entity grid over several join fields (Bill-To OR Ship-To).
-     * New records still default to the first join field.
      */
     public static BuildRelationshipViewParamsForJoinFields(
         record: BaseEntity,
@@ -2636,7 +4093,7 @@ export class EntityInfo extends BaseInfo {
             if (rel) return EntityInfo.BuildRelationshipViewParams(record, rel);
         }
 
-        const firstKey = record.FirstPrimaryKey;
+        const firstKey = record.FirstPrimaryKey; // first-pk-ok: FK target — a relationship's join field references one parent key column
         const keyValue = firstKey.Value;
         const quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
         const clauses = fields.map((field) => `[${field}] = ${quotes}${keyValue}${quotes}`);
@@ -2647,19 +4104,49 @@ export class EntityInfo extends BaseInfo {
     }
     
     /**
-     * Builds a simple javascript object that will pre-populate a new record in the related entity with values that link back to the specified record. 
-     * This is useful, for example, when creating a new contact from an account, we want to pre-populate the account ID in the new contact record
+     * Default field values for a new related record so it links back to `record`.
+     * When the relationship's Configuration declares `UI.join.fields`, every
+     * listed FK is set (Bill-To AND Ship-To). Otherwise only
+     * `RelatedEntityJoinField` is set.
      */
-    public static BuildRelationshipNewRecordValues(record: BaseEntity, relationship: EntityRelationshipInfo): any {
-        // we want to build a simple javascript object that will pre-populate a new record in the related entity with values that link
-        // abck to the current record. This is useful for example when creating a new contact from an account, we want to pre-populate the
-        // account ID in the new contact record
-        const obj: any = {};
-        if (record && relationship) {
-            const keyField = relationship.EntityKeyField && relationship.EntityKeyField.trim().length > 0 ? relationship.EntityKeyField : record.FirstPrimaryKey.Name;
-            obj[relationship.RelatedEntityJoinField] = record.Get(keyField);
+    public static BuildRelationshipNewRecordValues(record: BaseEntity, relationship: EntityRelationshipInfo): Record<string, unknown> {
+        if (!record || !relationship) return {};
+        const joinFields = ReadRelationshipJoinFields(relationship.Configuration);
+        if (joinFields && joinFields.length > 0) {
+            return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(record, joinFields, relationship);
+        }
+        const joinField = (relationship.RelatedEntityJoinField ?? '').trim();
+        if (!joinField) return {};
+        return { [joinField]: EntityInfo.resolveRelationshipKeyValue(record, relationship) };
+    }
+
+    /**
+     * Default field values for a new related record, setting every listed join
+     * field to the parent key. Use this when one grid filters on several FKs
+     * (Bill-To OR Ship-To) so "New" still auto-links the child to this parent.
+     */
+    public static BuildRelationshipNewRecordValuesForJoinFields(
+        record: BaseEntity,
+        joinFields: readonly string[],
+        relationship?: EntityRelationshipInfo,
+    ): Record<string, unknown> {
+        if (!record) return {};
+        const fields = joinFields.map((f) => f.trim()).filter((f) => f.length > 0);
+        if (fields.length === 0) return {};
+        const keyValue = EntityInfo.resolveRelationshipKeyValue(record, relationship);
+        const obj: Record<string, unknown> = {};
+        for (const field of fields) {
+            obj[field] = keyValue;
         }
         return obj;
+    }
+
+    private static resolveRelationshipKeyValue(record: BaseEntity, relationship?: EntityRelationshipInfo): unknown {
+        const explicit = relationship?.EntityKeyField?.trim();
+        if (explicit) return record.Get(explicit);
+        const first = record.FirstPrimaryKey; // first-pk-ok: FK target — a relationship's join field references one parent key column
+        if (first?.Name) return record.Get(first.Name);
+        return first?.Value;
     }
 
     /**
@@ -2683,9 +4170,9 @@ export class EntityInfo extends BaseInfo {
         const matchFields = organicKey.MatchFieldNamesArray;
 
         if (organicKeyRelatedEntity.IsTransitiveMatch) {
-            params.ExtraFilter = EntityInfo.BuildTransitiveOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
+            params.ExtraFilter = EntityInfo.buildTransitiveOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
         } else {
-            params.ExtraFilter = EntityInfo.BuildDirectOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
+            params.ExtraFilter = EntityInfo.buildDirectOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
         }
 
         if (filter && filter.length > 0) {
@@ -2710,7 +4197,7 @@ export class EntityInfo extends BaseInfo {
      * matching organic key (same Name) to find its expression. Falls back to the hub's
      * expression on both sides if the spoke doesn't carry its own.
      */
-    private static BuildDirectOrganicKeyFilter(
+    private static buildDirectOrganicKeyFilter(
         record: BaseEntity,
         relatedEntity: EntityOrganicKeyRelatedEntityInfo,
         organicKey: EntityOrganicKeyInfo,
@@ -2721,7 +4208,7 @@ export class EntityInfo extends BaseInfo {
 
         // Resolve the spoke entity's own organic key (matching by Name) to pull its
         // per-column normalization. Falls back to the hub's expression if not found.
-        const spokeOrganicKey = EntityInfo.ResolveSpokeOrganicKey(relatedEntity, organicKey);
+        const spokeOrganicKey = EntityInfo.resolveSpokeOrganicKey(relatedEntity, organicKey);
 
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
@@ -2731,7 +4218,7 @@ export class EntityInfo extends BaseInfo {
             }
             const relatedField = relatedFields[i] || matchFields[i];
             const escapedValue = String(value).replace(/'/g, "''");
-            conditions.push(EntityInfo.WrapBothSidesWithNormalization(
+            conditions.push(EntityInfo.wrapBothSidesWithNormalization(
                 `[${relatedField}]`, spokeOrganicKey ?? organicKey,
                 escapedValue, organicKey
             ));
@@ -2745,7 +4232,7 @@ export class EntityInfo extends BaseInfo {
      * the spoke's own normalization function on the spoke side. Returns undefined if the
      * spoke entity doesn't have a parallel organic key — caller falls back to the hub's.
      */
-    private static ResolveSpokeOrganicKey(
+    private static resolveSpokeOrganicKey(
         relatedEntity: EntityOrganicKeyRelatedEntityInfo,
         hubOrganicKey: EntityOrganicKeyInfo,
         provider?: IMetadataProvider
@@ -2761,7 +4248,7 @@ export class EntityInfo extends BaseInfo {
     /**
      * Builds an ExtraFilter for transitive organic key matching (via SQL view/table subquery).
      */
-    private static BuildTransitiveOrganicKeyFilter(
+    private static buildTransitiveOrganicKeyFilter(
         record: BaseEntity,
         relatedEntity: EntityOrganicKeyRelatedEntityInfo,
         organicKey: EntityOrganicKeyInfo,
@@ -2780,7 +4267,7 @@ export class EntityInfo extends BaseInfo {
             }
             const transitiveField = transitiveMatchFields[i] || matchFields[i];
             const escapedValue = String(value).replace(/'/g, "''");
-            conditions.push(EntityInfo.WrapWithNormalization(
+            conditions.push(EntityInfo.wrapWithNormalization(
                 `[${transitiveField}]`, organicKey, escapedValue
             ));
         }
@@ -2795,7 +4282,7 @@ export class EntityInfo extends BaseInfo {
      * based on the organic key's NormalizationStrategy.
      * Returns a SQL comparison expression like: LOWER(LTRIM(RTRIM([Field]))) = LOWER(LTRIM(RTRIM('value')))
      */
-    private static WrapWithNormalization(
+    private static wrapWithNormalization(
         fieldExpression: string,
         organicKey: EntityOrganicKeyInfo,
         escapedValue: string
@@ -2813,8 +4300,11 @@ export class EntityInfo extends BaseInfo {
                     // Fall back to exact match if no custom expression defined
                     return `${fieldExpression} = '${escapedValue}'`;
                 }
-                const normalizedField = expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
-                const normalizedValue = expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+                // Replacement functions: `escapedValue` is a data value, so `$&`/`` $` ``/
+                // `$'`/`$$` in it would otherwise splice the custom expression's own text
+                // into the SQL literal. See issue #3171.
+                const normalizedField = expr.replace(/\{\{FieldName\}\}/g, () => fieldExpression);
+                const normalizedValue = expr.replace(/\{\{FieldName\}\}/g, () => `'${escapedValue}'`);
                 return `${normalizedField} = ${normalizedValue}`;
             }
             default:
@@ -2829,19 +4319,19 @@ export class EntityInfo extends BaseInfo {
      * when the expressions agree; different transforms applied independently when they
      * don't (the per-column normalization case).
      */
-    private static WrapBothSidesWithNormalization(
+    private static wrapBothSidesWithNormalization(
         fieldExpression: string,
         fieldOrganicKey: EntityOrganicKeyInfo,
         escapedValue: string,
         valueOrganicKey: EntityOrganicKeyInfo
     ): string {
-        const leftSide = EntityInfo.NormalizeFieldExpression(fieldExpression, fieldOrganicKey);
-        const rightSide = EntityInfo.NormalizeLiteralExpression(escapedValue, valueOrganicKey);
+        const leftSide = EntityInfo.normalizeFieldExpression(fieldExpression, fieldOrganicKey);
+        const rightSide = EntityInfo.normalizeLiteralExpression(escapedValue, valueOrganicKey);
         return `${leftSide} = ${rightSide}`;
     }
 
     /** Apply an organic key's normalization to a SQL field expression (left side of compare). */
-    private static NormalizeFieldExpression(
+    private static normalizeFieldExpression(
         fieldExpression: string,
         organicKey: EntityOrganicKeyInfo
     ): string {
@@ -2852,14 +4342,15 @@ export class EntityInfo extends BaseInfo {
             case 'Custom': {
                 const expr = organicKey.CustomNormalizationExpression;
                 if (!expr) return fieldExpression;
-                return expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
+                // Replacement function — see WrapWithNormalization (#3171).
+                return expr.replace(/\{\{FieldName\}\}/g, () => fieldExpression);
             }
             default: return fieldExpression;
         }
     }
 
     /** Apply an organic key's normalization to a quoted literal value (right side of compare). */
-    private static NormalizeLiteralExpression(
+    private static normalizeLiteralExpression(
         escapedValue: string,
         organicKey: EntityOrganicKeyInfo
     ): string {
@@ -2870,7 +4361,8 @@ export class EntityInfo extends BaseInfo {
             case 'Custom': {
                 const expr = organicKey.CustomNormalizationExpression;
                 if (!expr) return `'${escapedValue}'`;
-                return expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+                // Replacement function — see WrapWithNormalization (#3171).
+                return expr.replace(/\{\{FieldName\}\}/g, () => `'${escapedValue}'`);
             }
             default: return `'${escapedValue}'`;
         }
@@ -2884,9 +4376,11 @@ export class EntityInfo extends BaseInfo {
 
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
-            this._Fields = [];
+            this._fields = [];
 
             // Reset every lazy field-derived memo cache whenever _Fields is (re)assigned.
+            // `entityInfo.cacheReset.test.ts` mirrors this list in `runProductionCacheReset`;
+            // a cache added here needs adding there too, or its reset goes unexercised.
             // These caches (FieldByName map, PrimaryKeys, UniqueKeys, ForeignKeys, EncryptedFields,
             // DatetimeFields, NameField, FirstPrimaryKey) are populated lazily off this.Fields and
             // were previously relying on an implicit "_Fields is write-once after construction"
@@ -2903,35 +4397,38 @@ export class EntityInfo extends BaseInfo {
             this._encryptedFieldsCache = null;
             this._datetimeFieldsCache = null;
             this._nameFieldCache = undefined;
-
+            this._hasSearchFields = undefined;
+            // Added late: HasInactiveFields (Jun 18) post-dates this block (Jun 15) and was never
+            // listed here, so it carried exactly the staleness the block exists to prevent.
+            this._hasInactiveFields = undefined;
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
-                    this._Fields.push(new EntityFieldInfo(ef[j]));
+                    this._fields.push(new EntityFieldInfo(ef[j]));
                 }
             }
 
             // copy the Entity Permissions
-            this._Permissions = [];
+            this._permissions = [];
             const ep = initData.EntityPermissions || initData._Permissions || initData.Permissions;
             if (ep) {
                 for (let j = 0; j < ep.length; j++) {
-                    this._Permissions.push(new EntityPermissionInfo(ep[j]));
+                    this._permissions.push(new EntityPermissionInfo(ep[j]));
                 }
             }
 
             // copy the Entity settings
-            this._Settings = [];
+            this._settings = [];
             const es = initData.EntitySettings || initData._Settings || initData.Settings;
             if (es) {
-                es.map((s) => this._Settings.push(new EntitySettingInfo(s)));
+                es.map((s) => this._settings.push(new EntitySettingInfo(s)));
             }
 
             // auto-populate FieldCategories from the FieldCategoryInfo setting
-            this._FieldCategories = this.parseFieldCategoriesFromSettings();
+            this._fieldCategories = this.parseFieldCategoriesFromSettings();
 
             // copy the Related Entities (accept EntityRelationships, _RelatedEntities, or RelatedEntities as input names)
-            this._RelatedEntities = [];
+            this._relatedEntities = [];
             const er = initData.EntityRelationships || initData._RelatedEntities || initData.RelatedEntities;
             if (er) {
                 // check to see if ANY of the records in the er array have a non-null or non-zero sequence value. The reason is 
@@ -2949,22 +4446,22 @@ export class EntityInfo extends BaseInfo {
                     er.sort((a, b) => {
                         const aSeq = a.Sequence !== null && a.Sequence !== undefined ? a.Sequence : 999999;
                         const bSeq = b.Sequence !== null && b.Sequence !== undefined ? b.Sequence : 999999;
-                        return aSeq - bSeq
+                        return (aSeq - bSeq) || ordinalCompare(a.RelatedEntity, b.RelatedEntity) || ordinalCompare(a.ID, b.ID);
                     }); 
                 }
 
                 // now that we have prepared the er array by sorting it, if needed, let's load up the related entities
                 for (let j = 0; j < er.length; j++) {
-                    this._RelatedEntities.push(new EntityRelationshipInfo(er[j]));
+                    this._relatedEntities.push(new EntityRelationshipInfo(er[j]));
                 }
             }
 
             // copy the Organic Keys (sorted by sequence inside EntityOrganicKeyInfo constructor)
-            this._OrganicKeys = [];
+            this._organicKeys = [];
             const ok = initData.EntityOrganicKeys || initData._OrganicKeys || initData.OrganicKeys;
             if (ok && Array.isArray(ok)) {
                 for (const item of ok) {
-                    this._OrganicKeys.push(new EntityOrganicKeyInfo(item));
+                    this._organicKeys.push(new EntityOrganicKeyInfo(item));
                 }
             }
 
@@ -2988,9 +4485,9 @@ export class EntityInfo extends BaseInfo {
                 virtualCount += f.IsVirtual ? 1 : 0;
                 floatCount += f.IsFloat ? 1 : 0;
             }
-            this._hasIdField = hasIdField
-            this._floatCount = floatCount;
-            this._virtualCount = virtualCount;
+            this.HasIdField = hasIdField
+            this.FloatCount = floatCount;
+            this.VirtualCount = virtualCount;
     
             // now see if there are any relationships and count the one to many and many to many
             for (let j:number = 0; j < this.RelatedEntities.length; ++j) {
@@ -3002,8 +4499,8 @@ export class EntityInfo extends BaseInfo {
                     manyToManyCount++;
             }
                 
-            this._manyToManyCount = manyToManyCount;
-            this._oneToManyCount = oneToManyCount;
+            this.ManyToManyCount = manyToManyCount;
+            this.OneToManyCount = oneToManyCount;
         }
         catch (e) {
             LogError(e);
@@ -3015,12 +4512,12 @@ export class EntityInfo extends BaseInfo {
      * Called once during construction so the result is cached on _FieldCategories.
      */
     private parseFieldCategoriesFromSettings(): Record<string, FieldCategoryInfo> | null {
-        if (!this._Settings || this._Settings.length === 0) {
+        if (!this._settings || this._settings.length === 0) {
             return null;
         }
 
         // Try new format first
-        const infoSetting = this._Settings.find(s => s.Name === 'FieldCategoryInfo');
+        const infoSetting = this._settings.find(s => s.Name === 'FieldCategoryInfo');
         if (infoSetting?.Value) {
             const parsed = SafeJSONParse<Record<string, FieldCategoryInfo>>(infoSetting.Value, false);
             if (parsed) {
@@ -3029,7 +4526,7 @@ export class EntityInfo extends BaseInfo {
         }
 
         // Fallback to legacy FieldCategoryIcons format (icon-only map)
-        const iconSetting = this._Settings.find(s => s.Name === 'FieldCategoryIcons');
+        const iconSetting = this._settings.find(s => s.Name === 'FieldCategoryIcons');
         if (iconSetting?.Value) {
             const icons = SafeJSONParse<Record<string, string>>(iconSetting.Value, false);
             if (icons) {
@@ -3086,6 +4583,26 @@ export class RecordDependency {
      * The value of the primary key field in the parent record. MemberJunction supports composite(multi-field) primary keys. However, foreign keys only support links to single-valued primary keys in their linked entity.
      */
     PrimaryKey: CompositeKey
+    /**
+     * True when this dependency is a **polymorphic (soft) link** rather than a hard foreign key -
+     * that is, when `FieldName` is the `RecordID`-shaped payload column of an `EntityID`/`RecordID`
+     * pair declared via {@link EntityFieldInfo.EntityIDFieldName}.
+     *
+     * The distinction matters because the two kinds of link store the target differently: a hard
+     * foreign key holds the bare primary key value, while a polymorphic link holds the canonical
+     * `CompositeKey.ToRecordID()` encoding (`ID|<guid>`). Anything that *rewrites* the link - record
+     * merge, most importantly - has to write the right one, so this flag is what tells it which.
+     *
+     * Optional, and absent/false means "hard foreign key", so callers written before polymorphic
+     * links were detected keep their existing behavior.
+     */
+    IsSoftLink?: boolean
+    /**
+     * For a soft link ({@link IsSoftLink}), the name of the sibling discriminator column that says
+     * which entity `FieldName` points at - the value of `EntityIDFieldName` on the payload field.
+     * Undefined for hard foreign keys.
+     */
+    EntityIDFieldName?: string
 }
 
 /**

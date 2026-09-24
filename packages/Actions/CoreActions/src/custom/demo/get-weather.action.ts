@@ -1,7 +1,41 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios from "axios";
+import { HttpGet } from "@memberjunction/network-utils";
+
+/** A single geocoding hit from Open-Meteo's `/v1/search`. */
+interface GeocodingResult {
+    name: string;
+    latitude: number;
+    longitude: number;
+    country?: string;
+    country_code?: string;
+    admin1?: string;
+    admin1_code?: string;
+}
+
+/** Open-Meteo geocoding response. */
+interface GeocodingResponse {
+    results?: GeocodingResult[];
+}
+
+/** The `current` block of Open-Meteo's `/v1/forecast` response that this action reads. */
+interface ForecastResponse {
+    current: {
+        temperature_2m: number;
+        relative_humidity_2m: number;
+        apparent_temperature: number;
+        is_day: number;
+        precipitation: number;
+        rain: number;
+        weather_code: number;
+        cloud_cover: number;
+        pressure_msl: number;
+        wind_speed_10m: number;
+        wind_direction_10m: number;
+        time: string;
+    };
+}
 
 /**
  * Action that retrieves current weather information for a specified location
@@ -100,16 +134,16 @@ export class GetWeatherAction extends BaseAction {
                         // Try searching with just the city name and filter by US
                         searchQuery = city;
                         const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchQuery)}&count=10&language=en&format=json`;
-                        const geocodeResponse = await axios.get(geocodeUrl);
+                        const geocodeResponse = await HttpGet<GeocodingResponse>(geocodeUrl);
                         
-                        if (geocodeResponse.data.results && geocodeResponse.data.results.length > 0) {
+                        if (geocodeResponse.Data.results && geocodeResponse.Data.results.length > 0) {
                             // Filter results for US locations and try to match the state
-                            const usResults = geocodeResponse.data.results.filter((r: any) => 
+                            const usResults = geocodeResponse.Data.results.filter((r) => 
                                 r.country_code === 'US' || r.country === 'United States'
                             );
                             
                             // Try to find exact state match
-                            let location = usResults.find((r: any) => 
+                            let location = usResults.find((r) => 
                                 r.admin1 && (r.admin1.toUpperCase() === stateMap[stateAbbr].toUpperCase() || 
                                             r.admin1_code === `US-${stateAbbr}`)
                             );
@@ -140,9 +174,9 @@ export class GetWeatherAction extends BaseAction {
                     } else {
                         // Not a valid US state abbreviation, try the original search
                         const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchQuery)}&count=1&language=en&format=json`;
-                        const geocodeResponse = await axios.get(geocodeUrl);
+                        const geocodeResponse = await HttpGet<GeocodingResponse>(geocodeUrl);
                         
-                        if (!geocodeResponse.data.results || geocodeResponse.data.results.length === 0) {
+                        if (!geocodeResponse.Data.results || geocodeResponse.Data.results.length === 0) {
                             return {
                                 Success: false,
                                 Message: `Location '${locationParam.Value}' not found`,
@@ -150,7 +184,7 @@ export class GetWeatherAction extends BaseAction {
                             };
                         }
 
-                        const location = geocodeResponse.data.results[0];
+                        const location = geocodeResponse.Data.results[0];
                         latitude = location.latitude;
                         longitude = location.longitude;
                         locationName = `${location.name}, ${location.admin1 || ''} ${location.country || ''}`.trim();
@@ -158,9 +192,9 @@ export class GetWeatherAction extends BaseAction {
                 } else {
                     // Not in "City, ST" format, use original search
                     const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchQuery)}&count=1&language=en&format=json`;
-                    const geocodeResponse = await axios.get(geocodeUrl);
+                    const geocodeResponse = await HttpGet<GeocodingResponse>(geocodeUrl);
                     
-                    if (!geocodeResponse.data.results || geocodeResponse.data.results.length === 0) {
+                    if (!geocodeResponse.Data.results || geocodeResponse.Data.results.length === 0) {
                         return {
                             Success: false,
                             Message: `Location '${locationParam.Value}' not found`,
@@ -168,7 +202,7 @@ export class GetWeatherAction extends BaseAction {
                         };
                     }
 
-                    const location = geocodeResponse.data.results[0];
+                    const location = geocodeResponse.Data.results[0];
                     latitude = location.latitude;
                     longitude = location.longitude;
                     locationName = `${location.name}, ${location.admin1 || ''} ${location.country || ''}`.trim();
@@ -190,9 +224,9 @@ export class GetWeatherAction extends BaseAction {
 
             // Get weather data
             const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch`;
-            const weatherResponse = await axios.get(weatherUrl);
+            const weatherResponse = await HttpGet<ForecastResponse>(weatherUrl);
 
-            const current = weatherResponse.data.current;
+            const current = weatherResponse.Data.current;
             const weatherCodes: Record<number, string> = {
                 0: 'Clear sky',
                 1: 'Mainly clear',

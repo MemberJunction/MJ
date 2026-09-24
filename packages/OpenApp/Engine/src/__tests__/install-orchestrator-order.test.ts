@@ -17,6 +17,7 @@
  * times (and in the wrong order).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { existsSync } from 'node:fs';
 
 // ── Stub every external collaborator the install path touches ──────────────
 vi.mock('../github/github-client.js', () => ({
@@ -35,7 +36,10 @@ vi.mock('../github/github-client.js', () => ({
     ListGitHubReleases: vi.fn(),
     ListGitHubTags: vi.fn(),
 }));
-vi.mock('../install/schema-manager.js', () => ({
+// Spread the real module so ValidateSchemaName is the genuine rule (these suites declare
+// ordinary schema names, so it always passes); only the DB-touching functions are stubbed.
+vi.mock('../install/schema-manager.js', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../install/schema-manager.js')>()),
     CreateAppSchema: vi.fn(),
     DropAppSchema: vi.fn(),
     SchemaExists: vi.fn(),
@@ -52,6 +56,7 @@ vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
     AddClientDynamicPackages: vi.fn(),
     RemoveServerDynamicPackages: vi.fn(),
+    PruneDynamicPackagesNotInManifest: vi.fn(() => ({ Success: true })),
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
@@ -69,6 +74,8 @@ vi.mock('../install/history-recorder.js', () => ({
     FindDependentApps: vi.fn(),
     ListInstalledApps: vi.fn(),
     UpdateAppRecord: vi.fn(),
+    ReplaceAppDependenciesAtomically: vi.fn(),
+    CheckSchemaSharedByOtherApps: vi.fn(),
 }));
 vi.mock('@memberjunction/core', () => ({
     // Only CreateTransactionGroup is used on the install path.
@@ -84,7 +91,7 @@ import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitH
 import { CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping } from '../install/config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
     RecordInstallHistoryEntry,
@@ -92,6 +99,7 @@ import {
     SetAppStatus,
     FindInstalledApp,
     ListInstalledApps,
+    CheckSchemaSharedByOtherApps,
 } from '../install/history-recorder.js';
 
 /** Records the name of each app as it reaches the "record installation" step. */
@@ -320,6 +328,26 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
             'https://github.com/MemberJunction/Integrations', '1.0.0', 'migrations-pg', expect.any(String), expect.anything(), 'CRM/HubSpot',
         );
     });
+
+    /** The temp dir the engine created for this install (4th arg of the download call). */
+    function downloadedTempDir(): string {
+        const call = vi.mocked(DownloadMigrations).mock.calls[0];
+        return call[3] as string;
+    }
+
+    it('removes the migration temp directory after a successful install', async () => {
+        const r = await InstallApp({ Source: source }, ctxFor('sqlserver'));
+        expect(r.Success).toBe(true);
+        // Without cleanup, every install/upgrade leaves a copy of the app's .sql files in the OS temp dir.
+        expect(existsSync(downloadedTempDir())).toBe(false);
+    });
+
+    it('removes the migration temp directory even when the migration run fails', async () => {
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: false, ErrorMessage: 'V2 failed' });
+        const r = await InstallApp({ Source: source }, ctxFor('sqlserver'));
+        expect(r.Success).toBe(false);
+        expect(existsSync(downloadedTempDir())).toBe(false);
+    });
 });
 
 /**
@@ -350,16 +378,24 @@ describe('InstallApp — compensation when migrations fail', () => {
     });
     const source = 'https://github.com/MemberJunction/Integrations/CRM/HubSpot';
     const warnings: string[] = [];
+    const errors: { Phase: string; Message: string }[] = [];
+    const progressMessages: string[] = [];
     const ctx = () => ({
         ...context,
         DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
         DatabaseConfig: {},
-        Callbacks: { OnWarn: (_phase: string, message: string) => { warnings.push(message); } },
+        Callbacks: {
+            OnWarn: (_phase: string, message: string) => { warnings.push(message); },
+            OnError: (phase: string, message: string) => { errors.push({ Phase: phase, Message: message }); },
+            OnProgress: (_phase: string, message: string) => { progressMessages.push(message); },
+        },
     } as unknown as OrchestratorContext);
 
     beforeEach(() => {
         vi.clearAllMocks();
         warnings.length = 0;
+        errors.length = 0;
+        progressMessages.length = 0;
         vi.mocked(SchemaExists).mockResolvedValue(false);
         // The schema is created THIS run, which is what licenses tearing it down again.
         vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true, Created: true });
@@ -439,6 +475,23 @@ describe('InstallApp — compensation when migrations fail', () => {
         expect(vi.mocked(CreateAppSchema)).not.toHaveBeenCalled();
         expect(vi.mocked(DropAppSchema)).not.toHaveBeenCalled();
         expect(teardownAttempted()).toBe(false);
+    });
+
+    // DropAppSchema reports a failed DROP by RESOLVING to { Success: false }, never by throwing,
+    // so the rollback's try/catch alone cannot see it. Without checking the result the operator is
+    // told the schema was dropped while it is still sitting in the database.
+    it('reports a failed schema drop during rollback instead of announcing success', async () => {
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: withTeardown });
+        vi.mocked(DropAppSchema).mockResolvedValue({ Success: false, ErrorMessage: 'schema is not empty' });
+
+        const r = await InstallApp({ Source: source }, ctx());
+
+        expect(r.Success).toBe(false);
+        expect(vi.mocked(DropAppSchema)).toHaveBeenCalled();
+        expect(
+            errors.some((e) => e.Phase === 'Rollback' && e.Message.includes('mj_connector_hubspot') && e.Message.includes('schema is not empty')),
+        ).toBe(true);
+        expect(progressMessages.some((m) => m.includes('dropped successfully'))).toBe(false);
     });
 });
 
@@ -719,5 +772,309 @@ describe('UpgradeApp — migration failure is honest + recoverable (B21)', () =>
         expect(msg).toContain('ddl boom on v2');
         // App is flipped to Error (retryable: B17 makes Error reinstallable; upgrade resumes).
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+});
+
+describe('UpgradeApp — config prune ordering', () => {
+    const upContext = {
+        ...context,
+        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
+    } as unknown as OrchestratorContext;
+
+    function v2Manifest(name: string): string {
+        return JSON.stringify({
+            manifestVersion: 1,
+            name,
+            displayName: name,
+            description: `${name} test app description`,
+            version: '2.0.0',
+            publisher: { name: 'Test' },
+            repository: `https://github.com/test/${name}`,
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: `test_${name.replace(/-/g, '_')}` },
+            packages: { server: [{ name: '@test/app-x-server', role: 'bootstrap', startupExport: 'Load' }] },
+            dependencies: {},
+        });
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+        serveManifests({ 'https://github.com/test/app-x': v2Manifest('app-x') });
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true } as ReturnType<typeof AddServerDynamicPackages>);
+        vi.mocked(PruneDynamicPackagesNotInManifest).mockReturnValue(
+            { Success: true } as ReturnType<typeof PruneDynamicPackagesNotInManifest>
+        );
+    });
+
+    it('adds the new manifest\'s entries BEFORE pruning stale ones', async () => {
+        // Both orders converge on the same config (the keep-set IS the new manifest), so the
+        // order is chosen for the FAILURE window between these two un-rolled-back writes.
+        // Add-then-prune leaves that window at (old ∪ new) — the running server still finds every
+        // entry it needs. Prune-then-add would leave a subset of BOTH versions.
+        await UpgradeApp({ AppName: 'app-x' }, upContext);
+
+        const pruneCall = vi.mocked(PruneDynamicPackagesNotInManifest).mock.invocationCallOrder[0];
+        const addCall = vi.mocked(AddServerDynamicPackages).mock.invocationCallOrder[0];
+        expect(pruneCall).toBeDefined();
+        expect(addCall).toBeDefined();
+        expect(addCall).toBeLessThan(pruneCall);
+    });
+
+    it('fails the upgrade when the prune fails, leaving the added entries in place', async () => {
+        // The adds have already run, so the config is a superset of what the new version needs and
+        // the server keeps booting. The upgrade must still report failure so the operator retries;
+        // the resume checkpoint is not advanced, so the retry re-runs both writes.
+        vi.mocked(PruneDynamicPackagesNotInManifest).mockReturnValue(
+            { Success: false, ErrorMessage: 'config left unchanged' } as ReturnType<typeof PruneDynamicPackagesNotInManifest>
+        );
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
+
+        expect(result.Success).toBe(false);
+        expect(vi.mocked(AddServerDynamicPackages)).toHaveBeenCalled();
+        expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+
+    it('does NOT prune when the add fails — the old config is left intact', async () => {
+        // The failure window that motivates the order: if the first write fails, the second must
+        // not run, so the config still holds exactly what the previous version needed.
+        vi.mocked(AddServerDynamicPackages).mockReturnValue(
+            { Success: false, ErrorMessage: 'could not write mj.config.cjs' } as ReturnType<typeof AddServerDynamicPackages>
+        );
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
+
+        expect(result.Success).toBe(false);
+        expect(vi.mocked(PruneDynamicPackagesNotInManifest)).not.toHaveBeenCalled();
+        expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+});
+
+describe('reserved-schema guard on the adopt-an-existing-schema path', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+
+        // Default happy-path stubs — mirrors the outer describe's beforeEach so a real install
+        // would succeed if the reserved-name guard under test did not stop it first.
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined); // nothing installed yet
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
+            installSequence.push(manifest.name);
+            return `id-${manifest.name}`;
+        });
+    });
+
+    /**
+     * `HandleSchemaCreation` probes SchemaExists before it creates, and adopts the schema when
+     * it already exists. `__mj_UDT` exists in every MJ database, so without validation ahead of
+     * that probe an app could adopt MJ's user-defined-table sandbox — and `mj app remove` would
+     * then DROP it, taking every user-defined table with it.
+     */
+    it('refuses to install an app that claims a reserved schema which already exists', async () => {
+        const manifest = JSON.stringify({
+            manifestVersion: 1,
+            name: 'squatter',
+            displayName: 'squatter',
+            description: 'app claiming a reserved schema',
+            version: '1.0.0',
+            publisher: { name: 'Test' },
+            repository: 'https://github.com/test/squatter',
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: '__mj_UDT' },
+            packages: {},
+            dependencies: {},
+        });
+        serveManifests({ 'https://github.com/test/squatter': manifest });
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+
+        const result = await InstallApp({ Source: 'https://github.com/test/squatter' }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/reserved/i);
+    });
+
+    it('still refuses when the dangerous override is on — reserved means reserved', async () => {
+        // 'dbo', not '__mj': the manifest schema's own name pattern requires 3+ chars after any
+        // leading underscores (schemaNameRegex in manifest-schema.ts), so a literal '__mj' manifest
+        // is rejected before InstallApp ever runs — it can't reach the guard under test here. 'dbo'
+        // is also an exact-match reserved name (PLATFORM_SCHEMAS), so it proves the same point:
+        // the reserved check is unconditional and doesn't care about AllowDoubleUnderscoreSchema.
+        const manifest = JSON.stringify({
+            manifestVersion: 1,
+            name: 'squatter2',
+            displayName: 'squatter2',
+            description: 'app claiming a reserved schema',
+            version: '1.0.0',
+            publisher: { name: 'Test' },
+            repository: 'https://github.com/test/squatter2',
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: 'dbo' },
+            packages: {},
+            dependencies: {},
+        });
+        serveManifests({ 'https://github.com/test/squatter2': manifest });
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+
+        const result = await InstallApp(
+            { Source: 'https://github.com/test/squatter2', AllowDoubleUnderscoreSchema: true },
+            context,
+        );
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toMatch(/reserved/i);
+    });
+});
+
+describe('reserved-schema guard on the UPGRADE path', () => {
+    const upContext = {
+        ...context,
+        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
+    } as unknown as OrchestratorContext;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(PruneDynamicPackagesNotInManifest).mockReturnValue({ Success: true });
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
+            LastCompletedStep: null,
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+    });
+
+    /**
+     * Install validates the schema name; upgrade did not. `HandleSchemaCreation` is only reached
+     * from `InstallApp`, so a v2 manifest could rename its schema to anything the manifest regex
+     * admits — `dbo`, `public`, `db_owner` — and `HandleMigrations` would run that version's DDL
+     * straight into a platform schema. The rename is even detected (to clean config references),
+     * it was just never validated.
+     */
+    function v2WithSchema(schemaName: string): string {
+        return JSON.stringify({
+            manifestVersion: 1,
+            name: 'app-x',
+            displayName: 'app-x',
+            description: 'app-x test app description',
+            version: '2.0.0',
+            publisher: { name: 'Test' },
+            repository: 'https://github.com/test/app-x',
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: schemaName },
+            migrations: { directory: 'migrations' },
+            packages: {},
+            dependencies: {},
+        });
+    }
+
+    it('refuses to upgrade into a reserved schema, and runs no migrations', async () => {
+        for (const reserved of ['dbo', 'public', 'db_owner', '__mj_UDT']) {
+            vi.mocked(RunAppMigrations).mockClear();
+            serveManifests({ 'https://github.com/test/app-x': v2WithSchema(reserved) });
+
+            const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
+
+            expect(result.Success, `${reserved} must be refused`).toBe(false);
+            expect(result.ErrorMessage, reserved).toMatch(/reserved/i);
+            expect(vi.mocked(RunAppMigrations), `${reserved} must not reach migrations`).not.toHaveBeenCalled();
+        }
+    });
+
+    it('still upgrades normally into a legitimate schema name', async () => {
+        serveManifests({ 'https://github.com/test/app-x': v2WithSchema('test_app_x') });
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+    });
+});
+
+describe('adopting a schema another installed app already owns', () => {
+    /**
+     * This PR is what makes every first-party `__mj_<AppName>` schema reachable on the DEFAULT
+     * install path, so "a second app quietly adopts a live app's schema" stops being theoretical.
+     * It must stay ALLOWED — apps legitimately share a schema via `createIfNotExists` — but it
+     * must not be silent: once a squatter is registered, `CheckSchemaSharedByOtherApps` makes
+     * the real owner's removal skip its schema and metadata cleanup.
+     */
+    const warnings: string[] = [];
+    const warnContext = {
+        ...context,
+        Callbacks: { OnWarn: (_phase: string, message: string) => { warnings.push(message); } },
+    } as unknown as OrchestratorContext;
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        warnings.length = 0;
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(true);   // the schema is live — adopt path
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
+            installSequence.push(manifest.name);
+            return `id-${manifest.name}`;
+        });
+        serveManifests({ 'https://github.com/test/squatter3': manifestJSON('squatter3', {}) });
+    });
+
+    it('warns when another app owns the adopted schema, and still installs', async () => {
+        vi.mocked(CheckSchemaSharedByOtherApps).mockResolvedValue({ Shared: true, CheckFailed: false });
+
+        const result = await InstallApp({ Source: 'https://github.com/test/squatter3' }, warnContext);
+
+        expect(result.Success, result.ErrorMessage).toBe(true);   // sharing stays supported
+        expect(warnings.join('\n')).toMatch(/another installed app/i);
+        expect(warnings.join('\n')).toMatch(/test_squatter3/);
+    });
+
+    it('says nothing when no other app owns the schema', async () => {
+        vi.mocked(CheckSchemaSharedByOtherApps).mockResolvedValue({ Shared: false, CheckFailed: false });
+
+        const result = await InstallApp({ Source: 'https://github.com/test/squatter3' }, warnContext);
+
+        expect(result.Success, result.ErrorMessage).toBe(true);
+        expect(warnings.join('\n')).not.toMatch(/another installed app/i);
     });
 });

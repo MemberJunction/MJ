@@ -20,8 +20,8 @@ import { MJThemeEntity, ResourceData } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJ_DEFAULT_SEEDS, ThemeSeeds } from '@memberjunction/theme-engine';
-import { isBuiltInTheme } from './theme-studio.constants';
-import { buildThemeManagerAgentContext, resolveThemeByIDOrName, ThemeSummaryRow } from './theme-agent-context';
+import { IsBuiltInTheme } from './theme-studio.constants';
+import { BuildThemeManagerAgentContext, ResolveThemeByIDOrName, ThemeSummaryRow } from './theme-agent-context';
 
 interface ThemeRow {
   id: string;
@@ -41,7 +41,16 @@ interface ThemeRow {
   styleUrls: ['./theme-manager-dashboard.component.css'],
 })
 export class ThemeManagerDashboardComponent extends BaseDashboard implements OnDestroy {
-  public themes: ThemeRow[] = [];
+  public Themes: ThemeRow[] = [];
+
+  /** @deprecated Use {@link Themes}. */
+  public get themes(): ThemeRow[] {
+    return this.Themes;
+  }
+  /** @deprecated Use {@link Themes}. */
+  public set themes(value: ThemeRow[]) {
+    this.Themes = value;
+  }
   private themesChangedSub?: Subscription;
 
   constructor(
@@ -63,9 +72,14 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
 
   /** Whether this theme is the brand currently applied to the session (case-insensitive
    *  GUID compare — RunView ids and entity ids can differ in case). */
-  public isApplied(id: string): boolean {
+  public IsApplied(id: string): boolean {
     const active = this.themeService.BrandOverlayId;
     return !!active && UUIDsEqual(id, active);
+  }
+
+  /** @deprecated Use {@link IsApplied}. */
+  public isApplied(id: string): boolean {
+    return this.IsApplied(id);
   }
 
   protected initDashboard(): void {
@@ -84,17 +98,17 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
         OrderBy: 'Name',
         ResultType: 'entity_object',
       });
-      this.themes = (result.Success ? result.Results : []).map((t) => ({
+      this.Themes = (result.Success ? result.Results : []).map((t) => ({
         id: t.ID,
         name: t.Name,
         isDefault: t.IsDefault,
         status: t.Status,
         swatches: this.swatchesFor(t.Seeds),
-        builtIn: isBuiltInTheme(t.ID),
+        builtIn: IsBuiltInTheme(t.ID),
         starred: this.themeService.IsStarred(t.ID),
       }));
     } catch {
-      this.themes = [];
+      this.Themes = [];
     }
     this.publishAgentContext();
     this.cdRef.detectChanges();
@@ -110,14 +124,19 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
   }
 
   /** Star / unstar a theme (adds it to the user's starred set for the user-menu modal). */
-  public async toggleStar(row: ThemeRow): Promise<void> {
+  public async ToggleStar(row: ThemeRow): Promise<void> {
     row.starred = await this.themeService.ToggleStar(row.id);
     this.publishAgentContext();
     this.cdRef.detectChanges();
   }
 
+  /** @deprecated Use {@link ToggleStar}. */
+  public async toggleStar(row: ThemeRow): Promise<void> {
+    return this.ToggleStar(row);
+  }
+
   /** Open the theme record (edit) — the shell handles this via the resource wrapper. */
-  public edit(row: ThemeRow): void {
+  public Edit(row: ThemeRow): void {
     if (row.builtIn) {
       this.notify('The built-in theme is read-only — duplicate it to customize.', 'info');
       return;
@@ -125,8 +144,13 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
     this.OpenEntityRecord.emit({ EntityName: 'MJ: Themes', RecordPKey: CompositeKey.FromID(row.id) });
   }
 
+  /** @deprecated Use {@link Edit}. */
+  public edit(row: ThemeRow): void {
+    return this.Edit(row);
+  }
+
   /** Apply this theme to the current user's workspace now and remember it as their choice. */
-  public async applyToMe(row: ThemeRow): Promise<void> {
+  public async ApplyToMe(row: ThemeRow): Promise<void> {
     try {
       const md = this.ProviderToUse;
       const entity = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
@@ -143,8 +167,13 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
     }
   }
 
+  /** @deprecated Use {@link ApplyToMe}. */
+  public async applyToMe(row: ThemeRow): Promise<void> {
+    return this.ApplyToMe(row);
+  }
+
   /** Make this the single org-wide default and apply it to the running app immediately. */
-  public async setDefault(row: ThemeRow): Promise<void> {
+  public async SetDefault(row: ThemeRow): Promise<void> {
     try {
       const md = this.ProviderToUse;
       const rv = new RunView();
@@ -187,7 +216,12 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
     }
   }
 
-  public async duplicate(row: ThemeRow): Promise<void> {
+  /** @deprecated Use {@link SetDefault}. */
+  public async setDefault(row: ThemeRow): Promise<void> {
+    return this.SetDefault(row);
+  }
+
+  public async Duplicate(row: ThemeRow): Promise<void> {
     try {
       const md = this.ProviderToUse;
       const src = await md.GetEntityObject<MJThemeEntity>('MJ: Themes');
@@ -212,8 +246,13 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
     }
   }
 
+  /** @deprecated Use {@link Duplicate}. */
+  public async duplicate(row: ThemeRow): Promise<void> {
+    return this.Duplicate(row);
+  }
+
   /** Delete a theme after an explicit confirmation (MJConfirmService owns the dialog). */
-  public async remove(row: ThemeRow): Promise<void> {
+  public async Remove(row: ThemeRow): Promise<void> {
     if (row.builtIn) {
       this.notify('The built-in theme cannot be deleted.', 'info');
       return;
@@ -243,8 +282,13 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
     }
   }
 
+  /** @deprecated Use {@link Remove}. */
+  public async remove(row: ThemeRow): Promise<void> {
+    return this.Remove(row);
+  }
+
   private uniqueName(base: string): string {
-    const taken = new Set(this.themes.map((t) => t.name.trim().toLowerCase()));
+    const taken = new Set(this.Themes.map((t) => t.name.trim().toLowerCase()));
     if (!taken.has(base.trim().toLowerCase())) return base;
     for (let i = 2; i < 1000; i++) {
       const candidate = `${base} ${i}`;
@@ -262,13 +306,13 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
   // ---------------------------------------------------------------
 
   private summaryRows(): ThemeSummaryRow[] {
-    return this.themes.map((t) => ({ ID: t.id, Name: t.name, Status: t.status, IsDefault: t.isDefault, BuiltIn: t.builtIn }));
+    return this.Themes.map((t) => ({ ID: t.id, Name: t.name, Status: t.status, IsDefault: t.isDefault, BuiltIn: t.builtIn }));
   }
 
   private publishAgentContext(): void {
     this.navigationService.SetAgentContext(
       this,
-      buildThemeManagerAgentContext({
+      BuildThemeManagerAgentContext({
         Themes: this.summaryRows(),
         AppliedThemeID: this.themeService.BrandOverlayId,
         StarredThemeIDs: this.themeService.GetStarredThemeIds(),
@@ -284,7 +328,7 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
           await this.loadData();
-          return { Success: true, Data: { TotalThemeCount: this.themes.length } };
+          return { Success: true, Data: { TotalThemeCount: this.Themes.length } };
         },
       },
       {
@@ -296,15 +340,15 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
           required: ['theme'],
         },
         Handler: async (params) => {
-          const resolved = resolveThemeByIDOrName(this.summaryRows(), params['theme']);
+          const resolved = ResolveThemeByIDOrName(this.summaryRows(), params['theme']);
           if (!resolved.ok) {
             return { Success: false, ErrorMessage: resolved.error };
           }
-          const row = this.themes.find((t) => UUIDsEqual(t.id, resolved.value.ID));
+          const row = this.Themes.find((t) => UUIDsEqual(t.id, resolved.value.ID));
           if (!row) {
             return { Success: false, ErrorMessage: 'Theme list changed — refresh and retry.' };
           }
-          await this.applyToMe(row);
+          await this.ApplyToMe(row);
           return { Success: true, Data: { AppliedThemeName: resolved.value.Name } };
         },
       },
@@ -320,17 +364,17 @@ export class ThemeManagerDashboardComponent extends BaseDashboard implements OnD
           required: ['theme'],
         },
         Handler: async (params) => {
-          const resolved = resolveThemeByIDOrName(this.summaryRows(), params['theme']);
+          const resolved = ResolveThemeByIDOrName(this.summaryRows(), params['theme']);
           if (!resolved.ok) {
             return { Success: false, ErrorMessage: resolved.error };
           }
-          const row = this.themes.find((t) => UUIDsEqual(t.id, resolved.value.ID));
+          const row = this.Themes.find((t) => UUIDsEqual(t.id, resolved.value.ID));
           if (!row) {
             return { Success: false, ErrorMessage: 'Theme list changed — refresh and retry.' };
           }
           const wantStarred = typeof params['starred'] === 'boolean' ? params['starred'] : !row.starred;
           if (wantStarred !== row.starred) {
-            await this.toggleStar(row);
+            await this.ToggleStar(row);
           }
           return { Success: true, Data: { ThemeName: row.name, Starred: row.starred } };
         },

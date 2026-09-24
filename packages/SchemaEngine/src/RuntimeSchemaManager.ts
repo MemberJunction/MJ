@@ -178,6 +178,60 @@ export interface RSUPipelineStep {
 }
 
 /**
+ * A lifecycle notification from the RSU pipeline, delivered to an out-of-band
+ * {@link RSUPipelineObserver}.
+ *
+ * Why an observer instead of emitting progress directly: an RSU run's steps (CodeGen, compile,
+ * restart) take minutes, and until now the only live signal was `GetStatus()` polling — a caller had
+ * no durable record of what a run did, and a restart mid-run left nothing to read. The durable
+ * artifact stream that solves that lives in `@memberjunction/integration-progress-artifacts`, which
+ * is a LAYER ABOVE this package. So SchemaEngine publishes plain lifecycle events and lets the
+ * server wire them to the emitter, keeping the dependency direction intact.
+ */
+export type RSUObserverEvent =
+  | {
+      Kind: 'run.start';
+      /** Number of migrations in this batch. */
+      ItemCount: number;
+      /** One description per input, in input order. */
+      Descriptions: string[];
+      /** Union of every input's AffectedTables, de-duplicated. */
+      AffectedTables: string[];
+      /** Expected total steps for the run — the denominator of a determinate progress bar. */
+      StepTotal: number;
+    }
+  | { Kind: 'step.start'; Name: string; StepIndex?: number; StepTotal?: number }
+  | {
+      Kind: 'step.end';
+      Name: string;
+      Status: RSUPipelineStep['Status'];
+      DurationMs: number;
+      Message: string;
+      StepIndex?: number;
+      StepTotal?: number;
+    }
+  | {
+      Kind: 'run.end';
+      Success: boolean;
+      SuccessCount: number;
+      FailureCount: number;
+      TotalCount: number;
+      /** Present when the run failed — the first failing step's message. */
+      ErrorMessage?: string;
+      /** Present when the run failed — the name of the step that failed. */
+      ErrorStep?: string;
+    };
+
+/**
+ * Receives {@link RSUObserverEvent}s for every RSU pipeline run in this process.
+ *
+ * Synchronous and fire-and-forget by contract: the pipeline never awaits an observer and never
+ * fails because one threw. A throw is logged and swallowed — progress reporting must not be able
+ * to break a schema migration.
+ */
+export type RSUPipelineObserver = (event: RSUObserverEvent) => void;
+
+/**
  * Result of a full RSU pipeline run.
  */
 export interface RSUPipelineResult {
@@ -253,7 +307,67 @@ interface PostMigrationResult {
  * `MJ: RSU Pending Works`.PayloadJSON by {@link RuntimeSchemaManager.WritePendingWork}
  * and read back by the post-restart consumer via {@link RuntimeSchemaManager.ReadPendingWork}.
  */
+/**
+ * How many times one pending-work item may be attempted before it is failed terminally. Three is
+ * enough to survive a restart landing mid-consumption plus one genuinely transient error, and few
+ * enough that a broken item surfaces the same day rather than retrying quietly forever.
+ */
+export const MAX_RSU_PENDING_ATTEMPTS = 3;
+
 export interface RSUPendingWork {
+  /**
+   * What the post-restart consumer should do with this row.
+   *
+   * Absent means `'apply-objects'` — every row written before this field existed is that, and
+   * the consumer must keep treating it that way.
+   *
+   * `'promote-columns'` carries {@link RSUPendingWork.PromotedColumns} instead of relying on a
+   * fresh introspection: promotion has already decided which source keys become which columns,
+   * including any collision suffix, and re-deriving those names after the restart could produce
+   * different ones.
+   */
+  WorkType?: 'apply-objects' | 'promote-columns';
+
+  /**
+   * How many times a consumer has already tried and failed to finish this work.
+   *
+   * Absent means zero — every row written before this field existed has not been retried. The
+   * consumer increments it when it re-queues work that failed for a reason a later attempt could
+   * plausibly survive (a restart mid-consumption, a transient provider error), and gives up once
+   * {@link MAX_RSU_PENDING_ATTEMPTS} is reached so a genuinely broken item cannot retry forever.
+   */
+  Attempts?: number;
+
+  /**
+   * `promote-columns` only: what to finish once the restart has loaded the regenerated entity
+   * classes — the IntegrationObjectField rows, the field maps, and the overflow→column spread.
+   *
+   * The destination names are carried rather than recomputed because `uniqueColumnName` may have
+   * suffixed one (`_2`) to avoid a collision; deriving it again post-restart would not know that.
+   */
+  PromotedColumns?: Array<{
+    /** MJ entity the columns were added to. */
+    EntityName: string;
+    /** The connection's entity map — field maps hang off this. */
+    EntityMapID: string;
+    /** The connector's name for the object, for resolving its IntegrationObject. */
+    ExternalObjectName: string;
+    /** Owning integration, for the same resolution. */
+    IntegrationID: string;
+    Columns: Array<{
+      /** Key as it appears in the overflow JSON. */
+      SourceKey: string;
+      /** Column actually created — possibly collision-suffixed. */
+      ColumnName: string;
+      /** Inferred schema type, for the IntegrationObjectField row. */
+      SchemaFieldType: string;
+      /** Inferred length; null for an unbounded type. */
+      MaxLength: number | null;
+      /** Share of sampled records carrying the key, recorded on the IntegrationObjectField row. */
+      Coverage: number;
+    }>;
+  }>;
+
   CompanyIntegrationID: string;
   SourceObjectNames: string[];
   /** Per-object field selections. Key = source object name, value = field names (null = all fields). */
@@ -591,6 +705,41 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /** Mark a pending work row Failed, recording why. */
+  /**
+   * Re-queues failed work for one more attempt, narrowed to what has NOT yet been done.
+   *
+   * RSU is a long chain — migrations, CodeGen, a git commit, a compile, a restart — and a failure
+   * partway through it is frequently transient: the process was restarted mid-consumption, or a
+   * provider call failed once. Marking such an item Failed terminally means the objects it would
+   * have mapped are silently never mapped, and the only recovery is for someone to notice and
+   * re-apply the connector by hand.
+   *
+   * The remainder matters as much as the retry. Re-running an item whole would redo the objects
+   * that already succeeded; carrying only the outstanding ones makes each attempt strictly smaller
+   * and keeps a single poison object from blocking its siblings forever.
+   *
+   * Returns false when the budget is spent, in which case the caller should fail the item
+   * terminally — the message it writes is the operator's only signal, so it should name what was
+   * left undone.
+   */
+  public async RetryPendingWork(
+    id: string,
+    work: RSUPendingWork,
+    remainingObjectNames: string[],
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<boolean> {
+    const attempts = (work.Attempts ?? 0) + 1;
+    if (attempts >= MAX_RSU_PENDING_ATTEMPTS) return false;
+    if (remainingObjectNames.length === 0) return false;
+    return this.rewritePendingWorkPayload(
+      id,
+      { ...work, Attempts: attempts, SourceObjectNames: remainingObjectNames },
+      contextUser,
+      provider,
+    );
+  }
+
   public async FailPendingWork(
     id: string,
     errorMessage: string,
@@ -598,6 +747,34 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     provider?: IMetadataProvider,
   ): Promise<boolean> {
     return this.setPendingWorkTerminalStatus(id, 'Failed', errorMessage, contextUser, provider);
+  }
+
+  /**
+   * Rewrites a pending row's payload while leaving it PENDING, so the next consumer picks it up.
+   *
+   * Deliberately not a status transition: the row must stay claimable. Only the payload and the
+   * error message change, and ProcessedAt is left alone so "when did this last complete" keeps
+   * meaning that rather than "when was it last touched".
+   */
+  private async rewritePendingWorkPayload(
+    id: string,
+    work: RSUPendingWork,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<boolean> {
+    const md = provider ?? new Metadata();
+    const row = await md.GetEntityObject<MJRSUPendingWorkEntity>('MJ: RSU Pending Works', contextUser);
+    if (!(await row.Load(id))) {
+      LogError(`[RSU] Pending work ${id} not found when re-queueing`);
+      return false;
+    }
+    row.PayloadJSON = JSON.stringify(work);
+    row.Status = 'Pending';
+    if (!(await row.Save())) {
+      LogError(`[RSU] Failed to re-queue pending work ${id}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+      return false;
+    }
+    return true;
   }
 
   private async setPendingWorkTerminalStatus(
@@ -767,6 +944,85 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     this._stepTotal = null;
   }
 
+  // ── Pipeline observer ──────────────────────────────────────────────
+  /**
+   * Optional observer notified of every step and run boundary. Set once at process startup (see
+   * the RSU progress bridge in MJServer) — a single observer is sufficient because RSU runs are
+   * serialized by the pipeline lock, so events can never interleave between runs.
+   *
+   * Never awaited, never allowed to fail the pipeline. See {@link RSUPipelineObserver}.
+   */
+  public PipelineObserver: RSUPipelineObserver | null = null;
+
+  /** Delivers an event to {@link PipelineObserver}, swallowing (but logging) any throw. */
+  private notifyObserver(event: RSUObserverEvent): void {
+    const observer = this.PipelineObserver;
+    if (!observer) return;
+    try {
+      observer(event);
+    } catch (error: unknown) {
+      // Progress reporting must never break a schema migration.
+      this.rsuLog(`Pipeline observer threw on ${event.Kind} (ignored): ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * Records a completed step onto `steps` AND publishes it to the observer, so a step is never
+   * visible in the result but absent from the event stream. Every step recording goes through
+   * here — including the ones computed inline rather than via {@link runStep}.
+   */
+  private recordStep(steps: RSUPipelineStep[], step: RSUPipelineStep): void {
+    steps.push(step);
+    this.notifyObserver({
+      Kind: 'step.end',
+      Name: step.Name,
+      Status: step.Status,
+      DurationMs: step.DurationMs,
+      Message: step.Message,
+      StepIndex: step.StepIndex,
+      StepTotal: step.StepTotal,
+    });
+  }
+
+  /**
+   * Maps a finished batch onto its terminal `run.end` event.
+   *
+   * `result` is undefined when a throw escaped the pipeline before a result existed — that case
+   * must still produce a FAILED run.end, otherwise an observer's run would hang in-flight forever.
+   *
+   * Public + static so the mapping is unit-testable without a live pipeline.
+   */
+  public static BuildRunEndEvent(
+    result: RSUPipelineBatchResult | undefined,
+    totalCount: number
+  ): Extract<RSUObserverEvent, { Kind: 'run.end' }> {
+    if (!result) {
+      return {
+        Kind: 'run.end',
+        Success: false,
+        SuccessCount: 0,
+        FailureCount: totalCount,
+        TotalCount: totalCount,
+        ErrorMessage: 'Pipeline threw before producing a result',
+      };
+    }
+    const firstFailure = result.Results.find((r) => !r.Success);
+    return {
+      Kind: 'run.end',
+      Success: result.FailureCount === 0,
+      SuccessCount: result.SuccessCount,
+      FailureCount: result.FailureCount,
+      TotalCount: result.TotalCount,
+      ErrorMessage: firstFailure?.ErrorMessage,
+      ErrorStep: firstFailure?.ErrorStep,
+    };
+  }
+
+  /** Publishes the terminal run boundary. `result` is undefined when a throw escaped the pipeline. */
+  private notifyRunEnd(result: RSUPipelineBatchResult | undefined, totalCount: number): void {
+    this.notifyObserver(RuntimeSchemaManager.BuildRunEndEvent(result, totalCount));
+  }
+
   // ─── Pipeline ────────────────────────────────────────────────────
 
   /**
@@ -809,10 +1065,24 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     // U11 — arm the determinate step counter (index of expected total) for this run.
     this.beginStepTracking(inputs.length);
+    this.notifyObserver({
+      Kind: 'run.start',
+      ItemCount: inputs.length,
+      Descriptions: inputs.map((i) => i.Description),
+      AffectedTables: [...new Set(inputs.flatMap((i) => i.AffectedTables))],
+      StepTotal: this._stepTotal ?? 0,
+    });
+
+    // Captured so the `finally` can publish the terminal run boundary on EVERY exit path —
+    // early validation failure, normal completion, or a throw (which leaves it undefined).
+    let batchResult: RSUPipelineBatchResult | undefined;
     try {
       // Phase 1: Validate
       const validationFailure = await this.validateBatch(inputs, sharedSteps);
-      if (validationFailure) return validationFailure;
+      if (validationFailure) {
+        batchResult = validationFailure;
+        return batchResult;
+      }
 
       // Phase 2: Execute migrations under lock
       const itemResults = await this.executeMigrations(inputs, sharedSteps);
@@ -822,9 +1092,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       const postResult = await this.runPostMigrationPipeline(inputs, successfulItems, sharedSteps);
 
       // Phase 4: Build per-caller results
-      return this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+      batchResult = this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+      return batchResult;
     } finally {
       this.endStepTracking();
+      this.notifyRunEnd(batchResult, inputs.length);
     }
   }
 
@@ -838,11 +1110,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     for (const input of inputs) {
       const validation = ValidateMigrationSQL(input.MigrationSQL, this.getProtectedSchemas());
       if (!validation.Valid) {
-        sharedSteps.push({ Name: 'ValidateSQL', Status: 'failed', DurationMs: 0, Message: validation.Errors.join('; ') });
+        this.recordStep(sharedSteps, { Name: 'ValidateSQL', Status: 'failed', DurationMs: 0, Message: validation.Errors.join('; ') });
         return this.buildBatchResult(inputs.map((i) => this.buildFailedResult(i, 'ValidateSQL', sharedSteps)));
       }
     }
-    sharedSteps.push({ Name: 'ValidateSQL', Status: 'success', DurationMs: 0, Message: `Validated ${inputs.length} migration(s)` });
+    this.recordStep(sharedSteps, { Name: 'ValidateSQL', Status: 'success', DurationMs: 0, Message: `Validated ${inputs.length} migration(s)` });
     return null;
   }
 
@@ -884,7 +1156,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
       if (itemResults.some((r) => r.Success)) {
         this.MarkOutOfSync();
-        sharedSteps.push({ Name: 'MarkOutOfSync', Status: 'success', DurationMs: 0, Message: 'DB changed, API out-of-sync until CodeGen completes' });
+        this.recordStep(sharedSteps, { Name: 'MarkOutOfSync', Status: 'success', DurationMs: 0, Message: 'DB changed, API out-of-sync until CodeGen completes' });
       }
     } finally {
       await this.releaseLock();
@@ -1414,7 +1686,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       // guard), whose body legitimately contains `;`+newline. A naive split tears those apart.
       // The dialect owns this: PostgreSQLDialect.SplitStatements is dollar-quote-aware; the
       // base SplitStatements (SQL Server) is the prior naive `;`+EOL split.
-      const statements = GetDialect(this.Platform).SplitStatements(batch);
+      const statements = GetDialect(this.platform).SplitStatements(batch);
       this.rsuLog(`  Oversized batch (${batch.length} chars, ${statements.length} statements) — chunking into groups of ${STATEMENTS_PER_CHUNK}`);
       for (let i = 0; i < statements.length; i += STATEMENTS_PER_CHUNK) {
         finalBatches.push(statements.slice(i, i + STATEMENTS_PER_CHUNK).join('\n'));
@@ -1632,6 +1904,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       try {
         const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
         // Any HTTP response means the server is up
+        await response.body?.cancel().catch(() => { /* nothing to drain */ });
         if (response.status < 500) return true;
       } catch {
         /* server not ready yet */
@@ -1930,7 +2203,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   // ─── DB-Backed Mutex (Multi-Instance Safety) ──────────────────
 
   /** Whether the DB-backed lock is enabled via RSU_DB_LOCK_ENABLED=1. */
-  private get IsDBLockEnabled(): boolean {
+  private get IsDBLockEnabled(): boolean {  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
     return rsuConfig.IsDBLockEnabled;
   }
 
@@ -1969,7 +2242,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     if (!this._dbLockId) return;
 
     try {
-      const d = this.Dialect;
+      const d = this.dialect;
       const defaultSchema = rsuConfig.DefaultSchema;
       const quotedTable = d.QuoteSchema(defaultSchema, 'RSULock');
       const sql = `DELETE FROM ${quotedTable} WHERE LockID = '${this._dbLockId}';`;
@@ -2006,7 +2279,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   // ─── Platform Abstraction ────────────────────────────────────────
 
   /** Resolve the database platform from environment configuration. */
-  private get Platform(): DatabasePlatform {
+  private get platform(): DatabasePlatform {
     const platform = (process.env.DB_PLATFORM || 'sqlserver').toLowerCase();
     if (platform !== 'sqlserver' && platform !== 'postgresql') {
       throw new RSUError('CONFIG', `Unsupported DB_PLATFORM: "${platform}". Must be "sqlserver" or "postgresql".`);
@@ -2015,8 +2288,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   }
 
   /** Get the SQLDialect for the configured platform (SQL generation). */
-  private get Dialect() {
-    return GetDialect(this.Platform);
+  private get dialect() {
+    return GetDialect(this.platform);
   }
 
   /** Get the database provider for DDL operations. Prefers the dedicated DDL provider if set. */
@@ -2035,7 +2308,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * and attempt to acquire the lock.
    */
   private buildAcquireLockSQL(schema: string, lockId: string): string {
-    const d = this.Dialect;
+    const d = this.dialect;
     const quotedTable = d.QuoteSchema(schema, 'RSULock');
     const utcNow = d.CurrentTimestampUTC();
     const varchar200 = d.MapDataTypeToString('NVARCHAR', 200);
@@ -2062,7 +2335,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
   /** Generate SQL to create the RSUAuditLog table if it doesn't exist. */
   private buildAuditTableDDL(schema: string): string {
-    const d = this.Dialect;
+    const d = this.dialect;
     const intType = d.MapDataTypeToString('INT');
     const autoIncrement = d.AutoIncrementPKExpression();
     const varchar500 = d.MapDataTypeToString('NVARCHAR', 500);
@@ -2099,7 +2372,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * The CREATE TABLE DDL runs separately (no user input, safe as-is).
    */
   private async writeAuditInsert(schema: string, input: RSUPipelineInput, result: RSUPipelineResult): Promise<void> {
-    const d = this.Dialect;
+    const d = this.dialect;
     const quotedTable = d.QuoteSchema(schema, 'RSUAuditLog');
     const totalMs = result.Steps.reduce((sum, s) => sum + s.DurationMs, 0);
     const stepsJson = JSON.stringify(result.Steps).substring(0, 8000);
@@ -2220,17 +2493,18 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     const stepIndex = this._currentStepIndex ?? undefined;
     const stepTotal = this._stepTotal ?? undefined;
     this.rsuLog(`▶ Starting step${stepIndex && stepTotal ? ` ${stepIndex}/${stepTotal}` : ''}: ${name}`);
+    this.notifyObserver({ Kind: 'step.start', Name: name, StepIndex: stepIndex, StepTotal: stepTotal });
     try {
       const result = await fn();
       const durationMs = Date.now() - start;
       const msg = `${name} completed successfully`;
-      steps.push({ Name: name, Status: 'success', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
+      this.recordStep(steps, { Name: name, Status: 'success', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
       this.rsuLog(`✓ ${name} — ${durationMs}ms`);
       return result;
     } catch (error: unknown) {
       const durationMs = Date.now() - start;
       const msg = error instanceof Error ? error.message : String(error);
-      steps.push({ Name: name, Status: 'failed', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
+      this.recordStep(steps, { Name: name, Status: 'failed', DurationMs: durationMs, Message: msg, StepIndex: stepIndex, StepTotal: stepTotal });
       this.rsuLog(`✗ ${name} — FAILED after ${durationMs}ms: ${msg}`);
       return undefined;
     }

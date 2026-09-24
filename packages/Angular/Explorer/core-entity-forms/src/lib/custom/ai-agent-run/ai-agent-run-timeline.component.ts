@@ -9,6 +9,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FindAgentRunTreeNodes, type AgentRunTreeNode } from '@memberjunction/ai-core-plus';
 import { NormalizeStatus, ProjectRunTreeToTimeline } from './run-tree-timeline-projection';
+import { SortAgentRunStepsByExecutionOrder } from './agent-run-step-order';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 
 /**
@@ -20,7 +21,7 @@ import { ActionEngineBase } from '@memberjunction/actions-base';
  */
 const LOOP_KINDS: ReadonlySet<string> = new Set(['ForEach', 'While']);
 export interface TimelineItem {
-  id: string;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * What the row represents.
    *
@@ -28,7 +29,7 @@ export interface TimelineItem {
    * and the steps inside it. They are rendered as ordinary rows rather than as an embedded diagram,
    * and colour-coded so their provenance is visible without opening anything.
    */
-  type: 'step' | 'subrun' | 'action' | 'prompt' | 'taskgraph' | 'task';
+  type: 'step' | 'subrun' | 'action' | 'prompt' | 'taskgraph' | 'task';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Where this row's work ran, when that is not obvious from its type.
    *
@@ -36,10 +37,10 @@ export interface TimelineItem {
    * submitted it. Kept separate from `type` on purpose: a workflow step that runs an action IS an
    * action and should render as one — provenance styles it, it does not redefine it.
    */
-  provenance?: 'workflow';
-  title: string;
-  subtitle: string;
-  status: string;
+  provenance?: 'workflow';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  subtitle: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * When this row started, or NULL when it has not.
    *
@@ -48,19 +49,19 @@ export interface TimelineItem {
    * every row and indistinguishable from data. Ordering belongs to whatever produced the rows; a row
    * that has not run has no start time, and says so by having none.
    */
-  startTime: Date | null;
-  endTime?: Date;
-  duration?: string;
-  icon: string;
-  logoUrl?: string;
-  color: string;
-  data: any;
-  children?: TimelineItem[];
-  level: number;
-  parentId?: string;
-  isExpanded?: boolean;
-  childrenLoaded?: boolean;
-  hasNoChildren?: boolean;
+  startTime: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  endTime?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  duration?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  icon: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  logoUrl?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  color: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  data: any;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  children?: TimelineItem[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  level: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  parentId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  isExpanded?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  childrenLoaded?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  hasNoChildren?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Component({
@@ -71,7 +72,16 @@ export interface TimelineItem {
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AIAgentRunTimelineComponent extends BaseAngularComponent implements OnInit, OnDestroy {
-  @Input() aiAgentRunId!: string;
+  @Input() AiAgentRunId!: string;
+
+  /** @deprecated Use {@link AiAgentRunId}. */
+  @Input() set aiAgentRunId(value: string) {
+    this.AiAgentRunId = value;
+  }
+  /** @deprecated Use {@link AiAgentRunId}. */
+  get aiAgentRunId(): string {
+    return this.AiAgentRunId;
+  }
 
   /**
    * The run's execution tree, loaded ONCE by the form and shared with every tab.
@@ -96,9 +106,36 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   }
   private runTree: AgentRunTreeNode | null = null;
   private runTree$ = new BehaviorSubject<AgentRunTreeNode | null>(null);
-  @Input() dataHelper!: AIAgentRunDataHelper; // Data helper passed from parent
-  @Output() itemSelected = new EventEmitter<TimelineItem>();
-  @Output() navigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Input() DataHelper!: AIAgentRunDataHelper;
+
+  /** @deprecated Use {@link DataHelper}. */
+  @Input() set dataHelper(value: AIAgentRunDataHelper) {
+    this.DataHelper = value;
+  }
+  /** @deprecated Use {@link DataHelper}. */
+  get dataHelper(): AIAgentRunDataHelper {
+    return this.DataHelper;
+  } // Data helper passed from parent
+  @Output() ItemSelected = new EventEmitter<TimelineItem>();
+
+  /**
+   * @deprecated Use {@link ItemSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (itemSelected) keeps working. Must stay AFTER ItemSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() itemSelected = this.ItemSelected;
+  @Output() NavigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
+
+  /**
+   * @deprecated Use {@link NavigateToEntity}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navigateToEntity) keeps working. Must stay AFTER NavigateToEntity: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navigateToEntity = this.NavigateToEntity;
 
   private destroy$ = new Subject<void>();
   /** Resolved once the action cache is warm, so a first paint without icons can be re-rendered with them. */
@@ -113,16 +150,79 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   private actionIDByLogID = new Map<string, string>();
   
   // Public observables from data helper
-  steps$!: Observable<MJAIAgentRunStepEntity[]>;
-  subRuns$!: Observable<MJAIAgentRunEntity[]>;
-  actionLogs$!: Observable<MJActionExecutionLogEntity[]>;
-  promptRuns$!: Observable<MJAIPromptRunEntity[]>;
+  Steps$!: Observable<MJAIAgentRunStepEntity[]>;
+
+  /** @deprecated Use {@link Steps$}. */
+  get steps$(): Observable<MJAIAgentRunStepEntity[]> {
+    return this.Steps$;
+  }
+  /** @deprecated Use {@link Steps$}. */
+  set steps$(value: Observable<MJAIAgentRunStepEntity[]>) {
+    this.Steps$ = value;
+  }
+  SubRuns$!: Observable<MJAIAgentRunEntity[]>;
+
+  /** @deprecated Use {@link SubRuns$}. */
+  get subRuns$(): Observable<MJAIAgentRunEntity[]> {
+    return this.SubRuns$;
+  }
+  /** @deprecated Use {@link SubRuns$}. */
+  set subRuns$(value: Observable<MJAIAgentRunEntity[]>) {
+    this.SubRuns$ = value;
+  }
+  ActionLogs$!: Observable<MJActionExecutionLogEntity[]>;
+
+  /** @deprecated Use {@link ActionLogs$}. */
+  get actionLogs$(): Observable<MJActionExecutionLogEntity[]> {
+    return this.ActionLogs$;
+  }
+  /** @deprecated Use {@link ActionLogs$}. */
+  set actionLogs$(value: Observable<MJActionExecutionLogEntity[]>) {
+    this.ActionLogs$ = value;
+  }
+  PromptRuns$!: Observable<MJAIPromptRunEntity[]>;
+
+  /** @deprecated Use {@link PromptRuns$}. */
+  get promptRuns$(): Observable<MJAIPromptRunEntity[]> {
+    return this.PromptRuns$;
+  }
+  /** @deprecated Use {@link PromptRuns$}. */
+  set promptRuns$(value: Observable<MJAIPromptRunEntity[]>) {
+    this.PromptRuns$ = value;
+  }
   
-  timelineItems$!: Observable<TimelineItem[]>;
+  TimelineItems$!: Observable<TimelineItem[]>;
+
+  /** @deprecated Use {@link TimelineItems$}. */
+  get timelineItems$(): Observable<TimelineItem[]> {
+    return this.TimelineItems$;
+  }
+  /** @deprecated Use {@link TimelineItems$}. */
+  set timelineItems$(value: Observable<TimelineItem[]>) {
+    this.TimelineItems$ = value;
+  }
   
-  loading = true;
+  Loading = true;
+
+  /** @deprecated Use {@link Loading}. */
+  get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  set loading(value) {
+    this.Loading = value;
+  }
   error: string | null = null;
-  selectedItem: TimelineItem | null = null;
+  SelectedItem: TimelineItem | null = null;
+
+  /** @deprecated Use {@link SelectedItem}. */
+  get selectedItem(): TimelineItem | null {
+    return this.SelectedItem;
+  }
+  /** @deprecated Use {@link SelectedItem}. */
+  set selectedItem(value: TimelineItem | null) {
+    this.SelectedItem = value;
+  }
 
   /** Graph steps currently being expanded, so a second click cannot start a second load. */
   private expandingGraphIDs = new Set<string>();
@@ -148,21 +248,21 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     }
 
     // Initialize observables from the data helper
-    this.steps$ = this.dataHelper.steps$;
-    this.subRuns$ = this.dataHelper.subRuns$;
-    this.actionLogs$ = this.dataHelper.actionLogs$;
-    this.promptRuns$ = this.dataHelper.promptRuns$;
+    this.Steps$ = this.DataHelper.steps$;
+    this.SubRuns$ = this.DataHelper.subRuns$;
+    this.ActionLogs$ = this.DataHelper.actionLogs$;
+    this.PromptRuns$ = this.DataHelper.promptRuns$;
     
     // Combine all data sources to build timeline.
     // Skip emissions where steps are empty but data is still loading —
     // the BehaviorSubjects initialise with [] so combineLatest fires
     // immediately with an empty array before the real data arrives.
-    this.timelineItems$ = combineLatest([
-      this.steps$,
-      this.subRuns$,
-      this.actionLogs$,
-      this.promptRuns$,
-      this.dataHelper.loading$,
+    this.TimelineItems$ = combineLatest([
+      this.Steps$,
+      this.SubRuns$,
+      this.ActionLogs$,
+      this.PromptRuns$,
+      this.DataHelper.loading$,
       this.runTree$
     ]).pipe(
       filter(([steps, _subRuns, _actionLogs, _promptRuns, isLoading]) => {
@@ -185,12 +285,12 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     
     // Data loading is now handled by the parent component through the helper
     // Subscribe to loading state from helper
-    this.dataHelper.loading$.pipe(takeUntil(this.destroy$)).subscribe(loading => {
-      this.loading = loading;
+    this.DataHelper.loading$.pipe(takeUntil(this.destroy$)).subscribe(loading => {
+      this.Loading = loading;
       this.cdr.markForCheck();
     });
 
-    this.dataHelper.error$.pipe(takeUntil(this.destroy$)).subscribe(error => {
+    this.DataHelper.error$.pipe(takeUntil(this.destroy$)).subscribe(error => {
       this.error = error;
       this.cdr.markForCheck();
     });
@@ -203,9 +303,9 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
 
   // This method is now just for compatibility - actual loading is done by parent
   async loadData() {
-    if (!this.aiAgentRunId) return;
+    if (!this.AiAgentRunId) return;
     // The parent component should handle data loading through the helper
-    return this.dataHelper.loadAgentRunData(this.aiAgentRunId);
+    return this.DataHelper.loadAgentRunData(this.AiAgentRunId);
   }
   
   private buildTimelineItems(
@@ -222,17 +322,22 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     baseLevel: number,
     promptRuns?: MJAIPromptRunEntity[]
   ): TimelineItem[] {
+    // Walk in execution order, not persist order. Children are pushed in this walk, so a
+    // loop's iterations and root siblings both inherit the sort. Query OrderBy is the
+    // same pair; this is the belt for a caller that handed us an unsorted array.
+    const ordered = SortAgentRunStepsByExecutionOrder(steps);
+
     // Create a map of all timeline items by step ID
     const itemMap = new Map<string, TimelineItem>();
 
     // First pass: create all timeline items
-    steps.forEach(step => {
+    ordered.forEach(step => {
       const item = this.createTimelineItemFromStep(step, baseLevel, promptRuns);
       itemMap.set(step.ID, item);
     });
 
     // Second pass: build parent-child relationships based on ParentID
-    steps.forEach(step => {
+    ordered.forEach(step => {
       if (step.ParentID) {
         const parentItem = itemMap.get(step.ParentID);
         const childItem = itemMap.get(step.ID);
@@ -254,7 +359,7 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
 
     // Return only root-level items (those without a ParentID)
     const rootItems: TimelineItem[] = [];
-    steps.forEach(step => {
+    ordered.forEach(step => {
       if (!step.ParentID) {
         const item = itemMap.get(step.ID);
         if (item) {
@@ -332,7 +437,7 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     // finished while the page header said "Workflow still running".
     const graph = step.StepType === 'TaskGraph' ? this.graphNodeForStep(step.ID) : null;
     if (graph) {
-      subtitle = `${subtitle} · dispatched in ${this.calculateDuration(step.StartedAt, step.CompletedAt)}`;
+      subtitle = `${subtitle} · dispatched in ${this.CalculateDuration(step.StartedAt, step.CompletedAt)}`;
     }
 
     return {
@@ -346,8 +451,8 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       // A graph that has not started yet has no duration of its own — the submission's stands in,
       // and the subtitle says which it is either way.
       duration: graph?.StartedAt
-        ? this.calculateDuration(graph.StartedAt, graph.CompletedAt)
-        : this.calculateDuration(step.StartedAt, step.CompletedAt),
+        ? this.CalculateDuration(graph.StartedAt, graph.CompletedAt)
+        : this.CalculateDuration(step.StartedAt, step.CompletedAt),
       icon: iconInfo.icon,
       logoUrl: iconInfo.logoUrl,
       color: this.getStatusColor(graph ? NormalizeStatus(graph.Status) : step.Status),
@@ -425,7 +530,7 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     return colorMap[status] || 'secondary';
   }
   
-  calculateDuration(start: Date, end?: Date | null): string {
+  CalculateDuration(start: Date, end?: Date | null): string {
     if (!end) return 'Running...';
     
     const startTime = new Date(start).getTime();
@@ -437,13 +542,23 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     if (duration < 3600000) return `${Math.floor(duration / 60000)}m ${Math.floor((duration % 60000) / 1000)}s`;
     return `${Math.floor(duration / 3600000)}h ${Math.floor((duration % 3600000) / 60000)}m`;
   }
-  
-  selectItem(item: TimelineItem) {
-    this.selectedItem = item;
-    this.itemSelected.emit(item);
+
+  /** @deprecated Use {@link CalculateDuration}. */
+  calculateDuration(start: Date, end?: Date | null): string {
+    return this.CalculateDuration(start, end);
   }
   
-  async toggleItemExpansion(item: TimelineItem, event: Event) {
+  SelectItem(item: TimelineItem) {
+    this.SelectedItem = item;
+    this.ItemSelected.emit(item);
+  }
+
+  /** @deprecated Use {@link SelectItem}. */
+  selectItem(item: TimelineItem) {
+    return this.SelectItem(item);
+  }
+  
+  async ToggleItemExpansion(item: TimelineItem, event: Event) {
     event.stopPropagation();
 
     // Toggle expansion state
@@ -464,6 +579,11 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     // Just toggle - no additional loading needed since we already have all steps from the run
     // The children were already attached in buildTimelineItems()
   }
+
+  /** @deprecated Use {@link ToggleItemExpansion}. */
+  async toggleItemExpansion(item: TimelineItem, event: Event) {
+    return this.ToggleItemExpansion(item, event);
+  }
   
   private async loadSubAgentChildren(item: TimelineItem) {
     try {
@@ -477,7 +597,7 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       }
 
       // Load sub-agent data through service
-      const data = await this.dataHelper.loadSubAgentData(subAgentRunId);
+      const data = await this.DataHelper.loadSubAgentData(subAgentRunId);
 
       if (!data.steps || data.steps.length === 0) {
         item.hasNoChildren = true;
@@ -502,19 +622,34 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     }
   }
   
+  NavigateToSubRun(runId: string, event: Event) {
+    event.stopPropagation();
+    this.NavigateToEntity.emit({ entityName: 'MJ: AI Agent Runs', recordId: runId });
+  }
+
+  /** @deprecated Use {@link NavigateToSubRun}. */
   navigateToSubRun(runId: string, event: Event) {
-    event.stopPropagation();
-    this.navigateToEntity.emit({ entityName: 'MJ: AI Agent Runs', recordId: runId });
+    return this.NavigateToSubRun(runId, event);
   }
   
+  NavigateToActionLog(logId: string, event: Event) {
+    event.stopPropagation();
+    this.NavigateToEntity.emit({ entityName: 'MJ: Action Execution Logs', recordId: logId });
+  }
+
+  /** @deprecated Use {@link NavigateToActionLog}. */
   navigateToActionLog(logId: string, event: Event) {
-    event.stopPropagation();
-    this.navigateToEntity.emit({ entityName: 'MJ: Action Execution Logs', recordId: logId });
+    return this.NavigateToActionLog(logId, event);
   }
   
-  navigateToPromptRun(runId: string, event: Event) {
+  NavigateToPromptRun(runId: string, event: Event) {
     event.stopPropagation();
-    this.navigateToEntity.emit({ entityName: 'MJ: AI Prompt Runs', recordId: runId });
+    this.NavigateToEntity.emit({ entityName: 'MJ: AI Prompt Runs', recordId: runId });
+  }
+
+  /** @deprecated Use {@link NavigateToPromptRun}. */
+  navigateToPromptRun(runId: string, event: Event) {
+    return this.NavigateToPromptRun(runId, event);
   }
   
   /**
@@ -550,11 +685,11 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   OnGraphNodeSelected(event: { TaskID: string; Task: MJTaskEntity | null }): void {
     const agentRunID = event.Task?.AgentRunID;
     if (agentRunID) {
-      this.navigateToEntity.emit({ entityName: 'MJ: AI Agent Runs', recordId: agentRunID });
+      this.NavigateToEntity.emit({ entityName: 'MJ: AI Agent Runs', recordId: agentRunID });
       return;
     }
     if (event.Task?.ActionID) {
-      this.navigateToEntity.emit({ entityName: 'MJ: Tasks', recordId: event.TaskID });
+      this.NavigateToEntity.emit({ entityName: 'MJ: Tasks', recordId: event.TaskID });
     }
   }
 
@@ -601,12 +736,22 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
     return this.expandingGraphIDs.has(item.id);
   }
 
-  trackByItemId(index: number, item: TimelineItem): string {
+  TrackByItemId(index: number, item: TimelineItem): string {
     return item.id;
   }
+
+  /** @deprecated Use {@link TrackByItemId}. */
+  trackByItemId(index: number, item: TimelineItem): string {
+    return this.TrackByItemId(index, item);
+  }
   
-  createSubRunDataHelper(): AIAgentRunDataHelper {
+  CreateSubRunDataHelper(): AIAgentRunDataHelper {
     // Create a new data helper instance for sub-runs to prevent caching conflicts
     return new AIAgentRunDataHelper();
+  }
+
+  /** @deprecated Use {@link CreateSubRunDataHelper}. */
+  createSubRunDataHelper(): AIAgentRunDataHelper {
+    return this.CreateSubRunDataHelper();
   }
 }

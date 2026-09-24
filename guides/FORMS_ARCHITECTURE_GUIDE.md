@@ -101,7 +101,7 @@ shows a loading state until the record is ready (and an error state on failure).
   [EntityName]="'Users'"
   [PrimaryKey]="pk"          <!-- omit/empty → new record -->
   [Record]="preloaded"        <!-- OR bind an already-loaded BaseEntity -->
-  [NewRecordValues]="defaults"
+  [NewRecordValues]="defaults"   <!-- object or Field|value||Field2|value2 URL segment -->
   [EditMode]="null"           <!-- null = new→edit, existing→read -->
   [Config]="myConfig"
   [Provider]="Provider"
@@ -124,6 +124,24 @@ handle.
 host: it maps `Navigate` → `NavigationService`, `Notification` → `SharedService`,
 and record loads → `RecentAccessService`. That's the only Explorer-specific glue;
 all mechanics are Generic.
+
+Related-entity grids pass `NewRecordValues` from the join fields that filter the
+grid so **New** opens a child already linked to the parent.
+
+- `BaseFormComponent.NewRecordValues(relatedEntity, joinField?)` — one
+  relationship, or every join field when several `EntityRelationship` rows
+  share the related entity (Bill-To + Ship-To on the same Orders grid).
+- `NewRecordValuesForJoinFields(relatedEntity, fields)` — explicit list when
+  the grid already knows the FKs (Person Orders, Organization Orders).
+- `EntityInfo.BuildRelationshipNewRecordValues` / `…ForJoinFields` — typed
+  core helpers. When `EntityRelationship.Configuration.UI.join.fields` is set,
+  every named FK is copied, not only `RelatedEntityJoinField`.
+
+Explorer persists those defaults on the new-record URL
+(`/record/:entity/new?NewRecordValues=Field|value||Field2|value2`, using
+`NEW_ENTITY_RECORD_URL_ID` and `NEW_RECORD_VALUES_QUERY_PARAM` from
+`@memberjunction/core`). Refresh and share keep the child linked. Overlay
+hosts accept the same object or URL-segment string on `[NewRecordValues]`.
 
 ---
 
@@ -392,44 +410,178 @@ Orders' full custom form already wraps `<mj-record-form-container>` and emits `b
 
 ### 7d. Form chrome — accordion, left-nav, and More
 
-Contributions decide *what* is on the form. Chrome decides *how the container
-arranges it*. Metadata is the floor; an optional `BaseFormPolicy` is the last-wins
-override. Plan: [`/plans/form-chrome-policy.md`](../plans/form-chrome-policy.md).
+Contributions decide *what* is on the form. Chrome decides *which of those
+items appear* and *how the container arranges them*. Membership is data.
+`BaseFormPolicy.DecorateChrome` may rename groups, swap icons, or wrap
+labels. It cannot add, remove, or re-bucket sections.
+
+Five layers, later wins on the same target:
+
+| Layer | What it is | Who writes it |
+|---|---|---|
+| **L0** | CodeGen: field panels, `DisplayInForm`, `Sequence` | Schema / CodeGen |
+| **L1** | Inclusions: `Primary` \| `More` \| `None` | The OpenApp that owns the related entity or contribution |
+| **L2** | Ranker over remaining **Auto** leftovers | `Entity.Configuration.UI.Form` |
+| **L3** | Install overlay: `MJ: Form Chrome Rules` | Site admin (never app-synced) |
+| **L4** | User rail order and More membership | `UserInfoEngine` |
+
+#### L1 — inclusion, keyed by (parent, related entity)
+
+An **inclusion** is one parent-form section, not one FK. Bill-To and Ship-To
+are two `EntityRelationship` rows and **one** Orders section.
+
+`EntityRelationship.Configuration.UI`:
+
+- `inclusion`: `'Primary'` — first-class rail
+- `inclusion`: `'More'` — candidate, parked in More
+- `inclusion`: `'None'` — not a candidate. Not in More. Ranker never sees it
+- omit — **Auto** (L2 ranker)
+- `join`: `{ mode: 'any', fields: string[] }` — same-table OR of FKs (Bill-To OR Ship-To)
+- `FormRole`: `'Primary'` \| `'Detail'` — accepted alias (`Detail` = More)
+
+`None` is how an app keeps satellite records off a hub form (Task Comments
+on Person, Sold-To when Orders is already joined on Bill-To/Ship-To).
+
+When one relationship to a related entity carries `join.fields`, sibling
+FKs to that same entity with no explicit inclusion are `None`. Through-filters
+(junction tables) are not same-table OR — use a contribution widget for those.
+
+The app that **owns the related entity** (or the contribution) ships the L1
+row. Downstream may override upstream; the admin pathway shows that.
+
+#### L2 — ranker
 
 `Entity.Configuration.UI.Form`:
 
-- `Layout`: `'accordion'` | `'left-nav'` | `'auto'` (omit = auto)
+- `Layout`: `'accordion'` \| `'left-nav'` \| `'auto'` (omit = auto)
 - `AutoLeftNavAt`: first-class section count that flips auto to left-nav (omit = 8)
 - `RelatedRolePolicy`: `'smart'` (default) or `'keep-all-primary'`
-- `PrimaryRelatedBudget`: max untagged related grids that stay first-class under smart (omit = 6)
+- `PrimaryRelatedBudget`: max **Auto** related grids that stay first-class under smart (omit = 6). Does not cap explicit `inclusion: 'Primary'`
 
-`EntityRelationship.Configuration.UI.FormRole`:
+The ranker only sees Auto leftovers. Same-schema 1:N children, declared
+collections, and custom display components score above cross-schema hang-ons
+and `__mj` plumbing. If the Auto pool is at or under the budget, every Auto
+related stays Primary.
 
-- `'Primary'` — always top-level (punches through the budget)
-- `'Detail'` — always parked in one More group
-- omit — the parent entity's ranker decides
+#### L3 — install overlay
 
-**Smart is not "everything in More."** Same-schema 1:N children, declared
-collections, and custom display components stay first-class. Cross-schema
-hang-ons and `__mj` plumbing fold only after the untagged pool exceeds the
-budget. A form with 4 related grids is unchanged.
+`MJ: Form Chrome Rules` is the admin's global default. It is **not** in
+OpenApp `metadata/` push filters. A row pins a (parent entity, related entity)
+or (parent entity, contribution key) to Primary, More, or None, and may set
+`JoinFields` and an optional `Title`. `Title` is the site-specific rail /
+accordion label — keyed by RelatedEntityID or contribution key, so an
+OpenApp upgrade that renames "Payments" does not overwrite a local "Pmts".
+Blank / omitted `Title` keeps the L1 DisplayName. L3 can suppress a
+contribution for the site. L4 cannot.
 
-`BaseFormPolicy` registers with `{ metadata: { entity } }` and may return a
-full chrome spec. Cancelable `BeforeLayoutResolve` / `BeforeSectionActivate`
-live on the container.
+#### L4 — user overlay
 
-**Left-nav is not accordion-on-the-side.** The rail picks one group; the body
-shows only that group. Selected content has **no accordion chrome** (the rail
-is the header) and related grids fill the remaining height. **More** is a
-folder on the rail — click to expand sub-nodes, then pick one item like any
-other rail entry. Field panels collapse into one **Details** item. Related
-Primary grids stay first-class (same-title grids merge). `System Metadata`
-and Detail related always sit in More. Rail items use the same icon as the
-accordion header (entity `Icon` when present) and show related-grid row
-counts after they load. Users reorder first-class items by dragging the
-rail grip (or Manage Sections / reset in the toolbar). Section search
-filters the rail the same way it filters accordion panels. The centered /
-full-width toolbar toggle still applies.
+Users reorder first-class rail items and move visible items in or out of
+More (`UserInfoEngine`). They cannot suppress a contribution.
+
+#### Contributions
+
+No L0 (CodeGen did not emit them). No L2 (they are not the related-grid
+pool). Installed package → the contribution exists by `contributionKey`.
+L3 can turn it off. L4 rearranges what remains.
+
+#### Policy
+
+Register with `@RegisterClassEx(BaseFormPolicy, { metadata: { entity } })`.
+Downstream subclasses upstream (`OrdersPersonFormPolicy extends
+CommonPersonFormPolicy`). `DecorateChrome(spec, ctx)` returns cosmetics.
+A decorate that changes section membership is ignored.
+
+Cancelable `BeforeLayoutResolve` / `BeforeSectionActivate` live on the
+container.
+
+#### Left-nav
+
+The rail picks one group; the body shows only that group. Selected content
+has **no accordion chrome** (the rail is the header). **Details** shows every
+field panel under one rail item, so the container renders those panels as
+**one card** (`.mj-chrome-details`, with `-first` / `-last` on the visual
+edges — CSS order, not DOM order): no per-section headers, one surface. The
+field rows would otherwise float on the page background. A related grid pinned
+into Details with `ChromeGroup: 'details'` is not part of that card: it keeps
+the chrome-less grid treatment and sits as its own block. Related grids fill the
+**leftover column height** — the selected panel is `flex: 1 1 auto` in the
+column, not a pinned pixel height. Accordion-persisted heights are not
+applied while the rail is showing the panel.
+
+Slot-mounted contributions (`<mj-form-panel-slot>` / `BaseFormPanel` hosts)
+use `display: contents` so they do not sit as an extra wrapper in that flex
+column. `SetSectionRowCount` **upserts** the key: contribution sections are
+not seeded by generated `initSections()`, so the rail badge still appears
+(Orders on Person, Payments, etc.).
+
+**More** is a folder on the rail — click to expand sub-nodes, then pick one
+item like any other rail entry. Field panels collapse into one **Details**
+item. Related Primary grids stay first-class (same related entity and
+same-title grids merge). `System Metadata` and More related always sit in
+More. Rail items use the same icon as the accordion header (entity `Icon`
+when present). Users reorder first-class items by dragging the rail grip
+(or Manage Sections / reset in the toolbar). The centered / full-width
+toolbar toggle still applies.
+
+#### Section indicators — unsaved edits and invalid fields, per section
+
+A multi-section form says **which** section holds an edit or a failure, so a user does
+not have to open every rail item to find the red field. Two marks, on the rail item,
+the accordion header, the More folder, and the collapsed rail spine:
+
+- an **amber dot** — the section has a field modified since the last save (the same
+  6px dot an edited field shows after its label; only on saved records, like the field);
+- a **red count pill** with `fa-circle-exclamation` — how many fields in the section
+  are invalid: a failing validation rule, or a required field left empty in edit mode
+  (the same two conditions that paint a field's underline red). A warning-only section
+  gets an amber pill instead.
+
+**Derived, not declared.** Every `<mj-collapsible-panel>` computes its
+`SectionIndicators` live from the `mj-form-field`s it projects — the same `IsDirty` /
+`ShowErrors` / `IsRequiredEmpty` getters the fields use for their own dot and underline
+— so the section can never disagree with its fields, and generated forms, custom
+`*Extended` forms, and slot-mounted `BaseFormPanel`s that wrap a collapsible panel all
+get the marks with no code. Failed-save errors whose `Source` is a graph path
+(`Lines[2].Amount`) route to the panel that owns the collection: a `SectionKey` that
+matches the leading segment claims it automatically; declare
+`ValidationSources="Modifications"` when the names differ. Graph errors are never
+matched on their trailing field name, so a child failure cannot land on the header.
+
+**Custom content.** A section whose content is not `mj-form-field` (an inline grid, a
+designer) supplies its own counts through the panel's `[Indicators]` input — they are
+added to whatever the panel derives:
+
+```html
+<mj-collapsible-panel SectionKey="lines" SectionName="Lines" [Form]="this" [FormContext]="formContext"
+    [Indicators]="{ DirtyCount: LineEditor.EditedRows, ErrorCount: LineEditor.InvalidRows }">
+```
+
+A custom section that is not a collapsible panel at all can implement
+`FormSectionIndicatorSource` and register with the container-provided
+`FormSectionIndicatorCoordinator` (`inject(FormSectionIndicatorCoordinator, { optional: true })`);
+the rail reads it like any other section. Both are exported from `@memberjunction/ng-base-forms`.
+
+The rail reads the coordinator on every pass (pull, not push), and each panel nudges it
+on a field `ValueChange`, so the marks follow the keystroke rather than the container's
+dirty poll. Form-level errors no section claims stay in the spine's whole-form total, so
+a rejected save never leaves the rail looking clean. Host hooks for CSS / tests:
+`data-dirty-count`, `data-error-count`, `.mj-panel-dirty`, `.mj-panel-has-errors`,
+`.mj-panel-has-warnings` on the panel; `.is-dirty` / `.has-errors` on a rail item.
+
+#### Section search
+
+Search matches a group's **title** and each panel's `MatchesSearch` (title
+plus registered keywords). It does **not** use `IsVisible` — chrome hides
+inactive left-nav groups, so visibility would make search miss everything
+except the selected item. Contribution titles (Orders, Payments) match in
+both accordion and left-nav. The rail stays visible whenever more than one
+chrome group exists **or** search is active, even if only one group hits.
+The empty state is **SearchHasNoMatches** (live match), not a baked
+ContentChildren snapshot that would miss slot-mounted panels.
+
+Authoring: `Entity.Configuration` / `EntityRelationship.Configuration`
+JSONType interfaces, [`PANELS.md`](../packages/Angular/Generic/base-forms/PANELS.md).
 
 ### 7b. Render a single section standalone (`SectionName`)
 
@@ -448,6 +600,39 @@ Section mode bypasses the full-form resolver/toolbar/container — the section
 renders its own fields and the host saves the record directly. (This is the
 capability the legacy `EntityFormDialogComponent` exposed; the new host now
 supports it on every surface.)
+
+### 7c. Record Attachments & File Storage Linking
+
+MemberJunction provides first-class support for linked file attachments directly on entity records via the `<mj-form-toolbar>` paperclip button and the `<mj-record-attachments>` slide-in drawer.
+
+#### Enabling & Gating Attachments
+Attachments are enabled when:
+1. **Existing Record**: The record is persisted (`record.IsSaved === true`).
+2. **Entity Configuration**: `Entity.Configuration` allows attachments (`Attachments.Enabled !== false`).
+3. **Storage Subsystem Active**: At least one storage provider is active in `FileStorageEngineBase.Instance.Providers`.
+4. **Permissions**: The user has permissions on `MJ: Files` and `MJ: File Entity Record Links`.
+
+#### Entity-Level Configuration (`IEntityAttachmentsConfiguration`)
+Stored in `MJ: Entities.Configuration` (JSONType):
+
+```json
+{
+  "Attachments": {
+    "Enabled": true,
+    "MaxFileSizeBytes": 52428800,
+    "AllowedContentTypes": ["image/*", "application/pdf", ".docx"],
+    "DefaultStorageAccountID": "00000000-0000-0000-0000-000000000001"
+  }
+}
+```
+
+#### Capabilities & Features
+- **Paperclip Toolbar Button**: Displays real-time badge count (`5`) of linked files on the toolbar.
+- **Slide-in Drawer (`<mj-record-attachments>`)**: Resizable drawer with `UserInfoEngine` width and view mode persistence.
+- **Provider Filtering**: Filter attachments across cloud storage accounts (Azure Blob, AWS S3, Box, etc.).
+- **Rich Media Preview**: In-app previews for PDFs, Images, Audio, Video, Code/Text, and Office Documents.
+- **Drag & Drop Upload**: Direct upload pipeline linked into `MJ: File Entity Record Links`.
+- **Cancelable Event Hooks**: Full Before/After lifecycle (`BeforeUpload`, `BeforeDelete`, `BeforeUnlink`, `BeforeDownload`, `BeforePreview`, `BeforeReplace`).
 
 ---
 

@@ -4,37 +4,42 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Per-action tests for the HootSuite provider.
  *
  * Boundary mocking: BaseOAuthAction is mocked (OAuth succeeds by default) and
- * axios is mocked so `axiosInstance.get/post/patch/delete` capture the exact
+ * the HTTP layer is mocked so `httpClient.get/post/patch/delete` capture the exact
  * endpoint and payload each action sends to the HootSuite REST API.
  */
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => {
@@ -141,14 +146,14 @@ const hsPost = {
 };
 
 function notFoundError(): Error {
-  return Object.assign(new Error('Request failed with status code 404'), { response: { status: 404 } });
+  return Object.assign(new Error('Request failed with status code 404'), { Status: 404, Headers: {} });
 }
 
 beforeEach(() => {
-  http.instance.get.mockReset();
-  http.instance.post.mockReset();
-  http.instance.patch.mockReset();
-  http.instance.delete.mockReset();
+  http.instance.Get.mockReset();
+  http.instance.Post.mockReset();
+  http.instance.Patch.mockReset();
+  http.instance.Delete.mockReset();
 });
 
 // ─── HootSuiteCreateScheduledPostAction ─────────────────────────────────────
@@ -176,14 +181,14 @@ describe('HootSuiteCreateScheduledPostAction', () => {
   });
 
   it('should fail when no profiles exist and none are specified', async () => {
-    http.instance.get.mockResolvedValue({ data: { data: [] }, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: { data: [] }, Headers: {}, Status: 200 });
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', Content: 'Hi' }));
     expect(result.Success).toBe(false);
     expect(result.Message).toBe('Failed to create scheduled post: No social profiles found. Please specify ProfileIDs.');
   });
 
   it('should POST /messages with the exact scheduling payload', async () => {
-    http.instance.post.mockResolvedValue({ data: hsPost, headers: {} });
+    http.instance.Post.mockResolvedValue({ Data: hsPost, Headers: {}, Status: 200 });
 
     const result = await run(
       action,
@@ -199,7 +204,7 @@ describe('HootSuiteCreateScheduledPostAction', () => {
       ),
     );
 
-    expect(http.instance.post).toHaveBeenCalledWith('/messages', {
+    expect(http.instance.Post).toHaveBeenCalledWith('/messages', {
       text: 'Scheduled hello',
       socialProfileIds: ['p1'],
       scheduledTime: new Date('2999-01-01T00:00:00Z').toISOString(),
@@ -241,7 +246,7 @@ describe('HootSuiteDeleteScheduledPostAction', () => {
   });
 
   it('should return POST_NOT_FOUND when the post does not exist', async () => {
-    http.instance.get.mockRejectedValue(notFoundError());
+    http.instance.Get.mockRejectedValue(notFoundError());
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', PostID: 'hs-404', ConfirmDeletion: true }));
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('POST_NOT_FOUND');
@@ -249,7 +254,7 @@ describe('HootSuiteDeleteScheduledPostAction', () => {
   });
 
   it('should refuse to delete published posts', async () => {
-    http.instance.get.mockResolvedValue({ data: { ...hsPost, state: 'PUBLISHED' }, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: { ...hsPost, state: 'PUBLISHED' }, Headers: {}, Status: 200 });
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', PostID: 'hs-1', ConfirmDeletion: true }));
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('CANNOT_DELETE_PUBLISHED');
@@ -258,19 +263,19 @@ describe('HootSuiteDeleteScheduledPostAction', () => {
 
   it('should DELETE /messages/{id} and verify the deletion', async () => {
     let getCalls = 0;
-    http.instance.get.mockImplementation(() => {
+    http.instance.Get.mockImplementation(() => {
       getCalls += 1;
-      if (getCalls === 1) return Promise.resolve({ data: hsPost, headers: {} });
+      if (getCalls === 1) return Promise.resolve({ Data: hsPost, Headers: {}, Status: 200 });
       return Promise.reject(notFoundError()); // verification 404 = confirmed deleted
     });
-    http.instance.delete.mockResolvedValue({ data: {}, headers: {} });
+    http.instance.Delete.mockResolvedValue({ Data: {}, Headers: {}, Status: 200 });
 
     const result = await run(
       action,
       inputs({ CompanyIntegrationID: 'ci-1', PostID: 'hs-1', ConfirmDeletion: true }, ['DeletedPostInfo', 'DeletionVerified']),
     );
 
-    expect(http.instance.delete).toHaveBeenCalledWith('/messages/hs-1');
+    expect(http.instance.Delete).toHaveBeenCalledWith('/messages/hs-1');
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Successfully deleted post hs-1');
@@ -310,15 +315,15 @@ describe('HootSuiteGetScheduledPostsAction', () => {
   });
 
   it('should GET /messages filtered by SCHEDULED state', async () => {
-    http.instance.get.mockResolvedValue({ data: { data: [hsPost] }, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: { data: [hsPost] }, Headers: {}, Status: 200 });
 
     const result = await run(
       action,
       inputs({ CompanyIntegrationID: 'ci-1', ProfileID: 'p1', Limit: 10 }, ['ScheduledPosts', 'Summary']),
     );
 
-    expect(http.instance.get).toHaveBeenCalledWith('/messages', {
-      params: expect.objectContaining({ state: 'SCHEDULED', socialProfileIds: 'p1', limit: 10, maxResults: 10 }),
+    expect(http.instance.Get).toHaveBeenCalledWith('/messages', {
+      Query: expect.objectContaining({ state: 'SCHEDULED', socialProfileIds: 'p1', limit: 10, maxResults: 10 }),
     });
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
@@ -345,10 +350,10 @@ describe('HootSuiteGetSocialProfilesAction', () => {
   });
 
   it('should GET /socialProfiles and enrich the results', async () => {
-    http.instance.get.mockImplementation((url: string) => {
+    http.instance.Get.mockImplementation((url: string) => {
       if (url === '/socialProfiles') {
         return Promise.resolve({
-          data: {
+          Data: {
             data: [
               {
                 id: 'p1',
@@ -361,7 +366,7 @@ describe('HootSuiteGetSocialProfilesAction', () => {
               },
             ],
           },
-          headers: {},
+          Headers: {},
         });
       }
       return Promise.reject(new Error(`Unmocked GET ${url}`));
@@ -369,7 +374,7 @@ describe('HootSuiteGetSocialProfilesAction', () => {
 
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1' }, ['Profiles', 'Summary']));
 
-    expect(http.instance.get).toHaveBeenCalledWith('/socialProfiles');
+    expect(http.instance.Get).toHaveBeenCalledWith('/socialProfiles');
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Retrieved 1 social profiles');
@@ -407,7 +412,7 @@ describe('HootSuiteUpdateScheduledPostAction', () => {
   });
 
   it('should refuse to update a published post', async () => {
-    http.instance.get.mockResolvedValue({ data: { ...hsPost, state: 'PUBLISHED' }, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: { ...hsPost, state: 'PUBLISHED' }, Headers: {}, Status: 200 });
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', PostID: 'hs-1', Content: 'New' }));
     expect(result.Success).toBe(false);
     expect(result.Message).toBe(
@@ -416,24 +421,24 @@ describe('HootSuiteUpdateScheduledPostAction', () => {
   });
 
   it('should return NO_CHANGES when no update fields are provided', async () => {
-    http.instance.get.mockResolvedValue({ data: hsPost, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: hsPost, Headers: {}, Status: 200 });
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', PostID: 'hs-1' }));
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('NO_CHANGES');
     expect(result.Message).toBe('No updates were provided');
-    expect(http.instance.patch).not.toHaveBeenCalled();
+    expect(http.instance.Patch).not.toHaveBeenCalled();
   });
 
   it('should PATCH /messages/{id} with only the changed fields', async () => {
-    http.instance.get.mockResolvedValue({ data: hsPost, headers: {} });
-    http.instance.patch.mockResolvedValue({ data: { ...hsPost, text: 'Updated text' }, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: hsPost, Headers: {}, Status: 200 });
+    http.instance.Patch.mockResolvedValue({ Data: { ...hsPost, text: 'Updated text' }, Headers: {}, Status: 200 });
 
     const result = await run(
       action,
       inputs({ CompanyIntegrationID: 'ci-1', PostID: 'hs-1', Content: 'Updated text' }, ['UpdatedPost', 'ChangesSummary']),
     );
 
-    expect(http.instance.patch).toHaveBeenCalledWith('/messages/hs-1', { text: 'Updated text' });
+    expect(http.instance.Patch).toHaveBeenCalledWith('/messages/hs-1', { text: 'Updated text' });
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Successfully updated scheduled post (ID: hs-1)');
@@ -469,7 +474,7 @@ describe('HootSuiteBulkSchedulePostsAction', () => {
   });
 
   it('should fail when no default profiles exist and none are specified', async () => {
-    http.instance.get.mockResolvedValue({ data: { data: [] }, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: { data: [] }, Headers: {}, Status: 200 });
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', Posts: [{ content: 'x' }] }));
     expect(result.Success).toBe(false);
     expect(result.Message).toBe('Failed to bulk schedule posts: No social profiles found. Please specify DefaultProfileIDs.');

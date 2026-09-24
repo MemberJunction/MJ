@@ -3,14 +3,14 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import {
   AGENTIC_TEST_RUNNER_IMAGE,
-  dockerComposeArgs,
-  dockerRunArgs,
-  isInsideMonorepo,
+  DockerComposeArgs,
+  DockerRunArgs,
+  IsInsideMonorepo,
   LOAD_TARGET_SCRIPT,
-  resolveStandaloneCompose,
-  resolveTargetPath,
-  spawnCapture,
-  spawnInherit,
+  ResolveStandaloneCompose,
+  ResolveTargetPath,
+  SpawnCapture,
+  SpawnInherit,
   STANDALONE_COMPOSE,
 } from '../../../lib/regression/docker-helpers.js';
 
@@ -61,7 +61,7 @@ export default class TestRegressionRemote extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(TestRegressionRemote);
-    if (isInsideMonorepo()) {
+    if (IsInsideMonorepo()) {
       await this.runInMonorepo(flags);
     } else {
       await this.runExternal(flags);
@@ -72,11 +72,11 @@ export default class TestRegressionRemote extends Command {
   private async runInMonorepo(flags: Record<string, unknown>): Promise<void> {
     if (!existsSync(LOAD_TARGET_SCRIPT)) this.error(`✗ Loader missing: ${LOAD_TARGET_SCRIPT}`);
 
-    const targetPath = resolveTargetPath(flags.target as string);
+    const targetPath = ResolveTargetPath(flags.target as string);
     if (!existsSync(targetPath)) this.error(`✗ Target profile not found: ${targetPath}`);
 
     this.log(`▶ Loading target profile: ${targetPath}`);
-    const loaded = await spawnCapture(process.execPath, [LOAD_TARGET_SCRIPT, '--format=json', targetPath]);
+    const loaded = await SpawnCapture(process.execPath, [LOAD_TARGET_SCRIPT, '--format=json', targetPath]);
     if (loaded.code !== 0) this.error(`✗ Target profile loader failed (exit ${loaded.code})`);
 
     let envFromProfile: Record<string, string>;
@@ -97,11 +97,11 @@ export default class TestRegressionRemote extends Command {
     });
     if (overlays.length > 0) this.log(`  Overlays: ${overlays.join(', ')}`);
 
-    const composeArgs = dockerComposeArgs(composeProfile, ['up'], overlays);
+    const composeArgs = DockerComposeArgs(composeProfile, ['up'], overlays);
     if (flags.detach as boolean) composeArgs.push('-d');
 
     this.log(`▶ docker compose --profile ${composeProfile} up`);
-    const code = await spawnInherit('docker', composeArgs, { env: childEnv });
+    const code = await SpawnInherit('docker', composeArgs, { env: childEnv });
     if (code !== 0) this.exit(code);
   }
 
@@ -111,7 +111,7 @@ export default class TestRegressionRemote extends Command {
    * with the bundled standalone compose + the user's app overlay.
    */
   private async runExternal(flags: Record<string, unknown>): Promise<void> {
-    const targetPath = resolveTargetPath(flags.target as string);
+    const targetPath = ResolveTargetPath(flags.target as string);
     if (!existsSync(targetPath)) {
       this.error(`✗ Target profile not found: ${targetPath}\n  Outside the monorepo, pass a path (e.g. --target=./my-suite/target.json).`);
     }
@@ -127,7 +127,7 @@ export default class TestRegressionRemote extends Command {
 
     if (overlays.length > 0) {
       // Mode D — boot the app overlay alongside the runner via the standalone compose.
-      const standalone = resolveStandaloneCompose(STANDALONE_COMPOSE);
+      const standalone = ResolveStandaloneCompose(STANDALONE_COMPOSE);
       if (!existsSync(standalone)) {
         this.error(`✗ Standalone compose not found (${standalone}). Reinstall @memberjunction/cli or run from the monorepo.`);
       }
@@ -142,16 +142,16 @@ export default class TestRegressionRemote extends Command {
       for (const o of overlays) args.push('-f', o);
       args.push('up', '--abort-on-container-exit', '--exit-code-from', 'test-runner');
       this.log(`▶ docker compose (standalone + ${overlays.length} overlay) — image ${image}`);
-      const code = await spawnInherit('docker', args, { env: childEnv });
+      const code = await SpawnInherit('docker', args, { env: childEnv });
       if (code !== 0) this.exit(code);
       return;
     }
 
     // Mode B/C — single `docker run` against the published image.
     this.log(`▶ docker run ${image} run --target=/work/${targetFile}`);
-    const code = await spawnInherit(
+    const code = await SpawnInherit(
       'docker',
-      dockerRunArgs(image, ['run', `--target=/work/${targetFile}`], {
+      DockerRunArgs(image, ['run', `--target=/work/${targetFile}`], {
         mounts: [[targetDir, '/work'], [resultsDir, '/app/test-results']],
         envFile,
       }),

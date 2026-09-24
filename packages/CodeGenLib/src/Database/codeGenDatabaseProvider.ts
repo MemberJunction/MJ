@@ -1,6 +1,7 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { TrimTrailingStatementTerminators } from '../Misc/sql_text';
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
 
@@ -36,17 +37,17 @@ export interface CodeGenTransaction {
      * @param sql The SQL statement to execute.
      * @returns The query result.
      */
-    query(sql: string): Promise<CodeGenQueryResult>;
+    query(sql: string): Promise<CodeGenQueryResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Commits the transaction. After commit, this transaction handle must not be reused.
      */
-    commit(): Promise<void>;
+    commit(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Rolls back the transaction. After rollback, this transaction handle must not be reused.
      */
-    rollback(): Promise<void>;
+    rollback(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -111,7 +112,7 @@ export interface CodeGenConnection {
      * @param sql The SQL statement to execute.
      * @returns The query result with a `recordset` array.
      */
-    query(sql: string): Promise<CodeGenQueryResult>;
+    query(sql: string): Promise<CodeGenQueryResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Executes a SQL query with named parameters.
@@ -126,7 +127,7 @@ export interface CodeGenConnection {
      * @param params Named parameters as key-value pairs.
      * @returns The query result with a `recordset` array.
      */
-    queryWithParams(sql: string, params: Record<string, unknown>): Promise<CodeGenQueryResult>;
+    queryWithParams(sql: string, params: Record<string, unknown>): Promise<CodeGenQueryResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Executes a stored procedure (SQL Server) or function call (PostgreSQL).
@@ -134,13 +135,13 @@ export interface CodeGenConnection {
      * @param params Named parameters for the routine.
      * @returns The query result with a `recordset` array.
      */
-    executeStoredProcedure(name: string, params: Record<string, unknown>): Promise<CodeGenQueryResult>;
+    executeStoredProcedure(name: string, params: Record<string, unknown>): Promise<CodeGenQueryResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Begins a new database transaction.
      * @returns A CodeGenTransaction handle for executing queries within the transaction.
      */
-    beginTransaction(): Promise<CodeGenTransaction>;
+    beginTransaction(): Promise<CodeGenTransaction>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -239,6 +240,45 @@ export interface CascadeDeleteContext {
 }
 
 /**
+ * One live permission entry from the database catalog within the managed scope, captured at
+ * generation time for the reconciliation preamble (see the Field-Level Security DB-tier work).
+ */
+export interface CatalogPermissionEntry {
+    /** The grantee database role name (always one of the managed role SQLNames). */
+    RoleName: string;
+    /** e.g. 'SELECT' | 'EXECUTE' */
+    PermissionName: string;
+    /** 'GRANT' | 'DENY' | 'GRANT_WITH_GRANT_OPTION' */
+    StateDesc: string;
+    /** Non-null for column-level entries (minor_id > 0); null for object-level. */
+    ColumnName: string | null;
+}
+
+/**
+ * Once-per-run context for field-level-security DB-tier emission and permission
+ * reconciliation, computed by the orchestrator (async catalog reads) and handed to the
+ * provider whose emitters are synchronous string builders.
+ */
+export interface FieldSecurityRunContext {
+    /**
+     * SQLNames (lowercased) of roles that a protected principal — the API service login(s)
+     * and the CodeGen login — is a MEMBER of. A column DENY emitted to such a role would
+     * strip the column from the service login itself (DENY beats every sibling GRANT), so
+     * emission SKIPS these roles with a prominent warning instead.
+     */
+    ServiceProtectedRoleSQLNames: Set<string>;
+    /**
+     * Live catalog permission state within the managed scope, keyed
+     * `<schema>.<object>` (lowercased) → entries. Only rows granted to managed roles are
+     * captured; DBA-owned grants to anything else are invisible here and therefore never
+     * touched.
+     */
+    CatalogPermissions: Map<string, CatalogPermissionEntry[]>;
+    /** RoleID → SQLName for resolving EntityFieldPermission rows (which carry only RoleID). */
+    RoleSQLNameByID: Map<string, string>;
+}
+
+/**
  * Abstract base class for database-specific code generation providers.
  *
  * Each database platform (SQL Server, PostgreSQL, etc.) implements this class
@@ -265,6 +305,16 @@ export interface MaterializedColumnSpec {
 }
 
 export abstract class CodeGenDatabaseProvider {
+    /**
+     * Field-security run context (catalog snapshot + protected-role set), set once per run by
+     * the orchestrator before entity generation begins. Null when the platform emits no
+     * DB-tier field security (PostgreSQL, per decision D2) or on runs that could not read the
+     * catalog — emitters must degrade to grants-only emission in that case.
+     */
+    protected _fieldSecurityRunContext: FieldSecurityRunContext | null = null;
+    public SetFieldSecurityRunContext(context: FieldSecurityRunContext | null): void {
+        this._fieldSecurityRunContext = context;
+    }
     /**
      * The SQL dialect instance for this provider.
      */
@@ -335,7 +385,7 @@ export abstract class CodeGenDatabaseProvider {
      * `IsVirtual = 1` would let the join target the base table instead,
      * removing the need for this capability flag entirely.
      */
-    canSelfJoinViewForVirtualNameField(): boolean {
+    canSelfJoinViewForVirtualNameField(): boolean {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return false;
     }
 
@@ -346,7 +396,7 @@ export abstract class CodeGenDatabaseProvider {
      * For SQL Server: `IF OBJECT_ID(...) IS NOT NULL DROP ...`
      * For PostgreSQL: `DROP ... IF EXISTS ...` or `CREATE OR REPLACE ...`
      */
-    abstract generateDropGuard(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION' | 'TRIGGER', schema: string, name: string): string;
+    abstract generateDropGuard(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION' | 'TRIGGER', schema: string, name: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── BASE VIEWS ──────────────────────────────────────────────────────
 
@@ -355,7 +405,7 @@ export abstract class CodeGenDatabaseProvider {
      * The orchestrator provides pre-computed context (related fields, joins, parent joins, etc.)
      * so the provider only needs to assemble the platform-specific SQL.
      */
-    abstract generateBaseView(context: BaseViewGenerationContext): string;
+    abstract generateBaseView(context: BaseViewGenerationContext): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── MATERIALIZATION ─────────────────────────────────────────────────
 
@@ -373,7 +423,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param tableName Physical table name (convention: `materialized_<Name>`).
      * @param columns   Resolved column specs (name, engine-native SQL type, nullability, PK flag).
      */
-    generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
+    generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         throw new Error(`generateMaterializedTableSQL is not implemented for platform '${this.PlatformKey}'`);
     }
 
@@ -390,8 +440,40 @@ export abstract class CodeGenDatabaseProvider {
      * @param viewName  Wrapper view name (convention: `materialized_vw<Name>`).
      * @param tableName Physical table the view selects from.
      */
-    generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
+    generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         throw new Error(`generateMaterializedWrapperViewSQL is not implemented for platform '${this.PlatformKey}'`);
+    }
+
+    // ─── CONFIG-DECLARED VIEWS ───────────────────────────────────────────
+
+    /**
+     * Generates idempotent create-or-replace DDL for a view whose body is supplied verbatim
+     * by configuration — e.g. an organic key's `TransitiveView` bridge view. Re-running the
+     * statement against an existing view must replace it in place, including when the body's
+     * column list has changed.
+     *
+     * The body is emitted as-is, so it must already be written in this platform's dialect.
+     * Returns a single statement with no trailing batch separator; callers executing it through
+     * `LogSQLAndExecute` pass `includeBatchSeparator` with the provider's `BatchSeparator` so the
+     * migration file still gets one.
+     *
+     * Default throws — each engine provider overrides.
+     *
+     * @param schema    Schema to create the view in.
+     * @param viewName  Unqualified view name.
+     * @param selectSQL The view body (a SELECT statement). A trailing `;` is tolerated.
+     */
+    generateCreateOrReplaceViewSQL(schema: string, viewName: string, selectSQL: string): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
+        throw new Error(`generateCreateOrReplaceViewSQL is not implemented for platform '${this.PlatformKey}'`);
+    }
+
+    /**
+     * Strips trailing whitespace and statement terminators from a caller-supplied SQL body so
+     * it can be embedded in a larger statement (a view definition, a dynamic `EXECUTE` string).
+     * Linear time — the body comes from configuration (see Misc/sql_text).
+     */
+    protected trimStatementTerminator(sql: string): string {
+        return TrimTrailingStatementTerminators(sql);
     }
 
     /**
@@ -400,7 +482,7 @@ export abstract class CodeGenDatabaseProvider {
      * (the deterministic combined-key-set hashing in §5 is Phase 3 and replaces this for incremental).
      * Default throws — each engine overrides (SQL Server: `int IDENTITY(1,1)`).
      */
-    getMaterializedSurrogateColumnType(): string {
+    getMaterializedSurrogateColumnType(): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         throw new Error(`getMaterializedSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
     }
 
@@ -411,7 +493,7 @@ export abstract class CodeGenDatabaseProvider {
      * the minted entity's PK metadata doesn't diverge from the rebuilt table. Default throws — each engine
      * overrides (SQL Server: `varchar(64)`; PostgreSQL: `text`).
      */
-    getMaterializedHashSurrogateColumnType(): string {
+    getMaterializedHashSurrogateColumnType(): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         throw new Error(`getMaterializedHashSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
     }
 
@@ -422,19 +504,19 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `CREATE PROCEDURE [schema].[spCreate...]`
      * PostgreSQL: `CREATE OR REPLACE FUNCTION schema.fn_create_...()`
      */
-    abstract generateCRUDCreate(entity: EntityInfo): string;
+    abstract generateCRUDCreate(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates the UPDATE stored procedure or function for an entity.
      * Includes the updated-at trigger generation.
      */
-    abstract generateCRUDUpdate(entity: EntityInfo): string;
+    abstract generateCRUDUpdate(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates the DELETE stored procedure or function for an entity.
      * Handles both hard and soft delete types, and includes cascade delete logic.
      */
-    abstract generateCRUDDelete(entity: EntityInfo, cascadeSQL: string): string;
+    abstract generateCRUDDelete(entity: EntityInfo, cascadeSQL: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── TRIGGERS ────────────────────────────────────────────────────────
 
@@ -443,7 +525,7 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: single AFTER UPDATE trigger.
      * PostgreSQL: companion function + BEFORE UPDATE trigger.
      */
-    abstract generateTimestampTrigger(entity: EntityInfo): string;
+    abstract generateTimestampTrigger(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── INDEXES ─────────────────────────────────────────────────────────
 
@@ -462,10 +544,15 @@ export abstract class CodeGenDatabaseProvider {
      * primary-key/virtual-field exclusions that PostgreSQL had. See
      * {@link isIndexableForeignKey}.
      */
-    generateForeignKeyIndexes(entity: EntityInfo): string[] {
+    GenerateForeignKeyIndexes(entity: EntityInfo): string[] {
         return entity.Fields
             .filter((f) => this.isIndexableForeignKey(f))
             .map((f) => this.formatIndexStatement(entity, f, this.foreignKeyIndexName(entity, f)));
+    }
+
+    /** @deprecated Use {@link GenerateForeignKeyIndexes}. */
+    generateForeignKeyIndexes(entity: EntityInfo): string[] {
+        return this.GenerateForeignKeyIndexes(entity);
     }
 
     /**
@@ -491,6 +578,115 @@ export abstract class CodeGenDatabaseProvider {
     protected isIndexableForeignKey(f: EntityFieldInfo): boolean {
         return !!f.RelatedEntityID && !f.IsPrimaryKey && !f.IsVirtual;
     }
+
+    /**
+     * Generates the composite index covering an entity's SOFT primary key, or an empty array
+     * when the entity has no soft PK (which is every ordinary entity — this is a no-op for
+     * anything with a real `PRIMARY KEY` constraint).
+     *
+     * WHY THIS EXISTS. A soft primary key lives only in metadata: `IsPrimaryKey` and
+     * `IsSoftPrimaryKey` are both set, and the table carries no `PRIMARY KEY` and no unique
+     * index. Integration tables are built that way on purpose — their keys are inferred, so
+     * enforcing one would reject valid rows whenever an inference is wrong.
+     *
+     * The consequence is a heap that MJ's own write path scans on every record. A create calls
+     * `InnerLoad` on the key to check for an existing row; a genuinely new record matches
+     * nothing; and a not-found lookup cannot short-circuit, so it reads the whole table before
+     * concluding the row is absent. The scan grows with the table, so a sync gets slower the
+     * longer it runs — measured live at 345 → 574 → 864 ms per record across consecutive
+     * batches of one connector, with nothing saturated (DB CPU 57%, log write 13%, sessions 0,
+     * app CPU 5.7%, memory flat).
+     *
+     * Note that {@link isIndexableForeignKey} excludes primary keys with the comment "a primary
+     * key is already covered by its own index". That is true for a real PK and false, by
+     * definition, for a soft one — which is precisely how these tables fell through every
+     * existing mechanism.
+     *
+     * ONE COMPOSITE INDEX, not one per column: the lookup is always an equality match on the
+     * whole key, so a single index in ordinal order serves it. Non-unique, because uniqueness
+     * is exactly what the soft-PK design refuses to assert.
+     *
+     * IDEMPOTENT BY NAME, like the FK indexes. An index someone created by hand over the same
+     * columns under a different name will not be recognised, and this will add a second one —
+     * drop the hand-made one rather than disabling this.
+     */
+    GenerateSoftPrimaryKeyIndex(entity: EntityInfo): string[] {
+        const keyFields = this.softPrimaryKeyFields(entity);
+        if (keyFields.length === 0) {
+            return [];
+        }
+
+        // A key column the dialect cannot index (an unbounded string, typically) makes the whole
+        // composite impossible. Say so IN THE GENERATED SQL rather than emitting nothing: a
+        // silently absent index is the failure mode this method exists to end, and swapping one
+        // silence for another would leave the next person with the same puzzle.
+        const unindexable = keyFields.filter(f => !this.isIndexableKeyColumn(f));
+        if (unindexable.length > 0) {
+            return [
+                `-- SOFT PRIMARY KEY INDEX SKIPPED for ${entity.SchemaName}.${entity.BaseTable}\n` +
+                `-- These key columns cannot be part of an index key in this dialect: ` +
+                `${unindexable.map(f => `${f.Name} (${f.Type}${f.Length === -1 ? ', unbounded' : ''})`).join(', ')}.\n` +
+                `-- Without the index, every create on this table scans it in full to decide the row is new,\n` +
+                `-- and that scan grows with the table. Give the column(s) an explicit bounded length in the\n` +
+                `-- source schema definition so the key can be indexed.`
+            ];
+        }
+
+        return [this.formatCompositeIndexStatement(entity, keyFields, this.softPrimaryKeyIndexName(entity))];
+    }
+
+    /** @deprecated Use {@link GenerateSoftPrimaryKeyIndex}. */
+    generateSoftPrimaryKeyIndex(entity: EntityInfo): string[] {
+        return this.GenerateSoftPrimaryKeyIndex(entity);
+    }
+
+    /**
+     * The entity's soft-PK fields in ordinal order, or an empty array if its PK is not soft.
+     *
+     * Requires EVERY primary-key field to be soft. A mixed key would mean the table has a real
+     * constraint on part of its key, which is not a shape the integration schema builder
+     * produces, and guessing at the right index for it is worse than leaving it alone.
+     */
+    protected softPrimaryKeyFields(entity: EntityInfo): EntityFieldInfo[] {
+        if (entity.VirtualEntity) {
+            return [];
+        }
+        const pkFields = entity.Fields.filter(f => f.IsPrimaryKey && !f.IsVirtual);
+        if (pkFields.length === 0 || !pkFields.every(f => f.IsSoftPrimaryKey)) {
+            return [];
+        }
+        return [...pkFields].sort((a, b) => a.Sequence - b.Sequence);
+    }
+
+    /** Composes the soft-PK index name in this dialect's spelling, truncated to its limit. */
+    protected softPrimaryKeyIndexName(entity: EntityInfo): string {
+        const name = `${this.softPrimaryKeyIndexPrefix()}${this.tableToken(entity)}`;
+        const max = this.maxIdentifierLength();
+        return name.length > max ? name.substring(0, max) : name;
+    }
+
+    /**
+     * Whether a column may appear in an index KEY. Dialects override where they have a rule
+     * the base class cannot know; the shared case is an unbounded string, which no dialect
+     * accepts as a key column.
+     */
+    protected isIndexableKeyColumn(f: EntityFieldInfo): boolean {
+        return f.Length !== -1;
+    }
+
+    /** Prefix for the automatic soft-PK index name. Dialects override to match their casing. */
+    protected abstract softPrimaryKeyIndexPrefix(): string;
+
+    /**
+     * Renders one complete composite index statement for the dialect — quoting, column order,
+     * and the "create only if absent" idempotency form. The index NAME arrives pre-composed and
+     * pre-truncated; implementations must use it verbatim.
+     */
+    protected abstract formatCompositeIndexStatement(
+        entity: EntityInfo,
+        fields: EntityFieldInfo[],
+        indexName: string
+    ): string;
 
     /**
      * Composes the automatic foreign-key index name and enforces the dialect's identifier
@@ -544,47 +740,106 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: FULLTEXT CATALOG + INDEX + inline TVF
      * PostgreSQL: tsvector column + GIN index + trigger + search function
      */
-    abstract generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult;
+    abstract generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
-    // ─── RECURSIVE FUNCTIONS (ROOT ID) ───────────────────────────────────
+    // ─── RECURSIVE FUNCTIONS (HIERARCHY & ROOT ID) ──────────────────────
+
+    /**
+     * Generates a recursive hierarchy metadata function for a self-referencing FK field.
+     * Computes RootID, Depth, Path, IsLeaf, and ChildCount.
+     * SQL Server: inline TVF with recursive CTE + OUTER APPLY in view.
+     * PostgreSQL: table-valued function with recursive CTE + LEFT JOIN LATERAL in view.
+     */
+    abstract generateHierarchyMetaFunction(entity: EntityInfo, field: EntityFieldInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * Generates a TVF for querying all descendants of an arbitrary root node with optional max depth limit.
+     * `fn<Table><FieldName>_GetDescendants(@RootID, @MaxDepth)`
+     */
+    abstract generateDescendantsFunction(entity: EntityInfo, field: EntityFieldInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * Generates a TVF for querying all ancestors of an arbitrary node walking upward to the top-level root.
+     * `fn<Table><FieldName>_GetAncestors(@RecordID)`
+     */
+    abstract generateAncestorsFunction(entity: EntityInfo, field: EntityFieldInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * Generates the SELECT expressions for hierarchy fields in a base view.
+     * Projects: Root<Field>, <Field>Depth, <Field>Path, <Field>IsLeaf, <Field>ChildCount.
+     */
+    abstract generateHierarchyFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * Generates the JOIN clause for the hierarchy metadata function in a base view.
+     */
+    abstract generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * Produces the canonical database function name for the hierarchy metadata helper function.
+     */
+    getHierarchyMetaFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
+        return `fn${entity.BaseTable}${field.Name}_GetHierarchyMeta`;
+    }
+
+    /**
+     * Produces the canonical database function name for the descendants traversal helper function.
+     */
+    getDescendantsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
+        return `fn${entity.BaseTable}${field.Name}_GetDescendants`;
+    }
+
+    /**
+     * Produces the canonical database function name for the ancestors traversal helper function.
+     */
+    getAncestorsFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
+        return `fn${entity.BaseTable}${field.Name}_GetAncestors`;
+    }
+
+    /**
+     * Produces the canonical database function name for the root ID helper function.
+     */
+    getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
+        return `fn${entity.BaseTable}${field.Name}_GetRootID`;
+    }
 
     /**
      * Generates a recursive root-ID function for a self-referencing FK field.
      * SQL Server: inline TVF with recursive CTE + OUTER APPLY in view.
      * PostgreSQL: scalar function with recursive CTE + LEFT JOIN LATERAL in view.
      */
-    abstract generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string;
+    abstract generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates the SELECT expression for a root ID field in a base view.
      * SQL Server: `rootFn.RootID AS [FieldRoot...]`
      * PostgreSQL: `root_fn.root_id AS "FieldRoot..."`
      */
-    abstract generateRootFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;
+    abstract generateRootFieldSelect(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates the JOIN clause for a root ID function in a base view.
      * SQL Server: `OUTER APPLY [schema].[fnTable_GetRootID](t.ID) AS rootFn`
      * PostgreSQL: `LEFT JOIN LATERAL schema.fn_table_get_root_id(t."ID") AS root_fn ON true`
      */
-    abstract generateRootFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;
+    abstract generateRootFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── PERMISSIONS ─────────────────────────────────────────────────────
 
     /**
      * Generates GRANT SELECT permission for a base view.
      */
-    abstract generateViewPermissions(entity: EntityInfo): string;
+    abstract generateViewPermissions(entity: EntityInfo): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates GRANT EXECUTE permission for a CRUD routine.
      */
-    abstract generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string;
+    abstract generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates GRANT EXECUTE permission for a full-text search function.
      */
-    abstract generateFullTextSearchPermissions(entity: EntityInfo, functionName: string): string;
+    abstract generateFullTextSearchPermissions(entity: EntityInfo, functionName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── CASCADE DELETES ─────────────────────────────────────────────────
 
@@ -592,14 +847,49 @@ export abstract class CodeGenDatabaseProvider {
      * Generates the cascade delete/update SQL for a single related entity.
      * Called by the orchestrator for each FK relationship when CascadeDeletes is true.
      */
-    abstract generateSingleCascadeOperation(context: CascadeDeleteContext): string;
+    abstract generateSingleCascadeOperation(context: CascadeDeleteContext): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * Resolves which of the parent's primary-key columns a cascading FK references, so the
+     * cascade's `WHERE <fk> = @<param>` binds to the matching `spDelete` parameter (one is
+     * declared per parent PK column). An FK always targets exactly one column:
+     *
+     *  - Single-column parent key: the FK necessarily targets it — returned directly.
+     *  - Composite parent key: the referenced column is `fkField.RelatedEntityFieldName`.
+     *    When it names a parent PK column that column is returned; when it names nothing
+     *    (metadata not yet synced) or a non-key unique column, `null` is returned because
+     *    no `spDelete` parameter carries that value — the caller must skip the cascade
+     *    rather than silently bind the FK to the wrong key column.
+     */
+    protected resolveCascadeParentKeyField(parentEntity: EntityInfo, fkField: EntityFieldInfo): EntityFieldInfo | null {
+        if (parentEntity.PrimaryKeys.length === 1) {
+            return parentEntity.FirstPrimaryKey; // first-pk-ok: single-column parent key; an FK targets exactly one column so it is this one
+        }
+        const referenced = (fkField.RelatedEntityFieldName ?? '').trim().toLowerCase();
+        if (referenced.length === 0) {
+            return null;
+        }
+        return parentEntity.PrimaryKeys.find((k: EntityFieldInfo) => k.Name.trim().toLowerCase() === referenced) ?? null;
+    }
+
+    /**
+     * SQL comment emitted (and warning logged) when a cascade cannot be generated because the
+     * FK on a composite-key parent does not resolve to one of the parent's key columns.
+     */
+    protected unresolvedCascadeKeyComment(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
+        const referenced = (fkField.RelatedEntityFieldName ?? '').trim();
+        const detail = referenced.length > 0
+            ? `references ${parentEntity.Name}.${referenced}, which is not one of its primary key columns (${parentEntity.PrimaryKeys.map((k: EntityFieldInfo) => k.Name).join(', ')})`
+            : `has no RelatedEntityFieldName, so the referenced column of composite-key parent ${parentEntity.Name} is unknown`;
+        return `    -- WARNING: Cannot cascade to ${relatedEntity.Name}.${fkField.Name} — the FK ${detail}; no spDelete parameter carries that value`;
+    }
 
     // ─── TIMESTAMP COLUMNS ───────────────────────────────────────────────
 
     /**
      * Generates ALTER TABLE statements to add __mj_CreatedAt and __mj_UpdatedAt columns.
      */
-    abstract generateTimestampColumns(schema: string, tableName: string): string;
+    abstract generateTimestampColumns(schema: string, tableName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── PARAMETER / FIELD HELPERS ───────────────────────────────────────
 
@@ -735,7 +1025,7 @@ export abstract class CodeGenDatabaseProvider {
      * (e.g. PostgreSQL's "all params after the first DEFAULT must also have
      * DEFAULTs" rule, which the PostgreSQL provider handles via override).
      */
-    generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
+    generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         const dialect = this.Dialect;
         const nullDefault = dialect.ParameterDefault(dialect.NullLiteral);
         const parts: string[] = [];
@@ -789,9 +1079,8 @@ export abstract class CodeGenDatabaseProvider {
      *   - `formatInsertDefaultValue(ef)` render hook (for type-strict
      *     dialects that need to massage default values).
      */
-    generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
+    GenerateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
         const dialect = this.Dialect;
-        const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement;
         const usingParameterPrefix = !!prefix && prefix.length > 0;
         const parts: string[] = [];
         for (const ef of entityFields) {
@@ -802,10 +1091,12 @@ export abstract class CodeGenDatabaseProvider {
             // this exception, the !AllowUpdateAPI clause below silently strips these
             // out — the metadata discovery query hardcodes `AllowUpdateAPI=0` for every
             // PK row — and the generated INSERT becomes invalid.
-            const isCallerSuppliedPK = ef.IsPrimaryKey && !autoGeneratedPrimaryKey && !excludePrimaryKey;
+            // AutoIncrement is evaluated PER COLUMN: on a composite key such as
+            // (TenantID, ID IDENTITY) only the identity column is database-generated —
+            // the other key columns are still caller-supplied and must stay in the list.
+            const isCallerSuppliedPK = ef.IsPrimaryKey && !ef.AutoIncrement && !excludePrimaryKey;
             if (
                 (excludePrimaryKey && ef.IsPrimaryKey) ||
-                (ef.IsPrimaryKey && autoGeneratedPrimaryKey) ||
                 ef.IsVirtual ||
                 (!ef.AllowUpdateAPI && !isCallerSuppliedPK) ||
                 ef.AutoIncrement
@@ -857,6 +1148,11 @@ export abstract class CodeGenDatabaseProvider {
         return parts.join(',\n                ');
     }
 
+    /** @deprecated Use {@link GenerateInsertFieldString}. */
+    generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
+        return this.GenerateInsertFieldString(entity, entityFields, prefix, excludePrimaryKey);
+    }
+
     /**
      * Generates the SET clause body for an UPDATE statement with tolerant
      * merge semantics. Each non-PK column wraps the parameter with the
@@ -873,7 +1169,7 @@ export abstract class CodeGenDatabaseProvider {
      * `IsNull`, `NullLiteral`). Subclasses can override to customize line
      * formatting if a future dialect needs something different.
      */
-    generateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
+    GenerateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
         const dialect = this.Dialect;
         const parts: string[] = [];
         for (const ef of entityFields) {
@@ -898,6 +1194,11 @@ export abstract class CodeGenDatabaseProvider {
         return parts.join(',\n        ');
     }
 
+    /** @deprecated Use {@link GenerateUpdateFieldString}. */
+    generateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
+        return this.GenerateUpdateFieldString(entityFields);
+    }
+
     // ─── ROUTINE NAMING ──────────────────────────────────────────────────
 
     /**
@@ -905,19 +1206,19 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `spCreateEntityName`
      * PostgreSQL: `fn_create_entity_name`
      */
-    abstract getCRUDRoutineName(entity: EntityInfo, type: CRUDType): string;
+    abstract getCRUDRoutineName(entity: EntityInfo, type: CRUDType): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── SQL HEADERS ─────────────────────────────────────────────────────
 
     /**
      * Generates a comment header for a generated SQL file.
      */
-    abstract generateSQLFileHeader(entity: EntityInfo, itemName: string): string;
+    abstract generateSQLFileHeader(entity: EntityInfo, itemName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates a comment header for the combined all-entities SQL file.
      */
-    abstract generateAllEntitiesSQLFileHeader(): string;
+    abstract generateAllEntitiesSQLFileHeader(): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── UTILITY ─────────────────────────────────────────────────────────
 
@@ -925,13 +1226,13 @@ export abstract class CodeGenDatabaseProvider {
      * Formats a default value for use in generated SQL.
      * Handles SQL functions (GETUTCDATE, gen_random_uuid, etc.) and literal values.
      */
-    abstract formatDefaultValue(defaultValue: string, needsQuotes: boolean): string;
+    abstract formatDefaultValue(defaultValue: string, needsQuotes: boolean): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Builds primary key variable declarations, select fields, fetch-into, and SP param strings
      * for use in cursor-based cascade operations.
      */
-    abstract buildPrimaryKeyComponents(entity: EntityInfo, prefix?: string): {
+    abstract buildPrimaryKeyComponents(entity: EntityInfo, prefix?: string): {  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
         varDeclarations: string;
         selectFields: string;
         fetchInto: string;
@@ -947,7 +1248,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * The result set must include a column named `ViewDefinition`.
      */
-    abstract getViewDefinitionSQL(schema: string, viewName: string): string;
+    abstract getViewDefinitionSQL(schema: string, viewName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns a SQL query string to retrieve the primary key index name for a table.
@@ -956,7 +1257,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * The result set must include a column named `IndexName`.
      */
-    abstract getPrimaryKeyIndexNameSQL(schema: string, tableName: string): string;
+    abstract getPrimaryKeyIndexNameSQL(schema: string, tableName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns a SQL query string to check if a given column is part of a composite unique constraint.
@@ -968,7 +1269,7 @@ export abstract class CodeGenDatabaseProvider {
      * Note: Implementations should return the SQL query string. The orchestrator is responsible
      * for executing the query with proper parameterization for the target database platform.
      */
-    abstract getCompositeUniqueConstraintCheckSQL(schema: string, tableName: string, columnName: string): string;
+    abstract getCompositeUniqueConstraintCheckSQL(schema: string, tableName: string, columnName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns a SQL query string to check if a foreign key index already exists.
@@ -978,7 +1279,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * The result set should return rows if the index exists (length > 0 means exists).
      */
-    abstract getForeignKeyIndexExistsSQL(schema: string, tableName: string, indexName: string): string;
+    abstract getForeignKeyIndexExistsSQL(schema: string, tableName: string, indexName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns the batch separator for the database platform.
@@ -1009,7 +1310,7 @@ export abstract class CodeGenDatabaseProvider {
      *                   for functions returning record"), and a routine that only performs work has
      *                   no column list to give. SQL Server's `EXEC` is unaffected and ignores this.
      */
-    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], discardResult?: boolean): string;
+    abstract callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], discardResult?: boolean): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: CONDITIONAL INSERT ─────────────────────
 
@@ -1018,10 +1319,17 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `IF NOT EXISTS (checkQuery) BEGIN insertSQL END`
      * PostgreSQL: `DO $$ BEGIN IF NOT EXISTS (checkQuery) THEN insertSQL; END IF; END $$`
      *
-     * @param checkQuery The SELECT query to check for existence.
-     * @param insertSQL The INSERT statement to execute if the check returns no rows.
+     * **Both arguments must already be identifier-quoted by the caller** (`qi()`/`qs()`).
+     * On PostgreSQL the result is a `DO $$ ... $$` block, and the identifier auto-quoter
+     * (`quoteSQLForExecution`, applied later by `runQuery`/`LogSQLAndExecute`) skips dollar-quoted
+     * blocks wholesale — it cannot know whether their contents are SQL or literal text. So this is
+     * the one SQL-building path where the usual "write it bare, the quoter handles it" convention
+     * does not hold: a bare `ID` survives to PG folded as `id` and the statement fails every run.
+     *
+     * @param checkQuery The SELECT query to check for existence. Identifiers must be pre-quoted.
+     * @param insertSQL The INSERT statement to execute if the check returns no rows. Identifiers must be pre-quoted.
      */
-    abstract conditionalInsertSQL(checkQuery: string, insertSQL: string): string;
+    abstract conditionalInsertSQL(checkQuery: string, insertSQL: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Wraps an INSERT statement with a conditional existence check at the statement level.
@@ -1031,7 +1339,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param conflictCheckSQL The SQL Server existence check query. Ignored on PostgreSQL.
      * @returns An object with `prefix` and `suffix` strings to wrap around the INSERT.
      */
-    abstract wrapInsertWithConflictGuard(conflictCheckSQL: string): { prefix: string; suffix: string };
+    abstract wrapInsertWithConflictGuard(conflictCheckSQL: string): { prefix: string; suffix: string };  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: DDL OPERATIONS ─────────────────────────
 
@@ -1040,28 +1348,28 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `ALTER TABLE [schema].[table] ADD colName TYPE [NOT] NULL [DEFAULT expr]`
      * PostgreSQL: `ALTER TABLE schema."table" ADD COLUMN "colName" TYPE [NOT] NULL [DEFAULT expr]`
      */
-    abstract addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string;
+    abstract addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates ALTER TABLE ... ALTER COLUMN to change type and nullability.
      * SQL Server: `ALTER TABLE ... ALTER COLUMN col TYPE NULL|NOT NULL`
      * PostgreSQL: `ALTER TABLE ... ALTER COLUMN "col" TYPE type, ALTER COLUMN "col" SET|DROP NOT NULL`
      */
-    abstract alterColumnTypeAndNullabilitySQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean): string;
+    abstract alterColumnTypeAndNullabilitySQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates SQL to add a default constraint/value to a column.
      * SQL Server: `ALTER TABLE ... ADD CONSTRAINT DF_name DEFAULT expr FOR [col]`
      * PostgreSQL: `ALTER TABLE ... ALTER COLUMN "col" SET DEFAULT expr`
      */
-    abstract addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string;
+    abstract addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates SQL to drop an existing default constraint from a column.
      * SQL Server: Dynamic lookup of constraint name from sys catalog + DROP.
      * PostgreSQL: Dynamic lookup from pg_catalog + ALTER COLUMN DROP DEFAULT.
      */
-    abstract dropDefaultConstraintSQL(schema: string, tableName: string, columnName: string): string;
+    abstract dropDefaultConstraintSQL(schema: string, tableName: string, columnName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates a DROP statement for a database object (view/procedure/function).
@@ -1071,7 +1379,7 @@ export abstract class CodeGenDatabaseProvider {
      * Note: This differs from `generateDropGuard()` which is used for CREATE OR REPLACE
      * patterns. This method is used for cleanup operations.
      */
-    abstract dropObjectSQL(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION', schema: string, name: string): string;
+    abstract dropObjectSQL(objectType: 'VIEW' | 'PROCEDURE' | 'FUNCTION', schema: string, name: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: VIEW INTROSPECTION ─────────────────────
 
@@ -1080,13 +1388,13 @@ export abstract class CodeGenDatabaseProvider {
      * The query uses `@ViewName` and `@SchemaName` as named parameters.
      * Returns 1 row if the view exists.
      */
-    abstract getViewExistsSQL(): string;
+    abstract getViewExistsSQL(): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns SQL to get column metadata for a view or table.
      * Result columns: FieldName, Type, Length, Precision, Scale, AllowsNull.
      */
-    abstract getViewColumnsSQL(schema: string, viewName: string): string;
+    abstract getViewColumnsSQL(schema: string, viewName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: TYPE SYSTEM ────────────────────────────
 
@@ -1106,7 +1414,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param expected The expected type name (from DDL or configuration).
      * @returns True if the types are equivalent.
      */
-    abstract compareDataTypes(reported: string, expected: string): boolean;
+    abstract compareDataTypes(reported: string, expected: string): boolean;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: PLATFORM CONFIGURATION ─────────────────
 
@@ -1117,7 +1425,7 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `[]` (no system schemas need excluding)
      * PostgreSQL: `['information_schema', 'pg_catalog', 'pg_toast', ...]`
      */
-    abstract getSystemSchemasToExclude(): string[];
+    abstract getSystemSchemasToExclude(): string[];  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Whether this platform needs explicit view refresh after schema changes.
@@ -1131,7 +1439,22 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: `EXEC sp_refreshview 'schema.viewName';`
      * PostgreSQL: returns empty string (no-op).
      */
-    abstract generateViewRefreshSQL(schema: string, viewName: string): string;
+    abstract generateViewRefreshSQL(schema: string, viewName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
+
+    /**
+     * SQL that rebinds a layered entity's application-owned outer view after the
+     * inner generated view has been rewritten. SQL Server: empty here — the
+     * outer is `sp_refreshview`'d via {@link generateViewRefreshSQL}. PostgreSQL:
+     * a call to `__mj.spRebindLayeredOuterView` that restars `g.*` from
+     * `pg_get_viewdef` so newly added inner columns appear on the wrapper.
+     *
+     * Default is empty: platforms that do not need a distinct rebind step leave
+     * it alone. Must be a complete statement. The caller guards it on the outer
+     * view existing (bootstrap pass).
+     */
+    generateLayeredOuterRebindSQL(_entity: EntityInfo): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
+        return '';
+    }
 
     /**
      * Wraps `innerSQL` so it runs only when the named view already exists.
@@ -1147,14 +1470,14 @@ export abstract class CodeGenDatabaseProvider {
      * @param viewName View whose existence gates `innerSQL`
      * @param innerSQL Statements to run when the view exists. Must be a complete statement batch.
      */
-    abstract generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string;
+    abstract generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates a simple test query to validate a view is functional.
      * SQL Server: `SELECT TOP 1 * FROM [schema].[viewName]`
      * PostgreSQL: `SELECT * FROM "schema"."viewName" LIMIT 1`
      */
-    abstract generateViewTestQuerySQL(schema: string, viewName: string): string;
+    abstract generateViewTestQuerySQL(schema: string, viewName: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Whether this platform needs a post-sync fix for virtual field nullability.
@@ -1170,7 +1493,7 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: returns the SQL unchanged (case-insensitive identifiers).
      * PostgreSQL: double-quotes PascalCase identifiers to preserve case.
      */
-    abstract quoteSQLForExecution(sql: string): string;
+    abstract quoteSQLForExecution(sql: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: DEFAULT VALUE PARSING ──────────────────
 
@@ -1181,7 +1504,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * @returns The cleaned default value, or `null` if the column has no meaningful default.
      */
-    abstract parseColumnDefaultValue(sqlDefaultValue: string): string | null;
+    abstract parseColumnDefaultValue(sqlDefaultValue: string): string | null;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
 
@@ -1195,21 +1518,21 @@ export abstract class CodeGenDatabaseProvider {
      *   avoid re-scanning the entire schema for entities that haven't changed. `undefined`
      *   or empty preserves the prior unscoped behavior.
      */
-    abstract getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string;
+    abstract getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns an additional WHERE clause fragment for the check-constraints query.
      * SQL Server: ` WHERE SchemaName NOT IN (...)` when excludeSchemas is provided.
      * PostgreSQL: empty string (the PG view already handles schema filtering).
      */
-    abstract getCheckConstraintsSchemaFilter(excludeSchemas: string[]): string;
+    abstract getCheckConstraintsSchemaFilter(excludeSchemas: string[]): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns an additional WHERE clause fragment for the missing-base-tables query.
      * SQL Server: ` WHERE VirtualEntity=0`
      * PostgreSQL: empty string (PG query doesn't need this filter).
      */
-    abstract getEntitiesWithMissingBaseTablesFilter(): string;
+    abstract getEntitiesWithMissingBaseTablesFilter(): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Generates SQL to fix virtual field nullability after metadata sync.
@@ -1218,7 +1541,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * @param mjCoreSchema The MJ core schema name.
      */
-    abstract getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string;
+    abstract getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Returns DDL that creates/replaces the platform's metadata-management
@@ -1235,7 +1558,7 @@ export abstract class CodeGenDatabaseProvider {
      * SQL Server: returns `null` (objects ship in the baseline migrations).
      * PostgreSQL: returns the full support-object DDL.
      */
-    getMetadataSupportObjectsSQL(_mjCoreSchema: string): string | null {
+    getMetadataSupportObjectsSQL(_mjCoreSchema: string): string | null {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return null;
     }
 
@@ -1249,7 +1572,7 @@ export abstract class CodeGenDatabaseProvider {
      * @param filePath Path to the SQL file to execute.
      * @returns True if execution succeeded, false otherwise.
      */
-    abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;
+    abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
     /**
      * Optional — dialect-specific fast path for regenerating a single entity's
@@ -1272,7 +1595,7 @@ export abstract class CodeGenDatabaseProvider {
      *               other per-entity regeneration failure (collected into the
      *               batch summary, halts the install in strict mode).
      */
-    regenerateBaseView?(
+    regenerateBaseView?(  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
         entity: EntityInfo,
         viewSQL: string,
         willRegenerate?: Set<string>
@@ -1304,7 +1627,7 @@ export abstract class CodeGenDatabaseProvider {
      * The `success`/`phase` pair in the result identifies exactly where things
      * fell over so the caller doesn't have to bisect.
      */
-    executeEntityPhased?(opts: {
+    executeEntityPhased?(opts: {  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
         entity: EntityInfo;
         /** Root-ID TVF DDL emitted ahead of the view. Empty when the entity
          *  has no recursive ParentID FKs. */
@@ -1338,7 +1661,7 @@ export abstract class CodeGenDatabaseProvider {
      *
      * @param schemas List of schemas to scan. Empty array returns no rows.
      */
-    getRoutineNamesBySchemaSQL(_schemas: string[]): string {
+    getRoutineNamesBySchemaSQL(_schemas: string[]): string {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         return '';
     }
 
@@ -1372,7 +1695,7 @@ export abstract class CodeGenDatabaseProvider {
      * platform-specific shortcuts (e.g. checking only `sys.procedures` on
      * SQL Server) but the default is fine for all current dialects.
      */
-    async validateExpectedCRUDFunctions(
+    async ValidateExpectedCRUDFunctions(
         pool: CodeGenConnection,
         entities: EntityInfo[],
     ): Promise<CRUDValidationMissing[]> {
@@ -1428,6 +1751,145 @@ export abstract class CodeGenDatabaseProvider {
             !existing.has(`${e.schema.toLowerCase()}.${e.expectedRoutine.toLowerCase()}`)
         );
     }
+
+    /** @deprecated Use {@link ValidateExpectedCRUDFunctions}. */
+    async validateExpectedCRUDFunctions(
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+    ): Promise<CRUDValidationMissing[]> {
+        return this.ValidateExpectedCRUDFunctions(pool, entities);
+    }
+
+    /**
+     * Cross-check every entity's declared fields against the columns its base view
+     * actually produces.
+     *
+     * A field the metadata promises but the view cannot emit is not a cosmetic
+     * inconsistency: the runtime selects fields by name, so the first read of that
+     * entity fails with `column "X" does not exist`. Grids surface that as an empty
+     * result rather than an error, so the entity simply appears to hold no data — a
+     * failure mode that can persist for months without anyone seeing a stack trace.
+     *
+     * This drift is created whenever a migration adds a column to a base TABLE and
+     * registers an EntityField for it without also rebuilding the base VIEW. CodeGen
+     * would normally repair that on its next run, but `excludeSchemas` skips SQL
+     * generation entirely for excluded schemas (permissions only) — and `__mj` is in
+     * that list by convention on essentially every install. So for the core schema
+     * there is no regeneration pass to lean on, and the drift is permanent.
+     *
+     * Deliberately NOT filtered by `excludeSchemas`: excluded schemas are precisely
+     * where nothing else is watching.
+     *
+     * Read-only — this reports, it does not repair.
+     */
+    async ValidateEntityFieldsResolve(
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+    ): Promise<FieldResolutionGap[]> {
+        const relevant = entities.filter(e => !e.VirtualEntity && e.BaseView && e.SchemaName);
+        if (relevant.length === 0) return [];
+
+        const schemas = Array.from(new Set(relevant.map(e => e.SchemaName)));
+        const sql = this.getViewColumnsBySchemaSQL(schemas);
+        if (!sql || !sql.trim()) return [];
+
+        const result = await pool.query(sql);
+        // schema.view -> set of column names, all lower-cased so the comparison is
+        // dialect-neutral (PG stores as-written, SQL Server folds by collation).
+        const actual = new Map<string, Set<string>>();
+        for (const row of result.recordset) {
+            const schemaName = String(row.schema_name ?? '').toLowerCase();
+            const viewName = String(row.view_name ?? '').toLowerCase();
+            const columnName = String(row.column_name ?? '').toLowerCase();
+            if (!schemaName || !viewName || !columnName) continue;
+            const key = `${schemaName}.${viewName}`;
+            let set = actual.get(key);
+            if (!set) { set = new Set<string>(); actual.set(key, set); }
+            set.add(columnName);
+        }
+
+        const gaps: FieldResolutionGap[] = [];
+        for (const entity of relevant) {
+            const key = `${entity.SchemaName.toLowerCase()}.${entity.BaseView.toLowerCase()}`;
+            const columns = actual.get(key);
+            // No entry at all means the view does not exist. That is a different fault
+            // with its own diagnostics; reporting every field of a missing view as a gap
+            // would bury the real signal.
+            if (!columns) continue;
+            for (const field of entity.Fields) {
+                if (!columns.has(field.Name.toLowerCase())) {
+                    gaps.push({
+                        entity: entity.Name,
+                        schema: entity.SchemaName,
+                        baseView: entity.BaseView,
+                        field: field.Name,
+                        isVirtual: !!field.IsVirtual,
+                    });
+                }
+            }
+        }
+        return gaps;
+    }
+
+    /** @deprecated Use {@link ValidateEntityFieldsResolve}. */
+    async validateEntityFieldsResolve(
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+    ): Promise<FieldResolutionGap[]> {
+        return this.ValidateEntityFieldsResolve(pool, entities);
+    }
+
+    /**
+     * Dialect SQL returning every view column in the given schemas as
+     * `{ schema_name, view_name, column_name }`.
+     *
+     * `information_schema.columns` restricted to views is standard in both dialects,
+     * so the base implementation serves both; override only if a dialect needs a
+     * catalog-specific path.
+     */
+    protected getViewColumnsBySchemaSQL(schemas: string[]): string {
+        if (!schemas || schemas.length === 0) return '';
+        // Case-INSENSITIVE on both sides, deliberately.
+        //
+        // The caller keys and looks up its map with `.toLowerCase()`, so matching the
+        // catalog verbatim here left the two halves disagreeing about case. On
+        // PostgreSQL an unquoted schema is folded to lowercase in the catalog, so an
+        // entity whose SchemaName is stored with any other casing matched no rows,
+        // fell into the "view does not exist" skip, and was silently dropped from
+        // validation — a validator reporting nothing, which is the exact failure this
+        // check exists to end.
+        //
+        // LOWER() on both sides rather than lowercasing only the list: that is correct
+        // whichever way the schema was actually created (PG folds unquoted, keeps
+        // quoted; SQL Server stores as-written and usually compares case-insensitively
+        // by collation), and it makes the SQL agree with the JS by construction rather
+        // than by coincidence. The cost is a scan of information_schema over a handful
+        // of schemas, which is nothing.
+        const list = schemas.map(s => `'${s.toLowerCase().replace(/'/g, "''")}'`).join(', ');
+        return `SELECT c.table_schema AS schema_name, c.table_name AS view_name, c.column_name AS column_name
+                  FROM information_schema.columns c
+                  JOIN information_schema.views v
+                    ON v.table_schema = c.table_schema AND v.table_name = c.table_name
+                 WHERE LOWER(c.table_schema) IN (${list})`;
+    }
+}
+
+/**
+ * One entity field that the metadata promises but the entity's base view does not
+ * produce. The runtime selects fields by name, so each of these makes the entity
+ * unreadable — and a grid renders that as "no data" rather than an error.
+ */
+export interface FieldResolutionGap {
+    /** Entity.Name (e.g. "MJ: Entities") */
+    entity: string;
+    /** Entity.SchemaName (e.g. "__mj") */
+    schema: string;
+    /** Entity.BaseView (e.g. "vwEntities") */
+    baseView: string;
+    /** EntityField.Name that the view does not expose. */
+    field: string;
+    /** True for join-sourced/computed fields, false for plain base-table columns. */
+    isVirtual: boolean;
 }
 
 /**
@@ -1461,7 +1923,7 @@ export interface PhasedExecutionResult {
  * @returns The resolved provider subclass instance.
  * @throws Error if no provider is registered for the given platform.
  */
-export function resolveCodeGenDatabaseProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
+export function ResolveCodeGenDatabaseProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
     const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
         CodeGenDatabaseProvider,
         platform,
@@ -1473,4 +1935,9 @@ export function resolveCodeGenDatabaseProvider(platform: DatabasePlatform): Code
         );
     }
     return provider;
+}
+
+/** @deprecated Use {@link ResolveCodeGenDatabaseProvider}. */
+export function resolveCodeGenDatabaseProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
+    return ResolveCodeGenDatabaseProvider(platform);
 }

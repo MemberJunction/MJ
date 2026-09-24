@@ -1,8 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
+import { Subject, of } from 'rxjs';
 import { CommonModule } from '@angular/common';
+import { Component, ElementRef, EventEmitter, Input, inject, type OnChanges } from '@angular/core';
 import { renderComponentFixture, query, text, hasClass } from '@memberjunction/ng-test-utils';
 import { CompositeKey } from '@memberjunction/core';
+import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjCollapsiblePanelComponent } from './collapsible-panel.component';
+import type { MjFormFieldComponent } from '../field/form-field.component';
+import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
+import { FormSectionIndicatorCoordinator } from '../section-indicators/form-section-indicator-coordinator.service';
+import { FORM_SECTION_FIELD_HOST, type FormSectionFieldHost } from '../section-indicators/form-section-field-host';
+import { ParseValidationSource } from '../section-indicators/form-section-indicators';
 import type { FormNavigationEvent } from '../types/navigation-events';
 import type { FormContext } from '../types/form-types';
 
@@ -25,6 +33,37 @@ function formStub(expanded: boolean) {
   };
 }
 
+/**
+ * Duck-typed stand-in for the @ContentChildren QueryList of mj-form-field children. The panel
+ * reads `length`, `forEach`, `toArray()`, `some()` and `changes` off the list, and each child's
+ * `Navigate` / `DisplayName` / `IsFieldReadableByUser` / `ShouldHideField` — that is the whole
+ * contract, and projecting real form-field components would drag their entire dependency graph
+ * in for a visibility assertion.
+ *
+ * `ShouldHideField` mirrors the real component: a field the user cannot read reports itself
+ * hidden WITHOUT reading its value, because BaseEntity.Get() throws for a denied field and
+ * hasRenderableContent() sweeps this property on every change-detection cycle.
+ */
+function fieldChildren(readable: boolean[]) {
+  // `Navigate` and `ValueChange` are both stubbed because `ngAfterContentInit` subscribes to
+  // every projected field's outputs. They are irrelevant to what these tests assert, but a
+  // missing one is not inert — it throws inside content-init, before any assertion runs.
+  const items = readable.map((r, i) => ({
+    DisplayName: `Field ${i}`,
+    IsFieldReadableByUser: r,
+    ShouldHideField: !r,
+    Navigate: of(),
+    ValueChange: of(),
+  }));
+  return {
+    length: items.length,
+    toArray: () => items,
+    forEach: (fn: (item: unknown) => void) => items.forEach(fn),
+    some: (fn: (item: unknown) => boolean) => items.some(fn),
+    changes: new Subject(),
+  };
+}
+
 function render(inputs: Record<string, unknown>) {
   return renderComponentFixture(MjCollapsiblePanelComponent, {
     declarations: [MjCollapsiblePanelComponent],
@@ -32,6 +71,34 @@ function render(inputs: Record<string, unknown>) {
     inputs,
   });
 }
+
+describe('MjCollapsiblePanelComponent — field-level security', () => {
+  /** Render, attach the projected-field stub, then run the content-init pass that reads it. */
+  function renderWithFields(readable: boolean[]) {
+    const f = render({ SectionName: 'Compensation', SectionKey: 'comp', Form: formStub(true) });
+    (f.componentInstance as unknown as { FieldComponents: unknown }).FieldComponents = fieldChildren(readable);
+    f.componentInstance.ngAfterContentInit();
+    f.detectChanges();
+    return f;
+  }
+
+  it('hides a section whose every field is denied — an empty card reads as a broken screen', () => {
+    const f = renderWithFields([false, false]);
+    expect(f.componentInstance.IsVisible).toBe(false);
+  });
+
+  it('keeps a section with at least one readable field', () => {
+    const f = renderWithFields([false, true]);
+    expect(f.componentInstance.IsVisible).toBe(true);
+  });
+
+  it('keeps a section that projects NO fields at all', () => {
+    // Related-entity grids, IS-A cards and slot-injected panels legitimately have no
+    // mj-form-field children. "No fields" and "no readable fields" are different states.
+    const f = renderWithFields([]);
+    expect(f.componentInstance.IsVisible).toBe(true);
+  });
+});
 
 describe('MjCollapsiblePanelComponent (DOM)', () => {
   it('renders the section name (DisplayName) and the data-section-key attribute', () => {
@@ -46,9 +113,100 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
     expect(hasClass(f, '.mj-forms-panel', 'mj-forms-panel--inherited')).toBe(false);
   });
 
+  it('does not pin a persisted pixel height when left-nav hides accordion chrome', () => {
+    const form = {
+      ...formStub(true),
+      GetSectionPanelHeight: () => 48,
+    };
+    const f = renderComponentFixture(MjCollapsiblePanelComponent, {
+      declarations: [MjCollapsiblePanelComponent],
+      imports: [CommonModule],
+      providers: [{
+        provide: FormChromeCoordinator,
+        useValue: {
+          HidesAccordionChrome: () => true,
+          IsRelatedSectionVisible: () => true,
+          IsFirstClassSectionVisible: () => true,
+          Spec: { RelatedRoles: new Map() },
+          Changes: new Subject<void>(),
+        },
+      }],
+      inputs: {
+        SectionName: 'Payments',
+        SectionKey: 'payments',
+        Variant: 'related-entity',
+        Form: form,
+      },
+    });
+    const content = query(f, '.mj-forms-panel-content') as HTMLElement;
+    expect(content.style.height).toBe('');
+  });
+
+  it('does not pin a toolbar-only persisted height in accordion', () => {
+    const form = {
+      ...formStub(true),
+      GetSectionPanelHeight: () => 52,
+    };
+    const f = render({
+      SectionName: 'Products',
+      SectionKey: 'products',
+      Variant: 'related-entity',
+      Form: form,
+    });
+    const content = query(f, '.mj-forms-panel-content') as HTMLElement;
+    expect(content.style.height).toBe('');
+  });
+
+  it('honors a user-resized accordion height at or above the min', () => {
+    const form = {
+      ...formStub(true),
+      GetSectionPanelHeight: () => 240,
+    };
+    const f = render({
+      SectionName: 'Products',
+      SectionKey: 'products',
+      Variant: 'related-entity',
+      Form: form,
+    });
+    const content = query(f, '.mj-forms-panel-content') as HTMLElement;
+    expect(content.style.height).toBe('240px');
+  });
+
+  it('does not pin a persisted pixel height when the host has mj-chrome-show', () => {
+    const form = {
+      ...formStub(true),
+      GetSectionPanelHeight: () => 48,
+    };
+    const f = renderComponentFixture(MjCollapsiblePanelComponent, {
+      declarations: [MjCollapsiblePanelComponent],
+      imports: [CommonModule],
+      inputs: {
+        SectionName: 'Payments',
+        SectionKey: 'payments',
+        Variant: 'related-entity',
+        Form: form,
+      },
+      setup: (_c, ref) => {
+        ref.location.nativeElement.classList.add('mj-chrome-show');
+      },
+    });
+    const content = query(f, '.mj-forms-panel-content') as HTMLElement;
+    expect(content.style.height).toBe('');
+  });
+
   it('applies the inherited variant class', () => {
     const f = render({ SectionName: 'Base', Variant: 'inherited', Form: formStub(true) });
     expect(hasClass(f, '.mj-forms-panel', 'mj-forms-panel--inherited')).toBe(true);
+  });
+
+  it('MatchesSearch hits section name, key, and field names without requiring chrome visibility', () => {
+    const f = render({ SectionName: 'Orders', SectionKey: 'orders', Form: formStub(false) });
+    const panel = f.componentInstance;
+    expect(panel.MatchesSearch('ord')).toBe(true);
+    expect(panel.MatchesSearch('orders')).toBe(true);
+    expect(panel.MatchesSearch('xyz')).toBe(false);
+    panel.FieldNames = 'order date total gross';
+    expect(panel.MatchesSearch('gross')).toBe(true);
   });
 
   it('omits the row-count badge when BadgeCount is undefined', () => {
@@ -129,5 +287,200 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
     const f = render({ SectionName: 'X', SectionKey: 'k', Form: stub });
     (query(f, '.mj-forms-panel-header') as HTMLElement).click();
     expect(stub.SetSectionExpanded).toHaveBeenCalledWith('k', true);
+  });
+});
+
+/**
+ * golive #255 — the panel's field set is the union of its content query and the fields that
+ * reach it through {@link FORM_SECTION_FIELD_HOST}.
+ *
+ * A field declared inside a widget component's OWN template, with the widget projected into the
+ * panel, is behind a view boundary the content query cannot cross. The Accounting section of the
+ * Product form was exactly that: four required fields the section could not see, so it reported
+ * no required-and-empty count before a save and owned none of the field errors after the failed
+ * one, and the rail never badged it. The injector does cross that boundary.
+ *
+ * The field here is a duck-typed stand-in registered through the token, not a real
+ * `mj-form-field`: the panel reads `EditMode`, `IsFieldReadOnly`, `IsRequiredEmpty`, `ShowErrors`,
+ * `IsDirty`, `FieldName`, `DisplayName`, `ShouldHideField`, `IsFieldReadableByUser`, `ValueChange`
+ * and `HostElement` off it, and that is the whole contract. The REAL field's side — that it
+ * registers on construction and withdraws on destroy — is pinned in form-field.component.dom.test.ts.
+ */
+@Component({
+  standalone: true,
+  selector: 'test-hosted-field',
+  template: '<span class="hosted-field">{{ FieldName }}</span>',
+})
+class HostedFieldStub implements OnChanges {
+  @Input() FieldName = '';
+  /** Bound by the widget AFTER the panel is first evaluated — exactly like the real field's inputs. */
+  @Input() EditMode = false;
+  @Input() Value: unknown = null;
+  @Input() IsDirty = false;
+  IsFieldReadOnly = false;
+  ShowErrors = false;
+  ShowWarnings = false;
+  StoredDateIsUnreadable = false;
+  IsFieldReadableByUser = true;
+  /** False until ngOnChanges, mirroring MjFormFieldComponent.InputsBound. */
+  InputsBound = false;
+  ValueChange = new EventEmitter<unknown>();
+  Navigate = new EventEmitter<FormNavigationEvent>();
+  get DisplayName(): string {
+    return this.FieldName;
+  }
+  private get isEmpty(): boolean {
+    return this.Value === null || this.Value === undefined || this.Value === '';
+  }
+  /** The real rule: a required field, in edit mode, with nothing in it. */
+  get IsRequiredEmpty(): boolean {
+    return this.EditMode && this.isEmpty;
+  }
+  /** The real rule: hidden only in read mode when empty. Before inputs bind this is TRUE. */
+  get ShouldHideField(): boolean {
+    return !this.EditMode && this.isEmpty;
+  }
+  private readonly host = inject(FORM_SECTION_FIELD_HOST, { optional: true });
+  private readonly el = inject(ElementRef<HTMLElement>);
+  get HostElement(): HTMLElement {
+    return this.el.nativeElement;
+  }
+  constructor() {
+    this.host?.RegisterField(this as unknown as MjFormFieldComponent);
+  }
+  ngOnChanges(): void {
+    this.InputsBound = true;
+    this.host?.NotifyFieldChanged(this as unknown as MjFormFieldComponent);
+  }
+}
+
+/** A widget with its own view: the boundary a content query stops at. */
+@Component({
+  standalone: true,
+  selector: 'test-widget',
+  imports: [HostedFieldStub],
+  template: `
+    <div class="widget-shell">
+      <test-hosted-field FieldName="CompanyID" [EditMode]="EditMode" [Value]="Value"></test-hosted-field>
+      <test-hosted-field FieldName="RevenueRecognitionTypeID" [EditMode]="EditMode" [Value]="Value"></test-hosted-field>
+    </div>
+  `,
+})
+class WidgetStub {
+  @Input() EditMode = false;
+  @Input() Value: unknown = null;
+}
+
+@Component({
+  standalone: false,
+  selector: 'test-form-with-widget-section',
+  template: `
+    <mj-collapsible-panel SectionKey="accounting" SectionName="Accounting" [Form]="Form">
+      <test-widget [EditMode]="EditMode" [Value]="Value"></test-widget>
+    </mj-collapsible-panel>
+  `,
+})
+class FormWithWidgetSection {
+  Form = formStub(true);
+  /** Inputs so a test can flip them through `setInput`, which marks the view dirty for the zoneless TestBed. */
+  @Input() EditMode = true;
+  @Input() Value: unknown = null;
+}
+
+describe('MjCollapsiblePanelComponent — fields behind a component view boundary', () => {
+  function renderWidgetSection(inputs: { EditMode?: boolean; Value?: unknown } = {}) {
+    const f = renderComponentFixture(FormWithWidgetSection, {
+      declarations: [FormWithWidgetSection, MjCollapsiblePanelComponent],
+      imports: [CommonModule, WidgetStub],
+      providers: [FormSectionIndicatorCoordinator],
+      inputs,
+    });
+    const panel = f.debugElement.children[0].componentInstance as MjCollapsiblePanelComponent;
+    return { f, panel };
+  }
+
+  it('counts a required-and-empty field the content query cannot see', () => {
+    const { f, panel } = renderWidgetSection();
+    // The content query genuinely sees nothing — that is the situation being fixed.
+    expect(panel.FieldComponents.length).toBe(0);
+    expect(panel.SectionIndicators.ErrorCount).toBe(2);
+    expect(query(f, 'mj-collapsible-panel')?.getAttribute('data-error-count')).toBe('2');
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-panel-has-errors')).toBe(true);
+  });
+
+  it('owns the field-named validation errors a failed save publishes for those fields', () => {
+    const { panel } = renderWidgetSection();
+    expect(panel.OwnsValidationSource(ParseValidationSource('CompanyID'))).toBe(true);
+    expect(panel.OwnsValidationSource(ParseValidationSource('RevenueRecognitionTypeID'))).toBe(true);
+    expect(panel.OwnsValidationSource(ParseValidationSource('SKU'))).toBe(false);
+  });
+
+  it('reports through the coordinator the rail reads, so the group badge follows', () => {
+    const { f } = renderWidgetSection();
+    const coordinator = f.debugElement.injector.get(FormSectionIndicatorCoordinator);
+    expect(coordinator.IndicatorsFor('accounting').ErrorCount).toBe(2);
+    const orphan = new ValidationErrorInfo('CompanyID', 'Company cannot be null', null);
+    expect(coordinator.UnroutedValidationErrors([orphan])).toEqual([]);
+  });
+
+  it('clears once the fields are filled, on the same pass', () => {
+    // The widget's view refreshes AFTER the panel's host bindings and the rail. Without the
+    // field's NotifyFieldChanged this pass would end with the section still counting 2 and, in
+    // dev mode, an ExpressionChangedAfterItHasBeenChecked error on data-error-count.
+    const { f, panel } = renderWidgetSection();
+    f.componentRef.setInput('Value', 'filled');
+    f.detectChanges();
+    expect(panel.SectionIndicators.ErrorCount).toBe(0);
+    expect(query(f, 'mj-collapsible-panel')?.getAttribute('data-error-count')).toBe('0');
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-panel-has-errors')).toBe(false);
+  });
+
+  it('finds hosted fields by name in section search, and does not hide a section that has them', () => {
+    const { panel } = renderWidgetSection();
+    expect(panel.MatchesSearch('revenue')).toBe(true);
+    expect(panel.IsVisible).toBe(true);
+  });
+
+  /**
+   * Review finding on this change: the panel first evaluates hide-when-empty in
+   * `ngAfterContentInit`, BEFORE a widget's view has bound its fields' inputs. An unbound field
+   * reports itself hidden (read mode, empty), so a section whose fields all sit behind the
+   * boundary latched `IsVisible = false` and never recovered. Two rules fix it: a hosted field is
+   * not read until its inputs are bound, and a change to the hosted set recomputes visibility.
+   */
+  it('is not hidden by its own fields before they have bound their inputs', () => {
+    const { f, panel } = renderWidgetSection();
+    f.detectChanges();
+    f.detectChanges();
+    expect(panel.IsVisible).toBe(true);
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-panel-empty')).toBe(false);
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-search-hidden')).toBe(false);
+  });
+
+  it('still hides when every hosted field is empty in read mode, and comes back when editing starts', () => {
+    const { f, panel } = renderWidgetSection({ EditMode: false });
+    expect(panel.IsVisible).toBe(false);
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-panel-empty')).toBe(true);
+
+    f.componentRef.setInput('EditMode', true);
+    f.detectChanges();
+    expect(panel.IsVisible).toBe(true);
+    expect(hasClass(f, 'mj-collapsible-panel', 'mj-panel-empty')).toBe(false);
+    expect(panel.SectionIndicators.ErrorCount).toBe(2);
+  });
+
+  it('ignores a registered field whose element is not inside the panel', () => {
+    const { panel } = renderWidgetSection();
+    const elsewhere = document.createElement('div');
+    const stray = {
+      FieldName: 'Stray', DisplayName: 'Stray', EditMode: true, IsFieldReadOnly: false, InputsBound: true,
+      Navigate: new EventEmitter<FormNavigationEvent>(),
+      IsRequiredEmpty: true, ShowErrors: false, IsDirty: false, ShouldHideField: false,
+      IsFieldReadableByUser: true, ValueChange: new EventEmitter<unknown>(), HostElement: elsewhere,
+    } as unknown as MjFormFieldComponent;
+    (panel as FormSectionFieldHost).RegisterField(stray);
+    expect(panel.SectionIndicators.ErrorCount).toBe(2);
+    expect(panel.OwnsValidationSource(ParseValidationSource('Stray'))).toBe(false);
+    (panel as FormSectionFieldHost).UnregisterField(stray);
   });
 });

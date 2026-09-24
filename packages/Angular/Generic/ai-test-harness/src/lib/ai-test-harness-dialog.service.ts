@@ -17,7 +17,7 @@ export class AITestHarnessDialogService {
   /**
    * Opens the test harness window for an AI Agent
    */
-  openForAgent(agentId: string, viewContainerRef?: ViewContainerRef): Observable<TestResult> {
+  OpenForAgent(agentId: string, viewContainerRef?: ViewContainerRef): Observable<TestResult> {
     return this.testHarnessService.openAgentTestHarness({
       agentId: agentId,
       // Don't pass title - let the window component generate it with the agent name
@@ -27,10 +27,15 @@ export class AITestHarnessDialogService {
     });
   }
 
+  /** @deprecated Use {@link OpenForAgent}. */
+  openForAgent(agentId: string, viewContainerRef?: ViewContainerRef): Observable<TestResult> {
+    return this.OpenForAgent(agentId, viewContainerRef);
+  }
+
   /**
    * Opens the test harness window for an AI Prompt
    */
-  openForPrompt(promptId: string, viewContainerRef?: ViewContainerRef): Observable<TestResult> {
+  OpenForPrompt(promptId: string, viewContainerRef?: ViewContainerRef): Observable<TestResult> {
     return this.testHarnessService.openPromptTestHarness({
       promptId: promptId,
       // Don't pass title - let the window component generate it with the prompt name
@@ -38,5 +43,10 @@ export class AITestHarnessDialogService {
       height: '80vh',
       viewContainerRef: viewContainerRef
     });
+  }
+
+  /** @deprecated Use {@link OpenForPrompt}. */
+  openForPrompt(promptId: string, viewContainerRef?: ViewContainerRef): Observable<TestResult> {
+    return this.OpenForPrompt(promptId, viewContainerRef);
   }
 }

@@ -1,16 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { CreateTableRule } from '../rules/CreateTableRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 
 const rule = new CreateTableRule();
 
 function convert(sql: string): string {
-  const context = createConversionContext('tsql', 'postgres');
+  const context = CreateConversionContext('tsql', 'postgres');
   return rule.PostProcess!(sql, sql, context);
 }
 
-function convertWithContext(sql: string): { result: string; context: ReturnType<typeof createConversionContext> } {
-  const context = createConversionContext('tsql', 'postgres');
+function convertWithContext(sql: string): { result: string; context: ReturnType<typeof CreateConversionContext> } {
+  const context = CreateConversionContext('tsql', 'postgres');
   const result = rule.PostProcess!(sql, sql, context);
   return { result, context };
 }
@@ -320,6 +320,22 @@ describe('CreateTableRule', () => {
       const result = convert(sql);
       expect(result).toContain('CONSTRAINT pk_payment');
       expect(result).not.toContain('"pk_payment"');
+    });
+  });
+
+  describe('JSON CHECK constraints', () => {
+    it('should convert ISJSON(col) = 1 to (col) IS JSON after identifier quoting', () => {
+      const sql = `CREATE TABLE [__mj_BizAppsAccounting].[AccountingEngineExtension] (
+  [ID] UNIQUEIDENTIFIER NOT NULL,
+  [Configuration] NVARCHAR(MAX) NULL,
+  CONSTRAINT CK_AccountingEngineExtension_Configuration CHECK (
+    Configuration IS NULL OR ISJSON(Configuration) = 1
+  )
+)`;
+      const result = convert(sql);
+      expect(result).toMatch(/IS JSON/);
+      expect(result).not.toMatch(/"ISJSON"/);
+      expect(result).not.toMatch(/\bISJSON\s*\(/i);
     });
   });
 });

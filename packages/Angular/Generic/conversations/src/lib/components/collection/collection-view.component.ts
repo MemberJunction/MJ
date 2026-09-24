@@ -117,27 +117,123 @@ type SortBy = 'name' | 'date' | 'type';
   `]
 })
 export class CollectionViewComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy  {
-  @Input() collection!: MJCollectionEntity;
-  @Input() currentUser!: UserInfo;
-  @Input() environmentId!: string;
+  @Input() Collection!: MJCollectionEntity;
+
+  /** @deprecated Use {@link Collection}. */
+  @Input() set collection(value: MJCollectionEntity) {
+    this.Collection = value;
+  }
+  /** @deprecated Use {@link Collection}. */
+  get collection(): MJCollectionEntity {
+    return this.Collection;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
   @Input() canEdit: boolean = true;
 
   // Store versions with parent artifact info for display
-  public artifactVersions: Array<{
+  public ArtifactVersions: Array<{
     version: MJArtifactVersionEntity;
     artifact: MJArtifactEntity;
   }> = [];
-  public viewMode: ViewMode = 'grid';
-  public sortBy: SortBy = 'date';
-  public selectedArtifactId: string | null = null;
-  public selectedVersionNumber: number | undefined = undefined;
-  public showArtifactViewer = false;
 
-  public sortOptions = [
+  /** @deprecated Use {@link ArtifactVersions}. */
+  public get artifactVersions(): Array<{
+    version: MJArtifactVersionEntity;
+    artifact: MJArtifactEntity;
+  }> {
+    return this.ArtifactVersions;
+  }
+  /** @deprecated Use {@link ArtifactVersions}. */
+  public set artifactVersions(value: Array<{
+    version: MJArtifactVersionEntity;
+    artifact: MJArtifactEntity;
+  }>) {
+    this.ArtifactVersions = value;
+  }
+  public ViewMode: ViewMode = 'grid';
+
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): ViewMode {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public set viewMode(value: ViewMode) {
+    this.ViewMode = value;
+  }
+  public SortBy: SortBy = 'date';
+
+  /** @deprecated Use {@link SortBy}. */
+  public get sortBy(): SortBy {
+    return this.SortBy;
+  }
+  /** @deprecated Use {@link SortBy}. */
+  public set sortBy(value: SortBy) {
+    this.SortBy = value;
+  }
+  public SelectedArtifactId: string | null = null;
+
+  /** @deprecated Use {@link SelectedArtifactId}. */
+  public get selectedArtifactId(): string | null {
+    return this.SelectedArtifactId;
+  }
+  /** @deprecated Use {@link SelectedArtifactId}. */
+  public set selectedArtifactId(value: string | null) {
+    this.SelectedArtifactId = value;
+  }
+  public SelectedVersionNumber: number | undefined = undefined;
+
+  /** @deprecated Use {@link SelectedVersionNumber}. */
+  public get selectedVersionNumber(): number | undefined {
+    return this.SelectedVersionNumber;
+  }
+  /** @deprecated Use {@link SelectedVersionNumber}. */
+  public set selectedVersionNumber(value: number | undefined) {
+    this.SelectedVersionNumber = value;
+  }
+  public ShowArtifactViewer = false;
+
+  /** @deprecated Use {@link ShowArtifactViewer}. */
+  public get showArtifactViewer() {
+    return this.ShowArtifactViewer;
+  }
+  /** @deprecated Use {@link ShowArtifactViewer}. */
+  public set showArtifactViewer(value) {
+    this.ShowArtifactViewer = value;
+  }
+
+  public SortOptions = [
     { label: 'Name', value: 'name' },
     { label: 'Date Modified', value: 'date' },
     { label: 'Type', value: 'type' }
   ];
+
+  /** @deprecated Use {@link SortOptions}. */
+  public get sortOptions() {
+    return this.SortOptions;
+  }
+  /** @deprecated Use {@link SortOptions}. */
+  public set sortOptions(value) {
+    this.SortOptions = value;
+  }
 
   constructor(private cdr: ChangeDetectorRef, private confirmService: MJConfirmService) {
   super();}
@@ -154,13 +250,13 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
 
   ngOnDestroy() {
     // Close artifact viewer when navigating away from collection
-    if (this.showArtifactViewer) {
-      this.onCloseArtifactViewer();
+    if (this.ShowArtifactViewer) {
+      this.OnCloseArtifactViewer();
     }
   }
 
   private async loadArtifacts(): Promise<void> {
-    if (!this.collection) return;
+    if (!this.Collection) return;
 
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -172,11 +268,11 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
         ExtraFilter: `ID IN (
           SELECT ca.ArtifactVersionID
           FROM [__mj].[vwCollectionArtifacts] ca
-          WHERE ca.CollectionID='${this.collection.ID}'
+          WHERE ca.CollectionID='${this.Collection.ID}'
         )`,
         OrderBy: this.getVersionOrderBy(),
         ResultType: 'entity_object'
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       if (versionResult.Success && versionResult.Results) {
         // Get unique artifact IDs
@@ -190,7 +286,7 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
             EntityName: 'MJ: Artifacts',
             ExtraFilter: artifactFilter,
             ResultType: 'entity_object'
-          }, this.currentUser);
+          }, this.CurrentUser);
 
           if (artifactResult.Success && artifactResult.Results) {
             artifactResult.Results.forEach(a => artifactMap.set(a.ID, a));
@@ -198,23 +294,23 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
         }
 
         // Combine version + artifact info
-        this.artifactVersions = versionResult.Results
+        this.ArtifactVersions = versionResult.Results
           .map(version => ({
             version,
             artifact: artifactMap.get(version.ArtifactID)!
           }))
           .filter(item => item.artifact != null); // Filter out any without parent artifact
       } else {
-        this.artifactVersions = [];
+        this.ArtifactVersions = [];
       }
     } catch (error) {
       console.error('Failed to load collection artifacts:', error);
-      this.artifactVersions = [];
+      this.ArtifactVersions = [];
     }
   }
 
   private getVersionOrderBy(): string {
-    switch (this.sortBy) {
+    switch (this.SortBy) {
       case 'name':
         return 'Name ASC, VersionNumber DESC';
       case 'type':
@@ -226,33 +322,58 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  onSortChange(): void {
+  OnSortChange(): void {
     this.loadArtifacts();
   }
 
-  onArtifactSelected(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
+  /** @deprecated Use {@link OnSortChange}. */
+  onSortChange(): void {
+    return this.OnSortChange();
+  }
+
+  OnArtifactSelected(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     // TODO: Emit event or navigate to artifact detail view
   }
 
-  onViewArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
-    this.selectedArtifactId = item.artifact.ID;
-    this.selectedVersionNumber = item.version.VersionNumber;
+  /** @deprecated Use {@link OnArtifactSelected}. */
+  onArtifactSelected(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
+    return this.OnArtifactSelected(item);
+  }
+
+  OnViewArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
+    this.SelectedArtifactId = item.artifact.ID;
+    this.SelectedVersionNumber = item.version.VersionNumber;
     // Force change detection to ensure Input bindings propagate before component creation
     this.cdr.detectChanges();
-    this.showArtifactViewer = true;
+    this.ShowArtifactViewer = true;
   }
 
+  /** @deprecated Use {@link OnViewArtifact}. */
+  onViewArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
+    return this.OnViewArtifact(item);
+  }
+
+  OnCloseArtifactViewer(): void {
+    this.ShowArtifactViewer = false;
+    this.SelectedArtifactId = null;
+    this.SelectedVersionNumber = undefined;
+  }
+
+  /** @deprecated Use {@link OnCloseArtifactViewer}. */
   onCloseArtifactViewer(): void {
-    this.showArtifactViewer = false;
-    this.selectedArtifactId = null;
-    this.selectedVersionNumber = undefined;
+    return this.OnCloseArtifactViewer();
   }
 
-  onEditArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
+  OnEditArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     // TODO: Open artifact editor
   }
 
-  async onRemoveArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
+  /** @deprecated Use {@link OnEditArtifact}. */
+  onEditArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
+    return this.OnEditArtifact(item);
+  }
+
+  async OnRemoveArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
     const versionLabel = `"${item.artifact.Name}" v${item.version.VersionNumber}`;
     if (!(await this.confirmService.ConfirmDelete({ title: 'Remove from Collection', message: `Remove ${versionLabel} from this collection?`, confirmText: 'Remove' }))) return;
 
@@ -261,9 +382,9 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView({
         EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `CollectionID='${this.collection.ID}' AND ArtifactVersionID='${item.version.ID}'`,
+        ExtraFilter: `CollectionID='${this.Collection.ID}' AND ArtifactVersionID='${item.version.ID}'`,
         ResultType: 'entity_object'
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
         // Delete all version associations atomically
@@ -298,7 +419,12 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  async onAddArtifact(): Promise<void> {
+  /** @deprecated Use {@link OnRemoveArtifact}. */
+  async onRemoveArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
+    return this.OnRemoveArtifact(item);
+  }
+
+  async OnAddArtifact(): Promise<void> {
     // TODO: Open artifact picker dialog
     // For now, just show a simple prompt
     const name = prompt('Enter artifact name:');
@@ -307,7 +433,7 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
     try {
       // Create new artifact
       const md = this.ProviderToUse;
-      const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
+      const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.CurrentUser);
 
       artifact.Name = name;
       // Type is read-only, set via TypeID instead
@@ -323,7 +449,7 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
           OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
           ResultType: 'entity_object'
-        }, this.currentUser);
+        }, this.CurrentUser);
 
         if (!versionResult.Success || !versionResult.Results || versionResult.Results.length === 0) {
           alert('Failed to get artifact version');
@@ -331,8 +457,8 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
         }
 
         // Add to collection via join table using version ID
-        const joinRecord = await md.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
-        joinRecord.CollectionID = this.collection.ID;
+        const joinRecord = await md.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.CurrentUser);
+        joinRecord.CollectionID = this.Collection.ID;
         joinRecord.ArtifactVersionID = versionResult.Results[0].ID;
 
         await joinRecord.Save();
@@ -342,5 +468,10 @@ export class CollectionViewComponent extends BaseAngularComponent implements OnI
       console.error('Failed to add artifact:', error);
       alert('Failed to add artifact');
     }
+  }
+
+  /** @deprecated Use {@link OnAddArtifact}. */
+  async onAddArtifact(): Promise<void> {
+    return this.OnAddArtifact();
   }
 }

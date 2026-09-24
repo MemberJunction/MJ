@@ -67,7 +67,7 @@ export type PromoteModelOutcome =
  */
 export interface IModelPromotionGate {
   /** Attempt the promotion, enforcing the leakage sign-off gate. */
-  promote(request: PromoteModelRequest): Promise<PromoteModelOutcome>;
+  promote(request: PromoteModelRequest): Promise<PromoteModelOutcome>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

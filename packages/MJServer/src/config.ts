@@ -2,16 +2,38 @@ import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
+import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
+import { RealtimeEnabledDefault } from './realtimeConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
 const userHandlingInfoSchema = z.object({
   autoCreateNewUsers: z.boolean().optional().default(false),
+  /** When true, auto-provisioning is restricted to the domains in `newUserAuthorizedDomains`. */
   newUserLimitedToAuthorizedDomains: z.boolean().optional().default(false),
+  /**
+   * Authorized **email domains** for auto-provisioned users — e.g. `['example.com', '*.example.org']`.
+   *
+   * These are matched against the domain of the email address in the verified identity token, NOT
+   * against the browser `Origin` / frontend hostname. If you are upgrading from a build that
+   * compared these to the request origin, replace any frontend hostnames here (`app.example.com`,
+   * `localhost`) with the email domains your users actually sign in with.
+   *
+   * `*` wildcards are supported and match in full: `*.example.com` matches `mail.example.com` but
+   * NOT `example.com` — list both if you need both.
+   */
   newUserAuthorizedDomains: z.array(z.string()).optional().default([]),
   newUserRoles: z.array(z.string()).optional().default([]),
   updateCacheWhenNotFound: z.boolean().optional().default(false),
   updateCacheWhenNotFoundDelay: z.number().optional().default(30000),
+  /**
+   * The internal user whose context creates new user records. Matched against `User.Name` FIRST,
+   * then `User.Email` — so either spelling of an existing user resolves. On a stock database the
+   * system user is `Name='System'` / `Email='not.set@nowhere.com'`; both reach it.
+   *
+   * When unset, or when the value matches no user, resolution falls back to the system user and
+   * then to the lowest-ID active Owner. See `src/auth/principals.ts`.
+   */
   contextUserForNewUserCreation: z.string().optional().default(''),
   CreateUserApplicationRecords: z.boolean().optional().default(false),
   UserApplications: z.array(z.string()).optional().default([]),
@@ -179,9 +201,14 @@ const multiTenancySchema = z.object({
 });
 
 const telemetrySchema = z.object({
-  enabled: zodBooleanWithTransforms().default(
-    process.env.MJ_TELEMETRY_ENABLED !== 'false' // Enabled by default unless explicitly disabled
-  ),
+  // NOTE: MJ_TELEMETRY_ENABLED is read in DEFAULT_SERVER_CONFIG, not here.
+  //
+  // A Zod `.default()` only fires when the key is ABSENT from the parsed object, and
+  // DEFAULT_SERVER_CONFIG — the base of the config merge — always supplies `telemetry.enabled`.
+  // The key is therefore never absent, so a `.default(process.env...)` here could never take
+  // effect. Owning it in one place keeps the env var working and stops this line from claiming
+  // a behaviour it does not have.
+  enabled: zodBooleanWithTransforms().default(true),
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
@@ -203,6 +230,29 @@ const cacheSettingsSchema = z.object({
   evictionSweepIntervalSeconds: z.number().optional().default(300),
   /** Enable verbose cache logging (hits, misses, evictions). Default: false. */
   verboseLogging: z.boolean().optional().default(false),
+  /**
+   * Entity names whose FULL ROW may ride along with a cache-invalidation broadcast.
+   *
+   * The cache-invalidation subscription is delivered to EVERY connected client with no per-user
+   * filter (see CacheInvalidationResolver), so any row named here is disclosed to every signed-in
+   * session, whatever row-level security or tenant scoping would otherwise apply to reading it.
+   *
+   * Defaults to `[]`: invalidation still carries the entity name and primary key, which is all a
+   * client needs to evict, and the client re-fetches through the normal read path where access
+   * control applies. Listing an entity re-enables the apply-in-place optimisation for it — correct
+   * only for reference data every signed-in user is allowed to read.
+   *
+   * What the re-fetch costs depends on the consumer. `ConversationEngine` re-reads the ONE record
+   * by primary key. `BaseEngine` (every engine subclass with `AutoRefresh`, the default) applies a
+   * remote save in place only when the row is present, so without it a remote save falls through to
+   * a full reload of each matching config — a `RunView` of that entity, not a keyed read. Remote
+   * deletes still apply in place from the primary key. Engine-cached reference entities that every
+   * signed-in user may read are the ones worth listing here.
+   *
+   * `['*']` opts every entity in, restoring the previous behaviour. Only safe on a deployment where
+   * every signed-in user may read every row of every entity.
+   */
+  recordDataBroadcastEntities: z.array(z.string()).optional().default([]),
 });
 
 const loggingSettingsSchema = z.object({
@@ -310,7 +360,11 @@ const magicLinkSchema = z.object({
    * from attaching a privileged role (e.g. Owner) to an external magic-link user.
    */
   grantableRoleNames: z.array(z.string()).optional().default([]),
-  /** Email of the internal user whose context provisions magic-link users (falls back to userHandling.contextUserForNewUserCreation). */
+  /**
+   * The internal user whose context provisions magic-link users, matched against `User.Name` then
+   * `User.Email` (falls back to `userHandling.contextUserForNewUserCreation`, then to the system
+   * user, then to the lowest-ID active Owner).
+   */
   contextUserForProvisioning: z.string().optional(),
   /**
    * Guard against bolting an external magic-link role/app onto an EXISTING account
@@ -373,7 +427,10 @@ const widgetSchema = z.object({
   rateLimitWindowMs: z.coerce.number().optional().default(60_000),
   /** Server-wide default hard ceiling (minutes) on a voice session when an instance omits one (W4). */
   voiceDefaultMaxSessionMinutes: z.coerce.number().optional().default(10),
-  /** Email/name of the internal user whose context READS widget config at mint time (falls back to system/Owner). */
+  /**
+   * The internal user whose context READS widget config at mint time, matched against `User.Name`
+   * then `User.Email` (falls back to the system user, then the lowest-ID active Owner).
+   */
   contextUserForLookup: z.string().optional(),
   /**
    * Host-identity public keys (PEM), keyed by widget PublicKey, for the `host-identity` auth
@@ -506,11 +563,17 @@ const telephonySchema = z.object({
   teams: teamsMeetingsSchema.optional(),
 }).passthrough();
 
+const realtimeSchema = z.object({
+  /** Master switch. When false, the WebRTC SDP broker router is not mounted. Defaults to true. */
+  enabled: zodBooleanWithTransforms().default(true),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   magicLink: magicLinkSchema.optional().default({}),
   widget: widgetSchema.optional().default({}),
   telephony: telephonySchema.optional().default({}),
+  realtime: realtimeSchema.optional().default({}),
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
@@ -565,6 +628,7 @@ export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type WidgetConfig = z.infer<typeof widgetSchema>;
 export type TelephonyConfig = z.infer<typeof telephonySchema>;
+export type RealtimeConfig = z.infer<typeof realtimeSchema>;
 export type TwilioTelephonyConfig = z.infer<typeof twilioTelephonySchema>;
 export type VonageTelephonyConfig = z.infer<typeof vonageTelephonySchema>;
 export type RingCentralTelephonyConfig = z.infer<typeof ringcentralTelephonySchema>;
@@ -630,10 +694,23 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
     newUserAuthorizedDomains: [],
-    newUserRoles: ['UI', 'Developer'],
+    // 'UI' ONLY, deliberately (issue #4260). Auto-provisioning is on by default above, with no
+    // domain restriction, so this list is the standing authority of anyone the configured IdP will
+    // issue a token for. On the baseline seed 'Developer' and 'Integration' hold unfiltered
+    // CanUpdate on ~439 of the database's ~446 entities, so defaulting every such identity into
+    // either grants broad data-plane access no host should hand out by default. (The MJ: Users
+    // escalation this list also used to guard against — writing your own Type to 'Owner' — is now
+    // closed at the entity layer regardless of role: see MJUserEntityServer in
+    // @memberjunction/core-entities-server.) 'UI' carries the end-user surface (conversations,
+    // views, dashboards, settings) and no write on MJ: Users. Hosts that need more grant it
+    // per-deployment.
+    newUserRoles: ['UI'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
-    contextUserForNewUserCreation: 'not.set@nowhere.com',
+    // The seeded system user, named by `Name`. Its Email ('not.set@nowhere.com') resolves too —
+    // resolution tries both columns — but naming it this way keeps the default readable as what it
+    // is, rather than as an address nobody can receive mail at.
+    contextUserForNewUserCreation: 'System',
     CreateUserApplicationRecords: true,
     UserApplications: []
   },
@@ -698,9 +775,20 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     maxConcurrentRuns: 3
   },
 
-  // Telemetry defaults
+  // Realtime WebRTC SDP broker defaults (on by default; can be disabled via MJ_REALTIME_ENABLED=false)
+  realtime: {
+    enabled: RealtimeEnabledDefault(process.env.MJ_REALTIME_ENABLED),
+  },
+
+  // Telemetry defaults — on unless the operator turns it off via MJ_TELEMETRY_ENABLED.
+  //
+  // The env read lives HERE rather than in telemetrySchema for the same reason as
+  // loggingSettings.graphql.logVariables below: this object is the merge BASE, so any key it
+  // supplies is always present by the time Zod parses, and a schema-level `.default()` can never
+  // fire. An unset (or empty) variable leaves telemetry enabled; anything parseBooleanEnv reads as
+  // false ('false', '0', 'no', 'off') disables it.
   telemetry: {
-    enabled: true,
+    enabled: TelemetryEnabledDefault(process.env.MJ_TELEMETRY_ENABLED),
     level: 'standard'
   },
 
@@ -723,42 +811,22 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     },
   },
 
-  // Auth providers (environment-driven)
-  authProviders: [
-    // Microsoft Azure AD / Entra ID
-    process.env.TENANT_ID && process.env.WEB_CLIENT_ID ? {
-      name: 'azure',
-      type: 'msal',
-      issuer: `https://login.microsoftonline.com/${process.env.TENANT_ID}/v2.0`,
-      audience: process.env.WEB_CLIENT_ID,
-      jwksUri: `https://login.microsoftonline.com/${process.env.TENANT_ID}/discovery/v2.0/keys`,
-      clientId: process.env.WEB_CLIENT_ID,
-      tenantId: process.env.TENANT_ID
-    } : null,
-
-    // Auth0
-    process.env.AUTH0_DOMAIN && process.env.AUTH0_CLIENT_ID ? {
-      name: 'auth0',
-      type: 'auth0',
-      issuer: `https://${process.env.AUTH0_DOMAIN}/`,
-      audience: process.env.AUTH0_CLIENT_ID,
-      jwksUri: `https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`,
-      clientId: process.env.AUTH0_CLIENT_ID,
-      clientSecret: process.env.AUTH0_CLIENT_SECRET,
-      domain: process.env.AUTH0_DOMAIN
-    } : null,
-    // AWS Cognito
-    process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID && process.env.AWS_REGION ? {
-      name: 'cognito',
-      type: 'cognito',
-      issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}`,
-      audience: process.env.COGNITO_CLIENT_ID,
-      jwksUri: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
-      clientId: process.env.COGNITO_CLIENT_ID,
-      region: process.env.AWS_REGION,
-      userPoolId: process.env.COGNITO_USER_POOL_ID
-    } : null,
-  ].filter(Boolean),
+  // Auth providers.
+  //
+  // Empty by design. This used to be a hard-coded block that enumerated Entra / Auth0 / Cognito
+  // inline and built each config from its environment variables. That made env-var configuration
+  // a closed domain: a third-party provider could register a driver class and take a metadata row
+  // or an explicit entry here, but it could never offer the "set two variables and you're done"
+  // experience, because the enumeration lived in core.
+  //
+  // Each provider class now owns its own mapping via the optional static
+  // `ConfigFromEnvironment` (see IEnvironmentConfigurableProvider in @memberjunction/auth-providers),
+  // and `initializeAuthProviders()` collects them through the ClassFactory registry.
+  //
+  // Discovery cannot happen here: this literal is evaluated when config.ts is imported, which is
+  // BEFORE @memberjunction/auth-providers loads and the driver classes register. It is deferred to
+  // registration time, where the registry is populated.
+  authProviders: [],
 };
 
 /**
@@ -767,9 +835,14 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
  * startup summary `Config` line. Declared before `configInfo` so the assignment
  * inside `loadConfig()` (invoked below) is not in its temporal dead zone.
  */
-export let configFilePath: string | undefined;
+export let ConfigFilePath: string | undefined;
 
-export const configInfo: ConfigInfo = loadConfig();
+export {
+  /** @deprecated Use {@link ConfigFilePath} instead. */
+  ConfigFilePath as configFilePath,
+};
+
+export const configInfo: ConfigInfo = LoadConfig();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 export const {
   dbUsername,
@@ -796,7 +869,7 @@ export const {
   restApiOptions: RESTApiOptions,
 } = configInfo;
 
-export function loadConfig() {
+export function LoadConfig() {
   const configSearchResult = explorer.search(process.cwd());
 
   // Start with DEFAULT_SERVER_CONFIG as base
@@ -806,7 +879,7 @@ export function loadConfig() {
   if (configSearchResult && !configSearchResult.isEmpty) {
     // Resolved config-file path. Surfaced in the startup summary `Config` line at standard
     // level (see StartupLogger). Demoted to verbose-only here to avoid a duplicate inline line.
-    configFilePath = configSearchResult.filepath;
+    ConfigFilePath = configSearchResult.filepath;
     LogStatusEx({ message: `Config file found at ${configSearchResult.filepath}`, verboseOnly: true });
 
     // Merge user config with defaults (user config takes precedence)
@@ -822,4 +895,9 @@ export function loadConfig() {
     throw new Error('Configuration validation failed');
   }
   return configParsing.data;
+}
+
+/** @deprecated Use {@link LoadConfig}. */
+export function loadConfig() {
+  return LoadConfig();
 }

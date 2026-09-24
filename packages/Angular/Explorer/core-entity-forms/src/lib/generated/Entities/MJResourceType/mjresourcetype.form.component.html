@@ -154,9 +154,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Workspace Items','ResourceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Workspace Items')"
+                [NewRecordValues]="NewRecordValues('MJ: Workspace Items','ResourceTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJWorkspaceItems')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJWorkspaceItems', $event.totalRowCount)"
                 >
@@ -179,9 +179,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notifications','ResourceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Notifications')"
+                [NewRecordValues]="NewRecordValues('MJ: User Notifications','ResourceTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJUserNotifications')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserNotifications', $event.totalRowCount)"
                 >
@@ -204,9 +204,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Resource Links','ResourceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Resource Links')"
+                [NewRecordValues]="NewRecordValues('MJ: Resource Links','ResourceTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJResourceLinks')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJResourceLinks', $event.totalRowCount)"
                 >
@@ -229,9 +229,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Resource Permissions','ResourceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Resource Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: Resource Permissions','ResourceTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJResourcePermissions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJResourcePermissions', $event.totalRowCount)"
                 >
@@ -254,9 +254,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Invites','ResourceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invites')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invites','ResourceTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJMagicLinkInvites')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMagicLinkInvites', $event.totalRowCount)"
                 >

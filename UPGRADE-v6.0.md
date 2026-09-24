@@ -10,6 +10,31 @@ export list — is byte-for-byte identical to 5.51.0, and Angular, Node, TypeScr
 rxjs floors did not move. There is a short list of real breaking changes, documented below;
 most upgrades will only feel one or two of them.
 
+## License change — read this first
+
+**6.x is the first MemberJunction line released under the [Business Source License 1.1](./LICENSE).** 5.x
+and every version before it were released under the ISC License and remain ISC-licensed forever. Upgrading
+is what changes your terms; nothing about an existing 5.x installation changes.
+
+The BUSL grants the following without any further agreement:
+
+- **Internal use.** You may run MemberJunction in production for your own business or organizational
+  operations.
+- **Nonprofit use.** A nonprofit — 501(c)(3), (c)(4), (c)(5), or (c)(6), or a foreign organization
+  recognized under substantially equivalent laws — may run it in production for the operations and
+  activities of its Organizational Family.
+- **Non-production use.** Development, testing, and evaluation are unrestricted for everyone.
+- **Change Date.** Four years after a given version is first made available, that version converts to the
+  MIT License.
+
+What now requires certification is **providing professional services to clients on MemberJunction** —
+implementation, integration, customization, or consulting performed in a client's environment on their
+behalf. That runs through the [MemberJunction Certified Program](https://docs.memberjunction.org/mjcertified).
+
+The controlling terms, including the definitions that govern the Nonprofit grant and the documentation a
+nonprofit may be asked to provide, are in [`LICENSE`](./LICENSE). If your usage doesn't fit the grants
+above, staying on the 5.x LTS line keeps you on ISC.
+
 ## Understanding the 6.x version scheme
 
 Five facts up front, because the numbering is the part most likely to confuse a 5.x user:
@@ -166,6 +191,40 @@ are fixed. Equality-style filters are unaffected, but filters written in negatio
 the fix working, not a regression. Audit negation-form filters in advance if you need to
 know the blast radius.
 
+### Top-level Flow agents run on the task-graph dispatcher
+
+Since 6.1.0 a Flow agent compiles to a task graph, and the durable task-graph dispatcher runs its
+steps. A **top-level** run submits the graph and returns before any step has executed. It parks as
+`Paused`, and the dispatcher completes it when the graph settles. That keeps a workflow alive
+across page reloads and server restarts.
+
+A caller that needs the workflow's result has to run it in-process instead:
+
+- **Sub-agent runs do this automatically from 6.1.3.** Any Flow agent run with a `parentRun`
+  walks its steps in the calling process and returns its final payload, as in 5.x. On 6.1.0 to
+  6.1.2 these runs failed at once with:
+  > *'&lt;agent&gt;' is a workflow, and a workflow cannot be used as a sub-agent step yet. It returns
+  > as soon as its steps are scheduled, so the calling agent would continue before any of the work
+  > had happened.*
+- **Top-level callers that use the payload must opt in.** An API handler, a script or a test that
+  reads `result.payload` from a Flow agent run should pass
+  `agentTypeParams: { executionMode: 'inRun' }` (`FlowAgentExecuteParams`). Without it, the
+  run returns before the flow has produced anything.
+- **`startAtStep` needs in-process execution.** A dispatched run refuses it with a message that
+  says so.
+- **Scheduled jobs still refuse Flow agents.** A scheduled job cannot target a Flow agent yet.
+
+Each Flow agent run records which way it ran as a `Decision` step, "Workflow runs in this run" or
+"Workflow runs on the task-graph dispatcher", with the reason.
+
+**One path-selection change applies to both modes.** A path whose destination step is not
+`Active` is no longer followed. A flow whose only satisfied path leads to a disabled step now
+finishes with Success, where 5.x failed with *"No active steps found"*.
+
+**Migration:** add `executionMode: 'inRun'` to any top-level Flow agent call whose result you use.
+Sub-agent Flow agents need no change on 6.1.3 or later. See the
+[Workflows and Task Graphs Guide](guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md#when-a-flow-agent-runs-in-process-instead).
+
 ### Minor: ElevenLabs realtime session initiation
 
 `ElevenLabsRealtimeSession.SendInitiation` now takes the wire-shaped overrides object rather
@@ -225,8 +284,7 @@ npx mj codegen               # regenerate — required after the EntityAction mi
 - **Push-subscription hijack fixed:** `statusUpdates` subscriptions previously filtered only
   on a client-supplied session id without checking it against the authenticated subscriber;
   they now fail closed. No operator action needed.
-- Additive features you can ignore until you want them: layered base views (SQL Server only,
-  opt-in per entity), per-verb direct-SQL flags (default off), API-key row-filter columns
+- Additive features you can ignore until you want them: layered base views (SQL Server via `sp_refreshview`; PostgreSQL restars the outer view after inner regeneration; opt-in per entity), per-verb direct-SQL flags (default off), API-key row-filter columns
   (enforcement lands later), a pluggable search-scope permission resolver, and mobile
   records UX below 768px.
 

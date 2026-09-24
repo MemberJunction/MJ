@@ -15,7 +15,7 @@
  * here is how the two sources would drift into looking like different products.
  */
 import type { AgentRunTreeNode, AgentRunTreeNodeType } from '@memberjunction/ai-core-plus';
-import { FlowNode, FlowModel, RootIcon, finalizeFlowModel } from './agent-run-flow.model';
+import { FlowNode, FlowModel, RootIcon, FinalizeFlowModel } from './agent-run-flow.model';
 
 /**
  * How a tree node's kind maps to the visual vocabulary.
@@ -25,7 +25,7 @@ import { FlowNode, FlowModel, RootIcon, finalizeFlowModel } from './agent-run-fl
  * flattening that difference at the source would have lost the design-time/executable distinction
  * everywhere else.
  */
-const KIND_TO_FLOW_TYPE: Record<string, FlowNode['type']> = {
+const KIND_TO_FLOW_TYPE: Record<string, FlowNode['Type']> = {
     // Run-step vocabulary
     Actions: 'action',
     Prompt: 'prompt',
@@ -48,11 +48,11 @@ const KIND_TO_FLOW_TYPE: Record<string, FlowNode['type']> = {
 };
 
 /** The visual type for a node, preferring its declared kind over its structural role. */
-function flowTypeOf(node: AgentRunTreeNode): FlowNode['type'] {
+function flowTypeOf(node: AgentRunTreeNode): FlowNode['Type'] {
     const byKind = node.SourceKind ? KIND_TO_FLOW_TYPE[node.SourceKind] : undefined;
     if (byKind) return byKind;
 
-    const byType: Record<AgentRunTreeNodeType, FlowNode['type']> = {
+    const byType: Record<AgentRunTreeNodeType, FlowNode['Type']> = {
         Run: 'subagent',
         Step: 'other',
         TaskGraph: 'loop',
@@ -62,7 +62,7 @@ function flowTypeOf(node: AgentRunTreeNode): FlowNode['type'] {
 }
 
 /** Font Awesome icon per visual type — the same vocabulary the step-based builder uses. */
-const ICON_BY_TYPE: Record<FlowNode['type'], string> = {
+const ICON_BY_TYPE: Record<FlowNode['Type'], string> = {
     agent: 'fa-robot',
     subagent: 'fa-robot',
     prompt: 'fa-brain',
@@ -81,7 +81,7 @@ const ICON_BY_TYPE: Record<FlowNode['type'], string> = {
  * @param rootStatus the run's status
  * @param rootIcon the agent's icon/logo, which only the form knows
  */
-export function buildFlowModelFromTree(
+export function BuildFlowModelFromTree(
     root: AgentRunTreeNode | null,
     rootName: string,
     rootStatus: string,
@@ -90,48 +90,58 @@ export function buildFlowModelFromTree(
     if (!root) return null;
 
     const rootNode: FlowNode = {
-        id: -1,
-        name: rootName || root.Name || 'Agent run',
-        type: 'agent',
-        status: rootStatus || root.Status,
-        model: null,
-        realDur: durationSeconds(root),
-        t0: 0, t1: 1, tmid: 0.5, r0: 0, r1: 0, depth: 0, heat: 0,
-        parent: null,
-        children: [],
-        raw: null,
-        source: { entity: root.SourceEntity, id: root.SourceID },
-        iconClass: rootIcon.iconClass || 'fa-robot',
-        logoUrl: rootIcon.logoUrl,
+        Id: -1,
+        Name: rootName || root.Name || 'Agent run',
+        Type: 'agent',
+        Status: rootStatus || root.Status,
+        Model: null,
+        RealDur: durationSeconds(root),
+        T0: 0, T1: 1, Tmid: 0.5, R0: 0, R1: 0, Depth: 0, Heat: 0,
+        Parent: null,
+        Children: [],
+        Raw: null,
+        Source: { entity: root.SourceEntity, id: root.SourceID },
+        IconClass: rootIcon.iconClass || 'fa-robot',
+        LogoUrl: rootIcon.logoUrl,
     };
 
     for (const child of root.Children) attach(rootNode, child);
 
-    return finalizeFlowModel(rootNode);
+    return FinalizeFlowModel(rootNode);
+}
+
+/** @deprecated Use {@link BuildFlowModelFromTree}. */
+export function buildFlowModelFromTree(
+    root: AgentRunTreeNode | null,
+    rootName: string,
+    rootStatus: string,
+    rootIcon: RootIcon,
+): FlowModel | null {
+    return BuildFlowModelFromTree(root, rootName, rootStatus, rootIcon);
 }
 
 /** Adds one tree node (and its descendants) under a flow node. */
 function attach(parent: FlowNode, node: AgentRunTreeNode): void {
     const type = flowTypeOf(node);
     const flow: FlowNode = {
-        id: 0,                       // assigned during flatten
-        name: node.Name,
-        type,
-        status: node.Status,
-        model: null,
-        realDur: durationSeconds(node),
-        t0: 0, t1: 1, tmid: 0.5, r0: 0, r1: 0, depth: parent.depth + 1, heat: 0,
-        parent,
-        children: [],
-        raw: null,
+        Id: 0,                       // assigned during flatten
+        Name: node.Name,
+        Type: type,
+        Status: node.Status,
+        Model: null,
+        RealDur: durationSeconds(node),
+        T0: 0, T1: 1, Tmid: 0.5, R0: 0, R1: 0, Depth: parent.Depth + 1, Heat: 0,
+        Parent: parent,
+        Children: [],
+        Raw: null,
         // Every node keeps a pointer to the row it came from, so a click can open the right record
         // whichever entity it lives in. `raw` stays null for task nodes because it is typed to a
         // run STEP — the reason this generic reference exists.
-        source: { entity: node.SourceEntity, id: node.SourceID },
-        iconClass: ICON_BY_TYPE[type],
-        logoUrl: null,
+        Source: { entity: node.SourceEntity, id: node.SourceID },
+        IconClass: ICON_BY_TYPE[type],
+        LogoUrl: null,
     };
-    parent.children.push(flow);
+    parent.Children.push(flow);
     for (const child of node.Children) attach(flow, child);
 }
 

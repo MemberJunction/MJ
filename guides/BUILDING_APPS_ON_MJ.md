@@ -257,7 +257,7 @@ Your application starts with a schema. MJ doesn't hide SQL from you — it embra
 
 A defining choice in MJ: **the database is the source of truth for your schema, and you (DBA/developer) own all DDL.** MJ performs **no implicit schema changes**. Instead, it **introspects** your database to discover tables, columns, keys, indexes, and relationships, **reads the documentation already in the database** (SQL Server extended properties / Postgres `COMMENT`s), and **keeps its metadata layer in sync** with what's actually there. You're free to use any column types, indexing strategy, schemas, computed columns, or vendor features you like — MJ adapts to your schema rather than dictating it.
 
-Schema changes flow through **explicit, versioned migrations** applied by **[Skyway](https://github.com/MemberJunction/skyway)** — MJ's open-source, **Flyway-compatible** migration engine written in TypeScript. This is what makes MJ's upgrade story **deterministic, verifiable, and robust**, and why it slots cleanly into CI/CD:
+Schema changes flow through **explicit, versioned migrations** applied by **[Skyway](https://github.com/MemberJunction/skyway)** — MJ's source-available, **Flyway-compatible** migration engine written in TypeScript. This is what makes MJ's upgrade story **deterministic, verifiable, and robust**, and why it slots cleanly into CI/CD:
 
 - **Deterministic & repeatable.** The *same* immutable, versioned migration files run in dev, staging, and production, in the same order, producing the same result. No "it worked on my environment" schema drift.
 - **Verifiable.** Migrations are **checksum-verified** against the recorded history — if a previously-applied migration is altered, Skyway detects it and refuses to proceed, so tampering and accidental drift surface immediately instead of silently corrupting an environment.
@@ -271,7 +271,7 @@ Two more freedoms worth knowing:
 
 - **UUID primary keys by default, but no fixed key shape.** MJ defaults to `UNIQUEIDENTIFIER` / UUID PKs, yet — because it reads keys from your schema rather than mandating them — supports **any primary-/foreign-key style, including composite and natural keys**. (MJ normalizes UUID casing differences between SQL Server and PostgreSQL for you.)
 - **Bring existing data as-is.** Point CodeGen at existing tables and MJ registers them as entities — migrations are how you *evolve* the schema over time, not a precondition for building.
-- **Add your own columns to a base view without giving up regeneration.** Set `GeneratedBaseViewName` on the entity and CodeGen writes its full generated view under *that* name, while your application owns `BaseView` and wraps it — `SELECT g.*, <your computed columns> FROM <inner> g`. Everything underneath keeps regenerating, so a foreign key added later still appears on its own, and your custom layer stays a few reviewable lines instead of an inherited copy of ~80 lines of generated SQL. Columns you add become first-class virtual `EntityField`s: typed on the entity class, filterable in `RunView`, visible in Explorer, and returned by `spCreate`/`spUpdate`/`spDelete`. SQL Server only. See **[Base Views: Generated, Custom, or Layered](../packages/CodeGenLib/README.md#base-views-generated-custom-or-layered)**.
+- **Add your own columns to a base view without giving up regeneration.** Set `GeneratedBaseViewName` on the entity and CodeGen writes its full generated view under *that* name, while your application owns `BaseView` and wraps it — `SELECT g.*, <your computed columns> FROM <inner> g`. Everything underneath keeps regenerating, so a foreign key added later still appears on its own, and your custom layer stays a few reviewable lines instead of an inherited copy of ~80 lines of generated SQL. Columns you add become first-class virtual `EntityField`s: typed on the entity class, filterable in `RunView`, visible in Explorer, and returned by `spCreate`/`spUpdate`/`spDelete`. On PostgreSQL the outer view is custom SQL shipped via pg-migrate; CodeGen restars it after regenerating the inner view so `g.*` re-expands. See **[Base Views: Generated, Custom, or Layered](../packages/CodeGenLib/README.md#base-views-generated-custom-or-layered)**.
 
 #### Modeling beyond plain tables: type inheritance & organic (soft) keys
 
@@ -279,11 +279,13 @@ Two metadata features matter especially when you're **ingesting data from third-
 
 - **IS-A type inheritance (table-per-type).** A child entity can *be a* parent entity — it shares the parent's primary key and inherits all of the parent's fields (the generated view JOINs them in), while its own table holds only its unique columns. This models real hierarchies cleanly — e.g. a *Webinar* IS-A *Meeting* IS-A *Product* — and the inheritance is orchestrated in `BaseEntity` with no hand-written subclass code. It lets ingested or domain data be specialized without duplicating shared structure. See [IS-A Relationships](../packages/MJCore/docs/isa-relationships.md).
 - **Organic keys (natural / "soft" keys).** Relationships based on **shared business data** — email address, domain, tax ID, phone — rather than enforced foreign keys. This is the key to working with **third-party data**: records ingested from Mailchimp, QuickBooks, HubSpot, Salesforce, and the like arrive with their own IDs and *no* cross-system FKs, but they do share business values. Organic keys formalize that matching (with normalization, compound keys, and transitive joins through bridge views) so MJ can surface "related records" across integration boundaries — a contact's campaigns, invoices, and tickets matched by email. Because the matches are **first-class metadata**, the platform — and your **AI agents and RAG** — can reason over these cross-system relationships, use them for retrieval and enrichment, and even surface likely duplicates. See [Organic Keys](../packages/MJCore/docs/organic-keys.md).
+- **Recursive tree hierarchies (self-referencing foreign keys).** Define a self-referencing foreign key (e.g. `ParentID`) and declare `{ "Hierarchy": { "IsHierarchy": true } }` in `EntityField.Configuration`. CodeGen automatically creates a 4-routine Table-Valued Function (TVF) suite (`GetHierarchyMeta`, `GetDescendants`, `GetAncestors`, `GetRootID`), projects 5 computed hierarchy columns (`Root<Field>`, `<Field>Depth`, `<Field>Path`, `<Field>IsLeaf`, `<Field>ChildCount`) into the base view via lateral joins, generates strongly typed `GetDescendants()`, `GetAncestors()`, and `GetChildren()` methods on the entity subclass, and connects the interactive `<mj-hierarchy-tree>` Angular visual component. Requires single-column primary and foreign keys. See [Recursive Foreign Keys & Hierarchy Traversal Guide](RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md).
 
 #### Reference material
 
 - **[migrations/CLAUDE.md](../migrations/CLAUDE.md)** — Authoring database migrations: naming conventions, hardcoded UUIDs, and what CodeGen adds automatically (timestamps, FK indexes) so you don't.
-- **[Skyway](https://github.com/MemberJunction/skyway)** — The open-source, Flyway-compatible TypeScript migration engine that applies your migrations atomically and verifiably.
+- **[Skyway](https://github.com/MemberJunction/skyway)** — The source-available, Flyway-compatible TypeScript migration engine that applies your migrations atomically and verifiably.
+- **[Recursive Foreign Keys & Hierarchy Traversal Guide](RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md)** — Complete architectural guide for tree structures, TVFs, lateral views, traversal APIs, and `<mj-hierarchy-tree>`.
 - **[IS-A Relationships](../packages/MJCore/docs/isa-relationships.md)** & **[Organic Keys](../packages/MJCore/docs/organic-keys.md)** — Type inheritance and natural/soft-key matching (see above).
 - **[Virtual Entities](../packages/MJCore/docs/virtual-entities.md)** — Surface a view or external source as a first-class entity without a physical table.
 - **[Soft Deletes Guide](SOFT_DELETES_GUIDE.md)** — Opt into `DeleteType='Soft'` and get filtered views + soft-delete stored procedures managed for you.
@@ -582,11 +584,11 @@ If you're weighing MemberJunction against the stacks you already know — Next.j
 
 ## Building on MJ & joining the community
 
-MemberJunction is open source (ISC), and there are two complementary ways to engage with it — building *on* the platform, and helping shape the platform itself.
+MemberJunction's full source code is public on GitHub (Business Source License 1.1), and there are two complementary ways to engage with it — building *on* the platform, and helping shape the platform itself.
 
 ### Build your application on MJ
 
-You're encouraged to build on MJ, whether your app is **commercial or open source**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. Several **open-source apps in the MemberJunction org** show this in practice and are worth studying as references (and reusing):
+You're encouraged to build on MJ, whether your app is **commercial or community-driven**. The platform gives you the data layer, API, security, UI, Actions, and AI; you bring the domain. Several **apps in the MemberJunction org** show this in practice and are worth studying as references (and reusing):
 
 - **[BizApps Common](https://github.com/MemberJunction/bizapps-common)** — a production-ready, schema-complete, fully-typed set of **foundational business entities** (people, organizations, addresses, relationships) packaged as an MJ Open App, so applications share these core entities instead of reinventing them.
 - **[BizApps Tasks](https://github.com/MemberJunction/bizapps-tasks)** — a complete, reusable **task-management system** as an MJ Open App: multi-person assignment, sub-task hierarchies, dependency tracking, and templating that any MJ app can integrate without building its own.
@@ -602,7 +604,7 @@ If you want to extend the framework itself, the best first step isn't to fork in
 - **File [Issues](https://github.com/MemberJunction/MJ/issues)** for bugs and feature requests.
 - **Raise pull requests** with fixes, new features, ideas, and plugins — see [`CONTRIBUTING.md`](../CONTRIBUTING.md) for setup, coding standards, and the PR process.
 
-And of course, because MJ is open source, you can always **read, fork, and extend** the platform directly. But contributing back through the community means your extensions are maintained with the project rather than diverging from it.
+And of course, because MJ's source is fully public, you can always **read, fork, and extend** the platform directly. But contributing back through the community means your extensions are maintained with the project rather than diverging from it.
 
 ---
 

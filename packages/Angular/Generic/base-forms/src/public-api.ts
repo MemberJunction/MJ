@@ -17,7 +17,13 @@ export * from './lib/types/form-types';
 export * from './lib/types/navigation-events';
 export * from './lib/types/toolbar-config';
 export * from './lib/types/form-events';
+export * from './lib/types/form-toolbar-item';
 export * from './lib/types/entity-form-config';
+
+// Section indicators (unsaved-changes dot + invalid-field count on panels and the chrome rail)
+export * from './lib/section-indicators/form-section-indicators';
+export * from './lib/section-indicators/form-section-indicator-coordinator.service';
+export * from './lib/section-indicators/form-section-field-host';
 
 // Form resolution (form-variant / interactive-override picker — Generic, no Explorer deps)
 export * from './lib/resolver/form-resolver.service';
@@ -42,11 +48,14 @@ export * from './lib/base-form-section-info';
 // State management
 export * from './lib/form-state.interface';
 export * from './lib/form-state.service';
+export * from './lib/form-record-refresh.coordinator';
 
 // Components
 export * from './lib/toolbar/form-toolbar.component';
 export * from './lib/field/form-field.component';
 export * from './lib/field/fk-search-utils';
+export * from './lib/field/fk-lookup-strategy';
+export * from './lib/field/default-fk-lookup-strategy';
 export * from './lib/field/linked-field-options';
 export * from './lib/panel/collapsible-panel.component';
 export * from './lib/container/record-form-container.component';
@@ -73,4 +82,7 @@ export * from './lib/interactive-form/interactive-form.component';
 export * from './lib/chrome/form-chrome';
 export * from './lib/chrome/base-form-policy';
 export * from './lib/chrome/resolve-form-chrome';
+export * from './lib/chrome/load-form-chrome-rules';
 export * from './lib/chrome/form-chrome-coordinator.service';
+export * from './lib/chrome/form-chrome-rail-pref';
+export * from './lib/related-grid-height';

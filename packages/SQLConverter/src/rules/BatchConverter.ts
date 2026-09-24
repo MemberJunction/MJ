@@ -9,16 +9,16 @@
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { classifyBatch } from './StatementClassifier.js';
-import { subSplitCompoundBatch } from './SubSplitter.js';
-import { postProcess } from './PostProcessor.js';
-import { getHeaderBuilder } from './DialectHeaderBuilder.js';
+import { ClassifyBatch } from './StatementClassifier.js';
+import { SubSplitCompoundBatch } from './SubSplitter.js';
+import { PostProcess } from './PostProcessor.js';
+import { GetHeaderBuilder } from './DialectHeaderBuilder.js';
 import type {
   IConversionRule, ConversionContext, ConversionStats,
   OutputGroups, StatementType,
 } from './types.js';
 import {
-  createConversionContext, createConversionStats, createOutputGroups,
+  CreateConversionContext, CreateConversionStats, CreateOutputGroups, CONVERSION_GAP_MARKERS, GAP_MARKER_BATCH_ERROR,
 } from './types.js';
 
 /** Batch type groupings for ordered output */
@@ -65,7 +65,7 @@ export interface BatchConverterResult {
 /**
  * Convert a SQL Server file to PostgreSQL using the rule-based pipeline.
  */
-export function convertFile(config: BatchConverterConfig): BatchConverterResult {
+export function ConvertFile(config: BatchConverterConfig): BatchConverterResult {
   const log = config.OnProgress ?? (() => {});
   const schema = config.Schema ?? '__mj';
   const sourceDialect = config.SourceDialect ?? 'tsql';
@@ -73,9 +73,9 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
   const includeHeader = config.IncludeHeader ?? true;
   const enablePostProcess = config.EnablePostProcess ?? true;
 
-  const stats = createConversionStats();
-  const context = createConversionContext(sourceDialect, targetDialect, schema);
-  const groups = createOutputGroups();
+  const stats = CreateConversionStats();
+  const context = CreateConversionContext(sourceDialect, targetDialect, schema);
+  const groups = CreateOutputGroups();
 
   // Read source
   log('Reading source SQL...');
@@ -99,7 +99,7 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
   // Sub-split compound batches
   const batches: string[] = [];
   for (const batch of rawBatches) {
-    batches.push(...subSplitCompoundBatch(batch));
+    batches.push(...SubSplitCompoundBatch(batch));
   }
   stats.TotalBatches = batches.length;
   log(`  Found ${stats.TotalBatches.toLocaleString()} batches`);
@@ -107,7 +107,7 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
   // Classify and log distribution
   const classifications = new Map<string, number>();
   for (const batch of batches) {
-    const bt = classifyBatch(batch);
+    const bt = ClassifyBatch(batch);
     classifications.set(bt, (classifications.get(bt) ?? 0) + 1);
   }
   log('  Batch classification:');
@@ -130,7 +130,7 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
     }
 
     const batch = batches[i];
-    const batchType = classifyBatch(batch);
+    const batchType = ClassifyBatch(batch);
 
     try {
       const result = convertBatch(batch, batchType, sortedRules, context, stats);
@@ -142,7 +142,7 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
       stats.Errors++;
       const errMsg = err instanceof Error ? err.message : String(err);
       stats.ErrorBatches.push(`Error in batch ${i + 1} (${batchType}): ${errMsg.slice(0, 100)}`);
-      groups.Other.push(`\n-- ERROR converting batch ${i + 1} (${batchType}): ${errMsg.slice(0, 100)}\n`);
+      groups.Other.push(`\n${GAP_MARKER_BATCH_ERROR} ${i + 1} (${batchType}): ${errMsg.slice(0, 100)}\n`);
       groups.Other.push(`-- Original (first 200 chars): ${batch.slice(0, 200)}\n\n`);
     }
   }
@@ -163,7 +163,7 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
   const outputParts: string[] = [];
 
   if (includeHeader) {
-    const headerBuilder = getHeaderBuilder(targetDialect);
+    const headerBuilder = GetHeaderBuilder(targetDialect);
     if (headerBuilder) {
       outputParts.push(headerBuilder.BuildHeader(schema));
     }
@@ -203,8 +203,14 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
   log('Post-processing...');
   let fullOutput = outputParts.join('\n');
   if (enablePostProcess) {
-    fullOutput = postProcess(fullOutput);
+    fullOutput = PostProcess(fullOutput);
   }
+
+  // Scan the ASSEMBLED output for gap markers before it is written. Done here rather than
+  // at each emission site so a gap from ANY rule — present or future — is counted: rules
+  // return their marker as an ordinary string, so nothing else in this pipeline can tell
+  // that the batch it just counted as `Converted` is unusable SQL (issue #3857).
+  recordOutputGaps(fullOutput, stats);
 
   // Write output
   if (config.OutputFile) {
@@ -220,6 +226,27 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
     OutputSQL: fullOutput,
     OutputFile: config.OutputFile,
   };
+}
+
+/** @deprecated Use {@link ConvertFile}. */
+export function convertFile(config: BatchConverterConfig): BatchConverterResult {
+  return ConvertFile(config);
+}
+
+/**
+ * Record every conversion gap present in the assembled output (see CONVERSION_GAP_MARKERS).
+ *
+ * A gap is not an error: the rule that hit it returned a comment instead of throwing, so the
+ * batch was counted as converted and the file was reported clean. Counting the markers is what
+ * makes the file's unusability visible to the caller — and doing it on the finished text keeps
+ * it independent of which rule produced the gap.
+ */
+function recordOutputGaps(output: string, stats: ConversionStats): void {
+  for (const line of output.split('\n')) {
+    if (!CONVERSION_GAP_MARKERS.some(marker => line.includes(marker))) continue;
+    stats.Gaps++;
+    stats.GapBatches.push(line.trim().slice(0, 200));
+  }
 }
 
 /** Replace Flyway placeholders with target schema */
@@ -597,7 +624,7 @@ function topologicallySortViews(views: string[], schema: string): string[] {
 }
 
 /** Print a formatted conversion report */
-export function printReport(stats: ConversionStats, log: (msg: string) => void): void {
+export function PrintReport(stats: ConversionStats, log: (msg: string) => void): void {
   log('');
   log('='.repeat(70));
   log('CONVERSION REPORT');
@@ -606,6 +633,7 @@ export function printReport(stats: ConversionStats, log: (msg: string) => void):
   log(`Converted:              ${stats.Converted.toLocaleString()}`);
   log(`Skipped:                ${stats.Skipped.toLocaleString()}`);
   log(`Errors:                 ${stats.Errors.toLocaleString()}`);
+  log(`Gaps (unconverted SQL): ${stats.Gaps.toLocaleString()}`);
   log('');
   log('Object counts:');
   log(`  Tables created:       ${stats.TablesCreated}`);
@@ -630,10 +658,25 @@ export function printReport(stats: ConversionStats, log: (msg: string) => void):
     }
   }
 
+  if (stats.GapBatches.length > 0) {
+    log(`\nGaps — statements the converter could not produce (${stats.GapBatches.length}):`);
+    for (const gap of stats.GapBatches.slice(0, 20)) {
+      log(`  - ${gap}`);
+    }
+    if (stats.GapBatches.length > 20) {
+      log(`  ... and ${stats.GapBatches.length - 20} more`);
+    }
+  }
+
   if (stats.SkippedBatches.length > 0) {
     log(`\nSkipped (showing first 10 of ${stats.SkippedBatches.length}):`);
     for (const skip of stats.SkippedBatches.slice(0, 10)) {
       log(`  - ${skip}`);
     }
   }
+}
+
+/** @deprecated Use {@link PrintReport}. */
+export function printReport(stats: ConversionStats, log: (msg: string) => void): void {
+  return PrintReport(stats, log);
 }

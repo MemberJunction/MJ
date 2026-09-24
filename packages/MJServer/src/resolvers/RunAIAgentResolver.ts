@@ -8,10 +8,10 @@ import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
+import { StartLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
-import { resolveWidgetGuestRunContext, elevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
+import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GetAttachmentService } from '@memberjunction/aiengine';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -28,55 +28,55 @@ const INLINE_SIZE_CAP = 100 * 1024;
 @ObjectType()
 export class AIAgentRunResult {
     @Field()
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    errorMessage?: string;
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    executionTimeMs?: number;
+    executionTimeMs?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    result: string; // JSON serialized ExecuteAgentResult with scalars only
+    result: string; // JSON serialized ExecuteAgentResult with scalars only — case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AgentExecutionProgress {
     @Field()
-    currentStep: string;
+    currentStep: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    percentage?: number;
+    percentage?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    message: string;
+    message: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    agentName?: string;
+    agentName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    agentType?: string;
+    agentType?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    stepCount?: number;
+    stepCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    hierarchicalStep?: string;
+    hierarchicalStep?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AgentStreamingContent {
     @Field()
-    content: string;
+    content: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    isPartial: boolean;
+    isPartial: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    stepName?: string;
+    stepName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    agentName?: string;
+    agentName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     /**
      * Content discriminator passed through from the agent's streaming chunk (see
@@ -87,73 +87,73 @@ export class AgentStreamingContent {
      * rendered by the conversation client.
      */
     @Field({ nullable: true })
-    kind?: string;
+    kind?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AgentExecutionStepSummary {
     @Field()
-    stepId: string;
+    stepId: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    stepName: string;
+    stepName: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    agentName?: string;
+    agentName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    agentType?: string;
+    agentType?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    startTime: Date;
+    startTime: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    endTime?: Date;
+    endTime?: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    status: string;
+    status: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    result?: string;
+    result?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AgentPartialResult {
     @Field()
-    currentStep: string;
+    currentStep: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    partialOutput?: string;
+    partialOutput?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 @ObjectType()
 export class AgentExecutionStreamMessage {
     @Field(() => ID)
-    sessionId: string;
+    sessionId: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => ID)
-    agentRunId: string;
+    agentRunId: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    type: 'progress' | 'streaming' | 'partial_result' | 'complete';
+    type: 'progress' | 'streaming' | 'partial_result' | 'complete';  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    progress?: AgentExecutionProgress;
+    progress?: AgentExecutionProgress;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    streaming?: AgentStreamingContent;
+    streaming?: AgentStreamingContent;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field({ nullable: true })
-    partialResult?: AgentPartialResult;
+    partialResult?: AgentPartialResult;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    timestamp: Date;
+    timestamp: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     // Not a GraphQL field - used internally for streaming
-    agentRun?: any;
+    agentRun?: any;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     // Not a GraphQL field - used for completion routing to correct conversation detail
-    conversationDetailId?: string;
+    conversationDetailId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 
@@ -300,11 +300,11 @@ export class RunAIAgentResolver extends ResolverBase {
                 },
                 timestamp: new Date()
             };
-            this.PublishProgressUpdate(pubSub, progressMsg, userPayload);
+            this.publishProgressUpdate(pubSub, progressMsg, userPayload);
         };
     }
 
-    private PublishProgressUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
+    private publishProgressUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
         this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
             resolver: 'RunAIAgentResolver',
             type: 'ExecutionProgress',
@@ -314,7 +314,7 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
 
-    private PublishStreamingUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
+    private publishStreamingUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
         this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
             resolver: 'RunAIAgentResolver',
             type: 'StreamingContent',
@@ -350,7 +350,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 },
                 timestamp: new Date()
             };
-            this.PublishStreamingUpdate(pubSub, streamMsg, userPayload);
+            this.publishStreamingUpdate(pubSub, streamMsg, userPayload);
         };
     }
 
@@ -392,7 +392,13 @@ export class RunAIAgentResolver extends ResolverBase {
         taskGraphDebug?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
-        
+        // Best-effort handle for persistInFlightAgentFailure. Populated from a
+        // progress event carrying metadata.agentRun, or from the successful
+        // result. A throw before the first such event leaves this null, so the
+        // run is not marked Failed — the early-failure case we most want to
+        // persist, but we have no run object yet.
+        const agentRunRef = runRef ?? { current: null as MJAIAgentRunEntityExtended | null };
+
         try {
             LogStatus(`=== RUNNING AI AGENT FOR ID: ${agentId} ===`);
 
@@ -422,10 +428,6 @@ export class RunAIAgentResolver extends ResolverBase {
             // (AIAgentRun, AIAgentRunSteps, AIAgentRequests, AIPromptRuns) never share the global
             // singleton's transaction state with concurrent requests (e.g. conversation deletes).
             const agentRunner = new AgentRunner(p);
-
-            // Track agent run for streaming (use ref to update later). Reuse the caller-supplied
-            // ref when provided so the fire-and-forget liveness pulse can observe the run.
-            const agentRunRef = runRef ?? { current: null as any };
 
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
@@ -539,11 +541,15 @@ export class RunAIAgentResolver extends ResolverBase {
         } catch (error) {
             const executionTime = Date.now() - startTime;
             LogError(`AI Agent run failed:`, undefined, error);
-            
-            // Create error payload
+            const errorMessage = (error as Error).message || 'Unknown error occurred';
+
+            // Fire-and-forget clients otherwise leave the run Running and the
+            // conversation detail In-Progress (Explorer red-pill timer).
+            await this.persistInFlightAgentFailure(p, userPayload, agentRunRef.current, conversationDetailId, errorMessage);
+
             const errorResult = {
                 success: false,
-                errorMessage: (error as Error).message || 'Unknown error occurred',
+                errorMessage,
                 executionTimeMs: executionTime
             };
             
@@ -553,6 +559,51 @@ export class RunAIAgentResolver extends ResolverBase {
                 executionTimeMs: executionTime,
                 result: JSON.stringify(errorResult)
             };
+        }
+    }
+
+    /**
+     * When executeAIAgent throws after the run/detail exist, close them so Explorer
+     * does not leave a red-pill timer on Status=Running / ConversationDetail In-Progress.
+     */
+    private async persistInFlightAgentFailure(
+        provider: DatabaseProviderBase,
+        userPayload: UserPayload,
+        run: MJAIAgentRunEntityExtended | null | undefined,
+        conversationDetailId: string | undefined,
+        errorMessage: string
+    ): Promise<void> {
+        try {
+            if (run && run.Status === 'Running') {
+                await run.EnsureSaveComplete();
+                run.Status = 'Failed';
+                run.ErrorMessage = errorMessage;
+                run.CompletedAt = new Date();
+                if (!(await run.Save())) {
+                    LogError(`Failed to persist Failed status on in-flight AIAgentRun ${run.ID}`);
+                }
+            }
+            const user = this.GetUserFromPayload(userPayload);
+            if (!user) {
+                return;
+            }
+            if (conversationDetailId) {
+                const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details',
+                    user
+                );
+                if (await detail.Load(conversationDetailId) && detail.Status === 'In-Progress') {
+                    await detail.EnsureSaveComplete();
+                    detail.Status = 'Error';
+                    detail.Message = errorMessage;
+                    detail.Error = errorMessage;
+                    if (!(await detail.Save())) {
+                        LogError(`Failed to persist Error on conversation detail ${conversationDetailId}`);
+                    }
+                }
+            }
+        } catch (persistError) {
+            LogError(`persistInFlightAgentFailure failed: ${persistError}`, undefined, persistError);
         }
     }
 
@@ -590,7 +641,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 partialResult,
                 timestamp: new Date()
             };
-            this.PublishStreamingUpdate(pubSub, partialMsg, userPayload);
+            this.publishStreamingUpdate(pubSub, partialMsg, userPayload);
         }
 
         // Publish completion with conversationDetailId for client-side routing.
@@ -605,7 +656,7 @@ export class RunAIAgentResolver extends ResolverBase {
             errorMessage: result.agentRun?.ErrorMessage || undefined,
             result: resultJson || undefined
         };
-        this.PublishStreamingUpdate(pubSub, completionData, userPayload);
+        this.publishStreamingUpdate(pubSub, completionData, userPayload);
     }
 
     /**
@@ -989,9 +1040,9 @@ export class RunAIAgentResolver extends ResolverBase {
         // Conversation OWNERSHIP is still enforced under the guest principal below: the guest loads its
         // own ConversationDetail through the Widget Guest RLS filters, so a detail id from another
         // session resolves to "not found" before any elevated work happens.
-        const widgetElevation = await resolveWidgetGuestRunContext(userPayload, p);
-        const effectiveAgentId = widgetElevation ? widgetElevation.pinnedAgentId : agentId;
-        const effectiveUserPayload = widgetElevation ? elevateUserPayload(userPayload, widgetElevation.elevatedUser) : userPayload;
+        const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
+        const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
+        const effectiveUserPayload = widgetElevation ? ElevateUserPayload(userPayload, widgetElevation.ElevatedUser) : userPayload;
 
         try {
             // LATENCY OPTIMIZATION (Opt #2 + #3): Load ConversationDetail once here to extract
@@ -1287,7 +1338,7 @@ export class RunAIAgentResolver extends ResolverBase {
     ): void {
         // Ref the liveness pulse reads to enrich heartbeats once the run is created.
         const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
-        const pulse = startLivenessPulse({
+        const pulse = StartLivenessPulse({
             pubSub,
             sessionId,
             ownerUserId: userPayload.userRecord.ID,
@@ -1320,8 +1371,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 errorMessage,
                 result: JSON.stringify({ success: false, errorMessage })
             };
-            this.PublishStreamingUpdate(pubSub, errorCompletionData, userPayload);
-        }).finally(() => pulse.stop());
+            this.publishStreamingUpdate(pubSub, errorCompletionData, userPayload);
+        }).finally(() => pulse.Stop());
     }
 
     /**
@@ -1426,20 +1477,20 @@ export class RunAIAgentResolver extends ResolverBase {
                 const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(artifactMime, ext);
 
                 const decision = RouteArtifact({
-                    typeDefault: artifactType?.DefaultDeliveryMode ?? 'ToolsOnly',
-                    forceToolsOnly: artifactVersion.ForceToolsOnly,
+                    TypeDefault: artifactType?.DefaultDeliveryMode ?? 'ToolsOnly',
+                    ForceToolsOnly: artifactVersion.ForceToolsOnly,
                     mimeType: artifactMime,
-                    sizeBytes: artifactVersion.ContentSizeBytes ?? 0,
-                    inlineSizeCap: INLINE_SIZE_CAP,
-                    modelSupportsModality: () => true,
-                    modelName: '<resolver>',
-                    artifactTypeName: artifactType?.Name ?? artifactMime,
+                    SizeBytes: artifactVersion.ContentSizeBytes ?? 0,
+                    InlineSizeCap: INLINE_SIZE_CAP,
+                    ModelSupportsModality: () => true,
+                    ModelName: '<resolver>',
+                    ArtifactTypeName: artifactType?.Name ?? artifactMime,
                 });
 
                 if (artifactVersion.ContentMode === 'File' && artifactVersion.FileID) {
                     if (decision.delivery !== 'inline') {
-                        if (decision.delivery === 'tools' && decision.annotation) {
-                            LogStatus(`[RunAIAgentResolver] ${decision.annotation}`);
+                        if (decision.delivery === 'tools' && decision.Annotation) {
+                            LogStatus(`[RunAIAgentResolver] ${decision.Annotation}`);
                         }
                         continue;
                     }
@@ -1457,8 +1508,8 @@ export class RunAIAgentResolver extends ResolverBase {
                     // Text-mode artifact (ContentMode = 'Text'). Honor the
                     // routing decision the same way as for file-mode.
                     if (decision.delivery !== 'inline') {
-                        if (decision.delivery === 'tools' && decision.annotation) {
-                            LogStatus(`[RunAIAgentResolver] ${decision.annotation}`);
+                        if (decision.delivery === 'tools' && decision.Annotation) {
+                            LogStatus(`[RunAIAgentResolver] ${decision.Annotation}`);
                         }
                         continue;
                     }
@@ -1580,12 +1631,13 @@ export class RunAIAgentResolver extends ResolverBase {
         if (!artifactVersion.FileID) return null;
 
         try {
-            // Use the attachment service's downloadFileContent which uses GetObject directly
+            // The attachment service returns base64 rather than a Buffer — `Buffer` is Node-only,
+            // and removing it from that signature is what let the service stop depending on the
+            // storage SDKs and become usable from browser and React Native hosts.
             const attachmentService = GetAttachmentService();
-            const buffer = await attachmentService.DownloadFileContent(artifactVersion.FileID, contextUser, provider);
-            if (!buffer) return null;
+            const base64 = await attachmentService.DownloadFileContent(artifactVersion.FileID, contextUser, provider);
+            if (!base64) return null;
 
-            const base64 = buffer.toString('base64');
             const mimeType = artifactVersion.MimeType || 'application/octet-stream';
             return `data:${mimeType};base64,${base64}`;
         } catch (err) {

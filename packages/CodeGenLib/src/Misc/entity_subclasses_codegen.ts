@@ -1,13 +1,29 @@
 import { BaseEntity, EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueListType, EntityInfo, EntityRelationshipInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
+import { RegisterClass, UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
-import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
-import { logError, logStatus } from './status_logging';
+import { MakeDir, SortBySequenceAndCreatedAt } from '../Misc/util';
+import { logError, logStatus, LogWarning } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
-import { mj_core_schema } from '../Config/config';
+import { configInfo, DbPlatform, MjCoreSchema, ResolveEntityImportPackage, type ConfigInfo } from '../Config/config';
 import { SQLLogging } from './sql_logging';
-import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
+import { CodeGenConnection, ResolveCodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
+import { CodeGenReporter } from './codegen-reporter';
+import { v4 as uuidv4 } from 'uuid';
+import { WriteFileIfChanged } from './file-write';
+import { EmitStats } from './emit-stats';
+import {
+  SchemaEmitOptions,
+  BuildSchemaBarrel,
+  GroupEntitiesBySchema,
+  MapLimit,
+  EmitSchemaFile,
+  PruneOrphanedSchemaFiles,
+  ResolveSchemaEmitOptions,
+  SanitizeSchemaFileName,
+  SchemasToEmit,
+} from './schema-emit';
 
 /**
  * Narrow typed view over a parsed `ts.SourceFile` exposing the internal-but-stable
@@ -60,6 +76,15 @@ function SafeCodeName(field: EntityFieldInfo): string {
  * `RelatedEntity` and `RelatedEntityJoinField` are deliberately absent — they are columns on the
  * same `EntityRelationship` row, and duplicating them here would create two sources of truth.
  */
+/**
+ * A generated subclass that is referenced from this file (embed or related-record
+ * collection) but is not itself being emitted here, so it must be imported.
+ */
+export type PeerClassImport = {
+  className: string;
+  packageName: string;
+};
+
 export type RelatedRecordCollectionConfig = {
   /** Generated property name on the entity subclass, e.g. `Lines`. Must be a valid TS identifier. */
   Name: string;
@@ -75,6 +100,15 @@ export type RelatedRecordCollectionConfig = {
   Sequence?: { Field: string; From?: number };
   /** Whether the collection empties itself after a successful save. Defaults to `false`. */
   ClearAfterSave?: boolean;
+};
+
+/**
+ * Policy half of a `DeclareEmbeddedRecord(...)` declaration, stored in `EntityField.EmbeddedRecord`.
+ * `RelatedEntity` and the FK field name are columns on the same `EntityField` row.
+ */
+export type EmbeddedRecordConfig = {
+  OnClear?: 'delete' | 'orphan' | 'refuse';
+  LoadNested?: 'inherit' | 'related';
 };
 
 /**
@@ -163,52 +197,170 @@ export class EntitySubClassGeneratorBase {
    *
    * @param pool
    * @param entities
-   * @param directory 
+   * @param directory
    * @param skipDBUpdate - when set to true, no updates are written back to the database - which happens after code generation when newly generated code from AI has been generated, but in the case where this flag is true, we don't ever write back to the DB because the assumption is we are only emitting code to the file that was already in the DB.
-   * @returns 
+   * @param options - per-schema emit / dirty-schema / parallelism. Defaults come from `configInfo.fileEmit`.
+   * @returns
    */
-  public async generateAllEntitySubClasses(pool: CodeGenConnection, entities: EntityInfo[], directory: string, skipDBUpdate: boolean): Promise<boolean> {
+  public async GenerateAllEntitySubClasses(
+    pool: CodeGenConnection,
+    entities: EntityInfo[],
+    directory: string,
+    skipDBUpdate: boolean,
+    options?: SchemaEmitOptions,
+  ): Promise<boolean> {
     try {
-      // Entities are already sorted by name in PostProcessEntityMetadata (see providerBase.ts)
-      const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
-      let sContent: string = "";
-      for (const e of entities) {
-        sContent += await this.generateEntitySubClass(pool, e, false, skipDBUpdate);
+      const emit = this.resolveEmitOptions(options);
+      MakeDir(directory);
+
+      if (!emit.perSchema) {
+        const allContent = await this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, true);
+        this.emitFile(path.join(directory, 'entity_subclasses.ts'), allContent, emit.writeIfChanged);
+        return true;
       }
-      // Hoist the base-class imports (e.g. ReadOnlyExternalBaseEntity for external entities, or custom
-      // subclass imports) into the file header, de-duplicated. Emitting each once — instead of once per
-      // entity — prevents a TS2300 duplicate-identifier error in files with 2+ external entities.
-      // Only consider entities that actually emit a class: generateEntitySubClass skips PK-less entities
-      // (returns ''), so hoisting their import would leave a dangling/unused import (a build error under
-      // a downstream consumer's noUnusedLocals). Match that skip condition here.
-      const subclassImports: string = [...new Set(
-        entities
-          .filter((e) => e.PrimaryKeys.length > 0)
-          .map((e) => this.resolveEntityBaseClass(e).importStatement)
-          .filter((s) => s.length > 0)
-      )].join('');
-      const allContent = `${this.generateEntitySubClassFileHeader()} \n ${subclassImports}${zodContent} \n ${sContent}`;
 
-      makeDir(directory);
-      fs.writeFileSync(path.join(directory, 'entity_subclasses.ts'), allContent);
+      const grouped = GroupEntitiesBySchema(entities);
+      const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
+      const schemasDir = path.join(directory, 'entities');
+      MakeDir(schemasDir);
 
+      const toEmit = SchemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
+        fs.existsSync(path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`)),
+      );
+      const emitSet = new Set(toEmit);
+      for (const schemaName of schemas) {
+        EmitStats.RecordSchemaEmit(emitSet.has(schemaName));
+      }
+
+      const concurrency = emit.parallel ? emit.concurrency : 1;
+      const assembleStarted = Date.now();
+      await MapLimit(toEmit, concurrency, async (schemaName) => {
+        const schemaEntities = grouped.get(schemaName) ?? [];
+        const content = await this.AssembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false);
+        const filePath = path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`);
+        this.emitFile(filePath, content, emit.writeIfChanged);
+      });
+      EmitStats.AddAssembleMs(Date.now() - assembleStarted);
+
+      // Before the barrel, so the directory and the barrel always agree.
+      const pruned = PruneOrphanedSchemaFiles(schemasDir, schemas);
+      if (pruned.length > 0) {
+        logStatus(`   Removed ${pruned.length} orphaned entity schema file(s): ${pruned.join(', ')}`);
+      }
+
+      const barrel = BuildSchemaBarrel(
+        schemas,
+        'entities',
+        `export const loadModule = () => {
+  // no-op — importing this barrel loads every per-schema module via the re-exports below
+}
+
+`,
+      );
+      this.emitFile(path.join(directory, 'entity_subclasses.ts'), barrel, emit.writeIfChanged);
       return true;
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError(message);
       console.error(err);
       return false;
     }
   }
 
-  public generateEntitySubClassFileHeader(): string {
-    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
-import { z } from "zod";
+  /** @deprecated Use {@link GenerateAllEntitySubClasses}. */
+  public async generateAllEntitySubClasses(
+    pool: CodeGenConnection,
+    entities: EntityInfo[],
+    directory: string,
+    skipDBUpdate: boolean,
+    options?: SchemaEmitOptions,
+  ): Promise<boolean> {
+    return this.GenerateAllEntitySubClasses(pool, entities, directory, skipDBUpdate, options);
+  }
 
+  /**
+   * Build the TypeScript source for one emit file (one schema, or the legacy monolith).
+   * Hoists and de-duplicates two kinds of import into the file header: the generated
+   * base class each entity extends, and the embedded-record peers an entity references.
+   * Emitting each once per file — instead of once per entity — prevents a TS2300
+   * duplicate-identifier error in a file holding 2+ external entities.
+   *
+   * Entities without primary keys are excluded because {@link generateEntitySubClass}
+   * emits nothing for them; hoisting their imports would leave an unused import that
+   * fails a downstream consumer's `noUnusedLocals`.
+   */
+  public async AssembleEntitySubclassFile(
+    pool: CodeGenConnection,
+    entities: EntityInfo[],
+    skipDBUpdate: boolean,
+    includeLoadModule: boolean,
+  ): Promise<string> {
+    const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
+    let sContent = '';
+    for (const e of entities) {
+      sContent += await this.GenerateEntitySubClass(pool, e, false, skipDBUpdate);
+    }
+    // Only entities that actually emit a class: generateEntitySubClass skips PK-less entities
+    // (returns ''), so hoisting their imports would leave a dangling/unused import that fails a
+    // downstream consumer's noUnusedLocals.
+    const entitiesWithPK = entities.filter((e) => e.PrimaryKeys.length > 0);
+    const localClassNames = new Set(entitiesWithPK.map((e) => `${e.ClassName}Entity`));
+    // De-duplicated so a file holding 2+ external entities does not emit
+    // `import { ReadOnlyExternalBaseEntity }` twice (TS2300).
+    const baseClassImports: string = [...new Set(
+      entitiesWithPK
+        .map((e) => this.resolveEntityBaseClass(e).importStatement)
+        .filter((s) => s.length > 0),
+    )].join('');
+    // Collect every embed + related-record-collection peer across the file, then emit
+    // one grouped `import { A, B } from 'pkg'` per npm package. Per-entity import
+    // lines would duplicate packages (Address on two owners → two import lines).
+    const peerImports = entitiesWithPK.flatMap((e) =>
+      EntitySubClassGeneratorBase.CollectPeerClassImports(e, localClassNames),
+    );
+    const peerImportStatements = EntitySubClassGeneratorBase.FormatPeerImportStatements(peerImports).join('');
+    const subclassImports = `${baseClassImports}${peerImportStatements}`;
+    return `${this.GenerateEntitySubClassFileHeader(includeLoadModule)} \n ${subclassImports}${zodContent} \n ${sContent}`;
+  }
+
+  /** @deprecated Use {@link AssembleEntitySubclassFile}. */
+  public async assembleEntitySubclassFile(
+    pool: CodeGenConnection,
+    entities: EntityInfo[],
+    skipDBUpdate: boolean,
+    includeLoadModule: boolean,
+  ): Promise<string> {
+    return this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, includeLoadModule);
+  }
+
+  /** Delegates so both generators share one set of defaults; override to change them. */
+  protected resolveEmitOptions(options?: SchemaEmitOptions): Required<SchemaEmitOptions> {
+    return ResolveSchemaEmitOptions(options, configInfo?.fileEmit);
+  }
+
+  /** Delegates so both generators write identically; override to change that. */
+  protected emitFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
+    EmitSchemaFile(filePath, content, useWriteIfChanged);
+  }
+
+  public GenerateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
+    const loadModule = includeLoadModule
+      ? `
 export const loadModule = () => {
   // no-op, only used to ensure this file is a valid module and to allow easy loading
 }
-
+`
+      : '';
+    return `import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
+import { RegisterClass } from "@memberjunction/global";
+import { z } from "zod";
+${loadModule}
     `;
+  }
+
+  /** @deprecated Use {@link GenerateEntitySubClassFileHeader}. */
+  public generateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
+    return this.GenerateEntitySubClassFileHeader(includeLoadModule);
   }
 
   /**
@@ -230,21 +382,21 @@ export const loadModule = () => {
     return { baseClass: 'BaseEntity', importStatement: '' };
   }
 
-  public async generateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
+  public async GenerateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
       return '';
-    } else {
-      // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
-      const sClassName: string = `${entity.ClassName}Entity`;
+    }
 
-      const fields: string = sortedFields.map((e) => {
+    const sClassName: string = `${entity.ClassName}Entity`;
+    // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
+    const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
+    const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
           // Sort by Sequence to ensure consistent ordering in comments
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           values = sortedValues.map(
             (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
           ).join('');
@@ -269,7 +421,7 @@ export const loadModule = () => {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           typeString = sortedValues.map((v) => `${quotes}${v.Value}${quotes}`).join(' | ');
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
@@ -503,6 +655,8 @@ export const loadModule = () => {
           : '';
 
       const relatedRecordCollections = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(entity);
+      const embeddedRecords = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(entity);
+      const hierarchyMethods = EntitySubClassGeneratorBase.GenerateHierarchyMethods(entity, sClassName);
 
       let sRet: string = `
 ${jsonTypeBlock}
@@ -517,15 +671,19 @@ ${jsonTypeBlock}
  * @public${deprecatedFlag}
  */
 ${includeFileHeader ? subClassImportStatement : ''}@RegisterClass(BaseEntity, '${entity.Name}')
-export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${relatedRecordCollections}${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
+export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${relatedRecordCollections}${embeddedRecords}${hierarchyMethods}${loadFunction ? '\n' + loadFunction : ''}${saveFunction ? '\n\n' + saveFunction : ''}${deleteFunction ? '\n\n' + deleteFunction : ''}${validateFunction ? '\n\n' + validateFunction : ''}
 
 ${fields}
 }
 `;
-      if (includeFileHeader) sRet = this.generateEntitySubClassFileHeader() + sRet;
+      if (includeFileHeader) sRet = this.GenerateEntitySubClassFileHeader() + sRet;
 
       return sRet;
-    }
+  }
+
+  /** @deprecated Use {@link GenerateEntitySubClass}. */
+  public async generateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
+    return this.GenerateEntitySubClass(pool, entity, includeFileHeader, skipDBUpdate);
   }
 
   /**
@@ -821,6 +979,338 @@ ${fields}
   }
 
   /**
+   * Emits `{Field}_Object` / `{Field}_EnsureObject()` for every FK field whose
+   * `EmbeddedRecord` column holds a config object.
+   *
+   * RelatedEntity and the FK field name come from the row (`RelatedEntityID`, `Name`),
+   * not the JSON. `AllowsNull` on the same row decides the getter's nullability.
+   *
+   * @param entity - The entity being generated.
+   * @returns The declarations block, or an empty string when none are declared.
+   */
+  public static GenerateEmbeddedRecords(entity: EntityInfo): string {
+    const declared = (entity.Fields ?? []).filter(
+      f => f.EmbeddedRecord && String(f.EmbeddedRecord).trim().length > 0,
+    );
+    if (declared.length === 0) {
+      return '';
+    }
+
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+    const blocks: string[] = [];
+    const seen = new Set<string>();
+
+    for (const field of declared) {
+      const config = EntitySubClassGeneratorBase.ParseEmbeddedRecordConfig(entity, field);
+      if (!config) {
+        continue;
+      }
+      const nameKey = `${field.Name}_Object`.toLowerCase();
+      if (seen.has(nameKey)) {
+        logError(
+          `[EmbeddedRecord] ${entity.Name}.${field.Name}: duplicate generated name '${field.Name}_Object'; skipping.`,
+        );
+        continue;
+      }
+      seen.add(nameKey);
+      const related = field.RelatedEntityID ? md.EntityByID(field.RelatedEntityID) : undefined;
+      if (!related) {
+        logError(
+          `[EmbeddedRecord] ${entity.Name}.${field.Name}: RelatedEntityID is missing or unknown; skipping.`,
+        );
+        continue;
+      }
+      blocks.push(EntitySubClassGeneratorBase.RenderEmbeddedRecord(entity, field, related, config));
+    }
+
+    return blocks.length > 0 ? '\n' + blocks.join('\n') : '';
+  }
+
+  /**
+   * Emits strongly-typed hierarchy traversal helper methods (`GetDescendants`, `GetAncestors`, `GetChildren`)
+   * for entities with recursive self-referencing foreign keys.
+   *
+   * @param entity - The entity being generated.
+   * @param sClassName - The generated subclass name.
+   * @returns The generated methods block, or an empty string when the entity has no recursive FKs.
+   */
+  public static GenerateHierarchyMethods(entity: EntityInfo, sClassName: string): string {
+    const recursiveFKs = (entity.Fields ?? []).filter(
+      f => f.RelatedEntityID != null && (UUIDsEqual(f.RelatedEntityID, entity.ID) || f.RelatedEntity === entity.Name) && !f.IsVirtual && f.IsHierarchy === true
+    );
+    if (recursiveFKs.length === 0) {
+      return '';
+    }
+
+    if (entity.PrimaryKeys.length !== 1) {
+      LogWarning(
+        `[Hierarchy] Entity '${entity.Name}' has ${recursiveFKs.length} hierarchy foreign key(s) ` +
+        `(${recursiveFKs.map(f => f.Name).join(', ')}), but has ${entity.PrimaryKeys.length} primary key fields. ` +
+        `MemberJunction hierarchy traversal requires a single-column primary key; skipping subclass hierarchy methods.`
+      );
+      return '';
+    }
+
+    const methods: string[] = [];
+
+    for (const field of recursiveFKs) {
+      const fieldName = field.Name;
+      const rootField = `Root${fieldName}`;
+      const depthField = `${fieldName}Depth`;
+      const pathField = `${fieldName}Path`;
+
+      const isPrimaryHierarchy = recursiveFKs.length === 1 || fieldName === 'ParentID';
+
+      // For primary hierarchies (e.g. ParentID), BaseEntity already provides strongly-typed
+      // GetDescendants<T = this>(), GetAncestors<T = this>(), and GetChildren<T = this>().
+      // We only generate named helper methods for non-primary hierarchy fields (e.g. ManagerID).
+      if (isPrimaryHierarchy) {
+        continue;
+      }
+
+      methods.push(`
+  /**
+   * Retrieves all descendant records in the ${fieldName} hierarchy under this record using a single RunView query.
+   * @param maxDepth Optional maximum relative depth to retrieve.
+   * @returns Array of descendant entity instances ordered by hierarchy depth.
+   */
+  public async Get${fieldName}Descendants<T extends BaseEntity = this>(maxDepth?: number): Promise<T[]> {
+    return this.GetDescendants<T>({ parentFieldName: '${fieldName}', maxDepth });
+  }
+
+  /**
+   * Retrieves all ancestor records in the ${fieldName} hierarchy from the top-level root down to this record using a single RunView query.
+   * @returns Array of ancestor entity instances ordered from root down to parent.
+   */
+  public async Get${fieldName}Ancestors<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetAncestors<T>('${fieldName}');
+  }
+
+  /**
+   * Retrieves all direct child records in the ${fieldName} hierarchy of this record using a single RunView query.
+   * @returns Array of direct child entity instances.
+   */
+  public async Get${fieldName}Children<T extends BaseEntity = this>(): Promise<T[]> {
+    return this.GetChildren<T>('${fieldName}');
+  }`);
+    }
+
+    return methods.length > 0 ? '\n' + methods.join('\n') : '';
+  }
+
+  /**
+   * One peer class that must be imported because it is referenced by an embed or
+   * related-record collection and is not being emitted in this file.
+   */
+  public static CollectPeerClassImports(
+    entity: EntityInfo,
+    localClassNames: Set<string>,
+    config?: ConfigInfo,
+  ): PeerClassImport[] {
+    const owningSchema = (entity.SchemaName ?? '').trim();
+    if (!owningSchema) {
+      throw new Error(
+        `[CodeGen] entity import: entity '${entity.Name}' has no SchemaName; cannot resolve peer import packages.`,
+      );
+    }
+
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+    const byClass = new Map<string, string>();
+
+    const addPeer = (className: string | undefined, relatedSchema: string | undefined, context: string) => {
+      if (!className || className === 'BaseEntity') {
+        return;
+      }
+      if (localClassNames.has(className)) {
+        return;
+      }
+      const schema = (relatedSchema ?? '').trim();
+      if (!schema) {
+        throw new Error(
+          `[CodeGen] entity import: ${context} refers to class '${className}' but the related entity has no SchemaName. ` +
+          `CodeGen cannot pick an npm package to import it from.`,
+        );
+      }
+      const packageName = ResolveEntityImportPackage(schema, owningSchema, config);
+      const existing = byClass.get(className);
+      if (existing && existing !== packageName) {
+        throw new Error(
+          `[CodeGen] entity import: class '${className}' resolved to both '${existing}' and '${packageName}' on entity '${entity.Name}'.`,
+        );
+      }
+      byClass.set(className, packageName);
+    };
+
+    for (const field of (entity.Fields ?? []).filter(
+      (f) => f.EmbeddedRecord && String(f.EmbeddedRecord).trim().length > 0 && f.RelatedEntityID,
+    )) {
+      const related = md.EntityByID?.(field.RelatedEntityID);
+      if (!related) {
+        continue;
+      }
+      addPeer(
+        `${related.ClassName}Entity`,
+        related.SchemaName,
+        `${entity.Name}.${field.Name} (embedded record)`,
+      );
+    }
+
+    for (const relationship of (entity.RelatedEntities ?? []).filter(
+      (r) => r.RelatedRecordCollection && r.RelatedRecordCollection.trim().length > 0,
+    )) {
+      const parsed = EntitySubClassGeneratorBase.ParseRelatedRecordCollectionConfig(entity, relationship);
+      if (!parsed) {
+        continue;
+      }
+      const relatedBase = relationship.RelatedEntityClassName?.trim();
+      if (!relatedBase) {
+        continue;
+      }
+      let related: { SchemaName?: string } | undefined;
+      if (relationship.RelatedEntityID && typeof md.EntityByID === 'function') {
+        related = md.EntityByID(relationship.RelatedEntityID);
+      }
+      if (!related && relationship.RelatedEntity && typeof md.EntityByName === 'function') {
+        related = md.EntityByName(relationship.RelatedEntity);
+      }
+      addPeer(
+        `${relatedBase}Entity`,
+        related?.SchemaName,
+        `${entity.Name} → ${relationship.RelatedEntity} (related-record collection)`,
+      );
+    }
+
+    return [...byClass.entries()].map(([className, packageName]) => ({ className, packageName }));
+  }
+
+  /**
+   * Groups peer imports into one `import { A, B } from 'pkg'` line per npm package.
+   * `@memberjunction/core-entities` is emitted first; remaining packages are alphabetical.
+   */
+  public static FormatPeerImportStatements(imports: PeerClassImport[]): string[] {
+    const byPackage = new Map<string, Set<string>>();
+    for (const item of imports) {
+      if (!item.className || !item.packageName) {
+        continue;
+      }
+      let set = byPackage.get(item.packageName);
+      if (!set) {
+        set = new Set();
+        byPackage.set(item.packageName, set);
+      }
+      set.add(item.className);
+    }
+    const packages = [...byPackage.keys()].sort((a, b) => {
+      if (a === '@memberjunction/core-entities') return -1;
+      if (b === '@memberjunction/core-entities') return 1;
+      return ordinalCompare(a, b);
+    });
+    return packages.map((pkg) => {
+      const names = [...byPackage.get(pkg)!].sort((a, b) => ordinalCompare(a, b));
+      return `import { ${names.join(', ')} } from '${pkg}';\n`;
+    });
+  }
+
+  /**
+   * @deprecated Use {@link CollectPeerClassImports} + {@link FormatPeerImportStatements}.
+   * Kept so existing call sites still compile; includes related-record collections as well as embeds.
+   */
+  public static CollectEmbeddedImports(entity: EntityInfo, localClassNames: Set<string>, config?: ConfigInfo): string[] {
+    return EntitySubClassGeneratorBase.FormatPeerImportStatements(
+      EntitySubClassGeneratorBase.CollectPeerClassImports(entity, localClassNames, config),
+    );
+  }
+
+  /**
+   * Parses and validates one field's `EmbeddedRecord` JSON.
+   * Invalid metadata is skipped with a logged error rather than throwing.
+   */
+  public static ParseEmbeddedRecordConfig(
+    entity: EntityInfo,
+    field: EntityFieldInfo,
+  ): EmbeddedRecordConfig | null {
+    const label = `${entity.Name}.${field.Name}`;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(String(field.EmbeddedRecord));
+    } catch (e) {
+      logError(
+        `[EmbeddedRecord] ${label}: EmbeddedRecord is not valid JSON ` +
+        `(${e instanceof Error ? e.message : String(e)}); skipping.`,
+      );
+      return null;
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      logError(`[EmbeddedRecord] ${label}: expected a JSON object; skipping.`);
+      return null;
+    }
+    const config = parsed as EmbeddedRecordConfig;
+    const clearModes = ['delete', 'orphan', 'refuse'];
+    if (config.OnClear && !clearModes.includes(config.OnClear)) {
+      logError(`[EmbeddedRecord] ${label}: invalid OnClear '${config.OnClear}'; skipping.`);
+      return null;
+    }
+    const nestedModes = ['inherit', 'related'];
+    if (config.LoadNested && !nestedModes.includes(config.LoadNested)) {
+      logError(`[EmbeddedRecord] ${label}: invalid LoadNested '${config.LoadNested}'; skipping.`);
+      return null;
+    }
+    const emittedName = field.CodeName ? SafeCodeName(field) : field.Name;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(emittedName)) {
+      logError(`[EmbeddedRecord] ${label}: emitted name '${emittedName}' is not a valid TypeScript identifier; skipping.`);
+      return null;
+    }
+    return config;
+  }
+
+  /**
+   * Renders the private companion plus the public `{Field}_Object` / `{Field}_EnsureObject` API.
+   */
+  protected static RenderEmbeddedRecord(
+    entity: EntityInfo,
+    field: EntityFieldInfo,
+    related: EntityInfo,
+    config: EmbeddedRecordConfig,
+  ): string {
+    const relatedClass = `${related.ClassName}Entity`;
+    const getterType = field.AllowsNull ? `${relatedClass} | null` : relatedClass;
+    const code = field.CodeName ? SafeCodeName(field) : field.Name;
+    const lines: string[] = [
+      `ForeignKeyField: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(field.Name)}'`,
+      `RelatedEntity: '${EntitySubClassGeneratorBase.EscapeSingleQuotes(related.Name)}'`,
+    ];
+    if (config.OnClear) {
+      lines.push(`OnClear: '${config.OnClear}'`);
+    }
+    if (config.LoadNested) {
+      lines.push(`LoadNested: '${config.LoadNested}'`);
+    }
+    const requiredNote = field.AllowsNull
+      ? ` Null until ${code}_EnsureObject() or Load() finds a value.`
+      : ` Always present after GetEntityObject / NewRecord.`;
+
+    return `
+  /**
+  * Embedded record: ${related.Name}
+  *
+  * 1:1 peer joined by this record's ${field.Name}. Loaded and saved with this
+  * ${entity.Name} record — see packages/MJCore/docs/embedded-records.md.
+  * Declared by EntityField.EmbeddedRecord on '${entity.Name}.${field.Name}'; edit that row, not this file.
+  *${requiredNote}
+  */
+  private readonly __emb_${code} = this.DeclareEmbeddedRecord<${relatedClass}>({
+      ${lines.join(',\n        ')},
+  });
+  public get ${code}_Object(): ${getterType} {
+      return this.__emb_${code}.Value${field.AllowsNull ? '' : '!'};
+  }
+  public ${code}_EnsureObject(): ${relatedClass} {
+      return this.__emb_${code}.Ensure();
+  }
+`;
+  }
+
+  /**
    * Finds the source parent entity for an IS-A inherited field by walking the parent chain.
    * Returns the name of the parent entity that originally defines the field (as a non-virtual column).
    */
@@ -857,16 +1347,20 @@ ${fields}
         const qi = (n: string) => dialect.QuoteIdentifier(n);
         const lit = (v: string) => dialect.QuoteStringLiteral(v);
         const utcNow = dialect.CurrentTimestampUTC();
-        const generatedCodeTbl = dialect.QuoteSchema(mj_core_schema(), 'GeneratedCode');
-        const generatedCodeCatsView = dialect.QuoteSchema(mj_core_schema(), 'vwGeneratedCodeCategories');
+        const generatedCodeTbl = dialect.QuoteSchema(MjCoreSchema(), 'GeneratedCode');
+        const generatedCodeCatsView = dialect.QuoteSchema(MjCoreSchema(), 'vwGeneratedCodeCategories');
         const validatorCodeCategoryID = `(SELECT ${qi('ID')} FROM ${generatedCodeCatsView} WHERE ${qi('Name')}=${lit('CodeGen: Validators')})`;
 
         let sSQL: string  = '';
         const justGenerated = ret.validators.filter((f) => f.wasGenerated);
+        if (justGenerated.length > 0) {
+          CodeGenReporter.Instance.counter('ai.validatorCalls', justGenerated.length);
+        }
+        const provider = ResolveCodeGenDatabaseProvider(DbPlatform());
         for (const v of justGenerated) {
           // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
           const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());
-          sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function\n`
+          sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function\n`;
           if (v.generatedCodeId) {
             // need to update the existing record in the __mj.GeneratedCode table
             sSQL += `UPDATE ${generatedCodeTbl} SET
@@ -877,25 +1371,29 @@ ${fields}
                         ${qi('GeneratedAt')}=${utcNow},
                         ${qi('GeneratedByModelID')}=${lit(v.aiModelID)}
                      WHERE
-                        ${qi('ID')}=${lit(v.generatedCodeId)};`
+                        ${qi('ID')}=${lit(v.generatedCodeId)};\n\n`;
           }
           else {
-            // need to create a row inside the __mj.GeneratedCode table
+            // need to create a row inside the __mj.GeneratedCode table with literal host-stable ID
             const linkedEntityID = f ? entityFieldsEntityID : entitiesEntityID;
             const linkedRecordPK = f ? f.ID : entity.ID;
-            sSQL += `INSERT INTO ${generatedCodeTbl} (${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
-                      VALUES (${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)});
-
-            `
+            const newGeneratedCodeId = uuidv4();
+            v.generatedCodeId = newGeneratedCodeId;
+            const checkQuery = `SELECT 1 FROM ${generatedCodeTbl} WHERE ${qi('CategoryID')} = ${validatorCodeCategoryID} AND ${qi('LinkedEntityID')} = ${lit(linkedEntityID ?? '')} AND ${qi('LinkedRecordPrimaryKey')} = ${lit(linkedRecordPK)}`;
+            const insertSQL = `INSERT INTO ${generatedCodeTbl} (${qi('ID')}, ${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
+VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)})`;
+            sSQL += `${provider.conditionalInsertSQL(checkQuery, insertSQL)};\n\n`;
           }
         }
 
         // now Log and Execute the SQL
-        try {
-          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);
-        }
-        catch (e) {
-          logError(`Error logging and executing SQL for ${entity.Name}: ${e}`);
+        if (sSQL.trim().length > 0) {
+          try {
+            await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);
+          }
+          catch (e) {
+            logError(`Error logging and executing SQL for ${entity.Name}: ${e}`);
+          }
         }
       }
 
@@ -911,18 +1409,18 @@ ${fields}
     const sortedValidators = unsortedValidators.sort((a, b) => {
       // sort by field name, then by function name, then by generatedCodeId as last-resort tiebreaker
       if (a.fieldName && b.fieldName) {
-        const cmp = a.fieldName.localeCompare(b.fieldName) || a.functionName.localeCompare(b.functionName);
+        const cmp = ordinalCompare(a.fieldName, b.fieldName) || ordinalCompare(a.functionName, b.functionName);
         if (cmp !== 0) return cmp;
       } else if (a.fieldName) {
         return -1; // a comes first
       } else if (b.fieldName) {
         return 1; // b comes first
       } else {
-        const cmp = a.functionName.localeCompare(b.functionName); // both are table-level, sort by function name
+        const cmp = ordinalCompare(a.functionName, b.functionName); // both are table-level, sort by function name
         if (cmp !== 0) return cmp;
       }
       // last-resort tiebreaker for absolute determinism
-      return a.generatedCodeId.localeCompare(b.generatedCodeId);
+      return ordinalCompare(a.generatedCodeId, b.generatedCodeId);
     });
 
     // Deduplicate by functionName — duplicate GeneratedCode records can exist if the view JOIN
@@ -984,14 +1482,14 @@ ${validationFunctions}`
       logStatus(`SKIPPING SCHEMA GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+      const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
       
       const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
           // Sort by Sequence to ensure consistent ordering in comments
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           values = sortedValues.map(
             (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
           ).join('');
@@ -1007,7 +1505,7 @@ ${validationFunctions}`
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           // z.union() requires at least 2 members. When there's only one allowed
           // value (single-value CHECK constraint), emit z.literal() directly.
           const literals = sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`);
@@ -1057,7 +1555,7 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     let valueList: string = '';
     if (entityField.ValueListType && entityField.ValueListType.length > 0 && entityField.ValueListType.trim().toLowerCase() !== 'none') {
       // Sort by Sequence to ensure consistent ordering in comments
-      const sortedValues = sortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
+      const sortedValues = SortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
       let values = sortedValues.map(
         (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
       ).join('');

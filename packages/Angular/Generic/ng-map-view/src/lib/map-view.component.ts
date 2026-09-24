@@ -13,7 +13,7 @@ import {
     AfterViewInit,
     inject
 } from '@angular/core';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, ResolveMapLatitudeField, ResolveMapLongitudeField } from '@memberjunction/core';
 import { GeoDataEngine } from '@memberjunction/core-entities';
 import { MapRenderMode, MapDisplayState, MapMarkerClickEvent, MapRegionClickEvent } from './map-view.types';
 import * as MapCore from '@memberjunction/geo-maps';
@@ -114,19 +114,13 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
      * Resolve a lat/lng field name. Explicit override wins; otherwise picks the
      * field tagged with the matching `ExtendedType` on `Entity`.
      */
-    private resolveGeoField(input: string, defaultName: string, extendedType: 'GeoLatitude' | 'GeoLongitude'): string {
-        if (input && input !== defaultName) return input; // explicit override
-        if (this.Entity) {
-            const tagged = this.Entity.Fields.find(f => f.ExtendedType === extendedType);
-            if (tagged) return tagged.Name;
-        }
-        return input || defaultName;
-    }
     private get effectiveLatitudeField(): string {
-        return this.resolveGeoField(this.LatitudeField, '__mj_Latitude', 'GeoLatitude');
+        if (!this.Entity) return this.LatitudeField || '__mj_Latitude';
+        return ResolveMapLatitudeField(this.Entity, this.LatitudeField);
     }
     private get effectiveLongitudeField(): string {
-        return this.resolveGeoField(this.LongitudeField, '__mj_Longitude', 'GeoLongitude');
+        if (!this.Entity) return this.LongitudeField || '__mj_Longitude';
+        return ResolveMapLongitudeField(this.Entity, this.LongitudeField);
     }
 
     ngOnInit(): void {
@@ -146,12 +140,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
             const entry = entries[0];
             if (entry.isIntersecting && !this.engine) {
                 // First time visible — initialize the map
-                this.InitializeMap();
+                this.initializeMap();
             } else if (entry.isIntersecting && this.engine) {
                 // Becoming visible again — fix tile rendering and re-fit
                 this.engine.invalidateSize();
                 if (this.pendingRender) {
-                    this.DoRender();
+                    this.doRender();
                     this.pendingRender = false;
                 }
             }
@@ -173,7 +167,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
             this.IsLoading = true;
             this.cdr.detectChanges();
             if (this.mapContainer?.nativeElement) {
-                this.InitializeMap();
+                this.initializeMap();
             } else {
                 this.pendingRender = true;
             }
@@ -185,7 +179,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                 setTimeout(() => {
                     if (this.engine) {
                         this.engine.invalidateSize();
-                        this.DoRender();
+                        this.doRender();
                     }
                 }, 100);
             } else {
@@ -209,7 +203,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     /**
      * Initialize the map engine via MapCore.
      */
-    private InitializeMap(): void {
+    private initializeMap(): void {
         if (!this.mapContainer?.nativeElement || this.engine) return;
 
         this.engine = MapCore.createEngine({
@@ -225,11 +219,11 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
             geoResolver: GeoDataEngine.Instance,
             getRecordId: (record: Record<string, unknown>) => {
                 const pkFields = this.Entity?.PrimaryKeys ?? [];
-                return pkFields.map(pk => this.GetField(record, pk.Name)).join('||');
+                return pkFields.map(pk => this.getField(record, pk.Name)).join('||');
             },
             getRecordName: (record: Record<string, unknown>) => {
                 const nameField = this.Entity?.NameField;
-                return nameField ? String(this.GetField(record, nameField.Name) ?? '') : 'Record';
+                return nameField ? String(this.getField(record, nameField.Name) ?? '') : 'Record';
             },
             onMarkerClick: (event: MapCore.MarkerClickEvent) => {
                 this.MarkerClick.emit({
@@ -250,12 +244,12 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
             onPopupRecordClick: (recordId: string) => {
                 const record = this.Records.find(r => {
                     const pkFields = this.Entity?.PrimaryKeys ?? [];
-                    const id = pkFields.map(pk => this.GetField(r, pk.Name)).join('||');
+                    const id = pkFields.map(pk => this.getField(r, pk.Name)).join('||');
                     return id === recordId;
                 });
                 if (record) {
-                    const lat = this.GetNumericField(record, this.LatitudeField) ?? 0;
-                    const lng = this.GetNumericField(record, this.LongitudeField) ?? 0;
+                    const lat = this.getNumericField(record, this.LatitudeField) ?? 0;
+                    const lng = this.getNumericField(record, this.LongitudeField) ?? 0;
                     this.MarkerClick.emit({
                         RecordID: recordId,
                         Latitude: lat,
@@ -280,7 +274,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         setTimeout(() => {
             if (this.engine) {
                 this.engine.invalidateSize();
-                this.DoRender();
+                this.doRender();
                 this.IsLoading = false;
                 this.cdr.detectChanges();
 
@@ -295,7 +289,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     /**
      * Render records using the current mode, update marker count.
      */
-    private DoRender(): void {
+    private doRender(): void {
         if (!this.engine) return;
         this.engine.render(this.Records, this.RenderMode);
         this.MarkerCount = this.engine.getStats().markerCount;
@@ -308,7 +302,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
             && this.RenderMode === 'point'
             && this.MarkerCount === 0
             && this.Records.length > 0
-            && this.RecordsHaveBoundaryData()) {
+            && this.recordsHaveBoundaryData()) {
             this.autoModeApplied = true;
             this.SetRenderMode('boundary');
         }
@@ -317,10 +311,10 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     /**
      * True if at least one loaded record carries a non-empty value in the boundary field.
      */
-    private RecordsHaveBoundaryData(): boolean {
+    private recordsHaveBoundaryData(): boolean {
         const field = this.BoundaryField;
         for (const record of this.Records) {
-            const val = this.GetField(record, field);
+            const val = this.getField(record, field);
             if (val != null && val !== '') return true;
         }
         return false;
@@ -332,13 +326,13 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     SetRenderMode(mode: MapRenderMode): void {
         this.RenderMode = mode;
         this.RenderModeChange.emit(mode);
-        this.DoRender();
+        this.doRender();
     }
 
     /**
      * Get a field value from a record, supporting both BaseEntity (with .Get()) and plain objects.
      */
-    private GetField(record: Record<string, unknown>, fieldName: string): unknown {
+    private getField(record: Record<string, unknown>, fieldName: string): unknown {
         if ('Get' in record && typeof record['Get'] === 'function') {
             return (record as { Get: (name: string) => unknown }).Get(fieldName);
         }
@@ -348,8 +342,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     /**
      * Get a numeric field value from a record, returning null if not a valid number.
      */
-    private GetNumericField(record: Record<string, unknown>, fieldName: string): number | null {
-        const val = this.GetField(record, fieldName);
+    private getNumericField(record: Record<string, unknown>, fieldName: string): number | null {
+        const val = this.getField(record, fieldName);
         if (val == null) return null;
         const num = Number(val);
         return isNaN(num) ? null : num;

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
     SupportWidgetElement,
-    defineSupportWidgetElement,
+    DefineSupportWidgetElement,
     WIDGET_TAG_NAME,
 } from '../ui/support-widget-element.js';
 import { MockWidgetTransport } from '../transport/mock-widget-transport.js';
@@ -18,7 +18,7 @@ const SESSION: WidgetSession = {
 };
 
 function mountElement(transport: MockWidgetTransport): SupportWidgetElement {
-    defineSupportWidgetElement();
+    DefineSupportWidgetElement();
     const el = document.createElement(WIDGET_TAG_NAME) as SupportWidgetElement;
     el.Configure({ title: 'Help', greeting: 'Welcome!' });
     el.SetSession(SESSION);
@@ -36,7 +36,7 @@ describe('SupportWidgetElement', () => {
     });
 
     it('registers the custom element', () => {
-        defineSupportWidgetElement();
+        DefineSupportWidgetElement();
         expect(customElements.get(WIDGET_TAG_NAME)).toBe(SupportWidgetElement);
     });
 
@@ -87,7 +87,7 @@ describe('SupportWidgetElement', () => {
     });
 
     it('shows a system message when no transport is connected', async () => {
-        defineSupportWidgetElement();
+        DefineSupportWidgetElement();
         const el = document.createElement(WIDGET_TAG_NAME) as SupportWidgetElement;
         el.SetSession(SESSION);
         document.body.appendChild(el);

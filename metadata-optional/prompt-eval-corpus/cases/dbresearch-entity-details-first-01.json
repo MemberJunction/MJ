@@ -1,0 +1,41 @@
+{
+  "id": "dbresearch-entity-details-first-01",
+  "agent": "Database Research Agent",
+  "tags": [
+    "mid-loop-action",
+    "first-step-action"
+  ],
+  "description": "Nothing known yet about the entity. Writing SQL before looking up the schema is the guessing failure; Get Entity Details first is correct.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "How many active AI agents do we have?"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Get Entity Details"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Search Query Catalog"
+          }
+        ],
+        "allowAdditionalActions": true
+      }
+    ]
+  }
+}

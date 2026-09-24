@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Health Dashboard</title>
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; }
+  .kpi .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 800; }
+  .kpi .value.good { color: var(--mj-status-success); }
+  .kpi .value.warn { color: var(--mj-status-warning); }
+  .kpi .value.err { color: var(--mj-status-error); }
+  .kpi .delta { font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--mj-status-success); }
+  .kpi .delta.bad { color: var(--mj-status-error); }
+
+  .insight-banner { background: var(--mj-status-info-bg); border: 1px solid color-mix(in srgb, var(--mj-status-info) 30%, transparent); border-radius: 10px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+  .insight-banner i { color: var(--mj-status-info); font-size: 18px; }
+  .insight-banner b { display: block; }
+  .insight-banner span.d { font-size: 12.5px; color: var(--mj-text-secondary); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: start; }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-body { padding: 0; }
+  .card-body.pad { padding: 18px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); padding: 10px 18px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+  td { padding: 11px 18px; border-bottom: 1px solid var(--mj-border-subtle); font-size: 13px; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .sev { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .sev-critical { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+  .sev-warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .sev-info { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+  .rule-tag { font-family: ui-monospace, monospace; font-size: 11px; color: var(--mj-text-secondary); background: var(--mj-bg-surface-sunken); padding: 1px 6px; border-radius: 4px; }
+  .rec-count { color: var(--mj-text-muted); font-size: 11.5px; }
+  .fix-link { color: var(--mj-brand-primary); font-weight: 600; font-size: 12px; cursor: default; white-space: nowrap; }
+
+  .score-bars { padding: 6px 0; }
+  .score-row { display: flex; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .score-row:last-child { border-bottom: none; }
+  .score-name { flex: 1; font-size: 12.5px; font-weight: 600; }
+  .score-name .path { display: block; font-size: 11px; font-weight: 400; color: var(--mj-text-muted); }
+  .score-val { font-size: 13px; font-weight: 800; width: 40px; text-align: right; }
+  .score-bar-track { width: 70px; height: 6px; background: var(--mj-bg-surface-sunken); border-radius: 999px; overflow: hidden; }
+  .score-bar { height: 100%; border-radius: 999px; }
+
+  .record-panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; }
+  .record-panel .card-header { background: var(--mj-bg-surface-card); }
+  .rp-body { padding: 18px; }
+  .rp-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .rp-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--mj-bg-surface-sunken); display: flex; align-items: center; justify-content: center; color: var(--mj-text-muted); font-weight: 700; }
+  .rp-name { font-weight: 700; font-size: 14px; }
+  .rp-sub { font-size: 12px; color: var(--mj-text-secondary); }
+  .health-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-left: auto; }
+  .health-badge.warn { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .finding-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--mj-border-subtle); }
+  .finding-item:last-child { border-bottom: none; }
+  .finding-item i { margin-top: 2px; width: 14px; text-align: center; }
+  .finding-item .t { font-weight: 600; font-size: 12.5px; }
+  .finding-item .d { font-size: 11.5px; color: var(--mj-text-secondary); margin-top: 1px; }
+  .finding-item .fix { font-size: 11px; color: var(--mj-brand-primary); font-weight: 600; margin-top: 4px; }
+
+  .footer-note { padding: 4px 28px 24px; color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-diagram-project"></i> MemberJunction</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Permissions</div>
+    <div class="nav-item"><i class="fa-solid fa-database"></i> Entity Admin</div>
+    <div class="nav-section">Dev Tools</div>
+    <div class="nav-item"><i class="fa-solid fa-universal-access"></i> Accessibility Audit</div>
+    <div class="nav-item active"><i class="fa-solid fa-heart-pulse"></i> Data Health</div>
+    <div class="nav-item"><i class="fa-solid fa-vial"></i> Testing Framework</div>
+    <div class="nav-section">Data</div>
+    <div class="nav-item"><i class="fa-solid fa-users"></i> Contacts</div>
+    <div class="nav-item"><i class="fa-solid fa-building"></i> Organizations</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-heart-pulse"></i> Data Health Dashboard</h1>
+        <div class="sub">Configurable, no-ML data-quality scoring across every entity &middot; New: Data Health &amp; Trust Layer</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn"><i class="fa-solid fa-sliders"></i> Manage Rules</button>
+        <button class="btn btn-primary"><i class="fa-solid fa-play"></i> Run Evaluation Now</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="kpi-row">
+        <div class="kpi">
+          <div class="label">Org-Wide Health Score</div>
+          <div class="value warn">78<span style="font-size:15px;font-weight:600;">/100</span></div>
+          <div class="delta bad"><i class="fa-solid fa-arrow-down"></i> 3 pts vs. last month</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Critical Findings</div>
+          <div class="value err">412</div>
+          <div class="delta bad"><i class="fa-solid fa-arrow-up"></i> 58 new this week</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Records Evaluated</div>
+          <div class="value">142,880</div>
+          <div class="delta">Last run: 6 min ago</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Active Rules</div>
+          <div class="value good">17</div>
+          <div class="delta">Across 6 entities</div>
+        </div>
+      </div>
+
+      <div class="insight-banner">
+        <i class="fa-solid fa-circle-info"></i>
+        <div>
+          <b>Constituents entity dropped 4 points this month</b>
+          <span class="d">228 records went stale (no communication or activity in 18+ months) since the last renewal cycle &mdash; the largest single contributor to this month's score decline.</span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fa-solid fa-list-check"></i> Worst Offenders</h2>
+              <span class="rec-count">Sorted by critical finding count</span>
+            </div>
+            <div class="card-body">
+              <table>
+                <thead><tr><th>Record</th><th>Rule</th><th>Severity</th><th>Detail</th><th>Fix</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td><b>Marcus Webb</b><br><span class="rec-count">Contacts</span></td>
+                    <td><span class="rule-tag">completeness.email</span></td>
+                    <td><span class="sev sev-critical"><i class="fa-solid fa-circle-exclamation"></i> Critical</span></td>
+                    <td>Email is empty; no way to send renewal notice</td>
+                    <td><span class="fix-link">Request update &rsaquo;</span></td>
+                  </tr>
+                  <tr>
+                    <td><b>Riverside Alumni Chapter</b><br><span class="rec-count">Organizations</span></td>
+                    <td><span class="rule-tag">format.address</span></td>
+                    <td><span class="sev sev-critical"><i class="fa-solid fa-circle-exclamation"></i> Critical</span></td>
+                    <td>Mailing address failed postal format validation</td>
+                    <td><span class="fix-link">Verify address &rsaquo;</span></td>
+                  </tr>
+                  <tr>
+                    <td><b>Priya Natarajan</b><br><span class="rec-count">Contacts</span></td>
+                    <td><span class="rule-tag">consistency.dates</span></td>
+                    <td><span class="sev sev-warning"><i class="fa-solid fa-triangle-exclamation"></i> Warning</span></td>
+                    <td>Membership EndDate is before StartDate</td>
+                    <td><span class="fix-link">Review record &rsaquo;</span></td>
+                  </tr>
+                  <tr>
+                    <td><b>Grant #GR-2291</b><br><span class="rec-count">Grants</span></td>
+                    <td><span class="rule-tag">freshness.last_touch</span></td>
+                    <td><span class="sev sev-warning"><i class="fa-solid fa-triangle-exclamation"></i> Warning</span></td>
+                    <td>No update in 412 days &mdash; status may be stale for board reporting</td>
+                    <td><span class="fix-link">Ping steward &rsaquo;</span></td>
+                  </tr>
+                  <tr>
+                    <td><b>Dana Ferreira</b><br><span class="rec-count">Contacts</span></td>
+                    <td><span class="rule-tag">externalref.dupe_cluster</span></td>
+                    <td><span class="sev sev-info"><i class="fa-solid fa-circle-info"></i> Info</span></td>
+                    <td>Possible duplicate cluster flagged by Dupe engine, unresolved</td>
+                    <td><span class="fix-link">Open in Dupe review &rsaquo;</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-chart-bar"></i> Score by Entity</h2></div>
+            <div class="card-body">
+              <div class="score-bars">
+                <div class="score-row">
+                  <div class="score-name">Contacts<span class="path">86,204 records</span></div>
+                  <div class="score-bar-track"><div class="score-bar" style="width:71%; background:var(--mj-status-warning);"></div></div>
+                  <div class="score-val">71</div>
+                </div>
+                <div class="score-row">
+                  <div class="score-name">Organizations<span class="path">9,842 records</span></div>
+                  <div class="score-bar-track"><div class="score-bar" style="width:88%; background:var(--mj-status-success);"></div></div>
+                  <div class="score-val">88</div>
+                </div>
+                <div class="score-row">
+                  <div class="score-name">Grants<span class="path">1,120 records</span></div>
+                  <div class="score-bar-track"><div class="score-bar" style="width:64%; background:var(--mj-status-warning);"></div></div>
+                  <div class="score-val">64</div>
+                </div>
+                <div class="score-row">
+                  <div class="score-name">Memberships<span class="path">44,910 records</span></div>
+                  <div class="score-bar-track"><div class="score-bar" style="width:93%; background:var(--mj-status-success);"></div></div>
+                  <div class="score-val">93</div>
+                </div>
+                <div class="score-row">
+                  <div class="score-name">Donations<span class="path">804 records</span></div>
+                  <div class="score-bar-track"><div class="score-bar" style="width:97%; background:var(--mj-status-success);"></div></div>
+                  <div class="score-val">97</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="record-panel">
+            <div class="card-header"><h2><i class="fa-solid fa-id-card"></i> Embedded on a Record Form</h2></div>
+            <div class="rp-body">
+              <div class="rp-header">
+                <div class="rp-avatar">MW</div>
+                <div>
+                  <div class="rp-name">Marcus Webb</div>
+                  <div class="rp-sub">Contact &middot; Member since 2019</div>
+                </div>
+                <div class="health-badge warn"><i class="fa-solid fa-heart-pulse"></i> 42/100</div>
+              </div>
+              <div class="finding-item">
+                <i class="fa-solid fa-circle-exclamation" style="color:var(--mj-status-error);"></i>
+                <div>
+                  <div class="t">Email is empty</div>
+                  <div class="d">Required for renewal notices and receipts</div>
+                  <div class="fix">Run &ldquo;Request Contact Update&rdquo; action &rsaquo;</div>
+                </div>
+              </div>
+              <div class="finding-item">
+                <i class="fa-solid fa-triangle-exclamation" style="color:var(--mj-status-warning);"></i>
+                <div>
+                  <div class="t">No activity in 640 days</div>
+                  <div class="d">Freshness threshold for Contacts is 365 days</div>
+                </div>
+              </div>
+              <div class="finding-item">
+                <i class="fa-solid fa-circle-info" style="color:var(--mj-status-info);"></i>
+                <div>
+                  <div class="t">Possible duplicate: &ldquo;Marc Webb&rdquo;</div>
+                  <div class="d">Flagged by the Dupe engine, not yet resolved &mdash; read here, not re-detected</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-note">Mockup for <code>plans/weekly-exploration/2026-08-29/idea-1-data-health-trust-layer.md</code> &middot; illustrative data, not connected to a live system.</div>
+  </div>
+<script>
+const ICON_MAP = {
+  'fa-diagram-project':'◈','fa-shield-halved':'🛡','fa-database':'🗄','fa-universal-access':'♿',
+  'fa-heart-pulse':'♥','fa-vial':'⚗','fa-users':'👥','fa-building':'🏢','fa-sliders':'⚙',
+  'fa-play':'▶','fa-circle-info':'ℹ','fa-list-check':'☑','fa-circle-exclamation':'⛔',
+  'fa-triangle-exclamation':'⚠','fa-chart-bar':'📊','fa-id-card':'🪪','fa-language':'🌐',
+  'fa-globe':'🌐','fa-plus':'+','fa-wand-magic-sparkles':'✨','fa-table-cells':'▦','fa-inbox':'📥',
+  'fa-clock-rotate-left':'↺','fa-check':'✓','fa-pen':'✎','fa-eye':'👁','fa-code':'</>',
+  'fa-filter':'▼','fa-list-ul':'≡','fa-robot':'🤖','fa-user':'👤','fa-rotate-left':'↺',
+  'fa-ban':'⊘','fa-xmark':'✕','fa-circle-check':'✓'
+};
+document.querySelectorAll('i[class*="fa-"]').forEach(el => {
+  const cls = [...el.classList].find(c => ICON_MAP[c]);
+  el.textContent = cls ? ICON_MAP[cls] : '•';
+  el.style.fontStyle = 'normal';
+});
+
+</script>
+</body>
+</html>

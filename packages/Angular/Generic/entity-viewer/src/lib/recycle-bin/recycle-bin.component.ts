@@ -493,7 +493,12 @@ export class RecycleBinComponent extends BaseAngularComponent implements OnInit 
       const v = snapshot[f.Name];
       if (typeof v === 'string' && v.trim().length > 0) return v;
     }
-    return `Record ${snapshot[entityInfo.PrimaryKeys[0]?.Name] ?? ''}`;
+    // Last resort: every primary-key column's value (the entity is arbitrary and may be composite-keyed)
+    const keyValues = entityInfo.PrimaryKeys
+      .map((pk) => snapshot[pk.Name])
+      .filter((v) => v != null && v !== '')
+      .map((v) => String(v));
+    return `Record ${keyValues.join(', ')}`;
   }
 
   /**
@@ -549,7 +554,7 @@ export class RecycleBinComponent extends BaseAngularComponent implements OnInit 
 
   // ─── Display helpers (template) ─────────────────────────────────
 
-  public formatTimestamp(date: Date | string | null): string {
+  public FormatTimestamp(date: Date | string | null): string {
     if (!date) return '';
     return new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
@@ -561,9 +566,19 @@ export class RecycleBinComponent extends BaseAngularComponent implements OnInit 
     }).format(new Date(date));
   }
 
-  public getUserDisplay(user: string | null): string {
+  /** @deprecated Use {@link FormatTimestamp}. */
+  public formatTimestamp(date: Date | string | null): string {
+    return this.FormatTimestamp(date);
+  }
+
+  public GetUserDisplay(user: string | null): string {
     if (!user) return 'Unknown';
     if (user.includes('@')) return user.split('@')[0];
     return user;
+  }
+
+  /** @deprecated Use {@link GetUserDisplay}. */
+  public getUserDisplay(user: string | null): string {
+    return this.GetUserDisplay(user);
   }
 }

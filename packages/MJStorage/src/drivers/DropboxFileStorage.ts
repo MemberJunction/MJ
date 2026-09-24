@@ -1,5 +1,6 @@
 import { Dropbox, DropboxOptions, files } from 'dropbox';
 import { RegisterClass } from '@memberjunction/global';
+import { DrainResponseBody } from '@memberjunction/network-utils';
 import env from 'env-var';
 import mime from 'mime-types';
 import { Readable } from 'stream';
@@ -17,7 +18,7 @@ import {
   StorageListResult,
   StorageObjectMetadata,
 } from '../generic/FileStorageBase';
-import { getProviderConfig } from '../config';
+import { GetProviderConfig } from '../config';
 
 import { StorageProviderConfig } from '../generic/FileStorageBase';
 
@@ -112,6 +113,9 @@ function describeDropboxError(error: unknown): DropboxErrorDiagnostics {
  *
  * Optional configuration:
  * - STORAGE_DROPBOX_ROOT_PATH - Path within Dropbox to use as the root (defaults to empty which is the root)
+ * - STORAGE_DROPBOX_PATH_ROOT - Optional namespace id to use as the API path root (Dropbox-API-Path-Root header).
+ *   Needed for Dropbox Business team space: shared/team folders live in the team root namespace
+ *   (users/get_current_account -> root_info.root_namespace_id), not in the member's home namespace.
  *
  * @example
  * ```typescript
@@ -155,6 +159,17 @@ export class DropboxFileStorage extends FileStorageBase {
   private _rootPath: string;
 
   /**
+   * Adds the Dropbox-API-Path-Root header (via the SDK's `pathRoot` option) when STORAGE_DROPBOX_PATH_ROOT
+   * names a namespace id. Without it, a Dropbox Business member only sees their home folder and team
+   * folders such as a shared vault are `path/not_found`.
+   */
+  private static withPathRoot(options: DropboxOptions): DropboxOptions {
+    const namespaceId = env.get('STORAGE_DROPBOX_PATH_ROOT').default('').asString();
+    if (!namespaceId) return options;
+    return { ...options, pathRoot: JSON.stringify({ '.tag': 'root', root: namespaceId }) };
+  }
+
+  /**
    * Creates a new DropboxFileStorage instance
    *
    * This constructor initializes the Dropbox client using the provided credentials
@@ -166,7 +181,7 @@ export class DropboxFileStorage extends FileStorageBase {
     super();
 
     // Try to get config from centralized configuration
-    const config = getProviderConfig('dropbox');
+    const config = GetProviderConfig('dropbox');
 
     // Dropbox auth can be via access token or refresh token
     const accessToken = config?.accessToken || env.get('STORAGE_DROPBOX_ACCESS_TOKEN').asString();
@@ -184,7 +199,7 @@ export class DropboxFileStorage extends FileStorageBase {
         dropboxConfig.selectUser = config.selectUser as string;
       }
 
-      this._client = new Dropbox(dropboxConfig);
+      this._client = new Dropbox(DropboxFileStorage.withPathRoot(dropboxConfig));
     } else if (refreshToken && appKey && appSecret) {
       // Use refresh token with app credentials
       const dropboxConfig: DropboxOptions = {
@@ -198,7 +213,10 @@ export class DropboxFileStorage extends FileStorageBase {
         dropboxConfig.selectUser = config.selectUser as string;
       }
 
-      this._client = new Dropbox(dropboxConfig);
+      this._client = new Dropbox(DropboxFileStorage.withPathRoot(dropboxConfig));
+      // Same placeholder initialize() sets: IsConfigured must be true in refresh-token mode too,
+      // otherwise env-configured refresh tokens are rejected by callers that only construct the driver.
+      this._accessToken = 'refresh-token-mode';
     }
     // Note: If no credentials are available, client will be initialized in initialize() method
     // This allows for database-driven configuration to be passed after construction
@@ -265,7 +283,7 @@ export class DropboxFileStorage extends FileStorageBase {
         dropboxConfig.selectUser = config.selectUser;
       }
 
-      this._client = new Dropbox(dropboxConfig);
+      this._client = new Dropbox(DropboxFileStorage.withPathRoot(dropboxConfig));
       // Set a placeholder for IsConfigured check - the SDK will get a real token on first API call
       this._accessToken = 'refresh-token-mode';
     } else if (accessToken) {
@@ -279,7 +297,7 @@ export class DropboxFileStorage extends FileStorageBase {
         dropboxConfig.selectUser = config.selectUser;
       }
 
-      this._client = new Dropbox(dropboxConfig);
+      this._client = new Dropbox(DropboxFileStorage.withPathRoot(dropboxConfig));
     }
 
     // Update root path if provided
@@ -1152,6 +1170,14 @@ export class DropboxFileStorage extends FileStorageBase {
     return true;
   }
 
+  public override get SupportsPreAuthUpload(): boolean {
+    return false;
+  }
+
+  public override get SupportsPreAuthDownload(): boolean {
+    return true;
+  }
+
   /**
    * Streams a file's content from Dropbox, optionally honoring a byte range.
    *
@@ -1193,6 +1219,7 @@ export class DropboxFileStorage extends FileStorageBase {
       const response = await fetch(downloadUrl, headers ? { headers } : undefined);
 
       if (!response.ok && response.status !== 206) {
+        await DrainResponseBody(response);
         throw new Error(`Failed to stream item: ${response.statusText}`);
       }
       if (!response.body) {

@@ -119,7 +119,7 @@ export class OAuthAuditLogger {
      * Logs an OAuth authorization initiated event.
      * T047: Implement audit logging for OAuth authorization initiated event
      */
-    public async logAuthorizationInitiated(
+    public async LogAuthorizationInitiated(
         details: AuthorizationInitiatedDetails,
         contextUser: UserInfo
     ): Promise<void> {
@@ -140,11 +140,19 @@ export class OAuthAuditLogger {
         );
     }
 
+    /** @deprecated Use {@link LogAuthorizationInitiated}. */
+    public async logAuthorizationInitiated(
+        details: AuthorizationInitiatedDetails,
+        contextUser: UserInfo
+    ): Promise<void> {
+        return this.LogAuthorizationInitiated(details, contextUser);
+    }
+
     /**
      * Logs an OAuth authorization completed event.
      * T048: Implement audit logging for OAuth authorization completed event
      */
-    public async logAuthorizationCompleted(
+    public async LogAuthorizationCompleted(
         details: AuthorizationCompletedDetails,
         contextUser: UserInfo
     ): Promise<void> {
@@ -164,11 +172,19 @@ export class OAuthAuditLogger {
         );
     }
 
+    /** @deprecated Use {@link LogAuthorizationCompleted}. */
+    public async logAuthorizationCompleted(
+        details: AuthorizationCompletedDetails,
+        contextUser: UserInfo
+    ): Promise<void> {
+        return this.LogAuthorizationCompleted(details, contextUser);
+    }
+
     /**
      * Logs an OAuth authorization failed event.
      * Part of T048 (covers failure cases)
      */
-    public async logAuthorizationFailed(
+    public async LogAuthorizationFailed(
         details: AuthorizationFailedDetails,
         contextUser: UserInfo
     ): Promise<void> {
@@ -188,11 +204,19 @@ export class OAuthAuditLogger {
         );
     }
 
+    /** @deprecated Use {@link LogAuthorizationFailed}. */
+    public async logAuthorizationFailed(
+        details: AuthorizationFailedDetails,
+        contextUser: UserInfo
+    ): Promise<void> {
+        return this.LogAuthorizationFailed(details, contextUser);
+    }
+
     /**
      * Logs an OAuth token refreshed event.
      * T049: Implement audit logging for OAuth token refreshed event
      */
-    public async logTokenRefreshed(
+    public async LogTokenRefreshed(
         details: TokenRefreshDetails,
         contextUser: UserInfo
     ): Promise<void> {
@@ -211,11 +235,19 @@ export class OAuthAuditLogger {
         );
     }
 
+    /** @deprecated Use {@link LogTokenRefreshed}. */
+    public async logTokenRefreshed(
+        details: TokenRefreshDetails,
+        contextUser: UserInfo
+    ): Promise<void> {
+        return this.LogTokenRefreshed(details, contextUser);
+    }
+
     /**
      * Logs an OAuth token refresh failed event.
      * T050: Implement audit logging for OAuth token refresh failed event
      */
-    public async logTokenRefreshFailed(
+    public async LogTokenRefreshFailed(
         details: TokenRefreshFailedDetails,
         contextUser: UserInfo
     ): Promise<void> {
@@ -234,11 +266,19 @@ export class OAuthAuditLogger {
         );
     }
 
+    /** @deprecated Use {@link LogTokenRefreshFailed}. */
+    public async logTokenRefreshFailed(
+        details: TokenRefreshFailedDetails,
+        contextUser: UserInfo
+    ): Promise<void> {
+        return this.LogTokenRefreshFailed(details, contextUser);
+    }
+
     /**
      * Logs an OAuth credentials revoked event.
      * T051: Implement audit logging for OAuth credentials revoked event
      */
-    public async logCredentialsRevoked(
+    public async LogCredentialsRevoked(
         details: CredentialsRevokedDetails,
         contextUser: UserInfo
     ): Promise<void> {
@@ -254,6 +294,14 @@ export class OAuthAuditLogger {
             details.connectionId,
             contextUser
         );
+    }
+
+    /** @deprecated Use {@link LogCredentialsRevoked}. */
+    public async logCredentialsRevoked(
+        details: CredentialsRevokedDetails,
+        contextUser: UserInfo
+    ): Promise<void> {
+        return this.LogCredentialsRevoked(details, contextUser);
     }
 
     // ========================================
@@ -385,9 +433,14 @@ let _auditLoggerInstance: OAuthAuditLogger | null = null;
 /**
  * Gets the singleton OAuthAuditLogger instance.
  */
-export function getOAuthAuditLogger(): OAuthAuditLogger {
+export function GetOAuthAuditLogger(): OAuthAuditLogger {
     if (!_auditLoggerInstance) {
         _auditLoggerInstance = new OAuthAuditLogger();
     }
     return _auditLoggerInstance;
+}
+
+/** @deprecated Use {@link GetOAuthAuditLogger}. */
+export function getOAuthAuditLogger(): OAuthAuditLogger {
+    return GetOAuthAuditLogger();
 }

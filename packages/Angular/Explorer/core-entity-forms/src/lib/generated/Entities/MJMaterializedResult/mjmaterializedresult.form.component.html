@@ -234,9 +234,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Materialized Result Queries','MaterializedResultID')"
-                [NewRecordValues]="NewRecordValues('MJ: Materialized Result Queries')"
+                [NewRecordValues]="NewRecordValues('MJ: Materialized Result Queries','MaterializedResultID')"
                 [AllowLoad]="IsSectionExpanded('mJMaterializedResultQueries')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMaterializedResultQueries', $event.totalRowCount)"
                 >

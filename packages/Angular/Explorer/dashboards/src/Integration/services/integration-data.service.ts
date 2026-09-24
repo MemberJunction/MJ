@@ -787,7 +787,7 @@ export class IntegrationDataService {
     const result = await rv.RunView<{ TotalCount: number }>({
       EntityName: entityInfo.Name,
       ExtraFilter: '',
-      Fields: [entityInfo.FirstPrimaryKey?.Name ?? 'ID'],
+      Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
       ResultType: 'simple'
     });
     return result.TotalRowCount ?? result.Results.length;
