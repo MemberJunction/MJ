@@ -11327,6 +11327,12 @@ importers:
       '@memberjunction/testing-cli':
         specifier: 6.1.0
         version: link:../TestingFramework/CLI
+      '@memberjunction/work-queue-core':
+        specifier: 6.1.0
+        version: link:../WorkQueue/core
+      '@memberjunction/work-queue-engine':
+        specifier: 6.1.0
+        version: link:../WorkQueue/engine
       '@oclif/core':
         specifier: ^3.27.0
         version: 3.27.0
@@ -14355,6 +14361,12 @@ importers:
       '@memberjunction/web-search-engine':
         specifier: 6.1.0
         version: link:../WebSearchEngine
+      '@memberjunction/work-queue-engine':
+        specifier: 6.1.0
+        version: link:../WorkQueue/engine
+      '@memberjunction/work-queue-server':
+        specifier: 6.1.0
+        version: link:../WorkQueue/server
       cosmiconfig:
         specifier: ^9.0.0
         version: 9.0.0(typescript@5.9.3)
@@ -14596,6 +14608,9 @@ importers:
       '@memberjunction/testing-engine':
         specifier: 6.1.0
         version: link:../TestingFramework/Engine
+      '@memberjunction/work-queue-engine':
+        specifier: 6.1.0
+        version: link:../WorkQueue/engine
     devDependencies:
       '@memberjunction/global':
         specifier: 6.1.0

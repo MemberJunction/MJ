@@ -31,6 +31,8 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // entries in this file use the colon form.
   'ai usage',
   'ai:usage',
+  'queue usage',
+  'queue:usage',
   'app usage',
   'app:usage',
   'artifacts usage',
@@ -91,6 +93,7 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
 
   // Topic index commands (just display help text, no heavy imports)
   'ai',
+  'queue',
   'ai audit',
   'test',
   'dbdoc',

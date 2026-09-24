@@ -32,7 +32,7 @@ type ResolvedConfig = ReturnType<typeof getValidatedConfig>;
  * configured platform, by adapting MJCLI's config to the `MJConfig` shape that
  * MetadataSync's shared `initializeProvider` consumes.
  */
-async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
+export async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
   return initializeProvider(toMJConfig(getValidatedConfig()));
 }
 
