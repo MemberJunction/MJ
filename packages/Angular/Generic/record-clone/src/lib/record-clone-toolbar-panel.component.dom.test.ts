@@ -82,7 +82,7 @@ describe('RecordCloneToolbarPanel (DOM)', () => {
     });
 
     it('does not register toolbar button when CanClone is false', async () => {
-        vi.spyOn(mockService, 'DescribeRecord').mockResolvedValue({ CanClone: false });
+        vi.spyOn(mockService, 'DescribeRecord').mockResolvedValue({ CanClone: false, Relationships: [] });
 
         const fixture = renderComponentFixture(RecordCloneToolbarPanel, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],

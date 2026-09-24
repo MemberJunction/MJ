@@ -20,7 +20,7 @@ import {
     RunView,
     UserInfo,
 } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CloneEdgeOverride,
     CloneNodeOverride,
@@ -482,7 +482,7 @@ export class RecordCloneOperationsHandler {
             if (res.Success && res.Results) {
                 for (const row of res.Results) {
                     const rowRecord = row as Record<string, unknown>;
-                    const targetEntity = md.Entities.find((e) => e.ID === rowRecord.TargetEntityID);
+                    const targetEntity = md.Entities.find((e) => UUIDsEqual(e.ID, String(rowRecord.TargetEntityID)));
                     ancestors.push({
                         RecordID: String(rowRecord.TargetRecordID),
                         EntityName: targetEntity?.Name || 'Unknown',
@@ -506,7 +506,7 @@ export class RecordCloneOperationsHandler {
             if (res.Success && res.Results) {
                 for (const row of res.Results) {
                     const rowRecord = row as Record<string, unknown>;
-                    const sourceEntity = md.Entities.find((e) => e.ID === rowRecord.SourceEntityID);
+                    const sourceEntity = md.Entities.find((e) => UUIDsEqual(e.ID, String(rowRecord.SourceEntityID)));
                     clones.push({
                         RecordID: String(rowRecord.SourceRecordID),
                         EntityName: sourceEntity?.Name || 'Unknown',

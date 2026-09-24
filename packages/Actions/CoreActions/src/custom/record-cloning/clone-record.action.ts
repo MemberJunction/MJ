@@ -33,7 +33,7 @@ export class CloneRecordAction extends BaseAction {
                 };
             }
 
-            const md = Metadata.Provider;
+            const md = params.Provider ?? new Metadata();
             const entityInfo = md.EntityByName(entityName);
             if (!entityInfo) {
                 return {

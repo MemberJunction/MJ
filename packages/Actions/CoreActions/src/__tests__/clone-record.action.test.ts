@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const cloneMock = vi.fn();
 const planMock = vi.fn();
 
+import { Metadata } from '@memberjunction/core';
 vi.mock('@memberjunction/record-cloning', () => {
     return {
         RecordCloneEngine: class {
@@ -66,6 +67,7 @@ describe('CloneRecordAction', () => {
             Action: { Name: 'Clone Record' } as never,
             Params: [],
             ContextUser: { ID: 'user-1' } as never,
+            Provider: Metadata.Provider as never,
         };
 
         const res1 = await (action as unknown as { InternalRunAction(p: RunActionParams): Promise<{ Success: boolean; ResultCode: string }> }).InternalRunAction(params);
@@ -93,6 +95,7 @@ describe('CloneRecordAction', () => {
                 { Name: 'DryRun', Type: 'Input', Value: true },
             ],
             ContextUser: { ID: 'user-1' } as never,
+            Provider: Metadata.Provider as never,
         };
 
         const res = await (action as unknown as { InternalRunAction(p: RunActionParams): Promise<{ Success: boolean; ResultCode: string }> }).InternalRunAction(params);
@@ -119,6 +122,7 @@ describe('CloneRecordAction', () => {
                 { Name: 'RecordID', Type: 'Input', Value: '123' },
             ],
             ContextUser: { ID: 'user-1' } as never,
+            Provider: Metadata.Provider as never,
         };
 
         const res = await (action as unknown as { InternalRunAction(p: RunActionParams): Promise<{ Success: boolean; ResultCode: string }> }).InternalRunAction(params);
@@ -149,6 +153,7 @@ describe('CloneRecordsAction', () => {
             Action: { Name: 'Clone Records' } as never,
             Params: [],
             ContextUser: { ID: 'user-1' } as never,
+            Provider: Metadata.Provider as never,
         };
 
         const res1 = await (action as unknown as { InternalRunAction(p: RunActionParams): Promise<{ Success: boolean; ResultCode: string }> }).InternalRunAction(params);
@@ -172,6 +177,7 @@ describe('CloneRecordsAction', () => {
                 { Name: 'RecordIDs', Type: 'Input', Value: JSON.stringify(['1', '2']) },
             ],
             ContextUser: { ID: 'user-1' } as never,
+            Provider: Metadata.Provider as never,
         };
 
         const res = await (action as unknown as { InternalRunAction(p: RunActionParams): Promise<{ Success: boolean; ResultCode: string }> }).InternalRunAction(params);

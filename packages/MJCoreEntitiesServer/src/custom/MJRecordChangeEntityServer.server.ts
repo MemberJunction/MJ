@@ -3,6 +3,7 @@ import {
     EntityPermissionType,
     Metadata,
     AuthorizationEvaluator,
+    type IMetadataProvider,
 } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJRecordChangeEntity } from '@memberjunction/core-entities';
@@ -24,7 +25,7 @@ export class MJRecordChangeEntityServer extends MJRecordChangeEntity {
             const u = this.ActiveUser;
             if (!u) {
                 throw new Error(
-                    'No user set - either the context user for the entity object must be set, or the Metadata.Provider.CurrentUser must be set'
+                    'No user set - either the context user for the entity object must be set, or the CurrentUser of the provider must be set'
                 );
             }
 
@@ -44,7 +45,7 @@ export class MJRecordChangeEntityServer extends MJRecordChangeEntity {
             }
 
             // Must hold "Record Changes: Annotate" authorization (evaluated with ancestors)
-            const md = new Metadata();
+            const md = (this.ProviderToUse as unknown as IMetadataProvider | undefined) ?? new Metadata();
             const auth = md.Authorizations.find((a) => a.Name === 'Record Changes: Annotate');
             const evaluator = new AuthorizationEvaluator();
             const allowed = auth ? evaluator.UserCanExecuteWithAncestors(auth, u, md.Authorizations) : false;

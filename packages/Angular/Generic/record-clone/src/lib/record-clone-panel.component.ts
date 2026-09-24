@@ -19,7 +19,8 @@ import {
     inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Metadata, CompositeKey, type BaseEntity } from '@memberjunction/core';
+import { CompositeKey, type BaseEntity } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type {
     RecordCloneKey,
     RecordCloneDescribeOutput,
@@ -387,7 +388,7 @@ import {
     ],
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class RecordClonePanelComponent implements OnInit, OnChanges {
+export class RecordClonePanelComponent extends BaseAngularComponent implements OnInit, OnChanges {
     private cloneService = inject(RecordCloneService);
     private cdr = inject(ChangeDetectorRef);
 
@@ -554,7 +555,7 @@ export class RecordClonePanelComponent implements OnInit, OnChanges {
             }
         }
 
-        const entInfo = Metadata.Provider?.EntityByName(this.EffectiveEntityName);
+        const entInfo = this.ProviderToUse?.EntityByName(this.EffectiveEntityName);
         const cloneCfg = entInfo?.CloneConfig;
 
         // Populate PromptedFields from entity clone configuration
@@ -623,7 +624,7 @@ export class RecordClonePanelComponent implements OnInit, OnChanges {
         this.cdr.markForCheck();
 
         if (step === 'review' && (this.RootRecordName || Object.keys(this.PromptedValues).length > 0)) {
-            const entInfo = Metadata.Provider?.EntityByName(this.EffectiveEntityName);
+            const entInfo = this.ProviderToUse?.EntityByName(this.EffectiveEntityName);
             const nameField = entInfo?.NameField?.Name || 'Name';
             const fieldOverrides: Record<string, string | number | boolean | null> = {
                 ...(this.ScopeOptions.FieldOverrides ?? {}),
@@ -655,7 +656,7 @@ export class RecordClonePanelComponent implements OnInit, OnChanges {
     public OnPromptedValuesChange(values: Record<string, string | number | boolean | null>): void {
         this.PromptedValues = values;
         if (!this.HasUserEditedRootName) {
-            const entInfo = Metadata.Provider?.EntityByName(this.EffectiveEntityName);
+            const entInfo = this.ProviderToUse?.EntityByName(this.EffectiveEntityName);
             const nameField = (entInfo?.NameField?.Name || 'Name').toLowerCase();
             const keys = Object.keys(values);
             const nameMatchKey = keys.find(
@@ -703,7 +704,7 @@ export class RecordClonePanelComponent implements OnInit, OnChanges {
         this.cdr.markForCheck();
 
         try {
-            const entInfo = Metadata.Provider?.EntityByName(this.EffectiveEntityName);
+            const entInfo = this.ProviderToUse?.EntityByName(this.EffectiveEntityName);
             const nameField = entInfo?.NameField?.Name || 'Name';
             const result = await this.cloneService.ExecuteClone({
                 EntityName: this.EffectiveEntityName,

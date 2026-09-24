@@ -19,8 +19,8 @@ const UNBLOCKED_PLAN: RecordClonePlanDetails = {
             ParentKey: null,
             DisplayName: 'John Doe',
             FieldChanges: [
-                { Field: 'Name', OldValue: 'John Doe', NewValue: 'John Doe (2)', Kind: 'naming_strategy' },
-                { Field: 'Email', OldValue: 'jdoe@test.com', NewValue: 'jdoe+copy@test.com', Kind: 'user_override' },
+                { Field: 'Name', OldValue: 'John Doe', NewValue: 'John Doe (2)', Kind: 'naming_strategy', Reason: 'Name made unique' },
+                { Field: 'Email', OldValue: 'jdoe@test.com', NewValue: 'jdoe+copy@test.com', Kind: 'user_override', Reason: 'Entered by the user' },
             ],
             Warnings: [{ Code: 'WARN_INFO', Severity: 'Info', Message: 'Profile picture not cloned' }],
             Route: 'direct',

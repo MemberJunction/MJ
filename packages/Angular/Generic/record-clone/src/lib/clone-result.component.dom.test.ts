@@ -18,8 +18,8 @@ describe('CloneResultComponent (DOM)', () => {
         Skipped: [],
         Counts: {
             ByEntity: {
-                Users: { Create: 1, Reference: 0, Skip: 0, Total: 1 },
-                Roles: { Create: 0, Reference: 2, Skip: 0, Total: 2 },
+                Users: { Create: 1, Reference: 0, Skip: 0 },
+                Roles: { Create: 0, Reference: 2, Skip: 0 },
             },
             Create: 3,
             Total: 5,
@@ -29,7 +29,7 @@ describe('CloneResultComponent (DOM)', () => {
 
     const FAILURE_RESULT: RecordCloneExecuteOutput = {
         Success: false,
-        ResultCode: 'FAILED',
+        ResultCode: 'EXECUTION_ERROR',
         CloneLogID: null,
         Roots: [],
         Created: [],

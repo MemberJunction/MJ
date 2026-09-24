@@ -11,8 +11,8 @@ import type { CloneCompletedEvent, FormNavigationEvent } from './record-clone-ty
 
 const MOCK_DESCRIBE: RecordCloneDescribeOutput = {
     CanClone: true,
-    Presets: { Standard: { Description: 'Standard copy' } },
-    Capabilities: { EntityActions: true },
+    Presets: ['Standard'],
+    Relationships: [],
 };
 
 const MOCK_PLAN: RecordClonePlanOutput = {
@@ -32,7 +32,7 @@ const MOCK_PLAN: RecordClonePlanOutput = {
                 ParentKey: null,
                 DisplayName: 'John Doe',
                 FieldChanges: [
-                    { Field: 'Name', OldValue: 'John Doe', NewValue: 'John Doe (Copy)', Kind: 'naming_strategy' },
+                    { Field: 'Name', OldValue: 'John Doe', NewValue: 'John Doe (Copy)', Kind: 'naming_strategy', Reason: 'Name made unique' },
                 ],
                 Warnings: [],
                 Route: 'direct',
@@ -40,7 +40,7 @@ const MOCK_PLAN: RecordClonePlanOutput = {
         ],
         Edges: [],
         Counts: {
-            ByEntity: { Users: { Create: 1, Reference: 0, Skip: 0, Total: 1 } },
+            ByEntity: { Users: { Create: 1, Reference: 0, Skip: 0 } },
             Create: 1,
             Total: 1,
         },
@@ -66,7 +66,7 @@ const MOCK_EXECUTE: RecordCloneExecuteOutput = {
     Roots: [{ EntityName: 'Users', SourceKey: 'u-1', TargetKey: 'u-copy-1' }],
     Created: [{ EntityName: 'Users', SourceKey: 'u-1', TargetKey: 'u-copy-1' }],
     Skipped: [],
-    Counts: { ByEntity: { Users: { Create: 1, Reference: 0, Skip: 0, Total: 1 } }, Create: 1, Total: 1 },
+    Counts: { ByEntity: { Users: { Create: 1, Reference: 0, Skip: 0 } }, Create: 1, Total: 1 },
     Warnings: [],
 };
 
@@ -86,6 +86,7 @@ describe('RecordClonePanelComponent (DOM)', () => {
         vi.spyOn(mockService, 'DescribeRecord').mockResolvedValue({
             CanClone: false,
             Reason: 'System entities cannot be cloned',
+            Relationships: [],
         });
 
         const fixture = renderComponentFixture(RecordClonePanelComponent, {

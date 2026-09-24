@@ -5,6 +5,7 @@
  * @see plans/record-cloning/README.md §11.3, §13.1
  */
 
+import { UUIDsEqual } from '@memberjunction/global';
 import { IRecordProcessor, RecordProcessorContext, RecordProcessorRegistry, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import { CloneEdgePolicy, CloneRequestOptions, RecordCloneRequest } from '@memberjunction/record-cloning-base';
 import { ClonePlanner } from './ClonePlanner';
@@ -32,7 +33,7 @@ export class CloneRecordProcessor implements IRecordProcessor {
         const provider = context.provider;
         const user = context.contextUser;
         const entityInfo =
-            provider.Entities.find((e) => e.ID === record.EntityID) ||
+            provider.Entities.find((e) => UUIDsEqual(e.ID, record.EntityID)) ||
             (this._config.EntityName ? provider.EntityByName(this._config.EntityName) : null);
 
         if (!entityInfo) {
