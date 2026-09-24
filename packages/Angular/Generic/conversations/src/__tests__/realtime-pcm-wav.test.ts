@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encodePcm16Wav, downsamplePeaks, PeakAccumulator, WAV_HEADER_BYTES } from '../lib/services/realtime-pcm-wav';
+import { EncodePcm16Wav, DownsamplePeaks, PeakAccumulator, WAV_HEADER_BYTES } from '../lib/services/realtime-pcm-wav';
 
 /** Read the little-endian Int16 PCM samples out of an encoded WAV ArrayBuffer (skip the 44-byte header). */
 function readWavSamples(buffer: ArrayBuffer): Int16Array {
@@ -23,7 +23,7 @@ function ascii(view: DataView, offset: number, len: number): string {
 describe('encodePcm16Wav', () => {
     it('produces a canonical RIFF/WAVE/fmt/data header (mono, 16-bit, given rate)', () => {
         const samples = new Float32Array([0, 0.5, -0.5, 1]);
-        const buffer = encodePcm16Wav(samples, 24000);
+        const buffer = EncodePcm16Wav(samples, 24000);
         const view = new DataView(buffer);
 
         expect(ascii(view, 0, 4)).toBe('RIFF');
@@ -42,7 +42,7 @@ describe('encodePcm16Wav', () => {
 
     it('sets data length and RIFF chunk size from the sample count', () => {
         const samples = new Float32Array(10);
-        const buffer = encodePcm16Wav(samples, 48000);
+        const buffer = EncodePcm16Wav(samples, 48000);
         const view = new DataView(buffer);
         const dataSize = view.getUint32(40, true);
         expect(dataSize).toBe(10 * 2);
@@ -52,7 +52,7 @@ describe('encodePcm16Wav', () => {
 
     it('round-trips representative float samples to PCM16 with full-scale clamping', () => {
         const samples = new Float32Array([0, 1, -1, 2, -2, 0.5]);
-        const buffer = encodePcm16Wav(samples, 24000);
+        const buffer = EncodePcm16Wav(samples, 24000);
         const pcm = readWavSamples(buffer);
         expect(pcm[0]).toBe(0);
         expect(pcm[1]).toBe(32767); // +1 full scale
@@ -63,7 +63,7 @@ describe('encodePcm16Wav', () => {
     });
 
     it('encodes an empty buffer as a header-only WAV', () => {
-        const buffer = encodePcm16Wav(new Float32Array(0), 24000);
+        const buffer = EncodePcm16Wav(new Float32Array(0), 24000);
         expect(buffer.byteLength).toBe(WAV_HEADER_BYTES);
         const view = new DataView(buffer);
         expect(view.getUint32(40, true)).toBe(0);
@@ -76,13 +76,13 @@ describe('downsamplePeaks', () => {
         for (let i = 0; i < samples.length; i++) {
             samples[i] = Math.sin(i / 50);
         }
-        const peaks = downsamplePeaks(samples, 600);
+        const peaks = DownsamplePeaks(samples, 600);
         expect(peaks.length).toBe(600);
     });
 
     it('normalizes to a max of 1 and stays within 0..1', () => {
         const samples = new Float32Array([0.1, 0.2, 0.05, 0.5, 0.25, 0.4]);
-        const peaks = downsamplePeaks(samples, 3);
+        const peaks = DownsamplePeaks(samples, 3);
         expect(peaks.length).toBe(3);
         const max = Math.max(...peaks);
         expect(max).toBeCloseTo(1, 6);
@@ -95,19 +95,19 @@ describe('downsamplePeaks', () => {
     it('computes per-bucket max-abs (bucket containing the global peak normalizes to 1)', () => {
         // 4 samples, 2 buckets: bucket0 = max(|0.2|,|−0.1|)=0.2, bucket1 = max(|0.8|,|0.4|)=0.8
         const samples = new Float32Array([0.2, -0.1, 0.8, 0.4]);
-        const peaks = downsamplePeaks(samples, 2);
+        const peaks = DownsamplePeaks(samples, 2);
         expect(peaks.length).toBe(2);
         expect(peaks[0]).toBeCloseTo(0.2 / 0.8, 6);
         expect(peaks[1]).toBeCloseTo(1, 6);
     });
 
     it('yields [] for an empty buffer and for an all-silent buffer', () => {
-        expect(downsamplePeaks(new Float32Array(0), 600)).toEqual([]);
-        expect(downsamplePeaks(new Float32Array(100), 50)).toEqual([]);
+        expect(DownsamplePeaks(new Float32Array(0), 600)).toEqual([]);
+        expect(DownsamplePeaks(new Float32Array(100), 50)).toEqual([]);
     });
 
     it('produces at most samples.length buckets for a short buffer', () => {
-        const peaks = downsamplePeaks(new Float32Array([0.5, 0.25]), 600);
+        const peaks = DownsamplePeaks(new Float32Array([0.5, 0.25]), 600);
         expect(peaks.length).toBe(2);
     });
 });

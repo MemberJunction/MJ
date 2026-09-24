@@ -57,7 +57,7 @@ describe('ConversationStreaming reconnection backoff', () => {
 
     it('escalates across cycles when the transport never delivers', () => {
         const { streaming, open, handlers } = build();
-        streaming.initialize();
+        streaming.Initialize();
 
         // Three failure cycles against a socket that accepts the subscribe but never yields.
         for (let i = 0; i < 3; i++) {
@@ -71,7 +71,7 @@ describe('ConversationStreaming reconnection backoff', () => {
 
     it('clears the backoff only once a frame is actually delivered', () => {
         const { streaming, open, handlers } = build();
-        streaming.initialize();
+        streaming.Initialize();
 
         handlers[0].error(new Error('dead'));
         vi.advanceTimersByTime(120_000);
@@ -83,7 +83,7 @@ describe('ConversationStreaming reconnection backoff', () => {
 
     it('keeps retrying past the point an attempt cap would have stopped it', () => {
         const { streaming, handlers } = build();
-        streaming.initialize();
+        streaming.Initialize();
 
         // Well past any fixed cap. A stream that stands down opens no further subscription, so
         // `failCycles` runs out of live handlers to fail and the count stops climbing. Nothing in
@@ -96,7 +96,7 @@ describe('ConversationStreaming reconnection backoff', () => {
 
     it('recovers on the first frame delivered after a long outage', () => {
         const { streaming, open, handlers } = build();
-        streaming.initialize();
+        streaming.Initialize();
 
         failCycles(handlers, 25);
         handlers[handlers.length - 1].next({ message: JSON.stringify({ type: 'noop' }) });
@@ -107,7 +107,7 @@ describe('ConversationStreaming reconnection backoff', () => {
 
     it('holds the retry delay at the ceiling', () => {
         const { streaming, handlers } = build();
-        streaming.initialize();
+        streaming.Initialize();
 
         // Escalate past the point where doubling meets the ceiling.
         failCycles(handlers, 6);

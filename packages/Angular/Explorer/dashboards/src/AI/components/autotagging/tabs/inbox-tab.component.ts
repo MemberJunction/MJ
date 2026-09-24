@@ -116,7 +116,12 @@ export class ClassifyInboxTabComponent extends BaseAngularComponent {
     }
 
     /** Template-facing formatter. */
-    public readonly formatShortDate = formatShortDate;
+    public readonly FormatShortDate = formatShortDate;
+
+    /** @deprecated Use {@link FormatShortDate}. */
+    public get formatShortDate() {
+        return this.FormatShortDate;
+    }
 
     /** Emitted after any Approve/Merge/Reject so the host refreshes its pending badge. */
     @Output() Resolved = new EventEmitter<void>();

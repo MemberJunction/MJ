@@ -8,7 +8,7 @@ export class DeletionReportGenerator {
     /**
      * Generate comprehensive deletion plan report
      */
-    static generateReport(audit: DeletionAudit, verbose = false): string {
+    static GenerateReport(audit: DeletionAudit, verbose = false): string {
         const lines: string[] = [];
 
         lines.push('═'.repeat(80));
@@ -53,6 +53,11 @@ export class DeletionReportGenerator {
         this.addConclusion(lines, audit);
 
         return lines.join('\n');
+    }
+
+    /** @deprecated Use {@link GenerateReport}. */
+    static generateReport(audit: DeletionAudit, verbose = false): string {
+        return this.GenerateReport(audit, verbose);
     }
 
     /**
@@ -307,7 +312,7 @@ export class DeletionReportGenerator {
     /**
      * Generate a concise summary for logging
      */
-    static generateSummary(audit: DeletionAudit): string {
+    static GenerateSummary(audit: DeletionAudit): string {
         const parts: string[] = [];
 
         if (audit.explicitDeletes.size > 0) {
@@ -327,5 +332,10 @@ export class DeletionReportGenerator {
         }
 
         return parts.length > 0 ? parts.join(', ') : 'no deletions';
+    }
+
+    /** @deprecated Use {@link GenerateSummary}. */
+    static generateSummary(audit: DeletionAudit): string {
+        return this.GenerateSummary(audit);
     }
 }

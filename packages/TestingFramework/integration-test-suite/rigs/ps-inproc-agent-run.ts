@@ -12,7 +12,7 @@
  * USAGE: PS_INTEGRATION=1 npx tsx packages/MJServer/integration-test-scripts/ps-inproc-agent-run.ts
  * Exit: 0 = passed/skipped, 1 = failures, 2 = bootstrap error.
  */
-import { bootstrapAI } from './lib/ai-bootstrap';
+import { BootstrapAI } from './lib/ai-bootstrap';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import '@memberjunction/core-entities';
 import { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
@@ -81,7 +81,7 @@ async function cleanup(md: IMetadataProvider, user: UserInfo): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const { provider, user } = await bootstrapAI();
+  const { provider, user } = await BootstrapAI();
   banner('PREDICTIVE STUDIO AGENT — RUN BUILDER SUB-AGENT VIA AgentRunner (in-process)');
   if (!provider.EntityByName('Memberships')) { console.log('  SKIP: Memberships not found. (exit 0)'); process.exit(0); }
   if (!PS_LIVE) { console.log('\n  SKIP: set PS_INTEGRATION=1 (+ sidecar). (exit 0)'); process.exit(0); }

@@ -30,6 +30,7 @@ import { ApplicationSettingEngine, ConversationEngine } from '@memberjunction/co
 import { ClientToolRegistry } from '@memberjunction/ai-agent-client';
 
 import { MentionParser } from './mentions/MentionParser';
+import { MentionAutocomplete } from './mentions/MentionAutocomplete';
 import { ConversationBridge } from './bridge/ConversationBridge';
 import { DefaultAgentResolver } from './default-agent/DefaultAgentResolver';
 import { SessionsObserver } from './sessions/SessionsObserver';
@@ -190,6 +191,18 @@ export class ConversationsRuntime
         return this._mentions;
     }
 
+    /**
+     * Mention autocomplete — the permission-filtered caches and per-trigger ranking behind the
+     * `@`, `#` and `/` pickers. See {@link MentionAutocomplete}.
+     *
+     * A `BaseSingleton` in its own right, so this accessor is a convenience rather than the only
+     * way in: trigger providers instantiated outside any DI container reach the same instance via
+     * `MentionAutocomplete.Instance`, and share its one cache warm-up.
+     */
+    public get MentionSuggestions(): MentionAutocomplete {
+        return MentionAutocomplete.Instance;
+    }
+
     /** Overlay ⇄ workspace coordination bus. See {@link ConversationBridge}. */
     public get Bridge(): ConversationBridge {
         return this._bridge;
@@ -248,7 +261,7 @@ export class ConversationsRuntime
     public get Liveness(): ConversationLiveness {
         if (!this._liveness) {
             this._liveness = new ConversationLiveness();
-            this._liveness.initialize(this.Streaming.streamReconnected$);
+            this._liveness.Initialize(this.Streaming.StreamReconnected$);
         }
         return this._liveness;
     }

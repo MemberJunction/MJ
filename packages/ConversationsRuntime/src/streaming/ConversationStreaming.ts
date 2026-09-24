@@ -144,13 +144,18 @@ export class ConversationStreaming {
      * A listener must therefore reconcile against durable state rather than assume the stream
      * resumed seamlessly. Consumed by `ConversationLiveness` (MJ #4222).
      */
-    public readonly streamReconnected$ = new Subject<void>();
+    public readonly StreamReconnected$ = new Subject<void>();
 
     /**
      * Observable for components to subscribe to completion events in real-time.
      * Emits enriched completion data once per agent finish.
      */
-    public readonly completionEvents$ = new Subject<CompletionEvent>();
+    public readonly CompletionEvents$ = new Subject<CompletionEvent>();
+
+    /** @deprecated Use {@link CompletionEvents$}. */
+    public get completionEvents$() {
+        return this.CompletionEvents$;
+    }
 
     /**
      * @param context Runtime context providing live access to the registered
@@ -164,7 +169,7 @@ export class ConversationStreaming {
      * times. Should be called once at app startup (e.g., the Angular widget calls
      * this when the workspace mounts).
      */
-    public initialize(): void {
+    public Initialize(): void {
         if (this.initialized) {
             return;
         }
@@ -176,7 +181,7 @@ export class ConversationStreaming {
                     // First frame on a new subscription is the only proof the transport actually
                     // works. Subscribing succeeds against a dead socket — graphql-ws accepts the
                     // request and returns an iterator that never yields — so this, not
-                    // initialize() returning, is what clears the backoff.
+                    // Initialize() returning, is what clears the backoff.
                     this.noteStreamAlive();
                     void this.handlePushStatusUpdate(status);
                 },
@@ -204,7 +209,7 @@ export class ConversationStreaming {
                 // here would reset the counter every cycle and pin the delay at its base value.
                 // Only a delivered frame clears it; see noteStreamAlive().
                 this.reconnecting = false;
-                this.streamReconnected$.next();
+                this.StreamReconnected$.next();
             }
         } catch (error) {
             console.error('[ConversationStreaming] Failed to initialize:', error);
@@ -213,21 +218,36 @@ export class ConversationStreaming {
         }
     }
 
+    /** @deprecated Use {@link Initialize}. */
+    public initialize(): void {
+        return this.Initialize();
+    }
+
     /** Current connection status as an observable. */
-    public getConnectionStatus$() {
+    public GetConnectionStatus$() {
         return this.connectionStatus$.asObservable();
     }
 
+    /** @deprecated Use {@link GetConnectionStatus$}. */
+    public getConnectionStatus$() {
+        return this.GetConnectionStatus$();
+    }
+
     /** Current connection status value (synchronous). */
-    public getConnectionStatus(): StreamingConnectionStatus {
+    public GetConnectionStatus(): StreamingConnectionStatus {
         return this.connectionStatus$.value;
+    }
+
+    /** @deprecated Use {@link GetConnectionStatus}. */
+    public getConnectionStatus(): StreamingConnectionStatus {
+        return this.GetConnectionStatus();
     }
 
     /**
      * Register a callback for a specific conversation detail (message). The callback
      * is invoked whenever progress updates arrive for that message.
      */
-    public registerMessageCallback(
+    public RegisterMessageCallback(
         conversationDetailId: string,
         callback: MessageProgressCallback
     ): void {
@@ -236,11 +256,19 @@ export class ConversationStreaming {
         this.callbackRegistry.set(conversationDetailId, existing);
     }
 
+    /** @deprecated Use {@link RegisterMessageCallback}. */
+    public registerMessageCallback(
+        conversationDetailId: string,
+        callback: MessageProgressCallback
+    ): void {
+        return this.RegisterMessageCallback(conversationDetailId, callback);
+    }
+
     /**
      * Unregister a callback for a specific conversation detail. When `callback` is
      * omitted, ALL callbacks for that message are removed.
      */
-    public unregisterMessageCallback(
+    public UnregisterMessageCallback(
         conversationDetailId: string,
         callback?: MessageProgressCallback
     ): void {
@@ -257,8 +285,16 @@ export class ConversationStreaming {
         }
     }
 
+    /** @deprecated Use {@link UnregisterMessageCallback}. */
+    public unregisterMessageCallback(
+        conversationDetailId: string,
+        callback?: MessageProgressCallback
+    ): void {
+        return this.UnregisterMessageCallback(conversationDetailId, callback);
+    }
+
     /** Total number of registered callbacks (diagnostic). */
-    public getRegisteredCallbackCount(): number {
+    public GetRegisteredCallbackCount(): number {
         let count = 0;
         for (const callbacks of this.callbackRegistry.values()) {
             count += callbacks.length;
@@ -266,30 +302,50 @@ export class ConversationStreaming {
         return count;
     }
 
+    /** @deprecated Use {@link GetRegisteredCallbackCount}. */
+    public getRegisteredCallbackCount(): number {
+        return this.GetRegisteredCallbackCount();
+    }
+
     /** Number of distinct messages currently being tracked (diagnostic). */
-    public getTrackedMessageCount(): number {
+    public GetTrackedMessageCount(): number {
         return this.callbackRegistry.size;
+    }
+
+    /** @deprecated Use {@link GetTrackedMessageCount}. */
+    public getTrackedMessageCount(): number {
+        return this.GetTrackedMessageCount();
     }
 
     /**
      * Replay a recently completed event so a late-mounting component can pick it up.
      * Returns `undefined` if no completion is in the 5-minute replay window.
      */
-    public getRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
+    public GetRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
         const completion = this.recentCompletions.get(conversationDetailId);
         return completion ? { agentRunId: completion.agentRunId } : undefined;
     }
 
+    /** @deprecated Use {@link GetRecentCompletion}. */
+    public getRecentCompletion(conversationDetailId: string): { agentRunId: string } | undefined {
+        return this.GetRecentCompletion(conversationDetailId);
+    }
+
     /** Clear a recent completion after the late-mounting component has handled it. */
-    public clearRecentCompletion(conversationDetailId: string): void {
+    public ClearRecentCompletion(conversationDetailId: string): void {
         this.recentCompletions.delete(conversationDetailId);
+    }
+
+    /** @deprecated Use {@link ClearRecentCompletion}. */
+    public clearRecentCompletion(conversationDetailId: string): void {
+        return this.ClearRecentCompletion(conversationDetailId);
     }
 
     /**
      * Diagnostic snapshot for a specific message — used by debugging tools to dump
      * live in-memory state.
      */
-    public getDiagnosticSnapshot(messageId: string): {
+    public GetDiagnosticSnapshot(messageId: string): {
         hasCallbacks: boolean;
         callbackCount: number;
         recentCompletion: { conversationDetailId: string; agentRunId: string; timestamp: Date } | undefined;
@@ -302,6 +358,16 @@ export class ConversationStreaming {
             recentCompletion: this.recentCompletions.get(messageId),
             connectionStatus: this.connectionStatus$.getValue(),
         };
+    }
+
+    /** @deprecated Use {@link GetDiagnosticSnapshot}. */
+    public getDiagnosticSnapshot(messageId: string): {
+        hasCallbacks: boolean;
+        callbackCount: number;
+        recentCompletion: { conversationDetailId: string; agentRunId: string; timestamp: Date } | undefined;
+        connectionStatus: StreamingConnectionStatus;
+    } {
+        return this.GetDiagnosticSnapshot(messageId);
     }
 
     /**
@@ -320,7 +386,7 @@ export class ConversationStreaming {
         this.callbackRegistry.clear();
         this.recentCompletions.clear();
         this.streamingAccumulator.clear();
-        this.completionEvents$.complete();
+        this.CompletionEvents$.complete();
         this.connectionStatus$.complete();
         this.initialized = false;
     }
@@ -447,7 +513,7 @@ export class ConversationStreaming {
                         timestamp: new Date(),
                     });
 
-                    this.completionEvents$.next({
+                    this.CompletionEvents$.next({
                         conversationDetailId,
                         agentRunId,
                         success,
@@ -615,7 +681,7 @@ export class ConversationStreaming {
         this.streamingAccumulator.clear();
 
         // Exponential backoff with a ceiling, retried for as long as the page lives. Recovery has
-        // to be autonomous: no host calls initialize() outside ngOnInit, so a stream that stopped
+        // to be autonomous: no host calls Initialize() outside ngOnInit, so a stream that stopped
         // retrying would stay stopped until a reload.
         const delay = Math.min(
             RECONNECTION_DELAY_MS * 2 ** this.reconnectionAttempts,
@@ -627,7 +693,7 @@ export class ConversationStreaming {
         this.reconnectionTimeout = setTimeout(() => {
             console.log(`[ConversationStreaming] Attempting to reconnect (attempt ${this.reconnectionAttempts})...`);
             this.initialized = false;
-            this.initialize();
+            this.Initialize();
         }, delay);
     }
 

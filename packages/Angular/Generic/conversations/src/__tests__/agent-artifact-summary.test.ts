@@ -33,8 +33,8 @@ describe('GroupVersionsByArtifact', () => {
       [ART_A]
     );
 
-    expect(summary.versions.map(v => v.versionNumber)).toEqual([3, 2, 1]);
-    expect(summary.versions[0].versionName).toBe('third');
+    expect(summary.Versions.map(v => v.versionNumber)).toEqual([3, 2, 1]);
+    expect(summary.Versions[0].versionName).toBe('third');
   });
 
   it('orders artifacts by most-recently-touched without an explicit sort', () => {
@@ -50,15 +50,15 @@ describe('GroupVersionsByArtifact', () => {
     );
 
     expect(summaries.map(s => s.artifactId)).toEqual(['art-a', 'art-b']);
-    expect(summaries[0].versions).toHaveLength(2);
-    expect(summaries[1].versions).toHaveLength(1);
+    expect(summaries[0].Versions).toHaveLength(2);
+    expect(summaries[1].Versions).toHaveLength(1);
   });
 
   it('carries the artifact name and type the prompt prints', () => {
     const [summary] = group([{ ID: 'v-1', ArtifactID: 'art-a', VersionNumber: 1, Name: null }], [ART_A]);
 
     expect(summary.artifactName).toBe('Revenue Model');
-    expect(summary.artifactType).toBe('Report');
+    expect(summary.ArtifactType).toBe('Report');
   });
 
   it('drops a version whose artifact row is missing, matching INNER JOIN semantics', () => {

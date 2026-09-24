@@ -34,7 +34,7 @@ export interface MigrationHistoryProvider {
  * @returns the highest applied version (Skyway's `<timestamp>` key), or `null` if the
  *   history table does not exist yet (fresh database).
  */
-export async function readCurrentDbVersion(provider: MigrationHistoryProvider, schema: string, historyTable: string): Promise<string | null> {
+export async function ReadCurrentDbVersion(provider: MigrationHistoryProvider, schema: string, historyTable: string): Promise<string | null> {
   await provider.Connect();
   try {
     if (!(await provider.History.Exists(schema, historyTable))) {
@@ -45,6 +45,11 @@ export async function readCurrentDbVersion(provider: MigrationHistoryProvider, s
   } finally {
     await provider.Disconnect();
   }
+}
+
+/** @deprecated Use {@link ReadCurrentDbVersion}. */
+export async function readCurrentDbVersion(provider: MigrationHistoryProvider, schema: string, historyTable: string): Promise<string | null> {
+  return ReadCurrentDbVersion(provider, schema, historyTable);
 }
 
 /** Highest successful, non-schema-marker version among history records (mirrors Skyway's own rule). */

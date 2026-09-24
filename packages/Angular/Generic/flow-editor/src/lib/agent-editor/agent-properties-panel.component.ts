@@ -56,34 +56,64 @@ export class AgentPropertiesPanelComponent {
 
   // ── Computed Properties ─────────────────────────────────────
 
-  get isStepSelected(): boolean {
+  get IsStepSelected(): boolean {
     return this.Step != null;
   }
 
-  get isConnectionSelected(): boolean {
+  /** @deprecated Use {@link IsStepSelected}. */
+  get isStepSelected(): boolean {
+    return this.IsStepSelected;
+  }
+
+  get IsConnectionSelected(): boolean {
     return this.SelectedConnection != null && this.PathEntity != null;
   }
 
-  get showActionPicker(): boolean {
+  /** @deprecated Use {@link IsConnectionSelected}. */
+  get isConnectionSelected(): boolean {
+    return this.IsConnectionSelected;
+  }
+
+  get ShowActionPicker(): boolean {
     return this.Step?.StepType === 'Action' ||
            ((this.Step?.StepType === 'ForEach' || this.Step?.StepType === 'While') && this.Step?.LoopBodyType === 'Action');
   }
 
-  get showPromptPicker(): boolean {
+  /** @deprecated Use {@link ShowActionPicker}. */
+  get showActionPicker(): boolean {
+    return this.ShowActionPicker;
+  }
+
+  get ShowPromptPicker(): boolean {
     return this.Step?.StepType === 'Prompt' ||
            ((this.Step?.StepType === 'ForEach' || this.Step?.StepType === 'While') && this.Step?.LoopBodyType === 'Prompt');
   }
 
-  get showAgentPicker(): boolean {
+  /** @deprecated Use {@link ShowPromptPicker}. */
+  get showPromptPicker(): boolean {
+    return this.ShowPromptPicker;
+  }
+
+  get ShowAgentPicker(): boolean {
     return this.Step?.StepType === 'Sub-Agent' ||
            ((this.Step?.StepType === 'ForEach' || this.Step?.StepType === 'While') && this.Step?.LoopBodyType === 'Sub-Agent');
   }
 
-  get showLoopConfig(): boolean {
+  /** @deprecated Use {@link ShowAgentPicker}. */
+  get showAgentPicker(): boolean {
+    return this.ShowAgentPicker;
+  }
+
+  get ShowLoopConfig(): boolean {
     return this.Step?.StepType === 'ForEach' || this.Step?.StepType === 'While';
   }
 
-  get stepTypeLabel(): string {
+  /** @deprecated Use {@link ShowLoopConfig}. */
+  get showLoopConfig(): boolean {
+    return this.ShowLoopConfig;
+  }
+
+  get StepTypeLabel(): string {
     switch (this.Step?.StepType) {
       case 'Action': return 'Action';
       case 'Prompt': return 'Prompt';
@@ -94,15 +124,30 @@ export class AgentPropertiesPanelComponent {
     }
   }
 
-  get stepTypeColor(): string {
+  /** @deprecated Use {@link StepTypeLabel}. */
+  get stepTypeLabel(): string {
+    return this.StepTypeLabel;
+  }
+
+  get StepTypeColor(): string {
     return STEP_TYPE_COLORS[this.Step?.StepType ?? ''] ?? '#64748b';
   }
 
-  get stepTypeIcon(): string {
+  /** @deprecated Use {@link StepTypeColor}. */
+  get stepTypeColor(): string {
+    return this.StepTypeColor;
+  }
+
+  get StepTypeIcon(): string {
     return STEP_TYPE_ICONS[this.Step?.StepType ?? ''] ?? 'fa-circle-nodes';
   }
 
-  get statusColor(): string {
+  /** @deprecated Use {@link StepTypeIcon}. */
+  get stepTypeIcon(): string {
+    return this.StepTypeIcon;
+  }
+
+  get StatusColor(): string {
     switch (this.Step?.Status) {
       case 'Active': return '#10b981';
       case 'Disabled': return '#94a3b8';
@@ -111,46 +156,86 @@ export class AgentPropertiesPanelComponent {
     }
   }
 
+  /** @deprecated Use {@link StatusColor}. */
+  get statusColor(): string {
+    return this.StatusColor;
+  }
+
   /** Path: origin step name */
-  get originStepName(): string {
+  get OriginStepName(): string {
     if (!this.PathEntity) return '';
     const step = this.AllSteps.find(s => UUIDsEqual(s.ID, this.PathEntity!.OriginStepID));
     return step?.Name ?? 'Unknown Step';
   }
 
+  /** @deprecated Use {@link OriginStepName}. */
+  get originStepName(): string {
+    return this.OriginStepName;
+  }
+
   /** Path: destination step name */
-  get destinationStepName(): string {
+  get DestinationStepName(): string {
     if (!this.PathEntity) return '';
     const step = this.AllSteps.find(s => UUIDsEqual(s.ID, this.PathEntity!.DestinationStepID));
     return step?.Name ?? 'Unknown Step';
   }
 
+  /** @deprecated Use {@link DestinationStepName}. */
+  get destinationStepName(): string {
+    return this.DestinationStepName;
+  }
+
   /** Path: whether a condition is set */
-  get isConditionalPath(): boolean {
+  get IsConditionalPath(): boolean {
     return this.PathEntity?.Condition != null && this.PathEntity.Condition.trim().length > 0;
   }
 
+  /** @deprecated Use {@link IsConditionalPath}. */
+  get isConditionalPath(): boolean {
+    return this.IsConditionalPath;
+  }
+
   /** Path accent color */
+  get PathAccentColor(): string {
+    return this.IsConditionalPath ? '#f59e0b' : '#94a3b8';
+  }
+
+  /** @deprecated Use {@link PathAccentColor}. */
   get pathAccentColor(): string {
-    return this.isConditionalPath ? '#f59e0b' : '#94a3b8';
+    return this.PathAccentColor;
   }
 
   /** Resolved action name for display */
-  get selectedActionName(): string {
+  get SelectedActionName(): string {
     if (!this.Step?.ActionID) return 'None selected';
     return this.Actions.find(a => UUIDsEqual(a.ID, this.Step!.ActionID))?.Name ?? 'Unknown';
   }
 
+  /** @deprecated Use {@link SelectedActionName}. */
+  get selectedActionName(): string {
+    return this.SelectedActionName;
+  }
+
   /** Resolved prompt name for display */
-  get selectedPromptName(): string {
+  get SelectedPromptName(): string {
     if (!this.Step?.PromptID) return 'None selected';
     return this.Prompts.find(p => UUIDsEqual(p.ID, this.Step!.PromptID))?.Name ?? 'Unknown';
   }
 
+  /** @deprecated Use {@link SelectedPromptName}. */
+  get selectedPromptName(): string {
+    return this.SelectedPromptName;
+  }
+
   /** Resolved agent name for display */
-  get selectedAgentName(): string {
+  get SelectedAgentName(): string {
     if (!this.Step?.SubAgentID) return 'None selected';
     return this.Agents.find(a => UUIDsEqual(a.ID, this.Step!.SubAgentID))?.Name ?? 'Unknown';
+  }
+
+  /** @deprecated Use {@link SelectedAgentName}. */
+  get selectedAgentName(): string {
+    return this.SelectedAgentName;
   }
 
   // ── Section Collapse ──────────────────────────────────────

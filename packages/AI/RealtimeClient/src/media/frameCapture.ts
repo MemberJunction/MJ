@@ -2,9 +2,9 @@
  * @fileoverview FRAME CAPTURE for realtime video tracks — camera and screen capture pipelines.
  *
  * Patterned beside `micCapture.ts`:
- * - `createCameraCapture`: prompts via `getUserMedia` (consent-gated via {@link RealtimeTrackDescriptor.RequiresConsent}).
- * - `createScreenCapture`: prompts via `getDisplayMedia` (consent-gated via {@link RealtimeTrackDescriptor.RequiresConsent}).
- * - `createStreamFrameCapture`: extracts periodic JPEG frames from an already-acquired `MediaStream`.
+ * - `CreateCameraCapture`: prompts via `getUserMedia` (consent-gated via {@link RealtimeTrackDescriptor.RequiresConsent}).
+ * - `CreateScreenCapture`: prompts via `getDisplayMedia` (consent-gated via {@link RealtimeTrackDescriptor.RequiresConsent}).
+ * - `CreateStreamFrameCapture`: extracts periodic JPEG frames from an already-acquired `MediaStream`.
  *
  * Cadence is throttled to at most 1 frame per second (1 fps ceiling per Live API capabilities guide).
  *
@@ -54,7 +54,7 @@ export interface FrameCaptureOptions {
  * @param stream The media stream containing one or more video tracks.
  * @param options Frame capture options (cadence, format, frame callback).
  */
-export function createStreamFrameCapture(
+export function CreateStreamFrameCapture(
     stream: MediaStream,
     options: FrameCaptureOptions
 ): IFrameCapture {
@@ -139,7 +139,7 @@ export function createStreamFrameCapture(
  * @param options Frame capture options.
  * @param constraints Video track constraints.
  */
-export async function createCameraCapture(
+export async function CreateCameraCapture(
     options: FrameCaptureOptions,
     constraints?: MediaTrackConstraints
 ): Promise<IFrameCapture> {
@@ -153,7 +153,7 @@ export async function createCameraCapture(
     const stream = await navigator.mediaDevices.getUserMedia({
         video: constraints ?? { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { max: 1 } },
     });
-    const capture = createStreamFrameCapture(stream, options);
+    const capture = CreateStreamFrameCapture(stream, options);
     return {
         Stop: () => {
             capture.Stop();
@@ -172,7 +172,7 @@ export async function createCameraCapture(
  * @param options Frame capture options.
  * @param displayMediaOptions Display media options.
  */
-export async function createScreenCapture(
+export async function CreateScreenCapture(
     options: FrameCaptureOptions,
     displayMediaOptions?: DisplayMediaStreamOptions
 ): Promise<IFrameCapture> {
@@ -186,7 +186,7 @@ export async function createScreenCapture(
     const stream = await navigator.mediaDevices.getDisplayMedia(
         displayMediaOptions ?? { video: { frameRate: { max: 1 } } }
     );
-    const capture = createStreamFrameCapture(stream, options);
+    const capture = CreateStreamFrameCapture(stream, options);
     return {
         Stop: () => {
             capture.Stop();
@@ -196,4 +196,28 @@ export async function createScreenCapture(
             return stream;
         },
     };
+}
+
+/** @deprecated Use {@link CreateStreamFrameCapture}. */
+export function createStreamFrameCapture(
+    stream: MediaStream,
+    options: FrameCaptureOptions
+): IFrameCapture {
+    return CreateStreamFrameCapture(stream, options);
+}
+
+/** @deprecated Use {@link CreateCameraCapture}. */
+export async function createCameraCapture(
+    options: FrameCaptureOptions,
+    constraints?: MediaTrackConstraints
+): Promise<IFrameCapture> {
+    return CreateCameraCapture(options, constraints);
+}
+
+/** @deprecated Use {@link CreateScreenCapture}. */
+export async function createScreenCapture(
+    options: FrameCaptureOptions,
+    displayMediaOptions?: DisplayMediaStreamOptions
+): Promise<IFrameCapture> {
+    return CreateScreenCapture(options, displayMediaOptions);
 }

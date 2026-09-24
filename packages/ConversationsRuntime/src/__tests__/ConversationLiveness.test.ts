@@ -43,7 +43,7 @@ describe('ConversationLiveness', () => {
         providerState.available = true;
         liveness = new ConversationLiveness();
         seen = [];
-        liveness.reconciliationRequired$.subscribe((reason) => seen.push(reason));
+        liveness.ReconciliationRequired$.subscribe((reason) => seen.push(reason));
     });
 
     afterEach(() => {
@@ -52,20 +52,20 @@ describe('ConversationLiveness', () => {
     });
 
     it('fires when the socket reconnects — the signal that survives a socket that never closed', () => {
-        liveness.initialize();
+        liveness.Initialize();
         socketReconnected$.next();
         expect(seen).toEqual(['socket-reconnected']);
     });
 
     it('fires when the push-status stream re-subscribes', () => {
         const streamReconnected$ = new Subject<void>();
-        liveness.initialize(streamReconnected$.asObservable());
+        liveness.Initialize(streamReconnected$.asObservable());
         streamReconnected$.next();
         expect(seen).toEqual(['stream-reconnected']);
     });
 
     it('fires on tab focus and on the browser coming back online', async () => {
-        liveness.initialize();
+        liveness.Initialize();
 
         liveness.NotifyTabVisible();
         await vi.advanceTimersByTimeAsync(RECONCILE_THROTTLE_MS);
@@ -76,7 +76,7 @@ describe('ConversationLiveness', () => {
 
     it('collapses a lid-open burst into ONE reconciliation', async () => {
         const streamReconnected$ = new Subject<void>();
-        liveness.initialize(streamReconnected$.asObservable());
+        liveness.Initialize(streamReconnected$.asObservable());
 
         // Reopening a laptop produces all four within about a second. Downstream reconciliation
         // is idempotent but expensive — a RunView plus a window refresh and artifact rebuild per
@@ -91,7 +91,7 @@ describe('ConversationLiveness', () => {
     });
 
     it('reconciles immediately rather than waiting out the window', () => {
-        liveness.initialize();
+        liveness.Initialize();
         socketReconnected$.next();
 
         // Leading-edge, not trailing: recovery is user-visible, so the first trigger acts at
@@ -101,7 +101,7 @@ describe('ConversationLiveness', () => {
     });
 
     it('fires again for a genuinely separate outage once the window has passed', async () => {
-        liveness.initialize();
+        liveness.Initialize();
 
         socketReconnected$.next();
         await vi.advanceTimersByTimeAsync(RECONCILE_THROTTLE_MS + 1);
@@ -111,26 +111,26 @@ describe('ConversationLiveness', () => {
     });
 
     it('does not replay a stale request to a late subscriber', () => {
-        liveness.initialize();
+        liveness.Initialize();
         socketReconnected$.next();
 
         const late: ReconciliationReason[] = [];
-        liveness.reconciliationRequired$.subscribe((reason) => late.push(reason));
+        liveness.ReconciliationRequired$.subscribe((reason) => late.push(reason));
 
         // A component mounting after an outage already resolved must not be told to reconcile.
         expect(late).toEqual([]);
     });
 
     it('stops listening after Dispose', () => {
-        liveness.initialize();
+        liveness.Initialize();
         liveness.Dispose();
         socketReconnected$.next();
         expect(seen).toEqual([]);
     });
 
     it('is safe to initialize twice', () => {
-        liveness.initialize();
-        liveness.initialize();
+        liveness.Initialize();
+        liveness.Initialize();
         socketReconnected$.next();
 
         // A double-subscribe would emit twice and double every downstream reconciliation.
@@ -139,10 +139,10 @@ describe('ConversationLiveness', () => {
 
     it('retries the socket signal on a later initialize when the provider was not yet constructed', () => {
         providerState.available = false;
-        liveness.initialize();
+        liveness.Initialize();
 
         providerState.available = true;
-        liveness.initialize();
+        liveness.Initialize();
         socketReconnected$.next();
 
         // Marking itself initialized on a missing provider would leave the socket signal
@@ -153,7 +153,7 @@ describe('ConversationLiveness', () => {
     it('still wires the stream signal while the provider is missing', () => {
         providerState.available = false;
         const streamReconnected$ = new Subject<void>();
-        liveness.initialize(streamReconnected$.asObservable());
+        liveness.Initialize(streamReconnected$.asObservable());
 
         streamReconnected$.next();
 

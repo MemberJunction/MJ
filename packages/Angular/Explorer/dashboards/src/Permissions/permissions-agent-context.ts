@@ -27,9 +27,14 @@ export const PERMISSIONS_CONTEXT_LIST_CAP = 25;
  * Pure + deterministic; returns a new array and never mutates the input. Tolerates a
  * non-finite / negative cap by falling back to the default.
  */
-export function capPermissionsList(values: readonly string[], cap: number = PERMISSIONS_CONTEXT_LIST_CAP): string[] {
+export function CapPermissionsList(values: readonly string[], cap: number = PERMISSIONS_CONTEXT_LIST_CAP): string[] {
     const safeCap = Number.isFinite(cap) && cap >= 0 ? Math.floor(cap) : PERMISSIONS_CONTEXT_LIST_CAP;
     return values.slice(0, safeCap);
+}
+
+/** @deprecated Use {@link CapPermissionsList}. */
+export function capPermissionsList(values: readonly string[], cap: number = PERMISSIONS_CONTEXT_LIST_CAP): string[] {
+    return CapPermissionsList(values, cap);
 }
 
 /**
@@ -53,7 +58,7 @@ export interface PermissionsNamedCandidate {
  * @param input - whatever the agent passed (an ID or a display name)
  * @param candidates - the candidates available on this surface
  */
-export function resolvePermissionsCandidate<T extends PermissionsNamedCandidate>(
+export function ResolvePermissionsCandidate<T extends PermissionsNamedCandidate>(
     input: string,
     candidates: readonly T[]
 ): T | null {
@@ -72,6 +77,14 @@ export function resolvePermissionsCandidate<T extends PermissionsNamedCandidate>
     return candidates.find((c) => c.Name.toLowerCase().includes(needle)) ?? null;
 }
 
+/** @deprecated Use {@link ResolvePermissionsCandidate}. */
+export function resolvePermissionsCandidate<T extends PermissionsNamedCandidate>(
+    input: string,
+    candidates: readonly T[]
+): T | null {
+    return ResolvePermissionsCandidate(input, candidates);
+}
+
 /**
  * Build a tolerant "not found" error message that lists a bounded sample of the available
  * candidate names so the agent can correct itself. Pure + deterministic.
@@ -80,14 +93,23 @@ export function resolvePermissionsCandidate<T extends PermissionsNamedCandidate>
  * @param noun - what kind of thing wasn't found (e.g. "permission domain", "user")
  * @param candidates - the available candidates (a bounded sample of names is echoed back)
  */
+export function BuildPermissionsNotFoundError(
+    input: string,
+    noun: string,
+    candidates: readonly PermissionsNamedCandidate[]
+): string {
+    const names = CapPermissionsList(candidates.map((c) => c.Name), 10);
+    const sample = names.length > 0 ? ` Available ${noun}s include: ${names.join(', ')}.` : '';
+    return `No ${noun} matches "${input}".${sample}`;
+}
+
+/** @deprecated Use {@link BuildPermissionsNotFoundError}. */
 export function buildPermissionsNotFoundError(
     input: string,
     noun: string,
     candidates: readonly PermissionsNamedCandidate[]
 ): string {
-    const names = capPermissionsList(candidates.map((c) => c.Name), 10);
-    const sample = names.length > 0 ? ` Available ${noun}s include: ${names.join(', ')}.` : '';
-    return `No ${noun} matches "${input}".${sample}`;
+    return BuildPermissionsNotFoundError(input, noun, candidates);
 }
 
 // ===================================================================================
@@ -120,7 +142,7 @@ export interface ResourceAccessAgentContextInput {
 }
 
 /** Build the agent-visible context object for the Resource Access surface. */
-export function buildResourceAccessAgentContext(input: ResourceAccessAgentContextInput): Record<string, unknown> {
+export function BuildResourceAccessAgentContext(input: ResourceAccessAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         SelectedDomainName: input.SelectedDomainName,
         ResourceTypeInput: input.ResourceTypeInput || null,
@@ -128,25 +150,30 @@ export function buildResourceAccessAgentContext(input: ResourceAccessAgentContex
         LastQueryLabel: input.LastQueryLabel,
         GranteeCount: input.GranteeCount,
         IsLoading: input.IsLoading,
-        AvailableDomains: capPermissionsList(input.AvailableDomainNames),
+        AvailableDomains: CapPermissionsList(input.AvailableDomainNames),
     };
     if (input.AvailableDomainNames.length > PERMISSIONS_CONTEXT_LIST_CAP) {
         context['AvailableDomainCount'] = input.AvailableDomainNames.length;
     }
     if (input.ResourceTypes.length > 0) {
-        context['ResourceTypes'] = capPermissionsList(input.ResourceTypes);
+        context['ResourceTypes'] = CapPermissionsList(input.ResourceTypes);
         if (input.ResourceTypes.length > PERMISSIONS_CONTEXT_LIST_CAP) {
             context['ResourceTypeCount'] = input.ResourceTypes.length;
         }
     }
     if (input.GranteeNames.length > 0) {
-        context['GranteeNames'] = capPermissionsList(input.GranteeNames);
+        context['GranteeNames'] = CapPermissionsList(input.GranteeNames);
         if (input.GranteeNames.length > PERMISSIONS_CONTEXT_LIST_CAP) {
             // GranteeCount already reports the true total; this flag makes truncation explicit.
             context['GranteeNamesTruncated'] = true;
         }
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildResourceAccessAgentContext}. */
+export function buildResourceAccessAgentContext(input: ResourceAccessAgentContextInput): Record<string, unknown> {
+    return BuildResourceAccessAgentContext(input);
 }
 
 // ===================================================================================
@@ -185,20 +212,20 @@ export interface UserAccessAgentContextInput {
 }
 
 /** Build the agent-visible context object for the User Access surface. */
-export function buildUserAccessAgentContext(input: UserAccessAgentContextInput): Record<string, unknown> {
+export function BuildUserAccessAgentContext(input: UserAccessAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         SelectedUserId: input.SelectedUserId,
         SelectedUserName: input.SelectedUserName,
         DomainGroupCount: input.DomainSummaries.length,
         TotalAccessibleResourceCount: input.TotalResourceCount,
         IsLoadingPermissions: input.IsLoadingPermissions,
-        AvailableUsers: capPermissionsList(input.AvailableUserNames),
+        AvailableUsers: CapPermissionsList(input.AvailableUserNames),
     };
     if (input.AvailableUserCount > input.AvailableUserNames.length || input.AvailableUserNames.length > PERMISSIONS_CONTEXT_LIST_CAP) {
         context['AvailableUserCount'] = Math.max(input.AvailableUserCount, input.AvailableUserNames.length);
     }
     if (input.SelectedUserRoles.length > 0) {
-        context['SelectedUserRoles'] = capPermissionsList(input.SelectedUserRoles);
+        context['SelectedUserRoles'] = CapPermissionsList(input.SelectedUserRoles);
         if (input.SelectedUserRoles.length > PERMISSIONS_CONTEXT_LIST_CAP) {
             context['SelectedUserRoleCount'] = input.SelectedUserRoles.length;
         }
@@ -208,13 +235,18 @@ export function buildUserAccessAgentContext(input: UserAccessAgentContextInput):
             DomainName: d.DomainName,
             ResourceCount: d.ResourceCount,
             Expanded: d.Expanded,
-            ResourceNames: capPermissionsList(d.ResourceNames),
+            ResourceNames: CapPermissionsList(d.ResourceNames),
             ResourceNamesTruncated: d.ResourceNames.length > PERMISSIONS_CONTEXT_LIST_CAP,
         }));
         const expanded = input.DomainSummaries.filter((d) => d.Expanded).map((d) => d.DomainName);
-        context['ExpandedDomains'] = capPermissionsList(expanded);
+        context['ExpandedDomains'] = CapPermissionsList(expanded);
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildUserAccessAgentContext}. */
+export function buildUserAccessAgentContext(input: UserAccessAgentContextInput): Record<string, unknown> {
+    return BuildUserAccessAgentContext(input);
 }
 
 // ===================================================================================
@@ -265,7 +297,7 @@ export interface AuditLogAgentContextInput {
 }
 
 /** Build the agent-visible context object for the Audit Log surface. */
-export function buildAuditLogAgentContext(input: AuditLogAgentContextInput): Record<string, unknown> {
+export function BuildAuditLogAgentContext(input: AuditLogAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         DomainFilter: input.DomainFilter || null,
         UserFilter: input.UserFilter || null,
@@ -276,8 +308,8 @@ export function buildAuditLogAgentContext(input: AuditLogAgentContextInput): Rec
         IsLoading: input.IsLoading,
         HasRunQuery: input.HasRunQuery,
         HasActiveFilters: Boolean(input.DomainFilter || input.UserFilter || input.StartDate || input.EndDate),
-        AvailableDomains: capPermissionsList(input.AvailableDomainNames),
-        AvailableUsers: capPermissionsList(input.AvailableUserNames),
+        AvailableDomains: CapPermissionsList(input.AvailableDomainNames),
+        AvailableUsers: CapPermissionsList(input.AvailableUserNames),
     };
     if (input.AvailableDomainNames.length > PERMISSIONS_CONTEXT_LIST_CAP) {
         context['AvailableDomainCount'] = input.AvailableDomainNames.length;
@@ -292,4 +324,9 @@ export function buildAuditLogAgentContext(input: AuditLogAgentContextInput): Rec
         }
     }
     return context;
+}
+
+/** @deprecated Use {@link BuildAuditLogAgentContext}. */
+export function buildAuditLogAgentContext(input: AuditLogAgentContextInput): Record<string, unknown> {
+    return BuildAuditLogAgentContext(input);
 }

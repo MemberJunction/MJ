@@ -52,14 +52,14 @@
           [class.active]="!isInProgressAIMessage && isAgentRunActive"
           [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete'"
           [class.failed]="messageStatus === 'Error'"
-          [class.checking]="livenessState === 'checking'"
-          [class.stalled]="livenessState === 'stalled'"
-          [title]="livenessState === 'stalled' ? 'No progress reported for several minutes' : (livenessState === 'checking' ? 'No recent progress — re-checking' : '')">
-          <i class="fas" [ngClass]="livenessState === 'live' ? 'fa-clock' : 'fa-exclamation-triangle'"></i>
+          [class.checking]="LivenessState === 'checking'"
+          [class.stalled]="LivenessState === 'stalled'"
+          [title]="LivenessState === 'stalled' ? 'No progress reported for several minutes' : (LivenessState === 'checking' ? 'No recent progress — re-checking' : '')">
+          <i class="fas" [ngClass]="LivenessState === 'live' ? 'fa-clock' : 'fa-exclamation-triangle'"></i>
           {{ timePillText }}
-          @if (livenessState === 'checking') {
+          @if (LivenessState === 'checking') {
             <span class="liveness-label">checking…</span>
-          } @else if (livenessState === 'stalled') {
+          } @else if (LivenessState === 'stalled') {
             <span class="liveness-label">no response</span>
           }
         </span>

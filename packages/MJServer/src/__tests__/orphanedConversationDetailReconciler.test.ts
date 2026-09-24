@@ -40,7 +40,7 @@ vi.mock('@memberjunction/core', () => {
     return { LogError: vi.fn(), LogStatus: vi.fn(), RunView: MockRunView };
 });
 
-import { reconcileOrphanedConversationDetails, ORPHAN_DETAIL_GRACE_MS } from '../generic/OrphanedConversationDetailReconciler.js';
+import { ReconcileOrphanedConversationDetails, ORPHAN_DETAIL_GRACE_MS } from '../generic/OrphanedConversationDetailReconciler.js';
 
 const USER = { ID: 'U1' } as unknown as UserInfo;
 const CONVERSATION_ID = 'C1';
@@ -88,7 +88,7 @@ function script(details: unknown[], runs: unknown[], ownerId: string | null = 'O
 const longAgo = () => new Date(Date.now() - ORPHAN_DETAIL_GRACE_MS - 60_000).toISOString();
 const justNow = () => new Date().toISOString();
 
-describe('reconcileOrphanedConversationDetails', () => {
+describe('ReconcileOrphanedConversationDetails', () => {
     // Block body, NOT a concise arrow: `mockReset()` returns the mock, which is callable, and
     // vitest treats a function returned from beforeEach as a teardown hook — so a concise arrow
     // hands vitest the mock itself to invoke with no arguments after every test.
@@ -102,7 +102,7 @@ describe('reconcileOrphanedConversationDetails', () => {
         const d = detail();
         script([d], [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo(), ErrorMessage: 'watchdog force-fail' }]);
 
-        const closed = await reconcileOrphanedConversationDetails(PROVIDER, USER);
+        const closed = await ReconcileOrphanedConversationDetails(PROVIDER, USER);
 
         expect(closed).toBe(1);
         expect(writableStore.last?.Status).toBe('Error');
@@ -112,7 +112,7 @@ describe('reconcileOrphanedConversationDetails', () => {
     it('falls back to a failure marker only when the failed run carries no error text', async () => {
         script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo() }]);
 
-        await reconcileOrphanedConversationDetails(PROVIDER, USER);
+        await ReconcileOrphanedConversationDetails(PROVIDER, USER);
 
         expect(writableStore.last?.Status).toBe('Error');
         expect(writableStore.last?.Message).toBe('❌ Failed');
@@ -122,7 +122,7 @@ describe('reconcileOrphanedConversationDetails', () => {
         const d = detail();
         script([d], [{ ConversationDetailID: DETAIL_ID, Status: 'Completed', CompletedAt: longAgo() }]);
 
-        await reconcileOrphanedConversationDetails(PROVIDER, USER);
+        await ReconcileOrphanedConversationDetails(PROVIDER, USER);
 
         expect(writableStore.last?.Status).toBe('Complete');
         // A successful run has no error to report, so an empty message stays empty rather than
@@ -134,7 +134,7 @@ describe('reconcileOrphanedConversationDetails', () => {
         const d = detail();
         script([d], [{ ConversationDetailID: DETAIL_ID, Status: 'Running', CompletedAt: null }]);
 
-        expect(await reconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
+        expect(await ReconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
         expect(mockGetEntityObject).not.toHaveBeenCalled();
     });
 
@@ -142,7 +142,7 @@ describe('reconcileOrphanedConversationDetails', () => {
         const d = detail();
         script([d], [{ ConversationDetailID: DETAIL_ID, Status: 'Completed', CompletedAt: justNow() }]);
 
-        expect(await reconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
+        expect(await ReconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
         expect(mockGetEntityObject).not.toHaveBeenCalled();
     });
 
@@ -150,7 +150,7 @@ describe('reconcileOrphanedConversationDetails', () => {
         const d = detail();
         script([d], []);
 
-        expect(await reconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
+        expect(await ReconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
         expect(mockGetEntityObject).not.toHaveBeenCalled();
     });
 
@@ -162,7 +162,7 @@ describe('reconcileOrphanedConversationDetails', () => {
             { ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo() },
         ]);
 
-        expect(await reconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
+        expect(await ReconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
     });
 
     it('preserves an existing message rather than overwriting the answer', async () => {
@@ -173,7 +173,7 @@ describe('reconcileOrphanedConversationDetails', () => {
             return w;
         });
 
-        await reconcileOrphanedConversationDetails(PROVIDER, USER);
+        await ReconcileOrphanedConversationDetails(PROVIDER, USER);
 
         // The loaded record already carries the answer; only the status should change.
         expect(writableStore.last?.Message).toBe('the real answer');
@@ -184,7 +184,7 @@ describe('reconcileOrphanedConversationDetails', () => {
         script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo() }]);
         mockGetEntityObject.mockImplementation(async () => writable(false));
 
-        expect(await reconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
+        expect(await ReconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
     });
 
     it('writes as the conversation OWNER, never as the calling system user', async () => {
@@ -194,7 +194,7 @@ describe('reconcileOrphanedConversationDetails', () => {
         // system user this pass runs as owns nothing, which is exactly who that gate stops.
         script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo() }]);
 
-        await reconcileOrphanedConversationDetails(PROVIDER, USER);
+        await ReconcileOrphanedConversationDetails(PROVIDER, USER);
 
         expect(mockGetEntityObject).toHaveBeenCalledWith(
             'MJ: Conversation Details',
@@ -205,18 +205,18 @@ describe('reconcileOrphanedConversationDetails', () => {
     it('leaves the detail alone when no owner can be resolved', async () => {
         script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'Failed', CompletedAt: longAgo() }], null);
 
-        expect(await reconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
+        expect(await ReconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
         expect(mockGetEntityObject).not.toHaveBeenCalled();
     });
 
     it('never throws out of a maintenance pass', async () => {
         mockRunView.mockImplementation(async () => { throw new Error('db down'); });
 
-        await expect(reconcileOrphanedConversationDetails(PROVIDER, USER)).resolves.toBe(0);
+        await expect(ReconcileOrphanedConversationDetails(PROVIDER, USER)).resolves.toBe(0);
     });
 
     it('does nothing when no message is in progress', async () => {
         script([], []);
-        expect(await reconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
+        expect(await ReconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
     });
 });

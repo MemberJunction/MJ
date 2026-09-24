@@ -49,7 +49,7 @@ function createHarness(opts: {
   const emitted: string[] = [];
 
   open.message = { ID: 'MSG-1', Status: opts.status ?? 'In-Progress', Role: 'AI' };
-  open.agentRun =
+  open.AgentRun =
     opts.heartbeatAgeMs === null
       ? { ID: 'RUN-1', Status: opts.runStatus ?? 'Running' }
       : {
@@ -73,16 +73,16 @@ function createHarness(opts: {
   // and stub only the formatting helpers it reaches for.
   open.formatElapsedTime = vi.fn(() => '0:00');
   open.formatDurationFromMs = vi.fn(() => '0:00');
-  open.livenessCheckRequested = { emit: (id: string) => emitted.push(id) };
-  // `isAIMessage` is a getter on the prototype chain; the harness pins it directly.
-  Object.defineProperty(component, 'isAIMessage', { value: true, configurable: true });
+  open.LivenessCheckRequested = { emit: (id: string) => emitted.push(id) };
+  // `IsAIMessage` is a getter on the prototype chain; the harness pins it directly.
+  Object.defineProperty(component, 'IsAIMessage', { value: true, configurable: true });
 
   return { component, open, emitted };
 }
 
 function stateAfterCheck(h: Harness): MessageLivenessState {
   h.component.ngDoCheck();
-  return h.component.livenessState;
+  return h.component.LivenessState;
 }
 
 describe('MessageItemComponent liveness state', () => {
@@ -202,12 +202,12 @@ describe('MessageItemComponent liveness on the timer tick', () => {
    */
   const tick = (h: Harness): MessageLivenessState => {
     (h.open.updateTimers as () => void).call(h.component);
-    return h.component.livenessState;
+    return h.component.LivenessState;
   };
 
   it('degrades on a timer tick with no change-detection pass at all', () => {
     const h = createHarness({ heartbeatAgeMs: LIVENESS_CHECKING_MS + 1_000 });
-    expect(h.component.livenessState).toBe('live'); // nothing has run yet
+    expect(h.component.LivenessState).toBe('live'); // nothing has run yet
 
     expect(tick(h)).toBe('checking');
   });

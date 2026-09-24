@@ -28,4 +28,4 @@ export {
   type AgentRoomSession,
 } from './livekit-agent-room-coordinator';
 
-export { LiveKitEgressService, wsToHttpUrl, type EgressClientLike, type StartRecordingParams, type RecordingInfo } from './livekit-egress-service';
+export { LiveKitEgressService, WsToHttpUrl, wsToHttpUrl, type EgressClientLike, type StartRecordingParams, type RecordingInfo } from './livekit-egress-service';

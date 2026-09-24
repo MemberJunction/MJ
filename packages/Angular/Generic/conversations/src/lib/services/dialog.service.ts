@@ -69,7 +69,7 @@ export class DialogService {
    * Show a confirmation dialog
    * @returns Promise<boolean> - true if user clicked OK, false if cancelled
    */
-  confirm(options: ConfirmDialogOptions): Promise<boolean> {
+  Confirm(options: ConfirmDialogOptions): Promise<boolean> {
     return new Promise((resolve) => {
       const dialogRef = this.mjDialogService.open({
         title: options.title,
@@ -100,10 +100,15 @@ export class DialogService {
     });
   }
 
+  /** @deprecated Use {@link Confirm}. */
+  confirm(options: ConfirmDialogOptions): Promise<boolean> {
+    return this.Confirm(options);
+  }
+
   /**
    * Show an alert dialog
    */
-  alert(title: string, message: string, okText: string = 'OK'): Promise<void> {
+  Alert(title: string, message: string, okText: string = 'OK'): Promise<void> {
     return new Promise((resolve) => {
       const dialogRef = this.mjDialogService.open({
         title: title,
@@ -124,6 +129,11 @@ export class DialogService {
     });
   }
 
+  /** @deprecated Use {@link Alert}. */
+  alert(title: string, message: string, okText: string = 'OK'): Promise<void> {
+    return this.Alert(title, message, okText);
+  }
+
   /**
    * Show an input dialog
    * @returns Promise<string | {value: string; secondValue?: string} | null> -
@@ -131,7 +141,7 @@ export class DialogService {
    *          If dual input: returns object with both values
    *          Returns null if cancelled
    */
-  input(options: InputDialogOptions): Promise<string | {value: string; secondValue?: string} | null> {
+  Input(options: InputDialogOptions): Promise<string | {value: string; secondValue?: string} | null> {
     return new Promise((resolve) => {
       const dialogRef = this.mjDialogService.open({
         title: options.title,
@@ -197,11 +207,16 @@ export class DialogService {
     });
   }
 
+  /** @deprecated Use {@link Input}. */
+  input(options: InputDialogOptions): Promise<string | {value: string; secondValue?: string} | null> {
+    return this.Input(options);
+  }
+
   /**
    * Show a rating dialog (1-10 + free-form comments).
    * @returns Promise<RatingDialogResult | null> — null if cancelled or no rating selected.
    */
-  rating(options: RatingDialogOptions = {}): Promise<RatingDialogResult | null> {
+  Rating(options: RatingDialogOptions = {}): Promise<RatingDialogResult | null> {
     return new Promise((resolve) => {
       const okText = options.okText || 'Submit';
       const cancelText = options.cancelText || 'Cancel';
@@ -243,10 +258,15 @@ export class DialogService {
     });
   }
 
+  /** @deprecated Use {@link Rating}. */
+  rating(options: RatingDialogOptions = {}): Promise<RatingDialogResult | null> {
+    return this.Rating(options);
+  }
+
   /**
    * Show a custom dialog with custom content and actions
    */
-  custom(title: string, content: string, buttons: DialogButton[], width: number = 500): MJDialogRef {
+  Custom(title: string, content: string, buttons: DialogButton[], width: number = 500): MJDialogRef {
     const actions = buttons.map(btn => ({
       text: btn.text,
       primary: btn.primary || false
@@ -271,5 +291,10 @@ export class DialogService {
     });
 
     return dialogRef;
+  }
+
+  /** @deprecated Use {@link Custom}. */
+  custom(title: string, content: string, buttons: DialogButton[], width: number = 500): MJDialogRef {
+    return this.Custom(title, content, buttons, width);
   }
 }

@@ -29,7 +29,7 @@ export class ActionGalleryDialogService {
    * @param viewContainerRef Optional ViewContainerRef for proper positioning
    * @returns Observable that emits the selected action when confirmed
    */
-  openForSingleSelection(
+  OpenForSingleSelection(
     config: ActionGalleryDialogConfig = {},
     viewContainerRef?: ViewContainerRef
   ): Observable<MJActionEntity | null> {
@@ -60,13 +60,21 @@ export class ActionGalleryDialogService {
     return resultSubject.asObservable();
   }
 
+  /** @deprecated Use {@link OpenForSingleSelection}. */
+  openForSingleSelection(
+    config: ActionGalleryDialogConfig = {},
+    viewContainerRef?: ViewContainerRef
+  ): Observable<MJActionEntity | null> {
+    return this.OpenForSingleSelection(config, viewContainerRef);
+  }
+
   /**
    * Opens the Action Gallery in a dialog for multiple selection
    * @param config Configuration for the gallery
    * @param viewContainerRef Optional ViewContainerRef for proper positioning
    * @returns Observable that emits the selected actions when confirmed
    */
-  openForMultiSelection(
+  OpenForMultiSelection(
     config: ActionGalleryDialogConfig = {},
     viewContainerRef?: ViewContainerRef
   ): Observable<MJActionEntity[]> {
@@ -97,12 +105,20 @@ export class ActionGalleryDialogService {
     return resultSubject.asObservable();
   }
 
+  /** @deprecated Use {@link OpenForMultiSelection}. */
+  openForMultiSelection(
+    config: ActionGalleryDialogConfig = {},
+    viewContainerRef?: ViewContainerRef
+  ): Observable<MJActionEntity[]> {
+    return this.OpenForMultiSelection(config, viewContainerRef);
+  }
+
   /**
    * Opens the Action Gallery in a dialog for browsing only (no selection)
    * @param config Configuration for the gallery
    * @param viewContainerRef Optional ViewContainerRef for proper positioning
    */
-  openForBrowsing(
+  OpenForBrowsing(
     config: ActionGalleryDialogConfig = {},
     viewContainerRef?: ViewContainerRef
   ): void {
@@ -135,21 +151,39 @@ export class ActionGalleryDialogService {
     });
   }
 
+  /** @deprecated Use {@link OpenForBrowsing}. */
+  openForBrowsing(
+    config: ActionGalleryDialogConfig = {},
+    viewContainerRef?: ViewContainerRef
+  ): void {
+    return this.OpenForBrowsing(config, viewContainerRef);
+  }
+
   /**
    * Closes the currently open dialog
    */
-  close(): void {
+  Close(): void {
     if (this.dialogRef) {
       this.dialogRef.Close();
       this.dialogRef = null;
     }
   }
 
+  /** @deprecated Use {@link Close}. */
+  close(): void {
+    return this.Close();
+  }
+
   /**
    * Checks if a dialog is currently open
    */
-  isOpen(): boolean {
+  IsOpen(): boolean {
     return this.dialogRef !== null;
+  }
+
+  /** @deprecated Use {@link IsOpen}. */
+  isOpen(): boolean {
+    return this.IsOpen();
   }
 
   private openDialog(

@@ -26,86 +26,86 @@ export const TASK_GRAPH_FRAMES_TOPIC = 'TASK_GRAPH_FRAMES';
 @ObjectType()
 export class TaskGraphFrameNotification {
   @Field(() => String)
-  kind!: string;
+  kind!: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => ID)
-  parentTaskId!: string;
+  parentTaskId!: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => ID, { nullable: true })
-  taskId?: string;
+  taskId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  taskName?: string;
+  taskName?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  status?: string;
+  status?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  errorMessage?: string;
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => ID, { nullable: true })
-  assignedUserId?: string;
+  assignedUserId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Number, { nullable: true })
-  completedCount?: number;
+  completedCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Number, { nullable: true })
-  totalCount?: number;
+  totalCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   // ── GateDecision ──────────────────────────────────────────────────────────
   @Field(() => ID, { nullable: true })
-  edgeId?: string;
+  edgeId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => ID, { nullable: true })
-  dependsOnTaskId?: string;
+  dependsOnTaskId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** 'satisfied' | 'notTaken' | 'held' */
   @Field(() => String, { nullable: true })
-  verdict?: string;
+  verdict?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  conditionText?: string;
+  conditionText?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  reason?: string;
+  reason?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   // ── ClaimChanged ──────────────────────────────────────────────────────────
   /** 'claimed' | 'heartbeat-lost' | 'reclaimed' */
   @Field(() => String, { nullable: true })
-  claimEvent?: string;
+  claimEvent?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  claimedBy?: string;
+  claimedBy?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => String, { nullable: true })
-  claimExpiresAt?: string;
+  claimExpiresAt?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   // ── PassCompleted ─────────────────────────────────────────────────────────
   @Field(() => Number, { nullable: true })
-  passNumber?: number;
+  passNumber?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Number, { nullable: true })
-  eligibleCount?: number;
+  eligibleCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Number, { nullable: true })
-  heldCount?: number;
+  heldCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Number, { nullable: true })
-  claimedCount?: number;
+  claimedCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   /** The dispatcher instance's own load across every graph — not this graph's in-flight count. */
   @Field(() => Number, { nullable: true })
-  instanceInFlightCount?: number;
+  instanceInFlightCount?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   // ── NodeProgress ──────────────────────────────────────────────────────────
   @Field(() => String, { nullable: true })
-  progressMessage?: string;
+  progressMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Number, { nullable: true })
-  progressPercent?: number;
+  progressPercent?: number;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field(() => Date)
-  date!: Date;
+  date!: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -137,7 +137,7 @@ export interface TaskGraphFrameFilterContext {
  * another user's workflow — including its per-step error messages. **Fails closed** — a missing
  * identity on either side never matches.
  */
-export function taskGraphFrameFilter(data: {
+export function TaskGraphFrameFilter(data: {
   payload: TaskGraphFramePayload;
   args: TaskGraphFrameArgs;
   context: TaskGraphFrameFilterContext | undefined;
@@ -154,6 +154,15 @@ export function taskGraphFrameFilter(data: {
     return false; // fail closed
   }
   return UUIDsEqual(payload.ownerUserId, connectionUserId);
+}
+
+/** @deprecated Use {@link TaskGraphFrameFilter}. */
+export function taskGraphFrameFilter(data: {
+  payload: TaskGraphFramePayload;
+  args: TaskGraphFrameArgs;
+  context: TaskGraphFrameFilterContext | undefined;
+}): boolean {
+  return TaskGraphFrameFilter(data);
 }
 
 /**
@@ -189,9 +198,9 @@ export class TaskGraphFrameResolver {
   @Subscription(() => TaskGraphFrameNotification, {
     topics: TASK_GRAPH_FRAMES_TOPIC,
     filter: (data: ResolverFilterData<TaskGraphFramePayload, TaskGraphFrameArgs, TaskGraphFrameFilterContext>) =>
-      taskGraphFrameFilter(data),
+      TaskGraphFrameFilter(data),
   })
-  taskGraphFrames(
+  taskGraphFrames(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     @Root() payload: TaskGraphFramePayload,
     @Arg('parentTaskId', () => ID) parentTaskId: string
   ): TaskGraphFrameNotification {

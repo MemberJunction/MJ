@@ -87,7 +87,7 @@ describe('EntityCardsComponent — selection-only updates (Fix A)', () => {
   });
 
   it('selection-only change flips the correct isSelected flag WITHOUT re-running highlightMatch', () => {
-    const highlightSpy = vi.spyOn(component, 'highlightMatch');
+    const highlightSpy = vi.spyOn(component, 'HighlightMatch');
 
     const targetPk = pk(1);
     component.selectedRecordId = targetPk;
@@ -125,7 +125,7 @@ describe('EntityCardsComponent — selection-only updates (Fix A)', () => {
 
   it('a records change DOES rebuild the VMs (new array + highlightMatch runs)', () => {
     const arrayBefore = component.cardViewModels;
-    const highlightSpy = vi.spyOn(component, 'highlightMatch');
+    const highlightSpy = vi.spyOn(component, 'HighlightMatch');
 
     component.records = [
       { ID: 'x', Name: 'Xray' },
@@ -140,7 +140,7 @@ describe('EntityCardsComponent — selection-only updates (Fix A)', () => {
   });
 
   it('a combined records+selectedRecordId change rebuilds and sets selection correctly', () => {
-    const highlightSpy = vi.spyOn(component, 'highlightMatch');
+    const highlightSpy = vi.spyOn(component, 'HighlightMatch');
     component.records = [
       { ID: 'x', Name: 'Xray' },
       { ID: 'y', Name: 'Yankee' },

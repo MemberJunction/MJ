@@ -531,8 +531,8 @@
                 <div class="adv-lab"><span class="step-num esc">3</span>Custom CSS<span class="esc-tag">escape hatch</span></div>
                 <p class="sub">Only for what tokens can't express. Appended to the theme overlay, auto-scoped to this theme. <code>&#64;import</code> is not supported and is removed on save.</p>
                 <div class="sel-chips">
-                  @for (s of chromeSelectorInfo; track s.selector) {
-                    <button type="button" class="sel-chip" [title]="s.description" (click)="insertChromeSelector(s.selector)">{{ s.selector }}</button>
+                  @for (s of chromeSelectorInfo; track s.Selector) {
+                    <button type="button" class="sel-chip" [title]="s.Description" (click)="insertChromeSelector(s.Selector)">{{ s.Selector }}</button>
                   }
                 </div>
                 <div class="css-tools">

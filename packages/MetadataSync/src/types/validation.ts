@@ -34,11 +34,11 @@ export interface ValidationWarning {
 }
 
 export interface ValidationSummary {
-    totalFiles: number;
-    totalEntities: number;
-    totalErrors: number;
-    totalWarnings: number;
-    fileResults: Map<string, FileValidationResult>;
+    totalFiles: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    totalEntities: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    totalErrors: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    totalWarnings: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    fileResults: Map<string, FileValidationResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -47,11 +47,16 @@ export interface ValidationSummary {
 export class ValidationErrorClass extends Error {
     public readonly type: ValidationError['type'];
     public readonly severity: ValidationError['severity'];
-    public readonly file: string;
+    public readonly File: string;
+
+    /** @deprecated Use {@link File}. */
+    public get file(): string {
+        return this.File;
+    }
     public readonly entity?: string;
     public readonly field?: string;
     public readonly suggestion?: string;
-    public readonly line?: number;
+    public readonly line?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     public readonly column?: number;
     
     constructor(error: ValidationError) {
@@ -59,7 +64,7 @@ export class ValidationErrorClass extends Error {
         this.name = 'ValidationError';
         this.type = error.type;
         this.severity = error.severity;
-        this.file = error.file;
+        this.File = error.file;
         this.entity = error.entity;
         this.field = error.field;
         this.suggestion = error.suggestion;
@@ -77,7 +82,7 @@ export class ValidationErrorClass extends Error {
     /**
      * Get formatted error message with location info
      */
-    getFormattedMessage(): string {
+    GetFormattedMessage(): string {
         let msg = this.message;
         if (this.line) {
             msg += ` (line ${this.line}`;
@@ -88,6 +93,11 @@ export class ValidationErrorClass extends Error {
         }
         return msg;
     }
+
+    /** @deprecated Use {@link GetFormattedMessage}. */
+    getFormattedMessage(): string {
+        return this.GetFormattedMessage();
+    }
 }
 
 /**
@@ -96,11 +106,16 @@ export class ValidationErrorClass extends Error {
 export class ValidationWarningClass extends Error {
     public readonly type: ValidationWarning['type'];
     public readonly severity: ValidationWarning['severity'];
-    public readonly file: string;
+    public readonly File: string;
+
+    /** @deprecated Use {@link File}. */
+    public get file(): string {
+        return this.File;
+    }
     public readonly entity?: string;
     public readonly field?: string;
     public readonly suggestion?: string;
-    public readonly line?: number;
+    public readonly line?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     public readonly column?: number;
     
     constructor(warning: ValidationWarning) {
@@ -108,7 +123,7 @@ export class ValidationWarningClass extends Error {
         this.name = 'ValidationWarning';
         this.type = warning.type;
         this.severity = warning.severity;
-        this.file = warning.file;
+        this.File = warning.file;
         this.entity = warning.entity;
         this.field = warning.field;
         this.suggestion = warning.suggestion;
@@ -126,7 +141,7 @@ export class ValidationWarningClass extends Error {
     /**
      * Get formatted warning message with location info
      */
-    getFormattedMessage(): string {
+    GetFormattedMessage(): string {
         let msg = this.message;
         if (this.line) {
             msg += ` (line ${this.line}`;
@@ -136,6 +151,11 @@ export class ValidationWarningClass extends Error {
             msg += ')';
         }
         return msg;
+    }
+
+    /** @deprecated Use {@link GetFormattedMessage}. */
+    getFormattedMessage(): string {
+        return this.GetFormattedMessage();
     }
 }
 

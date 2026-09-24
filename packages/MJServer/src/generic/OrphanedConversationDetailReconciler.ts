@@ -39,7 +39,7 @@ const TERMINAL_RUN_STATUSES = ['Completed', 'Failed', 'Cancelled'];
  *
  * @returns How many details were closed.
  */
-export async function reconcileOrphanedConversationDetails(
+export async function ReconcileOrphanedConversationDetails(
     provider: IMetadataProvider,
     contextUser: UserInfo,
     graceMs: number = ORPHAN_DETAIL_GRACE_MS

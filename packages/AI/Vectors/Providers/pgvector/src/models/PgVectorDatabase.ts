@@ -86,7 +86,7 @@ export class PgVectorDatabase extends VectorDBBase {
     //  Connection management
     // ----------------------------------------------------------------
 
-    private GetPool(): pg.Pool {
+    private getPool(): pg.Pool {
         if (!this._pool) {
             this._pool = new Pool({
                 host: this._config.Host,
@@ -101,17 +101,17 @@ export class PgVectorDatabase extends VectorDBBase {
     }
 
     /** Qualified table name including schema */
-    private QualifyTable(tableName: string): string {
+    private qualifyTable(tableName: string): string {
         return `"${this._config.Schema}"."${tableName}"`;
     }
 
     /** Ensure the pgvector extension and our internal registry table exist */
-    private async EnsureInfrastructure(): Promise<void> {
-        const pool = this.GetPool();
+    private async ensureInfrastructure(): Promise<void> {
+        const pool = this.getPool();
         await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
         await pool.query(`CREATE SCHEMA IF NOT EXISTS "${this._config.Schema}"`);
         await pool.query(`
-            CREATE TABLE IF NOT EXISTS ${this.QualifyTable(INDEX_REGISTRY_TABLE)} (
+            CREATE TABLE IF NOT EXISTS ${this.qualifyTable(INDEX_REGISTRY_TABLE)} (
                 name TEXT PRIMARY KEY,
                 dimension INTEGER NOT NULL,
                 metric TEXT NOT NULL DEFAULT 'cosine',
@@ -136,10 +136,10 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async ListIndexes(): Promise<IndexList> {
         try {
-            await this.EnsureInfrastructure();
-            const pool = this.GetPool();
+            await this.ensureInfrastructure();
+            const pool = this.getPool();
             const result = await pool.query<{ name: string; dimension: number; metric: string }>(
-                `SELECT name, dimension, metric FROM ${this.QualifyTable(INDEX_REGISTRY_TABLE)} ORDER BY name`
+                `SELECT name, dimension, metric FROM ${this.qualifyTable(INDEX_REGISTRY_TABLE)} ORDER BY name`
             );
             const indexes: IndexDescription[] = result.rows.map((row) => ({
                 name: row.name,
@@ -165,10 +165,10 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async GetIndex(params: BaseRequestParams): Promise<BaseResponse> {
         try {
-            await this.EnsureInfrastructure();
-            const pool = this.GetPool();
+            await this.ensureInfrastructure();
+            const pool = this.getPool();
             const result = await pool.query(
-                `SELECT name, dimension, metric FROM ${this.QualifyTable(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
+                `SELECT name, dimension, metric FROM ${this.qualifyTable(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
                 [params.id]
             );
             if (result.rows.length === 0) {
@@ -209,15 +209,15 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async CreateIndex(params: CreateIndexParams): Promise<BaseResponse> {
         try {
-            await this.EnsureInfrastructure();
-            const pool = this.GetPool();
+            await this.ensureInfrastructure();
+            const pool = this.getPool();
             const tableName = params.id;
             const dimension = params.dimension;
             const metric = params.metric || 'cosine';
 
             // Create the vector table
             await pool.query(`
-                CREATE TABLE IF NOT EXISTS ${this.QualifyTable(tableName)} (
+                CREATE TABLE IF NOT EXISTS ${this.qualifyTable(tableName)} (
                     id TEXT PRIMARY KEY,
                     embedding vector(${dimension}),
                     metadata JSONB DEFAULT '{}'::jsonb
@@ -229,7 +229,7 @@ export class PgVectorDatabase extends VectorDBBase {
             const indexName = `idx_${tableName}_embedding`;
             await pool.query(`
                 CREATE INDEX IF NOT EXISTS "${indexName}"
-                ON ${this.QualifyTable(tableName)}
+                ON ${this.qualifyTable(tableName)}
                 USING hnsw (embedding ${opsClass})
             `);
 
@@ -237,13 +237,13 @@ export class PgVectorDatabase extends VectorDBBase {
             const metadataIndexName = `idx_${tableName}_metadata`;
             await pool.query(`
                 CREATE INDEX IF NOT EXISTS "${metadataIndexName}"
-                ON ${this.QualifyTable(tableName)}
+                ON ${this.qualifyTable(tableName)}
                 USING gin (metadata)
             `);
 
             // Register in our index registry
             await pool.query(
-                `INSERT INTO ${this.QualifyTable(INDEX_REGISTRY_TABLE)} (name, dimension, metric)
+                `INSERT INTO ${this.qualifyTable(INDEX_REGISTRY_TABLE)} (name, dimension, metric)
                  VALUES ($1, $2, $3)
                  ON CONFLICT (name) DO UPDATE SET dimension = $2, metric = $3`,
                 [tableName, dimension, metric]
@@ -268,11 +268,11 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async DeleteIndex(params: BaseRequestParams): Promise<BaseResponse> {
         try {
-            await this.EnsureInfrastructure();
-            const pool = this.GetPool();
-            await pool.query(`DROP TABLE IF EXISTS ${this.QualifyTable(params.id)} CASCADE`);
+            await this.ensureInfrastructure();
+            const pool = this.getPool();
+            await pool.query(`DROP TABLE IF EXISTS ${this.qualifyTable(params.id)} CASCADE`);
             await pool.query(
-                `DELETE FROM ${this.QualifyTable(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
+                `DELETE FROM ${this.qualifyTable(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
                 [params.id]
             );
             return this.wrapSuccessResponse(null);
@@ -328,7 +328,7 @@ export class PgVectorDatabase extends VectorDBBase {
     // with the abstract signature added in @memberjunction/ai-vectordb v5.30+.
     public async QueryIndex(params: QueryOptions, _contextUser?: UserInfo): Promise<BaseResponse> {
         try {
-            const pool = this.GetPool();
+            const pool = this.getPool();
             const vector = 'vector' in params ? params.vector : null;
             const indexName = 'id' in params ? (params as { id: string }).id : null;
 
@@ -344,11 +344,11 @@ export class PgVectorDatabase extends VectorDBBase {
             const includeValues = params.includeValues === true;
 
             // Determine metric for this index to choose the right operator
-            const metric = await this.GetIndexMetric(indexName);
+            const metric = await this.getIndexMetric(indexName);
             const operator = METRIC_OPERATOR_MAP[metric] || '<=>';
 
             // Build metadata filter WHERE clause
-            const { whereClause, queryParams } = this.BuildFilterClause(params.filter, 2);
+            const { whereClause, queryParams } = this.buildFilterClause(params.filter, 2);
 
             // $1 is the vector, additional params start at $2
             const vectorParam = `[${vector.join(',')}]`;
@@ -363,7 +363,7 @@ export class PgVectorDatabase extends VectorDBBase {
 
             const sql = `
                 SELECT ${selectFields.join(', ')}
-                FROM ${this.QualifyTable(indexName)}
+                FROM ${this.qualifyTable(indexName)}
                 ${whereClause ? `WHERE ${whereClause}` : ''}
                 ORDER BY embedding ${operator} $1::vector
                 LIMIT ${topK}
@@ -374,8 +374,8 @@ export class PgVectorDatabase extends VectorDBBase {
             const matches: ScoredRecord[] = result.rows.map((row: Record<string, unknown>) => {
                 const record: ScoredRecord = {
                     id: row['id'] as string,
-                    values: includeValues ? this.ParseVectorString(row['embedding_text'] as string) : [],
-                    score: this.DistanceToScore(row['distance'] as number, metric),
+                    values: includeValues ? this.parseVectorString(row['embedding_text'] as string) : [],
+                    score: this.distanceToScore(row['distance'] as number, metric),
                 };
                 if (includeMetadata && row['metadata']) {
                     record.metadata = row['metadata'] as Record<string, string | boolean | number | string[]>;
@@ -413,7 +413,7 @@ export class PgVectorDatabase extends VectorDBBase {
         if (!indexName) {
             return this.wrapFailureResponse('indexName is required for CreateRecord');
         }
-        return this.UpsertRecords([record], indexName);
+        return this.upsertRecords([record], indexName);
     }
 
     /**
@@ -432,7 +432,7 @@ export class PgVectorDatabase extends VectorDBBase {
         if (!indexName) {
             return this.wrapFailureResponse('indexName is required for CreateRecords');
         }
-        return this.UpsertRecords(records, indexName);
+        return this.upsertRecords(records, indexName);
     }
 
     /**
@@ -446,7 +446,7 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async GetRecord(params: BaseRequestParams): Promise<BaseResponse> {
         try {
-            const pool = this.GetPool();
+            const pool = this.getPool();
             const indexName = params.data?.indexName as string;
             if (!indexName) {
                 return this.wrapFailureResponse('params.data.indexName is required');
@@ -454,7 +454,7 @@ export class PgVectorDatabase extends VectorDBBase {
 
             const result = await pool.query(
                 `SELECT id, embedding::text AS embedding_text, metadata
-                 FROM ${this.QualifyTable(indexName)}
+                 FROM ${this.qualifyTable(indexName)}
                  WHERE id = $1`,
                 [params.id]
             );
@@ -466,7 +466,7 @@ export class PgVectorDatabase extends VectorDBBase {
             const row = result.rows[0] as { id: string; embedding_text: string; metadata: Record<string, unknown> };
             const record: VectorRecord = {
                 id: row.id,
-                values: this.ParseVectorString(row.embedding_text),
+                values: this.parseVectorString(row.embedding_text),
                 metadata: row.metadata as Record<string, string | boolean | number | string[]>,
             };
             return this.wrapSuccessResponse(record);
@@ -489,7 +489,7 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async GetRecords(params: BaseRequestParams): Promise<BaseResponse> {
         try {
-            const pool = this.GetPool();
+            const pool = this.getPool();
             const indexName = params.data?.indexName as string;
             const ids = params.data?.ids as string[];
             if (!indexName) {
@@ -502,14 +502,14 @@ export class PgVectorDatabase extends VectorDBBase {
             const placeholders = ids.map((_: string, i: number) => `$${i + 1}`).join(', ');
             const result = await pool.query(
                 `SELECT id, embedding::text AS embedding_text, metadata
-                 FROM ${this.QualifyTable(indexName)}
+                 FROM ${this.qualifyTable(indexName)}
                  WHERE id IN (${placeholders})`,
                 ids
             );
 
             const records: VectorRecord[] = result.rows.map((row: Record<string, unknown>) => ({
                 id: row['id'] as string,
-                values: this.ParseVectorString(row['embedding_text'] as string),
+                values: this.parseVectorString(row['embedding_text'] as string),
                 metadata: row['metadata'] as Record<string, string | boolean | number | string[]>,
             }));
             return this.wrapSuccessResponse(records);
@@ -534,7 +534,7 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async UpdateRecord(record: UpdateOptions): Promise<BaseResponse> {
         try {
-            const pool = this.GetPool();
+            const pool = this.getPool();
             const indexName = (record as Record<string, unknown>)['indexName'] as string;
             if (!indexName) {
                 return this.wrapFailureResponse('indexName property is required on the UpdateOptions object');
@@ -561,7 +561,7 @@ export class PgVectorDatabase extends VectorDBBase {
 
             queryParams.push(record.id);
             await pool.query(
-                `UPDATE ${this.QualifyTable(indexName)}
+                `UPDATE ${this.qualifyTable(indexName)}
                  SET ${setClauses.join(', ')}
                  WHERE id = $${paramIndex}`,
                 queryParams
@@ -602,9 +602,9 @@ export class PgVectorDatabase extends VectorDBBase {
             return this.wrapFailureResponse('indexName is required for DeleteRecord');
         }
         try {
-            const pool = this.GetPool();
+            const pool = this.getPool();
             await pool.query(
-                `DELETE FROM ${this.QualifyTable(indexName)} WHERE id = $1`,
+                `DELETE FROM ${this.qualifyTable(indexName)} WHERE id = $1`,
                 [record.id]
             );
             return this.wrapSuccessResponse(null);
@@ -628,11 +628,11 @@ export class PgVectorDatabase extends VectorDBBase {
             return this.wrapFailureResponse('indexName is required for DeleteRecords');
         }
         try {
-            const pool = this.GetPool();
+            const pool = this.getPool();
             const ids = records.map((r) => r.id);
             const placeholders = ids.map((_: string, i: number) => `$${i + 1}`).join(', ');
             await pool.query(
-                `DELETE FROM ${this.QualifyTable(indexName)} WHERE id IN (${placeholders})`,
+                `DELETE FROM ${this.qualifyTable(indexName)} WHERE id IN (${placeholders})`,
                 ids
             );
             return this.wrapSuccessResponse(null);
@@ -654,8 +654,8 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async DeleteAllRecords(indexName: string, _namespace?: string): Promise<BaseResponse> {
         try {
-            const pool = this.GetPool();
-            await pool.query(`DELETE FROM ${this.QualifyTable(indexName)}`);
+            const pool = this.getPool();
+            await pool.query(`DELETE FROM ${this.qualifyTable(indexName)}`);
             return this.wrapSuccessResponse(null);
         }
         catch (ex) {
@@ -684,7 +684,7 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async ListVectorIDs(params: ListVectorIDsParams): Promise<ListVectorIDsResult> {
         try {
-            const pool = this.GetPool();
+            const pool = this.getPool();
             const limit = params.Limit ?? 100;
             const offset = params.PaginationToken ? parseInt(params.PaginationToken, 10) : 0;
 
@@ -703,7 +703,7 @@ export class PgVectorDatabase extends VectorDBBase {
             const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
 
             const result = await pool.query<{ id: string }>(
-                `SELECT id FROM ${this.QualifyTable(params.IndexName)}
+                `SELECT id FROM ${this.qualifyTable(params.IndexName)}
                  ${whereClause}
                  ORDER BY id
                  LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -776,9 +776,9 @@ export class PgVectorDatabase extends VectorDBBase {
     //  Private helpers
     // ----------------------------------------------------------------
 
-    private async UpsertRecords(records: VectorRecord[], indexName: string): Promise<BaseResponse> {
+    private async upsertRecords(records: VectorRecord[], indexName: string): Promise<BaseResponse> {
         try {
-            const pool = this.GetPool();
+            const pool = this.getPool();
             const client = await pool.connect();
             try {
                 await client.query('BEGIN');
@@ -786,7 +786,7 @@ export class PgVectorDatabase extends VectorDBBase {
                     const vectorStr = `[${record.values.join(',')}]`;
                     const metadataJson = record.metadata ? JSON.stringify(record.metadata) : '{}';
                     await client.query(
-                        `INSERT INTO ${this.QualifyTable(indexName)} (id, embedding, metadata)
+                        `INSERT INTO ${this.qualifyTable(indexName)} (id, embedding, metadata)
                          VALUES ($1, $2::vector, $3::jsonb)
                          ON CONFLICT (id) DO UPDATE
                          SET embedding = EXCLUDED.embedding,
@@ -815,11 +815,11 @@ export class PgVectorDatabase extends VectorDBBase {
      * Look up the distance metric for a given index from the registry table.
      * Falls back to 'cosine' if not found.
      */
-    private async GetIndexMetric(indexName: string): Promise<string> {
+    private async getIndexMetric(indexName: string): Promise<string> {
         try {
-            const pool = this.GetPool();
+            const pool = this.getPool();
             const result = await pool.query<{ metric: string }>(
-                `SELECT metric FROM ${this.QualifyTable(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
+                `SELECT metric FROM ${this.qualifyTable(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
                 [indexName]
             );
             return result.rows.length > 0 ? result.rows[0].metric : 'cosine';
@@ -838,7 +838,7 @@ export class PgVectorDatabase extends VectorDBBase {
      * @param startParamIndex The starting $N index for parameterized values
      * @returns An object with the WHERE clause string and the parameter values array
      */
-    private BuildFilterClause(
+    private buildFilterClause(
         filter: object | undefined,
         startParamIndex: number
     ): { whereClause: string; queryParams: unknown[] } {
@@ -908,7 +908,7 @@ export class PgVectorDatabase extends VectorDBBase {
     /**
      * Parse a pgvector text representation like "[0.1,0.2,0.3]" into a number array.
      */
-    private ParseVectorString(vectorStr: string): number[] {
+    private parseVectorString(vectorStr: string): number[] {
         if (!vectorStr) {
             return [];
         }
@@ -925,7 +925,7 @@ export class PgVectorDatabase extends VectorDBBase {
      * - Euclidean distance [0, inf) -> score via 1 / (1 + distance)
      * - Dot product: pgvector returns negative inner product, so negate it
      */
-    private DistanceToScore(distance: number, metric: string): number {
+    private distanceToScore(distance: number, metric: string): number {
         switch (metric) {
             case 'cosine':
                 return 1 - distance;

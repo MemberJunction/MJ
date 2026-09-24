@@ -86,7 +86,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 /** Applies one matcher to one value, returning why it failed rather than just that it did. */
-export function applyMatcher(matcher: ParamMatcher, value: unknown): { passed: boolean; detail?: string } {
+export function ApplyMatcher(matcher: ParamMatcher, value: unknown): { passed: boolean; detail?: string } {
     switch (matcher.kind) {
         case 'absent':
             return value === undefined || value === null
@@ -151,14 +151,24 @@ export function applyMatcher(matcher: ParamMatcher, value: unknown): { passed: b
     }
 }
 
+/** @deprecated Use {@link ApplyMatcher}. */
+export function applyMatcher(matcher: ParamMatcher, value: unknown): { passed: boolean; detail?: string } {
+    return ApplyMatcher(matcher, value);
+}
+
 /** Runs every expectation against one params object. */
-export function matchParams(expectations: ParamExpectation[], params: Record<string, unknown>): ParamMatchResult[] {
+export function MatchParams(expectations: ParamExpectation[], params: Record<string, unknown>): ParamMatchResult[] {
     return expectations.map((expectation) => {
         const value = params[expectation.param];
         if (expectation.optional && (value === undefined || value === null)) {
             return { param: expectation.param, matcherKind: expectation.matcher.kind, passed: true };
         }
-        const { passed, detail } = applyMatcher(expectation.matcher, value);
+        const { passed, detail } = ApplyMatcher(expectation.matcher, value);
         return { param: expectation.param, matcherKind: expectation.matcher.kind, passed, detail };
     });
+}
+
+/** @deprecated Use {@link MatchParams}. */
+export function matchParams(expectations: ParamExpectation[], params: Record<string, unknown>): ParamMatchResult[] {
+    return MatchParams(expectations, params);
 }

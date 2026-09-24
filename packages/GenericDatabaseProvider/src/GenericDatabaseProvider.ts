@@ -60,6 +60,8 @@ import {
     LogError,
     LogStatus,
     LogStatusEx,
+    PostCommitTask,
+    PostCommitToken,
     StripStopWords,
     DatabasePlatform,
     QueryExecutionSpec,
@@ -84,7 +86,7 @@ import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
-import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
+import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
 import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
@@ -103,6 +105,7 @@ import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
+import { TransactionFrameTracker } from './TransactionFrameTracker';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -119,6 +122,14 @@ export interface ExecuteSQLBatchOptions {
     isMutation?: boolean;
     /** Run on the pool even while an ambient transaction is open — see ExecuteSQLOptions.ignoreAmbientTransaction (#4514). */
     ignoreAmbientTransaction?: boolean;
+}
+
+/** A {@link GenericDatabaseProvider.RunAfterCommit} task waiting for the outermost commit. */
+interface PostCommitEntry {
+    Task: PostCommitTask;
+    Description: string;
+    /** Transaction frame that owns the entry (1 = outermost). */
+    Depth: number;
 }
 
 /**
@@ -493,6 +504,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // built any later would report that nothing changed. Everything below this line may yield;
         // nothing above it does.
         const entityChange = BuildEntityChangeContext(entity);
+        // Same reason: by the first `await` the save's transaction may already have committed or
+        // rolled back. The token ties a Durable After* run to the transaction that caused it, so a
+        // rolled-back save never fires it (see RunAfterCommit).
+        const postCommitToken = this.CapturePostCommitToken();
         try {
             const engine = EntityActionEngineServer.Instance;
             await engine.Config(false, user);
@@ -528,6 +543,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         InvocationType: invocationTypeEntity,
                         ContextUser: user,
                         EntityChange: entityChange,
+                        PostCommitToken: postCommitToken,
                     });
                     // null means the binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls
                     // outside it — the action never ran, so there is no result to report.
@@ -567,6 +583,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         before: boolean,
         user: UserInfo,
     ): Promise<void> {
+        // Before the first `await`: after-save dispatch is fire-and-forget, so by the time the task
+        // is enqueued the save's transaction may already have settled. See RunAfterCommit.
+        const postCommitToken = this.CapturePostCommitToken();
         try {
             if (baseType === 'delete') return; // delete not yet supported for AI actions
 
@@ -588,7 +607,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                             await ai.ExecuteEntityAIAction(p);
                         } else {
                             try {
-                                this.EnqueueAfterSaveAIAction(p, user);
+                                this.EnqueueAfterSaveAIAction(p, user, postCommitToken);
                             } catch (e) {
                                 LogError(e instanceof Error ? e.message : String(e));
                             }
@@ -605,8 +624,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Enqueues an after-save AI action for execution. By default, immediately adds
      * to QueueManager. Subclasses with transaction support can override to defer
      * until after transaction commit.
+     *
+     * @param _postCommitToken The transaction frames open when the save dispatched this action,
+     *                        captured before any `await` — pass it to {@link RunAfterCommit} when deferring.
      */
-    protected EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo): void {
+    protected EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo, _postCommitToken?: PostCommitToken): void {
         QueueManager.AddTask('Entity AI Action', params, null, user);
     }
 
@@ -1056,7 +1078,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * invocation in lockstep.
      */
     public UseJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType): boolean {
-        return useJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
+        return UseJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
     }
 
     /**************************************************************************/
@@ -5785,6 +5807,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * throwing 'No active transaction to rollback' on top of the real error (#4447).
      */
     private _abandonedByFailedCommit = false;
+    /**
+     * Work waiting for the outermost commit (see {@link RunAfterCommit}). `Depth` is the frame that
+     * currently owns the entry: a savepoint rollback drops the entries its frame owns, a savepoint
+     * release hands them to the enclosing frame.
+     */
+    private _postCommitTasks: PostCommitEntry[] = [];
+    /**
+     * Tasks whose own transaction already settled, held back because an UNRELATED transaction is
+     * open on this instance. Running them now would enlist their writes in it — on one connection,
+     * that means a rollback of work that has nothing to do with them. Drained when this provider
+     * goes idle, whichever way that transaction ends.
+     */
+    private _idlePostCommitTasks: PostCommitEntry[] = [];
+    /** Identity of each open frame and the fate of recent transactions, for {@link PostCommitToken}s. */
+    private readonly _frameTracker = new TransactionFrameTracker();
 
     protected override get CurrentTransactionDepth(): number {
         return this._transactionDepth;
@@ -5899,8 +5936,142 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * After a successful outermost commit, once depth is 0 and the transaction lock is released.
-     * SQL Server drains deferred tasks here — those saves must be able to BeginTransaction.
+     * Queue `task` until the outermost commit of the ambient transaction, or start it now when
+     * there is none. See {@link DatabaseProviderBase.RunAfterCommit} for the contract.
+     *
+     * - Queued tasks run once, in registration order, after the outermost commit succeeds and the
+     *   transaction lock is released — so a task may begin its own transaction. The committer
+     *   awaits them; a failing task is logged and does not stop later tasks or reject the commit.
+     * - Outermost rollback, a failed commit, a doomed/abandoned handle, and
+     *   {@link ResetTransactionState} discard the queue.
+     * - A savepoint release keeps its tasks (they now belong to the enclosing frame); a savepoint
+     *   rollback discards only the tasks registered inside that savepoint.
+     * - With a `token`, the task follows the transaction the token was captured in: it runs once
+     *   that transaction has committed; it is dropped if that transaction, or any savepoint the
+     *   token was captured in, rolled back — including a savepoint rolled back inside a transaction
+     *   that went on to commit — or if the token matches nothing this provider knows; otherwise it
+     *   is queued at the deepest captured frame that is still open. A token captured outside any
+     *   transaction always runs. "Runs" means immediately when this provider is idle, and otherwise
+     *   once it is: a task must never have its own writes rolled back by an unrelated transaction.
+     */
+    public override RunAfterCommit(task: PostCommitTask, description: string = 'post-commit task', token?: PostCommitToken): void {
+        if (token) {
+            this.registerPostCommitTaskWithToken(task, description, token);
+            return;
+        }
+        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
+            super.RunAfterCommit(task, description);
+            return;
+        }
+        this._postCommitTasks.push({ Task: task, Description: description, Depth: this._transactionDepth });
+    }
+
+    /**
+     * Snapshot of the open transaction frames. Synchronous, and never `undefined` on this provider:
+     * outside a transaction it returns a token whose epoch is `null`, which says the work is already
+     * durable rather than saying nothing. See {@link DatabaseProviderBase.CapturePostCommitToken}.
+     */
+    public override CapturePostCommitToken(): PostCommitToken {
+        return this._frameTracker.Capture();
+    }
+
+    private registerPostCommitTaskWithToken(task: PostCommitTask, description: string, token: PostCommitToken): void {
+        const resolution = this._frameTracker.Resolve(token, this._doomed);
+        switch (resolution.Kind) {
+            case 'run':
+                this.runDetachedTask(task, description);
+                return;
+            case 'queue':
+                this._postCommitTasks.push({ Task: task, Description: description, Depth: resolution.Depth });
+                return;
+            case 'drop':
+                if (resolution.Unknown) {
+                    // Not a rollback: durable work is being dropped because its transaction cannot be
+                    // identified. That is data loss, so it must not read as routine housekeeping.
+                    LogError(`Dropped post-commit task '${description}': ${resolution.Reason}`);
+                } else {
+                    LogStatus(`Dropped post-commit task '${description}': ${resolution.Reason}`);
+                }
+                return;
+        }
+    }
+
+    /** Number of tasks waiting for the outermost commit. */
+    public get PendingPostCommitTaskCount(): number {
+        return this._postCommitTasks.length;
+    }
+
+    /** Number of tasks waiting only for this provider to go idle. */
+    public get PendingIdlePostCommitTaskCount(): number {
+        return this._idlePostCommitTasks.length;
+    }
+
+    /**
+     * Run work whose own transaction has already settled. Immediate when this provider is idle;
+     * otherwise held until it is, so the task's writes cannot join — and be rolled back with — a
+     * transaction it has nothing to do with.
+     */
+    private runDetachedTask(task: PostCommitTask, description: string): void {
+        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
+            super.RunAfterCommit(task, description);
+            return;
+        }
+        this._idlePostCommitTasks.push({ Task: task, Description: description, Depth: 0 });
+    }
+
+    /** Run everything that was waiting for this provider to go idle. Never throws. */
+    private async drainIdlePostCommitTasks(): Promise<void> {
+        if (this._idlePostCommitTasks.length === 0 || this._transactionDepth > 0 || this.HasPhysicalTransaction) {
+            return;
+        }
+        const tasks = this._idlePostCommitTasks;
+        this._idlePostCommitTasks = [];
+        LogStatus(`Running ${tasks.length} post-commit task(s) held back by an unrelated transaction`);
+        for (const entry of tasks) {
+            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
+        }
+    }
+
+    /** Run tasks detached from a committed transaction, one at a time, in order. Never throws. */
+    private async runPostCommitTasks(tasks: PostCommitEntry[]): Promise<void> {
+        if (tasks.length === 0) {
+            return;
+        }
+        LogStatus(`Running ${tasks.length} post-commit task(s) after transaction commit`);
+        for (const entry of tasks) {
+            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
+        }
+    }
+
+    /** Detach the whole queue (outermost commit succeeded). */
+    private takePostCommitTasks(): PostCommitEntry[] {
+        const tasks = this._postCommitTasks;
+        this._postCommitTasks = [];
+        return tasks;
+    }
+
+    /** Drop every task owned by `depth` or deeper; they belonged to work that will never commit. */
+    private discardPostCommitTasks(depth: number, reason: string): void {
+        const kept = this._postCommitTasks.filter((entry) => entry.Depth < depth);
+        const dropped = this._postCommitTasks.length - kept.length;
+        this._postCommitTasks = kept;
+        if (dropped > 0) {
+            LogStatus(`Cleared ${dropped} post-commit task(s): ${reason}`);
+        }
+    }
+
+    /** A released savepoint's tasks now belong to the enclosing frame. */
+    private promotePostCommitTasks(releasedDepth: number): void {
+        for (const entry of this._postCommitTasks) {
+            if (entry.Depth >= releasedDepth) {
+                entry.Depth = releasedDepth - 1;
+            }
+        }
+    }
+
+    /**
+     * After a successful outermost commit, once depth is 0, the transaction lock is released, and
+     * the {@link RunAfterCommit} queue has been drained. Subclass hook; no-op by default.
      */
     protected async AfterPhysicalCommit(): Promise<void> {
         /* no-op */
@@ -5923,6 +6094,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     protected markDoomed(): void {
         this._doomed = true;
+        // A doomed transaction can never commit, so nothing queued for its commit may run.
+        this.discardPostCommitTasks(0, 'the ambient transaction was abandoned');
     }
 
     /**
@@ -5932,6 +6105,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     public async ResetTransactionState(): Promise<void> {
         await this.WithTransactionLock(() => this.abandonDoomedTransaction());
+        await this.drainIdlePostCommitTasks();
     }
 
     public async BeginTransaction(): Promise<void> {
@@ -5939,19 +6113,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     public async CommitTransaction(): Promise<void> {
-        let runAfter = false;
-        await this.WithTransactionLock(async () => {
+        // null = not the outermost commit, so nothing drains and the subclass hook does not run.
+        const committedTasks = await this.WithTransactionLock(async (): Promise<PostCommitEntry[] | null> => {
             const outermost = this._transactionDepth === 1;
-            await this.commitTransactionCore();
-            runAfter = outermost;
+            const tasks = await this.commitTransactionCore();
+            return outermost ? tasks : null;
         });
-        if (runAfter) {
+        if (committedTasks) {
+            await this.runPostCommitTasks(committedTasks);
             await this.AfterPhysicalCommit();
         }
+        await this.drainIdlePostCommitTasks();
     }
 
     public async RollbackTransaction(): Promise<void> {
-        return this.WithTransactionLock(() => this.rollbackTransactionCore());
+        await this.WithTransactionLock(() => this.rollbackTransactionCore());
+        await this.drainIdlePostCommitTasks();
     }
 
     private async beginTransactionCore(): Promise<void> {
@@ -5959,6 +6136,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             throw new DoomedTransactionError();
         }
         this._transactionDepth++;
+        this._frameTracker.PushFrame();
         try {
             if (this._transactionDepth === 1) {
                 this._abandonedByFailedCommit = false;
@@ -5982,6 +6160,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         } catch (e) {
             if (this._transactionDepth > 0) {
                 this._transactionDepth--;
+                // The frame never opened, so it undid nothing; any work captured in it belongs to its parent.
+                this._frameTracker.ReleaseFrame();
             }
             if (e instanceof DoomedTransactionError || this._doomed) {
                 throw e;
@@ -6040,13 +6220,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         await this.OnBeginFailedAtDepthZero();
     }
 
-    private async commitTransactionCore(): Promise<void> {
+    /**
+     * Returns the post-commit tasks detached by a successful outermost commit; empty otherwise.
+     */
+    private async commitTransactionCore(): Promise<PostCommitEntry[]> {
         if (this._doomed) {
             this.popDoomedFrame();
             if (this._transactionDepth === 0) {
                 throw new DoomedTransactionError();
             }
-            return;
+            return [];
         }
         if (!this.HasPhysicalTransaction) {
             throw new Error('No active transaction to commit');
@@ -6064,8 +6247,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 LogError(e);
                 throw e;
             }
+            this._frameTracker.EndEpoch('committed');
+            const tasks = this.takePostCommitTasks();
             this.clearTransactionState();
-            return;
+            return tasks;
         }
         const savepointName = this._savepointStack[this._savepointStack.length - 1];
         if (!savepointName) {
@@ -6085,8 +6270,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 throw new DoomedTransactionError(undefined, { cause: e });
             }
         }
+        this.promotePostCommitTasks(this._transactionDepth);
         this._savepointStack.pop();
         this._transactionDepth--;
+        this._frameTracker.ReleaseFrame();
+        return [];
     }
 
     private async rollbackTransactionCore(): Promise<void> {
@@ -6129,8 +6317,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     ignoreLogging: true,
                 });
             }
+            this.discardPostCommitTasks(this._transactionDepth, `savepoint ${savepointName} was rolled back`);
             this._savepointStack.pop();
             this._transactionDepth--;
+            this._frameTracker.RollBackFrame();
         } catch (savepointError) {
             await this.HandleFailedSavepointRollback(savepointName, savepointError);
             this.popDoomedFrame();
@@ -6149,6 +6339,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
         this._savepointStack.pop();
         this._transactionDepth--;
+        this._frameTracker.RollBackFrame();
     }
 
     private clearSavepointState(): void {
@@ -6156,9 +6347,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         this._savepointCounter = 0;
     }
 
+    /**
+     * Back to depth 0. A successful commit detaches the post-commit queue first, so anything still
+     * queued here belongs to a transaction that rolled back, failed, or was abandoned.
+     */
     private clearTransactionState(): void {
         this._transactionDepth = 0;
         this._doomed = false;
         this.clearSavepointState();
+        this._frameTracker.EndEpoch('rolledBack');
+        this.discardPostCommitTasks(0, 'the transaction ended without committing');
     }
 }

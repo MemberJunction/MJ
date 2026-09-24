@@ -14,13 +14,23 @@ export class CollectionStateService {
   /**
    * Observable of the active collection ID
    */
-  public readonly activeCollectionId$: Observable<string | null> = this._activeCollectionId$.asObservable();
+  public readonly ActiveCollectionId$: Observable<string | null> = this._activeCollectionId$.asObservable();
+
+  /** @deprecated Use {@link ActiveCollectionId$}. */
+  public get activeCollectionId$(): Observable<string | null> {
+    return this.ActiveCollectionId$;
+  }
 
   /**
    * Gets the currently active collection ID (synchronous)
    */
-  public get activeCollectionId(): string | null {
+  public get ActiveCollectionId(): string | null {
     return this._activeCollectionId$.value;
+  }
+
+  /** @deprecated Use {@link ActiveCollectionId}. */
+  public get activeCollectionId(): string | null {
+    return this.ActiveCollectionId;
   }
 
   constructor() {}
@@ -29,22 +39,37 @@ export class CollectionStateService {
    * Sets the active collection
    * @param id The collection ID to activate (or null to clear)
    */
-  setActiveCollection(id: string | null): void {
+  SetActiveCollection(id: string | null): void {
     console.log('📁 Setting active collection:', id);
     this._activeCollectionId$.next(id);
+  }
+
+  /** @deprecated Use {@link SetActiveCollection}. */
+  setActiveCollection(id: string | null): void {
+    return this.SetActiveCollection(id);
   }
 
   /**
    * Clears the active collection
    */
-  clearActiveCollection(): void {
+  ClearActiveCollection(): void {
     this._activeCollectionId$.next(null);
+  }
+
+  /** @deprecated Use {@link ClearActiveCollection}. */
+  clearActiveCollection(): void {
+    return this.ClearActiveCollection();
   }
 
   /**
    * Gets the currently active collection ID
    */
-  getActiveCollectionId(): string | null {
+  GetActiveCollectionId(): string | null {
     return this._activeCollectionId$.value;
+  }
+
+  /** @deprecated Use {@link GetActiveCollectionId}. */
+  getActiveCollectionId(): string | null {
+    return this.GetActiveCollectionId();
   }
 }

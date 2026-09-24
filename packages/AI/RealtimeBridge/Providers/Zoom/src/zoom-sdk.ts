@@ -88,17 +88,17 @@ export interface IZoomMeetingSdk {
      * @param args Join parameters (meeting number, passcode, bot name, auth).
      * @returns The bot participant + meeting handles.
      */
-    join(args: ZoomJoinArgs): Promise<ZoomJoinResult>;
+    join(args: ZoomJoinArgs): Promise<ZoomJoinResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /** Leaves the meeting and releases SDK resources. */
-    leave(): Promise<void>;
+    leave(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends one raw PCM audio frame as the bot's outbound audio (the agent's voice into the meeting).
      *
      * @param pcm The PCM audio bytes to send.
      */
-    sendAudioFrame(pcm: ArrayBuffer): void;
+    sendAudioFrame(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for inbound raw per-participant audio frames (what the agent hears, carrying
@@ -106,56 +106,56 @@ export interface IZoomMeetingSdk {
      *
      * @param cb Invoked with each inbound audio frame.
      */
-    onAudioFrame(cb: (frame: ZoomAudioFrame) => void): void;
+    onAudioFrame(cb: (frame: ZoomAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant joins. "Latest handler wins."
      *
      * @param cb Invoked with the participant who joined.
      */
-    onParticipantJoin(cb: (participant: ZoomParticipant) => void): void;
+    onParticipantJoin(cb: (participant: ZoomParticipant) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant leaves. "Latest handler wins."
      *
      * @param cb Invoked with the participant id that left.
      */
-    onParticipantLeave(cb: (participantId: string) => void): void;
+    onParticipantLeave(cb: (participantId: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for native hand-raise/lower signals. "Latest handler wins."
      *
      * @param cb Invoked with the participant id and whether the hand is now raised.
      */
-    onHandRaise(cb: (participantId: string, raised: boolean) => void): void;
+    onHandRaise(cb: (participantId: string, raised: boolean) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Returns the current participant roster (including the bot).
      *
      * @returns The current participants.
      */
-    getParticipants(): Promise<ZoomParticipant[]>;
+    getParticipants(): Promise<ZoomParticipant[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Posts a message to the in-meeting chat (everyone).
      *
      * @param text The chat message text.
      */
-    postChatMessage(text: string): Promise<void>;
+    postChatMessage(text: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Mutes a participant (requires the bot to be host/co-host).
      *
      * @param participantId The participant to mute.
      */
-    muteParticipant(participantId: string): Promise<void>;
+    muteParticipant(participantId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when the meeting ends (host ended / timed out). "Latest handler wins."
      *
      * @param cb Invoked when the meeting has ended.
      */
-    onMeetingEnded(cb: () => void): void;
+    onMeetingEnded(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

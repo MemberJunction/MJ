@@ -42,7 +42,7 @@ const DEFAULT_MAX_STALL_RECONCILES = 6;
  * - `{ resolve }` — the operation finished (e.g. completion event was lost); resolve with this result.
  * - `{ reject }` — the operation failed/died; reject with this error.
  */
-export type StallDecision<TResult> = 'continue' | { resolve: TResult } | { reject: Error };
+export type StallDecision<TResult> = 'continue' | { resolve: TResult } | { reject: Error };  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
 /**
  * Configuration for a fire-and-forget GraphQL mutation execution.

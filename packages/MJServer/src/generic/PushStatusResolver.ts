@@ -7,13 +7,13 @@ export const PUSH_STATUS_UPDATES_TOPIC = 'PUSH_STATUS_UPDATES';
 @ObjectType()
 export class PushStatusNotification {
   @Field(() => String, { nullable: true })
-  message?: string;
+  message?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field((_type) => Date)
-  date!: Date;
+  date!: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field((_type) => ID)
-  sessionId!: string;
+  sessionId!: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -65,7 +65,7 @@ export function SetPushStatusPublishHook(hook?: PushStatusPublishHook): void {
  * Progress and completion are low-rate and each is individually meaningful, which is exactly the
  * kind of message that must survive landing on the wrong replica.
  */
-export function shouldReplicateStatusUpdate(message?: string): boolean {
+export function ShouldReplicateStatusUpdate(message?: string): boolean {
   if (!message) {
     return false;
   }
@@ -100,7 +100,7 @@ export interface StatusUpdateParams {
  * payload shape and the required-identity guarantee live in exactly one place. Adding a field to
  * the push is a one-line change here; a new publisher physically cannot omit `ownerUserId`.
  */
-export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
+export function PublishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
   const payload: PushStatusNotificationPayload = {
     sessionId: params.sessionId,
     ownerUserId: params.ownerUserId,
@@ -112,7 +112,7 @@ export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdatePa
   // Fan out to other instances. Only reached by updates originating HERE: a message arriving from
   // the bus is republished straight onto the local topic and never comes back through this
   // function, so there is no loop to break beyond the SourceServerId check on the receiving side.
-  if (_publishHook && shouldReplicateStatusUpdate(params.message)) {
+  if (_publishHook && ShouldReplicateStatusUpdate(params.message)) {
     try {
       _publishHook(payload);
     } catch {
@@ -120,6 +120,11 @@ export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdatePa
       // never break local delivery, which is the path that works for the common case.
     }
   }
+}
+
+/** @deprecated Use {@link PublishStatusUpdate}. */
+export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
+  return PublishStatusUpdate(pubSub, params);
 }
 
 /** Minimal shape of the subscription's connection context needed by the filter. */
@@ -140,7 +145,7 @@ export interface StatusUpdatesFilterContext {
  * `sessionId` is no longer sufficient. Fails CLOSED — a missing owner or connection identity never
  * matches.
  */
-export function statusUpdatesFilter(data: {
+export function StatusUpdatesFilter(data: {
   payload: PushStatusNotificationPayload;
   args: PushStatusNotificationArgs;
   context: StatusUpdatesFilterContext | undefined;
@@ -156,14 +161,23 @@ export function statusUpdatesFilter(data: {
   return UUIDsEqual(payload.ownerUserId, connectionUserId);
 }
 
+/** @deprecated Use {@link StatusUpdatesFilter}. */
+export function statusUpdatesFilter(data: {
+  payload: PushStatusNotificationPayload;
+  args: PushStatusNotificationArgs;
+  context: StatusUpdatesFilterContext | undefined;
+}): boolean {
+  return StatusUpdatesFilter(data);
+}
+
 @Resolver()
 export class PushStatusResolver {
   @Subscription(() => PushStatusNotification, {
     topics: PUSH_STATUS_UPDATES_TOPIC,
     filter: (data: ResolverFilterData<PushStatusNotificationPayload, PushStatusNotificationArgs, StatusUpdatesFilterContext>) =>
-      statusUpdatesFilter(data),
+      StatusUpdatesFilter(data),
   })
-  statusUpdates(
+  statusUpdates(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     @Root() { message }: PushStatusNotificationPayload,
     @Arg('sessionId', () => String) sessionId: string
   ): PushStatusNotification {

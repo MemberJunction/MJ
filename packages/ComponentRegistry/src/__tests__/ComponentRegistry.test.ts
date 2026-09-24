@@ -45,7 +45,7 @@ vi.mock('@memberjunction/core', () => ({
 // Import after mocks
 // ---------------------------------------------------------------------------
 
-import { loadConfig, type ConfigInfo, type ComponentRegistrySettings } from '../config';
+import { LoadConfig, type ConfigInfo, type ComponentRegistrySettings } from '../config';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -58,12 +58,12 @@ describe('loadConfig', () => {
 
   it('should throw when config file not found', () => {
     mockSearch.mockReturnValue(null);
-    expect(() => loadConfig()).toThrow('Config file not found.');
+    expect(() => LoadConfig()).toThrow('Config file not found.');
   });
 
   it('should throw when config file is empty', () => {
     mockSearch.mockReturnValue({ config: {}, filepath: '/mj.config.cjs', isEmpty: true });
-    expect(() => loadConfig()).toThrow('is empty or does not exist');
+    expect(() => LoadConfig()).toThrow('is empty or does not exist');
   });
 
   it('should parse a valid config', () => {
@@ -82,7 +82,7 @@ describe('loadConfig', () => {
       isEmpty: false,
     });
 
-    const config = loadConfig();
+    const config = LoadConfig();
     expect(config.dbHost).toBe('db.example.com');
     expect(config.dbDatabase).toBe('TestDB');
     expect(config.dbUsername).toBe('admin');
@@ -110,7 +110,7 @@ describe('loadConfig', () => {
       isEmpty: false,
     });
 
-    const config = loadConfig();
+    const config = LoadConfig();
     expect(config.componentRegistrySettings).toBeDefined();
     expect(config.componentRegistrySettings!.port).toBe(3300);
     expect(config.componentRegistrySettings!.enableRegistry).toBe(true);
@@ -134,7 +134,7 @@ describe('loadConfig', () => {
       isEmpty: false,
     });
 
-    const config = loadConfig();
+    const config = LoadConfig();
     expect(config.dbTrustServerCertificate).toBe('Y');
   });
 });

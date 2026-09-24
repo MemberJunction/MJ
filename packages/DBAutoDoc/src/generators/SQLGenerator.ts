@@ -27,7 +27,7 @@ export class SQLGenerator {
   /**
    * Generate SQL script
    */
-  public generate(
+  public Generate(
     state: DatabaseDocumentation,
     options: SQLGeneratorOptions = {}
   ): string {
@@ -103,6 +103,14 @@ export class SQLGenerator {
     }
 
     return lines.join('\n');
+  }
+
+  /** @deprecated Use {@link Generate}. */
+  public generate(
+    state: DatabaseDocumentation,
+    options: SQLGeneratorOptions = {}
+  ): string {
+    return this.Generate(state, options);
   }
 
   /**

@@ -39,7 +39,7 @@ export interface RunBoundedOptions {
  * @param options optional controls (e.g. a `shouldStop` budget predicate)
  * @returns the results in the same order as `tasks` (`undefined` for un-dispatched slots)
  */
-export async function runBounded<T>(
+export async function RunBounded<T>(
   tasks: Array<() => Promise<T>>,
   limit: number,
   options: RunBoundedOptions = {},
@@ -71,4 +71,13 @@ export async function runBounded<T>(
   }
   await Promise.all(workers);
   return results;
+}
+
+/** @deprecated Use {@link RunBounded}. */
+export async function runBounded<T>(
+  tasks: Array<() => Promise<T>>,
+  limit: number,
+  options: RunBoundedOptions = {},
+): Promise<Array<T | undefined>> {
+  return RunBounded(tasks, limit, options);
 }

@@ -55,7 +55,7 @@ export const RECONCILE_THROTTLE_MS = 500;
  * Emits when something suggests the client may have missed server events and should re-read
  * authoritative state.
  *
- * Usually reached via `ConversationsRuntime.Instance.Liveness`. Call {@link initialize} once after
+ * Usually reached via `ConversationsRuntime.Instance.Liveness`. Call {@link Initialize} once after
  * the data provider exists; hosts translate DOM events in via the `Notify*` methods.
  */
 export class ConversationLiveness {
@@ -70,7 +70,7 @@ export class ConversationLiveness {
      * Deliberately does NOT replay: a late subscriber must not be handed a reconciliation
      * request for an outage that was already resolved.
      */
-    public readonly reconciliationRequired$: Observable<ReconciliationReason> = this.triggers$.pipe(
+    public readonly ReconciliationRequired$: Observable<ReconciliationReason> = this.triggers$.pipe(
         throttleTime(RECONCILE_THROTTLE_MS, undefined, { leading: true, trailing: false })
     );
 
@@ -81,7 +81,7 @@ export class ConversationLiveness {
      *     {@link ConversationStreaming}. Passed in rather than imported so this class stays
      *     independent of the streaming implementation and is trivially testable.
      */
-    public initialize(streamReconnected$?: Observable<void>): void {
+    public Initialize(streamReconnected$?: Observable<void>): void {
         if (this.initialized) {
             return;
         }

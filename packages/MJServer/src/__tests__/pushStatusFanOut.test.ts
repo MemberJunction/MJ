@@ -19,7 +19,7 @@ import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     publishStatusUpdate,
-    shouldReplicateStatusUpdate,
+    ShouldReplicateStatusUpdate,
     SetPushStatusPublishHook,
     type PushStatusNotificationPayload,
 } from '../generic/PushStatusResolver.js';
@@ -46,26 +46,26 @@ afterEach(() => {
     SetPushStatusPublishHook(undefined);
 });
 
-describe('shouldReplicateStatusUpdate', () => {
+describe('ShouldReplicateStatusUpdate', () => {
     it('replicates execution progress', () => {
-        expect(shouldReplicateStatusUpdate(envelope('ExecutionProgress'))).toBe(true);
+        expect(ShouldReplicateStatusUpdate(envelope('ExecutionProgress'))).toBe(true);
     });
 
     it('does not replicate streaming content', () => {
-        expect(shouldReplicateStatusUpdate(envelope('StreamingContent'))).toBe(false);
+        expect(ShouldReplicateStatusUpdate(envelope('StreamingContent'))).toBe(false);
     });
 
     it('replicates a plain-string message, which is rare and low-rate', () => {
-        expect(shouldReplicateStatusUpdate('agent finished')).toBe(true);
+        expect(ShouldReplicateStatusUpdate('agent finished')).toBe(true);
     });
 
     it('does not replicate an empty message', () => {
-        expect(shouldReplicateStatusUpdate(undefined)).toBe(false);
-        expect(shouldReplicateStatusUpdate('')).toBe(false);
+        expect(ShouldReplicateStatusUpdate(undefined)).toBe(false);
+        expect(ShouldReplicateStatusUpdate('')).toBe(false);
     });
 
     it('replicates JSON that is not the resolver envelope', () => {
-        expect(shouldReplicateStatusUpdate(JSON.stringify({ hello: 'world' }))).toBe(true);
+        expect(ShouldReplicateStatusUpdate(JSON.stringify({ hello: 'world' }))).toBe(true);
     });
 });
 

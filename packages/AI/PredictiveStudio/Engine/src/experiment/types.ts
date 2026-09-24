@@ -51,7 +51,7 @@ export interface IExperimentEntityFactory {
    * @param entityName MJ entity name (e.g. `MJ: Experiment Sessions`)
    * @param contextUser request user — required on the server for isolation/audit
    */
-  getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>;
+  getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -61,7 +61,7 @@ export interface IExperimentEntityFactory {
  */
 export interface IClock {
   /** @returns the current time in milliseconds (monotonic, test-controllable). */
-  now(): number;
+  now(): number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -85,7 +85,7 @@ export interface IExperimentTrainer {
    *
    * @param input the experiment to train + the owning iteration/session context
    */
-  train(input: TrainExperimentInput): Promise<TrainExperimentResult>;
+  train(input: TrainExperimentInput): Promise<TrainExperimentResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -141,7 +141,7 @@ export interface IWaveStrategist {
    *   candidates + the plan, so the strategist can decide what to try next
    * @returns the experiments to run in the next wave (empty array ends the loop)
    */
-  proposeNextWave(context: WaveStrategistContext): Promise<ProposedExperiment[]> | ProposedExperiment[];
+  proposeNextWave(context: WaveStrategistContext): Promise<ProposedExperiment[]> | ProposedExperiment[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

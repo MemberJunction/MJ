@@ -33,14 +33,19 @@ export * from './lib/services/artifact-permission.service';
 export * from './lib/services/artifact-use-tracking.service';
 export * from './lib/services/collection-state.service';
 export * from './lib/services/conversation-attachment.service';
+export * from './lib/services/graphql-attachment-blob-store';
 export * from './lib/services/ui-command-handler.service';
 export * from './lib/services/conversation-bridge.service';
 export * from './lib/services/realtime-session.service';
+export * from './lib/services/browser-realtime-media-host';
+// NOTE: the realtime session types (RealtimeCaption, RealtimeConnectionState,
+// RealtimeSessionRunOptions, …), the channel plugin base class, and the delegation-result
+// parser now live in `@memberjunction/realtime-runtime`. Import them from there directly —
+// MJ does not re-export across package boundaries.
 export * from './lib/services/realtime-pairing';
 export * from './lib/services/user-authorization';
 export * from './lib/services/realtime-sessions-adapter';
 export * from './lib/services/realtime-session-review.service';
-export * from './lib/services/delegation-result-parser';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
@@ -144,7 +149,6 @@ export * from './lib/components/realtime/realtime-channel-strip.component';
 export * from './lib/components/realtime/realtime-session-timeline-card.component';
 export * from './lib/utils/realtime-session-timeline';
 // Pluggable interactive-channel contract (registry-resolved client plugins) + pane host
-export * from './lib/components/realtime/channels/base-realtime-channel-client';
 export * from './lib/components/realtime/channels/client-context-channel';
 export * from './lib/components/realtime/channels/realtime-channel-pane.component';
 export * from './lib/components/realtime/channels/channel-onboarding-panel.component';

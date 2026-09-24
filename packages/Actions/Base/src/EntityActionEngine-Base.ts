@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, PostCommitToken, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJActionExecutionLogEntity, MJActionResultCodeEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionInvocationTypeEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { ActionParam, AIDirective, RunActionParams } from "./ActionEngine-Base";
@@ -49,6 +49,17 @@ export class EntityActionInvocationParams {
      * Absent on invocations with no save behind them (a View or List fan-out, a direct call).
      */
     public EntityChange?: EntityChangeContext;
+
+    /**
+     * The transaction frames that were open on the entity's provider when the lifecycle event fired,
+     * from `DatabaseProviderBase.CapturePostCommitToken()`. Captured by the dispatcher before its first
+     * `await`, for the same reason as {@link EntityChange}: a Durable `After*` run deferred with no
+     * queue submitter is handed to `RunAfterCommit` with this token, so it follows the save's own
+     * transaction — run once that commits, dropped if it rolled back — even when it registers late.
+     *
+     * Absent outside a transaction and on invocations with no save behind them.
+     */
+    public PostCommitToken?: PostCommitToken;
 }
 
 
@@ -104,11 +115,11 @@ export class EntityActionEngineBase extends BaseEngine<EntityActionEngineBase> {
 
  
     // internal instance properties used for the singleton pattern
-    private _EntityActions: MJEntityActionEntityExtended[] = [];
-    private _EntityActionParams: MJEntityActionParamEntity[] = [];
-    private _EntityActionInvocationTypes: MJEntityActionInvocationTypeEntity[] = [];
-    private _EntityActionFilters: MJEntityActionFilterEntity[] = [];
-    private _EntityActionInvocations: MJEntityActionInvocationEntity[] = [];
+    private _EntityActions: MJEntityActionEntityExtended[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionParams: MJEntityActionParamEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionInvocationTypes: MJEntityActionInvocationTypeEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionFilters: MJEntityActionFilterEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
+    private _EntityActionInvocations: MJEntityActionInvocationEntity[] = [];  // case-violation-ok-legacy-back-compat: the name is also a string literal that resolves this member at runtime, so renaming it breaks the lookup
 
     /**
      * This method is called to configure the ActionEngine. It loads the metadata for the actions, filters, and result codes and caches them in the GlobalObjectStore. You must call this method before running any actions.

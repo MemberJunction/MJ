@@ -18,13 +18,13 @@ import type {
     ApolloPeopleSearchFilter,
 } from '../generic/apollo-lists.types.js';
 import { ApolloRESTBaseAction } from './ApolloRESTBaseAction.js';
-import { LIST_NOT_FOUND_HINT, getParam, getParamRaw, parseOptionalIntegerParam, parseStringArrayParam } from './params.js';
+import { LIST_NOT_FOUND_HINT, GetParam, GetParamRaw, ParseOptionalIntegerParam, ParseStringArrayParam } from './params.js';
 
 /** Shared paging parse for the three search actions. Apollo's caps are 500 pages of 100. */
 function parsePaging(params: RunActionParams): { paging: ApolloPagingOptions; error: string | null } {
-    const pageParsed = parseOptionalIntegerParam(getParamRaw(params, 'Page'), 'Page', { min: 1, max: 500 });
+    const pageParsed = ParseOptionalIntegerParam(GetParamRaw(params, 'Page'), 'Page', { min: 1, max: 500 });
     if (pageParsed.error !== null) return { paging: {}, error: pageParsed.error };
-    const perPageParsed = parseOptionalIntegerParam(getParamRaw(params, 'PerPage'), 'PerPage', { min: 1, max: 100 });
+    const perPageParsed = ParseOptionalIntegerParam(GetParamRaw(params, 'PerPage'), 'PerPage', { min: 1, max: 100 });
     if (perPageParsed.error !== null) return { paging: {}, error: perPageParsed.error };
 
     const paging: ApolloPagingOptions = {};
@@ -55,9 +55,9 @@ function parsePaging(params: RunActionParams): { paging: ApolloPagingOptions; er
 @RegisterClass(BaseAction, 'ApolloGetListAccountsAction')
 export class ApolloGetListAccountsAction extends ApolloRESTBaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const listName = getParam(params, 'ListName');
+        const listName = GetParam(params, 'ListName');
         if (!listName) return this.MissingField('ListName');
-        const keywords = getParam(params, 'Keywords');
+        const keywords = GetParam(params, 'Keywords');
 
         const { paging, error: pagingError } = parsePaging(params);
         if (pagingError !== null) return this.Invalid(pagingError);
@@ -115,9 +115,9 @@ export class ApolloGetListAccountsAction extends ApolloRESTBaseAction {
 @RegisterClass(BaseAction, 'ApolloGetListContactsAction')
 export class ApolloGetListContactsAction extends ApolloRESTBaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const listName = getParam(params, 'ListName');
+        const listName = GetParam(params, 'ListName');
         if (!listName) return this.MissingField('ListName');
-        const keywords = getParam(params, 'Keywords');
+        const keywords = GetParam(params, 'Keywords');
 
         const { paging, error: pagingError } = parsePaging(params);
         if (pagingError !== null) return this.Invalid(pagingError);
@@ -193,13 +193,13 @@ export class ApolloGetListContactsAction extends ApolloRESTBaseAction {
 @RegisterClass(BaseAction, 'ApolloSearchPeopleAction')
 export class ApolloSearchPeopleAction extends ApolloRESTBaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const domainsParsed = parseStringArrayParam(getParamRaw(params, 'OrganizationDomains'), 'OrganizationDomains');
+        const domainsParsed = ParseStringArrayParam(GetParamRaw(params, 'OrganizationDomains'), 'OrganizationDomains');
         if (domainsParsed.error !== null) return this.Invalid(domainsParsed.error);
-        const orgIdsParsed = parseStringArrayParam(getParamRaw(params, 'OrganizationIDs'), 'OrganizationIDs');
+        const orgIdsParsed = ParseStringArrayParam(GetParamRaw(params, 'OrganizationIDs'), 'OrganizationIDs');
         if (orgIdsParsed.error !== null) return this.Invalid(orgIdsParsed.error);
-        const titlesParsed = parseStringArrayParam(getParamRaw(params, 'Titles'), 'Titles');
+        const titlesParsed = ParseStringArrayParam(GetParamRaw(params, 'Titles'), 'Titles');
         if (titlesParsed.error !== null) return this.Invalid(titlesParsed.error);
-        const senioritiesParsed = parseStringArrayParam(getParamRaw(params, 'Seniorities'), 'Seniorities');
+        const senioritiesParsed = ParseStringArrayParam(GetParamRaw(params, 'Seniorities'), 'Seniorities');
         if (senioritiesParsed.error !== null) return this.Invalid(senioritiesParsed.error);
 
         const { paging, error: pagingError } = parsePaging(params);

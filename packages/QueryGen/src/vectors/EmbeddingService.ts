@@ -34,7 +34,7 @@ export class EmbeddingService {
    * @param query - Query to embed (partial structure with text fields)
    * @returns Embeddings for all fields
    */
-  async embedQuery(query: {
+  async EmbedQuery(query: {
     userQuestion: string;
     description: string;
     technicalDescription: string;
@@ -55,6 +55,15 @@ export class EmbeddingService {
     };
   }
 
+  /** @deprecated Use {@link EmbedQuery}. */
+  async embedQuery(query: {
+    userQuestion: string;
+    description: string;
+    technicalDescription: string;
+  }): Promise<QueryEmbeddings> {
+    return this.EmbedQuery(query);
+  }
+
   /**
    * Embed all golden queries for few-shot learning
    *
@@ -65,11 +74,11 @@ export class EmbeddingService {
    * @param goldenQueries - Array of golden queries to embed
    * @returns Array of golden queries with their embeddings
    */
-  async embedGoldenQueries(goldenQueries: GoldenQuery[]): Promise<EmbeddedGoldenQuery[]> {
+  async EmbedGoldenQueries(goldenQueries: GoldenQuery[]): Promise<EmbeddedGoldenQuery[]> {
     const embedded: EmbeddedGoldenQuery[] = [];
 
     for (const query of goldenQueries) {
-      const embeddings = await this.embedQuery({
+      const embeddings = await this.EmbedQuery({
         userQuestion: query.userQuestion,
         description: query.description,
         technicalDescription: query.technicalDescription,
@@ -84,13 +93,18 @@ export class EmbeddingService {
     return embedded;
   }
 
+  /** @deprecated Use {@link EmbedGoldenQueries}. */
+  async embedGoldenQueries(goldenQueries: GoldenQuery[]): Promise<EmbeddedGoldenQuery[]> {
+    return this.EmbedGoldenQueries(goldenQueries);
+  }
+
   /**
    * Embed multiple queries in batch
    *
    * @param queries - Array of queries to embed
    * @returns Array of embeddings corresponding to input queries
    */
-  async embedQueries(
+  async EmbedQueries(
     queries: Array<{
       userQuestion: string;
       description: string;
@@ -100,10 +114,21 @@ export class EmbeddingService {
     const embeddings: QueryEmbeddings[] = [];
 
     for (const query of queries) {
-      const embedding = await this.embedQuery(query);
+      const embedding = await this.EmbedQuery(query);
       embeddings.push(embedding);
     }
 
     return embeddings;
+  }
+
+  /** @deprecated Use {@link EmbedQueries}. */
+  async embedQueries(
+    queries: Array<{
+      userQuestion: string;
+      description: string;
+      technicalDescription: string;
+    }>
+  ): Promise<QueryEmbeddings[]> {
+    return this.EmbedQueries(queries);
   }
 }
