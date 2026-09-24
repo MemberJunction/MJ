@@ -2787,6 +2787,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Work Queue Deliveries Section -->
+    <mj-collapsible-panel
+        SectionKey="mJWorkQueueDeliveries"
+        SectionName="Work Queue Deliveries"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJWorkQueueDeliveries')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Work Queue Deliveries','ResolvedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Work Queue Deliveries','ResolvedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJWorkQueueDeliveries')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJWorkQueueDeliveries', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Skills Section -->
     <mj-collapsible-panel
         SectionKey="mJAISkills"
@@ -2806,6 +2831,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAISkills', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Work Queue Messages Section -->
+    <mj-collapsible-panel
+        SectionKey="mJWorkQueueMessages"
+        SectionName="Work Queue Messages"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJWorkQueueMessages')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Work Queue Messages','PublishedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Work Queue Messages','PublishedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJWorkQueueMessages')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJWorkQueueMessages', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

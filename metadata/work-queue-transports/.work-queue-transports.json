@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "Database",
+      "Description": "MJ-native transport: messages and deliveries are rows in the MJ database, claimed by MJ worker hosts.",
+      "DriverClass": "Database",
+      "Configuration": null,
+      "CredentialID": null,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D1ED3F08-7008-4DA8-BA2B-7CD6A820AEB5"
+    }
+  }
+]

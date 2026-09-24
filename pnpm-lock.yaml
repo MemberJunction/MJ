@@ -15295,6 +15295,86 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/WorkQueue/base:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0
+        version: link:../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../../MJGlobal
+      '@memberjunction/work-queue-core':
+        specifier: 6.1.0
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/WorkQueue/core:
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/WorkQueue/engine:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0
+        version: link:../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../../MJGlobal
+      '@memberjunction/sql-dialect':
+        specifier: 6.1.0
+        version: link:../../SQLDialect
+      '@memberjunction/work-queue-base':
+        specifier: 6.1.0
+        version: link:../base
+      '@memberjunction/work-queue-core':
+        specifier: 6.1.0
+        version: link:../core
+    devDependencies:
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0
+        version: link:../../GenericDatabaseProvider
+      '@memberjunction/sqlserver-dataprovider':
+        specifier: 6.1.0
+        version: link:../../SQLServerDataProvider
+      '@types/mssql':
+        specifier: ^9.1.9
+        version: 9.1.9
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      mssql:
+        specifier: ^11.0.1
+        version: 11.0.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/eSignature/Base:
     dependencies:
       '@memberjunction/core':

@@ -1,0 +1,51 @@
+{
+  "name": "@memberjunction/work-queue-core",
+  "type": "module",
+  "version": "6.1.0",
+  "description": "MemberJunction: durable work queue contracts, consumer runtime, in-memory transport and conformance kit. No MemberJunction runtime dependencies.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    },
+    "./testing/vitest": {
+      "types": "./dist/testing/vitest.d.ts",
+      "default": "./dist/testing/vitest.js"
+    }
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck:tests": "tsc -p tsconfig.test.json"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "peerDependencies": {
+    "vitest": ">=3.2.0"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
