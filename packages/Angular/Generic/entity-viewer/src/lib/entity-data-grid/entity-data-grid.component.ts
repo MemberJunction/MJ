@@ -1208,6 +1208,34 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    * number under someone else's label is worse than a blank one, because nothing looks wrong.
    * An explicit `[Aggregates]` config is the host's instruction and always wins.
    */
+  /**
+   * The aggregates to write into CAPTURED state, as distinct from the ones to compute.
+   *
+   * These differ in exactly one case. {@link effectiveAggregatesConfig} returns `undefined` when it
+   * refuses a foreign grid state, which is right for computing — but captured state is persisted
+   * WHOLESALE (`persistUserDefaultGridState()` assigns `aggregates` unconditionally, and
+   * `GridStateChanged` replaces the renderer's whole `config.gridState`), so writing `undefined`
+   * does not mean "no opinion", it means "this view has no aggregates". A single column resize
+   * would then erase the destination view's real aggregates. Refusing the wrong numbers only to
+   * delete the right ones is not an improvement (raised by @rkihm-BC reviewing #4656).
+   *
+   * So on refusal — and ONLY on refusal, so that genuinely clearing aggregates still persists —
+   * fall back to what the loaded view record legitimately holds. The user-default path needs no
+   * equivalent: `loadUserDefaultGridState()` adopts its aggregates into `_aggregatesConfig`, which
+   * outranks the grid state and so never reaches a refusal.
+   */
+  private get capturableAggregatesConfig(): ViewGridAggregatesConfig | undefined {
+    const refusedForeignState =
+      !this._aggregatesConfig &&
+      !!this._gridState?.aggregates &&
+      !this.gridStateDescribesCurrentEntity();
+
+    if (refusedForeignState) {
+      return this._viewEntity?.GridStateObject?.aggregates ?? undefined;
+    }
+    return this.effectiveAggregatesConfig ?? undefined;
+  }
+
   private get effectiveAggregatesConfig(): ViewGridAggregatesConfig | null | undefined {
     if (this._aggregatesConfig) {
       return this._aggregatesConfig;
@@ -4602,7 +4630,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       sortSettings,
       // Via the getter, so a foreign state's aggregates are not captured into THIS entity's saved
       // view. Without it one column resize makes the wrong numbers durable.
-      aggregates: this.effectiveAggregatesConfig ?? undefined
+      aggregates: this.capturableAggregatesConfig
     };
   }
 

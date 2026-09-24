@@ -53,6 +53,7 @@ const ORDERS_COLUMNS = ['OrderNumber', 'OrderTotal', 'CustomerName'];
 
 type Internals = {
     _entityInfo: EntityInfo | null;
+    _viewEntity: { GridStateObject?: { aggregates?: unknown } } | null;
     _gridState: unknown;
     _aggregatesConfig: unknown;
     _columns: unknown[];
@@ -109,6 +110,43 @@ describe('EntityDataGridComponent — aggregates from a foreign grid state', () 
         expect(captured.aggregates?.expressions ?? []).toEqual([]);
     });
 
+    it('do not ERASE the loaded view\'s own aggregates when refused', () => {
+        // Captured state is persisted wholesale, so `undefined` does not read as "no opinion" — it
+        // reads as "this view has no aggregates", and one column resize would delete the real ones.
+        // Refusing the wrong numbers only to lose the right ones is not an improvement.
+        const viewOwn = {
+            expressions: [{ id: 'v1', expression: 'COUNT(*)', displayType: 'card', label: 'Care Logs', enabled: true }],
+        };
+        const grid = withState(makeGrid(CARE_LOGS), ORDERS_COLUMNS, ORDERS_AGGREGATES);
+        internalsOf(grid)._viewEntity = { GridStateObject: { aggregates: viewOwn } };
+        internalsOf(grid).gridApi = { getColumnState: () => [] };
+
+        const captured = internalsOf(grid).buildCurrentGridState();
+
+        expect(captured.aggregates).toEqual(viewOwn);
+    });
+
+    it('capture stays empty on refusal when there is no view record to preserve', () => {
+        // Nothing legitimate exists to fall back to, so the refusal stands.
+        const grid = withState(makeGrid(CARE_LOGS), ORDERS_COLUMNS, ORDERS_AGGREGATES);
+        internalsOf(grid)._viewEntity = null;
+        internalsOf(grid).gridApi = { getColumnState: () => [] };
+
+        expect(internalsOf(grid).buildCurrentGridState().aggregates).toBeUndefined();
+    });
+
+    it('does NOT resurrect view aggregates when the user genuinely cleared them', () => {
+        // No refusal here: the state describes this entity, so an empty explicit config is a real
+        // user action and must persist as empty rather than being overwritten by the view record.
+        const empty = { expressions: [] };
+        const grid = withState(makeGrid(CARE_LOGS), ['CareDate'], undefined);
+        internalsOf(grid)._aggregatesConfig = empty;
+        internalsOf(grid)._viewEntity = { GridStateObject: { aggregates: ORDERS_AGGREGATES } };
+        internalsOf(grid).gridApi = { getColumnState: () => [] };
+
+        expect(internalsOf(grid).buildCurrentGridState().aggregates).toEqual(empty);
+    });
+
     it('ARE honoured when the state does describe this entity', () => {
         // The normal path must be untouched: a real saved view's aggregates still apply.
         const own = {
@@ -122,7 +160,6 @@ describe('EntityDataGridComponent — aggregates from a foreign grid state', () 
     it('ARE honoured when the state carries aggregates but no columnSettings', () => {
         // No column list is no evidence either way, so refusing here would break an
         // aggregates-only state that is perfectly valid.
-        internalsOf(makeGrid(CARE_LOGS));
         const grid = makeGrid(CARE_LOGS);
         internalsOf(grid)._gridState = { aggregates: ORDERS_AGGREGATES };
 
