@@ -5,3 +5,4 @@ export * from './entities/validation';
 export * from './topology/bindings';
 export * from './topology/validateTopology';
 export * from './topology/manifest';
+export * from './WorkQueueEngineBase';

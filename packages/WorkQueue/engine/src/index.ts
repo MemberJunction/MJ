@@ -33,3 +33,6 @@ export * from './entities/WorkQueueSubscriptionEntityServer';
 export * from './entities/DriverOwnedEntityServers';
 export * from './entities/partitionModeChange';
 export * from './publish/WorkQueuePublishCoordinator';
+export * from './engine/driverResolution';
+export * from './engine/PublishListenerSet';
+export * from './WorkQueueEngine';

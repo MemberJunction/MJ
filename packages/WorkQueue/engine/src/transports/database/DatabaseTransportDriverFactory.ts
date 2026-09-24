@@ -13,3 +13,8 @@ export class DatabaseTransportDriverFactory extends BaseTransportDriverFactory {
         return new DatabaseTransportDriver(deps.Executor, deps);
     }
 }
+
+/** Keeps the factory's @RegisterClass registration alive under tree-shaking (MJ convention for registered classes). */
+export function LoadDatabaseTransportDriverFactory(): void {
+    // The import of this module is the side effect; the body is intentionally empty.
+}
