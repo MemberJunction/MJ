@@ -1463,7 +1463,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (this.PendingArtifacts.length === 0) {
       return NO_PENDING_ARTIFACTS;
     }
-    // UUIDsEqual, not string equality: these two IDs come from different sources — one from the
+    // Case-insensitive, not string equality: these two IDs come from different sources — one from the
     // conversation query, one off a loaded entity — and SQL Server returns upper-case UUIDs where
     // PostgreSQL returns lower-case. A case-sensitive match left a placeholder sitting above the
     // very card it was waiting for. See guides/UUID_COMPARISON_GUIDE.md.

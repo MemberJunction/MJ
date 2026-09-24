@@ -130,8 +130,8 @@ function relatedSectionKey(relationship: FormContributionRelationship, sharesRel
 /**
  * Builds a function that returns {@link RelatedEntitySectionKey}`(relationship, displayInFormPeers)`
  * for any relationship, against the ONE peer set passed here. Build it once per peer set, then
- * call it once per relationship. The relationship does not have to be in the peer set (the chrome
- * resolver keys DisplayInForm=false rows against the full list).
+ * call it once per relationship. The relationship does not have to be in the peer set; it is keyed
+ * by how many peers share its related entity.
  *
  * Building counts each related entity once, so keying all n peers is O(n). Calling
  * RelatedEntitySectionKey per peer is O(n²), which on an entity with ~150 DisplayInForm
