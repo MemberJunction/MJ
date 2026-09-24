@@ -2524,9 +2524,18 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           const existingRecordId = existingResourceData?.ResourceRecordID || '';
           const newRecordId = tab.resourceRecordId || tab.configuration['recordId'] as string || '';
 
+          // Entity tells dynamic views apart: every one carries recordId 'dynamic', so without it
+          // opening #Contacts into a tab showing #Accounts retitles the tab and keeps the Accounts
+          // grid. Saved-view configs never carry Entity, so both sides are undefined there. It is
+          // also part of ComponentCacheManager's key for 'dynamic', which is what stops this
+          // reload from being handed back the component it just detached.
+          const existingEntity = existingResourceData?.Configuration?.Entity as string | undefined;
+          const newEntity = tab.configuration['Entity'] as string | undefined;
+
           const needsReload = !TabContainerComponent.IsSameResourceType(existingResourceData?.ResourceType, tab.configuration['resourceType'] as string | undefined) ||
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
                              existingRecordId !== newRecordId ||
+                             existingEntity !== newEntity ||
                              (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
 
           if (needsReload) {
