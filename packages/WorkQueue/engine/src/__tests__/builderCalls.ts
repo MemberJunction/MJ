@@ -1,5 +1,6 @@
 import type { SqlBuilderContext, SqlStatement } from '../sql/WorkQueueSqlExecutor';
 import { WorkQueueConsumeSql } from '../sql/WorkQueueConsumeSql';
+import { WorkQueueOperatorSql } from '../sql/WorkQueueOperatorSql';
 import { WorkQueuePublishSql } from '../sql/WorkQueuePublishSql';
 
 export const TOPIC = 'AAAAAAAA-0000-0000-0000-000000000001';
@@ -16,11 +17,12 @@ export interface SampleCall {
 
 /**
  * One representative invocation of every builder method that calls a procedure, so the parity test can check each
- * call's procedure name and argument order against the migration. Grows with each builder (Tasks 3–5).
+ * call's procedure name and argument order against the migration.
  */
 export function SampleCalls(context: SqlBuilderContext): SampleCall[] {
     const publish = new WorkQueuePublishSql(context);
     const consume = new WorkQueueConsumeSql(context);
+    const operator = new WorkQueueOperatorSql(context);
     return [
         { Method: 'Publish.AcquirePublishOrderLock', Statement: publish.AcquirePublishOrderLock(TOPIC, 'venue-42', 5000) },
         { Method: 'Publish.InsertMessage', Statement: publish.InsertMessage({
@@ -46,5 +48,16 @@ export function SampleCalls(context: SqlBuilderContext): SampleCall[] {
         { Method: 'Consume.DeadLetterDelivery', Statement: consume.DeadLetterDelivery(DELIVERY, TOKEN, 'MaxAttempts', 'boom') },
         { Method: 'Consume.ReleaseDelivery', Statement: consume.ReleaseDelivery(DELIVERY, TOKEN) },
         { Method: 'Consume.AcknowledgeCancel', Statement: consume.AcknowledgeCancel(DELIVERY, TOKEN) },
+        { Method: 'Operator.SubscriptionStats', Statement: operator.SubscriptionStats(SUB, true) },
+        { Method: 'Operator.ListDeadLetters', Statement: operator.ListDeadLetters(SUB, true, { DeliveryID: DELIVERY }, 50) },
+        { Method: 'Operator.ListPartitions', Statement: operator.ListPartitions(SUB, true, 'Blocked', null, 50) },
+        { Method: 'Operator.ReplayDelivery', Statement: operator.ReplayDelivery(SUB, DELIVERY, USER, 'retrying') },
+        { Method: 'Operator.DiscardDelivery', Statement: operator.DiscardDelivery(SUB, DELIVERY, false, USER, 'obsolete') },
+        { Method: 'Operator.CancelInFlightDelivery', Statement: operator.CancelInFlightDelivery(SUB, DELIVERY, USER, 'stop') },
+        { Method: 'Operator.ExpireLeasesAll', Statement: operator.ExpireLeasesAll() },
+        { Method: 'Operator.AcquireSweepLock', Statement: operator.AcquireSweepLock('mj-wq-sweep') },
+        { Method: 'Operator.ReadCommittedSnapshotState', Statement: operator.ReadCommittedSnapshotState() },
+        { Method: 'Operator.PurgeTerminalDeliveries', Statement: operator.PurgeTerminalDeliveries(500) },
+        { Method: 'Operator.PurgeOrphanMessages', Statement: operator.PurgeOrphanMessages(500) },
     ];
 }

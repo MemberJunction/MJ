@@ -8,3 +8,4 @@ export * from './sql/WorkQueueSqlBuilder';
 export * from './sql/ProcedureCallBuilder';
 export * from './sql/WorkQueuePublishSql';
 export * from './sql/WorkQueueConsumeSql';
+export * from './sql/WorkQueueOperatorSql';
