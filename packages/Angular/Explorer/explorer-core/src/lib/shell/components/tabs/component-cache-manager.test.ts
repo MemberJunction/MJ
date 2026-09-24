@@ -21,7 +21,7 @@ import { ComponentCacheManager } from './component-cache-manager';
 const DRIVER = 'ViewResource';
 const APP = 'app-1';
 
-type CacheArgs = Parameters<ComponentCacheManager['CacheComponent']>;
+type CacheArgs = Parameters<ComponentCacheManager['cacheComponent']>;
 
 /** Cache a component for a resource, then detach it so it is available for reuse. */
 function cacheAndDetach(manager: ComponentCacheManager, recordId: string, entity?: string): void {
@@ -31,8 +31,8 @@ function cacheAndDetach(manager: ComponentCacheManager, recordId: string, entity
     Configuration: { applicationId: APP, resourceTypeDriverClass: DRIVER, Entity: entity },
   } as unknown as CacheArgs[2];
   const componentRef = { instance: {}, destroy: vi.fn() } as unknown as CacheArgs[0];
-  manager.CacheComponent(componentRef, {} as HTMLElement, resourceData, 'tab-1');
-  manager.MarkAsDetached(DRIVER, recordId, APP, entity);
+  manager.cacheComponent(componentRef, {} as HTMLElement, resourceData, 'tab-1');
+  manager.markAsDetached(DRIVER, recordId, APP, entity);
 }
 
 /** No navigation service, and eviction only starts past MaxDetachedComponents, so ApplicationRef is never touched. */
@@ -43,19 +43,19 @@ describe('ComponentCacheManager — dynamic views', () => {
   it('keeps dynamic views of different entities apart', () => {
     const m = manager();
     cacheAndDetach(m, 'dynamic', 'Accounts');
-    expect(m.GetCachedComponent(DRIVER, 'dynamic', APP, 'Contacts')).toBeNull();
+    expect(m.getCachedComponent(DRIVER, 'dynamic', APP, 'Contacts')).toBeNull();
   });
 
   it('still reuses a dynamic view of the same entity', () => {
     const m = manager();
     cacheAndDetach(m, 'dynamic', 'Accounts');
-    expect(m.GetCachedComponent(DRIVER, 'dynamic', APP, 'Accounts')).not.toBeNull();
+    expect(m.getCachedComponent(DRIVER, 'dynamic', APP, 'Accounts')).not.toBeNull();
   });
 
   it('matches the marker the way ViewResourceComponent does (trimmed, case-insensitive)', () => {
     const m = manager();
     cacheAndDetach(m, 'Dynamic', 'Accounts');
-    expect(m.GetCachedComponent(DRIVER, 'Dynamic', APP, 'Contacts')).toBeNull();
+    expect(m.getCachedComponent(DRIVER, 'Dynamic', APP, 'Contacts')).toBeNull();
     expect(ComponentCacheManager.IsDynamicViewMarker(' DYNAMIC ')).toBe(true);
     expect(ComponentCacheManager.IsDynamicViewMarker('view-1')).toBe(false);
   });
@@ -65,14 +65,14 @@ describe('ComponentCacheManager — other resources are unchanged', () => {
   it('keys a real record id on the id alone, whatever the entity', () => {
     const m = manager();
     cacheAndDetach(m, 'view-1', 'Accounts');
-    expect(m.GetCachedComponent(DRIVER, 'view-1', APP, 'Contacts')).not.toBeNull();
-    expect(m.GetCachedComponent(DRIVER, 'view-1', APP)).not.toBeNull();
+    expect(m.getCachedComponent(DRIVER, 'view-1', APP, 'Contacts')).not.toBeNull();
+    expect(m.getCachedComponent(DRIVER, 'view-1', APP)).not.toBeNull();
   });
 
   it('still separates "new record" tabs of different entities by the empty-id rule', () => {
     const m = manager();
     cacheAndDetach(m, '', 'MJ: Companies');
-    expect(m.GetCachedComponent(DRIVER, '', APP, 'MJ: Employees')).toBeNull();
-    expect(m.GetCachedComponent(DRIVER, '', APP, 'MJ: Companies')).not.toBeNull();
+    expect(m.getCachedComponent(DRIVER, '', APP, 'MJ: Employees')).toBeNull();
+    expect(m.getCachedComponent(DRIVER, '', APP, 'MJ: Companies')).not.toBeNull();
   });
 });
