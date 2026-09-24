@@ -1015,11 +1015,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this._entitySupportsCommunication = false;
     try {
       const provider = this.ProviderToUse;
-      await CommunicationEngineBase.Instance.Config(false, provider?.CurrentUser, provider);
+      const engine = <CommunicationEngineBase>CommunicationEngineBase.GetProviderInstance(provider, CommunicationEngineBase);
+      await engine.Config(false, provider.CurrentUser, provider);
       if (this._entityInfo !== entity) {
         return; // the grid moved to another entity while the engine loaded
       }
-      this._entitySupportsCommunication = CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes
+      this._entitySupportsCommunication = engine.Metadata.EntityCommunicationMessageTypes
         .some(m => m.IsActive && UUIDsEqual(m.EntityID, entity.ID));
       this.cdr.detectChanges();
     } catch {
@@ -1145,8 +1146,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this._entityActionsAutoLoaded = true;
     try {
       const provider = this.ProviderToUse;
-      await EntityActionEngineBase.Instance.Config(false, provider?.CurrentUser, provider);
-      const configs = this.mapEntityActionsToConfigs(this._entityInfo.Name);
+      const engine = this.entityActionEngine();
+      await engine.Config(false, provider.CurrentUser, provider);
+      const configs = this.mapEntityActionsToConfigs(engine, this._entityInfo.Name);
       if (configs.length > 0) {
         this._entityActions = configs;
         this._showEntityActionButtons = true;
@@ -1158,9 +1160,13 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
+  /** The EntityAction engine for this grid's provider, so a multi-provider client reads the right server's actions. */
+  private entityActionEngine(): EntityActionEngineBase {
+    return <EntityActionEngineBase>EntityActionEngineBase.GetProviderInstance(this.ProviderToUse, EntityActionEngineBase);
+  }
+
   /** Maps the entity's active EntityActions to grid configs, carrying the driver key + RecordProcessID. */
-  private mapEntityActionsToConfigs(entityName: string): EntityActionConfig[] {
-    const engine = EntityActionEngineBase.Instance;
+  private mapEntityActionsToConfigs(engine: EntityActionEngineBase, entityName: string): EntityActionConfig[] {
     return engine.GetActionsByEntityName(entityName, 'Active').map((ea): EntityActionConfig => {
       const driverInvocation = engine.Invocations.find(i => UUIDsEqual(i.EntityActionID, ea.ID) && !!i.RuntimeUXDriverClass);
       const recordProcessParam = engine.Params.find(p => UUIDsEqual(p.EntityActionID, ea.ID) && p.ActionParam?.trim().toLowerCase() === 'recordprocessid');
@@ -5006,12 +5012,14 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   public GetExportColumns(): ExportColumn[] {
     const displayed = this.gridApi?.getAllDisplayedColumns() ?? [];
     const defs = displayed.length > 0
-      ? displayed.map(c => ({ def: c.getColDef(), width: c.getActualWidth() }))
-      : this.AgColumnDefs.filter(d => !d.hide).map(d => ({ def: d, width: typeof d.width === 'number' ? d.width : undefined }));
+      ? displayed.map(c => c.getColDef())
+      : this.AgColumnDefs.filter(d => !d.hide);
 
+    // No `width`: ExportColumn.width is in characters, while grid widths are pixels, so passing them
+    // made a 150px column 150 characters wide. Left unset, the Excel exporter auto-fits each column.
     return defs
-      .filter(({ def }) => this.isExportableColumn(def))
-      .map(({ def, width }) => {
+      .filter(def => this.isExportableColumn(def))
+      .map(def => {
         const colField = def.field as string;
         // Case-insensitive, matching how col defs and auto-width resolve a host's field name.
         const field = this._entityInfo?.Fields.find(f => f.Name.toLowerCase() === colField.toLowerCase());
@@ -5021,8 +5029,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
           // exported a correctly-headed column of blank cells.
           name: field?.Name ?? colField,
           displayName: def.headerName || field?.DisplayNameOrName || colField,
-          dataType: this.mapFieldTypeToExportType(field?.Type),
-          width
+          dataType: this.mapFieldTypeToExportType(field?.Type)
         };
       });
   }

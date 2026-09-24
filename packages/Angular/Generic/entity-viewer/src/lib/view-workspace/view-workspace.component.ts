@@ -8,7 +8,7 @@ import {
   ViewChild
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, LogError } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   MJUserViewEntityExtended,
@@ -714,10 +714,11 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
   /**
    * Columns to export: what the active renderer shows on screen (the grid), else the view's saved
-   * columns, else the entity fields. The saved columns are read the way the grid renders them —
-   * sorted by `orderIndex`, headed by the user's rename, and resolved to the entity's field spelling
-   * (the export engine reads each row by that key) — so Cards, Map and Timeline export the columns a
-   * grid of this view would show.
+   * columns, else the entity fields. The fallbacks apply the grid's own rules, so Cards, Map and
+   * Timeline export the columns a grid of this view would show: saved settings are sorted by
+   * `orderIndex`, headed by the user's rename, resolved to the entity's field spelling (the export
+   * engine reads each row by that key), and dropped when the field no longer exists; fields the
+   * user is denied read access to are left out.
    */
   private buildExportColumns(): ExportColumn[] {
     const entity = this._entity;
@@ -728,21 +729,28 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     if (onScreen.length > 0) {
       return onScreen;
     }
+    const user = this.ProviderToUse?.CurrentUser;
+    const denied = user ? entity.GetDeniedReadFields(user) : new Set<string>();
+    const readable = (f: EntityFieldInfo) => !denied.has(f.Name.trim().toLowerCase());
+
     const gridCols = this.CurrentGridState?.columnSettings;
     if (gridCols && gridCols.length > 0) {
-      return [...gridCols]
+      const columns: ExportColumn[] = [];
+      const sorted = [...gridCols]
         .filter(c => c.hidden !== true)
-        .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
-        .map(c => {
-          const field = entity.Fields.find(f => f.Name.toLowerCase() === c.Name.toLowerCase());
-          return {
-            name: field?.Name ?? c.Name,
-            displayName: c.userDisplayName || c.DisplayName || field?.DisplayNameOrName || c.Name
-          };
-        });
+        .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+      for (const c of sorted) {
+        const field = entity.Fields.find(f => f.Name.toLowerCase() === c.Name.toLowerCase());
+        if (field && readable(field)) {
+          columns.push({ name: field.Name, displayName: c.userDisplayName || c.DisplayName || field.DisplayNameOrName });
+        }
+      }
+      if (columns.length > 0) {
+        return columns;
+      }
     }
     return entity.Fields
-      .filter(f => !f.IsVirtual)
+      .filter(f => !f.IsVirtual && readable(f))
       .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
   }
 
