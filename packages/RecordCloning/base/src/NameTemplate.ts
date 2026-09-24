@@ -47,33 +47,45 @@ export function RenderNameTemplate(template: string, ctx: NameTemplateContext): 
  * - "Widget" -> "Widget 2"
  */
 export function IncrementName(name: string): string {
+    // Linear scans instead of anchored lazy regexes, which backtrack polynomially on long digit or whitespace runs.
+
     // 1. Parenthesized number at end: "Title (1)" -> "Title (2)"
-    const parenMatch = name.match(/^(.*?)\s*\((\d+)\)$/);
-    if (parenMatch) {
-        const prefix = parenMatch[1];
-        const num = parseInt(parenMatch[2], 10) + 1;
-        return `${prefix} (${num})`;
+    if (name.endsWith(')')) {
+        const [beforeDigits, digits] = splitTrailingDigits(name.slice(0, -1));
+        if (digits && beforeDigits.endsWith('(')) {
+            const prefix = beforeDigits.slice(0, -1).trimEnd();
+            return `${prefix} (${parseInt(digits, 10) + 1})`;
+        }
     }
 
     // 2. Dotted version at end: "Title v1.2" or "Title 1.2" -> "Title 1.3"
-    const versionMatch = name.match(/^(.*?)(\d+)\.(\d+)$/);
-    if (versionMatch) {
-        const prefix = versionMatch[1];
-        const major = versionMatch[2];
-        const minor = parseInt(versionMatch[3], 10) + 1;
-        return `${prefix}${major}.${minor}`;
+    const [beforeMinor, minor] = splitTrailingDigits(name);
+    if (minor && beforeMinor.endsWith('.')) {
+        const [prefix, major] = splitTrailingDigits(beforeMinor.slice(0, -1));
+        if (major) {
+            return `${prefix}${major}.${parseInt(minor, 10) + 1}`;
+        }
     }
 
-    // 3. Trailing integer with or without 'v'/'V': "Title v1" -> "Title v2", "Title 5" -> "Title 6"
-    const trailingNumMatch = name.match(/^(.*?\b[vV]?)(\d+)$/);
-    if (trailingNumMatch) {
-        const prefix = trailingNumMatch[1];
-        const num = parseInt(trailingNumMatch[2], 10) + 1;
-        return `${prefix}${num}`;
+    // 3. Trailing integer with or without 'v'/'V' after a word boundary: "Title v1" -> "Title v2", "Title 5" -> "Title 6"
+    if (minor) {
+        const withoutV = /[vV]$/.test(beforeMinor) ? beforeMinor.slice(0, -1) : beforeMinor;
+        if (withoutV === '' || !/\w$/.test(withoutV)) {
+            return `${beforeMinor}${parseInt(minor, 10) + 1}`;
+        }
     }
 
     // 4. No number: append " 2"
     return `${name} 2`;
+}
+
+/** Splits a string into [everything before the trailing digit run, the trailing digits]. */
+function splitTrailingDigits(value: string): [string, string] {
+    let i = value.length;
+    while (i > 0 && value.charCodeAt(i - 1) >= 48 && value.charCodeAt(i - 1) <= 57) {
+        i--;
+    }
+    return [value.slice(0, i), value.slice(i)];
 }
 
 /**

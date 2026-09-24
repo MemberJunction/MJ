@@ -55,6 +55,20 @@ describe('NameTemplate', () => {
         it('appends " 2" when name has no number', () => {
             expect(IncrementName('Monthly Summary')).toBe('Monthly Summary 2');
         });
+
+        it('keeps the word-boundary rule for trailing integers', () => {
+            expect(IncrementName('Title5')).toBe('Title5 2');
+            expect(IncrementName('v1')).toBe('v2');
+            expect(IncrementName('Build-12')).toBe('Build-13');
+            expect(IncrementName('Report  (3)')).toBe('Report (4)');
+        });
+
+        it('stays linear on long whitespace and digit runs', () => {
+            const start = Date.now();
+            IncrementName('\t'.repeat(50000) + 'x');
+            IncrementName('0'.repeat(50000) + '.x');
+            expect(Date.now() - start).toBeLessThan(250);
+        });
     });
 
     describe('FindNextAvailableName deterministic collision counter', () => {

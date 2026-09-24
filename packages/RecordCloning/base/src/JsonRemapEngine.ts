@@ -5,6 +5,7 @@
  * @see plans/record-cloning/README.md §7.6, §13.1
  */
 
+import { Uuidv4 } from '@memberjunction/global';
 import { CloneWarning } from './types';
 
 export type JsonRemapMode = 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
@@ -35,19 +36,9 @@ export interface JsonRemapResult {
     Warning?: CloneWarning;
 }
 
+/** Mints a v4 UUID through MJGlobal's `Uuidv4` (crypto-backed; never `Math.random`). */
 export function GenerateUUID(): string {
-    if (
-        typeof globalThis !== 'undefined' &&
-        globalThis.crypto &&
-        typeof globalThis.crypto.randomUUID === 'function'
-    ) {
-        return globalThis.crypto.randomUUID();
-    }
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0;
-        const v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-    });
+    return Uuidv4();
 }
 
 /**
