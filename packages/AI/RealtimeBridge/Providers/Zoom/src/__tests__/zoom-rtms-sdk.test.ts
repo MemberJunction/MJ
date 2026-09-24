@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
     ZoomRtmsMeetingSdk,
     BindZoomRtms,
-    readRtmsConfig,
-    mapRtmsAudioFrame,
-    toArrayBuffer,
+    ReadRtmsConfig,
+    MapRtmsAudioFrame,
+    ToArrayBuffer,
     RtmsClient,
     RtmsModule,
     RtmsAudioCallback,
@@ -99,7 +99,7 @@ const JOIN_ARGS: ZoomJoinArgs = { MeetingNumber: '987654321', BotDisplayName: 'S
 
 describe('mapRtmsAudioFrame — pure RTMS frame → {Pcm, ParticipantId} mapping', () => {
     it('maps the 3-arg form (data, timestamp, metadata)', () => {
-        const frame = mapRtmsAudioFrame(bytes(1, 2, 3), 42, { userId: 'u-7', userName: 'Alice' });
+        const frame = MapRtmsAudioFrame(bytes(1, 2, 3), 42, { userId: 'u-7', userName: 'Alice' });
         expect(new Uint8Array(frame.Pcm)).toEqual(new Uint8Array([1, 2, 3]));
         expect(frame.ParticipantId).toBe('u-7');
         expect(frame.DisplayName).toBe('Alice');
@@ -107,39 +107,39 @@ describe('mapRtmsAudioFrame — pure RTMS frame → {Pcm, ParticipantId} mapping
     });
 
     it('maps the 4-arg form (data, size, timestamp, metadata)', () => {
-        const frame = mapRtmsAudioFrame(bytes(9, 8), 2, 100, { userId: 5, userName: 'Bob' });
+        const frame = MapRtmsAudioFrame(bytes(9, 8), 2, 100, { userId: 5, userName: 'Bob' });
         expect(new Uint8Array(frame.Pcm)).toEqual(new Uint8Array([9, 8]));
         expect(frame.ParticipantId).toBe('5'); // numeric id coerced to string
         expect(frame.TimestampMs).toBe(100);
     });
 
     it('prefers userId, falls back to userName for the diarization label', () => {
-        const byName = mapRtmsAudioFrame(bytes(1), 0, { userName: 'Carol' });
+        const byName = MapRtmsAudioFrame(bytes(1), 0, { userName: 'Carol' });
         expect(byName.ParticipantId).toBe('Carol');
     });
 
     it('labels a frame "unknown" when metadata carries no identity (never drops it)', () => {
-        const frame = mapRtmsAudioFrame(bytes(1), 0, {});
+        const frame = MapRtmsAudioFrame(bytes(1), 0, {});
         expect(frame.ParticipantId).toBe('unknown');
     });
 
     it('falls back to Date.now() when no timestamp is present', () => {
         const before = Date.now();
-        const frame = mapRtmsAudioFrame(bytes(1), undefined, { userId: 'u-1' });
+        const frame = MapRtmsAudioFrame(bytes(1), undefined, { userId: 'u-1' });
         expect(frame.TimestampMs).toBeGreaterThanOrEqual(before);
     });
 
     it('copies a Uint8Array view into a standalone ArrayBuffer (no shared backing window)', () => {
         const backing = new Uint8Array([0, 1, 2, 3, 4]);
         const view = backing.subarray(1, 3); // [1,2]
-        const frame = mapRtmsAudioFrame(view, 0, { userId: 'u' });
+        const frame = MapRtmsAudioFrame(view, 0, { userId: 'u' });
         expect(new Uint8Array(frame.Pcm)).toEqual(new Uint8Array([1, 2]));
         expect(frame.Pcm.byteLength).toBe(2); // not the full 5-byte backing buffer
     });
 
     it('toArrayBuffer passes an ArrayBuffer through unchanged', () => {
         const ab = new Uint8Array([7]).buffer;
-        expect(toArrayBuffer(ab)).toBe(ab);
+        expect(ToArrayBuffer(ab)).toBe(ab);
     });
 });
 
@@ -149,24 +149,24 @@ describe('mapRtmsAudioFrame — pure RTMS frame → {Pcm, ParticipantId} mapping
 
 describe('readRtmsConfig — Configuration extraction without `any`', () => {
     it('reads creds + a well-formed Connection block', () => {
-        const cfg = readRtmsConfig({ ClientId: 'cid', ClientSecret: 'sec', Connection: { ...CONNECTION } });
+        const cfg = ReadRtmsConfig({ ClientId: 'cid', ClientSecret: 'sec', Connection: { ...CONNECTION } });
         expect(cfg.ClientId).toBe('cid');
         expect(cfg.ClientSecret).toBe('sec');
         expect(cfg.Connection).toEqual(CONNECTION);
     });
 
     it('returns Connection=undefined when required webhook fields are missing', () => {
-        const cfg = readRtmsConfig({ Connection: { meeting_uuid: 'u', rtms_stream_id: 's' } }); // no server_urls
+        const cfg = ReadRtmsConfig({ Connection: { meeting_uuid: 'u', rtms_stream_id: 's' } }); // no server_urls
         expect(cfg.Connection).toBeUndefined();
     });
 
     it('tolerates a completely empty/undefined config', () => {
-        expect(readRtmsConfig(undefined).Connection).toBeUndefined();
-        expect(readRtmsConfig({}).ClientId).toBeUndefined();
+        expect(ReadRtmsConfig(undefined).Connection).toBeUndefined();
+        expect(ReadRtmsConfig({}).ClientId).toBeUndefined();
     });
 
     it('ignores non-string cred values rather than coercing them', () => {
-        const cfg = readRtmsConfig({ ClientId: 123 as unknown as string });
+        const cfg = ReadRtmsConfig({ ClientId: 123 as unknown as string });
         expect(cfg.ClientId).toBeUndefined();
     });
 });

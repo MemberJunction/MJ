@@ -7,7 +7,6 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
@@ -18,11 +17,12 @@ import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-bu
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
-import { CreateAppSchema, DropAppSchema, SchemaExists } from './schema-manager.js';
-import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.js';
-import { extractApplicationIds } from './migration-application-ids.js';
+import { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
+import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
+import { ExtractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
@@ -339,7 +339,11 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
       // Steps 6-7: Schema
       if (manifest.schema) {
-        const schemaResult = await HandleSchemaCreation(manifest, context, isReinstall || isResume, options.AllowDoubleUnderscoreSchema === true);
+        const schemaResult = await HandleSchemaCreation(manifest, context, {
+          IsReinstall: isReinstall || isResume,
+          AllowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+          ThisAppId: existingApp?.ID ?? '',
+        });
         if (!schemaResult.Success) {
           return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, schemaResult.ErrorMessage ?? 'Schema creation failed');
         }
@@ -462,7 +466,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
           ContextUser: context.ContextUser,
           Callbacks: context.Callbacks,
           Manifest: manifest,
-        }, context.RepoRoot);
+        }, context, manifest);
       }
       await SetAppStep(context.ContextUser, createdAppId!, 'HooksRun');
     }
@@ -663,8 +667,15 @@ async function CompensateSchemaOnFailure(
   // 3. The app's own schema (and with it, its migration history table).
   try {
     callbacks?.OnProgress?.('Rollback', `Dropping schema '${schemaName}'...`);
-    await DropAppSchema(schemaName, context.DatabaseProvider, { allowDoubleUnderscore });
-    callbacks?.OnProgress?.('Rollback', `Schema '${schemaName}' dropped successfully`);
+    // DropAppSchema reports failure by RETURNING { Success: false, ErrorMessage } — it does not
+    // throw (see the catch at the end of DropAppSchema in schema-manager.ts) — so the catch below
+    // alone would never see a failed drop. The result must be inspected explicitly.
+    const dropResult = await DropAppSchema(schemaName, context.DatabaseProvider, { allowDoubleUnderscore });
+    if (!dropResult.Success) {
+      callbacks?.OnError?.('Rollback', `Failed to drop schema '${schemaName}' during rollback: ${dropResult.ErrorMessage ?? 'unknown error'}`);
+    } else {
+      callbacks?.OnProgress?.('Rollback', `Schema '${schemaName}' dropped successfully`);
+    }
   } catch (rollbackError: unknown) {
     const msg = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
     callbacks?.OnError?.('Rollback', `Failed to drop schema '${schemaName}' during rollback: ${msg}`);
@@ -754,6 +765,20 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     const compatResult = CheckMJVersionCompatibility(context.MJVersion, manifest.mjVersionRange);
     if (!compatResult.Compatible) {
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, compatResult.Message ?? 'Incompatible MJ version');
+    }
+
+    // Upgrade never reaches HandleSchemaCreation (that is install-only), so this is the ONLY
+    // place the new version's schema name is checked. A v2 manifest can name a different schema
+    // than v1 — the rename is even detected further down, to clean up config references — and
+    // without this the new name goes straight to HandleMigrations, running that version's DDL
+    // inside whatever it asked for. Before any mutation, so a rejected upgrade changes nothing.
+    if (manifest.schema) {
+      const schemaValidation = ValidateSchemaName(manifest.schema.name, {
+        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+      });
+      if (!schemaValidation.Success) {
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, schemaValidation.ErrorMessage ?? 'Invalid schema name');
+      }
     }
 
     // Step 3: Check dependency compatibility
@@ -953,7 +978,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
           ContextUser: context.ContextUser,
           Callbacks: context.Callbacks,
           Manifest: manifest,
-        }, context.RepoRoot);
+        }, context, manifest);
       }
       await SetAppStep(context.ContextUser, existingApp.ID, 'HooksRun', undefined, manifest.version);
     }
@@ -1026,6 +1051,53 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 // ─────────────────────────────────────────────────────────────────────────────
 // REMOVE FLOW
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Composes what `RemoveApp` tells an operator when it refuses to drop an app's schema — including
+ * the one remedy that actually applies. `ValidateSchemaName` classifies WHY it refused, and the
+ * classes need different things said:
+ *   - `OverriddenBy` set (the `__`-namespace rule): the SAME override the install used lifts the
+ *     rule again here, so the schema is NOT un-droppable — point back at that flag instead of
+ *     parking the operator on `--keep-data`. The validator's own message is written for install
+ *     and upgrade ("is not available", "choose a name that does not start with `__`"), which
+ *     addresses a reader who is not here: this name is fixed and this app is being deleted. So say
+ *     it in remove's terms rather than quoting the validator.
+ *   - `Malformed`: the stored name is unusable, so there is no schema to claim ownership of —
+ *     asserting MJ "must never drop" it would be false. `--keep-data` is still the way out.
+ *   - `ReservedByPlatform` / `ReservedByMJ`: MJ or the platform owns the name outright and no flag
+ *     unblocks it. This is the one reserved-name rejection an operator can hit WITHOUT having done
+ *     anything wrong, and refusing leaves the app in status `Error`, still installed, with the
+ *     reinstall path failing on the same name. Refusing is right — these are schemas MJ must never
+ *     drop — so name `--keep-data`, the real exit.
+ * None of the branches claims to know the app's install history; the runtime never checks it.
+ */
+function BuildSchemaDropRefusalMessage(check: SchemaNameValidation, appName: string, schemaName: string): string {
+  if (check.OverriddenBy) {
+    return (
+      `Schema '${schemaName}' is outside the '${MJ_APP_SCHEMA_PREFIX}<AppName>' app namespace, so '${appName}' remove ` +
+      `will not drop it by default. Re-run with --dangerously-ignore-dbl-underscore-schema-rule to drop it.`
+    );
+  }
+  // Malformed, ReservedByPlatform and ReservedByMJ are the classes that reach this line, and
+  // their templates quote the validator verbatim as the lead-in with no trailing sentence
+  // terminator today; they're shared with the install and upgrade paths (which emit them as-is),
+  // so normalize the join here rather than editing them. MJNamespace's template DOES end in a
+  // period, but it always carries OverriddenBy and returns via the branch above before reaching
+  // this normalization — so the conditional's already-terminated branch is currently unreachable,
+  // not merely untested.
+  const validatorMessage = check.ErrorMessage ?? '';
+  const leadIn = /[.!?]$/.test(validatorMessage) ? validatorMessage : `${validatorMessage}.`;
+  if (check.Rule === 'Malformed') {
+    return (
+      `${leadIn} '${appName}' has an unusable stored schema name, so no schema can be addressed for it. ` +
+      `Re-run with --keep-data to remove '${appName}' and leave any schema in place.`
+    );
+  }
+  return (
+    `${leadIn} MemberJunction must never drop schema '${schemaName}'. ` +
+    `Re-run with --keep-data to remove '${appName}' and leave the schema in place.`
+  );
+}
 
 /**
  * Executes the remove flow for an installed Open App, inverting whatever the install added.
@@ -1115,7 +1187,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
         ContextUser: context.ContextUser,
         Callbacks: context.Callbacks,
         Manifest: manifest,
-      }, context.RepoRoot);
+      }, context, manifest);
     }
 
     // Step 3: Database cleanup FIRST — metadata + schema (the hard-to-undo, failure-prone
@@ -1172,13 +1244,25 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
 
       let schemaDropError: string | undefined;
       if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
-        Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
-        const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
+        // Check the name here, where the remove-specific remedies are still available, and say
+        // which one applies (see `BuildSchemaDropRefusalMessage`). `DropAppSchema` still validates
+        // for itself; this exists so a refusal names the operator's way out instead of being a
+        // wall — or, for the overridable case, so it is not a dead end at all.
+        const nameCheck = ValidateSchemaName(existingApp.SchemaName, {
           allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
         });
-        if (!dropResult.Success) {
-          schemaDropError = dropResult.ErrorMessage;
-          Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
+        if (!nameCheck.Success) {
+          schemaDropError = BuildSchemaDropRefusalMessage(nameCheck, existingApp.Name, existingApp.SchemaName);
+          Callbacks?.OnError?.('Schema', schemaDropError);
+        } else {
+          Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
+          const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
+            allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+          });
+          if (!dropResult.Success) {
+            schemaDropError = dropResult.ErrorMessage;
+            Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
+          }
         }
       }
 
@@ -1587,11 +1671,66 @@ export async function ResolveDependencyVersion(
 }
 
 /**
+ * Warns when the schema an install is about to ADOPT is already owned by another installed app.
+ *
+ * Adoption stays allowed — apps legitimately share a schema via `createIfNotExists`, and refusing
+ * would break that. But it must not be silent: once this app's row exists,
+ * `CheckSchemaSharedByOtherApps` reports the schema as shared, which makes the ORIGINAL owner's
+ * `mj app remove` skip its schema drop and metadata cleanup to protect the co-tenant. So a
+ * careless adopt quietly disarms someone else's uninstall.
+ *
+ * Best-effort and never fatal: an indeterminate check (`CheckFailed`) is reported as a warning of
+ * its own rather than blocking an install that is otherwise fine. `thisAppId` excludes this app's
+ * own row so a reinstall does not warn about itself.
+ */
+async function WarnIfSchemaOwnedByAnotherApp(schemaName: string, thisAppId: string, context: OrchestratorContext): Promise<void> {
+  const share = await CheckSchemaSharedByOtherApps(context.ContextUser, schemaName, thisAppId, context.DatabaseProvider);
+  if (share.CheckFailed) {
+    context.Callbacks?.OnWarn?.(
+      'Schema',
+      `Could not determine whether another installed app already owns schema '${schemaName}': ${share.ErrorMessage ?? 'unknown error'}. ` +
+      `Proceeding with the install.`
+    );
+    return;
+  }
+  if (share.Shared) {
+    context.Callbacks?.OnWarn?.(
+      'Schema',
+      `Schema '${schemaName}' is already owned by another installed app. This app will share it, which is supported — ` +
+      `but be aware that 'mj app remove' will now SKIP dropping this schema and its entity metadata for BOTH apps, ` +
+      `to avoid destroying the co-tenant's data. Remove the other app first if you intended to take the schema over.`
+    );
+  }
+}
+
+/** Inputs to {@link HandleSchemaCreation}. Named rather than positional — three of these in a row
+ * as bare arguments (two of them booleans) reads as `(manifest, context, true, false, '')`. */
+interface HandleSchemaCreationOptions {
+  /** Reinstall or resume — an existing schema is expected, so adopt it rather than failing. */
+  IsReinstall: boolean;
+  /** Permit `__`-prefixed names outside the `__mj_<AppName>` namespace. Never unblocks a reserved name. */
+  AllowDoubleUnderscore: boolean;
+  /** This app's own row ID, excluded from the co-tenant check so a reinstall never warns about itself. */
+  ThisAppId: string;
+}
+
+/**
  * Handles schema creation for an app, including collision checks and reinstall reuse.
  */
-async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, isReinstall: boolean = false, allowDoubleUnderscore: boolean = false): Promise<InternalResult> {
+async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, options: HandleSchemaCreationOptions): Promise<InternalResult> {
   if (!manifest.schema) {
     return { Success: true };
+  }
+
+  // Validate BEFORE probing for existence. The "schema already exists → adopt it" branch below
+  // never reaches CreateAppSchema, so this is the only place the name is checked on that path —
+  // and it is the path that matters most, because the schemas worth protecting (`__mj`,
+  // `__mj_UDT`) exist in every MJ database. Adopting one would hand it to `mj app remove`,
+  // which DROPs the app's schema. CreateAppSchema validates again on the create path; that
+  // duplication is deliberate — it is an exported function and must guard its own contract.
+  const validation = ValidateSchemaName(manifest.schema.name, { allowDoubleUnderscore: options.AllowDoubleUnderscore });
+  if (!validation.Success) {
+    return { Success: false, ErrorMessage: validation.ErrorMessage };
   }
 
   context.Callbacks?.OnProgress?.('Schema', `Checking schema '${manifest.schema.name}'...`);
@@ -1603,11 +1742,12 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
   const exists = await SchemaExists(canonicalSchemaName, context.DatabaseProvider);
 
   if (exists) {
-    if (isReinstall || manifest.schema.createIfNotExists !== false) {
+    if (options.IsReinstall || manifest.schema.createIfNotExists !== false) {
       // Schema already exists — either a reinstall (previously removed app),
       // or createIfNotExists is set (the app expects to adopt an existing schema).
       // Reuse it and let Skyway apply only new migrations.
       context.Callbacks?.OnProgress?.('Schema', `Reusing existing schema '${manifest.schema.name}'`);
+      await WarnIfSchemaOwnedByAnotherApp(manifest.schema.name, options.ThisAppId, context);
       return { Success: true, Created: false };
     }
     return { Success: false, ErrorMessage: `Schema '${manifest.schema.name}' already exists` };
@@ -1615,7 +1755,7 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
 
   if (manifest.schema.createIfNotExists !== false) {
     context.Callbacks?.OnProgress?.('Schema', `Creating schema '${manifest.schema.name}'...`);
-    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
+    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore: options.AllowDoubleUnderscore });
     return { Success: result.Success, ErrorMessage: result.ErrorMessage, Created: result.Success };
   }
 
@@ -1871,6 +2011,13 @@ async function HandlePackageInstallation(
 
   context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
   const installResult = RunPackageInstall(context.RepoRoot, verbose, manifest.packages.registry, context.PackageManager);
+  if (installResult.DevWorkspaceParent) {
+    context.Callbacks?.OnProgress?.(
+      'Packages',
+      `Ran the install at the mj dev workspace parent ${installResult.DevWorkspaceParent} — this repo is a member there, ` +
+        `and an in-place install would have created a second, standalone store beside the workspace links.`
+    );
+  }
   if (!installResult.Success) {
     return { Success: false, PackageJsonUpdated: true, ErrorMessage: installResult.ErrorMessage };
   }
@@ -2048,31 +2195,39 @@ async function ExecuteHook(command: string, cwd: string): Promise<void> {
 }
 
 /**
- * Executes an in-process lifecycle hook MODULE. The specifier is resolved from the
- * consumer monorepo (`repoRoot`) so it loads one of the app's already-installed npm
- * packages (npm install runs earlier in the flow), then its default export is awaited
- * with the live {@link AppHookPayload} — DB provider, context user, interactive prompt
- * callbacks, and the manifest. Unlike {@link ExecuteHook} this runs IN-PROCESS: no child
- * process, no execSync timeout, and no need for the hook to self-bootstrap a DB
- * connection. This is what powers DB-aware, interactive setup/teardown (e.g. a guided
- * config wizard). A repo-relative path will NOT work here — only the manifest + migration
- * .sql files are downloaded to the consumer, never the app's source — so the specifier
- * must resolve to an installed package (e.g. '@scope/app-server/setup').
+ * Executes an in-process lifecycle hook MODULE. The specifier is resolved from where the
+ * app's npm packages were installed (package install runs earlier in the flow) — each
+ * installed app package first, then the server / client workspaces, then the repo root; see
+ * {@link BuildHookResolutionBases} for why the repo root alone stopped working under pnpm —
+ * then its default export is awaited with the live {@link AppHookPayload}: DB provider,
+ * context user, interactive prompt callbacks, and the manifest. Unlike {@link ExecuteHook}
+ * this runs IN-PROCESS: no child process, no execSync timeout, and no need for the hook to
+ * self-bootstrap a DB connection. This is what powers DB-aware, interactive setup/teardown
+ * (e.g. a guided config wizard). A repo-relative path will NOT work here — only the manifest
+ * + migration .sql files are downloaded to the consumer, never the app's source — so the
+ * specifier must resolve to an installed package or one of its dependencies (e.g.
+ * '@scope/app-server/setup', or '@scope/app-core/setup' beneath '@scope/app-server').
  */
-async function ExecuteHookModule(specifier: string, payload: AppHookPayload, repoRoot: string): Promise<void> {
+async function ExecuteHookModule(
+  specifier: string,
+  payload: AppHookPayload,
+  layout: Pick<OrchestratorContext, 'RepoRoot' | 'ServerPackagePath' | 'ClientPackagePath'>,
+  manifest: MJAppManifest
+): Promise<void> {
   try {
-    const requireFromRepo = createRequire(pathToFileURL(join(repoRoot, 'package.json')).href);
-    let resolved: string;
-    try {
-      resolved = requireFromRepo.resolve(specifier);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(
-        `Hook module '${specifier}' could not be resolved from '${repoRoot}'. ` +
-        `Ensure it is exported by one of the app's installed packages. (${msg})`,
-      );
+    const shared = (manifest.packages?.shared ?? []).map((p) => p.name);
+    const bases = BuildHookResolutionBases({
+      RepoRoot: layout.RepoRoot,
+      ServerPackagePath: layout.ServerPackagePath,
+      ClientPackagePath: layout.ClientPackagePath,
+      ServerPackageNames: [...(manifest.packages?.server ?? []).map((p) => p.name), ...shared],
+      ClientPackageNames: [...(manifest.packages?.client ?? []).map((p) => p.name), ...shared],
+    });
+    const resolution = ResolveHookModule(specifier, bases);
+    if ('Error' in resolution) {
+      throw new Error(resolution.Error);
     }
-    const mod = await import(pathToFileURL(resolved).href);
+    const mod = await import(pathToFileURL(resolution.Resolved).href);
     const fn = (mod.default ?? mod) as unknown;
     if (typeof fn !== 'function') {
       throw new Error(`Hook module '${specifier}' must export a default async function`);
@@ -2200,7 +2355,7 @@ export async function RemoveAppEntityMetadata(
       // QueueDeleteEntitiesByFilter list + per-entity Delete + SchemaInfo delete.
       const dbProvider = options!.DatabaseProvider!;
       const mjSchema = options?.MJCoreSchema ?? '__mj';
-      const rootPredicate = buildRootDoomedPredicate(dbProvider.Dialect, schemaName);
+      const rootPredicate = BuildRootDoomedPredicate(dbProvider.Dialect, schemaName);
       await RunFkGraphTeardown(dbProvider, mjSchema, rootPredicate, callbacks);
     } else {
       // LEGACY FALLBACK (no DatabaseProvider passed): entity-layer path — all deletes queued into
@@ -2305,7 +2460,7 @@ async function ExtractDeclaredApplicationIds(
     if (!download.Success) {
       return [];
     }
-    return await extractApplicationIds(tempDir);
+    return await ExtractApplicationIds(tempDir);
   } catch {
     return [];
   } finally {

@@ -44,8 +44,8 @@ function mockEntity(overrides: Partial<MockEntity> = {}): MockEntity {
  * to either member breaks this file at compile time instead of at run time.
  */
 type OrphanSweepInternals = {
-    LoadAllRecordMaps: unknown;
-    DeleteOrphanedRecords: (
+    loadAllRecordMaps: unknown;
+    deleteOrphanedRecords: (
         companyIntegration: { ID: string },
         entityMap: { ID: string; Entity: string; ExternalObjectName: string; DeleteBehavior: string; EntityID: string },
         fetchedExternalIDs: ReadonlySet<string>,
@@ -77,12 +77,12 @@ function harness(opts: {
     };
     Object.defineProperty(engine, 'ProviderToUse', { get: () => md });
     const internals = engine as unknown as OrphanSweepInternals;
-    internals.LoadAllRecordMaps = vi.fn().mockResolvedValue({ Rows: opts.mapRows, Complete: true });
+    internals.loadAllRecordMaps = vi.fn().mockResolvedValue({ Rows: opts.mapRows, Complete: true });
     const warnings: Array<{ code: string; data?: unknown }> = [];
     const logger = { warning: (_o: string, code: string, _m: string, data?: unknown) => warnings.push({ code, data }) };
     const result = { RecordsDeleted: 0 };
     const run = async () =>
-        internals.DeleteOrphanedRecords(
+        internals.deleteOrphanedRecords(
             { ID: 'ci-1' },
             { ID: 'em-1', Entity: 'Widgets', ExternalObjectName: 'Widget', DeleteBehavior: opts.deleteBehavior, EntityID: 'e-1' },
             new Set(opts.fetched),

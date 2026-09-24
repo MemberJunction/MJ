@@ -1,0 +1,33 @@
+{
+  "id": "querybuilder-dispatch-strategist-01",
+  "agent": "Query Builder",
+  "tags": [
+    "sub-agent-dispatch",
+    "prompt-mandated-action"
+  ],
+  "description": "Query Builder owns catalog CRUD; the SQL work belongs to its Query Strategist sub-agent. Searching the query catalog first is what the action's description prescribes and what the Strategist's prompt anticipates, so it is as correct as delegating immediately .",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Build me a query showing monthly signups by plan tier."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "subAgent",
+        "subAgents": [
+          "Query Strategist"
+        ]
+      },
+      {
+        "kind": "action",
+        "actions": [{ "name": "Search Query Catalog" }]
+      }
+    ]
+  }
+}

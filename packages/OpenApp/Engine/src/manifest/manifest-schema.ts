@@ -166,7 +166,7 @@ const hooksSchema = z.object({
  * Complete Zod schema for the mj-app.json manifest.
  * All validation rules match the MJ Open App specification.
  */
-export const mjAppManifestSchema = z.object({
+export const MjAppManifestSchema = z.object({
     // Identity
     $schema: z.string().optional(),
     manifestVersion: z.literal(1),
@@ -248,11 +248,14 @@ export const mjAppManifestSchema = z.object({
     tags: z.array(z.string().regex(tagRegex, 'Tags must be lowercase alphanumeric + hyphens, max 50 chars')).max(20).optional(),
 });
 
+/** @deprecated Use {@link MjAppManifestSchema}. */
+export const mjAppManifestSchema = MjAppManifestSchema;
+
 /**
  * TypeScript type inferred from the manifest schema.
  * Use this for strongly-typed manifest handling throughout the engine.
  */
-export type MJAppManifest = z.infer<typeof mjAppManifestSchema>;
+export type MJAppManifest = z.infer<typeof MjAppManifestSchema>;
 
 /**
  * Type for a single package entry within the manifest.

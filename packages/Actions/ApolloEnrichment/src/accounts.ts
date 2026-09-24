@@ -66,7 +66,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * Job titles to exclude when creating contact records
      * These are typically not decision-makers or relevant contacts
      */
-    private readonly ExcludeTitles: string[] = ['member', 'student member', 'student', 'volunteer'];
+    private readonly excludeTitles: string[] = ['member', 'student member', 'student', 'volunteer'];
 
     /**
      * Main entry point for the Apollo account enrichment action
@@ -433,7 +433,8 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         currentUser: UserInfo
     ): Promise<boolean> {
         try {
-            const accountEntity = await md.GetEntityObject(params.AccountEntity.EntityName, CompositeKey.FromID(record.ID), currentUser);
+            // The account entity is configured, not fixed — build the key from its real primary key column(s).
+            const accountEntity = await md.GetEntityObject(params.AccountEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.AccountEntity.EntityName)!, record), currentUser);
 
             // Set organization data fields
             this.setFieldIfExists(accountEntity, params.AccountEntity.AddressField, organization.street_address);
@@ -478,7 +479,8 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         currentUser: UserInfo
     ): Promise<boolean> {
         try {
-            const accountEntity = await md.GetEntityObject<BaseEntity>('Accounts', CompositeKey.FromID(record.ID), currentUser);
+            // The account entity is configured, not fixed — build the key from its real primary key column(s), as updateAccountWithOrganizationData does.
+            const accountEntity = await md.GetEntityObject<BaseEntity>(params.AccountEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.AccountEntity.EntityName)!, record), currentUser);
             accountEntity.Set(params.AccountEntity.EnrichedAtField, new Date());
             
             const saveResult = await accountEntity.Save();
@@ -564,7 +566,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
                 // Mark unmatched technologies as ended
                 for (const record of runViewResult.Results) {
                     if (!record.matchFound) {
-                        const entity = await md.GetEntityObject<BaseEntity>(ATEntity.EntityName, CompositeKey.FromID(record.ID), currentUser);
+                        const entity = await md.GetEntityObject<BaseEntity>(ATEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(ATEntity.EntityName)!, record), currentUser);
                         entity.Set(ATEntity.EndedUseAtField, new Date());
                         
                         const saveResult = await entity.Save();
@@ -965,7 +967,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
                     let historyEntity: BaseEntity | null = null;
                     
                     if (EHRunViewResult.Results.length > 0) {
-                        historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, CompositeKey.FromID(EHRunViewResult.Results[0].ID), currentUser);
+                        historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(CEntity.EntityName)!, EHRunViewResult.Results[0]), currentUser);
                     } else {
                         historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, currentUser);
                         historyEntity.NewRecord();
@@ -1028,7 +1030,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         if (!title) {
             return false;
         }
-        return this.ExcludeTitles.includes(title.toLowerCase());
+        return this.excludeTitles.includes(title.toLowerCase());
     }
 
     /**
@@ -1067,7 +1069,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
             if (response.Status === 429) {
                 if (retryAttempts > 0) {
                     LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
-                    await this.Timeout(60000); // wait 1 minute
+                    await this.timeout(60000); // wait 1 minute
                     return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
                 }
                 else{
@@ -1082,7 +1084,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
             if (IsHttpError(apolloError) && apolloError.Status === 429) {
                 if (retryAttempts > 0) {
                     LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
-                    await this.Timeout(60000); // wait 1 minute
+                    await this.timeout(60000); // wait 1 minute
                     return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
                 }
                 else {
@@ -1102,7 +1104,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param ms - Number of milliseconds to wait
      * @returns Promise that resolves after the specified delay
      */
-    private async Timeout(ms: number): Promise<void> {
+    private async timeout(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
     }  
 }

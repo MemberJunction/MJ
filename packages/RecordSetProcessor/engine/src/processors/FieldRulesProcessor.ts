@@ -96,7 +96,7 @@ export class FieldRulesProcessor implements IRecordProcessor {
             return `field-rules updates support single-primary-key entities only ('${entity.Name}')`;
         }
         const obj = await context.provider.GetEntityObject<BaseEntity>(entity.Name, context.contextUser);
-        const loaded = await obj.InnerLoad(CompositeKey.FromKeyValuePair(entity.FirstPrimaryKey.Name, record.RecordID));
+        const loaded = await obj.InnerLoad(CompositeKey.FromURLSegment(entity, record.RecordID));
         if (!loaded) {
             return `record '${record.RecordID}' of '${entity.Name}' not found`;
         }

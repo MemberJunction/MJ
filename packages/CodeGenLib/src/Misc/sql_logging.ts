@@ -1,21 +1,105 @@
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
-import { configInfo, mj_core_schema, SQLOutputConfig, dbPlatform } from "../Config/config";
+import { configInfo, MjCoreSchema, SQLOutputConfig, DbPlatform, currentWorkingDirectory } from "../Config/config";
 import { logError, logStatus } from "./status_logging";
+import { EndsWithBatchSeparatorLine, TrimTrailingStatementTerminators } from './sql_text';
 import * as fs from 'fs';
 import path from 'path';
+
+const MJ_DEFAULT_SQL_OUTPUT_RE = /(^|\/|\\)migrations[/\\]v\d+[/\\]?$/i;
+
+/**
+ * True when `folderPath` is the CodeGenLib / MJ-host default (`./migrations/v5` etc.),
+ * not an Open App `migrations/codegen` tree.
+ */
+export function IsMjDefaultSqlOutputPath(folderPath: string): boolean {
+    const n = folderPath.replace(/\\/g, '/').replace(/\/+$/, '');
+    return MJ_DEFAULT_SQL_OUTPUT_RE.test(n) || n === './migrations/v5' || n === '../../migrations/v5';
+}
+
+/** @deprecated Use {@link IsMjDefaultSqlOutputPath}. */
+export function isMjDefaultSqlOutputPath(folderPath: string): boolean {
+    return IsMjDefaultSqlOutputPath(folderPath);
+}
+
+export type ResolveSQLOutputFolderArgs = {
+    Cwd: string;
+    ConfiguredFolderPath?: string;
+    IncludeSchemas?: string[];
+    CoreSchema: string;
+    /** CLI `--sql-output-dir`. Wins over config when set. */
+    SqlOutputDirFlag?: string;
+    HasMjAppJson: boolean;
+    IsMjMonorepo: boolean;
+};
+
+/**
+ * Where CodeGen writes `CodeGen_Run_*.sql` (EntityField INSERTs and other metadata SQL).
+ *
+ * Open App (`mj-app.json` in cwd): always `{cwd}/migrations/codegen` unless
+ * `--sql-output-dir` or an explicit non-MJ `SQLOutput.folderPath` is set.
+ * Never fall back to `MJ/migrations/v*` — that silently dropped Open App
+ * EntityField SQL into the host tree.
+ *
+ * MJ monorepo cwd + `includeSchemas` listing a non-core schema: throw. Run
+ * CodeGen from the app directory.
+ */
+export function ResolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string {
+    const cwd = path.resolve(args.Cwd);
+    const core = (args.CoreSchema || '__mj').toLowerCase();
+    const include = (args.IncludeSchemas ?? []).map(s => s.toLowerCase());
+    const generatingAppSchemas = include.some(s => s !== core);
+
+    if (args.SqlOutputDirFlag) {
+        const resolved = path.resolve(cwd, args.SqlOutputDirFlag);
+        if (args.HasMjAppJson && IsMjDefaultSqlOutputPath(resolved)) {
+            throw new Error(
+                `CodeGen --sql-output-dir resolves to an MJ host migrations tree (${resolved}). ` +
+                `Open App metadata SQL must go to the app's migrations/codegen. ` +
+                `Run from the app cwd (mj-app.json) without this flag, or pass the app codegen folder.`
+            );
+        }
+        return resolved;
+    }
+
+    if (args.HasMjAppJson) {
+        const configured = args.ConfiguredFolderPath;
+        if (configured && !IsMjDefaultSqlOutputPath(configured)) {
+            return path.resolve(cwd, configured);
+        }
+        return path.join(cwd, 'migrations', 'codegen');
+    }
+
+    if (args.IsMjMonorepo && generatingAppSchemas) {
+        throw new Error(
+            `CodeGen SQLOutput would write Open App metadata SQL into the MJ repo (${cwd}). ` +
+            `Run \`mj codegen\` from the Open App directory (a cwd that contains mj-app.json), not from MJ. ` +
+            `includeSchemas=${(args.IncludeSchemas ?? []).join(',') || '(empty)'}`
+        );
+    }
+
+    const folder = args.ConfiguredFolderPath ?? './migrations/v5/';
+    return path.resolve(cwd, folder);
+}
+
+/** @deprecated Use {@link ResolveSQLOutputFolder}. */
+export function resolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string {
+    return ResolveSQLOutputFolder(args);
+}
 
 /**
  * Utility class for logging SQL to a run file that can be fresh for each run or appended to depending on the settings in the configuration
  */
 export class SQLLogging {
-    private static _SQLLoggingFilePath: string = '';
-    private static _OmitRecurringScriptsFromLog: boolean = false;
+    private static _sQLLoggingFilePath: string = '';
+    private static _omitRecurringScriptsFromLog: boolean = true;
+    /** CLI `--sql-output-dir`. Set before {@link initSQLLogging}. */
+    public static sqlOutputDirFlag: string | undefined;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     public static get SQLLoggingFilePath(): string {
-        return SQLLogging._SQLLoggingFilePath;
+        return SQLLogging._sQLLoggingFilePath;
     }
     public static get OmitRecurringScriptsFromLog(): boolean {
-        return SQLLogging._OmitRecurringScriptsFromLog
+        return SQLLogging._omitRecurringScriptsFromLog
     }
 
     /**
@@ -42,7 +126,7 @@ export class SQLLogging {
      *
      * Public so the routing can be unit-tested without a CodeGen run.
      */
-    public static redirectToPGMigrations(folderPath: string): string {
+    public static RedirectToPGMigrations(folderPath: string): string {
         // Split on either separator so a Windows-style path is handled without normalizing the
         // whole string (which would rewrite the caller's separators as a side effect).
         const segments = folderPath.split(/([\\/])/);
@@ -66,50 +150,123 @@ export class SQLLogging {
         }
         return folderPath;
     }
-    public static initSQLLogging() {
-        SQLLogging._OmitRecurringScriptsFromLog = configInfo.SQLOutput.omitRecurringScriptsFromLog;
+
+    /** @deprecated Use {@link RedirectToPGMigrations}. */
+    public static redirectToPGMigrations(folderPath: string): string {
+        return this.RedirectToPGMigrations(folderPath);
+    }
+    public static InitSQLLogging() {
+        const config = configInfo.SQLOutput;
+        if (!config) {
+            throw new Error("SQLOutput config is required to enable metadata logging");
+        }
+        SQLLogging._omitRecurringScriptsFromLog = config.omitRecurringScriptsFromLog;
         if (!SQLLogging.SQLLoggingFilePath) {
-            // not already set up, so proceed, otherwise we do nothing as we're already good to go
-            const config = configInfo.SQLOutput;
-            if(!config){
-                logError("MetadataLoggingConfig is required to enable metadata logging");
-                return;
-            }
 
             if (!config.enabled)
-                return; // we are not doing anything here....
-
-            if (config.folderPath) {
-                // On PostgreSQL, redirect the migrations root so CodeGen audit SQL lands in
-                // migrations-pg/ alongside the rest of the PG tooling.
-                let folderPath = config.folderPath;
-                if (dbPlatform() === 'postgresql') {
-                    folderPath = SQLLogging.redirectToPGMigrations(folderPath);
-                }
-
-                const dirExists: boolean = fs.existsSync(folderPath);
-                if (!dirExists) {
-                    fs.mkdirSync(folderPath, {recursive: true });
-                }
-
-                const fileName: string = config.fileName || this.createFileName();
-                SQLLogging._SQLLoggingFilePath = path.join(folderPath, fileName);
-
-                if (!config.appendToFile || !fs.existsSync(SQLLogging.SQLLoggingFilePath)) {
-                    //create an empty file
-                    fs.writeFileSync(SQLLogging.SQLLoggingFilePath, '');
-                }
-
-                logStatus(`Metadata logging enabled. File path: ${SQLLogging.SQLLoggingFilePath}`);
-            }
-            else {
-                logError("folderPath is required to enable metadata logging");
                 return;
+
+            const cwd = currentWorkingDirectory || process.cwd();
+            const coreSchema = MjCoreSchema();
+            let folderPath = ResolveSQLOutputFolder({
+                Cwd: cwd,
+                ConfiguredFolderPath: config.folderPath,
+                IncludeSchemas: configInfo.includeSchemas,
+                CoreSchema: coreSchema,
+                SqlOutputDirFlag: SQLLogging.sqlOutputDirFlag,
+                HasMjAppJson: fs.existsSync(path.join(cwd, 'mj-app.json')),
+                IsMjMonorepo:
+                    fs.existsSync(path.join(cwd, 'packages', 'CodeGenLib')) ||
+                    fs.existsSync(path.join(cwd, 'packages', 'MJCLI')),
+            });
+
+            if (DbPlatform() === 'postgresql') {
+                folderPath = SQLLogging.redirectToPGMigrations(folderPath);
             }
+
+            if (!fs.existsSync(folderPath)) {
+                fs.mkdirSync(folderPath, {recursive: true });
+            }
+
+            const fileName: string = config.fileName || this.createFileName();
+            SQLLogging._sQLLoggingFilePath = path.join(folderPath, fileName);
+
+            if (!config.appendToFile || !fs.existsSync(SQLLogging.SQLLoggingFilePath)) {
+                fs.writeFileSync(SQLLogging.SQLLoggingFilePath, '');
+            }
+
+            logStatus(`Metadata logging enabled. File path: ${SQLLogging.SQLLoggingFilePath}`);
         }
      }
 
-     public static finishSQLLogging() {
+    /** @deprecated Use {@link InitSQLLogging}. */
+    public static initSQLLogging() {
+        return this.InitSQLLogging();
+    }
+
+    /**
+     * The batch separator for the active platform: `GO` on SQL Server, none on PostgreSQL. Used as the
+     * default for callers that do not pass the provider's separator, so a PostgreSQL capture can never
+     * pick up a literal `GO` from a forgotten argument.
+     */
+    public static DefaultBatchSeparator(): string {
+        return DbPlatform() === 'postgresql' ? '' : 'GO';
+    }
+
+    /** @deprecated Use {@link DefaultBatchSeparator}. */
+    public static defaultBatchSeparator(): string {
+        return this.DefaultBatchSeparator();
+    }
+
+    /** Test hook — SQLLogging is a process-wide singleton. */
+    public static ResetForTests(): void {
+        SQLLogging._sQLLoggingFilePath = '';
+        SQLLogging.sqlOutputDirFlag = undefined;
+    }
+
+    /** @deprecated Use {@link ResetForTests}. */
+    public static resetForTests(): void {
+        return this.ResetForTests();
+    }
+
+    /** Test hook — sets the active capture file path for testing. */
+    public static SetFilePathForTesting(filePath: string): void {
+        SQLLogging._sQLLoggingFilePath = filePath;
+    }
+
+    /** @deprecated Use {@link SetFilePathForTesting}. */
+    public static setFilePathForTesting(filePath: string): void {
+        return this.SetFilePathForTesting(filePath);
+    }
+
+    /**
+     * Test hook — turns SQL capture off for the process: disables `SQLOutput` so
+     * {@link LogSQLAndExecute} does not refuse to run against a stub connection with no CodeGen_Run
+     * file open, and closes any capture file already open so nothing is written meanwhile. Returns a
+     * function that restores both; call it from `afterAll`.
+     */
+    public static SuppressOutputForTests(): () => void {
+        const output = configInfo.SQLOutput;
+        const previousEnabled = output?.enabled;
+        const previousPath = SQLLogging._sQLLoggingFilePath;
+        if (output) {
+            output.enabled = false;
+        }
+        SQLLogging._sQLLoggingFilePath = '';
+        return () => {
+            if (output && previousEnabled !== undefined) {
+                output.enabled = previousEnabled;
+            }
+            SQLLogging._sQLLoggingFilePath = previousPath;
+        };
+    }
+
+    /** @deprecated Use {@link SuppressOutputForTests}. */
+    public static suppressOutputForTests(): () => void {
+        return this.SuppressOutputForTests();
+    }
+
+     public static FinishSQLLogging() {
         if (SQLLogging.SQLLoggingFilePath) {
             if (SQLLogging.getFileLength(SQLLogging.SQLLoggingFilePath) === 0) {
                 // no content in the file, so delete it
@@ -120,6 +277,11 @@ export class SQLLogging {
                 SQLLogging.convertSQLLogToFlywaySchema();
             }
         }
+     }
+
+     /** @deprecated Use {@link FinishSQLLogging}. */
+     public static finishSQLLogging() {
+         return this.FinishSQLLogging();
      }
 
      protected static createFileName(): string {
@@ -138,22 +300,26 @@ export class SQLLogging {
     }
 
     /**
-     * Adds the provided SQL to the log file for the run
-     * @param contents - the executable SQL to log
-     * @param description - a description of what is being logged that will be emitted and wrapped in comments
-     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
-     * @returns
-     */
-    /**
-     * Adds the provided SQL to the log file for the run
+     * Adds the provided SQL to the log file for the run.
+     *
+     * Two rules keep the file replayable as a migration. A unit that declares a batch-scoped T-SQL
+     * variable always ends its batch: every unit is executed as its own query, so no later unit can
+     * depend on the variable, but two such units concatenated into one migration batch fail replay
+     * with "The variable name '@x' has already been declared" (see {@link declaresBatchScopedVariable}).
+     * And a unit that already ends in `GO` never receives a second separator. An empty
+     * `batchSeparator` (PostgreSQL) means none. Callers should still pass `includeBatchSeparator`
+     * explicitly: the scan does not see a declaration hidden inside a string or a mid-line statement.
      * @param contents - the executable SQL to log
      * @param description - a description of what is being logged that will be emitted and wrapped in comments
      * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
      * @param includeBatchSeparator - if true, appends a batch separator (e.g., GO for SQL Server) after the SQL. Use this when the next statement in the migration needs to reference schema changes made by this statement (e.g., ALTER TABLE ADD column followed by UPDATE referencing that column). Defaults to false.
      * @param batchSeparator - the batch separator string to use (e.g., 'GO' for SQL Server). Only used when includeBatchSeparator is true.
+     * @param requiresOwnBatch - the unit must be the ONLY statement in its batch — e.g. `CREATE OR ALTER VIEW`,
+     *   which T-SQL requires to be first in its batch as well as last. Emits a separator BEFORE the unit
+     *   unless the log already ends at a batch boundary, and one after it. Implies `includeBatchSeparator`.
      * @returns
      */
-    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<void> {
+    public static async AppendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator(), requiresOwnBatch: boolean = false): Promise<void> {
         try{
             if (isRecurringScript && SQLLogging.OmitRecurringScriptsFromLog) {
                 return; // is a recurring script and the flag to omit recurring scripts is set
@@ -182,21 +348,43 @@ export class SQLLogging {
             // generateBaseView / generateCRUDCreate / generateRootIDFunction return strings
             // ending in `GO`. Appending `;` produces `GO;`, which SSMS and sqlcmd reject
             // ("Incorrect syntax near ';'"). Detect and skip the `;` append in that case.
-            const trimmed = contents.replace(/[\s;]+$/g, '');
+            // Linear scans, not `/[\s;]+$/` or `/(^|\n)\s*GO\s*$/`: a unit can carry caller-supplied SQL
+            // (a TransitiveView body), and those patterns backtrack quadratically on a long interior
+            // whitespace run (see ./sql_text).
+            const trimmed = TrimTrailingStatementTerminators(contents);
+            let endsWithBatchSeparator = false;
             if (trimmed.length > 0) {
-                const endsWithBatchSeparator = /(^|\n)\s*GO\s*$/i.test(trimmed);
+                endsWithBatchSeparator = EndsWithBatchSeparatorLine(trimmed, 'GO');
                 contents = endsWithBatchSeparator ? trimmed : `${trimmed};`;
             }
 
-            contents = includeBatchSeparator
+            // A unit that must be alone in its batch also needs a separator BEFORE it: the log only ever
+            // appends, so whatever was logged last would otherwise share its batch.
+            const leadingSeparator = requiresOwnBatch && !!batchSeparator && !SQLLogging.logEndsAtBatchBoundary(batchSeparator)
+                ? `${batchSeparator}\n\n`
+                : '';
+
+            // Emit a separator when the caller asked for one, or when the unit declares a batch-scoped
+            // variable (see the method JSDoc). Never for an empty separator (PostgreSQL), and never
+            // after a unit that already closes its own batch. The declaration scan runs only on
+            // units that could receive a separator, so GO-terminated view and routine bodies — the
+            // largest units logged — are not scanned.
+            const emitSeparator = !!batchSeparator && !endsWithBatchSeparator &&
+                (includeBatchSeparator || requiresOwnBatch || SQLLogging.DeclaresBatchScopedVariable(trimmed));
+            contents = emitSeparator
                 ? `${contents}\n${batchSeparator}\n\n`
                 : `${contents}\n\n`;
 
-            fs.appendFileSync(SQLLogging.SQLLoggingFilePath, contents);
+            fs.appendFileSync(SQLLogging.SQLLoggingFilePath, `${leadingSeparator}${contents}`);
         }
         catch(ex){
            logError("Unable to log metadata SQL text to file", ex);
         }
+    }
+
+    /** @deprecated Use {@link AppendToSQLLogFile}. */
+    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator(), requiresOwnBatch: boolean = false): Promise<void> {
+        return this.AppendToSQLLogFile(contents, description, isRecurringScript, includeBatchSeparator, batchSeparator, requiresOwnBatch);
     }
 
     /**
@@ -207,12 +395,78 @@ export class SQLLogging {
     * @param query - The SQL query to execute.
     * @param description - A description of the query to append to the log file.
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
+    * @param requiresOwnBatch - see {@link appendToSQLLogFile}: the unit must be alone in its batch.
     * @returns - The result of the query execution.
     */
-    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
-        SQLLogging.appendToSQLLogFile(query, description, isRecurringScript, includeBatchSeparator, batchSeparator);
+    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator(), requiresOwnBatch: boolean = false): Promise<any> {
+        if (configInfo.SQLOutput?.enabled && !SQLLogging.SQLLoggingFilePath) {
+            throw new Error(
+                'SQLOutput.enabled but no CodeGen_Run log file is open. Refusing to apply metadata SQL with no artifact. ' +
+                'Run `mj codegen` from the Open App directory (mj-app.json) or pass --sql-output-dir.'
+            );
+        }
+        SQLLogging.AppendToSQLLogFile(query, description, isRecurringScript, includeBatchSeparator, batchSeparator, requiresOwnBatch);
         const result = await ds.query(query);
         return result.recordset;
+    }
+
+    /**
+     * True when the SQL text declares a batch-scoped T-SQL local variable: a `DECLARE @name ...` at the
+     * start of any line with no routine header (`CREATE|ALTER [OR ALTER] PROCEDURE|FUNCTION|TRIGGER`) before
+     * it. T-SQL variables are scoped to the batch wherever they are declared — after `SET NOCOUNT ON`,
+     * inside `IF ... BEGIN ... END` — so the match is not limited to the first statement. A declaration
+     * inside a routine body is routine-scoped and cannot collide across units, so it does not count.
+     */
+    public static DeclaresBatchScopedVariable(sql: string): boolean {
+        if (!sql) {
+            return false;
+        }
+        // `[ \t]*` rather than `\s*` so the multiline anchors cannot walk across blank lines.
+        const declaration = /^[ \t]*DECLARE\s+@/im;
+        const routineHeader = /^[ \t]*(CREATE\s+(OR\s+ALTER\s+)?|ALTER\s+)(PROC|PROCEDURE|FUNCTION|TRIGGER)\b/im;
+        // A routine body ends at its GO, so judge each batch of the unit on its own: a DECLARE after a
+        // routine's GO is batch-scoped again.
+        for (const batch of sql.split(/^[ \t]*GO[ \t]*$/im)) {
+            const declAt = batch.search(declaration);
+            if (declAt === -1) {
+                continue;
+            }
+            const headerAt = batch.search(routineHeader);
+            if (headerAt === -1 || declAt < headerAt) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @deprecated Use {@link DeclaresBatchScopedVariable}. */
+    public static declaresBatchScopedVariable(sql: string): boolean {
+        return this.DeclaresBatchScopedVariable(sql);
+    }
+
+    /** Bytes read from the end of the log to decide whether it ends at a batch boundary. */
+    private static readonly BOUNDARY_TAIL_BYTES = 512;
+
+    /**
+     * True when the log is empty or its last non-blank line is `separator` — i.e. the next unit starts
+     * a new batch. Reads only the tail of the file, so it holds whoever wrote the previous unit.
+     */
+    protected static logEndsAtBatchBoundary(separator: string): boolean {
+        const filePath = SQLLogging.SQLLoggingFilePath;
+        const size = SQLLogging.getFileLength(filePath);
+        if (size === 0) {
+            return true;
+        }
+        const length = Math.min(size, SQLLogging.BOUNDARY_TAIL_BYTES);
+        const buffer = Buffer.alloc(length);
+        const fd = fs.openSync(filePath, 'r');
+        try {
+            fs.readSync(fd, buffer, 0, length, size - length);
+        } finally {
+            fs.closeSync(fd);
+        }
+        const tail = buffer.toString('utf8');
+        return tail.trim().length === 0 || EndsWithBatchSeparatorLine(tail, separator);
     }
 
     protected static getFileLength(filePath: string): number {
@@ -234,7 +488,7 @@ export class SQLLogging {
 
         // Get schema placeholder mappings, defaulting to legacy behavior if not specified
         const schemaPlaceholders = configInfo.SQLOutput.schemaPlaceholders || [
-            { schema: mj_core_schema(), placeholder: '${flyway:defaultSchema}' }
+            { schema: MjCoreSchema(), placeholder: '${flyway:defaultSchema}' }
         ];
 
         // Apply each schema-to-placeholder mapping in order

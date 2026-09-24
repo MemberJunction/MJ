@@ -32,7 +32,7 @@ import { EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload
 import { EmbeddedRecord } from './embeddedRecord';
 import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
-import type { EntitySaveOptions, IMetadataProvider, IRunViewProvider } from './interfaces';
+import type { EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunViewProvider } from './interfaces';
 import { LogError } from './logging';
 
 /**
@@ -359,8 +359,13 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * Alias for {@link Count}, so the collection reads like a collection in the places people expect
      * `length`. Both go through {@link Items}, so both trigger a lazy fill and see a live cache view.
      */
-    public get length(): number {
+    public get Length(): number {
         return this.Count;
+    }
+
+    /** @deprecated Use {@link Length}. */
+    public get length(): number {
+        return this.Length;
     }
 
     /**
@@ -544,7 +549,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             throw new Error(`RelatedRecordCollection '${this.Name}': owner has no provider; cannot load.`);
         }
 
-        const parentKey = this.Owner.FirstPrimaryKey?.Value;
+        const parentKey = this.Owner.FirstPrimaryKey?.Value; // first-pk-ok: RelatedEntityJoinField is one FK column, so the parent key it holds is single-column by design
         const result = await provider.RunView<T>(
             {
                 EntityName: this.RelatedEntityName,
@@ -682,7 +687,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         // survives the engine reassigning it wholesale, which is the case a captured array
         // reference misses. Re-running discovery here would also risk silently binding to a
         // DIFFERENT engine mid-life if two happened to cache the same entity.
-        const parentKey = this.Owner.FirstPrimaryKey?.Value;
+        const parentKey = this.Owner.FirstPrimaryKey?.Value; // first-pk-ok: RelatedEntityJoinField is one FK column, so the parent key it holds is single-column by design
         if (parentKey === null || parentKey === undefined || parentKey === '') {
             return;
         }
@@ -820,7 +825,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      *          entity — in which case the caller falls back to a database load.
      */
     private findCachedRecords(): T[] | null {
-        const parentKey = this.Owner.FirstPrimaryKey?.Value;
+        const parentKey = this.Owner.FirstPrimaryKey?.Value; // first-pk-ok: RelatedEntityJoinField is one FK column, so the parent key it holds is single-column by design
         if (parentKey === null || parentKey === undefined || parentKey === '') {
             return null; // an unsaved parent owns no persisted related records
         }
@@ -1305,7 +1310,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * already be correct.
      */
     private stampParentKey(): void {
-        const parentKey = this.Owner.FirstPrimaryKey?.Value;
+        const parentKey = this.Owner.FirstPrimaryKey?.Value; // first-pk-ok: RelatedEntityJoinField is one FK column, so the parent key it holds is single-column by design
         if (parentKey === null || parentKey === undefined || parentKey === '') {
             return;
         }
@@ -1338,5 +1343,18 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
                 );
             }
         });
+    }
+
+    public override BindProvider(provider: IEntityDataProvider | null): void {
+        for (const item of this.items) {
+            if (item.BoundProvider !== provider) {
+                item.BindProvider(provider);
+            }
+        }
+        for (const item of this.removed) {
+            if (item.BoundProvider !== provider) {
+                item.BindProvider(provider);
+            }
+        }
     }
 }

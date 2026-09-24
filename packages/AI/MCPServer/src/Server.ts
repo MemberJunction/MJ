@@ -24,8 +24,9 @@ import { randomUUID } from 'crypto';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
-import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
-import { loadAgentManagementTools } from './tools/agentManagementTools.js';
+import { InitConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
+import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
+import { LoadAgentManagementTools } from './tools/agentManagementTools.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
@@ -49,27 +50,28 @@ import {
     ProtectedResourceMetadata,
 } from './auth/types.js';
 import {
-    getAuthMode,
-    getResourceIdentifier,
-    isOAuthEnabled,
-    validateOAuthConfig,
-    logAuthConfig,
+    GetAuthMode,
+    GetResourceIdentifier,
+    IsOAuthEnabled,
+    ValidateOAuthConfig,
+    LogAuthConfig,
 } from './auth/OAuthConfig.js';
 import {
     authenticateRequest as oauthAuthenticateRequest,
-    toSessionContext,
-    sendAuthErrorResponse,
+    ToSessionContext,
+    SendAuthErrorResponse,
     AuthGateConfig,
 } from './auth/AuthGate.js';
 import {
-    buildProtectedResourceMetadata,
-    extractAuthorizationServers,
+    BuildProtectedResourceMetadata,
+    ExtractAuthorizationServers,
 } from './auth/ProtectedResourceMetadata.js';
-import { hasAuthProviders, setProxyTokenConfig } from './auth/TokenValidator.js';
-import { send401Response } from './auth/WWWAuthenticate.js';
+import { HasAuthProviders, SetProxyTokenConfig } from './auth/TokenValidator.js';
+import { Send401Response } from './auth/WWWAuthenticate.js';
 // OAuth Proxy imports
-import { createOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
+import { CreateOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
+import { ResolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
 
 
 /*******************************************************************************
@@ -392,7 +394,7 @@ async function authenticateRequest(request: Request | http.IncomingMessage): Pro
         throw new Error(error?.message || 'Authentication failed');
     }
 
-    return toSessionContext(result);
+    return ToSessionContext(result);
 }
 
 /**
@@ -693,7 +695,7 @@ function shouldIncludeTool(toolName: string, filterOptions: ToolFilterOptions): 
  * truncateText("Hello World", 5) // { value: "Hel...[4 chars]...ld", truncated: true }
  * truncateText("Hi", 100) // { value: "Hi", truncated: false }
  */
-export function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
+export function TruncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
     if (!text) {
         return { value: '', truncated: false };
     }
@@ -712,6 +714,11 @@ export function truncateText(text: string | null | undefined, maxChars: number):
         text.substring(text.length - endChars);
 
     return { value: truncated, truncated: true };
+}
+
+/** @deprecated Use {@link TruncateText}. */
+export function truncateText(text: string | null | undefined, maxChars: number): { value: string; truncated: boolean } {
+    return TruncateText(text, maxChars);
 }
 
 /*******************************************************************************
@@ -846,7 +853,7 @@ async function registerAllTools(
     await loadEntityTools(addToolWithFilter);
     await loadActionTools(addToolWithFilter, systemUser, sessionContext);
     await loadAgentTools(addToolWithFilter, systemUser, sessionContext);
-    await loadAgentManagementTools(
+    await LoadAgentManagementTools(
         addToolWithFilter,
         systemUser,
         sessionContext,
@@ -868,6 +875,21 @@ async function registerAllTools(
 /*******************************************************************************
  * SERVER INITIALIZATION
  ******************************************************************************/
+
+/** Process ID this server identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
+export const MCP_SERVER_PROCESS_ID = 'mcp';
+
+/**
+ * Loads the installed Open Apps' server packages (mj.config.cjs `dynamicPackages.server[]`) and the
+ * host's generated packages so entity/action tools construct the apps' real subclasses — the same
+ * step MJAPI performs at boot. Must run BEFORE the SQL Server client is set up (startup exports
+ * register classes; they never touch a provider). The parsed `configInfo` strips `dynamicPackages`,
+ * so the raw config is re-discovered here.
+ */
+async function loadOpenAppServerPackages(): Promise<void> {
+    const { config, configFilePath } = DiscoverMJConfig();
+    await LoadDynamicPackages({ processId: MCP_SERVER_PROCESS_ID, tier: 'server', config, configFilePath });
+}
 
 /**
  * Initializes and starts the MemberJunction MCP server.
@@ -902,7 +924,7 @@ async function registerAllTools(
  *   customToolProviders: [myCustomProvider]
  * });
  */
-export async function initializeServer(optionsOrFilterOptions: MCPServerOptions | ToolFilterOptions = {}): Promise<void> {
+export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions | ToolFilterOptions = {}): Promise<void> {
     try {
         // Support both MCPServerOptions and legacy ToolFilterOptions parameter
         const options: MCPServerOptions = isToolFilterOptions(optionsOrFilterOptions)
@@ -910,7 +932,8 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             : optionsOrFilterOptions;
 
         // Initialize configuration (loads .env and mj.config.cjs)
-        _config = await initConfig();
+        _config = await InitConfig();
+        await loadOpenAppServerPackages();
         mcpServerPort = _config.mcpServerSettings?.port || 3100;
 
         // Store filter options and custom providers for use by tool registration
@@ -957,14 +980,14 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         };
 
         // Validate OAuth configuration if OAuth is enabled
-        const authMode = getAuthMode();
+        const authMode = GetAuthMode();
         let effectiveAuthMode = authMode;
         let configuredProviderNames: string[] = [];
 
         if (authMode === 'oauth' || authMode === 'both') {
             // Check if auth providers are configured
-            const providersConfigured = await hasAuthProviders();
-            const validationResult = validateOAuthConfig(providersConfigured);
+            const providersConfigured = await HasAuthProviders();
+            const validationResult = ValidateOAuthConfig(providersConfigured);
 
             if (validationResult.errors.length > 0) {
                 console.error(`[Auth] OAuth configuration errors: ${validationResult.errors.join('; ')}`);
@@ -993,7 +1016,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         }
 
         // Log auth configuration
-        logAuthConfig(effectiveAuthMode, configuredProviderNames);
+        LogAuthConfig(effectiveAuthMode, configuredProviderNames);
 
         // Create Express app for SSE transport
         const app = express();
@@ -1033,7 +1056,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         const oauthProxyEnabled = _config.mcpServerSettings?.auth?.proxy?.enabled ?? false;
         let oauthProxyBaseUrl: string | undefined;
 
-        if (isOAuthEnabled() && oauthProxyEnabled) {
+        if (IsOAuthEnabled() && oauthProxyEnabled) {
             try {
                 // Get the upstream provider configuration
                 const factory = AuthProviderFactory.Instance;
@@ -1052,45 +1075,28 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         console.error(`[OAuth Proxy] Upstream provider '${upstreamProviderName}' not found`);
                     } else {
                         // Build OAuth proxy configuration
-                        oauthProxyBaseUrl = getResourceIdentifier();
+                        oauthProxyBaseUrl = GetResourceIdentifier();
 
-                        // Detect Azure AD v2.0 endpoints from issuer
-                        // Azure AD issuer: https://login.microsoftonline.com/{tenant}/v2.0
+                        // Derive the upstream OAuth endpoints from the provider's issuer.
                         // Cast to access provider properties (IAuthProvider interface)
                         const provider = upstreamProvider as {
                             issuer: string;
                             audience: string;
                             name: string;
                             clientId?: string;
+                            domain?: string;
                         };
-                        const issuer = provider.issuer;
-                        const isAzureAD = issuer?.includes('microsoftonline.com') || issuer?.includes('sts.windows.net');
-
-                        let authorizationEndpoint: string;
-                        let tokenEndpoint: string;
-
-                        if (isAzureAD) {
-                            // Azure AD v2.0 endpoints
-                            const baseUrl = issuer.replace(/\/v2\.0\/?$/, '');
-                            authorizationEndpoint = `${baseUrl}/oauth2/v2.0/authorize`;
-                            tokenEndpoint = `${baseUrl}/oauth2/v2.0/token`;
-                        } else {
-                            // Generic OIDC - assume standard paths (Auth0, Okta, etc.)
-                            // Most providers use /.well-known/openid-configuration but we need direct endpoints
-                            // Strip trailing slash from issuer to avoid double slashes in URL
-                            const issuerBase = issuer.replace(/\/+$/, '');
-                            authorizationEndpoint = `${issuerBase}/authorize`;
-                            tokenEndpoint = `${issuerBase}/oauth/token`;
-                        }
+                        const { flavor, authorizationEndpoint, tokenEndpoint } = ResolveUpstreamOAuthEndpoints(provider);
 
                         // Build scopes for upstream - use standard OIDC scopes only
                         // Note: We don't include api://.../.default because that would cause
                         // AADSTS90009 "app requesting token for itself" when using a single app registration.
                         // The OAuth proxy only needs to authenticate the user, not access an API resource.
                         const upstreamScopes: string[] = ['openid', 'profile', 'email'];
-                        if (!isAzureAD) {
-                            // For non-Azure providers, we might need additional scopes
-                            // (Azure AD doesn't need offline_access for refresh tokens in v2.0)
+                        if (flavor === 'generic') {
+                            // Auth0/Okta need offline_access to get a refresh token.
+                            // Azure AD v2.0 returns one without it, and Cognito has no such scope at
+                            // all - asking for it makes the hosted UI reject the request as invalid_scope.
                             upstreamScopes.push('offline_access');
                         }
 
@@ -1144,7 +1150,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         };
 
                         // Create and mount OAuth proxy router
-                        const oauthProxyRouter = createOAuthProxyRouter(proxyConfig);
+                        const oauthProxyRouter = CreateOAuthProxyRouter(proxyConfig);
                         app.use(oauthProxyRouter);
 
                         console.log(`[OAuth Proxy] Enabled with upstream provider: ${provider.name}`);
@@ -1154,7 +1160,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         if (jwtConfig) {
                             console.log(`[OAuth Proxy] JWT signing enabled (issuer: ${jwtConfig.issuer})`);
                             // Configure TokenValidator to accept proxy-signed JWTs
-                            setProxyTokenConfig({
+                            SetProxyTokenConfig({
                                 signingSecret: jwtConfig.signingSecret,
                                 issuer: jwtConfig.issuer,
                                 audience: oauthProxyBaseUrl,
@@ -1174,14 +1180,14 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
         // =====================================================================
         // This endpoint allows MCP clients to discover how to authenticate.
         // It's required by the MCP Authorization specification when OAuth is enabled.
-        if (isOAuthEnabled()) {
+        if (IsOAuthEnabled()) {
             app.get('/.well-known/oauth-protected-resource', async (_req: Request, res: Response) => {
                 try {
                     const factory = AuthProviderFactory.Instance;
                     const providers = factory.getAllProviders();
 
                     // Extract issuer URLs from configured auth providers
-                    const authorizationServers = extractAuthorizationServers(
+                    const authorizationServers = ExtractAuthorizationServers(
                         providers.map((p: { issuer: string }) => ({ issuer: p.issuer }))
                     );
 
@@ -1189,7 +1195,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         console.warn('[OAuth] No authorization servers configured - metadata endpoint returning empty list');
                     }
 
-                    const metadata: ProtectedResourceMetadata = buildProtectedResourceMetadata({
+                    const metadata: ProtectedResourceMetadata = BuildProtectedResourceMetadata({
                         authorizationServers,
                         resourceName: 'MemberJunction MCP Server',
                         providers, // Pass providers for automatic scope generation
@@ -1215,11 +1221,11 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             // Authenticate the request with full result for proper error handling
             const authResult = await authenticateRequestWithResult(req);
             if (!authResult.authenticated) {
-                sendAuthErrorResponse(res, authResult);
+                SendAuthErrorResponse(res, authResult);
                 return;
             }
 
-            const sessionContext = toSessionContext(authResult);
+            const sessionContext = ToSessionContext(authResult);
 
             try {
                 // Create a new MCP server for this connection
@@ -1301,8 +1307,8 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             if (!transport) {
                 // Session expired or invalid - client needs to re-authenticate
                 // When OAuth is enabled, include WWW-Authenticate header to guide client
-                if (isOAuthEnabled()) {
-                    send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
+                if (IsOAuthEnabled()) {
+                    Send401Response(res, 'Session expired or invalid. Please re-authenticate via /mcp/sse endpoint.', {
                         errorDescription: 'Session not found - establish a new authenticated session'
                     });
                 } else {
@@ -1387,11 +1393,11 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             // We need to authenticate and create a new transport
             const authResult = await authenticateRequestWithResult(req);
             if (!authResult.authenticated) {
-                sendAuthErrorResponse(res, authResult);
+                SendAuthErrorResponse(res, authResult);
                 return;
             }
 
-            const sessionContext = toSessionContext(authResult);
+            const sessionContext = ToSessionContext(authResult);
 
             try {
                 // Create a new MCP server for this session
@@ -1451,7 +1457,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
             console.log(`Streamable HTTP endpoint: http://localhost:${mcpServerPort}/mcp`);
 
             // Log OAuth-specific endpoints if enabled
-            if (isOAuthEnabled()) {
+            if (IsOAuthEnabled()) {
                 console.log(`Protected Resource Metadata: http://localhost:${mcpServerPort}/.well-known/oauth-protected-resource`);
             }
         });
@@ -1459,6 +1465,11 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
     } catch (error) {
         console.error("Failed to initialize MCP server:", error);
     }
+}
+
+/** @deprecated Use {@link InitializeServer}. */
+export async function initializeServer(optionsOrFilterOptions: MCPServerOptions | ToolFilterOptions = {}): Promise<void> {
+    return InitializeServer(optionsOrFilterOptions);
 }
 
 /*******************************************************************************
@@ -2187,8 +2198,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             }
 
             const step = steps[stepNumber - 1];
-            const inputData = truncateText(step.InputData, props.maxChars as number);
-            const outputData = truncateText(step.OutputData, props.maxChars as number);
+            const inputData = TruncateText(step.InputData, props.maxChars as number);
+            const outputData = TruncateText(step.OutputData, props.maxChars as number);
 
             const detail = {
                 stepNumber: step.StepNumber,
@@ -3280,10 +3291,11 @@ function getMatchingEntitiesForTool(allEntities: EntityInfo[], tool: EntityToolC
  * // List only Get_* tools
  * await listAvailableTools({ includePatterns: ['Get_*'] });
  */
-export async function listAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
+export async function ListAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
     try {
         // Initialize configuration (loads .env and mj.config.cjs)
-        _config = await initConfig();
+        _config = await InitConfig();
+        await loadOpenAppServerPackages();
 
         if (!_config.mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
@@ -3297,82 +3309,95 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
         // Initialize database connection to discover dynamic tools
         const poolConfig = buildPoolConfig();
         const pool = new sql.ConnectionPool(poolConfig);
+        // Without this handler, a dropped idle connection crashes the process with an
+        // uncaught pool-level error instead of letting the pool recover.
+        pool.on('error', (err) => {
+            console.error('[ConnectionPool] Pool-level connection error (stale connection evicted):', err.message);
+        });
         await pool.connect();
 
-        const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
-        await setupSQLServerClient(sqlConfig);
+        try {
+            const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
+            await setupSQLServerClient(sqlConfig);
 
-        // Register all tools (they won't actually be added to server, just tracked)
-        // We need to use a dummy filter that includes everything for listing
-        const listingFilterOptions = { ...filterOptions };
-        activeFilterOptions = {}; // Temporarily clear filters to get all tool names
+            // Register all tools (they won't actually be added to server, just tracked)
+            // We need to use a dummy filter that includes everything for listing
+            const listingFilterOptions = { ...filterOptions };
+            activeFilterOptions = {}; // Temporarily clear filters to get all tool names
 
-        // Add built-in tools
-        registeredToolNames.push("Get_Entity_List");
-        registeredToolNames.push("Get_Single_Entity");
+            // Add built-in tools
+            registeredToolNames.push("Get_Entity_List");
+            registeredToolNames.push("Get_Single_Entity");
 
-        // Add agent run diagnostic tools
-        registeredToolNames.push("List_Recent_Agent_Runs");
-        registeredToolNames.push("Get_Agent_Run_Summary");
-        registeredToolNames.push("Get_Agent_Run_Step_Detail");
-        registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
+            // Add agent run diagnostic tools
+            registeredToolNames.push("List_Recent_Agent_Runs");
+            registeredToolNames.push("Get_Agent_Run_Summary");
+            registeredToolNames.push("Get_Agent_Run_Step_Detail");
+            registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
 
-        // Use system user for tool discovery
-        const systemUser = UserCache.Instance.GetSystemUser();
-        if (!systemUser) {
-            throw new Error('System user not found in UserCache');
-        }
-
-        // Load tools to populate registeredToolNames
-        await loadEntityToolsForListing(systemUser);
-        await loadAgentToolsForListing(systemUser);
-
-        // Close database connection
-        await pool.close();
-
-        // Apply filters to the list if specified
-        let toolsToShow = registeredToolNames;
-        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
-            activeFilterOptions = listingFilterOptions;
-            toolsToShow = registeredToolNames.filter(name => shouldIncludeTool(name, listingFilterOptions));
-        }
-
-        // Sort tools alphabetically
-        toolsToShow.sort();
-
-        console.log("\n=== Available MCP Tools ===\n");
-
-        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
-            console.log(`Showing ${toolsToShow.length} of ${registeredToolNames.length} tools (filtered)\n`);
-        } else {
-            console.log(`Total tools: ${toolsToShow.length}\n`);
-        }
-
-        // Group tools by prefix for better readability
-        const toolGroups: Record<string, string[]> = {};
-        for (const tool of toolsToShow) {
-            const prefix = tool.split('_')[0];
-            if (!toolGroups[prefix]) {
-                toolGroups[prefix] = [];
+            // Use system user for tool discovery
+            const systemUser = UserCache.Instance.GetSystemUser();
+            if (!systemUser) {
+                throw new Error('System user not found in UserCache');
             }
-            toolGroups[prefix].push(tool);
-        }
 
-        // Print grouped tools
-        for (const [prefix, tools] of Object.entries(toolGroups).sort()) {
-            console.log(`--- ${prefix} ---`);
-            for (const tool of tools) {
-                console.log(`  ${tool}`);
+            // Load tools to populate registeredToolNames
+            await loadEntityToolsForListing(systemUser);
+            await loadAgentToolsForListing(systemUser);
+
+            // Apply filters to the list if specified
+            let toolsToShow = registeredToolNames;
+            if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+                activeFilterOptions = listingFilterOptions;
+                toolsToShow = registeredToolNames.filter(name => shouldIncludeTool(name, listingFilterOptions));
             }
-            console.log();
-        }
 
-        console.log("Use --include and --exclude to filter tools when starting the server.");
-        console.log("Example: npx @memberjunction/ai-mcp-server --include \"Get_Users_*,Run_Agent\"");
+            // Sort tools alphabetically
+            toolsToShow.sort();
+
+            console.log("\n=== Available MCP Tools ===\n");
+
+            if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+                console.log(`Showing ${toolsToShow.length} of ${registeredToolNames.length} tools (filtered)\n`);
+            } else {
+                console.log(`Total tools: ${toolsToShow.length}\n`);
+            }
+
+            // Group tools by prefix for better readability
+            const toolGroups: Record<string, string[]> = {};
+            for (const tool of toolsToShow) {
+                const prefix = tool.split('_')[0];
+                if (!toolGroups[prefix]) {
+                    toolGroups[prefix] = [];
+                }
+                toolGroups[prefix].push(tool);
+            }
+
+            // Print grouped tools
+            for (const [prefix, tools] of Object.entries(toolGroups).sort()) {
+                console.log(`--- ${prefix} ---`);
+                for (const tool of tools) {
+                    console.log(`  ${tool}`);
+                }
+                console.log();
+            }
+
+            console.log("Use --include and --exclude to filter tools when starting the server.");
+            console.log("Example: npx @memberjunction/ai-mcp-server --include \"Get_Users_*,Run_Agent\"");
+        } finally {
+            // Guarantee the pool is released even if tool discovery throws — otherwise a
+            // failed listing leaks the connection pool for the rest of the CLI process.
+            await pool.close().catch(() => {});
+        }
 
     } catch (error) {
         console.error("Failed to list tools:", error);
     }
+}
+
+/** @deprecated Use {@link ListAvailableTools}. */
+export async function listAvailableTools(filterOptions: ToolFilterOptions = {}): Promise<void> {
+    return ListAvailableTools(filterOptions);
 }
 
 /**

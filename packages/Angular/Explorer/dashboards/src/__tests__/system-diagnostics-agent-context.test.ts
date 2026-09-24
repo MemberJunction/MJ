@@ -11,9 +11,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildSystemDiagnosticsAgentContext,
-    isValidDiagnosticsSection,
-    isValidPerfTab,
+    BuildSystemDiagnosticsAgentContext,
+    IsValidDiagnosticsSection,
+    IsValidPerfTab,
     VALID_DIAGNOSTICS_SECTIONS,
     VALID_PERF_TABS,
     SystemDiagnosticsAgentContextInput,
@@ -64,20 +64,20 @@ function makeInput(overrides: Partial<SystemDiagnosticsAgentContextInput> = {}):
 
 describe('isValidDiagnosticsSection / isValidPerfTab', () => {
     it('accepts the known sections and perf tabs', () => {
-        for (const s of VALID_DIAGNOSTICS_SECTIONS) expect(isValidDiagnosticsSection(s)).toBe(true);
-        for (const t of VALID_PERF_TABS) expect(isValidPerfTab(t)).toBe(true);
+        for (const s of VALID_DIAGNOSTICS_SECTIONS) expect(IsValidDiagnosticsSection(s)).toBe(true);
+        for (const t of VALID_PERF_TABS) expect(IsValidPerfTab(t)).toBe(true);
     });
     it('rejects unknown / non-string values', () => {
-        expect(isValidDiagnosticsSection('secrets')).toBe(false);
-        expect(isValidPerfTab('logs')).toBe(false);
-        expect(isValidDiagnosticsSection(null)).toBe(false);
-        expect(isValidPerfTab(7)).toBe(false);
+        expect(IsValidDiagnosticsSection('secrets')).toBe(false);
+        expect(IsValidPerfTab('logs')).toBe(false);
+        expect(IsValidDiagnosticsSection(null)).toBe(false);
+        expect(IsValidPerfTab(7)).toBe(false);
     });
 });
 
 describe('buildSystemDiagnosticsAgentContext', () => {
     it('reports navigation, metrics, and bounded names', () => {
-        const ctx = buildSystemDiagnosticsAgentContext(makeInput());
+        const ctx = BuildSystemDiagnosticsAgentContext(makeInput());
         expect(ctx['ActiveSection']).toBe('engines');
         expect(ctx['EngineCount']).toBe(12);
         expect(ctx['LoadedEngineCount']).toBe(9);
@@ -88,7 +88,7 @@ describe('buildSystemDiagnosticsAgentContext', () => {
 
     it('caps slow-operations to 10 and preserves label/category/duration shape', () => {
         const many = Array.from({ length: 18 }, (_, i) => ({ Label: `op-${i}`, Category: 'RunView', ElapsedMs: 700 + i }));
-        const ctx = buildSystemDiagnosticsAgentContext(makeInput({ SlowOperations: many }));
+        const ctx = BuildSystemDiagnosticsAgentContext(makeInput({ SlowOperations: many }));
         const ops = ctx['SlowOperations'] as Array<Record<string, unknown>>;
         expect(ops.length).toBe(10);
         expect(Object.keys(ops[0]).sort()).toEqual(['Category', 'ElapsedMs', 'Label']);
@@ -96,7 +96,7 @@ describe('buildSystemDiagnosticsAgentContext', () => {
 
     it('bounds engine + redundant name lists with truncation flags', () => {
         const many = Array.from({ length: AGENT_CONTEXT_NAME_LIST_CAP + 5 }, (_, i) => `Engine${i}`);
-        const ctx = buildSystemDiagnosticsAgentContext(makeInput({ EngineNames: many, RedundantEntityNames: many }));
+        const ctx = BuildSystemDiagnosticsAgentContext(makeInput({ EngineNames: many, RedundantEntityNames: many }));
         expect((ctx['EngineNames'] as string[]).length).toBe(AGENT_CONTEXT_NAME_LIST_CAP);
         expect(ctx['EngineNamesTruncated']).toBe(true);
         expect(ctx['RedundantEntityNamesTruncated']).toBe(true);
@@ -113,7 +113,7 @@ describe('buildSystemDiagnosticsAgentContext', () => {
 
         // Hostile inputs: secret-looking strings stuffed into name fields are still
         // published only as benign diagnostic SHAPE strings under whitelisted keys.
-        const ctx = buildSystemDiagnosticsAgentContext(makeInput({
+        const ctx = BuildSystemDiagnosticsAgentContext(makeInput({
             EngineNames: ['token-stuffer', 'PasswordEngine'],
             SlowOperations: [{ Label: 'secret-op', Category: 'RunView', ElapsedMs: 999 }],
         }));

@@ -1,5 +1,325 @@
 # @memberjunction/remote-browser-server
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- b87e4ac: feat(ai): Gemini 3.8 Live multimodal realtime streaming, video tracks, asynchronous reasoning, and per-model legality
+
+  This release adds comprehensive support for Google's Gemini 3.8 Live multimodal realtime models (`gemini-3.8-live` and `gemini-3.8-live-extended-thinking`), including a first-class media plane for video/audio tracks, non-blocking tool execution, thought summaries, session continuity, and complete catalog metadata.
+
+  In `@memberjunction/server`, the default configuration for `realtime.enabled` is flipped from `false` to `true`, enabling the `/realtime/sdp-exchange` WebRTC broker endpoint on all MemberJunction API servers by default (configurable via `MJ_REALTIME_ENABLED`).
+
+  ### Phase Summary:
+  - **Phase A (Contracts & Media Plane)**: Introduced directional media tracks (`RealtimeTrackDescriptor`, `RealtimeTrackDirection`), open modality vocabulary via `RealtimeModalityRegistry`, track negotiation in `BaseRealtimeClient`, and channel track sourcing/sinking (`GetSourcedTracks`/`GetSunkTracks`).
+  - **Phase B (Audio Retrofit & SDK Convergence)**: Upgraded and converged `@google/genai` to `^2.8.0` across dependents.
+  - **Phase C (Gemini Live Config Legality)**: Added per-model legality enforcement in `GeminiRealtime`: stripped `enable_affective_dialog`, preserved `proactive_audio: true` while rejecting `false`, enforced `thinkingConfig` rules (omitted on 3.8-live, validated levels low/medium/high and rejected `minimal` on Extended Thinking), explicit turn coverage, local refusal of `BLOCKING` tools on Extended Thinking, default `NON_BLOCKING` state on all declarations, and config bag sanitization.
+  - **Phase D (Async Tool Execution & Idle Contract)**: Implemented per-model idle detection honoring `IdleSignal` (`generationComplete` for 3.8-live, `interactionStatus` for Extended Thinking); decoupled tool call arrival from response activity so generation is not falsely interrupted; drained `queuedSends` only on true idle or turn complete; integrated `RealtimeToolBatchBarrier` for parallel/out-of-order tool calls; and added function scheduling resolution (`__mj_scheduling` / `scheduling` with `INTERRUPT`/`INTERRUPTED` support).
+  - **Phase E (Extended Thinking & Narration)**: Routed model thought parts (`IsThought: true`) to `ThoughtNarration$` and created immutable narration delegation cards (`Kind: 'narration'`), keeping scratch thoughts distinct from spoken responses and user-cancelable actions.
+  - **Phase F (Video Tracks & Session Continuity)**: Implemented video frame capture (`getDisplayMedia`/`getUserMedia` in `src/media/frameCapture.ts`), throttled inbound video frame transmission via `ChannelInboundVideoBridge` (whiteboard and remote browser channels), and resilient session continuity across the vendor session cap via `sessionResumptionUpdate` / `goAway`.
+  - **Phase G (Metadata & Release)**: Added declarative catalog metadata and multi-channel pricing for `Gemini 3.8 Live` and `Gemini 3.8 Live Extended Thinking` in `metadata/ai-models/.ai-models.json`.
+
+  ### Reviewer Punch List Resolutions:
+  - **Items 16–18 (Scheduling)**: Supported `__mj_scheduling` alongside `scheduling`, sanitized payload keys, accepted both `INTERRUPT` and `INTERRUPTED`, and added diagnostic warnings on unknown values.
+  - **Item 19 (Non-blocking getter)**: Extracted and centralized `isNonBlocking` getter on `GeminiRealtimeClient`.
+  - **Item 20 (Generation Complete)**: Ensured `handleGenerationComplete` updates `responseActive` without prematurely draining queued sends.
+  - **Items 21–23 (Thought Narration)**: Cleanly separated thought summaries from spoken narrations and the ephemeral live note across `RealtimeSessionService` and `RealtimeSessionState`.
+  - **Item 24 (Activity Rail)**: Restricted open-run button rendering to agent runs (`card.Kind === 'agent' && !!card.RunID`).
+  - **Items 25–27 (Video Bridge & Throttle)**: Separated `sendFrameDirect`, resolved throttle contention between bridge and driver with jitter headroom, added graceful headless DOM detection, and guarded against unimplemented `SendVideoFrame`.
+  - **Item 28 (File organization)**: Moved `frameCapture.ts` from `audio/` to `media/` with clean import paths.
+  - **C5a–C5c (Config Sanitization & Tool Behavior)**: Stated explicit tool behavior on all declarations, warned on unknown values, and added `tooling`, `toolBehavior`, and `functionCallingBehavior` to `REALTIME_SHARED_CONFIG_KEYS`.
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/remote-browser-base@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- 0d1f748: Remote Browser: a dead browser handle now heals instead of poisoning the session (#3598)
+
+  A surface's browser can disappear without the engine being told — an external Chrome closed, a
+  backend container recycled, a CDP target lost. `RemoteBrowserEngine` kept the handle in its live map,
+  so `StartSessionForAgentSession` handed back the corpse and every later call threw
+  `Browser not launched. Call Launch() before using the adapter.` for the rest of the session. Observed
+  live: 232 of them in one MJAPI run, with the voice agent saying "the shared browser session isn't
+  launched right now" indefinitely while the pane sat frozen on its last good frame.
+
+  `RecoverDeadAgentSession(agentSessionID, error, opts)` discards the dead mapping, launches one
+  replacement, and re-attaches the screencast. The caller hands over the error it already caught and
+  does not decide what "dead" means — that lives in `IsDeadBrowserHandleError`, a closed list of
+  "the browser or its transport is gone". Anything unrecognised is treated as a real answer from a live
+  browser and reported exactly as it is today, because the false-positive cost is a healthy browser
+  losing its cookies, login and scroll position over a bad selector.
+
+  Re-attaching the view is half the fix, not a nicety: healing the backend alone is worse than the
+  original bug, because the client asked for a screencast once at bind time and would keep watching the
+  discarded session while the agent truthfully narrated a page the person could not see. The engine now
+  remembers each session's frame sink so the replacement can be re-piped to it — and a screencast the
+  host deliberately stopped is never resurrected.
+
+  Bounded in both directions: concurrent fault reports (the ~700ms snapshot poll and the next agent
+  action both meet the dead handle) coalesce onto one relaunch rather than each launching their own,
+  and a surface gets at most `MAX_DEAD_HANDLE_RECOVERIES` (3) before the engine logs that it is giving
+  up. A browser that dies on arrival should surface as a visible fault, never as a hang plus a stream
+  of orphaned Chromes.
+
+  Both callers that meet a dead handle report it. `RemoteBrowserSnapshot` — the poll that almost always
+  discovers the fault first — now reports it instead of only degrading around it, and
+  `ExecuteRemoteBrowserAction` reports it too and re-runs the action against the replacement. The action
+  path matters on its own: a surface nobody is watching has no poll to discover anything, so wiring only
+  the poll would leave exactly the agent-driven case in the issue unhealed. Re-running is safe precisely
+  because the handle was dead — the action never reached a browser, so it cannot run twice — and a
+  `navigate` therefore heals in place, while a click or a type is told, in words the agent can act on,
+  that its browser was replaced and is now on a blank page.
+
+- 6a06c80: Remote Browser: an agent session can now hold more than one browser, named by `instanceKey` (#3531)
+
+  `RemoteBrowserEngine` keyed its agent-session map on the agent session id alone, which made "one
+  remote browser per agent session" a framework invariant nothing could opt out of. A second surface's
+  lazy start found the first one's mapping and returned it, so both surfaces drove the same Chrome:
+  one live view, one screencast, one audio stream, and a `StopScreencast` from either tore down the
+  other's. Callers had no way to say which browser they meant, because there was only ever one.
+
+  `StartSessionForAgentSession`, `GetSessionForAgentSession`, `EndSessionForAgentSession` and
+  `AchieveGoal` (via `AchieveGoalParams.InstanceKey`) now take an optional `instanceKey` that names a
+  browser _within_ the agent session, and the six `RemoteBrowserActionResolver` mutations that address
+  a live session — `InterpretRemoteBrowserPage`, `RemoteBrowserSnapshot`, `StopRemoteBrowserScreencast`,
+  `StopRemoteBrowserAudioStream`, `RelayRemoteBrowserHumanInput`, `GetRemoteBrowserSelection` — accept
+  and forward it.
+
+  **Omitting it is exactly today's behaviour**, and that is load-bearing rather than incidental: the
+  key is composed as `agentSessionID` alone when no name is given, so every existing caller keeps
+  resolving the single unnamed instance and the pre-existing agent-session tests pass unchanged. An
+  empty or whitespace key is the unnamed instance too, so a caller threading an absent value through
+  as `''` lands where it did before the argument existed. Keys are trimmed and lowercased — the value
+  is typed by hand into a channel config, and `Primary` versus `primary` being two browsers would be a
+  spelling trap.
+
+  The composite stays scoped to the agent session (`id::name`), so two concurrent sessions that both
+  name their second surface `resume` get their own browsers rather than colliding. Start coalescing —
+  the fix that stopped four near-simultaneous callers launching four Chromes — is keyed the same way,
+  so it still collapses a race on one instance without collapsing two _different_ surfaces into one.
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [ada8784]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/ai@6.1.0
+  - @memberjunction/remote-browser-base@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/remote-browser-base@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/remote-browser-base@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Minor Changes

@@ -217,7 +217,7 @@ describe('CommunicationEngine', () => {
         vi.clearAllMocks();
         engine = new CommunicationEngine();
         // Loaded proxies to the (shared, cached) base mock — reset it here for per-test isolation.
-        (engine as unknown as { Base: { Loaded: boolean } }).Base.Loaded = true;
+        (engine as unknown as { base: { Loaded: boolean } }).base.Loaded = true;
         (engine as Record<string, unknown>)['ContextUser'] = { ID: 'test-user-id', Name: 'Test' };
     });
 
@@ -230,7 +230,7 @@ describe('CommunicationEngine', () => {
 
     describe('GetProvider', () => {
         it('should throw when not loaded', () => {
-            (engine as unknown as { Base: { Loaded: boolean } }).Base.Loaded = false;
+            (engine as unknown as { base: { Loaded: boolean } }).base.Loaded = false;
 
             expect(() => engine.GetProvider('TestProvider')).toThrow('Metadata not loaded');
         });
@@ -270,8 +270,8 @@ describe('CommunicationEngine', () => {
                 set Status(_v: string) {},
                 set EndedAt(_v: Date) {},
             };
-            vi.spyOn((engine as unknown as { Base: object }).Base as never, 'StartRun' as never).mockResolvedValue(mockRun as never);
-            vi.spyOn((engine as unknown as { Base: object }).Base as never, 'EndRun' as never).mockResolvedValue(true as never);
+            vi.spyOn((engine as unknown as { base: object }).base as never, 'StartRun' as never).mockResolvedValue(mockRun as never);
+            vi.spyOn((engine as unknown as { base: object }).base as never, 'EndRun' as never).mockResolvedValue(true as never);
 
             // Mock SendSingleMessage
             const sendSpy = vi.spyOn(engine, 'SendSingleMessage').mockResolvedValue({
@@ -305,7 +305,7 @@ describe('CommunicationEngine', () => {
         });
 
         it('should throw when StartRun fails', async () => {
-            vi.spyOn((engine as unknown as { Base: object }).Base as never, 'StartRun' as never).mockResolvedValue(null as never);
+            vi.spyOn((engine as unknown as { base: object }).base as never, 'StartRun' as never).mockResolvedValue(null as never);
 
             await expect(
                 engine.SendMessages('P', 'T', {} as never, [] as never)
@@ -314,8 +314,8 @@ describe('CommunicationEngine', () => {
 
         it('should throw when EndRun fails', async () => {
             const mockRun = { ID: 'run-1' };
-            vi.spyOn((engine as unknown as { Base: object }).Base as never, 'StartRun' as never).mockResolvedValue(mockRun as never);
-            vi.spyOn((engine as unknown as { Base: object }).Base as never, 'EndRun' as never).mockResolvedValue(false as never);
+            vi.spyOn((engine as unknown as { base: object }).base as never, 'StartRun' as never).mockResolvedValue(mockRun as never);
+            vi.spyOn((engine as unknown as { base: object }).base as never, 'EndRun' as never).mockResolvedValue(false as never);
             vi.spyOn(engine, 'SendSingleMessage').mockResolvedValue({
                 Success: true,
                 Error: '',
@@ -330,7 +330,7 @@ describe('CommunicationEngine', () => {
 
     describe('SendSingleMessage', () => {
         it('should throw when not loaded', async () => {
-            (engine as unknown as { Base: { Loaded: boolean } }).Base.Loaded = false;
+            (engine as unknown as { base: { Loaded: boolean } }).base.Loaded = false;
 
             await expect(
                 engine.SendSingleMessage('P', 'T', {} as never)
@@ -352,7 +352,7 @@ describe('CommunicationEngine', () => {
             vi.spyOn(engine, 'GetProvider').mockReturnValue(mockProvider as never);
 
             // Set up Providers metadata
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_Metadata'] = {
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_Metadata'] = {
                 Providers: [{
                     Name: 'P',
                     MessageTypes: [{ Name: 'T', ID: 'pmt-1', CommunicationProviderID: 'prov-1' }],
@@ -387,7 +387,7 @@ describe('CommunicationEngine', () => {
             const mockProvider = { constructor: { name: 'TestProvider' } };
             vi.spyOn(engine, 'GetProvider').mockReturnValue(mockProvider as never);
 
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_Metadata'] = {
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_Metadata'] = {
                 Providers: [{
                     Name: 'P',
                     MessageTypes: [{ Name: 'T', ID: 'pmt-1', CommunicationProviderID: 'prov-1' }],
@@ -412,7 +412,7 @@ describe('CommunicationEngine', () => {
             const mockProvider = { constructor: { name: 'TestProvider' } };
             vi.spyOn(engine, 'GetProvider').mockReturnValue(mockProvider as never);
 
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_Metadata'] = {
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_Metadata'] = {
                 Providers: [{
                     Name: 'P',
                     MessageTypes: [], // No message types
@@ -432,7 +432,7 @@ describe('CommunicationEngine', () => {
             const mockProvider = { constructor: { name: 'TestProvider' } };
             vi.spyOn(engine, 'GetProvider').mockReturnValue(mockProvider as never);
 
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_Metadata'] = {
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_Metadata'] = {
                 Providers: [], // Empty
                 ProviderMessageTypes: [],
                 BaseMessageTypes: [],
@@ -448,7 +448,7 @@ describe('CommunicationEngine', () => {
 
     describe('CreateDraft', () => {
         it('should return failure when not loaded', async () => {
-            (engine as unknown as { Base: { Loaded: boolean } }).Base.Loaded = false;
+            (engine as unknown as { base: { Loaded: boolean } }).base.Loaded = false;
 
             const result = await engine.CreateDraft({} as never, 'P');
             expect(result.Success).toBe(false);
@@ -459,7 +459,7 @@ describe('CommunicationEngine', () => {
             const mockProvider = { constructor: { name: 'TestProvider' } };
             vi.spyOn(engine, 'GetProvider').mockReturnValue(mockProvider as never);
 
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_Metadata'] = {
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_Metadata'] = {
                 Providers: [{ Name: 'P', SupportsDrafts: false }],
                 ProviderMessageTypes: [],
                 BaseMessageTypes: [],
@@ -476,7 +476,7 @@ describe('CommunicationEngine', () => {
             const mockProvider = { constructor: { name: 'TestProvider' }, CreateDraft: vi.fn() };
             vi.spyOn(engine, 'GetProvider').mockReturnValue(mockProvider as never);
 
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_Metadata'] = {
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_Metadata'] = {
                 Providers: [{ Name: 'P', SupportsDrafts: true }],
                 ProviderMessageTypes: [],
                 BaseMessageTypes: [],
@@ -498,7 +498,7 @@ describe('CommunicationEngine', () => {
             const mockProvider = { constructor: { name: 'TestProvider' }, CreateDraft: createDraftFn };
             vi.spyOn(engine, 'GetProvider').mockReturnValue(mockProvider as never);
 
-            ((engine as unknown as { Base: Record<string, unknown> }).Base)['_Metadata'] = {
+            ((engine as unknown as { base: Record<string, unknown> }).base)['_Metadata'] = {
                 Providers: [{ Name: 'P', SupportsDrafts: true }],
                 ProviderMessageTypes: [],
                 BaseMessageTypes: [],

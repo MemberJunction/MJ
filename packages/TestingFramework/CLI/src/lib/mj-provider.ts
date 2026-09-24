@@ -7,7 +7,8 @@ import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-dat
 import sql from 'mssql';
 import dotenv from 'dotenv';
 import path from 'path';
-import { loadMJConfig, type MJConfig } from '../utils/config-loader';
+import { LoadMJConfig, type MJConfig } from '../utils/config-loader';
+import { DiscoverMJConfig, EffectiveProcessId, LoadDynamicPackages, StderrDynamicPackagesLogger } from '@memberjunction/dynamic-packages';
 
 // Load environment variables from .env file.
 // `override` is deliberately FALSE so an explicitly-set variable wins over `.env`
@@ -26,7 +27,7 @@ let connectionPool: sql.ConnectionPool | null = null;
 /** Set only on the PostgreSQL path; there is no mssql pool to close in that case. */
 let pgProvider: { Close?: () => Promise<void> } | null = null;
 
-export async function initializeMJProvider(): Promise<void> {
+export async function InitializeMJProvider(): Promise<void> {
   if (isInitialized) {
     return;
   }
@@ -39,7 +40,23 @@ export async function initializeMJProvider(): Promise<void> {
   }
 
   try {
-    const config = await loadMJConfig();
+    const config = await LoadMJConfig();
+
+    // Installed Open App server packages register their entity/action subclasses here, before the
+    // provider exists. When this CLI runs inside `mj`, the prerun hook has already loaded them and
+    // published its process id (`cli:test:…`), which EffectiveProcessId adopts so the same scoping
+    // and policy apply here; packages already loaded are returned from cache, their startup export
+    // not re-run. Search strategy 'none' matches loadMJConfig() above (cwd only).
+    const raw = DiscoverMJConfig(undefined, { searchStrategy: 'none' });
+    // Stderr logger: this CLI's stdout is a JSON envelope under --format=json / --output=json,
+    // and the loader's default console logger would print its progress lines ahead of it.
+    await LoadDynamicPackages({
+      processId: EffectiveProcessId('testing-cli'),
+      tier: 'server',
+      config: raw.config,
+      configFilePath: raw.configFilePath,
+      log: StderrDynamicPackagesLogger,
+    });
 
     // Debug: Check what's in process.env and config
     console.log(`process.env.DB_DATABASE: ${process.env.DB_DATABASE}`);
@@ -186,6 +203,11 @@ For debugging, run with --verbose flag for detailed error information.`);
   }
 }
 
+/** @deprecated Use {@link InitializeMJProvider}. */
+export async function initializeMJProvider(): Promise<void> {
+  return InitializeMJProvider();
+}
+
 /** Connection details shared by both platform initializers. */
 type ResolvedDbConfig = {
   dbName: string;
@@ -254,7 +276,7 @@ async function refreshUserCacheFromPG(provider: { ExecuteSQL: <T>(sql: string) =
   UserCache.Instance.SetUsers(userInfos);
 }
 
-export function getConnectionPool(): sql.ConnectionPool {
+export function GetConnectionPool(): sql.ConnectionPool {
   if (!connectionPool) {
     throw new Error(`❌ MJ Provider not initialized
 
@@ -267,7 +289,12 @@ This is an internal error. Please report this issue.`);
   return connectionPool;
 }
 
-export async function closeMJProvider(): Promise<void> {
+/** @deprecated Use {@link GetConnectionPool}. */
+export function getConnectionPool(): sql.ConnectionPool {
+  return GetConnectionPool();
+}
+
+export async function CloseMJProvider(): Promise<void> {
   if (connectionPool) {
     await connectionPool.close();
     connectionPool = null;
@@ -280,11 +307,16 @@ export async function closeMJProvider(): Promise<void> {
   }
 }
 
+/** @deprecated Use {@link CloseMJProvider}. */
+export async function closeMJProvider(): Promise<void> {
+  return CloseMJProvider();
+}
+
 /**
  * Get a context user for CLI operations
  * Tries to get the "System" user first, falls back to first available user
  */
-export async function getContextUser(): Promise<import('@memberjunction/core').UserInfo> {
+export async function GetContextUser(): Promise<import('@memberjunction/core').UserInfo> {
   // Try to get the System user like other CLIs do
   let user = UserCache.Instance.UserByName("System", false);
 
@@ -323,4 +355,9 @@ This is typically a configuration or database setup issue.`);
   }
 
   return user;
+}
+
+/** @deprecated Use {@link GetContextUser}. */
+export async function getContextUser(): Promise<import('@memberjunction/core').UserInfo> {
+  return GetContextUser();
 }

@@ -18,7 +18,7 @@ const { Parser } = NodeSqlParser;
 import { MJLexer } from './mj-lexer.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
-import { getASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
+import { GetASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
 import {
     MJToken,
     MJTemplateExpr,
@@ -204,7 +204,7 @@ export class SQLParser {
     constructor(sql: string, dialect: SQLParserDialect) {
         this._sql = sql;
         this._dialect = dialect;
-        this._adapter = getASTDialectAdapter(dialect);
+        this._adapter = GetASTDialectAdapter(dialect);
 
         // Fast path: direct parse (matches the old static ParseSQL contract).
         const direct = SQLParser.parseSQL(sql, dialect.ParserDialect);
@@ -2392,6 +2392,16 @@ export class SQLParser {
             }
         }
         if (expr.expr) SQLParser.walkExpression(expr.expr as Record<string, unknown>, columnRefs, tableAliasMap);
+        // IN (SELECT …) is an expr_list on `value`, not `args`. Without this walk,
+        // ExtractTableRefs misses the subquery FROM (EXISTS uses `args` and was found).
+        if (expr.value != null) {
+            const values = Array.isArray(expr.value) ? expr.value : [expr.value];
+            for (const v of values) {
+                if (v && typeof v === 'object') {
+                    SQLParser.walkExpression(v as Record<string, unknown>, columnRefs, tableAliasMap);
+                }
+            }
+        }
     }
 
     // ═══════════════════════════════════════════════════

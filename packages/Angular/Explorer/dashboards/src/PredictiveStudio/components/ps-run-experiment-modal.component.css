@@ -1,0 +1,118 @@
+.ps-run-exp-dialog {
+  max-width: 860px;
+  width: 90vw;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ps-run-exp-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.exp-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.exp-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+.algo-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.algo-select-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--mj-border);
+  border-radius: 8px;
+  background: var(--mj-bg-surface);
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.algo-select-card:hover {
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-bg-hover, rgba(0, 0, 0, 0.02));
+}
+
+.algo-select-card.selected {
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-brand-primary-light, rgba(59, 130, 246, 0.08));
+  box-shadow: 0 0 0 1px var(--mj-brand-primary);
+}
+
+.algo-select-card input[type="checkbox"] {
+  margin-top: 3px;
+  cursor: pointer;
+  accent-color: var(--mj-brand-primary);
+}
+
+.algo-select-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.algo-select-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--mj-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.algo-select-name i {
+  color: var(--mj-brand-primary);
+}
+
+.algo-select-desc {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  margin-top: 4px;
+  line-height: 1.3;
+}
+
+.algo-select-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.algo-bar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.budget-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--mj-bg-surface-secondary, rgba(0, 0, 0, 0.03));
+  border-radius: 8px;
+  border: 1px dashed var(--mj-border);
+}
+
+.budget-banner i {
+  font-size: 20px;
+  color: var(--mj-status-warning);
+}

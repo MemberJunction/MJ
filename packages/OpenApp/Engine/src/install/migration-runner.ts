@@ -320,14 +320,14 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             .map((d: { Migration: { Filename: string } }) => d.Migration.Filename);
 
         if (result.Success) {
-            const { executeOpenAppMetadataRefresh, isOpenAppSchema } = await import('./open-app-metadata-refresh.js');
+            const { ExecuteOpenAppMetadataRefresh, IsOpenAppSchema } = await import('./open-app-metadata-refresh.js');
             const coreSchema = MJCoreSchema ?? '__mj';
-            if (isOpenAppSchema(SchemaName, coreSchema)) {
+            if (IsOpenAppSchema(SchemaName, coreSchema)) {
                 if (Verbose) {
                     console.log(`Refreshing metadata for Open App schema '${SchemaName}'`);
                 }
                 try {
-                    await executeOpenAppMetadataRefresh({
+                    await ExecuteOpenAppMetadataRefresh({
                         platform,
                         coreSchema,
                         appSchema: SchemaName,

@@ -15,7 +15,7 @@
  * - **Full page** (`pageLength >= maxRows`): more rows may exist — returns `null` to
  *   signal that a `COUNT(*)` is required to know the true total.
  */
-export function exactTotalFromPage(
+export function ExactTotalFromPage(
     startRow: number,
     pageLength: number,
     maxRows: number | null,
@@ -29,13 +29,22 @@ export function exactTotalFromPage(
     return null;
 }
 
+/** @deprecated Use {@link ExactTotalFromPage}. */
+export function exactTotalFromPage(
+    startRow: number,
+    pageLength: number,
+    maxRows: number | null,
+): number | null {
+    return ExactTotalFromPage(startRow, pageLength, maxRows);
+}
+
 /**
  * Reads the total row count from a `COUNT(*)` recordset (`[{ TotalRowCount }]`),
  * falling back to `fallback` when the count is absent, non-numeric, or negative — so
  * an unexpected count shape never yields a misleading total. `fallback` should be a
  * safe lower bound (e.g. `startRow + rowsReturned`).
  */
-export function resolveAdhocTotalRowCount(
+export function ResolveAdhocTotalRowCount(
     countRows: ReadonlyArray<{ TotalRowCount?: unknown }> | null | undefined,
     fallback: number,
 ): number {
@@ -47,4 +56,12 @@ export function resolveAdhocTotalRowCount(
         }
     }
     return fallback;
+}
+
+/** @deprecated Use {@link ResolveAdhocTotalRowCount}. */
+export function resolveAdhocTotalRowCount(
+    countRows: ReadonlyArray<{ TotalRowCount?: unknown }> | null | undefined,
+    fallback: number,
+): number {
+    return ResolveAdhocTotalRowCount(countRows, fallback);
 }

@@ -11,30 +11,30 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildClusterAgentContext,
-    capClusterList,
-    resolveSavedVisualization,
-    buildClusterNotFoundError,
+    BuildClusterAgentContext,
+    CapClusterList,
+    ResolveSavedVisualization,
+    BuildClusterNotFoundError,
     CLUSTER_CONTEXT_LIST_CAP,
     ClusterAgentContextInput,
     ClusterSummary,
 } from '../KnowledgeHub/components/clusters/cluster-agent-context';
 import {
-    buildVisualizeAgentContext,
-    resolveDrilldownRecord,
-    capVisualizeList,
-    isValidVisualizationMode,
+    BuildVisualizeAgentContext,
+    ResolveDrilldownRecord,
+    CapVisualizeList,
+    IsValidVisualizationMode,
     VISUALIZATION_MODES,
     VisualizeAgentContextInput,
     DrilldownRecordSummary,
 } from '../KnowledgeHub/components/visualize/visualize-agent-context';
 import {
-    buildAnalyticsAgentContext,
-    isValidAnalyticsTab,
-    isValidAnalyticsDateRange,
-    resolveAnalyticsName,
-    buildAnalyticsNotFoundError,
-    capAnalyticsList,
+    BuildAnalyticsAgentContext,
+    IsValidAnalyticsTab,
+    IsValidAnalyticsDateRange,
+    ResolveAnalyticsName,
+    BuildAnalyticsNotFoundError,
+    CapAnalyticsList,
     ANALYTICS_TABS,
     ANALYTICS_DATE_RANGES,
     AnalyticsAgentContextInput,
@@ -72,7 +72,7 @@ function clusterInput(overrides: Partial<ClusterAgentContextInput> = {}): Cluste
 
 describe('buildClusterAgentContext', () => {
     it('publishes the core config + counts', () => {
-        const ctx = buildClusterAgentContext(clusterInput());
+        const ctx = BuildClusterAgentContext(clusterInput());
         expect(ctx['IsVisualizationLoaded']).toBe(true);
         expect(ctx['ConfigEntityName']).toBe('Companies');
         expect(ctx['ConfigAlgorithm']).toBe('kmeans');
@@ -84,30 +84,30 @@ describe('buildClusterAgentContext', () => {
     });
 
     it('rounds the silhouette score to 2 decimals', () => {
-        const ctx = buildClusterAgentContext(clusterInput());
+        const ctx = BuildClusterAgentContext(clusterInput());
         expect(ctx['SilhouetteScore']).toBe(0.62);
     });
 
     it('omits SilhouetteScore + RunError when absent', () => {
-        const ctx = buildClusterAgentContext(clusterInput({ SilhouetteScore: null, RunError: null }));
+        const ctx = BuildClusterAgentContext(clusterInput({ SilhouetteScore: null, RunError: null }));
         expect('SilhouetteScore' in ctx).toBe(false);
         expect('RunError' in ctx).toBe(false);
     });
 
     it('surfaces RunError when present', () => {
-        const ctx = buildClusterAgentContext(clusterInput({ RunError: 'embedding mismatch' }));
+        const ctx = BuildClusterAgentContext(clusterInput({ RunError: 'embedding mismatch' }));
         expect(ctx['RunError']).toBe('embedding mismatch');
     });
 
     it('publishes per-cluster summaries and bounds them with a companion count', () => {
         const many: ClusterSummary[] = Array.from({ length: 40 }, (_, i) => ({ ClusterId: i, Label: `C${i}`, PointCount: i }));
-        const ctx = buildClusterAgentContext(clusterInput({ Clusters: many }));
+        const ctx = BuildClusterAgentContext(clusterInput({ Clusters: many }));
         expect((ctx['Clusters'] as ClusterSummary[]).length).toBe(CLUSTER_CONTEXT_LIST_CAP);
         expect(ctx['ClusterSummaryCount']).toBe(40);
     });
 
     it('emits ConfigEntityName as null when blank (multi-source)', () => {
-        const ctx = buildClusterAgentContext(clusterInput({ ConfigEntityName: '' }));
+        const ctx = BuildClusterAgentContext(clusterInput({ ConfigEntityName: '' }));
         expect(ctx['ConfigEntityName']).toBeNull();
     });
 });
@@ -115,7 +115,7 @@ describe('buildClusterAgentContext', () => {
 describe('capClusterList', () => {
     it('caps at the list cap and never mutates input', () => {
         const input = Array.from({ length: 30 }, (_, i) => i);
-        const out = capClusterList(input);
+        const out = CapClusterList(input);
         expect(out.length).toBe(CLUSTER_CONTEXT_LIST_CAP);
         expect(input.length).toBe(30);
     });
@@ -128,30 +128,30 @@ describe('resolveSavedVisualization', () => {
     ];
 
     it('matches by exact id (case-insensitive)', () => {
-        expect(resolveSavedVisualization('aaa-111', saved)?.Name).toBe('Customer Segments');
+        expect(ResolveSavedVisualization('aaa-111', saved)?.Name).toBe('Customer Segments');
     });
     it('matches by exact name (case-insensitive)', () => {
-        expect(resolveSavedVisualization('product themes', saved)?.Id).toBe('BBB-222');
+        expect(ResolveSavedVisualization('product themes', saved)?.Id).toBe('BBB-222');
     });
     it('falls back to a contains match', () => {
-        expect(resolveSavedVisualization('segment', saved)?.Id).toBe('AAA-111');
+        expect(ResolveSavedVisualization('segment', saved)?.Id).toBe('AAA-111');
     });
     it('returns null on miss / empty', () => {
-        expect(resolveSavedVisualization('nope', saved)).toBeNull();
-        expect(resolveSavedVisualization('  ', saved)).toBeNull();
+        expect(ResolveSavedVisualization('nope', saved)).toBeNull();
+        expect(ResolveSavedVisualization('  ', saved)).toBeNull();
     });
 });
 
 describe('buildClusterNotFoundError', () => {
     it('lists available names and reports total when truncated', () => {
         const names = Array.from({ length: 30 }, (_, i) => `V${i}`);
-        const err = buildClusterNotFoundError('x', names, 'saved visualization');
+        const err = BuildClusterNotFoundError('x', names, 'saved visualization');
         expect(err.Success).toBe(false);
         expect(err.ErrorMessage).toContain('No saved visualization matches "x"');
         expect(err.ErrorMessage).toContain('30 total');
     });
     it('handles an empty candidate list', () => {
-        const err = buildClusterNotFoundError('x', [], 'source entity');
+        const err = BuildClusterNotFoundError('x', [], 'source entity');
         expect(err.ErrorMessage).toContain('(none available)');
     });
 });
@@ -175,16 +175,16 @@ function visualizeInput(overrides: Partial<VisualizeAgentContextInput> = {}): Vi
 
 describe('isValidVisualizationMode', () => {
     it('accepts clusters / tagcloud, rejects others', () => {
-        expect(isValidVisualizationMode('clusters')).toBe(true);
-        expect(isValidVisualizationMode('tagcloud')).toBe(true);
-        expect(isValidVisualizationMode('grid')).toBe(false);
-        expect(isValidVisualizationMode(undefined)).toBe(false);
+        expect(IsValidVisualizationMode('clusters')).toBe(true);
+        expect(IsValidVisualizationMode('tagcloud')).toBe(true);
+        expect(IsValidVisualizationMode('grid')).toBe(false);
+        expect(IsValidVisualizationMode(undefined)).toBe(false);
     });
 });
 
 describe('buildVisualizeAgentContext', () => {
     it('publishes mode + available modes; omits drilldown detail when closed', () => {
-        const ctx = buildVisualizeAgentContext(visualizeInput());
+        const ctx = BuildVisualizeAgentContext(visualizeInput());
         expect(ctx['ActiveVisualizationMode']).toBe('clusters');
         expect(ctx['AvailableVisualizationModes']).toEqual(['clusters', 'tagcloud']);
         expect(ctx['DrilldownVisible']).toBe(false);
@@ -196,7 +196,7 @@ describe('buildVisualizeAgentContext', () => {
         const records: DrilldownRecordSummary[] = Array.from({ length: 30 }, (_, i) => ({
             RecordID: `r${i}`, Title: `Item ${i}`, Subtitle: 'Article',
         }));
-        const ctx = buildVisualizeAgentContext(visualizeInput({
+        const ctx = BuildVisualizeAgentContext(visualizeInput({
             ActiveMode: 'tagcloud',
             DrilldownVisible: true,
             DrilldownTitle: 'finance',
@@ -216,17 +216,17 @@ describe('resolveDrilldownRecord', () => {
         { RecordID: 'ID-2', Title: 'Annual Summary' },
     ];
     it('matches by id, then title, then contains', () => {
-        expect(resolveDrilldownRecord('id-1', recs)?.Title).toBe('Quarterly Report');
-        expect(resolveDrilldownRecord('annual summary', recs)?.RecordID).toBe('ID-2');
-        expect(resolveDrilldownRecord('quarterly', recs)?.RecordID).toBe('ID-1');
-        expect(resolveDrilldownRecord('zzz', recs)).toBeNull();
+        expect(ResolveDrilldownRecord('id-1', recs)?.Title).toBe('Quarterly Report');
+        expect(ResolveDrilldownRecord('annual summary', recs)?.RecordID).toBe('ID-2');
+        expect(ResolveDrilldownRecord('quarterly', recs)?.RecordID).toBe('ID-1');
+        expect(ResolveDrilldownRecord('zzz', recs)).toBeNull();
     });
 });
 
 describe('capVisualizeList', () => {
     it('caps and does not mutate', () => {
         const input = Array.from({ length: 40 }, (_, i) => i);
-        expect(capVisualizeList(input).length).toBe(25);
+        expect(CapVisualizeList(input).length).toBe(25);
         expect(input.length).toBe(40);
     });
 });
@@ -270,22 +270,22 @@ function analyticsInput(overrides: Partial<AnalyticsAgentContextInput> = {}): An
 describe('isValidAnalyticsTab / isValidAnalyticsDateRange', () => {
     it('accepts every known tab', () => {
         for (const t of ANALYTICS_TABS) {
-            expect(isValidAnalyticsTab(t)).toBe(true);
+            expect(IsValidAnalyticsTab(t)).toBe(true);
         }
-        expect(isValidAnalyticsTab('bogus')).toBe(false);
-        expect(isValidAnalyticsTab(7)).toBe(false);
+        expect(IsValidAnalyticsTab('bogus')).toBe(false);
+        expect(IsValidAnalyticsTab(7)).toBe(false);
     });
     it('accepts every known date range', () => {
         for (const r of ANALYTICS_DATE_RANGES) {
-            expect(isValidAnalyticsDateRange(r)).toBe(true);
+            expect(IsValidAnalyticsDateRange(r)).toBe(true);
         }
-        expect(isValidAnalyticsDateRange('1Y')).toBe(false);
+        expect(IsValidAnalyticsDateRange('1Y')).toBe(false);
     });
 });
 
 describe('buildAnalyticsAgentContext', () => {
     it('always publishes the common KPI/filter slice', () => {
-        const ctx = buildAnalyticsAgentContext(analyticsInput());
+        const ctx = BuildAnalyticsAgentContext(analyticsInput());
         expect(ctx['ActiveTab']).toBe('overview');
         expect(ctx['DateRange']).toBe('30D');
         expect(ctx['EntityFilter']).toBe('All Entities');
@@ -295,14 +295,14 @@ describe('buildAnalyticsAgentContext', () => {
     });
 
     it('overview/pipeline tabs carry no deep slice', () => {
-        const ctx = buildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'pipeline' }));
+        const ctx = BuildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'pipeline' }));
         expect('TopTags' in ctx).toBe(false);
         expect('SourceComparison' in ctx).toBe(false);
         expect('QualityScore' in ctx).toBe(false);
     });
 
     it('tags tab adds top tags + co-occurrence', () => {
-        const ctx = buildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'tags' }));
+        const ctx = BuildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'tags' }));
         expect((ctx['TopTags'] as unknown[]).length).toBe(2);
         expect(ctx['TopTagCount']).toBe(2);
         expect((ctx['CoOccurrencePairs'] as unknown[]).length).toBe(1);
@@ -310,31 +310,31 @@ describe('buildAnalyticsAgentContext', () => {
     });
 
     it('sources tab adds source comparison + available names + selection', () => {
-        const ctx = buildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'sources' }));
+        const ctx = BuildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'sources' }));
         expect((ctx['SourceComparison'] as unknown[]).length).toBe(2);
         expect(ctx['SelectedSourceName']).toBe('RSS Feed');
         expect(ctx['AvailableSourceNames']).toEqual(['RSS Feed', 'CRM']);
     });
 
     it('quality tab adds score + confidence stats', () => {
-        const ctx = buildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'quality' }));
+        const ctx = BuildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'quality' }));
         expect(ctx['QualityScore']).toBe(72);
         expect((ctx['ConfidenceStats'] as unknown[]).length).toBe(1);
     });
 
     it('cost tab adds cost KPIs', () => {
-        const ctx = buildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'cost' }));
+        const ctx = BuildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'cost' }));
         expect((ctx['CostKPIs'] as unknown[]).length).toBe(1);
     });
 
     it('reports DrillDownOpen when a target is set', () => {
-        const ctx = buildAnalyticsAgentContext(analyticsInput({ DrillDownTarget: 'kpi-totalTags' }));
+        const ctx = BuildAnalyticsAgentContext(analyticsInput({ DrillDownTarget: 'kpi-totalTags' }));
         expect(ctx['DrillDownOpen']).toBe(true);
         expect(ctx['DrillDownTarget']).toBe('kpi-totalTags');
     });
 
     it('omits co-occurrence block when there are no pairs', () => {
-        const ctx = buildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'tags', CoOccurrencePairs: [] }));
+        const ctx = BuildAnalyticsAgentContext(analyticsInput({ ActiveTab: 'tags', CoOccurrencePairs: [] }));
         expect('CoOccurrencePairs' in ctx).toBe(false);
     });
 });
@@ -342,13 +342,13 @@ describe('buildAnalyticsAgentContext', () => {
 describe('resolveAnalyticsName / buildAnalyticsNotFoundError', () => {
     const names = ['RSS Feed', 'CRM Import', 'Web Crawl'];
     it('matches exact then contains, case-insensitively', () => {
-        expect(resolveAnalyticsName('crm import', names)).toBe('CRM Import');
-        expect(resolveAnalyticsName('web', names)).toBe('Web Crawl');
-        expect(resolveAnalyticsName('', names)).toBeNull();
-        expect(resolveAnalyticsName('nope', names)).toBeNull();
+        expect(ResolveAnalyticsName('crm import', names)).toBe('CRM Import');
+        expect(ResolveAnalyticsName('web', names)).toBe('Web Crawl');
+        expect(ResolveAnalyticsName('', names)).toBeNull();
+        expect(ResolveAnalyticsName('nope', names)).toBeNull();
     });
     it('builds a tolerant not-found error listing names', () => {
-        const err = buildAnalyticsNotFoundError('xyz', names, 'source');
+        const err = BuildAnalyticsNotFoundError('xyz', names, 'source');
         expect(err.Success).toBe(false);
         expect(err.ErrorMessage).toContain('RSS Feed');
         expect(err.ErrorMessage).toContain('No source matches "xyz"');
@@ -358,7 +358,7 @@ describe('resolveAnalyticsName / buildAnalyticsNotFoundError', () => {
 describe('capAnalyticsList', () => {
     it('caps and does not mutate', () => {
         const input = Array.from({ length: 40 }, (_, i) => i);
-        expect(capAnalyticsList(input).length).toBe(25);
+        expect(CapAnalyticsList(input).length).toBe(25);
         expect(input.length).toBe(40);
     });
 });

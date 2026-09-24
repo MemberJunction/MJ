@@ -175,17 +175,22 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Gets a credential type by name.
      */
-    public getCredentialTypeByName(typeName: string): MJCredentialTypeEntity | undefined {
+    public GetCredentialTypeByName(typeName: string): MJCredentialTypeEntity | undefined {
         return this._credentialTypes.find(t =>
             t.Name.trim().toLowerCase() === typeName.trim().toLowerCase()
         );
     }
 
+    /** @deprecated Use {@link GetCredentialTypeByName}. */
+    public getCredentialTypeByName(typeName: string): MJCredentialTypeEntity | undefined {
+        return this.GetCredentialTypeByName(typeName);
+    }
+
     /**
      * Gets the default credential for a given type.
      */
-    public getDefaultCredentialForType(credentialTypeName: string): MJCredentialEntity | undefined {
-        const credType = this.getCredentialTypeByName(credentialTypeName);
+    public GetDefaultCredentialForType(credentialTypeName: string): MJCredentialEntity | undefined {
+        const credType = this.GetCredentialTypeByName(credentialTypeName);
         if (!credType) return undefined;
 
         return this._credentials.find(c =>
@@ -193,18 +198,28 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         );
     }
 
+    /** @deprecated Use {@link GetDefaultCredentialForType}. */
+    public getDefaultCredentialForType(credentialTypeName: string): MJCredentialEntity | undefined {
+        return this.GetDefaultCredentialForType(credentialTypeName);
+    }
+
     /**
      * Gets a credential by ID.
      */
-    public getCredentialById(credentialId: string): MJCredentialEntity | undefined {
+    public GetCredentialById(credentialId: string): MJCredentialEntity | undefined {
         return this._credentials.find(c => UUIDsEqual(c.ID, credentialId));
+    }
+
+    /** @deprecated Use {@link GetCredentialById}. */
+    public getCredentialById(credentialId: string): MJCredentialEntity | undefined {
+        return this.GetCredentialById(credentialId);
     }
 
     /**
      * Gets a credential by type and name.
      */
-    public getCredentialByName(credentialTypeName: string, credentialName: string): MJCredentialEntity | undefined {
-        const credType = this.getCredentialTypeByName(credentialTypeName);
+    public GetCredentialByName(credentialTypeName: string, credentialName: string): MJCredentialEntity | undefined {
+        const credType = this.GetCredentialTypeByName(credentialTypeName);
         if (!credType) return undefined;
 
         return this._credentials.find(c =>
@@ -212,6 +227,11 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             c.Name.trim().toLowerCase() === credentialName.trim().toLowerCase() &&
             c.IsActive
         );
+    }
+
+    /** @deprecated Use {@link GetCredentialByName}. */
+    public getCredentialByName(credentialTypeName: string, credentialName: string): MJCredentialEntity | undefined {
+        return this.GetCredentialByName(credentialTypeName, credentialName);
     }
 
     // ====================================
@@ -236,7 +256,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * @returns Resolved credential with decrypted values
      * @throws Error if credential is not found
      */
-    public async getCredential<T extends Record<string, string> = Record<string, string>>(
+    public async GetCredential<T extends Record<string, string> = Record<string, string>>(
         credentialName: string,
         options: CredentialResolutionOptions = {}
     ): Promise<ResolvedCredential<T>> {
@@ -299,6 +319,14 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         }
     }
 
+    /** @deprecated Use {@link GetCredential}. */
+    public async getCredential<T extends Record<string, string> = Record<string, string>>(
+        credentialName: string,
+        options: CredentialResolutionOptions = {}
+    ): Promise<ResolvedCredential<T>> {
+        return this.GetCredential(credentialName, options);
+    }
+
     /**
      * Stores a new credential with encryption and audit logging.
      *
@@ -309,7 +337,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * @param contextUser - Required user context
      * @returns The created credential
      */
-    public async storeCredential(
+    public async StoreCredential(
         credentialTypeName: string,
         name: string,
         values: Record<string, string>,
@@ -318,7 +346,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     ): Promise<MJCredentialEntity> {
         this.TryThrowIfNotLoaded();
 
-        const credType = this.getCredentialTypeByName(credentialTypeName);
+        const credType = this.GetCredentialTypeByName(credentialTypeName);
         if (!credType) {
             throw new Error(`Credential type not found: ${credentialTypeName}`);
         }
@@ -364,6 +392,17 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         return credEntity;
     }
 
+    /** @deprecated Use {@link StoreCredential}. */
+    public async storeCredential(
+        credentialTypeName: string,
+        name: string,
+        values: Record<string, string>,
+        options: StoreCredentialOptions,
+        contextUser: UserInfo
+    ): Promise<MJCredentialEntity> {
+        return this.StoreCredential(credentialTypeName, name, values, options, contextUser);
+    }
+
     /**
      * Updates credential values with encryption and audit logging.
      *
@@ -371,49 +410,64 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * @param values - New credential values
      * @param contextUser - Required user context
      */
-    public async updateCredential(
+    public async UpdateCredential(
         credentialId: string,
         values: Record<string, string>,
         contextUser: UserInfo
     ): Promise<void> {
         this.TryThrowIfNotLoaded();
 
-        const md = this.ProviderToUse;
-        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-        const loaded = await credEntity.Load(credentialId);
-        if (!loaded) {
-            throw new Error(`Credential not found: ${credentialId}`);
-        }
+        // Serialized against the background timestamp touches (see
+        // enqueueCredentialWrite): a fire-and-forget LastUsedAt save that loaded
+        // this row before we commit would otherwise rewrite Values from its stale
+        // snapshot and silently revert this update.
+        await this.enqueueCredentialWrite(credentialId, async () => {
+            const md = this.ProviderToUse;
+            const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
+            const loaded = await credEntity.Load(credentialId);
+            if (!loaded) {
+                throw new Error(`Credential not found: ${credentialId}`);
+            }
 
-        // Get credential type for validation
-        const credType = this._credentialTypes.find(t => UUIDsEqual(t.ID, credEntity.CredentialTypeID));
-        if (credType) {
-            // Apply default and const values from schema
-            const valuesWithDefaults = this.applySchemaDefaults(values, credType.FieldSchema);
+            // Get credential type for validation
+            const credType = this._credentialTypes.find(t => UUIDsEqual(t.ID, credEntity.CredentialTypeID));
+            if (credType) {
+                // Apply default and const values from schema
+                const valuesWithDefaults = this.applySchemaDefaults(values, credType.FieldSchema);
 
-            // Validate against FieldSchema using Ajv
-            this.validateValues(valuesWithDefaults, credType.FieldSchema, credType.ID);
+                // Validate against FieldSchema using Ajv
+                this.validateValues(valuesWithDefaults, credType.FieldSchema, credType.ID);
 
-            // Use values with defaults applied
-            credEntity.Values = JSON.stringify(valuesWithDefaults); // Encryption happens on save
-        } else {
-            // No credential type found, just use provided values
-            credEntity.Values = JSON.stringify(values);
-        }
+                // Use values with defaults applied
+                credEntity.Values = JSON.stringify(valuesWithDefaults); // Encryption happens on save
+            } else {
+                // No credential type found, just use provided values
+                credEntity.Values = JSON.stringify(values);
+            }
 
-        const saved = await credEntity.Save();
-        if (!saved) {
-            throw new Error('Failed to update credential');
-        }
+            const saved = await credEntity.Save();
+            if (!saved) {
+                throw new Error('Failed to update credential');
+            }
 
-        // Log update
-        await this.logAccess(credEntity, contextUser, {
-            operation: 'Update',
-            success: true
+            // Log update
+            await this.logAccess(credEntity, contextUser, {
+                operation: 'Update',
+                success: true
+            });
+
+            // Refresh cache
+            await this.RefreshItem('_credentials');
         });
+    }
 
-        // Refresh cache
-        await this.RefreshItem('_credentials');
+    /** @deprecated Use {@link UpdateCredential}. */
+    public async updateCredential(
+        credentialId: string,
+        values: Record<string, string>,
+        contextUser: UserInfo
+    ): Promise<void> {
+        return this.UpdateCredential(credentialId, values, contextUser);
     }
 
     /**
@@ -423,13 +477,13 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * @param contextUser - Required user context
      * @returns Validation result
      */
-    public async validateCredential(
+    public async ValidateCredential(
         credentialId: string,
         contextUser: UserInfo
     ): Promise<CredentialValidationResult> {
         this.TryThrowIfNotLoaded();
 
-        const credential = this.getCredentialById(credentialId);
+        const credential = this.GetCredentialById(credentialId);
         if (!credential) {
             return {
                 isValid: false,
@@ -469,6 +523,14 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         return result;
     }
 
+    /** @deprecated Use {@link ValidateCredential}. */
+    public async validateCredential(
+        credentialId: string,
+        contextUser: UserInfo
+    ): Promise<CredentialValidationResult> {
+        return this.ValidateCredential(credentialId, contextUser);
+    }
+
     // ====================================
     // Private Helper Methods
     // ====================================
@@ -487,7 +549,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     ): MJCredentialEntity | null {
         // Try by ID first
         if (options.credentialId) {
-            return this.getCredentialById(options.credentialId) || null;
+            return this.GetCredentialById(options.credentialId) || null;
         }
 
         // Try by name (using the main credentialName param or the override)
@@ -645,30 +707,96 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     }
 
     /**
+     * Per-credential write chains backing {@link enqueueCredentialWrite}. Keyed by
+     * normalized credential ID; entries are removed as soon as their chain drains,
+     * so the map only holds credentials with a write currently in flight.
+     */
+    private _credentialWriteChains: Map<string, Promise<void>> = new Map();
+
+    /**
+     * Serializes writes to a single credential row within this process.
+     *
+     * Why: BaseEntity.Save() writes every updatable column from the entity's
+     * in-memory snapshot. The fire-and-forget LastUsedAt/LastValidatedAt touches
+     * load the row, and if a legitimate updateCredential() commits between that
+     * load and the touch's save, the touch rewrites Values from its stale
+     * decrypted snapshot — silently reverting the update (last writer wins, both
+     * paths report success). Chaining every write to the same credential through
+     * one promise makes each operation load only after the previous one
+     * committed, so a full-row save always writes a current snapshot.
+     *
+     * Scope, precisely: this serializes the writes that go THROUGH THIS ENGINE —
+     * updateCredential and the two timestamp touches. It is not a lock on the row.
+     * Code that loads and saves the `MJ: Credentials` entity directly is outside
+     * the chain and can still interleave with a touch; `IntegrationDiscoveryResolver`
+     * writes `Values` that way in two places today. A new in-process writer of this
+     * entity should call updateCredential rather than saving the entity itself, or
+     * route through enqueueCredentialWrite, so it inherits this ordering.
+     *
+     * And two separate processes can still clobber each other's columns regardless —
+     * that is a property of MJ's write-all-columns spUpdate semantics affecting every
+     * entity, tracked by the sparse-update work in issue #2552.
+     *
+     * The returned promise settles with the operation's own outcome; a rejected
+     * operation does not break the chain for subsequent writers.
+     */
+    private enqueueCredentialWrite(credentialId: string, operation: () => Promise<void>): Promise<void> {
+        const key = credentialId.trim().toLowerCase();
+        const prev = this._credentialWriteChains.get(key) ?? Promise.resolve();
+        const next = prev.then(operation, operation);
+        // The chain link swallows the rejection (it surfaces to this call's
+        // caller via `next`) so an un-awaited chain never emits an unhandled
+        // rejection, and cleans the map up once it drains.
+        const link: Promise<void> = next.then(
+            () => undefined,
+            () => undefined
+        ).finally(() => {
+            if (this._credentialWriteChains.get(key) === link) {
+                this._credentialWriteChains.delete(key);
+            }
+        });
+        this._credentialWriteChains.set(key, link);
+        return next;
+    }
+
+    /**
      * Updates the LastUsedAt timestamp on a credential.
      */
     private async updateLastUsedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
-        try {
-            const md = this.ProviderToUse;
-            const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-            await credEntity.Load(credentialId);
-            credEntity.LastUsedAt = new Date();
-            await credEntity.Save();
-        } catch (e) {
-            // Non-fatal - just log
-            LogError(e);
-        }
+        await this.enqueueCredentialWrite(credentialId, () =>
+            this.touchCredentialTimestamp(credentialId, 'LastUsedAt', contextUser));
     }
 
     /**
      * Updates the LastValidatedAt timestamp on a credential.
      */
     private async updateLastValidatedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
+        await this.enqueueCredentialWrite(credentialId, () =>
+            this.touchCredentialTimestamp(credentialId, 'LastValidatedAt', contextUser));
+    }
+
+    /**
+     * Sets a timestamp column via a normal entity save. Must only run inside
+     * {@link enqueueCredentialWrite} — unserialized, the full-row save this
+     * performs is exactly the stale-snapshot clobber described there.
+     */
+    private async touchCredentialTimestamp(
+        credentialId: string,
+        column: 'LastUsedAt' | 'LastValidatedAt',
+        contextUser: UserInfo
+    ): Promise<void> {
         try {
             const md = this.ProviderToUse;
             const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
-            await credEntity.Load(credentialId);
-            credEntity.LastValidatedAt = new Date();
+            const loaded = await credEntity.Load(credentialId);
+            if (!loaded) {
+                return; // Row deleted since the read that triggered this touch — nothing to do
+            }
+            if (column === 'LastUsedAt') {
+                credEntity.LastUsedAt = new Date();
+            } else {
+                credEntity.LastValidatedAt = new Date();
+            }
             await credEntity.Save();
         } catch (e) {
             // Non-fatal - just log

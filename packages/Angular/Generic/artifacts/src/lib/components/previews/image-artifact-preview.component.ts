@@ -11,6 +11,12 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
  * fixed width) is the only width constraint, so the aspect ratio is preserved and portrait images
  * aren't distorted; the height cap is the single lever for overall size. Kept in sync with the video
  * preview's cap so both visual media previews stay visually consistent.
+ *
+ * Loading: the component has THREE states, not two. `resolveContentUrl()` is async, and an inline
+ * `data:` URI — what MJ stores whenever no file storage account is configured — can be several MB
+ * that the browser still has to decode after the src is assigned. With only `error` and `loaded`
+ * branches the element rendered nothing at all through both windows, so a generated image read as
+ * "never arrived" and then appeared unannounced seconds later.
  */
 @Component({
     standalone: false,
@@ -21,19 +27,31 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
                 <i class="fa-solid fa-image"></i>
                 <span>{{ errorMessage }}</span>
             </div>
-        } @else if (imageUrl) {
-            <img
-                class="image-preview__img"
-                [src]="imageUrl"
-                [alt]="altText"
-                (error)="onImageError()"
-            />
+        } @else {
+            @if (isLoading || !imagePainted) {
+                <mj-loading text="Loading image..." size="small"></mj-loading>
+            }
+            @if (imageUrl) {
+                <img
+                    class="image-preview__img"
+                    [class.image-preview__img--hidden]="!imagePainted"
+                    [src]="imageUrl"
+                    [alt]="altText"
+                    (load)="onImageLoaded()"
+                    (error)="onImageError()"
+                />
+            }
         }
     `,
     styles: [
         `
             :host {
                 display: block;
+                /* Containing block for the pending <img>, which is position:absolute so it can be
+                   painted (and therefore decoded) without reserving layout. Without this it
+                   positions against whatever ancestor happens to be positioned — in the
+                   conversation, potentially the scroll container. */
+                position: relative;
             }
 
             .image-preview__img {
@@ -45,6 +63,15 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
                 object-fit: contain;
                 border-radius: 6px;
                 background: var(--mj-bg-surface-sunken);
+            }
+
+            /* Same decode-while-hidden treatment as ImageArtifactViewerComponent's
+               .image-viewer__img--hidden, for the same reason: the element must stay in the paint
+               tree so the browser decodes it, which display:none would prevent. */
+            .image-preview__img--hidden {
+                opacity: 0;
+                position: absolute;
+                pointer-events: none;
             }
 
             .image-preview--error {
@@ -62,21 +89,51 @@ export class ImageArtifactPreviewComponent extends BaseArtifactPreviewComponent 
     private readonly cdr = inject(ChangeDetectorRef);
 
     /** Resolved URL bound to `<img src>` — data URI (inline) or pre-auth URL (file). */
-    public imageUrl = '';
+    public ImageUrl = '';
+
+    /** @deprecated Use {@link ImageUrl}. */
+    public get imageUrl() {
+        return this.ImageUrl;
+    }
+    /** @deprecated Use {@link ImageUrl}. */
+    public set imageUrl(value) {
+        this.ImageUrl = value;
+    }
 
     /** Non-empty hides the image and shows a compact error line. */
     public errorMessage = '';
 
+    /**
+     * Has the browser painted the image? Distinct from the base class's {@link isLoading}, which
+     * covers URL resolution: for a multi-megabyte inline `data:` URI the decode after `src` is
+     * assigned is what the user actually waits on, so the indicator holds until the `load` event.
+     */
+    public ImagePainted = false;
+
+    /** @deprecated Use {@link ImagePainted}. */
+    public get imagePainted() {
+        return this.ImagePainted;
+    }
+    /** @deprecated Use {@link ImagePainted}. */
+    public set imagePainted(value) {
+        this.ImagePainted = value;
+    }
+
     /** Accessible alt text — prefers a descriptive name over a raw filename. */
-    public get altText(): string {
+    public get AltText(): string {
         return this.artifactVersion?.Name || this.artifactVersion?.FileName || 'Image artifact';
+    }
+
+    /** @deprecated Use {@link AltText}. */
+    public get altText(): string {
+        return this.AltText;
     }
 
     async ngOnInit(): Promise<void> {
         try {
             const url = await this.resolveContentUrl();
             if (url) {
-                this.imageUrl = url;
+                this.ImageUrl = url;
             } else {
                 this.errorMessage = 'No image content.';
             }
@@ -86,9 +143,23 @@ export class ImageArtifactPreviewComponent extends BaseArtifactPreviewComponent 
         this.cdr.markForCheck();
     }
 
-    public onImageError(): void {
-        this.errorMessage = 'Image could not be displayed.';
-        this.imageUrl = '';
+    public OnImageLoaded(): void {
+        this.ImagePainted = true;
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link OnImageLoaded}. */
+    public onImageLoaded(): void {
+        return this.OnImageLoaded();
+    }
+
+    public OnImageError(): void {
+        this.errorMessage = 'Image could not be displayed.';
+        this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link OnImageError}. */
+    public onImageError(): void {
+        return this.OnImageError();
     }
 }

@@ -46,6 +46,34 @@ export interface AISkillImportMarkdownOutput {
     warnings: string[];
 }
 
+/** Input for `Authorization.Check`. */
+export interface AuthorizationCheckInput {
+    /**
+     * Authorization names to evaluate (e.g. `Orders.Price.OverrideList`).
+     * Matching is case-insensitive. Empty array returns an empty Results list.
+     */
+    Names: string[];
+}
+
+/** One row of `Authorization.Check` output. */
+export interface AuthorizationCheckResultRow {
+    /** The name as requested. */
+    Name: string;
+    /** True when the user has this authorization or an ancestor grant. */
+    Allowed: boolean;
+    /** True when no `MJ: Authorizations` row matches this name. Fail-closed: Allowed is then false. */
+    Unknown: boolean;
+    /** True when Allowed because of an ancestor grant, not a direct role on this row. */
+    ViaAncestor: boolean;
+    /** The authorization Name that actually matched (leaf or ancestor). Null when not allowed. */
+    MatchedAuthorizationName: string | null;
+}
+
+/** Output of `Authorization.Check`. */
+export interface AuthorizationCheckOutput {
+    Results: AuthorizationCheckResultRow[];
+}
+
 /** The control action to apply to a running/paused experiment session. */
 export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
 
@@ -694,6 +722,98 @@ export interface TemplateRunOutput {
     executionTimeMs?: number;
 }
 
+/**
+ * Input for `WebSearch.Query`.
+ *
+ * NO import statements — this definition is emitted verbatim into the generated
+ * remote_operations.ts and any import here would break that file.
+ */
+export interface WebSearchQueryInput {
+    /** The search query. Required, non-empty. */
+    query: string;
+    /** Desired result count. Clamped to the serving provider's cap. Default 10. */
+    maxResults?: number;
+    /**
+     * Pin the search to one provider, by Name (e.g. `Brave`) or DriverClass.
+     *
+     * When set there is NO failover: if that provider is missing, inactive, unavailable or
+     * incapable of what was asked, the call fails rather than quietly serving from another
+     * vendor. Omit it to let the administrator's priority order decide.
+     */
+    provider?: string;
+    /** Restrict results to these domains, where the serving provider supports it. */
+    includeDomains?: string[];
+    /** Exclude these domains, where the serving provider supports it. */
+    excludeDomains?: string[];
+    /** Relative recency window: `day`, `week`, `month` or `year`. */
+    freshness?: 'day' | 'week' | 'month' | 'year';
+    /** Two-letter country code for localisation, e.g. `US`, `GB`. */
+    country?: string;
+    /** Language code for results, e.g. `en`. */
+    language?: string;
+    /** Adult-content filter. Default `moderate`. */
+    safeSearch?: 'off' | 'moderate' | 'strict';
+    /**
+     * Ask for a synthesized answer alongside the hits.
+     *
+     * This restricts selection to providers that can produce one, so it changes which provider
+     * serves the request — not merely what comes back.
+     */
+    includeAnswer?: boolean;
+}
+
+/**
+ * Output of `WebSearch.Query`.
+ *
+ * NO import statements — emitted verbatim into the generated remote_operations.ts.
+ */
+export interface WebSearchQueryHit {
+    /** Page title as the provider reports it. */
+    title: string;
+    /** Absolute URL of the result. */
+    url: string;
+    /** Snippet or extracted page content. Length and style vary by provider. */
+    snippet: string;
+    /** Host as the provider displays it, e.g. `irs.gov`. */
+    displayUrl?: string;
+    /** Publication or last-modified date, ISO-8601, when the provider resolved one. */
+    publishedAt?: string;
+    /**
+     * The provider's own relevance score.
+     *
+     * Provider-relative and NOT comparable across providers — use it to order hits within one
+     * response, never to threshold or to compare two vendors.
+     */
+    score?: number;
+}
+
+/** One provider's turn, recorded whether it succeeded or not. */
+export interface WebSearchQueryAttempt {
+    providerName: string;
+    succeeded: boolean;
+    durationMs: number;
+    hitCount?: number;
+    /** `transient` (another provider may succeed) or `permanent` (the request itself is bad). */
+    failureKind?: string;
+    errorMessage?: string;
+}
+
+export interface WebSearchQueryOutput {
+    /** Normalised results. Legitimately empty for a narrow query — that is not a failure. */
+    hits: WebSearchQueryHit[];
+    /** Synthesized answer, only when `includeAnswer` was requested and the provider produced one. */
+    answer?: string;
+    /** Name of the provider that actually served this result. */
+    providerUsed: string;
+    /**
+     * Every provider tried, in order — including on success.
+     *
+     * If the primary rate-limits every call and the secondary quietly serves everything, nothing
+     * else makes that visible while the bill moves to a vendor nobody chose.
+     */
+    attempts: WebSearchQueryAttempt[];
+}
+
 /** Input for `Workflow.Draft`. */
 export interface WorkflowDraftInput {
     /** What the person wants done, in their own words. */
@@ -838,6 +958,22 @@ export class AISkillImportMarkdownOperation extends BaseRemotableOperation<AISki
     public readonly OperationKey = "AISkill.ImportMarkdown";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "aiskill:manage";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// Authorization.Check — Check Authorization
+// ============================================================
+/**
+ * Check Authorization
+ * Ask whether the calling user can execute one or more named MJ: Authorizations, including ancestor grants. Unknown names fail closed (Allowed=false, Unknown=true). When a row has UseAuditLog, a MJ: Audit Logs record is written. Implemented by AuthorizationCheckOperation in @memberjunction/core-entities.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Authorization.Check'. This generated base provides the typed contract only (client-safe).
+ */
+export class AuthorizationCheckOperation extends BaseRemotableOperation<AuthorizationCheckInput, AuthorizationCheckOutput> {
+    public readonly OperationKey = "Authorization.Check";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "authorization:check";
     public readonly RequiresSystemUser = false;
 }
 
@@ -1253,6 +1389,22 @@ export class TemplateRunOperation extends BaseRemotableOperation<TemplateRunInpu
     public readonly OperationKey = "Template.Run";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "template:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WebSearch.Query — Web Search
+// ============================================================
+/**
+ * Web Search
+ * Run a web search through the configured external provider set. The administrator's WebSearchProvider records decide which vendor serves the request and in what failover order; a caller may pin one explicitly, in which case the call fails rather than substituting another. Implemented by WebSearchQueryServerOperation in @memberjunction/web-search-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WebSearch.Query'. This generated base provides the typed contract only (client-safe).
+ */
+export class WebSearchQueryOperation extends BaseRemotableOperation<WebSearchQueryInput, WebSearchQueryOutput> {
+    public readonly OperationKey = "WebSearch.Query";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "websearch:execute";
     public readonly RequiresSystemUser = false;
 }
 

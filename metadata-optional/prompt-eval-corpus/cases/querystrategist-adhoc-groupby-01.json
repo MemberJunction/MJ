@@ -1,0 +1,42 @@
+{
+  "id": "querystrategist-adhoc-groupby-01",
+  "agent": "Query Strategist",
+  "tags": [
+    "mid-loop-action",
+    "param-fidelity"
+  ],
+  "description": "Schema already known from the prior turn. The SQL must aggregate, not select rows — a param-fidelity case where the action name alone proves nothing.",
+  "input": {
+    "payload": {
+      "schema": {
+        "entity": "MJ: AI Prompt Runs",
+        "view": "[__mj].vwAIPromptRuns"
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "How many prompt runs happened per day over the last week?"
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Get Entity Details succeeded. 'MJ: AI Prompt Runs' → [__mj].vwAIPromptRuns; columns ID, PromptID, RunAt, Success."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Run Ad-hoc Query",
+        "params": {
+          "Query": {
+            "matcher": "regex",
+            "pattern": "SELECT[\\s\\S]+FROM[\\s\\S]+GROUP\\s+BY",
+            "flags": "i"
+          }
+        }
+      }
+    ]
+  }
+}

@@ -20,6 +20,7 @@ export class MJContentItemFormComponent extends BaseFormComponent {
             { sectionKey: 'contentDetails', sectionName: 'Content Details', isExpanded: true },
             { sectionKey: 'aIVectorization', sectionName: 'AI & Vectorization', isExpanded: true },
             { sectionKey: 'hierarchy', sectionName: 'Hierarchy', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentItemAttributes', sectionName: 'Content Item Attributes', isExpanded: false },
             { sectionKey: 'mJContentItemTags', sectionName: 'Content Item Tags', isExpanded: false },

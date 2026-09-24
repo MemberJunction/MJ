@@ -413,7 +413,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
     // ─── Watermark detection (conservative, name-based default; operator-overridable) ─
 
     /** Common "last-changed" column names, normalized (letters only) for a forgiving match. */
-    private static readonly WatermarkNameHints = new Set([
+    private static readonly watermarkNameHints = new Set([
         'modifiedat', 'updatedat', 'lastmodified', 'lastupdated', 'modified', 'updated',
         'datemodified', 'dateupdated', 'lastmodifieddate', 'lastupdateddate', 'changedate',
         'mjupdatedat', 'rowlastupdated', 'lastchange', 'lastchanged',
@@ -427,7 +427,7 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
      */
     protected DetectWatermarkField(obj: ExternalSchemaObject): string | undefined {
         const normalize = (name: string): string => name.toLowerCase().replace(/[^a-z]/g, '');
-        const match = obj.Columns.find(c => BaseExternalDataSourceConnector.WatermarkNameHints.has(normalize(c.Name)));
+        const match = obj.Columns.find(c => BaseExternalDataSourceConnector.watermarkNameHints.has(normalize(c.Name)));
         return match?.Name;
     }
 }

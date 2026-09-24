@@ -19,7 +19,7 @@ export class ArtifactIconService {
      * @param pluginIcon Optional icon provided by a viewer plugin (highest priority)
      * @returns Font Awesome icon class (e.g., 'fa-file-code', 'fa-chart-line')
      */
-    public getArtifactIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity, pluginIcon?: string): string {
+    public GetArtifactIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity, pluginIcon?: string): string {
         if (!artifact) {
             return 'fa-file';
         }
@@ -37,6 +37,11 @@ export class ArtifactIconService {
 
         // Priority 3: Hardcoded type-based fallback
         return this.getHardcodedIcon(artifact);
+    }
+
+    /** @deprecated Use {@link GetArtifactIcon}. */
+    public getArtifactIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity, pluginIcon?: string): string {
+        return this.GetArtifactIcon(artifact, pluginIcon);
     }
 
     /**

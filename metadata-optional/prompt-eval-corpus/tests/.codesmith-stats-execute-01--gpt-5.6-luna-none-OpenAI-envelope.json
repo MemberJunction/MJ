@@ -1,0 +1,90 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-stats-execute-01 [gpt-5.6-luna@none · OpenAI · envelope]",
+    "Description": "Statistics must be computed by code, not inferred. The code param must actually reference the input data rather than hard-coding an answer.",
+    "InputDefinition": {
+      "payload": {
+        "task": "standard deviation",
+        "inputData": {
+          "values": [
+            12,
+            15,
+            19,
+            22,
+            28,
+            31,
+            44
+          ]
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Compute the standard deviation of input.values."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-stats-execute-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Execute Code",
+            "params": {
+              "code": {
+                "matcher": "regex",
+                "pattern": "input",
+                "flags": "i"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Execute Code",
+                "params": {
+                  "code": {
+                    "matcher": "regex",
+                    "pattern": "input",
+                    "flags": "i"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E8900CA1-BCC3-4E30-A6BD-C3E499BEC3E6"
+  }
+}

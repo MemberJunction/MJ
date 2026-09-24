@@ -14,41 +14,37 @@
     "angular",
     "memberjunction",
     "events",
-    "abstract-submission",
-    "angular-material"
+    "abstract-submission"
   ],
   "author": "MemberJunction",
   "license": "BUSL-1.1",
   "devDependencies": {
-    "@angular/compiler": "18.0.2",
-    "@angular/compiler-cli": "18.0.2",
-    "@angular-devkit/build-angular": "^18.0.0"
+    "@angular/animations": "21.2.19",
+    "@angular/common": "21.2.19",
+    "@angular/compiler": "21.2.19",
+    "@angular/compiler-cli": "21.2.19",
+    "@angular/core": "21.2.19",
+    "@angular/forms": "21.2.19",
+    "@angular/platform-browser": "21.2.19",
+    "@angular/router": "21.2.19",
+    "typescript": "~5.9.3"
   },
   "peerDependencies": {
-    "@angular/common": "18.0.2",
-    "@angular/core": "18.0.2",
-    "@angular/forms": "18.0.2",
-    "@angular/animations": "18.0.2",
-    "@angular/cdk": "^18.0.0",
-    "@angular/material": "^18.0.0"
+    "@angular/animations": "21.2.19",
+    "@angular/common": "21.2.19",
+    "@angular/core": "21.2.19",
+    "@angular/forms": "21.2.19",
+    "@angular/router": "21.2.19"
   },
   "dependencies": {
-    "@memberjunction/global": "5.3.0",
-    "@memberjunction/core": "5.3.0",
-    "@memberjunction/ng-base-forms": "5.3.0",
-    "@memberjunction/ng-form-toolbar": "5.3.0",
-    "@memberjunction/ng-dashboards": "5.3.0",
-    "@memberjunction/ng-shared": "5.3.0",
-    "@memberjunction/ng-container-directives": "5.3.0",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/ng-base-forms": "6.1.0-edge.5",
+    "@memberjunction/ng-container-directives": "6.1.0-edge.5",
+    "@memberjunction/ng-dashboards": "6.1.0-edge.5",
+    "@memberjunction/ng-shared": "6.1.0-edge.5",
     "mj_generatedentities": "file:../../../packages/GeneratedEntities",
-    "@progress/kendo-angular-buttons": "^18.0.0",
-    "@progress/kendo-angular-dropdowns": "^18.0.0",
-    "@progress/kendo-angular-inputs": "^18.0.0",
-    "@progress/kendo-angular-dateinputs": "^18.0.0",
-    "@progress/kendo-angular-dialog": "^18.0.0",
-    "@progress/kendo-angular-indicators": "^18.0.0",
-    "@progress/kendo-theme-default": "^12.3.0",
-    "marked": "^17.0.1",
     "rxjs": "^7.8.2",
     "tslib": "^2.3.0"
   },
@@ -56,5 +52,15 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
+  },
+  "overrides": {
+    "@angular/animations": "21.2.19",
+    "@angular/common": "21.2.19",
+    "@angular/compiler": "21.2.19",
+    "@angular/compiler-cli": "21.2.19",
+    "@angular/core": "21.2.19",
+    "@angular/forms": "21.2.19",
+    "@angular/platform-browser": "21.2.19",
+    "@angular/router": "21.2.19"
   }
 }

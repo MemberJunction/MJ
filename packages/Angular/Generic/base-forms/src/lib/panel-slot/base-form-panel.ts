@@ -98,6 +98,19 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      * L3 `MJ: Form Chrome Rules` still wins. `chromeGroup` still merges.
      */
     inclusion?: FormInclusion;
+
+    /**
+     * Open a NEW (unsaved) record on this contribution instead of the first first-class group.
+     *
+     * A saved record opens where the user last was, or on the lead group. That is right for reading a
+     * record and wrong for creating one: the lead group is usually a summary, and a summary of a record
+     * with no data is a page of blanks the user has to look past to find where typing starts.
+     *
+     * Only consulted when the record is unsaved, so it cannot change how an existing record opens.
+     * If several contributions on one entity set it, the highest ClassFactory `Priority` wins, matching
+     * how every other conflict between registrations is settled.
+     */
+    leadsWhenUnsaved?: boolean;
 }
 
 /**
@@ -152,12 +165,17 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
      * implementation reports valid (panels that don't need extra validation
      * can leave this method off).
      */
-    public validate(): ValidationResult {
+    public Validate(): ValidationResult {
         // Inline construction — ValidationResult is a class in @memberjunction/core,
         // not a plain interface, so callers can construct via `new`.
         const result = new ValidationResult();
         result.Success = true;
         return result;
+    }
+
+    /** @deprecated Use {@link Validate}. */
+    public validate(): ValidationResult {
+        return this.Validate();
     }
 
     /**

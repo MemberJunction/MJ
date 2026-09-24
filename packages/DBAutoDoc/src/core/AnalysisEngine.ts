@@ -4,7 +4,7 @@
  */
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition, ValueListVerdict } from '../types/state.js';
-import { ensureArray } from "../utils/ensureArray.js";
+import { EnsureArray } from "../utils/ensureArray.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, EnumCandidateContext } from '../types/analysis.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 import {
@@ -74,17 +74,22 @@ export class AnalysisEngine {
   /**
    * Initialize timing for guardrails and set current run
    */
-  public startAnalysis(run: AnalysisRun): void {
+  public StartAnalysis(run: AnalysisRun): void {
     this.startTime = Date.now();
     this.currentRun = run;
     this.guardrailsManager.startPhase('analysis');
+  }
+
+  /** @deprecated Use {@link StartAnalysis}. */
+  public startAnalysis(run: AnalysisRun): void {
+    return this.StartAnalysis(run);
   }
 
   /**
    * Lock interim ground truth: FKs with confidence ≥ threshold become immutable.
    * Call this AFTER the iterative analysis completes but BEFORE the pruning pass.
    */
-  public lockInterimGroundTruth(
+  public LockInterimGroundTruth(
     state: DatabaseDocumentation,
     confidenceThreshold: number = 90
   ): { locked: number; unlocked: number } {
@@ -108,10 +113,18 @@ export class AnalysisEngine {
     return { locked, unlocked };
   }
 
+  /** @deprecated Use {@link LockInterimGroundTruth}. */
+  public lockInterimGroundTruth(
+    state: DatabaseDocumentation,
+    confidenceThreshold: number = 90
+  ): { locked: number; unlocked: number } {
+    return this.LockInterimGroundTruth(state, confidenceThreshold);
+  }
+
   /**
    * Lock high-confidence PK candidates as interim ground truth.
    */
-  public lockInterimPKGroundTruth(
+  public LockInterimPKGroundTruth(
     state: DatabaseDocumentation,
     confidenceThreshold: number = 90
   ): { locked: number; unlocked: number } {
@@ -135,10 +148,18 @@ export class AnalysisEngine {
     return { locked, unlocked };
   }
 
+  /** @deprecated Use {@link LockInterimPKGroundTruth}. */
+  public lockInterimPKGroundTruth(
+    state: DatabaseDocumentation,
+    confidenceThreshold: number = 90
+  ): { locked: number; unlocked: number } {
+    return this.LockInterimPKGroundTruth(state, confidenceThreshold);
+  }
+
   /**
    * Two-pass PK pruning using a potentially stronger model.
    */
-  public async prunePrimaryKeys(
+  public async PrunePrimaryKeys(
     state: DatabaseDocumentation,
     run: AnalysisRun
   ): Promise<{ removed: number; kept: number }> {
@@ -186,7 +207,7 @@ export class AnalysisEngine {
 
       if (!result.success || !result.result) { console.log(`[AnalysisEngine] PK pruning failed for ${tableKey}: ${result.errorMessage}`); continue; }
 
-      try { for (const proposal of ensureArray(result.result, "PK pruning per-table")) {
+      try { for (const proposal of EnsureArray(result.result, "PK pruning per-table")) {
         if (proposal.action === 'remove' && proposal.index >= 1 && proposal.index <= tablePKs.length) {
           const pk = tablePKs[proposal.index - 1];
           if (pk.status === 'confirmed') { console.log(`[AnalysisEngine] BLOCKED removal of locked PK: ${tableKey} [${pk.columnNames.join(', ')}]`); continue; }
@@ -209,7 +230,7 @@ export class AnalysisEngine {
 
     let removed = 0;
     if (holisticResult.success && holisticResult.result) {
-      for (const decision of ensureArray(holisticResult.result, "holistic pruning")) {
+      for (const decision of EnsureArray(holisticResult.result, "holistic pruning")) {
         if (decision.action === 'remove' && decision.index >= 1 && decision.index <= allProposals.length) {
           const proposal = allProposals[decision.index - 1];
           proposal.pk.status = 'rejected';
@@ -230,13 +251,21 @@ export class AnalysisEngine {
     return { removed, kept };
   }
 
+  /** @deprecated Use {@link PrunePrimaryKeys}. */
+  public async prunePrimaryKeys(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): Promise<{ removed: number; kept: number }> {
+    return this.PrunePrimaryKeys(state, run);
+  }
+
     /**
    * Two-pass FK pruning using a potentially stronger model.
    * Pass 1: Per-table — evaluate each table's unlocked FKs, propose removals.
    * Pass 2: Holistic — review all proposed removals at once for final decision.
    * Locked FKs (interim ground truth) are never touched.
    */
-  public async pruneForeignKeys(
+  public async PruneForeignKeys(
     state: DatabaseDocumentation,
     run: AnalysisRun
   ): Promise<{ removed: number; kept: number }> {
@@ -335,7 +364,7 @@ export class AnalysisEngine {
         continue;
       }
 
-      try { for (const proposal of ensureArray(result.result, "FK pruning per-table")) {
+      try { for (const proposal of EnsureArray(result.result, "FK pruning per-table")) {
         if (proposal.action === 'remove' && proposal.index >= 1 && proposal.index <= tableFKs.length) {
           const fk = tableFKs[proposal.index - 1];
           if (fk.status === 'confirmed') {
@@ -399,7 +428,7 @@ export class AnalysisEngine {
 
     let removed = 0;
     if (holisticResult.success && holisticResult.result) {
-      for (const decision of ensureArray(holisticResult.result, "holistic pruning")) {
+      for (const decision of EnsureArray(holisticResult.result, "holistic pruning")) {
         if (decision.action === 'remove' && decision.index >= 1 && decision.index <= allProposals.length) {
           const proposal = allProposals[decision.index - 1];
           proposal.fk.status = 'rejected';
@@ -427,10 +456,18 @@ export class AnalysisEngine {
     return { removed, kept };
   }
 
+  /** @deprecated Use {@link PruneForeignKeys}. */
+  public async pruneForeignKeys(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): Promise<{ removed: number; kept: number }> {
+    return this.PruneForeignKeys(state, run);
+  }
+
   /**
    * Process a single dependency level
    */
-  public async processLevel(
+  public async ProcessLevel(
     state: DatabaseDocumentation,
     run: AnalysisRun,
     level: number,
@@ -465,6 +502,16 @@ export class AnalysisEngine {
     run.levelsProcessed = Math.max(run.levelsProcessed, level + 1);
 
     return { triggers, guardrailExceeded: false };
+  }
+
+  /** @deprecated Use {@link ProcessLevel}. */
+  public async processLevel(
+    state: DatabaseDocumentation,
+    run: AnalysisRun,
+    level: number,
+    tables: TableNode[]
+  ): Promise<{ triggers: BackpropagationTrigger[]; guardrailExceeded: boolean }> {
+    return this.ProcessLevel(state, run, level, tables);
   }
 
   /**
@@ -923,7 +970,7 @@ export class AnalysisEngine {
    * Perform dependency-level sanity check
    * Checks consistency across tables at the same dependency level
    */
-  public async performDependencyLevelSanityCheck(
+  public async PerformDependencyLevelSanityCheck(
     state: DatabaseDocumentation,
     run: AnalysisRun,
     level: number,
@@ -1000,11 +1047,21 @@ export class AnalysisEngine {
     }
   }
 
+  /** @deprecated Use {@link PerformDependencyLevelSanityCheck}. */
+  public async performDependencyLevelSanityCheck(
+    state: DatabaseDocumentation,
+    run: AnalysisRun,
+    level: number,
+    tables: TableNode[]
+  ): Promise<boolean> {
+    return this.PerformDependencyLevelSanityCheck(state, run, level, tables);
+  }
+
   /**
    * Perform schema-level sanity check
    * Holistic review after entire schema is analyzed
    */
-  public async performSchemaLevelSanityCheck(
+  public async PerformSchemaLevelSanityCheck(
     state: DatabaseDocumentation,
     run: AnalysisRun,
     schema: SchemaDefinition
@@ -1101,11 +1158,20 @@ export class AnalysisEngine {
     }
   }
 
+  /** @deprecated Use {@link PerformSchemaLevelSanityCheck}. */
+  public async performSchemaLevelSanityCheck(
+    state: DatabaseDocumentation,
+    run: AnalysisRun,
+    schema: SchemaDefinition
+  ): Promise<boolean> {
+    return this.PerformSchemaLevelSanityCheck(state, run, schema);
+  }
+
   /**
    * Perform cross-schema sanity check
    * Validates consistency across all schemas
    */
-  public async performCrossSchemaSanityCheck(
+  public async PerformCrossSchemaSanityCheck(
     state: DatabaseDocumentation,
     run: AnalysisRun
   ): Promise<boolean> {
@@ -1187,10 +1253,18 @@ export class AnalysisEngine {
     }
   }
 
+  /** @deprecated Use {@link PerformCrossSchemaSanityCheck}. */
+  public async performCrossSchemaSanityCheck(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): Promise<boolean> {
+    return this.PerformCrossSchemaSanityCheck(state, run);
+  }
+
   /**
    * Check convergence
    */
-  public checkConvergence(state: DatabaseDocumentation, run: AnalysisRun): boolean {
+  public CheckConvergence(state: DatabaseDocumentation, run: AnalysisRun): boolean {
     const result = this.convergenceDetector.hasConverged(state, run);
 
     if (result.converged) {
@@ -1201,10 +1275,15 @@ export class AnalysisEngine {
     return false;
   }
 
+  /** @deprecated Use {@link CheckConvergence}. */
+  public checkConvergence(state: DatabaseDocumentation, run: AnalysisRun): boolean {
+    return this.CheckConvergence(state, run);
+  }
+
   /**
    * Execute backpropagation
    */
-  public async executeBackpropagation(
+  public async ExecuteBackpropagation(
     state: DatabaseDocumentation,
     run: AnalysisRun,
     triggers: BackpropagationTrigger[]
@@ -1218,6 +1297,15 @@ export class AnalysisEngine {
     }
 
     await this.backpropagationEngine.execute(state, run, triggers);
+  }
+
+  /** @deprecated Use {@link ExecuteBackpropagation}. */
+  public async executeBackpropagation(
+    state: DatabaseDocumentation,
+    run: AnalysisRun,
+    triggers: BackpropagationTrigger[]
+  ): Promise<void> {
+    return this.ExecuteBackpropagation(state, run, triggers);
   }
 
 

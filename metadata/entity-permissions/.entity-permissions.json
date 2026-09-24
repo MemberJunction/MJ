@@ -548,11 +548,66 @@
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "5178BBEF-8F08-416E-90A9-A8255C851B84"
+      "ID": "C6D88D08-4583-468C-9106-CCAB00308BDE"
     },
     "sync": {
       "lastModified": "2026-08-20T22:30:53.611Z",
       "checksum": "fda68614f8fd529a3e30dc30b23a210aa1376d798dd5601fe4af02082b9fd017"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Skills",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "CFDBE38F-1222-40B4-82EC-F3EA49F785C8"
+    },
+    "sync": {
+      "lastModified": "2026-09-09T11:57:15.898Z",
+      "checksum": "eb38b6ae199b43108efb59e1a1ee1d93ef03c43f5977891ec243c65b6f189243"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Sessions",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Agent Sessions",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Agent Sessions"
+    },
+    "primaryKey": {
+      "ID": "662A433E-F36B-1410-8595-00C8AD7ACEA2"
+    },
+    "sync": {
+      "lastModified": "2026-09-14T00:43:05.196Z",
+      "checksum": "562944e4f8efb990e8eac3e5a4dfcdf3bde5636b285b1045606adb1a14c0281f"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Session Channels",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Agent Session Channels",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Agent Session Channels"
+    },
+    "primaryKey": {
+      "ID": "7E2A433E-F36B-1410-8595-00C8AD7ACEA2"
+    },
+    "sync": {
+      "lastModified": "2026-09-14T00:43:05.195Z",
+      "checksum": "af3d006e4f981ac3689d5b20d230b6a884fc5fd20e8fdcdb5a259f53d8c4c730"
     }
   }
 ]

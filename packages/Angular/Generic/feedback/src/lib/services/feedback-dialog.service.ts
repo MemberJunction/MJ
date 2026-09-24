@@ -35,9 +35,14 @@ export class FeedbackDialogRef {
   }
 
   /** @internal Emit the result and complete */
-  _emitResult(result: { success: boolean }): void {
+  EmitResult(result: { success: boolean }): void {
     this.resultSubject.next(result);
     this.resultSubject.complete();
+  }
+
+  /** @deprecated Use {@link EmitResult}. */
+  _emitResult(result: { success: boolean }): void {
+    return this.EmitResult(result);
   }
 }
 

@@ -1,4 +1,4 @@
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, ordinalCompare } from '@memberjunction/global';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -184,8 +184,18 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     return this._active;
   }
 
+  /** Current counters for this run. */
+  public get Counters(): Readonly<RunCounters> {
+    return this._counters;
+  }
+
+  /** @deprecated Use {@link Counters}. */
+  public get counters(): Readonly<RunCounters> {
+    return this.Counters;
+  }
+
   /** Begin capturing a new run. Resets all state from any prior run. */
-  public startRun(): void {
+  public StartRun(): void {
     this._active = true;
     this._runStartMs = Date.now();
     this._runStartIso = new Date(this._runStartMs).toISOString();
@@ -199,6 +209,11 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     this._currentEntity = null;
   }
 
+  /** @deprecated Use {@link StartRun}. */
+  public startRun(): void {
+    return this.StartRun();
+  }
+
   // ------------------------------------------------------------------------
   // Instrumentation API
   // ------------------------------------------------------------------------
@@ -210,7 +225,7 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
    * If no run is active this becomes a pass-through — safe to call
    * unconditionally.
    */
-  public async phase<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  public async Phase<T>(name: string, fn: () => Promise<T>): Promise<T> {
     if (!this._active) return fn();
 
     const parent = this._phaseStack[this._phaseStack.length - 1];
@@ -238,12 +253,17 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     }
   }
 
+  /** @deprecated Use {@link Phase}. */
+  public async phase<T>(name: string, fn: () => Promise<T>): Promise<T> {
+    return this.Phase(name, fn);
+  }
+
   /**
    * Wrap per-entity work. Accumulates total time and sub-phase time on the
    * entity record. Also sets the "current entity" so LLM calls recorded
    * inside this block get attributed correctly.
    */
-  public async entityPhase<T>(entityName: string, phaseName: string, fn: () => Promise<T>): Promise<T> {
+  public async EntityPhase<T>(entityName: string, phaseName: string, fn: () => Promise<T>): Promise<T> {
     if (!this._active) return fn();
 
     const entry = this.getOrCreateEntity(entityName);
@@ -252,7 +272,7 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
 
     const startedAt = Date.now();
     try {
-      return await this.phase(`entity:${entityName}:${phaseName}`, fn);
+      return await this.Phase(`entity:${entityName}:${phaseName}`, fn);
     } finally {
       const elapsed = Date.now() - startedAt;
       entry.totalMs += elapsed;
@@ -263,11 +283,16 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     }
   }
 
+  /** @deprecated Use {@link EntityPhase}. */
+  public async entityPhase<T>(entityName: string, phaseName: string, fn: () => Promise<T>): Promise<T> {
+    return this.EntityPhase(entityName, phaseName, fn);
+  }
+
   /**
    * Record a single LLM call. Attribution falls back to the entity set by
    * the most recent `entityPhase()` if the caller doesn't supply one.
    */
-  public recordLLMCall(call: {
+  public RecordLLMCall(call: {
     entityName?: string | null;
     promptName: string;
     model?: string | null;
@@ -300,8 +325,21 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     }
   }
 
+  /** @deprecated Use {@link RecordLLMCall}. */
+  public recordLLMCall(call: {
+    entityName?: string | null;
+    promptName: string;
+    model?: string | null;
+    tokensIn?: number;
+    tokensOut?: number;
+    costUSD?: number;
+    latencyMs: number;
+  }): void {
+    return this.RecordLLMCall(call);
+  }
+
   /** Increment a named counter (default 1). Unknown counter names are allowed. */
-  public counter(name: string, delta: number = 1): void {
+  public Counter(name: string, delta: number = 1): void {
     if (!this._active) return;
     const current = this._counters[name];
     if (typeof current === 'number') {
@@ -312,30 +350,55 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     // If it's a Record (e.g., spCalls), callers should use spCallCounter instead.
   }
 
+  /** @deprecated Use {@link Counter}. */
+  public counter(name: string, delta: number = 1): void {
+    return this.Counter(name, delta);
+  }
+
   /** Increment a specific stored-procedure call count. */
-  public spCallCounter(spName: string, delta: number = 1): void {
+  public SpCallCounter(spName: string, delta: number = 1): void {
     if (!this._active) return;
     const current = this._counters.spCalls[spName] ?? 0;
     this._counters.spCalls[spName] = current + delta;
   }
 
+  /** @deprecated Use {@link SpCallCounter}. */
+  public spCallCounter(spName: string, delta: number = 1): void {
+    return this.SpCallCounter(spName, delta);
+  }
+
   /** Set a one-time context value (platform, mjVersion, etc.). */
-  public mark(key: string, value: unknown): void {
+  public Mark(key: string, value: unknown): void {
     if (!this._active) return;
     this._context[key] = value;
   }
 
+  /** @deprecated Use {@link Mark}. */
+  public mark(key: string, value: unknown): void {
+    return this.Mark(key, value);
+  }
+
   /** Flag an entity's change status. Used for attribution in the report. */
-  public flagEntity(entityName: string, flag: 'new' | 'modified' | 'regenerated', value: boolean = true): void {
+  public FlagEntity(entityName: string, flag: 'new' | 'modified' | 'regenerated', value: boolean = true): void {
     if (!this._active) return;
     const ent = this.getOrCreateEntity(entityName);
     ent.flags[flag] = value;
   }
 
+  /** @deprecated Use {@link FlagEntity}. */
+  public flagEntity(entityName: string, flag: 'new' | 'modified' | 'regenerated', value: boolean = true): void {
+    return this.FlagEntity(entityName, flag, value);
+  }
+
   /** Append a free-form note (warnings, unexpected conditions, etc.). */
-  public note(message: string): void {
+  public Note(message: string): void {
     if (!this._active) return;
     this._notes.push(message);
+  }
+
+  /** @deprecated Use {@link Note}. */
+  public note(message: string): void {
+    return this.Note(message);
   }
 
   // ------------------------------------------------------------------------
@@ -348,7 +411,7 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
    *
    * Safe to call even if `startRun()` wasn't called (becomes a no-op).
    */
-  public async endRun(success: boolean): Promise<{ filePath: string | null; report: RunReport | null }> {
+  public async EndRun(success: boolean): Promise<{ filePath: string | null; report: RunReport | null }> {
     if (!this._active) return { filePath: null, report: null };
 
     const finishedAtMs = Date.now();
@@ -388,8 +451,13 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     return { filePath: writtenPath, report };
   }
 
+  /** @deprecated Use {@link EndRun}. */
+  public async endRun(success: boolean): Promise<{ filePath: string | null; report: RunReport | null }> {
+    return this.EndRun(success);
+  }
+
   /** Get the current in-memory report (snapshot). Mostly for tests. */
-  public snapshot(): RunReport {
+  public Snapshot(): RunReport {
     return {
       runId: this.makeRunId(),
       startedAt: this._runStartIso,
@@ -411,11 +479,16 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     };
   }
 
+  /** @deprecated Use {@link Snapshot}. */
+  public snapshot(): RunReport {
+    return this.Snapshot();
+  }
+
   /**
    * Print a human-readable summary of the completed run to stdout.
    * Call after `endRun()` — operates on the saved report.
    */
-  public static printSummary(report: RunReport): void {
+  public static PrintSummary(report: RunReport): void {
     const totalSec = report.totalMs / 1000;
     const entCount = report.counters.entitiesProcessed ?? report.entities.length;
     const lines: string[] = [
@@ -484,6 +557,11 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     console.log(lines.join('\n'));
   }
 
+  /** @deprecated Use {@link PrintSummary}. */
+  public static printSummary(report: RunReport): void {
+    return this.PrintSummary(report);
+  }
+
   private static sumPhaseTime(phases: PhaseSpan[]): number {
     let total = 0;
     for (const p of phases) {
@@ -497,12 +575,17 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
   // ------------------------------------------------------------------------
 
   /** The directory where run JSON files are stored. */
-  public static stateDir(): string {
+  public static StateDir(): string {
     return path.join(os.homedir(), '.mj', 'codegen-state');
   }
 
+  /** @deprecated Use {@link StateDir}. */
+  public static stateDir(): string {
+    return this.StateDir();
+  }
+
   /** List recent runs, newest first, with compact summaries. */
-  public static async listRuns(limit?: number): Promise<RunSummary[]> {
+  public static async ListRuns(limit?: number): Promise<RunSummary[]> {
     const dir = CodeGenReporter.stateDir();
     let files: string[];
     try {
@@ -533,12 +616,17 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
       }
     }
 
-    summaries.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+    summaries.sort((a, b) => ordinalCompare(b.startedAt, a.startedAt));
     return typeof limit === 'number' ? summaries.slice(0, limit) : summaries;
   }
 
+  /** @deprecated Use {@link ListRuns}. */
+  public static async listRuns(limit?: number): Promise<RunSummary[]> {
+    return this.ListRuns(limit);
+  }
+
   /** Load a single run by file name OR run id. Returns null if not found. */
-  public static async loadRun(runIdOrFile: string): Promise<RunReport | null> {
+  public static async LoadRun(runIdOrFile: string): Promise<RunReport | null> {
     const dir = CodeGenReporter.stateDir();
     const file = runIdOrFile.endsWith('.json') ? runIdOrFile : `run-${runIdOrFile}.json`;
     const full = path.join(dir, file);
@@ -552,11 +640,16 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     }
   }
 
+  /** @deprecated Use {@link LoadRun}. */
+  public static async loadRun(runIdOrFile: string): Promise<RunReport | null> {
+    return this.LoadRun(runIdOrFile);
+  }
+
   /**
    * Prune `~/.mj/codegen-state/` to the most recent MAX_RETAINED_RUNS files.
    * Non-fatal on errors.
    */
-  public static async pruneOldRuns(): Promise<void> {
+  public static async PruneOldRuns(): Promise<void> {
     try {
       const dir = CodeGenReporter.stateDir();
       const files = (await fs.readdir(dir))
@@ -575,6 +668,11 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
     } catch {
       // Directory may not exist yet — safe to ignore.
     }
+  }
+
+  /** @deprecated Use {@link PruneOldRuns}. */
+  public static async pruneOldRuns(): Promise<void> {
+    return this.PruneOldRuns();
   }
 
   // ------------------------------------------------------------------------
@@ -640,23 +738,43 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
 // ----------------------------------------------------------------------------
 
 /** Shortcut: wrap a phase using the singleton. */
-export function reportPhase<T>(name: string, fn: () => Promise<T>): Promise<T> {
+export function ReportPhase<T>(name: string, fn: () => Promise<T>): Promise<T> {
   return CodeGenReporter.Instance.phase(name, fn);
 }
 
+/** @deprecated Use {@link ReportPhase}. */
+export function reportPhase<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  return ReportPhase(name, fn);
+}
+
 /** Shortcut: wrap a per-entity phase using the singleton. */
-export function reportEntityPhase<T>(entityName: string, phaseName: string, fn: () => Promise<T>): Promise<T> {
+export function ReportEntityPhase<T>(entityName: string, phaseName: string, fn: () => Promise<T>): Promise<T> {
   return CodeGenReporter.Instance.entityPhase(entityName, phaseName, fn);
 }
 
+/** @deprecated Use {@link ReportEntityPhase}. */
+export function reportEntityPhase<T>(entityName: string, phaseName: string, fn: () => Promise<T>): Promise<T> {
+  return ReportEntityPhase(entityName, phaseName, fn);
+}
+
 /** Shortcut: increment a counter using the singleton. */
-export function reportCounter(name: string, delta: number = 1): void {
+export function ReportCounter(name: string, delta: number = 1): void {
   CodeGenReporter.Instance.counter(name, delta);
 }
 
+/** @deprecated Use {@link ReportCounter}. */
+export function reportCounter(name: string, delta: number = 1): void {
+  return ReportCounter(name, delta);
+}
+
 /** Shortcut: set a context mark using the singleton. */
-export function reportMark(key: string, value: unknown): void {
+export function ReportMark(key: string, value: unknown): void {
   CodeGenReporter.Instance.mark(key, value);
+}
+
+/** @deprecated Use {@link ReportMark}. */
+export function reportMark(key: string, value: unknown): void {
+  return ReportMark(key, value);
 }
 
 function formatDuration(ms: number): string {

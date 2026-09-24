@@ -58,9 +58,9 @@ import {
     QueryGridStateChangedEvent,
     QuerySelectionChangedEvent,
     QueryExportOptions,
-    buildColumnsFromQueryFields,
-    buildColumnsFromData,
-    getQueryGridStateKey
+    BuildColumnsFromQueryFields,
+    BuildColumnsFromData,
+    GetQueryGridStateKey
 } from './models/query-grid-types';
 import { RowDetailEntityLinkEvent } from '../query-row-detail/query-row-detail.component';
 
@@ -181,7 +181,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
 
         // If we have data but no columns from metadata or explicit configs, build from data
         if (this._data.length > 0 && this.Columns.length === 0 && !this._columnConfigs) {
-            this.Columns = buildColumnsFromData(this._data);
+            this.Columns = BuildColumnsFromData(this._data);
             this.buildColumnDefs();
         }
 
@@ -454,7 +454,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         }
 
         // Build columns from query fields
-        this.Columns = buildColumnsFromQueryFields(this._queryInfo.QueryFields);
+        this.Columns = BuildColumnsFromQueryFields(this._queryInfo.QueryFields);
 
         // Apply initial state if provided via prop (takes precedence)
         if (this.InitialGridState) {
@@ -868,7 +868,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         }
 
         try {
-            const settingKey = getQueryGridStateKey(this._queryInfo.ID);
+            const settingKey = GetQueryGridStateKey(this._queryInfo.ID);
             const savedState = UserInfoEngine.Instance.GetSetting(settingKey);
 
             if (savedState) {
@@ -951,7 +951,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         }
 
         try {
-            const settingKey = getQueryGridStateKey(this._queryInfo.ID);
+            const settingKey = GetQueryGridStateKey(this._queryInfo.ID);
             await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(state));
         } catch (error) {
             console.error('[query-data-grid] Failed to persist grid state:', error);

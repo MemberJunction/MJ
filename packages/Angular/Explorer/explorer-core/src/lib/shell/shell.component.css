@@ -440,8 +440,15 @@ mj-tab-container ::ng-deep .lm_stack {
   border-radius: var(--mj-radius-md);
   box-shadow: var(--mj-shadow-lg);
   min-width: 180px;
+  /* Never wider than the viewport, never taller than what is left below the 60px header:
+     a short window (or a phone) used to leave the bottom items unreachable, because the
+     menu had no height limit and clipped instead of scrolling. */
+  max-width: min(360px, calc(100vw - 2 * var(--mj-space-4)));
+  max-height: calc(100vh - 60px - 3 * var(--mj-space-2));
+  max-height: calc(100dvh - 60px - 3 * var(--mj-space-2));
   z-index: 10000;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .user-menu-item {

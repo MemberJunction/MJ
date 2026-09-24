@@ -1,13 +1,16 @@
-import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { ClassFactory, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
-import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
-import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
+import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { EntitySubtypeResolver } from './entitySubtypeResolver';
+import { BaseEngineRegistry } from './baseEngineRegistry';
+import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
+import { ComputeContentHashOptions, EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogDebug, LogError, LogStatus } from './logging';
-import { CompositeKey, FieldValueCollection } from './compositeKey';
+import { CompositeKey, FieldValueCollection, KeyValuePair } from './compositeKey';
 import { RelatedRecordCollection, RelatedRecordCollectionOptions } from './relatedRecordCollection';
 import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
 import { EmbeddedRecord, type EmbeddedRecordOptions } from './embeddedRecord';
@@ -50,9 +53,67 @@ export class EntityField {
     }
 
     private _entityFieldInfo: EntityFieldInfo;
-    private _OldValue: any;
-    private _Value: any;
-    private _NeverSet: boolean = true;
+    private _oldValue: any;
+    private _value: any;
+    private _neverSet: boolean = true;
+    private _notLoaded: boolean = false;
+
+    /**
+     * True when the source this entity was hydrated from OMITTED this field's key — most
+     * commonly because field-level security stripped it before the payload reached us, but
+     * equally for any partial hydration. The field's in-memory state (its metadata default,
+     * else null) is a construction artifact, not data: the save path skips not-loaded fields
+     * entirely (the generated procs' `ISNULL(@p, [Col])` merge then preserves the stored
+     * value), {@link Dirty} always reports false for them, and {@link Validate} exempts them
+     * from the required/null check.
+     *
+     * Deliberately DISTINCT from `_NeverSet`, which means "no set since construction," exists
+     * to permit the one-time write to ReadOnly fields on load, and is re-armed wholesale by
+     * `InnerLoad` — reusing it would conflate defaults with omissions. This flag is set only
+     * by the hydration paths (via {@link MarkNotLoaded}) when a source omits the key, is
+     * cleared by ANY explicit set (an intentional blind write to a read-denied field is a
+     * legitimate write-only update and must save), and is never present on new (unhydrated)
+     * entities — their fields legitimately hold metadata defaults for INSERT.
+     */
+    public get NotLoaded(): boolean {
+        return this._notLoaded;
+    }
+
+    /**
+     * Framework-internal: hydration paths call this for each field whose key the hydration
+     * source omitted. Application code should never need it — an explicit {@link Value} set
+     * clears the flag.
+     */
+    public MarkNotLoaded(): void {
+        this._notLoaded = true;
+    }
+
+    private _createSuppressed: boolean = false;
+
+    /**
+     * True when field-level security bars this user from supplying the field's value on INSERT,
+     * so the save path must omit it and let the column take its database default.
+     *
+     * Deliberately DISTINCT from {@link NotLoaded}, even though both end in "leave this
+     * parameter out of the SP call". `NotLoaded` means "the hydration source omitted this key"
+     * and carries consequences this must not: it suppresses the `_Clear` companion, exempts the
+     * field from required/null validation, and forces {@link Dirty} to false. A create-suppressed
+     * field, by contrast, holds a perfectly real value the user typed — it is simply not one they
+     * are permitted to supply. Conflating them would silently disarm validation on fields a user
+     * IS allowed to create.
+     *
+     * Set per-save by the create-path gate and cleared at the start of every save, because the
+     * answer depends on the acting user and the same entity object can be saved by different
+     * users over its lifetime.
+     */
+    public get CreateSuppressed(): boolean {
+        return this._createSuppressed;
+    }
+
+    /** Framework-internal: set by the save path's field-security create gate. */
+    public SetCreateSuppressed(suppressed: boolean): void {
+        this._createSuppressed = suppressed;
+    }
 
     get Name(): string {
         return this._entityFieldInfo.Name;
@@ -95,7 +156,7 @@ export class EntityField {
      * serialization, hydration, SQL build) reads this directly and must stay assertion-free.
      */
     get Value(): any {
-        return this._Value;
+        return this._value;
     }
 
     get ReadOnly(): boolean {
@@ -128,7 +189,7 @@ export class EntityField {
         // are enforced at BaseEntity.Get/Set/SetMany, not at this low-level accessor.
         if (
               !this.ReadOnly ||
-              this._NeverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
+              this._neverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
                                  after that load for a given INSTANCE of an EntityField object we never set a ReadOnly Field*/
             ) {
             // Strip trailing space-padding on fixed-width string columns
@@ -141,16 +202,24 @@ export class EntityField {
             if (typeof value === 'string' && this._entityFieldInfo.FixedWidthColumn) {
                 value = value.replace(/ +$/, '');
             }
-            this._Value = value;
+            this._value = value;
+            // Any explicit set means the field now holds REAL data — including a blind write to
+            // a read-denied field (the write-only case), which must flow to the save. Captured
+            // BEFORE clearing so the OldValue branch below can see it: a set onto a not-loaded
+            // field is an EDIT (must become dirty and reach the save), never the "initial value
+            // set" of record setup — the record's setup moment was the hydration that omitted
+            // this field.
+            const wasNotLoaded = this._notLoaded;
+            this._notLoaded = false;
 
             // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
-            if (this._NeverSet &&
-                (value !== null || this._OldValue !== null)) {
+            if (this._neverSet && !wasNotLoaded &&
+                (value !== null || this._oldValue !== null)) {
                 // initial value set
-                this._OldValue = value;
+                this._oldValue = value;
             }
 
-            this._NeverSet = false;
+            this._neverSet = false;
         }
     }
 
@@ -160,27 +229,29 @@ export class EntityField {
      * after the object is created, but only once. This is typically used in the BaseEntity class when loading an entity from an array of values or the DB and reusing an existing object.
      */
     public ResetNeverSetFlag() {
-        this._NeverSet = true;
+        this._neverSet = true;
     }
 
     /**
      * Returns true if the field is dirty, false otherwise. A field is considered dirty if the value is different from the old value. If the field is read only, it is never dirty.
+     * A {@link NotLoaded} field is never dirty either — its in-memory state is a construction
+     * artifact, not data, and nothing that was never loaded can have been changed.
      */
     get Dirty(): boolean {
-        if (this.ReadOnly)
+        if (this.ReadOnly || this._notLoaded)
             return false
         else {
-            const oldNull = this._OldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
+            const oldNull = this._oldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
             const curNull = this.Value === null || this.Value === undefined || Number.isNaN(this.OldValue);
             if (oldNull && curNull)
                 return false; // BOTH are null or undefined, not dirty
             else {
-                let oldCompare = this._OldValue;
+                let oldCompare = this._oldValue;
                 let newCompare = this.Value;
 
-                if (this._OldValue instanceof Date) {
+                if (this._oldValue instanceof Date) {
                     // sometimes we have old values that are date objects, convert to UTC timestamp for comparison
-                    oldCompare = this._OldValue.getTime();
+                    oldCompare = this._oldValue.getTime();
                 }
                 if (this.Value instanceof Date) {
                     // and sometimes the new values are date objects, convert to UTC timestamp for comparison
@@ -312,7 +383,13 @@ export class EntityField {
         // no longer false-warns or throws here.
         if (!ef.ReadOnly && !ef.SkipValidation) {
             // only do validation on updatable fields and skip the special case fields defined inside the SkipValidation property (like ID/CreatedAt/UpdatedAt)
-            if (!ef.AllowsNull && (this.Value === null || this.Value === undefined)) {
+            // NotLoaded exemption: a field the hydration source omitted holds null/default by
+            // construction and is SKIPPED by the save SQL, so the stored value is untouched —
+            // failing the required check here would make every partially hydrated record
+            // unsaveable for unrelated edits (the exact NOT-NULL breakage mode the not-loaded
+            // design exists to remove). Length/type checks below still apply to whatever the
+            // constructor state is; only the required/null check is meaningless for it.
+            if (!ef.AllowsNull && !this._notLoaded && (this.Value === null || this.Value === undefined)) {
                 // make sure this isn't a field that has a default value and we are inside a new record
                 if (ef.DefaultValue === null || ef.DefaultValue === undefined || ef.DefaultValue.trim().length === 0) {
                     // we have no default value, so this is an error
@@ -321,7 +398,7 @@ export class EntityField {
                 }
                 else {
                     // we do have a default value, but our current value is null. If we are in an EXISTING record, this is an error, check the OldValue to determine this
-                    if (this._OldValue !== null && this._OldValue !== undefined) {
+                    if (this._oldValue !== null && this._oldValue !== undefined) {
                         result.Success = false;
                         result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be null`, null));
                     }
@@ -361,6 +438,36 @@ export class EntityField {
                 result.Success = false;
                 const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
                 result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${ef.ValueListValuesForDisplay}${nullNote}. Current value is '${this.Value}'`, this.Value));
+            }
+
+            // ExtendedType semantic checks (Image / Color / JSON). Empty values are handled by
+            // the AllowsNull rung above — only non-empty strings are inspected here.
+            if (ef.TSType === EntityFieldTSType.String && this.Value != null && this.Value !== '') {
+                const text = String(this.Value);
+                switch (ef.ExtendedType) {
+                    case 'JSON': {
+                        const parsed = TryParseJsonText(text);
+                        if (parsed.ok === false) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be valid JSON. ${parsed.message}`, this.Value));
+                        }
+                        break;
+                    }
+                    case 'Color': {
+                        if (!IsValidCssColor(text)) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be a CSS color (hex, rgb, or hsl)`, this.Value));
+                        }
+                        break;
+                    }
+                    case 'Image': {
+                        if (!IsPermittedImageFieldValue(text)) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be an image URL or inline image (data URI / base64)`, this.Value));
+                        }
+                        break;
+                    }
+                }
             }
         }
 
@@ -460,11 +567,11 @@ export class EntityField {
                     this.Value = fieldInfo.DefaultValue;
                 }
             }
-            this._NeverSet = true; // set this back to true because we are setting the default value and we want to be able to set this ONCE from BaseEntity when we load
+            this._neverSet = true; // set this back to true because we are setting the default value and we want to be able to set this ONCE from BaseEntity when we load
         }
         else {
             this.Value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
-            this._NeverSet = true; // set this back to true because we are setting the value to null;
+            this._neverSet = true; // set this back to true because we are setting the value to null;
         }
     }
 
@@ -472,7 +579,7 @@ export class EntityField {
      * This method will set the internal Old Value which is used to track dirty state, to the current value of the field. This effectively resets the dirty state of the field to false. Use this method sparingly.
      */
     public ResetOldValue() {
-        this._OldValue = this.Value;
+        this._oldValue = this.Value;
     }
 
     /**
@@ -480,7 +587,7 @@ export class EntityField {
      * Used by graph rollback so a retried save still sees the pre-attempt dirty set.
      */
     public RestoreOldValue(value: unknown): void {
-        this._OldValue = value;
+        this._oldValue = value;
     }
 
     /**
@@ -502,7 +609,7 @@ export class EntityField {
      * Returns the old value of the field. This is the value that was set when the field was last loaded from the database.
      */
     public get OldValue(): any {
-        return this._OldValue;
+        return this._oldValue;
     }
 }
 
@@ -599,18 +706,18 @@ export interface RecordChangePayload {
 }
 
 export class DataObjectRelatedEntityParam {
-    relatedEntityName: string
-    filter?: string
-    maxRecords?: number
+    relatedEntityName: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    filter?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    maxRecords?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 export class DataObjectParams {
-    oldValues: boolean;
-    omitNullValues: boolean;
-    omitEmptyStrings: boolean;
-    excludeFields: string[];
-    includeRelatedEntityData: boolean;
-    relatedEntityList: DataObjectRelatedEntityParam[];
+    oldValues: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    omitNullValues: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    omitEmptyStrings: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    excludeFields: string[];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    includeRelatedEntityData: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    relatedEntityList: DataObjectRelatedEntityParam[];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor(
         oldValues: boolean = false,
@@ -630,12 +737,12 @@ export class DataObjectParams {
 }
 
 export class BaseEntityAIActionParams {
-    name: string
-    actionId: string
-    modelId: string
-    systemPrompt: string
-    userMessage: string
-    result: any
+    name: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    actionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    systemPrompt: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    userMessage: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    result: any  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -663,6 +770,21 @@ export class BaseEntityResult {
      * Optional, a list of structured error objects with additional information
      */
     Errors?: any[];
+    /**
+     * Set by a producer whose `Message` ALREADY renders every entry of `Errors`, so that
+     * {@link CompleteMessage} does not say the same thing twice.
+     *
+     * Two kinds of producer build `Message` out of `Errors`: the client-side providers, which copy
+     * the SERVER's `CompleteMessage` (= its errors, joined) into `Message` and then rehydrate the same
+     * entries into `Errors` so a form can paint the fields; and the IS-A parent-failure paths, which
+     * write "Failed to save parent entity … : <errors joined>". Without this flag every one of them
+     * read twice in `CompleteMessage`. A substring dedupe was tried and reverted (it is lossy in ways
+     * a reader cannot detect — see `CompleteMessage`); a producer stating the fact is exact.
+     *
+     * Only honoured when `Message` actually has text: a producer that set the flag and left `Message`
+     * empty is contradicting itself, and the errors are still rendered rather than lost.
+     */
+    MessageIncludesErrors: boolean = false;
     /**
      * A copy of the values of the entity object BEFORE the operation was performed
      */
@@ -692,6 +814,57 @@ export class BaseEntityResult {
     }
 
     /**
+     * Renders ONE entry of the {@link Errors} array as human-readable text.
+     *
+     * `Errors` is typed `any[]`, and two shapes land in it from different places:
+     *
+     *  - **`ValidationErrorInfo`** — carries **`Message`** (capital M), plus `Source`, `Value` and
+     *    `Type`. This is what `_InnerSave` puts there when validation refuses a save: it throws the
+     *    `ValidationResult`, and the catch block assigns `newResult.Errors = e.Errors`.
+     *  - **`Error`** (and anything error-like) — carries lowercase **`message`**.
+     *
+     * This used to read `err.message` ONLY, so every `ValidationErrorInfo` fell through to
+     * `JSON.stringify(err)`. That is not a cosmetic difference: `CompleteMessage` is the string the
+     * server hands the client on a failed save — every write-refusal throw in `ResolverBase`
+     * (`CreateRecord`/`UpdateRecord`/`DeleteRecord`) puts it in the `GraphQLError`, and
+     * `SaveEntityGraphOperation` puts it in `ErrorMessage` — so the whole point of writing a careful,
+     * field-named refusal in a subclass's `ValidateAsync()` was defeated at the last step, and the
+     * user saw
+     * `{"Source":"ParentContractID","Message":"…","Value":null,"Type":"Failure"}` in a toast.
+     *
+     * Nothing catches this at compile time because `Errors` is `any[]`; nothing catches it at runtime
+     * because `JSON.stringify` always succeeds. It is only visible by reading the message a user got.
+     *
+     * The parameter is `unknown` rather than `any` — per `.claude/rules/typescript-style.md` — because
+     * not knowing the shape is the whole reason this helper exists, and `unknown` forces the narrowing
+     * that makes each shape's handling explicit. Callers pass `any` (the `Errors` array and the `Error`
+     * property are both legacy `any`), which is assignable, so no call site changes.
+     *
+     * `Message` is preferred over `message` because a `ValidationErrorInfo` has only the former,
+     * while an `Error` has only the latter — so the order matters solely for an object carrying both,
+     * where the MJ-native field is the better answer.
+     *
+     * @param err - One entry from the `Errors` array.
+     * @returns The entry's human-readable text, falling back to JSON for a shape with neither field.
+     */
+    public static ErrorText(err: unknown): string {
+        if (err === null || err === undefined) {
+            return '';
+        }
+        if (typeof err === 'string') {
+            return err;
+        }
+        if (typeof err === 'object') {
+            const shaped = err as { Message?: unknown; message?: unknown };
+            const text = shaped.Message ?? shaped.message;
+            if (typeof text === 'string' && text.trim().length > 0) {
+                return text;
+            }
+        }
+        return JSON.stringify(err);
+    }
+
+    /**
      * Returns a complete message that includes the Message property (if present), the Error property (if present), and any Errors array items (if present).
      */
     public get CompleteMessage(): string {
@@ -702,24 +875,31 @@ export class BaseEntityResult {
             msg = this.Message;
         }   
 
-        // now check the simple Error property
+        // now check the simple Error property. Same shape problem as the Errors array below, so the
+        // same helper answers it: a string, an Error (lowercase `message`), or an MJ
+        // ValidationErrorInfo (capital `Message`) all render as their text rather than as JSON.
         if (this.Error) {
-            msg = (msg ? msg + '\n' : '')
-            if (typeof this.Error === 'string') {
-                msg += this.Error;
-            }
-            else if (this.Error.message) {
-                msg += this.Error.message;
-            }
-            else {
-                msg += JSON.stringify(this.Error);
-            }
+            msg = (msg ? msg + '\n' : '') + BaseEntityResult.ErrorText(this.Error);
         }
-        
-        // now check the Errors array
-        if (this.Errors && this.Errors.length > 0) {
+
+        // now check the Errors array.
+        //
+        // NOT de-duplicated, deliberately. Some producers set BOTH `Message` and `Errors` and build
+        // the former out of the latter — `_InnerSave`/`_InnerDelete` do on an IS-A parent failure —
+        // so their text does appear twice here. Suppressing a repeat was tried and reverted: any
+        // containment test is lossy in ways a reader cannot detect. Three fields failing with the
+        // same sentence collapse to one line; an entry whose text is a substring of another is kept
+        // or dropped depending on ARRAY ORDER; and a distinct error vanishes when its text happens to
+        // appear inside the summary. Saying something twice is ugly. Silently reporting one problem
+        // when there were three is the failure this whole class of bug is about, so the duplication
+        // stays UNLESS the producer states, via `MessageIncludesErrors`, that `Message` already
+        // renders every entry — an exact fact, not a guess, and the only producer-side fix that
+        // removes the repeat at the source.
+        const messageHasText = !!this.Message && this.Message.trim().length > 0;
+        const errorsAlreadyInMessage = this.MessageIncludesErrors && messageHasText;
+        if (this.Errors && this.Errors.length > 0 && !errorsAlreadyInMessage) {
             // append
-            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => err.message || JSON.stringify(err)).join('\n');
+            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => BaseEntityResult.ErrorText(err)).join('\n');
         }
 
         return msg;
@@ -747,29 +927,29 @@ export class BaseEntityEvent {
      *   Payload: `{ Success, NodeCount, Error? }` on `graph_save`; `{ NodeCount }` on
      *   `graph_save_started`.
      */
-    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'remote-invalidate' | 'graph_save_started' | 'graph_save' | 'other';
+    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'remote-invalidate' | 'graph_save_started' | 'graph_save' | 'other';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * If type === 'save' this property can either be 'create' or 'update' to indicate the type of save operation that was performed.
      */
-    saveSubType?: 'create' | 'update';
+    saveSubType?: 'create' | 'update';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Any payload that is associated with the event. This can be any type of object and is used to pass additional information about the event.
      */
-    payload: unknown;
+    payload: unknown;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The BaseEntity object that is raising the event.
      * Null for remote-invalidate events where no local BaseEntity instance is available.
      */
-    baseEntity: BaseEntity | null;
+    baseEntity: BaseEntity | null;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The entity name for the event. Used primarily for remote-invalidate events
      * where baseEntity is null but the entity name is known from the remote notification.
      */
-    entityName?: string;
+    entityName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * The metadata provider associated with the entity that raised this event. Required for
@@ -779,7 +959,7 @@ export class BaseEntityEvent {
      * field can be omitted; listeners should fall back to `baseEntity?.ProviderToUse` and finally
      * to `Metadata.Provider` when no provider is available.
      */
-    provider?: IMetadataProvider;
+    provider?: IMetadataProvider;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
@@ -798,7 +978,7 @@ export abstract class BaseEntity<T = unknown> {
      * `SetEntityName()` from `Metadata.EntityByName` and used as the source of truth for
      * field definitions and schema details throughout this class.
      */
-    private _EntityInfo: EntityInfo;
+    private _entityInfo: EntityInfo;
 
     /**
      * Runtime field instances for this record — one `EntityField` per column in `_EntityInfo.Fields`.
@@ -815,7 +995,7 @@ export abstract class BaseEntity<T = unknown> {
      * `BaseEntity` are reserved for paths that have already triggered hydration or paths that
      * deliberately want to inspect hydration state (e.g., `Dirty` getter).
      */
-    private _Fields: EntityField[] = [];
+    private _fields: EntityField[] = [];
 
     /**
      * Tracks whether `_Fields` has been populated. `false` while in "raw mode" (data accessible
@@ -1110,10 +1290,48 @@ export abstract class BaseEntity<T = unknown> {
 
     constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
         this._eventSubject = new Subject<BaseEntityEvent>();
-        this._EntityInfo = Entity;
+        this._entityInfo = Entity;
         EntityInfo.AssertEntityActiveStatus(Entity, 'BaseEntity::constructor');
         this._provider = Provider;
         this.init();
+    }
+
+    /**
+     * The provider actually stored on this instance, or `null` if none was bound.
+     * Unlike {@link ProviderToUse}, this does **not** fall back to the process-wide
+     * {@link BaseEntity.Provider}. Use it to detect a dropped constructor argument:
+     * `GetEntityObject(graphProvider)` must yield `BoundProvider === graphProvider`.
+     */
+    public get BoundProvider(): IEntityDataProvider | null {
+        return this._provider;
+    }
+
+    /**
+     * Bind this instance to a provider after construction.
+     *
+     * **Rule (ORM, not just metadata-sync):** every DB read and write on this
+     * instance — Save, Load, Delete, RunView, GetEntityObject of children/embeds,
+     * lookups, RecordGeoCode — MUST use this provider. Mixing another provider
+     * (especially the process-wide host) into the same record graph is a deadlock:
+     * a child FK waits on an uncommitted parent on another connection.
+     *
+     * {@link ProviderBase.GetEntityObject} always calls this so a subclass that
+     * declares `constructor(Entity: EntityInfo)` and drops the second ClassFactory
+     * argument cannot silently run on the global host.
+     */
+    public BindProvider(provider: IEntityDataProvider | null): void {
+        this._provider = provider;
+        if (this._parentEntity && this._parentEntity.BoundProvider !== provider) {
+            this._parentEntity.BindProvider(provider);
+        }
+        if (this._childEntity && this._childEntity.BoundProvider !== provider) {
+            this._childEntity.BindProvider(provider);
+        }
+        if (this._companions) {
+            for (const companion of this._companions.values()) {
+                companion.BindProvider(provider);
+            }
+        }
     }
 
     /**
@@ -1243,7 +1461,7 @@ export abstract class BaseEntity<T = unknown> {
         if (!this.GetFieldByName(name)) {
             return;
         }
-        this.SetLocal(name, value);
+        this.setLocal(name, value);
         this.GetFieldByName(name)?.ResetNeverSetFlag();
     }
 
@@ -1355,6 +1573,314 @@ export abstract class BaseEntity<T = unknown> {
         await childEntity.InitializeChildEntity();
     }
 
+    private static _subtypeLookupCache = new Map<string, BaseEntity | null>();
+
+    /**
+     * Clears the static memoization cache used by SubtypeSelector path evaluation.
+     */
+    public static ClearSubtypeLookupCache(): void {
+        BaseEntity._subtypeLookupCache.clear();
+    }
+
+    /**
+     * Prospective counterpart to FindISAChildEntity.
+     * Evaluates which IsA child subtype entity this record should have based on:
+     * 1. Registered EntitySubtypeResolver (ClassFactory key = entity name)
+     * 2. Entity.SubtypeSelector declarative FK traversal path
+     * 3. Unconditional single-child IsA fallback (ChildEntities.length === 1)
+     * 4. Otherwise null (no subtype)
+     *
+     * @see plans/sync-composition-axes.md
+     */
+    public async ResolveSubtypeEntityName(): Promise<string | null> {
+        if (!this.EntityInfo.IsParentType || !this.EntityInfo.ChildEntities || this.EntityInfo.ChildEntities.length === 0) {
+            return null;
+        }
+
+        // 1. Registered resolver override
+        const reg = MJGlobal.Instance.ClassFactory.GetRegistration(EntitySubtypeResolver, this.EntityInfo.Name);
+        if (reg) {
+            const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<EntitySubtypeResolver>(
+                EntitySubtypeResolver,
+                this.EntityInfo.Name
+            );
+            if (resolution.Resolved && resolution.Instance) {
+                const raw = resolution.Instance.Resolve(this);
+                const candidate = raw instanceof Promise ? await raw : raw;
+                if (candidate != null && candidate.trim() !== '') {
+                    const trimmed = candidate.trim();
+                    const match = this.EntityInfo.ChildEntities.find(
+                        c => c.Name.trim().toLowerCase() === trimmed.toLowerCase()
+                    );
+                    if (!match) {
+                        throw new Error(
+                            `EntitySubtypeResolver for '${this.EntityInfo.Name}' returned '${candidate}', which is not a declared IsA child entity of '${this.EntityInfo.Name}'.`
+                        );
+                    }
+                    return match.Name;
+                }
+                return null;
+            }
+        }
+
+        // 2. Entity.SubtypeSelector declarative path
+        const selectorConfig = this.EntityInfo.SubtypeSelectorConfig;
+        if (selectorConfig && selectorConfig.Path && selectorConfig.Path.trim() !== '') {
+            const pathResult = await this.evaluateSubtypeSelectorPath(selectorConfig.Path.trim());
+            if (pathResult != null && pathResult.trim() !== '') {
+                const trimmed = pathResult.trim();
+                const match = this.EntityInfo.ChildEntities.find(
+                    c => c.Name.trim().toLowerCase() === trimmed.toLowerCase()
+                );
+                if (!match) {
+                    throw new Error(
+                        `SubtypeSelector path '${selectorConfig.Path}' on '${this.EntityInfo.Name}' resolved to '${pathResult}', which is not a declared IsA child entity of '${this.EntityInfo.Name}'.`
+                    );
+                }
+                return match.Name;
+            }
+            return null;
+        }
+
+        // 3. Exactly one child, unconditional IsA
+        if (!this.EntityInfo.AllowMultipleSubtypes && this.EntityInfo.ChildEntities.length === 1) {
+            return this.EntityInfo.ChildEntities[0].Name;
+        }
+
+        // 4. Otherwise null
+        return null;
+    }
+
+    /**
+     * Create-safe prospective counterpart to InitializeChildEntity.
+     * Unlike createAndLinkChildEntity, does NOT unlink when InnerLoad finds no row —
+     * that is the create case. Idempotent. Defaults to ResolveSubtypeEntityName()
+     * when no name is passed.
+     *
+     * @param entityName Optional explicit child entity name. If omitted, resolved via ResolveSubtypeEntityName().
+     * @returns The linked child BaseEntity, or null if no subtype applies.
+     */
+    public async EnsureISAChild(entityName?: string): Promise<BaseEntity | null> {
+        if (!entityName) {
+            entityName = await this.ResolveSubtypeEntityName();
+        }
+        if (!entityName) {
+            return null;
+        }
+
+        const matchedChild = this.EntityInfo.ChildEntities?.find(
+            c => c.Name.trim().toLowerCase() === entityName.trim().toLowerCase()
+        );
+        if (!matchedChild) {
+            throw new Error(`'${entityName}' is not a declared IsA child entity of '${this.EntityInfo.Name}'.`);
+        }
+        const resolvedName = matchedChild.Name;
+
+        if (!this.EntityInfo.AllowMultipleSubtypes) {
+            // Disjoint hierarchy
+            if (this._childEntity) {
+                if (this._childEntity.EntityInfo.Name.trim().toLowerCase() === resolvedName.trim().toLowerCase()) {
+                    return this._childEntity; // Idempotent
+                }
+                throw new Error(
+                    `Entity '${this.EntityInfo.Name}' already has an attached child entity of type '${this._childEntity.EntityInfo.Name}', cannot attach '${resolvedName}' (AllowMultipleSubtypes is false).`
+                );
+            }
+
+            const childProvider = this.ProviderToUse as unknown as IMetadataProvider;
+            const childEntity = await childProvider.GetEntityObject<BaseEntity>(
+                resolvedName,
+                this._contextCurrentUser
+            );
+
+            // Wire up shared instance chain
+            this.replaceChildParentChain(childEntity);
+            this._childEntity = childEntity;
+
+            const dirtySnapshots = this.captureChainDirtyState();
+
+            if (this.PrimaryKey && this.PrimaryKey.HasValue) {
+                const loaded = await childEntity.InnerLoad(this.PrimaryKey);
+                if (!loaded) {
+                    this.mirrorSharedKeysToChild(childEntity);
+                }
+            } else {
+                this.mirrorSharedKeysToChild(childEntity);
+            }
+
+            this.restoreChainDirtyState(dirtySnapshots);
+
+            // Recursively discover grandchildren if the child is also a parent type
+            if (childEntity.EntityInfo.IsParentType) {
+                await childEntity.EnsureISAChild();
+            }
+
+            return childEntity;
+        } else {
+            // Overlapping hierarchy (AllowMultipleSubtypes = true)
+            if (!this._childEntities) {
+                this._childEntities = [];
+            }
+            if (!this._childEntities.some(c => c.entityName.trim().toLowerCase() === resolvedName.trim().toLowerCase())) {
+                this._childEntities.push({ entityName: resolvedName });
+            }
+
+            const childProvider = this.ProviderToUse as unknown as IMetadataProvider;
+            const childEntity = await childProvider.GetEntityObject<BaseEntity>(
+                resolvedName,
+                this._contextCurrentUser
+            );
+            this.replaceChildParentChain(childEntity);
+
+            const dirtySnapshots = this.captureChainDirtyState();
+
+            if (this.PrimaryKey && this.PrimaryKey.HasValue) {
+                const loaded = await childEntity.InnerLoad(this.PrimaryKey);
+                if (!loaded) {
+                    this.mirrorSharedKeysToChild(childEntity);
+                }
+            } else {
+                this.mirrorSharedKeysToChild(childEntity);
+            }
+
+            this.restoreChainDirtyState(dirtySnapshots);
+
+            if (childEntity.EntityInfo.IsParentType) {
+                await childEntity.EnsureISAChild();
+            }
+
+            return childEntity;
+        }
+    }
+
+    private mirrorSharedKeysToChild(childEntity: BaseEntity): void {
+        const parentPks = this.EntityInfo.PrimaryKeys;
+        if (!parentPks || parentPks.length === 0) return;
+        for (const pk of parentPks) {
+            const val = this.Get(pk.Name);
+            if (val != null) {
+                childEntity.mirrorSharedKey(pk.Name, val);
+            }
+        }
+    }
+
+    private async evaluateSubtypeSelectorPath(path: string): Promise<string | null> {
+        const segments = path.split('.').map(s => s.trim()).filter(Boolean);
+        if (segments.length === 0) return null;
+
+        let currentEntity: BaseEntity = this;
+        let currentEntityInfo: EntityInfo = this.EntityInfo;
+
+        for (let i = 0; i < segments.length - 1; i++) {
+            const fieldName = segments[i];
+            const fieldInfo = currentEntityInfo.Fields.find(
+                f => f.Name.trim().toLowerCase() === fieldName.toLowerCase()
+            );
+            if (!fieldInfo) {
+                throw new Error(
+                    `Invalid SubtypeSelector path '${path}' on '${this.EntityInfo.Name}': field '${fieldName}' was not found on entity '${currentEntityInfo.Name}'.`
+                );
+            }
+
+            const fkValue = currentEntity.Get(fieldInfo.Name);
+            if (fkValue == null || fkValue === '') {
+                return null;
+            }
+
+            const relatedEntityName = fieldInfo.RelatedEntity;
+            if (!relatedEntityName) {
+                throw new Error(
+                    `Invalid SubtypeSelector path '${path}' on '${this.EntityInfo.Name}': field '${fieldName}' on entity '${currentEntityInfo.Name}' is not a foreign key relationship.`
+                );
+            }
+
+            const targetEntity = await this.getSubtypePathTargetEntity(relatedEntityName, fkValue);
+            if (!targetEntity) {
+                return null;
+            }
+
+            currentEntity = targetEntity;
+            currentEntityInfo = targetEntity.EntityInfo;
+        }
+
+        const terminalSegment = segments[segments.length - 1];
+        const terminalField = currentEntityInfo.Fields.find(
+            f => f.Name.trim().toLowerCase() === terminalSegment.toLowerCase()
+        );
+        if (!terminalField) {
+            throw new Error(
+                `Invalid SubtypeSelector path '${path}' on '${this.EntityInfo.Name}': terminal field '${terminalSegment}' was not found on entity '${currentEntityInfo.Name}'.`
+            );
+        }
+
+        const terminalValue = currentEntity.Get(terminalField.Name);
+        if (terminalValue == null || typeof terminalValue !== 'string' || terminalValue.trim() === '') {
+            return null;
+        }
+
+        return terminalValue.trim();
+    }
+
+    private async getSubtypePathTargetEntity(entityName: string, pkValue: unknown): Promise<BaseEntity | null> {
+        const cacheKey = `${entityName.trim().toLowerCase()}|${String(pkValue).trim().toLowerCase()}`;
+        if (BaseEntity._subtypeLookupCache.has(cacheKey)) {
+            return BaseEntity._subtypeLookupCache.get(cacheKey) ?? null;
+        }
+
+        // 1. Check BaseEngineRegistry for loaded cached entities
+        const cachedMatches = BaseEngineRegistry.Instance.FindCachedEntity(entityName);
+        if (cachedMatches && cachedMatches.length > 0) {
+            for (const match of cachedMatches) {
+                const found = match.records.find(r => {
+                    const firstPK = r.FirstPrimaryKey; // first-pk-ok: FK target — pkValue is one SubtypeSelector FK column's value
+                    if (firstPK) {
+                        return String(firstPK.Value).trim().toLowerCase() === String(pkValue).trim().toLowerCase();
+                    }
+                    return false;
+                });
+                if (found) {
+                    BaseEntity._subtypeLookupCache.set(cacheKey, found);
+                    return found;
+                }
+            }
+        }
+
+        // 2. Fall back to loading via provider
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        if (!provider?.GetEntityObject) {
+            BaseEntity._subtypeLookupCache.set(cacheKey, null);
+            return null;
+        }
+
+        try {
+            const targetObj = await provider.GetEntityObject<BaseEntity>(entityName, this._contextCurrentUser);
+            if (!targetObj) {
+                BaseEntity._subtypeLookupCache.set(cacheKey, null);
+                return null;
+            }
+
+            let key: CompositeKey;
+            if (pkValue instanceof CompositeKey) {
+                key = pkValue;
+            } else {
+                key = new CompositeKey();
+                const pkName = targetObj.FirstPrimaryKey.Name; // first-pk-ok: FK target — pkValue is one SubtypeSelector FK column's value
+                key.KeyValuePairs.push(new KeyValuePair(pkName, pkValue));
+            }
+
+            const loaded = await targetObj.InnerLoad(key);
+            if (loaded) {
+                BaseEntity._subtypeLookupCache.set(cacheKey, targetObj);
+                return targetObj;
+            }
+        } catch {
+            // On load failure, return null
+        }
+
+        BaseEntity._subtypeLookupCache.set(cacheKey, null);
+        return null;
+    }
+
     private captureChainDirtyState(): Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> {
         const snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> = [];
         let curr: BaseEntity | null = this;
@@ -1398,6 +1924,11 @@ export abstract class BaseEntity<T = unknown> {
 
         let childParent = childEntity._parentEntity;
         let ourInstance: BaseEntity | null = this;
+
+        if (!childParent) {
+            childEntity._parentEntity = this;
+            return;
+        }
 
         while (childParent && ourInstance) {
             // Replace the child's parent reference with our shared instance
@@ -1494,6 +2025,8 @@ export abstract class BaseEntity<T = unknown> {
         // ignoreNonExistentFields=true remains as a safety net; ownedFieldsFrom already
         // dropped columns that belong to another level of the IS-A chain.
         this.SetMany(this.ownedFieldsFrom(data), true, true, true);
+        // Hydrate is a hydration entry point: keys the source omitted are not-loaded.
+        this.markFieldsOmittedBySourceAsNotLoaded(data);
     }
 
     /**
@@ -1668,6 +2201,8 @@ export abstract class BaseEntity<T = unknown> {
                 `Ensure the entity class is registered.`,
             );
         }
+        // Same rebind as GetEntityObject — 1-arg subclasses drop the ClassFactory provider.
+        instance.BindProvider(provider as unknown as IEntityDataProvider);
         await instance.Config(this.ContextCurrentUser);
         await instance.InitializeParentEntity();
         // Recurse so a *new* peer's own embeds are constructed (required nested
@@ -1774,7 +2309,10 @@ export abstract class BaseEntity<T = unknown> {
 
             if (!result.Success || !result.Output?.Success) {
                 const detail = result.ErrorMessage ?? result.Output?.ErrorMessage ?? 'unknown error';
-                this.registerGraphFailure(detail);
+                // The structured refusal rides alongside the prose so a form can paint the fields a
+                // server-side ValidateAsync named — the same thing a plain save gets from the
+                // GraphQL error's `extensions.validationErrors`.
+                this.registerGraphFailure(detail, 'save', result.Output?.ValidationErrors);
                 this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: detail });
                 return false;
             }
@@ -1892,7 +2430,7 @@ export abstract class BaseEntity<T = unknown> {
         // One `RunViews` for all remaining collections — N declared collections cost one round trip,
         // not N. Params are built per collection so each keeps its own filter and ordering. The key
         // is escaped exactly as RelatedRecordCollection.Load() and the batch loader escape it.
-        const parentKeyLiteral = String(this.FirstPrimaryKey?.Value).replace(/'/g, "''");
+        const parentKeyLiteral = String(this.FirstPrimaryKey?.Value).replace(/'/g, "''"); // first-pk-ok: RelatedEntityJoinField is one FK column, so the parent key it holds is single-column by design
         const rv = new RunView(this.ProviderToUse as unknown as IRunViewProvider);
         const results = await rv.RunViews(
             needsDatabase.map(c => ({
@@ -1929,7 +2467,7 @@ export abstract class BaseEntity<T = unknown> {
     private seedEmbedLoadVisited(): Set<string> {
         const seeded = new Set<string>();
         const name = this.EntityInfo?.Name;
-        const pk = this.FirstPrimaryKey?.Value;
+        const pk = this.FirstPrimaryKey?.Value; // first-pk-ok: must equal EmbeddedRecord.LoadEager's `entity:fk` cycle token, and an FK holds one column
         if (name && pk !== null && pk !== undefined && pk !== '') {
             seeded.add(`${name}:${String(pk)}`);
         }
@@ -2178,14 +2716,14 @@ export abstract class BaseEntity<T = unknown> {
      * binds this via {@link ExecuteEntitySavePlan}'s `SaveSelfOnly` callback.
      */
     private saveAsGraphNode(options?: EntitySaveOptions): Promise<boolean> {
-        return this._InnerSave(options);
+        return this._innerSave(options);
     }
 
     /**
      * Delete-path counterpart of {@link saveAsGraphNode}.
      */
     private deleteAsGraphNode(options?: EntityDeleteOptions): Promise<boolean> {
-        return this._InnerDelete(options);
+        return this._innerDelete(options);
     }
 
     /**
@@ -2236,11 +2774,16 @@ export abstract class BaseEntity<T = unknown> {
      *
      * @param message - The failure detail.
      */
-    private registerGraphFailure(message: string | undefined, operation: 'save' | 'delete' = 'save'): void {
+    private registerGraphFailure(message: string | undefined, operation: 'save' | 'delete' = 'save', validationErrors?: unknown): void {
         const result = new BaseEntityResult();
         result.Success = false;
         result.Type = operation === 'delete' ? 'delete' : this.IsSaved ? 'update' : 'create';
         result.Message = message ?? 'Entity graph operation failed';
+        // Rehydrated into real ValidationErrorInfo instances so `LatestResult.Errors` reads exactly as
+        // it does after a local `Validate()` refusal; `[]` when the server sent none.
+        result.Errors = DeserializeValidationErrors(validationErrors);
+        // `message` is the server's CompleteMessage — the same errors, already joined — so say so.
+        result.MessageIncludesErrors = result.Errors.length > 0 && !!message;
         result.StartedAt = new Date();
         result.EndedAt = new Date();
         result.OriginalValues = this.Fields.map(f => ({ FieldName: f.CodeName, Value: f.OldValue }));
@@ -2549,13 +3092,13 @@ export abstract class BaseEntity<T = unknown> {
      * Access to the underlying metadata for the entity object.
      */
     get EntityInfo(): EntityInfo {
-        return this._EntityInfo;
+        return this._entityInfo;
     }
 
     get Fields(): EntityField[] {
         // Caller wants to walk Fields — promote raw data into real EntityField instances now.
         this.hydrateFieldsIfNeeded();
-        return this._Fields;
+        return this._fields;
     }
 
     /**
@@ -2575,7 +3118,7 @@ export abstract class BaseEntity<T = unknown> {
 
         if (this._fieldCache === null) {
             this._fieldCache = new Map<string, EntityField>();
-            for (const f of this._Fields) {
+            for (const f of this._fields) {
                 if (!this._fieldCache.has(f.Name.trim().toLowerCase())) {
                     this._fieldCache.set(f.Name.trim().toLowerCase(), f);
                 }
@@ -2583,6 +3126,47 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         return this._fieldCache.get(lcase) || null;
+    }
+
+    /**
+     * True when any of the named fields exists on this entity and its current value
+     * differs from the last loaded or saved value.
+     *
+     * This is the boolean form of `GetFieldByName(name)?.Dirty === true`. Prefer it at
+     * call sites that only care whether a column has been edited — pricing, validation,
+     * and "did the user type this" gates — so they do not repeat the optional-chain and
+     * do not treat a missing field as a distinct third state.
+     *
+     * Semantics:
+     * - **Unknown or blank names return `false`.** They are not dirty; they are absent.
+     *   Callers that must distinguish "no such field" from "field is clean" should use
+     *   {@link GetFieldByName} and inspect the result.
+     * - **Names are case-insensitive and trimmed**, matching {@link GetFieldByName}.
+     * - **Read-only fields are never dirty**, even if their value was overwritten internally.
+     * - **Multiple names are OR'd.** `FieldIsDirty('UnitPrice', 'ProductPriceID')` is true
+     *   if either field has been edited. An empty rest list is a single-field check.
+     *
+     * @param fieldName First field to test. A missing/blank name contributes `false`.
+     * @param more Additional field names, each OR'd with the first.
+     * @returns `true` if at least one named field exists and is dirty; otherwise `false`.
+     *
+     * @example
+     * ```ts
+     * // Single field
+     * if (line.FieldIsDirty('UnitPrice')) { ... }
+     *
+     * // Either money column was edited
+     * if (line.FieldIsDirty('UnitPrice', 'ProductPriceID')) { ... }
+     * ```
+     */
+    public FieldIsDirty(fieldName: string, ...more: string[]): boolean {
+        const names = more.length === 0 ? [fieldName] : [fieldName, ...more];
+        for (const name of names) {
+            if (this.GetFieldByName(name)?.Dirty === true) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -2603,7 +3187,7 @@ export abstract class BaseEntity<T = unknown> {
         if (this._codeNameCache === null) {
             this._codeNameCache = new Map<string, EntityField>();
             // First-write-wins on duplicate code names — matches prior Array.find() behavior
-            for (const f of this._Fields) {
+            for (const f of this._fields) {
                 const codeKey = f.CodeName.trim().toLowerCase();
                 if (!this._codeNameCache.has(codeKey)) {
                     this._codeNameCache.set(codeKey, f);
@@ -2623,14 +3207,22 @@ export abstract class BaseEntity<T = unknown> {
      * return, and the children are silently never persisted — the save reports success and writes
      * nothing. See {@link EntityCompanion.Dirty}.
      */
+    private _isCheckingDirty: boolean = false;
+
     get Dirty(): boolean {
-        if (!this.IsSaved) return true;
-        if (this.companionsDirty) return true;
-        // Raw mode means LoadFromData populated us but no mutation has happened — nothing can be
-        // dirty. Avoid hydrating just to check.
-        if (!this._fieldsHydrated) return this._parentEntity?.Dirty ?? false;
-        return this._Fields.some(f => f.Dirty) ||
-               (this._parentEntity?.Dirty ?? false);
+        if (this._isCheckingDirty) return false;
+        this._isCheckingDirty = true;
+        try {
+            if (!this.IsSaved) return true;
+            if (this.companionsDirty) return true;
+            // Raw mode means LoadFromData populated us but no mutation has happened — nothing can be
+            // dirty. Avoid hydrating just to check.
+            if (!this._fieldsHydrated) return this._parentEntity?.Dirty ?? false;
+            return this._fields.some(f => f.Dirty) ||
+                   (this._parentEntity?.Dirty ?? false);
+        } finally {
+            this._isCheckingDirty = false;
+        }
     }
 
     /**
@@ -2668,8 +3260,8 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Helper method to return just the first Primary Key
      */
-    get FirstPrimaryKey(): EntityField {
-        return this.PrimaryKeys[0];
+    get FirstPrimaryKey(): EntityField { // first-pk-ok: the accessor itself
+        return this.PrimaryKeys[0]; // first-pk-ok: the accessor itself
     }
 
     /**
@@ -2696,16 +3288,17 @@ export abstract class BaseEntity<T = unknown> {
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
             this._parentEntity.Set(FieldName, Value); // recursive for N-level chains (parent asserts its own field)
             // Also mirror the value on our own virtual EntityField for UI compatibility
-            this.SetLocal(FieldName, Value);
+            this.setLocal(FieldName, Value);
         }
         else {
             // Active-status enforcement choke point for own-field writes. Fast-path gated on the
             // memoized EntityInfo.HasInactiveFields so all-Active entities (the overwhelming majority)
             // pay only a single cached boolean check.
             if (this.EntityInfo?.HasInactiveFields) {
-                this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Set');
+                this.assertFieldActiveStatus(FieldName, 'BaseEntity.Set');
             }
-            this.SetLocal(FieldName, Value);
+            this.assertFieldReadable(FieldName);
+            this.setLocal(FieldName, Value);
         }
     }
 
@@ -2719,7 +3312,7 @@ export abstract class BaseEntity<T = unknown> {
      * Callers should gate this behind `EntityInfo.HasInactiveFields` so the common all-Active entity
      * skips the field lookup entirely.
      */
-    private AssertFieldActiveStatus(fieldName: string, caller: string): void {
+    private assertFieldActiveStatus(fieldName: string, caller: string): void {
         const fi = this.EntityInfo?.FieldByName(fieldName);
         if (fi) {
             EntityFieldInfo.AssertEntityFieldActiveStatus(fi, caller);
@@ -2727,10 +3320,38 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Field-level security choke point for the strongly-typed accessor path. Throws when the
+     * acting user may not READ the field.
+     *
+     * Called by `Get()` and `Set()` — every generated typed accessor
+     * (`get Salary() { return this.Get('Salary'); }`) routes through them, so these two sites
+     * cover the whole typed surface. Gated on both READ, because a field a user cannot see is
+     * one they cannot meaningfully address by name at all; update and create denials are
+     * enforced on the write path, where a rejection can name a save rather than a keystroke.
+     *
+     * **Deliberately NOT called by `SetMany`.** That is the hydration and resolver-apply path —
+     * throwing there would break loading a record that merely CONTAINS a restricted column.
+     *
+     * **Fails open when no user resolves.** `ActiveUser` is legitimately null in plenty of
+     * server paths, and a gate that threw there would break unrelated code in ways that look
+     * nothing like field security.
+     *
+     * Framework-internal value machinery (`Dirty`, `Validate`, `GetAll`, hydration, save-SQL
+     * build) reads `EntityField.Value` directly and never routes through here — that exemption
+     * is load-bearing, not an oversight. Do not "fix" it.
+     */
+    private assertFieldReadable(fieldName: string): void {
+        const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedReadFields(u));
+        if (denied?.has(fieldName?.trim().toLowerCase())) {
+            throw new FieldSecurityError(fieldName, this.EntityInfo.Name);
+        }
+    }
+
+    /**
      * Internal helper that sets a field value directly on THIS entity's own Fields array
      * without IS-A routing. Used by Set() for own-fields and for mirroring parent field values.
      */
-    private SetLocal(FieldName: string, Value: any) {
+    private setLocal(FieldName: string, Value: any) {
         const field = this.GetFieldByName(FieldName);
         if (field != null) {
             if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
@@ -2789,8 +3410,13 @@ export abstract class BaseEntity<T = unknown> {
         // EntityInfo.HasInactiveFields so all-Active entities pay only a single cached boolean check
         // before the hot read paths below.
         if (this.EntityInfo?.HasInactiveFields) {
-            this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Get');
+            this.assertFieldActiveStatus(FieldName, 'BaseEntity.Get');
         }
+
+        // Field security sits BEFORE the raw-mode fast path below, not after: an entity whose
+        // fields are not yet hydrated would otherwise return denied values straight out of _raw
+        // without the gate ever running.
+        this.assertFieldReadable(FieldName);
 
         // Raw mode fast path: read directly from the cached data without building EntityField
         // instances. This is the dominant cost in engine warm-loads — generated typed getters
@@ -2804,7 +3430,7 @@ export abstract class BaseEntity<T = unknown> {
             // back into `_raw` — the row may be shared, frozen cache state. Fields needing no
             // conversion (the vast majority) never touch the memo at all, so the fast path stays
             // a single property read.
-            const fi = this._EntityInfo?.FieldByName(FieldName);
+            const fi = this._entityInfo?.FieldByName(FieldName);
             if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                 const memo = this._rawConverted?.get(FieldName);
                 if (memo !== undefined) return memo;
@@ -2867,7 +3493,7 @@ export abstract class BaseEntity<T = unknown> {
                     EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                 }
                 // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
-                this.SetLocal(key, object[key]);
+                this.setLocal(key, object[key]);
                 if (replaceOldValues) {
                     field.ResetOldValue();
                 }
@@ -2881,7 +3507,7 @@ export abstract class BaseEntity<T = unknown> {
                         EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                     }
                     // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
-                    this.SetLocal(field.Name, object[key]);
+                    this.setLocal(field.Name, object[key]);
                     if (replaceOldValues) {
                         field.ResetOldValue();
                     }
@@ -2928,7 +3554,7 @@ export abstract class BaseEntity<T = unknown> {
         // load — without this, the parent would think it's a new record and attempt CREATE
         // instead of UPDATE on save.
         if (replaceOldValues) {
-            this.UpdateSavedStateFromPrimaryKeys();
+            this.updateSavedStateFromPrimaryKeys();
         }
     }
 
@@ -2937,7 +3563,7 @@ export abstract class BaseEntity<T = unknown> {
      * a saved/loaded record. This enables entities populated via SetMany (e.g., IS-A parent
      * entities) to correctly recognize themselves as existing records.
      */
-    private UpdateSavedStateFromPrimaryKeys(): void {
+    private updateSavedStateFromPrimaryKeys(): void {
         if (!this.PrimaryKeys || this.PrimaryKeys.length === 0) return;
 
         const allPKsSet = this.PrimaryKeys.every(
@@ -2961,6 +3587,12 @@ export abstract class BaseEntity<T = unknown> {
     public GetAll(oldValues: boolean = false, onlyDirtyFields: boolean = false): any {
         let obj = {};
         for (let field of this.Fields) {
+            // NotLoaded fields are OMITTED (D-3 decision): their in-memory state is a
+            // construction artifact, and serializing it would launder a default/null into
+            // something downstream code treats as data — the exact masquerade the flag exists
+            // to prevent. Key-absence also propagates the flag naturally: hydrating another
+            // entity from this output re-marks the same fields not-loaded.
+            if (field.NotLoaded) continue;
             if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
                 // Reads field.Value directly — serialization is framework-internal, so it does not
                 // (and must not) assert active status. No suppression toggle needed: the assertion no
@@ -3003,6 +3635,53 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Computes a deterministic SHA-256 content hash of the entity's field values using
+     * the canonicalizer and Web Crypto API from `@memberjunction/global`.
+     *
+     * By default, hashes all loaded non-system fields (excluding `__mj_*` columns).
+     * The result is byte-for-byte identical across client and server tiers.
+     *
+     * @param options Optional configuration specifying subset of fields and/or whether to exclude system fields.
+     */
+    public async ComputeContentHash(options?: ComputeContentHashOptions): Promise<string> {
+        const excludeSystem = options?.ExcludeSystemFields ?? true;
+        const allData = this.GetAll(false, false) as Record<string, unknown>;
+
+        // If specific fields are requested, validate each exists (case-insensitively) and resolve canonical name
+        let targetFieldNames: string[];
+        if (options?.Fields && options.Fields.length > 0) {
+            targetFieldNames = options.Fields.map((req) => {
+                const fieldInfo = this.GetFieldByName(req);
+                if (!fieldInfo) {
+                    throw new Error(`ComputeContentHash: field '${req}' does not exist on entity '${this.EntityInfo.Name}'`);
+                }
+                return fieldInfo.Name;
+            });
+        } else {
+            targetFieldNames = Object.keys(allData);
+        }
+
+        const excludeSet = new Set((options?.ExcludeFields ?? []).map((f) => f.trim().toLowerCase()));
+
+        const data: Record<string, unknown> = {};
+        for (const name of targetFieldNames) {
+            if (excludeSystem && name.startsWith('__mj_')) continue;
+            if (excludeSet.has(name.toLowerCase())) continue;
+
+            const val = allData[name];
+            if (val !== undefined) {
+                data[name] = val;
+            }
+        }
+
+        if (Object.keys(data).length === 0) {
+            throw new Error(`ComputeContentHash: cannot compute content hash on empty basis for entity '${this.EntityInfo.Name}'`);
+        }
+
+        return ComputeContentHashAsync(data);
+    }
+
+    /**
      * This utility method calls GetDataObject() internally and formats the result as a JSON string. If you want to get the data as an object instead of a string, call GetDataObject() directly.
      * @param params
      * @param minifyJSON
@@ -3042,8 +3721,8 @@ export abstract class BaseEntity<T = unknown> {
 
         if (params.includeRelatedEntityData) {
             // now, get the related entity data
-            for (let i = 0; i < this._EntityInfo.RelatedEntities.length; i++) {
-                const re = this._EntityInfo.RelatedEntities[i];
+            for (let i = 0; i < this._entityInfo.RelatedEntities.length; i++) {
+                const re = this._entityInfo.RelatedEntities[i];
                 const pre = params.relatedEntityList ? params.relatedEntityList.find(r => r.relatedEntityName === re.RelatedEntity) : null;
                 if (pre) {
                     // pre now has the param that matches the related entity (re) that we are looking at
@@ -3091,7 +3770,7 @@ export abstract class BaseEntity<T = unknown> {
     public async GetRelatedEntityDataExt(re: EntityRelationshipInfo, filter: string = null, maxRecords: number = null): Promise<{Data: any[], TotalRowCount: number}> {
         // we need to query the database to get related entity info
         const params = EntityInfo.BuildRelationshipViewParams(this, re, filter, maxRecords)
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView(params, this._contextCurrentUser)
         if (result && result.Success) {
             return {
@@ -3107,7 +3786,7 @@ export abstract class BaseEntity<T = unknown> {
         this._compositeKey = null;
         this._resultHistory = [];
         this._recordLoaded = false;
-        this._Fields = [];
+        this._fields = [];
         this._fieldsHydrated = false;
         this._raw = null;
         this._rawConverted = null;
@@ -3144,7 +3823,7 @@ export abstract class BaseEntity<T = unknown> {
         for (const rawField of this.EntityInfo.Fields) {
             const key = this.EntityInfo.Name + '.' + rawField.Name;
             const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
-            this._Fields.push(newField);
+            this._fields.push(newField);
         }
 
         // 2. If we have raw data from LoadFromData, populate Fields. The first set of each Field
@@ -3152,7 +3831,7 @@ export abstract class BaseEntity<T = unknown> {
         //    Value AND OldValue (so the field is not marked dirty). This matches the old
         //    SetMany(replaceOldValues=true) semantics on initial load.
         if (this._raw) {
-            for (const field of this._Fields) {
+            for (const field of this._fields) {
                 const value = this._raw[field.Name];
                 if (value !== undefined) {
                     // Populating fields from the loaded row writes EntityField.Value directly, which does
@@ -3167,11 +3846,30 @@ export abstract class BaseEntity<T = unknown> {
                     }
                 }
             }
+            // _raw IS a hydration source (LoadFromData fast path) — fields whose key it omitted
+            // are not-loaded, not defaulted. See EntityField.NotLoaded.
+            this.markFieldsOmittedBySourceAsNotLoaded(this._raw);
             // Raw data has been promoted into Fields — release the reference so we don't carry
             // duplicate state. Fields hold their own copies, so a frozen source no longer
             // constrains anything from here on.
             this._raw = null;
             this._rawConverted = null;
+        }
+    }
+
+    /**
+     * Marks every field whose key the given HYDRATION SOURCE omitted as {@link EntityField.NotLoaded}.
+     * Called only by the hydration entry points ({@link LoadFromData} both modes, {@link Hydrate},
+     * {@link InnerLoad}) — never by plain {@link SetMany}, which is an incremental mutation API
+     * where omitting a field means "leave it alone," not "this field was never loaded."
+     * Both the field Name and CodeName are checked, matching SetMany's key acceptance.
+     */
+    private markFieldsOmittedBySourceAsNotLoaded(source: Record<string, unknown>): void {
+        if (!source || typeof source !== 'object') return;
+        for (const field of this.Fields) {
+            if (source[field.Name] === undefined && source[field.CodeName] === undefined) {
+                field.MarkNotLoaded();
+            }
         }
     }
 
@@ -3188,7 +3886,9 @@ export abstract class BaseEntity<T = unknown> {
             for (let field of this.Fields) {
                 if (!field.IsPrimaryKey || includePrimaryKeys) {
                     const otherField = other.GetFieldByName(field.Name);
-                    if (otherField) {
+                    // Skip fields the SOURCE never loaded (D-3): copying their construction
+                    // state would masquerade a default/null as real data on this entity.
+                    if (otherField && !otherField.NotLoaded) {
                         this.Set(field.Name, otherField.Value);
                         if (replaceOldValues) {
                             field.ResetOldValue();
@@ -3248,7 +3948,7 @@ export abstract class BaseEntity<T = unknown> {
             for (const pk of this.EntityInfo.PrimaryKeys) {
                 const parentValue = this._parentEntity.Get(pk.Name);
                 if (parentValue != null) {
-                    this.SetLocal(pk.Name, parentValue);
+                    this.setLocal(pk.Name, parentValue);
                     // The shared PK is ReadOnly, so SetLocal above consumed its
                     // one-time write (_NeverSet -> false). Restore _NeverSet so the
                     // child's OWN mirror can be re-written if the shared key is set
@@ -3263,7 +3963,7 @@ export abstract class BaseEntity<T = unknown> {
             // Root of an IS-A chain, or a standalone (non-IS-A) entity: generate
             // a single GUID/UUID PK here (SQL Server `uniqueidentifier` /
             // PostgreSQL `uuid`).
-            const pk = this.EntityInfo.PrimaryKeys[0];
+            const pk = this.EntityInfo.FirstPrimaryKey; // first-pk-ok: guarded by PrimaryKeys.length === 1 above
             if (!pk.AutoIncrement &&
                 pk.IsUniqueIdentifier &&
                 !this.Get(pk.Name)) {
@@ -3427,7 +4127,7 @@ export abstract class BaseEntity<T = unknown> {
         // Root.Save() would wait on the first _pendingSave$ (which is itself waiting
         // for the leaf chain), creating a circular wait that hangs forever.
         if (options?.IsParentEntitySave) {
-            return this._InnerSave(options);
+            return this._innerSave(options);
         }
 
         // If a save is already in progress, return its promise. This check MUST run before graph
@@ -3477,7 +4177,7 @@ export abstract class BaseEntity<T = unknown> {
         // Create a new observable that debounces duplicative calls, and executes the save.
         this._pendingSave$ = of(options).pipe(
             // Execute the actual save logic.
-            switchMap(opts => from(this._InnerSave(opts))),
+            switchMap(opts => from(this._innerSave(opts))),
             // When the save completes (whether successfully or not), clear the pending save observable.
             finalize(() => { this._pendingSave$ = null; }),
             // Ensure that all subscribers get the same result.
@@ -3493,7 +4193,7 @@ export abstract class BaseEntity<T = unknown> {
      * @param options
      * @returns
      */
-    private async _InnerSave(options?: EntitySaveOptions) : Promise<boolean> {
+    private async _innerSave(options?: EntitySaveOptions) : Promise<boolean> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
@@ -3562,6 +4262,9 @@ export abstract class BaseEntity<T = unknown> {
                             `Failed to save parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
                         // Surface the parent's field-level errors so the caller can act on them.
                         newResult.Errors = parentErrors;
+                        // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
+                        // them — say so, or CompleteMessage repeats every one.
+                        newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;
                         newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                         newResult.EndedAt = new Date();
                         this.RegisterResultHistoryEntry(newResult);
@@ -3574,6 +4277,8 @@ export abstract class BaseEntity<T = unknown> {
             const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;
             const saveSubType = this.IsSaved ? 'update' : 'create';
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
+            this.CheckFieldLevelUpdatePermissions() // field-level security — throws if a dirty field is not updatable by this user
+            this.ApplyFieldLevelCreateSuppression() // field-level security on INSERT — omits fields, never rejects
 
             // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
             // isn't already claimed by another child type (e.g., can't create Meeting
@@ -3655,7 +4360,7 @@ export abstract class BaseEntity<T = unknown> {
                     }
                     if (valResult.Success) {
                         // Run registered PreSave hooks (e.g., tenant validation)
-                        await this.RunPreSaveHooks();
+                        await this.runPreSaveHooks();
 
                         // Optimistic-UI hook: every pre-flight check (Validate, ValidateAsync,
                         // PreSave hooks) has passed and the DB write is imminent. Fire the optional
@@ -3764,7 +4469,7 @@ export abstract class BaseEntity<T = unknown> {
      * Runs all registered PreSave hooks. If any hook returns false or a string
      * (error message), the save is rejected by throwing an Error.
      */
-    private async RunPreSaveHooks(): Promise<void> {
+    private async runPreSaveHooks(): Promise<void> {
         const preSaveHooks = GetDataHooks<PreSaveHook>('PreSave');
         for (const hook of preSaveHooks) {
             const hookResult = await hook(this, this.ActiveUser);
@@ -3818,13 +4523,21 @@ export abstract class BaseEntity<T = unknown> {
             // does not own (e.g. OrderHeader on Event Order Line). Keep only columns
             // this entity defines, and ignore anything leftover.
             this.SetMany(this.ownedFieldsFrom(fieldData), true, true, true);
+            // finalizeSave re-hydrates from the save RESPONSE — a hydration source. Keys it
+            // omitted (e.g. fields the server stripped for field security) must be marked
+            // not-loaded, or the defaults init() just produced would masquerade as confirmed
+            // values and be resent on the NEXT save (the create/update-response corner: a
+            // trigger/system adjustment or concurrent change would be silently stomped).
+            if (typeof fieldData === 'object' && !Array.isArray(fieldData)) {
+                this.markFieldsOmittedBySourceAsNotLoaded(fieldData as Record<string, unknown>);
+            }
             this._everSaved = true; // Mark as saved after successful save
             const result = this.LatestResult;
             if (result)
                 result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
 
             // Cache the record name for faster lookups (updates cache with potentially new name)
-            this.CacheRecordName();
+            this.cacheRecordName();
 
             this.RaiseEvent('save', null, saveSubType);
 
@@ -3848,7 +4561,7 @@ export abstract class BaseEntity<T = unknown> {
      * Caches the entity record name in the provider's EntityRecordNameCache for faster lookups.
      * Called automatically after successful Load(), LoadFromData(), and Save() operations.
      */
-    private CacheRecordName(): void {
+    private cacheRecordName(): void {
         // Only cache if we have a valid primary key
         if (!this.PrimaryKey || !this.PrimaryKey.HasValue) {
             return;
@@ -3948,6 +4661,166 @@ export abstract class BaseEntity<T = unknown> {
             return bAllowed
     }
 
+    /**
+     * Field-level security on the write path: rejects a save that modifies a field this user
+     * has no update permission on.
+     *
+     * ENFORCEMENT LAYER — read this before treating it as the security boundary. `BaseEntity`
+     * also runs in the browser, where this guard is trivially bypassable. The AUTHORITATIVE
+     * check is the server-side execution of this same code: the MJServer mutation resolver
+     * re-instantiates the entity and re-runs Save on the server, where the client cannot reach
+     * it. The client-side occurrence is UX and defense-in-depth — fail fast with a clear
+     * message before a network round-trip — and must never be relied on alone.
+     *
+     * UPDATE rejects; CREATE does not — see {@link ApplyFieldLevelCreateSuppression}.
+     *
+     * Note this checks DIRTY fields only. CLIENT-side that is safe on its own: nothing ever
+     * nulls a restricted value in memory, so a field the user cannot see was never loaded as
+     * null, is not dirty, and an unrelated edit saves cleanly with the restricted column
+     * keeping its stored value.
+     *
+     * SERVER-side, dirty-only is safe only because `ResolverBase.UpdateRecord` guarantees the
+     * entity was hydrated FROM THE DATABASE on every FLS entity. Two distinct resolver behaviours
+     * carry that premise, and BOTH are load-bearing:
+     *
+     * 1. `StripDeniedReadFieldsFromClientInput` removes client-sent values for fields the caller
+     *    cannot READ, which `SetMany` would otherwise make genuinely dirty with fabricated data.
+     * 2. `entityInfo.EnableFieldLevelSecurity` forces the truth-load branch, so the entity's
+     *    non-dirty baseline is the real stored row rather than the client's `OldValues___`.
+     *
+     * (2) is not redundant with (1). A value arriving through `LoadFromData` is recorded by the
+     * EntityField setter as the field's INITIAL value, so it is not dirty — and this check would
+     * never see it, while `GenerateSaveSQL` sends it anyway (it filters on `NotLoaded`, never on
+     * `Dirty`). Without the forced truth-load, a caller with Read Allow + Update Deny — the
+     * canonical FLS configuration, and one that leaves (1) with nothing to strip — could write an
+     * update-denied field just by pinning its value in `OldValues___` and never naming it in the
+     * mutation. If you are considering relaxing that branch condition, this check is what breaks.
+     *
+     * The refusal names the missing permission when the caller can READ the field, and falls back
+     * to the ambiguous "does not exist or you do not have access" wording when they cannot. See
+     * {@link FieldSecurityWriteDenialMessage} for why that split discloses nothing.
+     */
+    protected CheckFieldLevelUpdatePermissions(): void {
+        if (!this.IsSaved) {
+            return; // INSERT — handled by ApplyFieldLevelCreateSuppression, which never rejects
+        }
+        const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedUpdateFields(u));
+        if (!denied) {
+            return;
+        }
+        // Resolved once, and only if we are actually going to reject: the wording depends on
+        // whether the caller can READ the field they were refused a write on.
+        let deniedRead: Set<string> | null | undefined;
+        for (const field of this.Fields) {
+            const key = field.Name.trim().toLowerCase();
+            if (field.Dirty && denied.has(key)) {
+                LogDebug(
+                    `[FieldSecurity] Rejected save on '${this.EntityInfo.Name}': ` +
+                    `field '${field.Name}' is not updatable by this user`
+                );
+                // A field the caller can READ gets the real reason. Both facts the ambiguous
+                // wording protects — that the column exists, and that it is restricted for them —
+                // are already theirs, so withholding the reason only tells someone a field whose
+                // values they are looking at might not exist.
+                //
+                // A field they CANNOT read keeps the ambiguous wording. Not hypothetical: SetMany
+                // deliberately skips the readability assertion (hydration / resolver-apply path),
+                // so server-side code can dirty a read-denied field and land here.
+                if (deniedRead === undefined) {
+                    deniedRead = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedReadFields(u));
+                }
+                throw deniedRead?.has(key)
+                    ? new FieldSecurityError(field.Name, this.EntityInfo.Name)
+                    : FieldSecurityError.WriteDenial(field.Name, this.EntityInfo.Name);
+            }
+        }
+    }
+
+    /**
+     * Field-level security on the INSERT path: marks the fields this user may not supply so the
+     * save omits them and each column takes its database default.
+     *
+     * **This never rejects, and that is deliberate.** Rejecting would be inconsistent with the
+     * read path (a denied field is simply absent, not an error) and would leak information — an
+     * error naming `Salary` confirms the field exists and is restricted, which the ambiguous
+     * denial wording exists to prevent. Silently defaulting is also what an unrestricted user
+     * gets by leaving the field blank, so a restricted user creating a record ends up with the
+     * same record SHAPE rather than a failure.
+     *
+     * The cost is that a user who supplies a value for a create-denied field gets no feedback
+     * that it was dropped, which is why the drop is logged and why the admin UI should not
+     * render the field at all.
+     *
+     * Runs on every save (clearing prior marks first) because the answer depends on the acting
+     * user, and one entity object can be saved by different users over its lifetime.
+     */
+    protected ApplyFieldLevelCreateSuppression(): void {
+        for (const field of this.Fields) {
+            field.SetCreateSuppressed(false);
+        }
+        if (this.IsSaved) {
+            return; // UPDATE — CheckFieldLevelUpdatePermissions owns that path
+        }
+        const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedCreateFields(u));
+        if (!denied) {
+            return;
+        }
+
+        const suppressed: string[] = [];
+        for (const field of this.Fields) {
+            if (denied.has(field.Name.trim().toLowerCase())) {
+                field.SetCreateSuppressed(true);
+                suppressed.push(field.Name);
+            }
+        }
+        if (suppressed.length > 0) {
+            LogDebug(
+                `[FieldSecurity] Create on '${this.EntityInfo.Name}': ` +
+                `omitted field(s) ${suppressed.join(', ')}; each column takes its default`
+            );
+        }
+    }
+
+    /**
+     * The denied-field set for the acting user, or null when field security does not apply —
+     * the entity has it switched off, no user resolves, or the user is denied nothing.
+     *
+     * Returning null rather than an empty Set lets callers skip their loop entirely, and keeps
+     * the three cheap short-circuits in one place instead of repeated at each gate.
+     */
+    private deniedFieldsForActiveUser(select: (user: UserInfo) => Set<string>): Set<string> | null {
+        if (!this.EntityInfo?.EnableFieldLevelSecurity) {
+            return null; // one boolean for the overwhelming majority of entities
+        }
+        const u: UserInfo = this.resolveActiveUserOrNull();
+        if (!u) {
+            return null; // no user resolves — fail open, see AssertFieldReadable
+        }
+        const denied = select(u);
+        return denied.size > 0 ? denied : null;
+    }
+
+    /**
+     * {@link ActiveUser}, but null instead of throwing when no provider is configured to resolve
+     * one from.
+     *
+     * `ActiveUser` ends in `Metadata.Provider.CurrentUser`, which throws a TypeError when there
+     * is no global provider — during early boot, in tests, or in any context that never
+     * configured one. That was harmless while only the save path consulted it, but `Get()` and
+     * `Set()` now do on every access to an FLS-enabled entity, so an unresolvable provider would
+     * turn an ordinary read into a crash.
+     *
+     * "No provider to ask" is the same answer as "no user" for this purpose, and field security
+     * fails open on both.
+     */
+    private resolveActiveUserOrNull(): UserInfo | null {
+        try {
+            return this.ActiveUser ?? null;
+        } catch {
+            return null;
+        }
+    }
+
     protected ThrowPermissionError(u: UserInfo, type: EntityPermissionType, additionalInfoMessage: string) {
         throw new Error(`User: ${u.Name} (ID: ${u.ID}, Email: ${u.Email})
                          Does NOT have permission to ${EntityPermissionType[type]} ${this.EntityInfo.Name } records.
@@ -4025,6 +4898,10 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             this.SetMany(data, false, true, true); // don't ignore non-existent fields, but DO replace old values
+            // InnerLoad is a hydration entry point: any field the provider's row omitted (e.g.
+            // a client-side load whose server response stripped read-denied fields) is
+            // not-loaded, so its constructor state never masquerades as data on the next save.
+            this.markFieldsOmittedBySourceAsNotLoaded(data);
             if (EntityRelationshipsToLoad) {
                 for (let relationship of EntityRelationshipsToLoad) {
                     if (data[relationship]) {
@@ -4038,7 +4915,7 @@ export abstract class BaseEntity<T = unknown> {
             this._compositeKey = CompositeKey; // set the composite key to the one we just loaded
 
             // Cache the record name for faster lookups
-            this.CacheRecordName();
+            this.cacheRecordName();
 
             // IS-A: discover child entity records after load completes.
             // This populates _childEntity so Save/Delete can delegate to the leaf.
@@ -4156,7 +5033,7 @@ export abstract class BaseEntity<T = unknown> {
         const canTakeFastPath =
             isPlainObject &&
             !this._fieldsHydrated &&
-            this._Fields.length === 0 &&
+            this._fields.length === 0 &&
             !this._parentEntity &&
             !this.EntityInfo?.IsParentType;
 
@@ -4198,6 +5075,10 @@ export abstract class BaseEntity<T = unknown> {
         // Hits when: subsequent LoadFromData call on an already-loaded instance, IS-A entity
         // (parent or child), or non-plain-object input. Preserves original semantics exactly.
         this.SetMany(data, true, _replaceOldValues, true); // ignore non-existent fields, but DO replace old values based on the provided param
+        if (isPlainObject) {
+            // LoadFromData is a hydration entry point: keys the source omitted are not-loaded.
+            this.markFieldsOmittedBySourceAsNotLoaded(data as Record<string, unknown>);
+        }
         // now, check to see if we have the primary key set, if so, we should consider ourselves
         // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag
         if (this.PrimaryKeys && this.PrimaryKeys.length > 0) {
@@ -4212,7 +5093,7 @@ export abstract class BaseEntity<T = unknown> {
 
             // Cache the record name for faster lookups if successfully loaded
             if (this._recordLoaded) {
-                this.CacheRecordName();
+                this.cacheRecordName();
 
                 // IS-A: discover child entity records after data load completes.
                 await this.InitializeChildEntity();
@@ -4255,39 +5136,51 @@ export abstract class BaseEntity<T = unknown> {
      * 
      * @returns ValidationResult The validation result
      */
+    private _isValidating: boolean = false;
+
     public Validate(): ValidationResult  {
-        const result = new ValidationResult();
-        result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
+        if (this._isValidating) {
+            const emptyResult = new ValidationResult();
+            emptyResult.Success = true;
+            return emptyResult;
+        }
+        this._isValidating = true;
+        try {
+            const result = new ValidationResult();
+            result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
 
-        // IS-A composition: validate parent entity first to collect all chain errors
-        if (this._parentEntity) {
-            const parentResult = this._parentEntity.Validate();
-            if (!parentResult.Success) {
-                result.Success = false;
-                parentResult.Errors.forEach(err => result.Errors.push(err));
+            // IS-A composition: validate parent entity first to collect all chain errors
+            if (this._parentEntity) {
+                const parentResult = this._parentEntity.Validate();
+                if (!parentResult.Success) {
+                    result.Success = false;
+                    parentResult.Errors.forEach(err => result.Errors.push(err));
+                }
             }
+
+            // Validate own fields — for IS-A entities, skip parent field mirrors since
+            // those are validated via _parentEntity above
+            for (let field of this.Fields) {
+                if (this._parentEntityFieldNames?.has(field.Name))
+                    continue; // skip parent field mirrors — authoritative validation is on _parentEntity
+
+                const err = field.Validate();
+                err.Errors.forEach(element => {
+                    result.Errors.push(element);
+                });
+                result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
+            }
+
+            // Companions validate LAST but still BEFORE any write, over their complete state including
+            // pending removals. That ordering is what lets a cross-child invariant — "debits must equal
+            // credits", "a confirmed order must have lines" — be enforced against the whole graph rather
+            // than discovered halfway through persisting it.
+            this.validateCompanions(result);
+
+            return result;
+        } finally {
+            this._isValidating = false;
         }
-
-        // Validate own fields — for IS-A entities, skip parent field mirrors since
-        // those are validated via _parentEntity above
-        for (let field of this.Fields) {
-            if (this._parentEntityFieldNames?.has(field.Name))
-                continue; // skip parent field mirrors — authoritative validation is on _parentEntity
-
-            const err = field.Validate();
-            err.Errors.forEach(element => {
-                result.Errors.push(element);
-            });
-            result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
-        }
-
-        // Companions validate LAST but still BEFORE any write, over their complete state including
-        // pending removals. That ordering is what lets a cross-child invariant — "debits must equal
-        // credits", "a confirmed order must have lines" — be enforced against the whole graph rather
-        // than discovered halfway through persisting it.
-        this.validateCompanions(result);
-
-        return result;
     }
 
     /**
@@ -4406,7 +5299,7 @@ export abstract class BaseEntity<T = unknown> {
         // Create a new observable that debounces duplicative calls, and executes the delete.
         this._pendingDelete$ = of(options).pipe(
             // Execute the actual delete logic.
-            switchMap(opts => from(this._InnerDelete(opts))),
+            switchMap(opts => from(this._innerDelete(opts))),
             // When the delete completes (whether successfully or not), clear the pending delete observable.
             finalize(() => { this._pendingDelete$ = null; }),
             // Ensure that all subscribers get the same result.
@@ -4422,7 +5315,7 @@ export abstract class BaseEntity<T = unknown> {
      * @param options
      * @returns
      */
-    private async _InnerDelete(options?: EntityDeleteOptions) : Promise<boolean> {
+    private async _innerDelete(options?: EntityDeleteOptions) : Promise<boolean> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
@@ -4540,6 +5433,9 @@ export abstract class BaseEntity<T = unknown> {
                                         `Failed to delete parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
                                     // Surface the parent's field-level errors so the caller can act on them.
                                     newResult.Errors = parentErrors;
+                                    // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
+                                    // them — say so, or CompleteMessage repeats every one.
+                                    newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;
                                     newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                                     newResult.EndedAt = new Date();
                                     this.RegisterResultHistoryEntry(newResult);
@@ -4639,12 +5535,13 @@ export abstract class BaseEntity<T = unknown> {
             return { HasChildren: false, ChildEntityName: '' };
         }
 
-        // Use RunView to check each child entity for records with our PK
-        const rv = new RunView();
+        // Use RunView on this instance's provider — a host RunView cannot see
+        // uncommitted child rows on a graph-scoped connection.
+        const rv = new RunView(this.RunViewProviderToUse);
         const pkValue = this.PrimaryKey.Values();
 
         for (const childEntity of childEntities) {
-            const pkField = childEntity.PrimaryKeys[0];
+            const pkField = childEntity.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
             if (!pkField) continue;
 
             const result = await rv.RunView({
@@ -4719,28 +5616,29 @@ export abstract class BaseEntity<T = unknown> {
             return { LeafEntityName: entityName, IsLeaf: true };
         }
 
-        return BaseEntity.ResolveLeafEntityRecursive(entityInfo, primaryKey, contextUser);
+        return BaseEntity.resolveLeafEntityRecursive(entityInfo, primaryKey, contextUser, md);
     }
 
     /**
      * Internal recursive helper for leaf entity resolution.
      * Walks down the child hierarchy until no more children are found.
      */
-    private static async ResolveLeafEntityRecursive(
+    private static async resolveLeafEntityRecursive(
         entityInfo: EntityInfo,
         primaryKey: CompositeKey,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ LeafEntityName: string; IsLeaf: boolean }> {
         const childEntities = entityInfo.ChildEntities;
         if (childEntities.length === 0) {
             return { LeafEntityName: entityInfo.Name, IsLeaf: true };
         }
 
-        const rv = new RunView();
+        const rv = new RunView((provider ?? BaseEntity.Provider) as unknown as IRunViewProvider);
         const pkValue = primaryKey.Values();
 
         for (const child of childEntities) {
-            const childPK = child.PrimaryKeys[0];
+            const childPK = child.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
             if (!childPK) continue;
 
             const result = await rv.RunView({
@@ -4753,7 +5651,7 @@ export abstract class BaseEntity<T = unknown> {
 
             if (result?.Success && result.Results?.length > 0) {
                 // Found a child — recurse to see if there's an even more specific leaf
-                return BaseEntity.ResolveLeafEntityRecursive(child, primaryKey, contextUser);
+                return BaseEntity.resolveLeafEntityRecursive(child, primaryKey, contextUser, provider);
             }
         }
 
@@ -4790,16 +5688,19 @@ export abstract class BaseEntity<T = unknown> {
         const pkValue = this.PrimaryKey.Values();
         if (!pkValue) return;
 
-        // Build all sibling queries and execute them in a single batch
-        const rv = new RunView();
-        const validSiblings = siblingChildEntities.filter(s => s.PrimaryKeys[0]);
+        // Build all sibling queries and execute them in a single batch on
+        // this instance's provider so an uncommitted sibling on the same
+        // graph connection is visible (host RunView would miss it).
+        const rv = new RunView(this.RunViewProviderToUse);
+        // first-pk-ok: IS-A siblings share the parent's single key
+        const validSiblings = siblingChildEntities.filter(s => s.FirstPrimaryKey); // first-pk-ok: IS-A siblings share the parent's single key
         if (validSiblings.length === 0) return;
 
         const viewParams = validSiblings.map(sibling => ({
             EntityName: sibling.Name,
-            ExtraFilter: `${sibling.PrimaryKeys[0].Name} = '${pkValue}'`,
+            ExtraFilter: `${sibling.FirstPrimaryKey.Name} = '${pkValue}'`, // first-pk-ok: IS-A shared key
             ResultType: 'simple' as const,
-            Fields: [sibling.PrimaryKeys[0].Name],
+            Fields: [sibling.FirstPrimaryKey.Name], // first-pk-ok: IS-A shared key
             MaxRows: 1
         }));
 
@@ -4874,9 +5775,20 @@ export abstract class BaseEntity<T = unknown> {
         if (!f) {
             return null;
         }
-        else {
-            return this.Get(f.Name)
+        // Field security: the name field is an ordinary field and can be denied like any other.
+        // `Get()` THROWS for a denied field, and this method runs AUTOMATICALLY after every
+        // Load / LoadFromData / Save via CacheRecordName — so an unguarded read here does not
+        // hide a name, it makes the record fail to load at all, with a message about the name
+        // field that reads like the record itself is broken.
+        //
+        // Returning null is the same answer callers already handle for "this entity has no name
+        // field", and every one of them degrades to the primary key. It also keeps a denied name
+        // OUT of the provider's record-name cache, which is keyed by entity + primary key and NOT
+        // by user — caching it would leak it to the next caller.
+        if (!this.EntityInfo.IsFieldReadableByUser(f.Name, this.ActiveUser)) {
+            return null;
         }
+        return this.Get(f.Name);
     }
 
 
@@ -5133,7 +6045,7 @@ export abstract class BaseEntity<T = unknown> {
             LogError(`BaseEntity.GetDescendants(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
             return [];
         }
-        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const pkName = this.FirstPrimaryKey.Name; // first-pk-ok: getRecursiveForeignKeyField already gates hierarchy traversal to single-column keys
         const rootId = this.Get(pkName);
         if (!rootId) return [];
 
@@ -5143,7 +6055,7 @@ export abstract class BaseEntity<T = unknown> {
             ? `${rootFieldName} = '${rootId}' AND ${depthFieldName} <= ${maxDepth}`
             : `${rootFieldName} = '${rootId}'`;
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
             ExtraFilter: filter,
@@ -5164,7 +6076,7 @@ export abstract class BaseEntity<T = unknown> {
             LogError(`BaseEntity.GetAncestors(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
             return [];
         }
-        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const pkName = this.FirstPrimaryKey.Name; // first-pk-ok: getRecursiveForeignKeyField already gates hierarchy traversal to single-column keys
         const currentId = this.Get(pkName);
         const pathFieldName = `${fkField.Name}Path`;
         const depthFieldName = `${fkField.Name}Depth`;
@@ -5174,7 +6086,7 @@ export abstract class BaseEntity<T = unknown> {
         const rawIds = path.split('/').filter(id => id.length > 0 && id !== currentId);
         if (rawIds.length === 0) return [];
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const idList = rawIds.map(id => `'${id}'`).join(',');
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
@@ -5196,11 +6108,11 @@ export abstract class BaseEntity<T = unknown> {
             LogError(`BaseEntity.GetChildren(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
             return [];
         }
-        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const pkName = this.FirstPrimaryKey.Name; // first-pk-ok: getRecursiveForeignKeyField already gates hierarchy traversal to single-column keys
         const currentId = this.Get(pkName);
         if (!currentId) return [];
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
             ExtraFilter: `${fkField.Name} = '${currentId}'`,

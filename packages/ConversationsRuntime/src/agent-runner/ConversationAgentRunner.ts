@@ -110,7 +110,12 @@ export class ConversationAgentRunner {
     private _provider: IMetadataProvider | null = null;
 
     /** Emits `true` while one or more agent runs are in flight, `false` otherwise. */
-    public readonly isProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
+    public readonly IsProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
+
+    /** @deprecated Use {@link IsProcessing$}. */
+    public get isProcessing$(): Observable<boolean> {
+        return this.IsProcessing$;
+    }
 
     /**
      * @param context Runtime context — used for notifications. Read on each call
@@ -151,7 +156,7 @@ export class ConversationAgentRunner {
      * @returns The agent's `ExecuteAgentResult`, or `null` if the agent failed and
      *     a notification was surfaced.
      */
-    public async processMessage(input: ProcessMessageInput): Promise<ExecuteAgentResult | null> {
+    public async ProcessMessage(input: ProcessMessageInput): Promise<ExecuteAgentResult | null> {
         const agent = await this.resolveAgent(input);
         if (!agent) return null;
 
@@ -249,6 +254,11 @@ export class ConversationAgentRunner {
             this._activeRunCount = Math.max(0, this._activeRunCount - 1);
             this._isProcessing$.next(this._activeRunCount > 0);
         }
+    }
+
+    /** @deprecated Use {@link ProcessMessage}. */
+    public async processMessage(input: ProcessMessageInput): Promise<ExecuteAgentResult | null> {
+        return this.ProcessMessage(input);
     }
 
     /**

@@ -15,22 +15,22 @@
  * same two expressions the caller uses.
  */
 import { describe, it, expect } from 'vitest';
-import { escapeRegExpLiteral } from '../SQLServerDataProvider';
+import { EscapeRegExpLiteral } from '../SQLServerDataProvider';
 
 /** Mirrors the caller: build the pattern, substitute the prefixed name. */
 const rewrite = (query: string, key: string, queryIndex = 0): string => {
     const prefixed = `@q${queryIndex}_${key}`;
-    return query.replace(new RegExp(`@${escapeRegExpLiteral(key)}\\b`, 'g'), () => prefixed);
+    return query.replace(new RegExp(`@${EscapeRegExpLiteral(key)}\\b`, 'g'), () => prefixed);
 };
 
 describe('escapeRegExpLiteral', () => {
     it('escapes every regex metacharacter', () => {
-        expect(escapeRegExpLiteral('a.b*c+d?e^f$g{h}i(j)k|l[m]n\\o'))
+        expect(EscapeRegExpLiteral('a.b*c+d?e^f$g{h}i(j)k|l[m]n\\o'))
             .toBe('a\\.b\\*c\\+d\\?e\\^f\\$g\\{h\\}i\\(j\\)k\\|l\\[m\\]n\\\\o');
     });
 
     it('leaves an ordinary name untouched', () => {
-        expect(escapeRegExpLiteral('CustomerID')).toBe('CustomerID');
+        expect(EscapeRegExpLiteral('CustomerID')).toBe('CustomerID');
     });
 });
 

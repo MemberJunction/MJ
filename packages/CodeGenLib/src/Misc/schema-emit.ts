@@ -10,8 +10,9 @@
 
 import fs from 'fs';
 import path from 'path';
+import { ordinalCompare } from '@memberjunction/global';
 
-import { writeFileIfChanged } from './file-write';
+import { WriteFileIfChanged } from './file-write';
 
 export type DirtySchemaSet = Set<string> | 'all';
 
@@ -46,13 +47,18 @@ export interface SchemaNamed {
  * literal — schema names like `bsd_crm` are common and must not glob).
  */
 /** Case-insensitive schema/entity key. Null/undefined become ''. */
-export function schemaKey(name: string | null | undefined): string {
+export function SchemaKey(name: string | null | undefined): string {
   return (name ?? '').trim().toLowerCase();
 }
 
-export function schemaNameMatches(pattern: string, schemaName: string | null | undefined): boolean {
-  const p = schemaKey(pattern);
-  const s = schemaKey(schemaName);
+/** @deprecated Use {@link SchemaKey}. */
+export function schemaKey(name: string | null | undefined): string {
+  return SchemaKey(name);
+}
+
+export function SchemaNameMatches(pattern: string, schemaName: string | null | undefined): boolean {
+  const p = SchemaKey(pattern);
+  const s = SchemaKey(schemaName);
   if (!p.includes('%')) {
     return p === s;
   }
@@ -60,21 +66,31 @@ export function schemaNameMatches(pattern: string, schemaName: string | null | u
   return new RegExp(`^${escaped}$`).test(s);
 }
 
+/** @deprecated Use {@link SchemaNameMatches}. */
+export function schemaNameMatches(pattern: string, schemaName: string | null | undefined): boolean {
+  return SchemaNameMatches(pattern, schemaName);
+}
+
 /**
  * Turn a SQL schema name into a safe TypeScript file stem.
  * `__mj` stays `__mj`; `bsd_crm` stays `bsd_crm`; `Sales.Analytics` becomes `Sales_Analytics`.
  */
-export function sanitizeSchemaFileName(schemaName: string | null | undefined): string {
+export function SanitizeSchemaFileName(schemaName: string | null | undefined): string {
   // Keep leading underscores — `__mj` is a real schema name and a valid file stem.
   const cleaned = (schemaName ?? '').trim().replace(/[^A-Za-z0-9_]+/g, '_').replace(/_+$/g, '');
   return cleaned.length > 0 ? cleaned : 'schema';
+}
+
+/** @deprecated Use {@link SanitizeSchemaFileName}. */
+export function sanitizeSchemaFileName(schemaName: string | null | undefined): string {
+  return SanitizeSchemaFileName(schemaName);
 }
 
 /**
  * Group entities by their raw `SchemaName` (trimmed, original casing of the
  * first occurrence). Order inside each group is the input order.
  */
-export function groupEntitiesBySchema<T extends { SchemaName: string }>(entities: readonly T[]): Map<string, T[]> {
+export function GroupEntitiesBySchema<T extends { SchemaName: string }>(entities: readonly T[]): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const entity of entities) {
     const key = (entity.SchemaName ?? '').trim() || 'unknown';
@@ -88,6 +104,11 @@ export function groupEntitiesBySchema<T extends { SchemaName: string }>(entities
   return map;
 }
 
+/** @deprecated Use {@link GroupEntitiesBySchema}. */
+export function groupEntitiesBySchema<T extends { SchemaName: string }>(entities: readonly T[]): Map<string, T[]> {
+  return GroupEntitiesBySchema(entities);
+}
+
 /**
  * Map dirty entity names (from `newEntityList` ∪ `modifiedEntityList`) back to
  * the schemas those entities live in. Comparison is case-insensitive.
@@ -98,7 +119,7 @@ export function groupEntitiesBySchema<T extends { SchemaName: string }>(entities
  * still keeps mtimes stable). Otherwise only schemas that contain a new/modified
  * entity are dirty — missing files are added later by {@link schemasToEmit}.
  */
-export function resolveDirtySchemasForEmit(
+export function ResolveDirtySchemasForEmit(
   entities: readonly SchemaNamed[],
   dirtyEntityNames: Iterable<string>,
   skipDB: boolean,
@@ -108,7 +129,7 @@ export function resolveDirtySchemasForEmit(
   if (skipDB || !dirtySchemaOnly) {
     return 'all';
   }
-  const schemas = collectDirtySchemas(entities, dirtyEntityNames);
+  const schemas = CollectDirtySchemas(entities, dirtyEntityNames);
   // Deletion arrives as a schema, not an entity name: by the time this runs the entity is gone
   // from `entities`, so `collectDirtySchemas` could never resolve it. Union it in directly, or
   // the schema is not rebuilt and the dead class survives on disk.
@@ -121,13 +142,24 @@ export function resolveDirtySchemasForEmit(
   return schemas;
 }
 
-export function collectDirtySchemas(
+/** @deprecated Use {@link ResolveDirtySchemasForEmit}. */
+export function resolveDirtySchemasForEmit(
+  entities: readonly SchemaNamed[],
+  dirtyEntityNames: Iterable<string>,
+  skipDB: boolean,
+  dirtySchemaOnly: boolean,
+  deletedEntitySchemas: Iterable<string> = [],
+): DirtySchemaSet {
+  return ResolveDirtySchemasForEmit(entities, dirtyEntityNames, skipDB, dirtySchemaOnly, deletedEntitySchemas);
+}
+
+export function CollectDirtySchemas(
   entities: readonly SchemaNamed[],
   dirtyEntityNames: Iterable<string>,
 ): Set<string> {
   const dirty = new Set<string>();
   for (const name of dirtyEntityNames) {
-    const key = schemaKey(name);
+    const key = SchemaKey(name);
     if (key.length > 0) {
       dirty.add(key);
     }
@@ -137,7 +169,7 @@ export function collectDirtySchemas(
     return schemas;
   }
   for (const entity of entities) {
-    if (dirty.has(schemaKey(entity.Name))) {
+    if (dirty.has(SchemaKey(entity.Name))) {
       const schema = (entity.SchemaName ?? '').trim();
       if (schema.length > 0) {
         schemas.add(schema);
@@ -147,12 +179,20 @@ export function collectDirtySchemas(
   return schemas;
 }
 
+/** @deprecated Use {@link CollectDirtySchemas}. */
+export function collectDirtySchemas(
+  entities: readonly SchemaNamed[],
+  dirtyEntityNames: Iterable<string>,
+): Set<string> {
+  return CollectDirtySchemas(entities, dirtyEntityNames);
+}
+
 /**
  * Decide which schema files to rebuild. Missing files are always rebuilt so a
  * fresh clone / first run is complete. When `dirty` is `'all'` every schema is
  * rebuilt (callers still use write-if-changed to keep mtimes stable).
  */
-export function schemasToEmit(
+export function SchemasToEmit(
   allSchemas: readonly string[],
   dirty: DirtySchemaSet | undefined,
   fileExists: (schemaName: string) => boolean,
@@ -169,10 +209,19 @@ export function schemasToEmit(
   });
 }
 
+/** @deprecated Use {@link SchemasToEmit}. */
+export function schemasToEmit(
+  allSchemas: readonly string[],
+  dirty: DirtySchemaSet | undefined,
+  fileExists: (schemaName: string) => boolean,
+): string[] {
+  return SchemasToEmit(allSchemas, dirty, fileExists);
+}
+
 /**
  * Bounded parallel map. Order of results matches `items`. A limit of 1 is serial.
  */
-export async function mapLimit<T, R>(
+export async function MapLimit<T, R>(
   items: readonly T[],
   limit: number,
   mapper: (item: T, index: number) => Promise<R>,
@@ -192,21 +241,39 @@ export async function mapLimit<T, R>(
   return results;
 }
 
+/** @deprecated Use {@link MapLimit}. */
+export async function mapLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  return MapLimit(items, limit, mapper);
+}
+
 /**
  * Barrel that re-exports every per-schema file. Uses `.js` specifiers so the
  * file is valid in `"type": "module"` packages (MJCoreEntities, MJServer).
  */
-export function buildSchemaBarrel(
+export function BuildSchemaBarrel(
   schemas: readonly string[],
   relativeDir: string,
   extraHeader: string,
 ): string {
   const dir = relativeDir.replace(/\\/g, '/').replace(/\/+$/, '');
   const exports = [...schemas]
-    .sort((a, b) => a.localeCompare(b))
-    .map((schema) => `export * from './${dir}/${sanitizeSchemaFileName(schema)}.js';`)
+    .sort((a, b) => ordinalCompare(a, b))
+    .map((schema) => `export * from './${dir}/${SanitizeSchemaFileName(schema)}.js';`)
     .join('\n');
   return `${extraHeader}${exports}\n`;
+}
+
+/** @deprecated Use {@link BuildSchemaBarrel}. */
+export function buildSchemaBarrel(
+  schemas: readonly string[],
+  relativeDir: string,
+  extraHeader: string,
+): string {
+  return BuildSchemaBarrel(schemas, relativeDir, extraHeader);
 }
 
 /**
@@ -216,9 +283,14 @@ export function buildSchemaBarrel(
  * filesystem. `fileNames` is a plain directory listing; `schemas` is every schema in the
  * run, not just the dirty subset.
  */
-export function selectOrphanedSchemaFiles(fileNames: readonly string[], schemas: readonly string[]): string[] {
-  const live = new Set(schemas.map((schema) => `${sanitizeSchemaFileName(schema)}.ts`));
+export function SelectOrphanedSchemaFiles(fileNames: readonly string[], schemas: readonly string[]): string[] {
+  const live = new Set(schemas.map((schema) => `${SanitizeSchemaFileName(schema)}.ts`));
   return fileNames.filter((name) => name.endsWith('.ts') && !live.has(name)).sort();
+}
+
+/** @deprecated Use {@link SelectOrphanedSchemaFiles}. */
+export function selectOrphanedSchemaFiles(fileNames: readonly string[], schemas: readonly string[]): string[] {
+  return SelectOrphanedSchemaFiles(fileNames, schemas);
 }
 
 /**
@@ -234,15 +306,20 @@ export function selectOrphanedSchemaFiles(fileNames: readonly string[], schemas:
  * Safe under dirty-schema regen: `schemas` is the full set for the run, so a schema that
  * simply was not dirty this time is still live and is never pruned.
  */
-export function pruneOrphanedSchemaFiles(directory: string, schemas: readonly string[]): string[] {
+export function PruneOrphanedSchemaFiles(directory: string, schemas: readonly string[]): string[] {
   if (!fs.existsSync(directory)) {
     return [];
   }
-  const orphans = selectOrphanedSchemaFiles(fs.readdirSync(directory), schemas);
+  const orphans = SelectOrphanedSchemaFiles(fs.readdirSync(directory), schemas);
   for (const name of orphans) {
     fs.unlinkSync(path.join(directory, name));
   }
   return orphans;
+}
+
+/** @deprecated Use {@link PruneOrphanedSchemaFiles}. */
+export function pruneOrphanedSchemaFiles(directory: string, schemas: readonly string[]): string[] {
+  return PruneOrphanedSchemaFiles(directory, schemas);
 }
 
 /**
@@ -256,7 +333,7 @@ export function pruneOrphanedSchemaFiles(directory: string, schemas: readonly st
  * generator uses them: its per-schema assembly is async (each file awaits its entities),
  * while GraphQL assembly is synchronous, so there is nothing to overlap there.
  */
-export function resolveSchemaEmitOptions(
+export function ResolveSchemaEmitOptions(
   options: SchemaEmitOptions | undefined,
   defaults: SchemaEmitOptions | undefined,
 ): Required<SchemaEmitOptions> {
@@ -269,6 +346,14 @@ export function resolveSchemaEmitOptions(
   };
 }
 
+/** @deprecated Use {@link ResolveSchemaEmitOptions}. */
+export function resolveSchemaEmitOptions(
+  options: SchemaEmitOptions | undefined,
+  defaults: SchemaEmitOptions | undefined,
+): Required<SchemaEmitOptions> {
+  return ResolveSchemaEmitOptions(options, defaults);
+}
+
 /**
  * Write one emitted file, honouring the write-if-changed setting.
  *
@@ -276,11 +361,16 @@ export function resolveSchemaEmitOptions(
  * an unchanged file identically, or one leaves mtimes alone while the other churns them and
  * downstream incremental builds see phantom work.
  */
-export function emitSchemaFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
+export function EmitSchemaFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
   if (useWriteIfChanged) {
-    writeFileIfChanged(filePath, content);
+    WriteFileIfChanged(filePath, content);
     return;
   }
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content);
+}
+
+/** @deprecated Use {@link EmitSchemaFile}. */
+export function emitSchemaFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
+  return EmitSchemaFile(filePath, content, useWriteIfChanged);
 }

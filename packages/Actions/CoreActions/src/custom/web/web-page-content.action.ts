@@ -147,6 +147,7 @@ export class WebPageContentAction extends BaseAction {
             const contentLength = parseInt(response.headers.get('content-length') || '0');
 
             if (contentLength > this.MAX_CONTENT_SIZE) {
+                await DrainResponseBody(response);
                 return {
                     Success: false,
                     Message: `Content too large: ${contentLength} bytes (max: ${this.MAX_CONTENT_SIZE})`,

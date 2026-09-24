@@ -3,13 +3,13 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
-import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
+import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
 import {
   ApplicationRoleExportRow,
-  buildApplicationNotFoundError,
-  buildApplicationRolesAgentContext,
-  buildApplicationRolesCsv,
-  resolveApplicationByIdOrName,
+  BuildApplicationNotFoundError,
+  BuildApplicationRolesAgentContext,
+  BuildApplicationRolesCsv,
+  ResolveApplicationByIdOrName,
 } from './application-roles-agent-context';
 
 /**
@@ -282,7 +282,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
       // Process deletes
       for (const deleteId of this._pendingDeletes) {
         const entity = await md.GetEntityObject('MJ: Application Roles');
-        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: deleteId }]));
+        await entity.InnerLoad(CompositeKey.FromID(deleteId));
         const deleteResult = await entity.Delete();
         if (!deleteResult) {
           this.ErrorMessage = `Failed to delete role assignment: ${entity.LatestResult?.Message || 'Unknown error'}`;
@@ -314,7 +314,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
             row.ID = entity.Get('ID');
           } else {
             const entity = await md.GetEntityObject('MJ: Application Roles');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: row.ID }]));
+            await entity.InnerLoad(CompositeKey.FromID(row.ID));
             entity.Set('CanAccess', row.CanAccess);
             entity.Set('CanAdmin', row.CanAdmin);
             const saveResult = await entity.Save();
@@ -403,7 +403,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
     const selectedGroup = this.SelectedApplicationId
       ? this.ApplicationGroups.find(g => UUIDsEqual(g.ApplicationID, this.SelectedApplicationId!))
       : undefined;
-    const context = buildApplicationRolesAgentContext({
+    const context = BuildApplicationRolesAgentContext({
       ApplicationGroupCount: this.ApplicationGroups.length,
       TotalRoleAssignmentCount: this.ApplicationGroups.reduce((sum, g) => sum + g.Roles.length, 0),
       HasUnsavedChanges: this.HasUnsavedChanges,
@@ -475,13 +475,13 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
 
   /** Resolve an application group by id or name and toggle its expand/collapse state (UI only). */
   private toolToggleApplicationGroup(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-    const validated = validateStringParam(params['applicationId'], 'applicationId');
+    const validated = ValidateStringParam(params['applicationId'], 'applicationId');
     if (!validated.ok) {
       return validated.result;
     }
-    const match = resolveApplicationByIdOrName(validated.value, this.applicationCandidates());
+    const match = ResolveApplicationByIdOrName(validated.value, this.applicationCandidates());
     if (!match) {
-      return { Success: false, ErrorMessage: buildApplicationNotFoundError(validated.value, this.applicationCandidates()) };
+      return { Success: false, ErrorMessage: BuildApplicationNotFoundError(validated.value, this.applicationCandidates()) };
     }
     const group = this.ApplicationGroups.find(g => UUIDsEqual(g.ApplicationID, match.ApplicationID))!;
     this.ToggleGroup(group);
@@ -490,13 +490,13 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
 
   /** Read-only: resolve an application group by id or name and return its assigned-role count + names. */
   private toolGetRoleCountForApplication(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-    const validated = validateStringParam(params['applicationId'], 'applicationId');
+    const validated = ValidateStringParam(params['applicationId'], 'applicationId');
     if (!validated.ok) {
       return validated.result;
     }
-    const match = resolveApplicationByIdOrName(validated.value, this.applicationCandidates());
+    const match = ResolveApplicationByIdOrName(validated.value, this.applicationCandidates());
     if (!match) {
-      return { Success: false, ErrorMessage: buildApplicationNotFoundError(validated.value, this.applicationCandidates()) };
+      return { Success: false, ErrorMessage: BuildApplicationNotFoundError(validated.value, this.applicationCandidates()) };
     }
     const group = this.ApplicationGroups.find(g => UUIDsEqual(g.ApplicationID, match.ApplicationID))!;
     return {
@@ -507,13 +507,13 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
 
   /** Read-only: select an application to inspect (sets selection, expands its group, reports roles). */
   private toolSelectApplication(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
-    const validated = validateStringParam(params['applicationId'], 'applicationId');
+    const validated = ValidateStringParam(params['applicationId'], 'applicationId');
     if (!validated.ok) {
       return validated.result;
     }
-    const match = resolveApplicationByIdOrName(validated.value, this.applicationCandidates());
+    const match = ResolveApplicationByIdOrName(validated.value, this.applicationCandidates());
     if (!match) {
-      return { Success: false, ErrorMessage: buildApplicationNotFoundError(validated.value, this.applicationCandidates()) };
+      return { Success: false, ErrorMessage: BuildApplicationNotFoundError(validated.value, this.applicationCandidates()) };
     }
     const group = this.ApplicationGroups.find(g => UUIDsEqual(g.ApplicationID, match.ApplicationID))!;
     this.SelectedApplicationId = group.ApplicationID;
@@ -541,7 +541,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
         rows.push({ ApplicationName: group.ApplicationName, RoleName: role.RoleName, CanAccess: role.CanAccess, CanAdmin: role.CanAdmin });
       }
     }
-    const csv = buildApplicationRolesCsv(rows);
+    const csv = BuildApplicationRolesCsv(rows);
     this.downloadCsv(csv, `application-roles-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`);
     return { Success: true, Data: { RowCount: rows.length } };
   }

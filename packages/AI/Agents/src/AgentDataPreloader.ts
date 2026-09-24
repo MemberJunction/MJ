@@ -218,7 +218,7 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
      *
      * @param {string} runId - The run ID to clear cache for
      */
-    public clearRunCache(runId: string): void {
+    public ClearRunCache(runId: string): void {
         this._perRunCache.delete(runId);
         LogStatusEx({
             message: `AgentDataPreloader: Cleared per-run cache for run ${runId}`,
@@ -227,17 +227,27 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
         });
     }
 
+    /** @deprecated Use {@link ClearRunCache}. */
+    public clearRunCache(runId: string): void {
+        return this.ClearRunCache(runId);
+    }
+
     /**
      * Clears all per-agent cached data.
      * Can be called to force refresh of global cached data.
      */
-    public clearAgentCache(): void {
+    public ClearAgentCache(): void {
         this._perAgentCache.clear();
         LogStatusEx({
             message: `AgentDataPreloader: Cleared all per-agent cache`,
             verboseOnly: true,
             isVerboseEnabled: IsVerboseLoggingEnabled
         });
+    }
+
+    /** @deprecated Use {@link ClearAgentCache}. */
+    public clearAgentCache(): void {
+        return this.ClearAgentCache();
     }
 
     /**

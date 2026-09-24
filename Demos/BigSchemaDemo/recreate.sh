@@ -108,10 +108,15 @@ if [[ $BOOTSTRAP -eq 1 ]]; then
   echo "Bootstrapping MemberJunction into [$DB_DATABASE] (migrate → codegen --skipfiles → sync → codegen --skipdb)"
   (
     cd "$REPO_ROOT"
-    npx mj migrate
-    npx mj codegen --skipfiles
-    npx mj sync push --dir=metadata --ci
-    npx mj codegen --skipdb
+    # NOT `npx mj`: nothing in this repo creates a workspace-root node_modules/.bin/mj (the
+    # root `workspace:*` devDependencies that used to are gone, so turbo's
+    # hashOfInternalDependencies stays empty), and this demo has no package.json of its own.
+    # `npx` would walk up, find nothing, and fetch the UNRELATED `mj` package from the
+    # registry — in a script holding DB credentials.
+    node "$REPO_ROOT/packages/MJCLI/bin/run.js" migrate
+    node "$REPO_ROOT/packages/MJCLI/bin/run.js" codegen --skipfiles
+    node "$REPO_ROOT/packages/MJCLI/bin/run.js" sync push --dir=metadata --ci
+    node "$REPO_ROOT/packages/MJCLI/bin/run.js" codegen --skipdb
   )
 fi
 
@@ -124,5 +129,5 @@ done
 
 echo "Done. Schemas are bsd_* in [$DB_DATABASE]."
 echo "Next (from the worktree root, using THIS .env):"
-echo "  npx mj codegen"
+echo "  pnpm mj codegen"
 echo "Demo schemas should be routed via schemaOutput / includeSchemas — see README.md."

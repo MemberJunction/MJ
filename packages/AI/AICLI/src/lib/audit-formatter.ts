@@ -12,7 +12,7 @@ export class AuditFormatter {
   /**
    * Format list of agent runs
    */
-  formatRunList(runs: MJAIAgentRunEntity[], format: AuditOutputFormat): string {
+  FormatRunList(runs: MJAIAgentRunEntity[], format: AuditOutputFormat): string {
     if (runs.length === 0) {
       return chalk.yellow('No runs found matching the specified criteria.');
     }
@@ -27,6 +27,11 @@ export class AuditFormatter {
 
     // Compact format (default)
     return this.formatRunListCompact(runs);
+  }
+
+  /** @deprecated Use {@link FormatRunList}. */
+  formatRunList(runs: MJAIAgentRunEntity[], format: AuditOutputFormat): string {
+    return this.FormatRunList(runs, format);
   }
 
   /**
@@ -79,7 +84,7 @@ export class AuditFormatter {
   /**
    * Format run summary
    */
-  formatRunSummary(summary: RunSummary, format: AuditOutputFormat): string {
+  FormatRunSummary(summary: RunSummary, format: AuditOutputFormat): string {
     if (format === 'json') {
       return JSON.stringify(summary, null, 2);
     }
@@ -94,6 +99,11 @@ export class AuditFormatter {
 
     // Compact format (default)
     return this.formatRunSummaryCompact(summary);
+  }
+
+  /** @deprecated Use {@link FormatRunSummary}. */
+  formatRunSummary(summary: RunSummary, format: AuditOutputFormat): string {
+    return this.FormatRunSummary(summary, format);
   }
 
   /**
@@ -270,7 +280,7 @@ export class AuditFormatter {
   /**
    * Format step detail
    */
-  formatStepDetail(detail: StepDetail, format: AuditOutputFormat): string {
+  FormatStepDetail(detail: StepDetail, format: AuditOutputFormat): string {
     if (format === 'json') {
       return JSON.stringify(detail, null, 2);
     }
@@ -281,6 +291,11 @@ export class AuditFormatter {
 
     // Compact format (default)
     return this.formatStepDetailCompact(detail);
+  }
+
+  /** @deprecated Use {@link FormatStepDetail}. */
+  formatStepDetail(detail: StepDetail, format: AuditOutputFormat): string {
+    return this.FormatStepDetail(detail, format);
   }
 
   /**
@@ -397,7 +412,7 @@ export class AuditFormatter {
   /**
    * Format error analysis
    */
-  formatErrorAnalysis(analysis: ErrorAnalysis, format: AuditOutputFormat): string {
+  FormatErrorAnalysis(analysis: ErrorAnalysis, format: AuditOutputFormat): string {
     if (format === 'json') {
       return JSON.stringify(analysis, null, 2);
     }
@@ -408,6 +423,11 @@ export class AuditFormatter {
 
     // Compact format (default)
     return this.formatErrorAnalysisCompact(analysis);
+  }
+
+  /** @deprecated Use {@link FormatErrorAnalysis}. */
+  formatErrorAnalysis(analysis: ErrorAnalysis, format: AuditOutputFormat): string {
+    return this.FormatErrorAnalysis(analysis, format);
   }
 
   /**

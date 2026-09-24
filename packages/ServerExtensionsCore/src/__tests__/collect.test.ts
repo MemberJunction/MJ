@@ -4,14 +4,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
     MJ_SERVER_EXTENSIONS_EXPORT,
-    describeServerExtensionMount,
-    extractServerExtensionsFromModule,
-    extractServerExtensionsFromPackageJson,
-    mergeServerExtensionConfigs,
-    normalizeServerExtensionConfigs,
-    prepareServerExtensionConfigs,
-    serverExtensionRootsOverlap,
-    validateServerExtensionRootPath,
+    DescribeServerExtensionMount,
+    ExtractServerExtensionsFromModule,
+    ExtractServerExtensionsFromPackageJson,
+    MergeServerExtensionConfigs,
+    NormalizeServerExtensionConfigs,
+    PrepareServerExtensionConfigs,
+    ServerExtensionRootsOverlap,
+    ValidateServerExtensionRootPath,
 } from '../collect.js';
 import { ServerExtensionConfig } from '../types.js';
 
@@ -38,18 +38,18 @@ const slack: ServerExtensionConfig = {
 
 describe('normalizeServerExtensionConfigs', () => {
     it('returns [] for null/undefined', () => {
-        expect(normalizeServerExtensionConfigs(null)).toEqual([]);
-        expect(normalizeServerExtensionConfigs(undefined)).toEqual([]);
+        expect(NormalizeServerExtensionConfigs(null)).toEqual([]);
+        expect(NormalizeServerExtensionConfigs(undefined)).toEqual([]);
     });
 
     it('returns [] and reports when raw is not an array', () => {
         const onInvalid = vi.fn();
-        expect(normalizeServerExtensionConfigs({ DriverClass: 'X' }, { source: 'pkg', onInvalid })).toEqual([]);
+        expect(NormalizeServerExtensionConfigs({ DriverClass: 'X' }, { source: 'pkg', onInvalid })).toEqual([]);
         expect(onInvalid).toHaveBeenCalledWith(expect.stringContaining('must be an array (pkg)'));
     });
 
     it('accepts a valid array and defaults Enabled/Settings', () => {
-        const result = normalizeServerExtensionConfigs([
+        const result = NormalizeServerExtensionConfigs([
             { DriverClass: 'ExtA', RootPath: '/a' },
         ]);
         expect(result).toEqual([
@@ -58,7 +58,7 @@ describe('normalizeServerExtensionConfigs', () => {
     });
 
     it('trims DriverClass and RootPath', () => {
-        const result = normalizeServerExtensionConfigs([
+        const result = NormalizeServerExtensionConfigs([
             { Enabled: false, DriverClass: '  ExtA  ', RootPath: ' /a/ ', Settings: { k: 1 } },
         ]);
         expect(result).toEqual([
@@ -68,7 +68,7 @@ describe('normalizeServerExtensionConfigs', () => {
 
     it('skips reserved RootPaths fail-closed', () => {
             const onInvalid = vi.fn();
-            const result = normalizeServerExtensionConfigs(
+            const result = NormalizeServerExtensionConfigs(
                 [
                     { DriverClass: 'ShadowGraphql', RootPath: '/graphql' },
                     { DriverClass: 'Ok', RootPath: '/checkout' },
@@ -81,7 +81,7 @@ describe('normalizeServerExtensionConfigs', () => {
 
     it('skips non-objects, missing DriverClass, missing RootPath, and non-boolean Enabled', () => {
         const onInvalid = vi.fn();
-        const result = normalizeServerExtensionConfigs(
+        const result = NormalizeServerExtensionConfigs(
             [
                 null,
                 'nope',
@@ -101,7 +101,7 @@ describe('normalizeServerExtensionConfigs', () => {
 
     it('coerces non-object Settings to {} and reports', () => {
         const onInvalid = vi.fn();
-        const result = normalizeServerExtensionConfigs(
+        const result = NormalizeServerExtensionConfigs(
             [{ DriverClass: 'ExtA', RootPath: '/a', Settings: 'nope' }],
             { onInvalid }
         );
@@ -114,19 +114,19 @@ describe('normalizeServerExtensionConfigs', () => {
 
 describe('extractServerExtensionsFromModule', () => {
     it('returns [] for null/undefined/non-object modules', () => {
-        expect(extractServerExtensionsFromModule(null)).toEqual([]);
-        expect(extractServerExtensionsFromModule(undefined)).toEqual([]);
+        expect(ExtractServerExtensionsFromModule(null)).toEqual([]);
+        expect(ExtractServerExtensionsFromModule(undefined)).toEqual([]);
     });
 
     it('returns [] when the named export is absent', () => {
-        expect(extractServerExtensionsFromModule({ RESOLVER_PATHS: ['/x'] })).toEqual([]);
+        expect(ExtractServerExtensionsFromModule({ RESOLVER_PATHS: ['/x'] })).toEqual([]);
     });
 
     it(`reads ${MJ_SERVER_EXTENSIONS_EXPORT}`, () => {
         const mod = {
             [MJ_SERVER_EXTENSIONS_EXPORT]: [webhook, checkout],
         };
-        expect(extractServerExtensionsFromModule(mod)).toEqual([
+        expect(ExtractServerExtensionsFromModule(mod)).toEqual([
             webhook,
             { ...checkout, Settings: {} },
         ]);
@@ -135,7 +135,7 @@ describe('extractServerExtensionsFromModule', () => {
     it('normalizes invalid export payloads instead of throwing', () => {
         const onInvalid = vi.fn();
         expect(
-            extractServerExtensionsFromModule(
+            ExtractServerExtensionsFromModule(
                 { [MJ_SERVER_EXTENSIONS_EXPORT]: { DriverClass: 'X' } },
                 { onInvalid }
             )
@@ -146,10 +146,10 @@ describe('extractServerExtensionsFromModule', () => {
 
 describe('extractServerExtensionsFromPackageJson', () => {
     it('returns [] when memberjunction.serverExtensions is absent', () => {
-        expect(extractServerExtensionsFromPackageJson(null)).toEqual([]);
-        expect(extractServerExtensionsFromPackageJson({})).toEqual([]);
-        expect(extractServerExtensionsFromPackageJson({ memberjunction: {} })).toEqual([]);
-        expect(extractServerExtensionsFromPackageJson({ memberjunction: 'nope' })).toEqual([]);
+        expect(ExtractServerExtensionsFromPackageJson(null)).toEqual([]);
+        expect(ExtractServerExtensionsFromPackageJson({})).toEqual([]);
+        expect(ExtractServerExtensionsFromPackageJson({ memberjunction: {} })).toEqual([]);
+        expect(ExtractServerExtensionsFromPackageJson({ memberjunction: 'nope' })).toEqual([]);
     });
 
     it('reads memberjunction.serverExtensions', () => {
@@ -159,23 +159,23 @@ describe('extractServerExtensionsFromPackageJson', () => {
                 serverExtensions: [webhook],
             },
         };
-        expect(extractServerExtensionsFromPackageJson(pkg)).toEqual([webhook]);
+        expect(ExtractServerExtensionsFromPackageJson(pkg)).toEqual([webhook]);
     });
 });
 
 describe('mergeServerExtensionConfigs', () => {
     it('returns [] when both sides are empty/null', () => {
-        expect(mergeServerExtensionConfigs(null, undefined)).toEqual([]);
-        expect(mergeServerExtensionConfigs([], [])).toEqual([]);
+        expect(MergeServerExtensionConfigs(null, undefined)).toEqual([]);
+        expect(MergeServerExtensionConfigs([], [])).toEqual([]);
     });
 
     it('returns discovered-only and host-only lists unchanged (cloned)', () => {
-        const discoveredOnly = mergeServerExtensionConfigs([webhook, checkout], []);
+        const discoveredOnly = MergeServerExtensionConfigs([webhook, checkout], []);
         expect(discoveredOnly).toEqual([webhook, checkout]);
         expect(discoveredOnly[0]).not.toBe(webhook);
         expect(discoveredOnly[0].Settings).not.toBe(webhook.Settings);
 
-        expect(mergeServerExtensionConfigs([], [slack])).toEqual([slack]);
+        expect(MergeServerExtensionConfigs([], [slack])).toEqual([slack]);
     });
 
     it('host overlays Settings per-key and RootPath when provided', () => {
@@ -195,7 +195,7 @@ describe('mergeServerExtensionConfigs', () => {
                 Settings: { ServiceUserEmail: 'checkout@example.com', RateLimitMax: 10 },
             },
         ];
-        expect(mergeServerExtensionConfigs(discovered, host)).toEqual([
+        expect(MergeServerExtensionConfigs(discovered, host)).toEqual([
             {
                 Enabled: true,
                 DriverClass: 'OrdersCheckoutEdge',
@@ -210,12 +210,12 @@ describe('mergeServerExtensionConfigs', () => {
         const host: ServerExtensionConfig[] = [
             { Enabled: true, DriverClass: 'OrdersCheckoutEdge', RootPath: '  ', Settings: { k: 1 } },
         ];
-        expect(mergeServerExtensionConfigs(discovered, host)[0].RootPath).toBe('/checkout');
-        expect(mergeServerExtensionConfigs(discovered, host)[0].Settings).toEqual({ k: 1 });
+        expect(MergeServerExtensionConfigs(discovered, host)[0].RootPath).toBe('/checkout');
+        expect(MergeServerExtensionConfigs(discovered, host)[0].Settings).toEqual({ k: 1 });
     });
 
     it('host Enabled: false keeps the DriverClass so the loader skips it (no discovered fallback)', () => {
-        const merged = mergeServerExtensionConfigs(
+        const merged = MergeServerExtensionConfigs(
             [checkout],
             [{ Enabled: false, DriverClass: 'OrdersCheckoutEdge', RootPath: '/checkout', Settings: {} }]
         );
@@ -225,7 +225,7 @@ describe('mergeServerExtensionConfigs', () => {
     });
 
     it('appends host-only DriverClasses after discovered ones', () => {
-        const merged = mergeServerExtensionConfigs([webhook, checkout], [slack]);
+        const merged = MergeServerExtensionConfigs([webhook, checkout], [slack]);
         expect(merged.map((c) => c.DriverClass)).toEqual([
             'OrdersPaymentWebhook',
             'OrdersCheckoutEdge',
@@ -246,13 +246,13 @@ describe('mergeServerExtensionConfigs', () => {
             RootPath: '/second',
             Settings: { from: 'b' },
         };
-        const merged = mergeServerExtensionConfigs([first, second], []);
+        const merged = MergeServerExtensionConfigs([first, second], []);
         expect(merged).toEqual([second]);
         expect(merged).toHaveLength(1);
     });
 
     it('skips entries with empty DriverClass', () => {
-        const merged = mergeServerExtensionConfigs(
+        const merged = MergeServerExtensionConfigs(
             [{ Enabled: true, DriverClass: '', RootPath: '/x', Settings: {} }, webhook],
             [{ Enabled: true, DriverClass: '  ', RootPath: '/y', Settings: {} }]
         );
@@ -262,7 +262,7 @@ describe('mergeServerExtensionConfigs', () => {
     it('does not mutate inputs', () => {
         const discovered = [{ ...checkout, Settings: { a: 1 } }];
         const host = [{ ...checkout, Settings: { b: 2 } }];
-        mergeServerExtensionConfigs(discovered, host);
+        MergeServerExtensionConfigs(discovered, host);
         expect(discovered[0].Settings).toEqual({ a: 1 });
         expect(host[0].Settings).toEqual({ b: 2 });
     });
@@ -270,78 +270,78 @@ describe('mergeServerExtensionConfigs', () => {
 
 describe('validateServerExtensionRootPath', () => {
     it('accepts ordinary extension roots', () => {
-        expect(validateServerExtensionRootPath('/checkout')).toBeNull();
-        expect(validateServerExtensionRootPath('/webhooks/payments')).toBeNull();
-        expect(validateServerExtensionRootPath('/webhook/slack')).toBeNull();
+        expect(ValidateServerExtensionRootPath('/checkout')).toBeNull();
+        expect(ValidateServerExtensionRootPath('/webhooks/payments')).toBeNull();
+        expect(ValidateServerExtensionRootPath('/webhook/slack')).toBeNull();
     });
 
     it('rejects missing slash, wildcards, overlong paths, and the server root', () => {
-        expect(validateServerExtensionRootPath('checkout')).toMatch(/must start with '\//);
-        expect(validateServerExtensionRootPath('/check*out')).toMatch(/wildcards/);
-        expect(validateServerExtensionRootPath('/')).toMatch(/reserved/);
-        expect(validateServerExtensionRootPath(`/${'a'.repeat(128)}`)).toMatch(/exceeds/);
+        expect(ValidateServerExtensionRootPath('checkout')).toMatch(/must start with '\//);
+        expect(ValidateServerExtensionRootPath('/check*out')).toMatch(/wildcards/);
+        expect(ValidateServerExtensionRootPath('/')).toMatch(/reserved/);
+        expect(ValidateServerExtensionRootPath(`/${'a'.repeat(128)}`)).toMatch(/exceeds/);
     });
 
     it('rejects reserved core prefixes without false-positive on similar names', () => {
-        expect(validateServerExtensionRootPath('/graphql')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/graphql/extra')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/auth/providers')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/health/extensions')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/oauth')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/magic-link/redeem')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/healthcare')).toBeNull();
-        expect(validateServerExtensionRootPath('/authorize-me')).toBeNull();
+        expect(ValidateServerExtensionRootPath('/graphql')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/graphql/extra')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/auth/providers')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/health/extensions')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/oauth')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/magic-link/redeem')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/healthcare')).toBeNull();
+        expect(ValidateServerExtensionRootPath('/authorize-me')).toBeNull();
     });
 
     it('rejects reserved prefixes case-insensitively (Express routing is case-insensitive)', () => {
-        expect(validateServerExtensionRootPath('/Auth')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/AUTH/providers')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/GraphQL')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/OAuth')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/Health')).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/Magic-Link/redeem')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/Auth')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/AUTH/providers')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/GraphQL')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/OAuth')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/Health')).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/Magic-Link/redeem')).toMatch(/reserved prefix/);
         // Sibling of /health, not nested under it — needs extraReservedRoots from serve().
-        expect(validateServerExtensionRootPath('/healthcheck')).toBeNull();
-        expect(validateServerExtensionRootPath('/Healthcheck')).toBeNull();
+        expect(ValidateServerExtensionRootPath('/healthcheck')).toBeNull();
+        expect(ValidateServerExtensionRootPath('/Healthcheck')).toBeNull();
     });
 
     it('rejects extra reserved roots from the running server, including parent-path shadowing', () => {
         const extra = ['/healthcheck', '/esignature', '/media', '/widget', '/telephony/twilio', '/api'];
-        expect(validateServerExtensionRootPath('/healthcheck', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/Healthcheck', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/esignature/webhook', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/media', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/widget/session', extra)).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/healthcheck', extra)).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/Healthcheck', extra)).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/esignature/webhook', extra)).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/media', extra)).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/widget/session', extra)).toMatch(/reserved prefix/);
         // Parent of a reserved mount: Express prefix-match would shadow the core route.
-        expect(validateServerExtensionRootPath('/telephony', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/telephony/twilio', extra)).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/telephony', extra)).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/telephony/twilio', extra)).toMatch(/reserved prefix/);
         // graphqlRootPath other than the static /graphql baseline.
-        expect(validateServerExtensionRootPath('/api', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/api/v1', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/apiv2', extra)).toBeNull();
-        expect(validateServerExtensionRootPath('/checkout', extra)).toBeNull();
-        expect(validateServerExtensionRootPath('/healthcare', extra)).toBeNull();
+        expect(ValidateServerExtensionRootPath('/api', extra)).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/api/v1', extra)).toMatch(/reserved prefix/);
+        expect(ValidateServerExtensionRootPath('/apiv2', extra)).toBeNull();
+        expect(ValidateServerExtensionRootPath('/checkout', extra)).toBeNull();
+        expect(ValidateServerExtensionRootPath('/healthcare', extra)).toBeNull();
     });
 });
 
 describe('serverExtensionRootsOverlap', () => {
     it('detects equal and nested roots', () => {
-        expect(serverExtensionRootsOverlap('/checkout', '/checkout/')).toBe(true);
-        expect(serverExtensionRootsOverlap('/webhooks', '/webhooks/payments')).toBe(true);
-        expect(serverExtensionRootsOverlap('/a', '/b')).toBe(false);
-        expect(serverExtensionRootsOverlap('/checkout', '/check')).toBe(false);
+        expect(ServerExtensionRootsOverlap('/checkout', '/checkout/')).toBe(true);
+        expect(ServerExtensionRootsOverlap('/webhooks', '/webhooks/payments')).toBe(true);
+        expect(ServerExtensionRootsOverlap('/a', '/b')).toBe(false);
+        expect(ServerExtensionRootsOverlap('/checkout', '/check')).toBe(false);
     });
 
     it('treats casing as overlapping because Express does', () => {
-        expect(serverExtensionRootsOverlap('/Checkout', '/checkout')).toBe(true);
-        expect(serverExtensionRootsOverlap('/Webhooks', '/webhooks/payments')).toBe(true);
+        expect(ServerExtensionRootsOverlap('/Checkout', '/checkout')).toBe(true);
+        expect(ServerExtensionRootsOverlap('/Webhooks', '/webhooks/payments')).toBe(true);
     });
 });
 
 describe('prepareServerExtensionConfigs', () => {
     it('drops invalid roots fail-closed and keeps valid ones', () => {
         const onInvalid = vi.fn();
-        const result = prepareServerExtensionConfigs(
+        const result = PrepareServerExtensionConfigs(
             [
                 { Enabled: true, DriverClass: 'Good', RootPath: '/checkout', Settings: {} },
                 { Enabled: true, DriverClass: 'BadRoot', RootPath: '/', Settings: {} },
@@ -355,7 +355,7 @@ describe('prepareServerExtensionConfigs', () => {
 
     it('warns when two enabled extensions overlap, and keeps disabled entries', () => {
         const onOverlap = vi.fn();
-        const result = prepareServerExtensionConfigs(
+        const result = PrepareServerExtensionConfigs(
             [
                 { Enabled: true, DriverClass: 'A', RootPath: '/webhooks', Settings: {} },
                 { Enabled: true, DriverClass: 'B', RootPath: '/webhooks/payments', Settings: {} },
@@ -370,7 +370,7 @@ describe('prepareServerExtensionConfigs', () => {
 
     it('drops extra-reserved and cased reserved roots fail-closed, keeping original RootPath casing', () => {
         const onInvalid = vi.fn();
-        const result = prepareServerExtensionConfigs(
+        const result = PrepareServerExtensionConfigs(
             [
                 { Enabled: true, DriverClass: 'Checkout', RootPath: '/Checkout', Settings: {} },
                 { Enabled: true, DriverClass: 'AuthCased', RootPath: '/Auth', Settings: {} },
@@ -389,7 +389,7 @@ describe('prepareServerExtensionConfigs', () => {
 
     it('warns on case-insensitive overlap between enabled extensions', () => {
         const onOverlap = vi.fn();
-        prepareServerExtensionConfigs(
+        PrepareServerExtensionConfigs(
             [
                 { Enabled: true, DriverClass: 'A', RootPath: '/Webhooks', Settings: {} },
                 { Enabled: true, DriverClass: 'B', RootPath: '/webhooks/payments', Settings: {} },
@@ -402,11 +402,46 @@ describe('prepareServerExtensionConfigs', () => {
 
 describe('describeServerExtensionMount', () => {
     it('names DriverClass, RootPath, enabled state, and PRE-AUTH', () => {
-        const line = describeServerExtensionMount(checkout);
+        const line = DescribeServerExtensionMount(checkout);
         expect(line).toContain('OrdersCheckoutEdge');
         expect(line).toContain('/checkout');
         expect(line).toContain('enabled');
         expect(line).toContain('PRE-AUTH');
         expect(line).toContain('Enabled: false');
+    });
+
+    it('names POST-AUTH when Phase is post-auth', () => {
+        const line = DescribeServerExtensionMount({ ...checkout, Phase: 'post-auth' });
+        expect(line).toContain('POST-AUTH');
+    });
+});
+
+describe('Phase support in collect', () => {
+    it('normalizes valid Phase values', () => {
+        const normalized = NormalizeServerExtensionConfigs([
+            { DriverClass: 'Pre', RootPath: '/pre', Phase: 'pre-auth' },
+            { DriverClass: 'Post', RootPath: '/post', Phase: 'post-auth' },
+        ]);
+        expect(normalized[0].Phase).toBe('pre-auth');
+        expect(normalized[1].Phase).toBe('post-auth');
+    });
+
+    it('rejects invalid Phase values and logs warning', () => {
+        const onInvalid = vi.fn();
+        const raw = [{ DriverClass: 'BadPhase', RootPath: '/bad', Phase: 'invalid-phase' }];
+        const normalized = NormalizeServerExtensionConfigs(raw, { onInvalid });
+        expect(normalized[0].Phase).toBeUndefined();
+        expect(onInvalid).toHaveBeenCalledWith(expect.stringContaining("Phase must be 'pre-auth' or 'post-auth'"));
+    });
+
+    it('merges Phase with host overlay precedence', () => {
+        const discovered: ServerExtensionConfig[] = [
+            { Enabled: true, DriverClass: 'Ext', RootPath: '/ext', Phase: 'pre-auth', Settings: {} },
+        ];
+        const host: ServerExtensionConfig[] = [
+            { Enabled: true, DriverClass: 'Ext', RootPath: '/ext', Phase: 'post-auth', Settings: {} },
+        ];
+        const merged = MergeServerExtensionConfigs(discovered, host);
+        expect(merged[0].Phase).toBe('post-auth');
     });
 });
