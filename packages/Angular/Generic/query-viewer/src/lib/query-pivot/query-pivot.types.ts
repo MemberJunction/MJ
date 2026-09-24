@@ -55,6 +55,13 @@ export interface QueryPivotConfig {
      * When not supplied but ComparisonWindow is true, rows are split across available time intervals.
      */
     ComparisonPeriodColumn?: string | null;
+    /** Header titles for dimension/time columns, keyed by column; unlisted columns show their key. */
+    ColumnLabels?: Record<string, string>;
+    /**
+     * Dimension columns that take part in grouping but are not displayed — e.g. group by an ID and
+     * its display name, show only the name, and still have the ID on each output row.
+     */
+    HiddenColumns?: string[];
 }
 
 /**

@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
 import { createFakeProvider, query, queryAll, capture, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { AnalyticsExecutiveSummaryComponent } from './executive-summary.component';
 import { AIInstrumentationService, DashboardKPIs, ChartData, TrendData } from '../../../services/ai-instrumentation.service';
 
@@ -39,7 +40,7 @@ function render(): { fixture: ComponentFixture<AnalyticsExecutiveSummaryComponen
   const service = new FakeInstrumentationService();
   TestBed.configureTestingModule({
     declarations: [AnalyticsExecutiveSummaryComponent],
-    imports: [StubChart, StubLoadingComponent, StubEmptyStateComponent],
+    imports: [StubChart, StubLoadingComponent, StubEmptyStateComponent, MJClickableDirective],
     providers: [{ provide: AIInstrumentationService, useValue: service }],
   });
   const fixture = TestBed.createComponent(AnalyticsExecutiveSummaryComponent);
@@ -105,10 +106,32 @@ describe('AnalyticsExecutiveSummaryComponent (DOM)', () => {
     expect(queryAll(fixture, '.kpi-card').length).toBe(0);
   });
 
-  it('emits SectionNavigate("error-analysis") from OnConsumerClick for a prompt consumer', () => {
+  it('emits SectionNavigate("model-performance") from OnConsumerClick for a model consumer', () => {
     const { fixture } = render();
     const nav = capture(fixture.componentInstance.SectionNavigate);
-    fixture.componentInstance.OnConsumerClick({ Type: 'prompt', Name: 'Summarize', Rank: 1, Cost: 5, Proportion: 0.5 });
-    expect(nav).toEqual(['prompt-runs']);
+    fixture.componentInstance.OnConsumerClick({ Type: 'model', Name: 'GPT 5.5', Rank: 1, Cost: 5, Proportion: 0.5 });
+    expect(nav).toEqual(['model-performance']);
+  });
+
+  it('labels cost-by-model consumers as models', () => {
+    const { fixture, service } = render();
+    service.ChartData$.next({ ...EMPTY_CHART, costByModel: [{ model: 'GPT 5.5', cost: 3, tokens: 10 }] } as ChartData);
+    fixture.detectChanges(false);
+    expect(queryAll(fixture, '.consumer-type-pill').map((e) => e.textContent?.trim())).toEqual(['model']);
+  });
+
+  it('ranks error hotspots by their actual failed-run count and omits pairs with no failures', () => {
+    const { fixture, service } = render();
+    service.ChartData$.next({
+      ...EMPTY_CHART,
+      performanceMatrix: [
+        { agent: 'A', model: 'M1', avgTime: 1000, successRate: 0.5, FailedRuns: 1 },
+        { agent: 'B', model: 'M2', avgTime: 1000, successRate: 0.96, FailedRuns: 40 },
+        { agent: 'C', model: 'M3', avgTime: 1000, successRate: 1, FailedRuns: 0 },
+      ],
+    });
+    fixture.detectChanges(false);
+    expect(queryAll(fixture, '.error-source').map((e) => e.textContent?.trim())).toEqual(['B / M2', 'A / M1']);
+    expect(queryAll(fixture, '.error-count').map((e) => e.textContent?.trim())).toEqual(['40', '1']);
   });
 });

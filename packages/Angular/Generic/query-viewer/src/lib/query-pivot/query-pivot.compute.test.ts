@@ -162,6 +162,53 @@ describe('query-pivot.compute', () => {
             expect(triageRow['Tokens']).toBe('1,200');
         });
 
+        it('groups by a hidden ID column so two records sharing a name stay separate rows', () => {
+            const rows = [
+                { AgentID: 'a1', Agent: 'Helper', Cost: 1 },
+                { AgentID: 'a2', Agent: 'Helper', Cost: 2 },
+                { AgentID: 'a1', Agent: 'Helper', Cost: 3 }
+            ];
+            const config: QueryPivotConfig = {
+                DimensionColumns: ['AgentID', 'Agent'],
+                HiddenColumns: ['AgentID'],
+                MeasureColumns: [{ Key: 'Cost', Label: 'Cost', Format: 'currency', Aggregation: 'sum' }]
+            };
+
+            const result = ComputePivot(rows, config);
+
+            expect(result.GroupedRowCount).toBe(2);
+            expect(result.Rows.find(r => r['AgentID'] === 'a1')?.['Cost_raw']).toBe(4);
+            const byField = new Map(result.ColumnConfigs.map(c => [c.field, c]));
+            expect(byField.get('AgentID')?.visible).toBe(false);
+            expect(byField.get('Agent')?.visible).toBe(true);
+        });
+
+        it('titles dimension and time columns from ColumnLabels, falling back to the field name', () => {
+            const config: QueryPivotConfig = {
+                DimensionColumns: ['Agent', 'SourceKind'],
+                ColumnLabels: { SourceKind: 'Source', Timestamp: 'Day' },
+                TimeColumn: 'Timestamp',
+                Grain: 'day',
+                MeasureColumns: [{ Key: 'Cost', Label: 'Total Cost', Format: 'currency', Aggregation: 'sum' }]
+            };
+
+            const titles = ComputePivot(twelveRowFixture.map(r => ({ ...r, SourceKind: 'agent' })), config)
+                .ColumnConfigs.map(c => [c.field, c.title]);
+
+            expect(titles).toEqual([['Agent', 'Agent'], ['SourceKind', 'Source'], ['Timestamp', 'Day'], ['Cost', 'Total Cost']]);
+        });
+
+        it('keeps the grain suffix on the time column when no label is given', () => {
+            const config: QueryPivotConfig = {
+                DimensionColumns: ['Agent'],
+                TimeColumn: 'Timestamp',
+                Grain: 'hour',
+                MeasureColumns: [{ Key: 'Cost', Label: 'Cost', Format: 'currency', Aggregation: 'sum' }]
+            };
+            const time = ComputePivot(twelveRowFixture, config).ColumnConfigs.find(c => c.field === 'Timestamp');
+            expect(time?.title).toBe('Timestamp (Hour)');
+        });
+
         it('renders null measure as em dash when all grouped rows have null', () => {
             const config: QueryPivotConfig = {
                 DimensionColumns: ['Agent', 'Model'],

@@ -69,13 +69,18 @@ interface CostByModelRow {
 
 const TIME_RANGE_OPTIONS = ['Today', '7d', '30d', 'MTD'];
 
+// Vendors are categories: the categorical --mj-viz palette, steps spread out (neighbouring steps are
+// close hues). Brand/status tokens were three blues. Each colour tints its tile rather than filling it
+// (see .treemap-cell), so the tile text keeps its contrast in both themes.
 const TREEMAP_COLORS = [
-    'var(--mj-brand-primary)',
-    'var(--mj-brand-accent, var(--mj-brand-primary-hover))',
-    'var(--mj-status-info)',
-    'var(--mj-status-success)',
-    'var(--mj-status-warning)',
-    'var(--mj-text-disabled)'
+    'var(--mj-viz-1)',
+    'var(--mj-viz-6)',
+    'var(--mj-viz-3)',
+    'var(--mj-viz-9)',
+    'var(--mj-viz-5)',
+    'var(--mj-viz-8)',
+    'var(--mj-viz-4)',
+    'var(--mj-viz-10)'
 ];
 
 /** The UTC day key ('YYYY-MM-DD') for an instant — the same bucketing the server applies. */
@@ -151,7 +156,7 @@ function CostBudgetUTCDayKey(d: Date): string {
                                             <span class="avg-label">avg</span>
                                         </div>
                                     }
-                                    @for (bar of DailyBars; track bar.Date) {
+                                    @for (bar of DailyBars; track bar.Date; let i = $index) {
                                         <div class="bar-col" [title]="bar.Label + ': ' + (bar.IsUnpriced ? 'unpriced — cost unknown' : FormatCurrency(bar.Cost))">
                                             <div
                                                 class="bar"
@@ -159,7 +164,7 @@ function CostBudgetUTCDayKey(d: Date): string {
                                                 [class.bar--unpriced]="bar.IsUnpriced"
                                                 [style.height.%]="bar.HeightPercent"
                                             ></div>
-                                            <div class="bar-label">{{ bar.Label }}</div>
+                                            <div class="bar-label" [class.bar-label--skipped]="i % LabelStep !== 0">{{ bar.Label }}</div>
                                         </div>
                                     }
                                 </div>
@@ -186,7 +191,7 @@ function CostBudgetUTCDayKey(d: Date): string {
                                     <div
                                         class="treemap-cell"
                                         [class.treemap-cell--unpriced]="cell.Percent === null"
-                                        [style.background]="cell.Color"
+                                        [style.--tile-color]="cell.Color"
                                         [style.flex-basis.%]="cell.Percent ?? 0"
                                         [title]="cell.Label + ': ' + (cell.Percent === null ? 'unpriced — cost unknown' : FormatCurrency(cell.Cost) + ' (' + (cell.Percent | number:'1.0-0') + '%)')">
                                         <span class="treemap-label">{{ cell.Label }}</span>
@@ -445,6 +450,9 @@ function CostBudgetUTCDayKey(d: Date): string {
 
         .bar-col {
             flex: 1;
+            /* Without min-width: 0 each column is at least as wide as its no-wrap date label, so a
+               30- or 90-day range overflowed and the most recent days were clipped off the card. */
+            min-width: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -479,6 +487,11 @@ function CostBudgetUTCDayKey(d: Date): string {
             color: var(--mj-text-muted);
             margin-top: 4px;
             white-space: nowrap;
+        }
+
+        /* Thinned labels keep their line box so every bar keeps the same baseline. */
+        .bar-label--skipped {
+            visibility: hidden;
         }
 
         .avg-line {
@@ -520,7 +533,9 @@ function CostBudgetUTCDayKey(d: Date): string {
             min-width: 80px;
             min-height: 70px;
             flex-grow: 1;
-            color: var(--mj-text-inverse);
+            background: color-mix(in srgb, var(--tile-color) 20%, var(--mj-bg-surface));
+            border-left: 4px solid var(--tile-color);
+            color: var(--mj-text-primary);
             transition: opacity 0.2s;
         }
 
@@ -529,6 +544,7 @@ function CostBudgetUTCDayKey(d: Date): string {
         }
 
         .treemap-cell--unpriced {
+            background: var(--mj-bg-surface-card);
             color: var(--mj-text-secondary);
             border: 1px dashed var(--mj-status-warning);
             flex-grow: 0;
@@ -673,6 +689,11 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     public CostKpis: CostKpi[] = [];
     public DailyBars: DailyBar[] = [];
+
+    /** Label every Nth day so the axis stays legible at 30/90-day ranges (about 12 labels max). */
+    public get LabelStep(): number {
+        return Math.max(1, Math.ceil(this.DailyBars.length / 12));
+    }
     public AvgLinePercent = 0;
     public TreemapCells: TreemapCell[] = [];
     public CostByModelRows: CostByModelRow[] = [];

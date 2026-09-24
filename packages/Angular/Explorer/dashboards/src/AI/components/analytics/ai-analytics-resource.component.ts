@@ -648,7 +648,7 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
           Description: 'Failure patterns and root causes' },
         { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns',
           Description: 'Volume, frequency, and concurrency over time' },
-        { Label: 'Usage Explorer', Icon: 'fa-solid fa-table-pivot', Key: 'usage-explorer',
+        { Label: 'Usage Explorer', Icon: 'fa-solid fa-table-cells', Key: 'usage-explorer',
           Description: 'Multidimensional usage pivot across agents, models, users, and tokens' },
         { Key: 'divider2' },
         { Label: 'Realtime Voice', Icon: 'fa-solid fa-tower-broadcast', Key: 'realtime-overview',

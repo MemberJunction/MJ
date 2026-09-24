@@ -31,7 +31,7 @@ interface KpiDisplayCard {
 
 interface TopConsumer {
   Rank: number;
-  Type: 'agent' | 'prompt';
+  Type: 'agent' | 'model';
   Name: string;
   Cost: number | null;
   Proportion: number;
@@ -232,6 +232,13 @@ interface ErrorHotspot {
     }
 
     /* ─── Sparkline ───────────────────────────────────────────── */
+    .kpi-subtitle {
+      margin-top: var(--mj-space-1);
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
+      line-height: var(--mj-leading-snug);
+    }
+
     .kpi-sparkline {
       display: flex;
       align-items: flex-end;
@@ -574,7 +581,7 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   }
 
   OnConsumerClick(item: TopConsumer): void {
-    this.SectionNavigate.emit(item.Type === 'agent' ? 'agent-runs' : 'prompt-runs');
+    this.SectionNavigate.emit(item.Type === 'agent' ? 'agent-runs' : 'model-performance');
   }
 
   // ─── Formatting Helpers ──────────────────────────────────────────
@@ -854,11 +861,11 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   private buildTopConsumers(chartData: ChartData): TopConsumer[] {
     const consumers: TopConsumer[] = [];
 
-    // Add model-based consumers (from prompt runs)
+    // Model consumers (own prompt-run cost per model)
     for (const model of chartData.costByModel.slice(0, 5)) {
       consumers.push({
         Rank: 0,
-        Type: 'prompt',
+        Type: 'model',
         Name: model.model,
         Cost: model.cost,
         Proportion: 0
@@ -881,18 +888,15 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   }
 
   // ─── Private: Error Hotspots ─────────────────────────────────────
-  // Error hotspots are computed reactively when KPIs change.
-  // Since rawData$ is private on the service, we compute from the
-  // kpis errorRate + totalExecutions, and rely on chartData for names.
-  // For a richer implementation, the service could expose an errors$ stream.
-  // For now, we derive from chartData.performanceMatrix entries with low successRate.
+  // Agent × model pairs ranked by their actual failed-run count for the period (a rate alone would
+  // rank one failure in two runs above forty in a thousand).
 
   private buildErrorHotspots(chartData: ChartData): ErrorHotspot[] {
     const hotspots: ErrorHotspot[] = [];
 
     for (const entry of chartData.performanceMatrix) {
-      if (entry.successRate < 1.0) {
-        const errorCount = Math.round((1 - entry.successRate) * 10); // approximate
+      if (entry.FailedRuns > 0) {
+        const errorCount = entry.FailedRuns;
         hotspots.push({
           Source: `${entry.agent} / ${entry.model}`,
           ErrorMessage: `${((1 - entry.successRate) * 100).toFixed(0)}% failure rate (avg ${(entry.avgTime / 1000).toFixed(1)}s)`,

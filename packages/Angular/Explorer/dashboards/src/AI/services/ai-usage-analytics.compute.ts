@@ -560,7 +560,7 @@ export function ComputePerformanceMatrix(
   rows: AIUsageHourlyRow[],
   modelNames?: Map<string, string>,
   agentNames?: Map<string, string>
-): { agent: string; model: string; avgTime: number; successRate: number }[] {
+): { agent: string; model: string; avgTime: number; successRate: number; FailedRuns: number }[] {
   const groups = new Map<string, AIUsageHourlyRow[]>();
 
   for (const r of rows) {
@@ -575,7 +575,7 @@ export function ComputePerformanceMatrix(
     }
   }
 
-  const result: { agent: string; model: string; avgTime: number; successRate: number }[] = [];
+  const result: { agent: string; model: string; avgTime: number; successRate: number; FailedRuns: number }[] = [];
 
   for (const [key, pairRows] of groups.entries()) {
     const [agentId, modelId] = key.split(':');
@@ -586,7 +586,8 @@ export function ComputePerformanceMatrix(
       agent: agentName,
       model: modelName,
       avgTime: ComputeAverageExecutionTime(pairRows),
-      successRate: ComputeSuccessRate(pairRows)
+      successRate: ComputeSuccessRate(pairRows),
+      FailedRuns: pairRows.reduce((sum, r) => sum + (r.FailedRuns ?? 0), 0)
     });
   }
 

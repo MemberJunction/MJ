@@ -62,7 +62,7 @@ interface NavigationCard {
           <span class="stat-label">Models</span>
         </div>
         <div class="stat-pill">
-          <i class="fa-solid fa-message-lines"></i>
+          <i class="fa-solid fa-comment-dots"></i>
           <span class="stat-value">{{ PromptCount }}</span>
           <span class="stat-label">Prompts</span>
         </div>
@@ -368,7 +368,7 @@ export class AIOverviewHubComponent extends BaseResourceComponent implements OnI
   }
 
   async GetResourceIconClass(data: ResourceData): Promise<string> {
-    return 'fa-solid fa-grid-2';
+    return 'fa-solid fa-table-cells-large';
   }
 
   /**
@@ -418,7 +418,7 @@ export class AIOverviewHubComponent extends BaseResourceComponent implements OnI
         Key: 'prompts',
         Title: 'Prompts',
         Description: 'Manage prompt templates, categories, and model priority assignments.',
-        Icon: 'fa-solid fa-message-lines',
+        Icon: 'fa-solid fa-comment-dots',
         ColorClass: 'card-prompts',
         NavItemLabel: 'Prompts',
         Stats: [

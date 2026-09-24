@@ -6,7 +6,9 @@ import {
     ChangeDetectorRef,
     inject
 } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { PivotMeasureColumn, PivotTimeGrain } from '@memberjunction/ng-query-viewer';
@@ -43,6 +45,43 @@ const MEASURE_COLUMNS: Record<string, PivotMeasureColumn[]> = {
         { Key: 'UnmeasuredRuns', Label: 'Unmeasured Runs', Format: 'number', Aggregation: 'sum' }
     ]
 };
+
+/**
+ * A group-by dimension. ID dimensions carry a display-name column that the explorer fills in from
+ * cached reference data; the pivot groups by BOTH (so two records that share a name stay apart) and
+ * shows only the name, while the ID stays on each row for drill-through.
+ */
+interface UsageDimension {
+    Key: string;
+    NameColumn?: string;
+    Label: string;
+    /** Display value for rows with no value in this dimension (e.g. a direct run has no agent). */
+    Empty: string;
+}
+
+const DIMENSIONS: UsageDimension[] = [
+    { Key: 'AgentID', NameColumn: 'Agent', Label: 'Agent', Empty: '(No agent — direct)' },
+    { Key: 'PromptID', NameColumn: 'Prompt', Label: 'Prompt', Empty: '(No prompt)' },
+    { Key: 'ModelID', NameColumn: 'Model', Label: 'Model', Empty: '(No model)' },
+    { Key: 'VendorID', NameColumn: 'Vendor', Label: 'Vendor', Empty: '(No vendor)' },
+    { Key: 'UserID', NameColumn: 'User', Label: 'User', Empty: '(No user)' },
+    // The tenant is the scope RECORD; PrimaryScopeEntityID is only its entity type, the same for every row.
+    { Key: 'PrimaryScopeRecordID', Label: 'Tenant', Empty: '(No tenant)' },
+    { Key: 'SourceKind', Label: 'Source', Empty: '(Unknown)' },
+    { Key: 'ConfigurationID', NameColumn: 'Configuration', Label: 'Configuration', Empty: '(Default)' }
+];
+
+const DIMENSION_BY_KEY = new Map(DIMENSIONS.map(d => [d.Key, d]));
+
+/** Header titles for the pivot: name columns, plain dimensions, currency and the time bucket. */
+const COLUMN_LABELS: Record<string, string> = {
+    ...Object.fromEntries(DIMENSIONS.map(d => [d.NameColumn ?? d.Key, d.Label])),
+    CostCurrency: 'Currency',
+    DayBucket: 'Day',
+    HourBucket: 'Hour'
+};
+
+const GUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 /**
  * AI Usage Explorer Component.
@@ -84,7 +123,10 @@ export class UsageExplorerComponent extends BaseAngularComponent implements OnIn
     get Filters(): GlobalFilterState | undefined { return this._filters; }
 
     private _rowsData: Record<string, unknown>[] | null | undefined;
-    /** Rows supplied by a host; when set, they are pivoted as-is and nothing is queried. */
+    /**
+     * Rows supplied by a host; when set, they are pivoted as-is and nothing is queried. Name columns
+     * the rows carry are kept; an ID dimension without one shows the ID.
+     */
     @Input()
     set RowsData(value: Record<string, unknown>[] | null | undefined) {
         if (value === this._rowsData) return;
@@ -129,7 +171,10 @@ export class UsageExplorerComponent extends BaseAngularComponent implements OnIn
     /** Measures for the selected measure option — replaced only when SelectedMeasure changes. */
     public MeasureColumns: PivotMeasureColumn[] = MEASURE_COLUMNS['cost'];
     /** Group-by columns — replaced only when SelectedGroupBy / SelectedSecondarySplit change. */
-    public DimensionColumns: string[] = ['AgentID'];
+    public DimensionColumns: string[] = ['AgentID', 'Agent'];
+    /** ID columns grouped by but not shown (their name column is shown instead). */
+    public HiddenColumns: string[] = ['AgentID'];
+    public readonly ColumnLabels = COLUMN_LABELS;
     /** Time bucket column for the selected grain. */
     public TimeColumn = 'DayBucket';
 
@@ -142,28 +187,9 @@ export class UsageExplorerComponent extends BaseAngularComponent implements OnIn
         { text: 'Unpriced %', value: 'unpriced_pct' }
     ];
 
-    public readonly DimensionOptions = [
-        { text: 'Agent', value: 'AgentID' },
-        { text: 'Prompt', value: 'PromptID' },
-        { text: 'Model', value: 'ModelID' },
-        { text: 'Vendor', value: 'VendorID' },
-        { text: 'User', value: 'UserID' },
-        { text: 'Tenant / Scope', value: 'PrimaryScopeEntityID' },
-        { text: 'Source Kind', value: 'SourceKind' },
-        { text: 'Configuration', value: 'ConfigurationID' }
-    ];
+    public readonly DimensionOptions = DIMENSIONS.map(d => ({ text: d.Label, value: d.Key }));
 
-    public readonly SecondarySplitOptions = [
-        { text: '(None)', value: '' },
-        { text: 'Agent', value: 'AgentID' },
-        { text: 'Prompt', value: 'PromptID' },
-        { text: 'Model', value: 'ModelID' },
-        { text: 'Vendor', value: 'VendorID' },
-        { text: 'User', value: 'UserID' },
-        { text: 'Tenant / Scope', value: 'PrimaryScopeEntityID' },
-        { text: 'Source Kind', value: 'SourceKind' },
-        { text: 'Configuration', value: 'ConfigurationID' }
-    ];
+    public readonly SecondarySplitOptions = [{ text: '(None)', value: '' }, ...this.DimensionOptions];
 
     public readonly GrainOptions = [
         { text: 'Hourly', value: 'hour' },
@@ -182,7 +208,10 @@ export class UsageExplorerComponent extends BaseAngularComponent implements OnIn
 
     public async LoadData(): Promise<void> {
         if (this.RowsData !== null && this.RowsData !== undefined) {
-            this.PivotRows = this.RowsData;
+            // Copied, not mutated: the name columns are filled in on the copies.
+            const rows = this.RowsData.map(r => ({ ...r }));
+            this.applyDisplayNames(rows, {});
+            this.PivotRows = rows;
             this.cdr.markForCheck();
             return;
         }
@@ -214,6 +243,8 @@ export class UsageExplorerComponent extends BaseAngularComponent implements OnIn
                     prevRows = this.applyFilters(rawPrev.map(r => this.rowToRecord(r)));
                 }
             }
+
+            await this.addDisplayNames([...currentRows, ...prevRows]);
 
             if (this.ComparisonEnabled) {
                 const taggedCurrent = currentRows.map(r => ({ ...r, _period: 'current' }));
@@ -303,11 +334,93 @@ export class UsageExplorerComponent extends BaseAngularComponent implements OnIn
     }
 
     private rebuildDimensionColumns(): void {
-        const cols = [this.SelectedGroupBy];
+        const selected = [this.SelectedGroupBy];
         if (this.SelectedSecondarySplit && this.SelectedSecondarySplit !== this.SelectedGroupBy) {
-            cols.push(this.SelectedSecondarySplit);
+            selected.push(this.SelectedSecondarySplit);
+        }
+        const cols: string[] = [];
+        const hidden: string[] = [];
+        for (const key of selected) {
+            const dim = DIMENSION_BY_KEY.get(key);
+            cols.push(key);
+            if (dim?.NameColumn) {
+                cols.push(dim.NameColumn);
+                hidden.push(key);
+            }
         }
         this.DimensionColumns = cols;
+        this.HiddenColumns = hidden;
+    }
+
+    /**
+     * Adds a display-name column for every ID dimension, and a readable value for rows that have
+     * none. Agent, prompt, model, vendor and configuration names come from AIEngineBase's cached
+     * reference data (no query); user names are one bounded read of the IDs actually present.
+     */
+    private async addDisplayNames(rows: Record<string, unknown>[]): Promise<void> {
+        if (rows.length === 0) {
+            return;
+        }
+        const engine = AIEngineBase.Instance;
+        try {
+            await engine.Config(false, undefined, this.ProviderToUse);
+        } catch (err) {
+            // Names are a convenience: without the engine the pivot still works, showing IDs.
+            console.error('AI Usage Explorer: AI metadata failed to load; showing IDs', err);
+        }
+        const byId = (items: { ID: string; Name: string | null }[] | undefined) =>
+            new Map((items ?? []).map(i => [NormalizeUUID(i.ID), i.Name ?? i.ID]));
+        const names: Record<string, Map<string, string>> = {
+            AgentID: byId(engine.Agents),
+            PromptID: byId(engine.Prompts),
+            ModelID: byId(engine.Models),
+            VendorID: byId(engine.Vendors),
+            ConfigurationID: byId(engine.Configurations),
+            UserID: await this.loadUserNames(rows)
+        };
+        this.applyDisplayNames(rows, names);
+    }
+
+    /**
+     * Fills each ID dimension's name column (a name the row already carries wins, then `names`, then
+     * the ID itself) and gives rows with no value a readable label instead of a blank cell.
+     */
+    private applyDisplayNames(rows: Record<string, unknown>[], names: Record<string, Map<string, string>>): void {
+        for (const row of rows) {
+            for (const dim of DIMENSIONS) {
+                const value = row[dim.Key];
+                const has = value !== null && value !== undefined && value !== '';
+                if (dim.NameColumn) {
+                    const carried = row[dim.NameColumn];
+                    row[dim.NameColumn] = !has
+                        ? dim.Empty
+                        : typeof carried === 'string' && carried !== ''
+                            ? carried
+                            : names[dim.Key]?.get(NormalizeUUID(String(value))) ?? String(value);
+                } else if (!has) {
+                    row[dim.Key] = dim.Empty;
+                }
+            }
+        }
+    }
+
+    private async loadUserNames(rows: Record<string, unknown>[]): Promise<Map<string, string>> {
+        const ids = [...new Set(rows.map(r => r['UserID']).filter((v): v is string => typeof v === 'string' && GUID.test(v)))];
+        if (ids.length === 0) {
+            return new Map();
+        }
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<{ ID: string; Name: string }>({
+            EntityName: 'MJ: Users',
+            Fields: ['ID', 'Name'],
+            ExtraFilter: `ID IN (${ids.map(id => `'${id}'`).join(',')})`,
+            ResultType: 'simple'
+        });
+        if (!result.Success) {
+            console.error('AI Usage Explorer: user names failed to load; showing IDs', result.ErrorMessage);
+            return new Map();
+        }
+        return new Map(result.Results.map(u => [NormalizeUUID(u.ID), u.Name]));
     }
 
     /**

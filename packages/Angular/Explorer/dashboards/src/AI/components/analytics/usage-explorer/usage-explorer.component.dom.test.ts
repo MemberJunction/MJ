@@ -125,6 +125,11 @@ describe('UsageExplorerComponent (DOM)', () => {
         return fixture;
     }
 
+    it('labels a row with no agent as a direct run instead of leaving the cell blank', async () => {
+        const fixture = await createComponent([{ ...FIXTURE_DAILY_ROWS[0], AgentID: null }] as Record<string, unknown>[]);
+        expect((fixture.nativeElement as HTMLElement).textContent).toContain('(No agent — direct)');
+    });
+
     it('renders grouped rows for a fixture', async () => {
         const fixture = await createComponent(FIXTURE_DAILY_ROWS as Record<string, unknown>[]);
         const el = fixture.nativeElement as HTMLElement;
@@ -216,11 +221,19 @@ describe('UsageExplorerComponent (DOM)', () => {
             { Key: 'LatencyP50', Label: 'Avg P50 Latency', Format: 'duration', Aggregation: 'avg' }
         ]);
 
+        // Each ID dimension is grouped by ID + name; the ID column is hidden, so the name is what shows.
         component.OnGroupByChange('ModelID');
-        expect(component.DimensionColumns).toEqual(['ModelID']);
+        expect(component.DimensionColumns).toEqual(['ModelID', 'Model']);
+        expect(component.HiddenColumns).toEqual(['ModelID']);
 
         component.OnSecondarySplitChange('UserID');
-        expect(component.DimensionColumns).toEqual(['ModelID', 'UserID']);
+        expect(component.DimensionColumns).toEqual(['ModelID', 'Model', 'UserID', 'User']);
+        expect(component.HiddenColumns).toEqual(['ModelID', 'UserID']);
+
+        // A dimension with no name column is grouped and shown as-is.
+        component.OnSecondarySplitChange('SourceKind');
+        expect(component.DimensionColumns).toEqual(['ModelID', 'Model', 'SourceKind']);
+        expect(component.HiddenColumns).toEqual(['ModelID']);
 
         component.OnGrainChange('hour');
         expect(component.SelectedGrain).toBe('hour');

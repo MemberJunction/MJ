@@ -758,6 +758,14 @@ describe('ai-usage-analytics.compute', () => {
       expect(result[0].model).toBe('m1');
       expect(result[0].avgTime).toBe(150);
       expect(result[0].successRate).toBe(0.9);
+      expect(result[0].FailedRuns).toBe(1);
+    });
+
+    it('sums failed runs across the hours of one agent x model pair', () => {
+      const hour = (h: string, failed: number) => createHourlyRow({ HourBucket: h, AgentID: 'a1', ModelID: 'm1', Runs: 10, SucceededRuns: 10 - failed, FailedRuns: failed });
+      const result = ComputePerformanceMatrix([hour('2026-09-01T00:00:00Z', 2), hour('2026-09-01T01:00:00Z', 3)]);
+      expect(result).toHaveLength(1);
+      expect(result[0].FailedRuns).toBe(5);
     });
   });
 

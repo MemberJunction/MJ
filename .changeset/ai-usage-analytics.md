@@ -40,4 +40,6 @@ the reporting layer on top.
   unbounded raw rows, unpriced cost renders as an em dash rather than `$0.00`, and coverage is
   shown beside every total.
 - **`mj-query-pivot`.** A generic pivot over any saved Query in `@memberjunction/ng-query-viewer`;
-  the AI Usage Explorer is a thin configuration of it.
+  the AI Usage Explorer is a thin configuration of it. `ColumnLabels` titles columns, and
+  `HiddenColumns` lets a host group by an ID it does not display (so two records that share a name
+  stay apart while only the name shows).

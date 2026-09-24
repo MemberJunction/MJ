@@ -13,6 +13,9 @@ import {
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { CacheHitRate } from '../../../services/cache-metrics';
+import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
+import { AIUsageDailyRow, AIUsageHourlyRow } from '../../../services/ai-usage-analytics.types';
+import { ComputeTotalCost, ComputeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
 import { CompareDateCells, DateCellIso } from '../../../../shared/date-cell';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -46,13 +49,19 @@ interface PromptRunRecord {
 
 interface PromptRunStats {
     TotalRuns: number;
-    AvgCost: number;
+    AvgCost: number | null;
     AvgTokens: number;
     AvgLatencySeconds: number;
     SuccessRate: number;
     P95LatencySeconds: number;
-    TotalCost: number;
+    TotalCost: number | null;
     CacheHitRate: number;
+    /** "covers N% of runs" — cost is only ever summed over priced runs. */
+    CoverageSubtitle?: string;
+    /** True when the totals come from the latest-runs sample rather than the period aggregates. */
+    FromSample: boolean;
+    /** How many recent runs the latency figures are taken over. */
+    LatencySampleSize: number;
 }
 
 interface ChartBucket {
@@ -102,6 +111,9 @@ const PAGE_SIZE = 25;
                 <div class="stat-card accent-brand">
                     <div class="stat-label">Total Runs</div>
                     <div class="stat-value">{{ Stats.TotalRuns | number }}</div>
+                    @if (Stats.FromSample && IsSampleTruncated) {
+                        <div class="stat-subtitle">within the latest {{ SampleSize | number }} runs</div>
+                    }
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Avg Cost</div>
@@ -114,6 +126,9 @@ const PAGE_SIZE = 25;
                 <div class="stat-card">
                     <div class="stat-label">Avg Latency</div>
                     <div class="stat-value">{{ Stats.AvgLatencySeconds | number:'1.2-2' }}s</div>
+                    @if (!Stats.FromSample && Stats.LatencySampleSize > 0) {
+                        <div class="stat-subtitle">latest {{ Stats.LatencySampleSize | number }} runs</div>
+                    }
                 </div>
                 <div class="stat-card accent-success">
                     <div class="stat-label">Success Rate</div>
@@ -122,10 +137,16 @@ const PAGE_SIZE = 25;
                 <div class="stat-card accent-warning">
                     <div class="stat-label">P95 Latency</div>
                     <div class="stat-value">{{ Stats.P95LatencySeconds | number:'1.2-2' }}s</div>
+                    @if (!Stats.FromSample && Stats.LatencySampleSize > 0) {
+                        <div class="stat-subtitle">latest {{ Stats.LatencySampleSize | number }} runs</div>
+                    }
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">Total Cost</div>
                     <div class="stat-value">{{ FormatCurrency(Stats.TotalCost, 2) }}</div>
+                    @if (Stats.CoverageSubtitle) {
+                        <div class="stat-subtitle">{{ Stats.CoverageSubtitle }}</div>
+                    }
                 </div>
                 <div class="stat-card" title="Share of input tokens served from the provider's prompt cache">
                     <div class="stat-label">Cache Hit Rate</div>
@@ -147,13 +168,13 @@ const PAGE_SIZE = 25;
                             Title="No data for selected time range" />
                     } @else {
                         <div class="chart-bars">
-                            @for (bucket of ChartBuckets; track bucket.label) {
+                            @for (bucket of ChartBuckets; track bucket.startTime.getTime(); let i = $index, count = $count) {
                                 <div
                                     class="chart-bar-wrapper"
                                     [title]="bucket.label + ': ' + bucket.value">
-                                    <div class="chart-bar-value">{{ FormatChartValue(bucket.value) }}</div>
+                                    <div class="chart-bar-value">{{ bucket.value ? FormatChartValue(bucket.value) : '' }}</div>
                                     <div class="chart-bar" [style.height.%]="bucket.heightPercent"></div>
-                                    <div class="chart-bar-label">{{ bucket.label }}</div>
+                                    <div class="chart-bar-label" [class.chart-bar-label--skipped]="i % ChartLabelStep(count) !== 0">{{ bucket.label }}</div>
                                 </div>
                             }
                         </div>
@@ -162,6 +183,9 @@ const PAGE_SIZE = 25;
             </div>
 
             <!-- Breakdown Cards -->
+            @if (IsSampleTruncated) {
+                <div class="sample-note">Breakdowns and run details cover the latest {{ SampleSize | number }} runs in this period.</div>
+            }
             <div class="breakdown-grid">
                 <!-- By Model -->
                 <div class="breakdown-card">
@@ -217,7 +241,7 @@ const PAGE_SIZE = 25;
             <div class="table-panel">
                 <div class="table-header">
                     <h3 class="table-title">Run Details</h3>
-                    <span class="table-count">showing latest {{ FilteredRuns.length | number }} of {{ AllRuns.length | number }} runs</span>
+                    <span class="table-count">{{ TableCountLabel }}</span>
                 </div>
                 <div class="table-scroll">
                     <table class="runs-table">
@@ -245,7 +269,7 @@ const PAGE_SIZE = 25;
                                     <td><span class="status-pill" [class]="GetStatusClass(run.Status)">{{ run.Status }}</span></td>
                                     <td class="cell-number">{{ FormatDuration(run.ExecutionTimeMS) }}</td>
                                     <td class="cell-number" title="Total tokens processed, including cached input">{{ run.TokensUsed != null ? (TrueTotalTokens(run) | number) : '-' }}</td>
-                                    <td class="cell-number">{{ FormatCurrency(run.Cost, 4) }}</td>
+                                    <td class="cell-number" [title]="run.Cost == null ? 'Unpriced — no pricing for this model' : ''">{{ FormatCurrency(run.Cost, 4) }}</td>
                                 </tr>
                             }
                             @if (PagedRuns.length === 0) {
@@ -290,6 +314,17 @@ const PAGE_SIZE = 25;
         }
 
         /* ── Stats Grid ── */
+        .stat-subtitle {
+            margin-top: var(--mj-space-1);
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
+        }
+
+        .sample-note {
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
+        }
+
 
         .stats-grid {
             display: grid;
@@ -419,14 +454,21 @@ const PAGE_SIZE = 25;
         .chart-bar-label {
             font-size: 10px;
             color: var(--mj-text-muted);
-            margin-top: 6px;
+            margin-top: 4px;
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
+            /* Wider than its bar on a 30-day range: centred on the bar, it spills evenly into the
+               neighbours, whose labels ChartLabelStep has hidden. It hangs below the bar, in the strip
+               .chart-bars reserves with padding-bottom (at bottom: 0 it was drawn over the bar). */
+            width: max-content;
             text-align: center;
             position: absolute;
-            bottom: 0;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .chart-bar-label--skipped {
+            visibility: hidden;
         }
 
         /* ── Breakdown Cards ── */
@@ -735,6 +777,16 @@ const PAGE_SIZE = 25;
 })
 export class AnalyticsPromptRunsComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private instrumentation = inject(AIInstrumentationService);
+    /** Period aggregates for ranges of a day or more (hourly for 24h, daily beyond). */
+    private usageRows: (AIUsageHourlyRow | AIUsageDailyRow)[] = [];
+    private usageGrain: 'hour' | 'day' | null = null;
+    /** Runs loaded for the breakdowns, latency and the run table (newest first). */
+    public readonly SampleSize = 1000;
+    /** True when the period holds more runs than the sample, so the per-run views are partial. */
+    public get IsSampleTruncated(): boolean {
+        return this.AllRuns.length >= this.SampleSize;
+    }
     private destroy$ = new Subject<void>();
     private isInitialized = false;
 
@@ -931,8 +983,9 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
 
     // ── Formatting Helpers ──
 
+    /** A null cost is an unpriced run (no pricing row for the model), not a free one. */
     public FormatCurrency(value: number | null, decimals: number): string {
-        if (value == null || isNaN(value)) return '$0.00';
+        if (value == null || isNaN(value)) return '—';
         return '$' + value.toFixed(decimals);
     }
 
@@ -946,6 +999,21 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         if (ms == null) return '-';
         if (ms < 1000) return ms + 'ms';
         return (ms / 1000).toFixed(2) + 's';
+    }
+
+    /** The run table's scope: all runs in the period, or a slice of the latest-runs sample. */
+    public get TableCountLabel(): string {
+        const shown = this.FilteredRuns.length.toLocaleString();
+        if (!this.IsSampleTruncated) {
+            return `${shown} runs`;
+        }
+        const sample = this.SampleSize.toLocaleString();
+        return this.FilteredRuns.length === this.AllRuns.length ? `latest ${sample} runs` : `${shown} of the latest ${sample} runs`;
+    }
+
+    /** Show every Nth bar label so 30 daily / 25 hourly labels never truncate into each other. */
+    public ChartLabelStep(count: number): number {
+        return Math.max(1, Math.ceil(count / 16));
     }
 
     public FormatChartValue(value: number): string {
@@ -977,14 +1045,28 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
             const cutoff = this.getTimeRangeCutoff(this._timeRange);
             const filter = cutoff ? `RunAt >= '${cutoff.toISOString()}'` : '';
 
-            const result = await rv.RunView<PromptRunRecord>({
-                EntityName: 'MJ: AI Prompt Runs',
-                ExtraFilter: filter,
-                OrderBy: 'RunAt DESC',
-                Fields: FIELDS,
-                MaxRows: 1000,
-                ResultType: 'simple'
-            });
+            // The run list is the latest 1,000 runs; the period totals and the chart come from the
+            // usage aggregates, so a busy period is never reported as "1,000 runs".
+            this.usageGrain = this._timeRange === '24h' ? 'hour' : (this._timeRange === '7d' || this._timeRange === '30d') ? 'day' : null;
+            this.instrumentation.Provider = this.ProviderToUse;
+            const now = new Date();
+            const [result, usage] = await Promise.all([
+                rv.RunView<PromptRunRecord>({
+                    EntityName: 'MJ: AI Prompt Runs',
+                    ExtraFilter: filter,
+                    OrderBy: 'RunAt DESC',
+                    Fields: FIELDS,
+                    MaxRows: this.SampleSize,
+                    ResultType: 'simple'
+                }),
+                this.usageGrain === 'hour' && cutoff ? this.instrumentation.GetUsageHourly(cutoff, now)
+                    : this.usageGrain === 'day' && cutoff ? this.instrumentation.GetUsageDaily(cutoff, now)
+                    : Promise.resolve([] as (AIUsageHourlyRow | AIUsageDailyRow)[])
+            ]);
+            this.usageRows = usage;
+            if (!result.Success) {
+                console.error('Prompt Run Analysis: prompt runs failed to load', result.ErrorMessage);
+            }
 
             if (result.Success) {
                 this.AllRuns = result.Results;
@@ -1030,36 +1112,142 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
     }
 
     private computeStats(runs: PromptRunRecord[]): PromptRunStats {
-        const total = runs.length;
-        if (total === 0) {
-            return { TotalRuns: 0, AvgCost: 0, AvgTokens: 0, AvgLatencySeconds: 0, SuccessRate: 0, P95LatencySeconds: 0, TotalCost: 0, CacheHitRate: 0 };
-        }
-
-        const totalCost = this.sumNullable(runs, r => r.Cost);
-        const totalTokens = runs.reduce((sum, r) => sum + this.TrueTotalTokens(r), 0);
         const latencies = this.collectNonNull(runs, r => r.ExecutionTimeMS);
         const avgLatencyMs = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
-        const successCount = runs.filter(r => r.Status === 'Completed').length;
         const p95 = this.percentile(latencies, 95);
-        const cacheHit = CacheHitRate({
-            UncachedInputTokens: this.sumNullable(runs, r => r.TokensPrompt),
-            CacheReadTokens: this.sumNullable(runs, r => r.TokensCacheRead),
-            CacheWriteTokens: this.sumNullable(runs, r => r.TokensCacheWrite)
-        });
 
+        if (this.useAggregates) {
+            const usage = this.filteredUsageRows();
+            const totalRuns = usage.reduce((sum, r) => sum + (r.Runs ?? 0), 0);
+            const priced = usage.reduce((sum, r) => sum + (r.PricedRuns ?? 0), 0);
+            const unpriced = usage.reduce((sum, r) => sum + (r.UnpricedRuns ?? 0), 0);
+            const totalCost = totalRuns > 0 ? ComputeTotalCost(usage) : 0;
+            const tokens = usage.reduce((sum, r) => sum + (r.TokensPrompt ?? 0) + (r.TokensCompletion ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0), 0);
+            const succeeded = usage.reduce((sum, r) => sum + (r.SucceededRuns ?? 0), 0);
+            return {
+                TotalRuns: totalRuns,
+                TotalCost: totalCost,
+                AvgCost: totalCost !== null && priced > 0 ? totalCost / priced : null,
+                AvgTokens: totalRuns > 0 ? tokens / totalRuns : 0,
+                SuccessRate: totalRuns > 0 ? (succeeded / totalRuns) * 100 : 0,
+                CacheHitRate: CacheHitRate({
+                    UncachedInputTokens: usage.reduce((sum, r) => sum + (r.TokensPrompt ?? 0), 0),
+                    CacheReadTokens: usage.reduce((sum, r) => sum + (r.TokensCacheRead ?? 0), 0),
+                    CacheWriteTokens: usage.reduce((sum, r) => sum + (r.TokensCacheWrite ?? 0), 0)
+                }),
+                CoverageSubtitle: priced + unpriced > 0 ? `covers ${Math.round(ComputeCoveragePercent({ PricedRuns: priced, UnpricedRuns: unpriced }))}% of runs` : undefined,
+                AvgLatencySeconds: avgLatencyMs / 1000,
+                P95LatencySeconds: p95 / 1000,
+                FromSample: false,
+                LatencySampleSize: latencies.length
+            };
+        }
+
+        const total = runs.length;
+        if (total === 0) {
+            return { TotalRuns: 0, AvgCost: null, AvgTokens: 0, AvgLatencySeconds: 0, SuccessRate: 0, P95LatencySeconds: 0, TotalCost: 0, CacheHitRate: 0, FromSample: true, LatencySampleSize: 0 };
+        }
+        // Unpriced runs (Cost null) stay out of the cost sum and the average instead of counting as $0.
+        const pricedRuns = runs.filter(r => r.Cost !== null && r.Cost !== undefined);
+        const totalCost = pricedRuns.length > 0 ? pricedRuns.reduce((sum, r) => sum + (r.Cost as number), 0) : null;
+        const totalTokens = runs.reduce((sum, r) => sum + this.TrueTotalTokens(r), 0);
+        const successCount = runs.filter(r => r.Success === true).length;
         return {
             TotalRuns: total,
-            AvgCost: totalCost / total,
+            TotalCost: totalCost,
+            AvgCost: totalCost !== null ? totalCost / pricedRuns.length : null,
             AvgTokens: totalTokens / total,
             AvgLatencySeconds: avgLatencyMs / 1000,
             SuccessRate: (successCount / total) * 100,
             P95LatencySeconds: p95 / 1000,
-            TotalCost: totalCost,
-            CacheHitRate: cacheHit,
+            CacheHitRate: CacheHitRate({
+                UncachedInputTokens: this.sumNullable(runs, r => r.TokensPrompt),
+                CacheReadTokens: this.sumNullable(runs, r => r.TokensCacheRead),
+                CacheWriteTokens: this.sumNullable(runs, r => r.TokensCacheWrite)
+            }),
+            CoverageSubtitle: `covers ${Math.round((pricedRuns.length / total) * 100)}% of runs`,
+            FromSample: true,
+            LatencySampleSize: latencies.length
         };
     }
 
+    /**
+     * Totals and the chart come from the period aggregates when the range has them (24h / 7d / 30d)
+     * and no status filter is set (the aggregates carry no status). Empty aggregates next to a
+     * non-empty sample mean the aggregate query failed or is not deployed, so the sample is used.
+     */
+    private get useAggregates(): boolean {
+        return this.usageGrain !== null
+            && this._filters.Statuses.length === 0
+            && (this.usageRows.length > 0 || this.AllRuns.length === 0);
+    }
+
+    /** Period aggregates narrowed by the model / agent / prompt filters (case-insensitive IDs). */
+    private filteredUsageRows(): (AIUsageHourlyRow | AIUsageDailyRow)[] {
+        const set = (ids: string[]) => ids.length > 0 ? new Set(ids.map(i => i.toLowerCase())) : null;
+        const models = set(this._filters.Models);
+        const agents = set(this._filters.Agents);
+        const prompts = set(this._filters.Prompts);
+        const ok = (value: string | null, allowed: Set<string> | null) => allowed === null || (value !== null && allowed.has(value.toLowerCase()));
+        return this.usageRows.filter(r => ok(r.ModelID, models) && ok(r.AgentID, agents) && ok(r.PromptID, prompts));
+    }
+
+    /** Buckets straight from the aggregates: one per UTC hour (24h) or UTC day (7d/30d). */
+    private computeUsageChartBuckets(): ChartBucket[] {
+        const rows = this.filteredUsageRows();
+        if (rows.length === 0) {
+            return [];
+        }
+        const bucketMs = this.usageGrain === 'hour' ? 3600000 : 86400000;
+        const cutoff = this.getTimeRangeCutoff(this._timeRange)!;
+        const first = Math.floor(cutoff.getTime() / bucketMs) * bucketMs;
+        const now = Date.now();
+        const values = new Map<number, { total: number; cacheRead: number; input: number; priced: number; unpriced: number }>();
+        for (const r of rows) {
+            const raw = 'HourBucket' in r ? r.HourBucket : r.DayBucket;
+            const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(raw) || raw.length <= 10 ? raw : raw + 'Z';
+            const key = Math.floor(new Date(iso).getTime() / bucketMs) * bucketMs;
+            const v = values.get(key) ?? { total: 0, cacheRead: 0, input: 0, priced: 0, unpriced: 0 };
+            switch (this.ActiveChartMetric) {
+                case 'cost': v.total += r.OwnCost ?? 0; break;
+                case 'tokens': v.total += (r.TokensPrompt ?? 0) + (r.TokensCompletion ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0); break;
+                default: v.total += r.Runs ?? 0;
+            }
+            v.cacheRead += r.TokensCacheRead ?? 0;
+            v.input += (r.TokensPrompt ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0);
+            v.priced += r.PricedRuns ?? 0;
+            v.unpriced += r.UnpricedRuns ?? 0;
+            values.set(key, v);
+        }
+
+        const buckets: { label: string; total: number; start: Date; end: Date }[] = [];
+        for (let t = first; t <= now; t += bucketMs) {
+            const v = values.get(t);
+            let total = v?.total ?? 0;
+            if (v && this.ActiveChartMetric === 'cacheHit') {
+                total = v.input > 0 ? (v.cacheRead / v.input) * 100 : 0;
+            }
+            const start = new Date(t);
+            const label = this.usageGrain === 'hour'
+                ? start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                : start.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+            buckets.push({ label, total, start, end: new Date(t + bucketMs) });
+        }
+
+        const max = Math.max(...buckets.map(b => b.total), 1);
+        return buckets.map(b => ({
+            label: b.label,
+            value: Math.round(b.total * 100) / 100,
+            heightPercent: Math.max((b.total / max) * 100, 1),
+            startTime: b.start,
+            endTime: b.end,
+        }));
+    }
+
     private computeChartBuckets(runs: PromptRunRecord[]): ChartBucket[] {
+        if (this.useAggregates) {
+            return this.computeUsageChartBuckets();
+        }
         if (runs.length === 0) return [];
 
         const bucketCount = this.getBucketCount();

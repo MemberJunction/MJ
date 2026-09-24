@@ -302,7 +302,7 @@ const FIELDS = [
 
         .last-error-time {
             font-size: 12px;
-            color: var(--mj-text-disabled);
+            color: var(--mj-text-muted);
             white-space: nowrap;
         }
 
@@ -318,7 +318,7 @@ const FIELDS = [
         }
 
         .preview-label {
-            color: var(--mj-text-disabled);
+            color: var(--mj-text-muted);
             margin-right: 4px;
         }
 
@@ -353,7 +353,7 @@ const FIELDS = [
 
         .error-detail__duration {
             font-size: 11px;
-            color: var(--mj-text-disabled);
+            color: var(--mj-text-muted);
             font-variant-numeric: tabular-nums;
         }
 

@@ -109,12 +109,12 @@ const DONUT_COLORS = [
                                 Title="No sessions in the selected period" />
                         } @else {
                             <div class="bars">
-                                @for (bucket of TimeBuckets; track bucket.Label) {
+                                @for (bucket of TimeBuckets; track bucket.Label; let i = $index, count = $count) {
                                     <div class="bcol" [title]="bucket.Label + ': ' + bucket.Count + ' session(s)'">
                                         <div class="bar"
                                              [class.bar--accent]="bucket.DelegatedHeavy"
                                              [style.height.%]="bucket.HeightPercent"></div>
-                                        <div class="blabel">{{ bucket.Label }}</div>
+                                        <div class="blabel" [class.blabel--skipped]="i % LabelStep(count) !== 0">{{ bucket.Label }}</div>
                                     </div>
                                 }
                             </div>
@@ -345,14 +345,17 @@ const DONUT_COLORS = [
                 color-mix(in srgb, var(--mj-status-success) 55%, transparent));
         }
 
+        /* Centred on its bar and allowed to spill into the neighbours, whose labels LabelStep hides. */
         .blabel {
             margin-top: 6px;
             font-size: 10px;
             color: var(--mj-text-muted);
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
+            width: max-content;
+        }
+
+        .blabel--skipped {
+            visibility: hidden;
         }
 
         /* ── Donut ── */
@@ -688,9 +691,15 @@ export class AnalyticsRealtimeOverviewComponent extends BaseAngularComponent imp
         ];
     }
 
+    /** Show every Nth bar label so 24 hourly / 30 daily labels never run into each other. */
+    public LabelStep(count: number): number {
+        return Math.max(1, Math.ceil(count / 12));
+    }
+
     private buildTimeBuckets(): void {
         const ds = this.dataset;
-        if (!ds) { this.TimeBuckets = []; return; }
+        // No sessions in the window: an empty bucket list renders the empty state, not a row of blank bars.
+        if (!ds || this.windowSessions.length === 0) { this.TimeBuckets = []; return; }
 
         const hourly = this.TimeRange === '24h';
         const bucketMs = hourly ? 3_600_000 : 86_400_000;

@@ -333,12 +333,17 @@ function buildGridColumns(
     const columns: QueryGridColumnConfig[] = [];
     let order = 0;
 
+    const labels = config.ColumnLabels ?? {};
+    const hidden = new Set(config.HiddenColumns ?? []);
     for (const dim of effectiveDimensions(config)) {
-        columns.push(createGridColumn(dim, dim, order++, 'left', 'nvarchar'));
+        const column = createGridColumn(dim, labels[dim] ?? dim, order++, 'left', 'nvarchar');
+        column.visible = !hidden.has(dim);
+        columns.push(column);
     }
 
     if (config.TimeColumn && config.Grain) {
-        const timeHeader = config.Grain === 'hour' ? `${config.TimeColumn} (Hour)` : `${config.TimeColumn} (Day)`;
+        const timeHeader = labels[config.TimeColumn]
+            ?? (config.Grain === 'hour' ? `${config.TimeColumn} (Hour)` : `${config.TimeColumn} (Day)`);
         columns.push(createGridColumn(config.TimeColumn, timeHeader, order++, 'left', 'nvarchar'));
     }
 

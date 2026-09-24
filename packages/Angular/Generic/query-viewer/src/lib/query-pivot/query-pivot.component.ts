@@ -169,6 +169,26 @@ export class QueryPivotComponent extends BaseAngularComponent implements OnInit,
     }
     get ComparisonPeriodColumn(): string | null { return this._comparisonPeriodColumn; }
 
+    private _columnLabels: Record<string, string> = {};
+    /** Header titles for dimension/time columns, keyed by column name. */
+    @Input()
+    set ColumnLabels(value: Record<string, string>) {
+        if (value === this._columnLabels) return;
+        this._columnLabels = value ?? {};
+        this.onPivotConfigChanged();
+    }
+    get ColumnLabels(): Record<string, string> { return this._columnLabels; }
+
+    private _hiddenColumns: string[] = [];
+    /** Dimension columns used for grouping but not displayed (e.g. an ID shown via its name column). */
+    @Input()
+    set HiddenColumns(value: string[]) {
+        if (value === this._hiddenColumns) return;
+        this._hiddenColumns = value ?? [];
+        this.onPivotConfigChanged();
+    }
+    get HiddenColumns(): string[] { return this._hiddenColumns; }
+
     // ========================================
     // Inputs: Data & Display Overrides
     // ========================================
@@ -351,7 +371,9 @@ export class QueryPivotComponent extends BaseAngularComponent implements OnInit,
             TimeColumn: this.TimeColumn,
             Grain: this.Grain,
             ComparisonWindow: this.ComparisonWindow,
-            ComparisonPeriodColumn: this.ComparisonPeriodColumn
+            ComparisonPeriodColumn: this.ComparisonPeriodColumn,
+            ColumnLabels: this.ColumnLabels,
+            HiddenColumns: this.HiddenColumns
         };
 
         const pivotResult = ComputePivot(rows, config);

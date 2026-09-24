@@ -52,6 +52,8 @@ interface AgentRunStats {
     AvgCostPerRun: number | null;
     SuccessRate: number;
     AvgDurationSeconds: number;
+    /** How many recent runs the duration average is taken over (the list is capped). */
+    DurationSampleSize: number;
 }
 
 interface CostAttributionRow {
@@ -87,11 +89,18 @@ const AGENT_RUN_FIELDS = [
     'TotalCost', 'TotalTokensUsed', 'AgentID', 'Agent', 'ErrorMessage', 'TotalPromptIterations'
 ];
 
+// Vendors are categories, so they take the categorical --mj-viz palette; brand/status tokens were
+// all blues and greys, and two vendors read as one. The palette is a hue ramp whose neighbours are
+// close (1-3 run blue to violet), so the steps are taken spread out.
 const COST_COLORS = [
-    'var(--mj-brand-primary)',
-    'var(--mj-brand-accent, var(--mj-brand-primary-hover))',
-    'var(--mj-status-info)',
-    'var(--mj-text-disabled)'
+    'var(--mj-viz-1)',
+    'var(--mj-viz-6)',
+    'var(--mj-viz-3)',
+    'var(--mj-viz-9)',
+    'var(--mj-viz-5)',
+    'var(--mj-viz-8)',
+    'var(--mj-viz-4)',
+    'var(--mj-viz-10)'
 ];
 
 @Component({
@@ -133,6 +142,9 @@ const COST_COLORS = [
                 <div class="stat-card">
                     <div class="stat-label">Avg Duration</div>
                     <div class="stat-value">{{ Stats.AvgDurationSeconds | number:'1.1-1' }}s</div>
+                    @if (Stats.DurationSampleSize > 0 && Stats.DurationSampleSize < Stats.TotalRuns) {
+                        <div class="stat-subtitle">last {{ Stats.DurationSampleSize }} completed runs</div>
+                    }
                 </div>
             </div>
 
@@ -582,7 +594,8 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
         PromptRuns: 0,
         AvgCostPerRun: 0,
         SuccessRate: 0,
-        AvgDurationSeconds: 0
+        AvgDurationSeconds: 0,
+        DurationSampleSize: 0
     };
 
     public CostAttributionRows: CostAttributionRow[] = [];
@@ -618,6 +631,10 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
     private instrumentation = inject(AIInstrumentationService);
 
     private agentRuns: AgentRunRecord[] = [];
+
+    private totalRunCount = 0;
+
+    private successRunCount = 0;
     /** Usage aggregate rows for agent-driven prompt runs in the period (AgentID set, agent filter applied). */
     private agentUsageRows: UsageRow[] = [];
     private vendorNames = new Map<string, string>();
@@ -683,15 +700,21 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             const now = new Date();
             const start = new Date(now.getTime() - rangeMs);
 
-            const [agentResult, usageRows, lookups] = await Promise.all([
-                rv.RunView<AgentRunRecord>({
-                    EntityName: 'MJ: AI Agent Runs',
-                    ExtraFilter: extraFilter,
-                    Fields: AGENT_RUN_FIELDS,
-                    OrderBy: 'StartedAt DESC',
-                    MaxRows: 100,
-                    ResultType: 'simple'
-                }),
+            // The run list is capped at the 100 most recent; the totals are exact counts, so the KPI
+            // cards never report the cap as if it were the period's run count.
+            const [agentResults, usageRows, lookups] = await Promise.all([
+                rv.RunViews([
+                    {
+                        EntityName: 'MJ: AI Agent Runs',
+                        ExtraFilter: extraFilter,
+                        Fields: AGENT_RUN_FIELDS,
+                        OrderBy: 'StartedAt DESC',
+                        MaxRows: 100,
+                        ResultType: 'simple'
+                    },
+                    { EntityName: 'MJ: AI Agent Runs', ExtraFilter: extraFilter, ResultType: 'count_only' },
+                    { EntityName: 'MJ: AI Agent Runs', ExtraFilter: `${extraFilter} AND Success = 1`, ResultType: 'count_only' }
+                ]),
                 // Hourly buckets for sub-day ranges so "last hour" is not a whole day's usage.
                 rangeMs <= 86400000
                     ? this.instrumentation.GetUsageHourly(start, now)
@@ -699,10 +722,18 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
                 this.instrumentation.GetModelAndVendorLookups()
             ]);
 
+            const [agentResult, totalResult, successResult] = agentResults;
             if (!agentResult.Success) {
                 console.error(`Agent Run Analysis: agent runs failed to load. ${agentResult.ErrorMessage}`);
             }
-            this.agentRuns = agentResult.Success ? agentResult.Results ?? [] : [];
+            if (!totalResult.Success || !successResult.Success) {
+                console.error(`Agent Run Analysis: run counts failed to load. ${totalResult.ErrorMessage ?? successResult.ErrorMessage}`);
+            }
+            this.agentRuns = agentResult.Success ? (agentResult.Results as AgentRunRecord[]) ?? [] : [];
+            this.totalRunCount = totalResult.Success ? totalResult.TotalRowCount : this.agentRuns.length;
+            this.successRunCount = successResult.Success
+                ? successResult.TotalRowCount
+                : this.agentRuns.filter(r => r.Success === true).length;
             const agentIds = new Set(this.Filters.Agents.map(a => a.toLowerCase()));
             const usage: UsageRow[] = usageRows;
             this.agentUsageRows = usage.filter(r =>
@@ -726,10 +757,12 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
 
     private computeStats(): void {
         const runs = this.agentRuns;
-        const total = runs.length;
-        const totalCost = ComputeTotalCost(runs);
+        const total = this.totalRunCount;
+        // Own cost at prompt-run grain, from the usage aggregates — never a sum of
+        // AIAgentRun.TotalCost, which is subtree-inclusive (and defaults to 0, so it can
+        // never express "unpriced").
+        const totalCost = ComputeTotalCost(this.agentUsageRows);
         const completed = runs.filter(r => r.Status === 'Completed');
-        const successCount = runs.filter(r => r.Success === true).length;
 
         const durations = completed
             .filter(r => r.CompletedAt)
@@ -746,17 +779,10 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
 
         const agentPromptRuns = this.agentUsageRows.reduce((sum, r) => sum + (r.Runs ?? 0), 0);
 
-        let covPriced = 0;
-        let covUnpriced = 0;
-        for (const r of runs) {
-            if (r.TotalCost !== null && r.TotalCost !== undefined) {
-                covPriced++;
-            } else {
-                covUnpriced++;
-            }
-        }
+        const covPriced = this.agentUsageRows.reduce((sum, r) => sum + (r.PricedRuns ?? 0), 0);
+        const covUnpriced = this.agentUsageRows.reduce((sum, r) => sum + (r.UnpricedRuns ?? 0), 0);
         const covPct = ComputeCoveragePercent({ PricedRuns: covPriced, UnpricedRuns: covUnpriced });
-        const covSubtitle = total > 0 ? `covers ${Math.round(covPct)}% of runs` : undefined;
+        const covSubtitle = covPriced + covUnpriced > 0 ? `covers ${Math.round(covPct)}% of prompt runs` : undefined;
 
         this.Stats = {
             TotalRuns: total,
@@ -764,8 +790,9 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
             CoverageSubtitle: covSubtitle,
             PromptRuns: agentPromptRuns,
             AvgCostPerRun: total > 0 && totalCost !== null ? totalCost / total : null,
-            SuccessRate: total > 0 ? (successCount / total) * 100 : 0,
-            AvgDurationSeconds: avgDuration
+            SuccessRate: total > 0 ? (this.successRunCount / total) * 100 : 0,
+            AvgDurationSeconds: avgDuration,
+            DurationSampleSize: durations.length
         };
     }
 

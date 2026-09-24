@@ -124,7 +124,7 @@ export interface ExecutionDetails {
 export interface ChartData {
   executionTrends: TrendData[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   costByModel: { model: string; cost: number | null; tokens: number }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  performanceMatrix: { agent: string; model: string; avgTime: number; successRate: number }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  performanceMatrix: { agent: string; model: string; avgTime: number; successRate: number; FailedRuns: number }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   tokenEfficiency: { inputTokens: number; outputTokens: number; cost: number | null; model: string }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 

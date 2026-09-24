@@ -29,13 +29,13 @@ const RUNS: PromptRunFixture[] = [
   { ID: 'r2', RunAt: '2026-01-05T10:00:00Z', Prompt: 'Classify', PromptID: 'p2', Model: 'Claude', ModelID: 'm2', Status: 'Failed', Success: false, ExecutionTimeMS: 800, TokensUsed: 400, Cost: 0.01 },
 ];
 
-async function render(rows: unknown[]): Promise<ComponentFixture<AnalyticsPromptRunsComponent>> {
+async function render(rows: unknown[], usageRows: unknown[] = []): Promise<ComponentFixture<AnalyticsPromptRunsComponent>> {
   TestBed.configureTestingModule({
     declarations: [AnalyticsPromptRunsComponent],
     imports: [StubLoadingComponent, StubEmptyStateComponent, MJViewToggleComponent, MJClickableDirective],
   });
   const fixture = TestBed.createComponent(AnalyticsPromptRunsComponent);
-  fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: (_p: RunViewParams) => rows }));
+  fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: (_p: RunViewParams) => rows, RunQueryResults: usageRows }));
   fixture.detectChanges(false);
   await new Promise((r) => setTimeout(r, 0));
   fixture.componentRef.changeDetectorRef.markForCheck();
@@ -104,6 +104,31 @@ describe('AnalyticsPromptRunsComponent (DOM)', () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => r.getAttribute('role') === 'button' && r.getAttribute('tabindex') === '0')).toBe(true);
     expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual(expect.arrayContaining(['Filter by model GPT-4o', 'Filter by status Failed']));
+  });
+
+  it('takes the period totals from the usage aggregates, not from the latest-runs sample', async () => {
+    installProvider({ runViewResults: [] });
+    const hour = new Date(Math.floor(Date.now() / 3600000) * 3600000).toISOString();
+    const usage = [{
+      HourBucket: hour, AgentID: null, PromptID: 'p1', ModelID: 'm1', CostCurrency: 'USD',
+      Runs: 1500, SucceededRuns: 1470, FailedRuns: 30, PricedRuns: 1400, UnpricedRuns: 100,
+      TokensPrompt: 100, TokensCompletion: 50, TokensCacheRead: 0, TokensCacheWrite: 0, OwnCost: 12.5,
+    }];
+    const fixture = await render(RUNS, usage);
+    const card = (label: string) => queryAll(fixture, '.stat-card').find((c) => c.querySelector('.stat-label')?.textContent?.trim() === label) as HTMLElement;
+    expect(card('Total Runs').querySelector('.stat-value')?.textContent?.trim()).toBe('1,500');
+    expect(card('Total Cost').querySelector('.stat-value')?.textContent?.trim()).toBe('$12.50');
+    expect(card('Total Cost').querySelector('.stat-subtitle')?.textContent?.trim()).toBe('covers 93% of runs');
+    expect(card('Success Rate').querySelector('.stat-value')?.textContent?.trim()).toBe('98.0%');
+    // Latency is per-run, so it stays on the sample — and says so.
+    expect(card('Avg Latency').querySelector('.stat-subtitle')?.textContent?.trim()).toBe('latest 2 runs');
+  });
+
+  it('shows an unpriced run as a dash, never as $0.00', async () => {
+    installProvider({ runViewResults: [] });
+    const fixture = await render([{ ...RUNS[0], Cost: null }]);
+    const costCell = queryAll(fixture, '.runs-table tbody tr td.cell-number').pop() as HTMLElement;
+    expect(costCell.textContent?.trim()).toBe('—');
   });
 
   it('does not present chart bars as interactive (there is no drill-down behind them)', async () => {

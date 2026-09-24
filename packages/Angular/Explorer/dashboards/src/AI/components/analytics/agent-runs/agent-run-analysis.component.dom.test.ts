@@ -34,8 +34,11 @@ const USAGE_ROWS = [
   { DayBucket: '2026-01-05', AgentID: 'ag1', VendorID: 'v1', CostCurrency: 'USD', Runs: 2, PricedRuns: 2, UnpricedRuns: 0, OwnCost: 0.01 },
 ];
 
+// The fake provider ignores ExtraFilter, so the success count's `Success = 1` predicate is applied here.
 const rowsByEntity = (p: RunViewParams): unknown[] =>
-  p.EntityName === 'MJ: AI Agent Runs' ? AGENT_RUNS : (LOOKUPS[p.EntityName ?? ''] ?? []);
+  p.EntityName === 'MJ: AI Agent Runs'
+    ? (p.ExtraFilter?.includes('Success = 1') ? AGENT_RUNS.filter((r) => r.Success) : AGENT_RUNS)
+    : (LOOKUPS[p.EntityName ?? ''] ?? []);
 const usageByQuery = (p: RunQueryParams): unknown[] => (p.QueryName === 'AIUsageDaily' ? USAGE_ROWS : []);
 
 async function render(

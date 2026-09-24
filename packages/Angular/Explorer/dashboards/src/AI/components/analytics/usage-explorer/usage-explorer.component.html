@@ -67,9 +67,14 @@
     </div>
 
     <div class="pivot-wrapper">
+        <!-- The analytics shell's content area is sized by its content, so the default Height of
+             100% resolves to nothing and the grid collapsed to 0px. Give it a viewport-relative height. -->
         <mj-query-pivot
+            Height="clamp(420px, 65vh, 900px)"
             [Data]="PivotRows"
             [DimensionColumns]="DimensionColumns"
+            [HiddenColumns]="HiddenColumns"
+            [ColumnLabels]="ColumnLabels"
             [MeasureColumns]="MeasureColumns"
             [TimeColumn]="TimeColumn"
             [Grain]="SelectedGrain"

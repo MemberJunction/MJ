@@ -49,7 +49,9 @@ import {
 
                 <!-- Transcript pane -->
                 <div class="transcript-pane">
-                    @if (!SelectedRoom) {
+                    @if (!SelectedRoom && Rooms.length === 0) {
+                        <mj-empty-state class="empty empty--center" Icon="fa-solid fa-microphone-lines" Title="No transcript to show" Message="Recorded meetings in this period will appear on the left." />
+                    } @else if (!SelectedRoom) {
                         <mj-empty-state class="empty empty--center" Icon="fa-solid fa-arrow-left" Title="Select a meeting" Message="Select a meeting to view its transcript." />
                     } @else if (IsLoadingTranscript) {
                         <div class="loading-container"><mj-loading text="Loading transcript..."></mj-loading></div>

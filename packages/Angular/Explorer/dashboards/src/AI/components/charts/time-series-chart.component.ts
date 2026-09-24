@@ -148,6 +148,8 @@ export interface DataPointClickEvent {
       padding: var(--mj-space-2) var(--mj-space-3);
       border-radius: var(--mj-radius-sm);
       font-size: var(--mj-text-xs);
+      font-weight: var(--mj-font-normal);
+      line-height: var(--mj-leading-snug);
       pointer-events: none;
       z-index: var(--mj-z-tooltip);
       max-width: 220px;
@@ -623,10 +625,13 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       const scale = scales[metric];
 
       // Create line generator with proper value transformation
+      // A missing value (an unpriced bucket's cost is null) is a GAP, never a zero.
+      const hasValue = (d: TrendData) => this.getMetricValue(d, metric) != null;
       const line = d3.line<TrendData>()
+        .defined(hasValue)
         .x(d => xScale(d.timestamp))
         .y(d => {
-          const value = this.getMetricValue(d, metric) || 0;
+          const value = this.getMetricValue(d, metric) ?? 0;
           // Normalize avgTime to seconds if using dual axis
           const transformedValue = (this.config.useDualAxis !== false && metric === 'avgTime') 
             ? value / 1000 : value;
@@ -636,10 +641,11 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
       // Create area generator with proper value transformation
       const area = d3.area<TrendData>()
+        .defined(hasValue)
         .x(d => xScale(d.timestamp))
         .y0(this.height)
         .y1(d => {
-          const value = this.getMetricValue(d, metric) || 0;
+          const value = this.getMetricValue(d, metric) ?? 0;
           // Normalize avgTime to seconds if using dual axis
           const transformedValue = (this.config.useDualAxis !== false && metric === 'avgTime') 
             ? value / 1000 : value;
@@ -749,10 +755,13 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
   private showTooltip(event: MouseEvent, data: TrendData) {
     const tooltip = d3.select(this.Tooltip.nativeElement);
-    
-    const costDisplay = data.cost !== null && data.cost !== undefined ? `$${data.cost.toFixed(4)}` : '\u2014';
+
+    const costDisplay = data.cost !== null && data.cost !== undefined ? `$${data.cost.toFixed(4)}` : '\u2014 (unpriced)';
+    const when = this.isDailyBuckets()
+      ? d3.utcFormat('%a %b %d, %Y')(data.timestamp)
+      : d3.timeFormat('%a %b %d, %H:%M')(data.timestamp);
     const content = `
-      <div><strong>${d3.timeFormat('%H:%M')(data.timestamp)}</strong></div>
+      <div><strong>${when}</strong></div>
       <div>Executions: ${data.executions.toLocaleString()}</div>
       <div>Cost: ${costDisplay}</div>
       <div>Tokens: ${data.tokens.toLocaleString()}</div>
@@ -761,11 +770,27 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       ${this.IsDrillDownEnabled ? '<div class="chart-tooltip__hint">Click a point to drill down</div>' : ''}
     `;
 
+    tooltip.style('display', 'block').html(content);
+
+    // Position relative to the container and flip left/up rather than letting the container's
+    // overflow clip it.
+    const container = this.Tooltip.nativeElement.parentElement!;
+    const [x, y] = d3.pointer(event, container);
+    const tip = this.Tooltip.nativeElement;
+    const offset = 12;
+    const left = x + offset + tip.offsetWidth > container.clientWidth ? x - offset - tip.offsetWidth : x + offset;
+    const top = y + offset + tip.offsetHeight > container.clientHeight ? y - offset - tip.offsetHeight : y + offset;
     tooltip
-      .style('display', 'block')
-      .html(content)
-      .style('left', (event.offsetX + 10) + 'px')
-      .style('top', (event.offsetY - 10) + 'px');
+      .style('left', Math.max(0, left) + 'px')
+      .style('top', Math.max(0, top) + 'px');
+  }
+
+  /** True when consecutive points are a day or more apart, i.e. the trend is bucketed by UTC day. */
+  private isDailyBuckets(): boolean {
+    if (this.Data.length < 2) {
+      return false;
+    }
+    return this.Data[1].timestamp.getTime() - this.Data[0].timestamp.getTime() >= 24 * 60 * 60 * 1000;
   }
 
   /**
@@ -845,6 +870,10 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private getTimeFormat(): (date: Date) => string {
     if (this.Data.length < 2) {
       return d3.timeFormat('%H:%M');
+    }
+    if (this.isDailyBuckets()) {
+      // Daily buckets are UTC days; a local-time label would show the previous day west of UTC.
+      return d3.utcFormat('%m/%d');
     }
     
     // Calculate the time span of the data
