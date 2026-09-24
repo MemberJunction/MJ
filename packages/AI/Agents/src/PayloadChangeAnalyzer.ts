@@ -140,7 +140,7 @@ export class PayloadChangeAnalyzer {
     /**
      * Analyzes a payload change request for suspicious patterns
      */
-    public analyzeChangeRequest<P = any>(
+    public AnalyzeChangeRequest<P = any>(
         originalPayload: P,
         changeRequest: AgentPayloadChangeRequest<P>,
         resultPayload: P
@@ -183,6 +183,15 @@ export class PayloadChangeAnalyzer {
                 suspiciousChanges: criticalWarnings.length
             }
         };
+    }
+
+    /** @deprecated Use {@link AnalyzeChangeRequest}. */
+    public analyzeChangeRequest<P = any>(
+        originalPayload: P,
+        changeRequest: AgentPayloadChangeRequest<P>,
+        resultPayload: P
+    ): PayloadAnalysisResult {
+        return this.AnalyzeChangeRequest(originalPayload, changeRequest, resultPayload);
     }
 
     /**
@@ -533,7 +542,7 @@ export class PayloadChangeAnalyzer {
     /**
      * Generate feedback questions for suspicious changes
      */
-    public generateFeedbackQuestions(warnings: PayloadWarning[]): string[] {
+    public GenerateFeedbackQuestions(warnings: PayloadWarning[]): string[] {
         const questions: string[] = [];
         const feedbackWarnings = warnings.filter(w => w.requiresFeedback);
         
@@ -571,5 +580,10 @@ export class PayloadChangeAnalyzer {
         }
         
         return questions;
+    }
+
+    /** @deprecated Use {@link GenerateFeedbackQuestions}. */
+    public generateFeedbackQuestions(warnings: PayloadWarning[]): string[] {
+        return this.GenerateFeedbackQuestions(warnings);
     }
 }

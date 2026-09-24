@@ -15,7 +15,7 @@ import { ViewGridState } from '../../types';
 import { GridSelectionMode, GridToolbarConfig, ForeignKeyClickEvent } from '../../entity-data-grid/models/grid-types';
 import { AfterRowClickEventArgs, AfterRowDoubleClickEventArgs, AfterSortEventArgs } from '../../entity-data-grid/events/grid-events';
 import { GridStateChangedEvent } from '../../types';
-import { buildPkString, buildCompositeKey } from '../../utils/record.util';
+import { BuildPkString, BuildCompositeKey } from '../../utils/record.util';
 import { EntityDataGridComponent } from '../../entity-data-grid/entity-data-grid.component';
 
 /**
@@ -301,7 +301,16 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * Optional full-result-set fetcher supplied by the host, forwarded to the grid's ExportDataProvider
    * so exports cover every matching row rather than just the loaded page (bug C1).
    */
-  @Input() exportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
+  @Input() ExportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
+
+  /** @deprecated Use {@link ExportDataProvider}. */
+  @Input() set exportDataProvider(value: (() => Promise<Record<string, unknown>[]>) | null) {
+    this.ExportDataProvider = value;
+  }
+  /** @deprecated Use {@link ExportDataProvider}. */
+  get exportDataProvider(): (() => Promise<Record<string, unknown>[]>) | null {
+    return this.ExportDataProvider;
+  }
 
   /** Primary-key string of the currently selected record, if any. */
   @Input() selectedRecordId: string | null = null;
@@ -412,36 +421,66 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   // ================================================================
 
   /** Effective toolbar visibility — defaults to `true` when not set in config. */
-  get effectiveShowToolbar(): boolean {
+  get EffectiveShowToolbar(): boolean {
     return this.config.showToolbar ?? true;
+  }
+
+  /** @deprecated Use {@link EffectiveShowToolbar}. */
+  get effectiveShowToolbar(): boolean {
+    return this.EffectiveShowToolbar;
   }
 
   /**
    * Grid search defaults OFF when hosted in entity-viewer. The container already owns
    * `filterText` ("Filter records..."). Opt in with `toolbarConfig.showSearch: true`.
    */
-  get effectiveShowSearch(): boolean {
+  get EffectiveShowSearch(): boolean {
     return this.config.toolbarConfig?.showSearch ?? false;
   }
 
+  /** @deprecated Use {@link EffectiveShowSearch}. */
+  get effectiveShowSearch(): boolean {
+    return this.EffectiveShowSearch;
+  }
+
   /** Effective selection mode — defaults to `'checkbox'` when not set in config. */
-  get effectiveSelectionMode(): GridSelectionMode {
+  get EffectiveSelectionMode(): GridSelectionMode {
     return this.config.selectionMode ?? 'checkbox';
   }
 
+  /** @deprecated Use {@link EffectiveSelectionMode}. */
+  get effectiveSelectionMode(): GridSelectionMode {
+    return this.EffectiveSelectionMode;
+  }
+
   /** Effective add-to-list button visibility — defaults to `true` when not set in config. */
-  get effectiveShowAddToListButton(): boolean {
+  get EffectiveShowAddToListButton(): boolean {
     return this.config.showAddToListButton ?? true;
   }
 
+  /** @deprecated Use {@link EffectiveShowAddToListButton}. */
+  get effectiveShowAddToListButton(): boolean {
+    return this.EffectiveShowAddToListButton;
+  }
+
   /** Effective pager visibility — defaults to `true` when not set in config. */
-  get effectiveShowPager(): boolean {
+  get EffectiveShowPager(): boolean {
     return this.config.showPager ?? true;
   }
 
+  /** @deprecated Use {@link EffectiveShowPager}. */
+  get effectiveShowPager(): boolean {
+    return this.EffectiveShowPager;
+  }
+
   /** Effective page size — config wins, else the generic `pageSize` input, else the grid's own default. */
-  get effectivePageSize(): number {
+  get EffectivePageSize(): number {
     return this.config.pageSize ?? this.pageSize ?? 100;
+  }
+
+  /** @deprecated Use {@link EffectivePageSize}. */
+  get effectivePageSize(): number {
+    return this.EffectivePageSize;
   }
 
   /**
@@ -449,7 +488,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * minimal dynamic-view params object from {@link entity}. Returns `null` when no entity is known
    * yet (the grid renders empty until the host provides one).
    */
-  get effectiveParams(): RunViewParams | null {
+  get EffectiveParams(): RunViewParams | null {
     if (this.config.params) {
       return this.config.params;
     }
@@ -457,6 +496,11 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
       return { EntityName: this.entity.Name };
     }
     return null;
+  }
+
+  /** @deprecated Use {@link EffectiveParams}. */
+  get effectiveParams(): RunViewParams | null {
+    return this.EffectiveParams;
   }
 
   // ================================================================
@@ -467,17 +511,27 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * Row single-click → {@link recordSelected}. Extracts the raw record (`event.row`) so the host
    * builds the composite key itself, matching the other renderers.
    */
-  onAfterRowClick(event: AfterRowClickEventArgs): void {
+  OnAfterRowClick(event: AfterRowClickEventArgs): void {
     if (event.row) {
       this.recordSelected.emit(event.row);
     }
   }
 
+  /** @deprecated Use {@link OnAfterRowClick}. */
+  onAfterRowClick(event: AfterRowClickEventArgs): void {
+    return this.OnAfterRowClick(event);
+  }
+
   /** Row double-click → {@link recordOpened} (NAVIGATION), emitting the raw record object. */
-  onAfterRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
+  OnAfterRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
     if (event.row) {
       this.recordOpened.emit(event.row);
     }
+  }
+
+  /** @deprecated Use {@link OnAfterRowDoubleClick}. */
+  onAfterRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
+    return this.OnAfterRowDoubleClick(event);
   }
 
   /**
@@ -486,7 +540,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    *  2. persists the sort into `config.gridState.sortSettings` and emits {@link configChanged} so
    *     the grid's sort survives view reloads via the opaque config channel.
    */
-  onAfterSort(event: AfterSortEventArgs): void {
+  OnAfterSort(event: AfterSortEventArgs): void {
     const sort = (event.newSortState ?? []).map((s) => ({ field: s.field, direction: s.direction }));
     this.dataRequest.emit({ sort });
 
@@ -496,22 +550,37 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     this.configChanged.emit(this.config);
   }
 
+  /** @deprecated Use {@link OnAfterSort}. */
+  onAfterSort(event: AfterSortEventArgs): void {
+    return this.OnAfterSort(event);
+  }
+
   /**
    * Generic grid-state change (column resize / reorder / visibility) → merge the grid's updated
    * {@link ViewGridState} into the opaque config and emit {@link configChanged}; the host persists
    * the blob verbatim. No `dataRequest` here — column changes don't alter the loaded record set.
    */
-  onGridStateChanged(event: GridStateChangedEvent): void {
+  OnGridStateChanged(event: GridStateChangedEvent): void {
     this.config = { ...this.config, gridState: event.gridState };
     this.configChanged.emit(this.config);
+  }
+
+  /** @deprecated Use {@link OnGridStateChanged}. */
+  onGridStateChanged(event: GridStateChangedEvent): void {
+    return this.OnGridStateChanged(event);
   }
 
   /**
    * Selection change → kept INTERNAL. The grid drives its own add-to-list from the selection, so the
    * wrapper has no need to surface it. We intentionally do not bubble selection anywhere.
    */
-  onSelectionChange(_selectedKeys: string[]): void {
+  OnSelectionChange(_selectedKeys: string[]): void {
     // No-op: selection is internal to the grid + this wrapper's add-to-list. It never bubbles up.
+  }
+
+  /** @deprecated Use {@link OnSelectionChange}. */
+  onSelectionChange(_selectedKeys: string[]): void {
+    return this.OnSelectionChange(_selectedKeys);
   }
 
   /**
@@ -520,7 +589,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * {@link ViewRelatedRecordNavigation} the container forwards to the outer app for routing. The
    * related entity name is taken from the event when present, else resolved from the metadata by ID.
    */
-  onForeignKeyClick(event: ForeignKeyClickEvent): void {
+  OnForeignKeyClick(event: ForeignKeyClickEvent): void {
     const entityName = event.relatedEntityName ?? this.resolveEntityNameById(event.relatedEntityId);
     if (!entityName) {
       return;
@@ -528,9 +597,19 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     this.openRelatedRecordRequested.emit({ entityName, recordKey: event.recordId });
   }
 
+  /** @deprecated Use {@link OnForeignKeyClick}. */
+  onForeignKeyClick(event: ForeignKeyClickEvent): void {
+    return this.OnForeignKeyClick(event);
+  }
+
   /** New button → {@link createRecordRequested} (NAVIGATION) — opening the create form is routing. */
-  onNewButtonClick(): void {
+  OnNewButtonClick(): void {
     this.createRecordRequested.emit();
+  }
+
+  /** @deprecated Use {@link OnNewButtonClick}. */
+  onNewButtonClick(): void {
+    return this.OnNewButtonClick();
   }
 
   /**
@@ -538,8 +617,13 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * (`PageNumber` is already 1-based, `PageSize`) onto the generic `{ page, pageSize }` shape the
    * host honors against its own RunView.
    */
-  onPageChange(event: PageChangeEvent): void {
+  OnPageChange(event: PageChangeEvent): void {
     this.dataRequest.emit({ page: event.PageNumber, pageSize: event.PageSize });
+  }
+
+  /** @deprecated Use {@link OnPageChange}. */
+  onPageChange(event: PageChangeEvent): void {
+    return this.OnPageChange(event);
   }
 
   // ================================================================
@@ -551,8 +635,13 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * generic container ↔ plug-in coordination (a data-access request), NOT a feature event surfaced
    * to the outer app.
    */
-  onRefreshButtonClick(): void {
+  OnRefreshButtonClick(): void {
     this.dataRequest.emit(this.currentPageDataRequest());
+  }
+
+  /** @deprecated Use {@link OnRefreshButtonClick}. */
+  onRefreshButtonClick(): void {
+    return this.OnRefreshButtonClick();
   }
 
   // ================================================================
@@ -571,7 +660,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * changes itself — nothing bubbles up. Mirrors the config construction the legacy host did in
    * `data-explorer-dashboard`'s `onAddToListRequested()`.
    */
-  onAddToListRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[]; recordIds: string[] }): void {
+  OnAddToListRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[]; recordIds: string[] }): void {
     const entity = event.entityInfo ?? this.entity;
     if (!entity || !event.records || event.records.length === 0) {
       return;
@@ -601,18 +690,33 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnAddToListRequested}. */
+  onAddToListRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[]; recordIds: string[] }): void {
+    return this.OnAddToListRequested(event);
+  }
+
   /** List-management dialog completed (membership changes applied) → tear down state. */
-  onListManagementComplete(_result: ListManagementResult): void {
+  OnListManagementComplete(_result: ListManagementResult): void {
     this.showListManagementDialog = false;
     this.listManagementConfig = null;
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnListManagementComplete}. */
+  onListManagementComplete(_result: ListManagementResult): void {
+    return this.OnListManagementComplete(_result);
+  }
+
   /** List-management dialog cancelled → tear down state. */
-  onListManagementCancel(): void {
+  OnListManagementCancel(): void {
     this.showListManagementDialog = false;
     this.listManagementConfig = null;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnListManagementCancel}. */
+  onListManagementCancel(): void {
+    return this.OnListManagementCancel();
   }
 
   /**
@@ -626,7 +730,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
         return String(nameValue);
       }
     }
-    return buildPkString(record, entity) || 'Unknown';
+    return BuildPkString(record, entity) || 'Unknown';
   }
 
   /**
@@ -652,7 +756,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * Delete button → stage the records and open the Generic confirm dialog. The actual delete happens
    * in {@link onDeleteConfirmed} after the user confirms — nothing bubbles up.
    */
-  onDeleteButtonClick(records: Record<string, unknown>[]): void {
+  OnDeleteButtonClick(records: Record<string, unknown>[]): void {
     if (!records || records.length === 0) {
       return;
     }
@@ -663,13 +767,18 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnDeleteButtonClick}. */
+  onDeleteButtonClick(records: Record<string, unknown>[]): void {
+    return this.OnDeleteButtonClick(records);
+  }
+
   /**
    * Delete confirmed → delete each staged record through the MJ entity layer
    * (`ProviderToUse.GetEntityObject(name, compositeKey, user)` → `Delete`), checking the boolean
    * result and surfacing failures via {@link LogError}. After deletion, re-request the current page
    * so the host reloads. Self-contained — no feature event leaves the wrapper.
    */
-  async onDeleteConfirmed(): Promise<void> {
+  async OnDeleteConfirmed(): Promise<void> {
     this.showDeleteConfirm = false;
     const entity = this.entity;
     const records = this.pendingDeleteRecords;
@@ -684,7 +793,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     const user = provider.CurrentUser;
 
     for (const record of records) {
-      const key = buildCompositeKey(record, entity);
+      const key = BuildCompositeKey(record, entity);
       try {
         // The (name, key, user) overload instantiates AND loads in one call (throws if it can't load).
         const obj = await provider.GetEntityObject(entity.Name, key, user);
@@ -706,11 +815,21 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnDeleteConfirmed}. */
+  async onDeleteConfirmed(): Promise<void> {
+    return this.OnDeleteConfirmed();
+  }
+
   /** Delete cancelled → discard the staged records and close the confirm dialog. */
-  onDeleteCancelled(): void {
+  OnDeleteCancelled(): void {
     this.showDeleteConfirm = false;
     this.pendingDeleteRecords = [];
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnDeleteCancelled}. */
+  onDeleteCancelled(): void {
+    return this.OnDeleteCancelled();
   }
 
   // ================================================================
@@ -756,9 +875,14 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   }
 
   /** Dismiss the merge notice from its own close button. */
-  onDismissMergeNotice(): void {
+  OnDismissMergeNotice(): void {
     this.setMergeNotice(null);
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnDismissMergeNotice}. */
+  onDismissMergeNotice(): void {
+    return this.OnDismissMergeNotice();
   }
 
   /**
@@ -803,7 +927,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
    * The grid asked to merge the selected rows. Compare them, preview what will move, and open
    * the panel — nothing is written until the user confirms.
    */
-  async onMergeRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[] }): Promise<void> {
+  async OnMergeRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[] }): Promise<void> {
     this.setMergeNotice(null);
     try {
       await this.prepareMerge(event);
@@ -814,14 +938,24 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     }
   }
 
+  /** @deprecated Use {@link OnMergeRequested}. */
+  async onMergeRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[] }): Promise<void> {
+    return this.OnMergeRequested(event);
+  }
+
   /** The user chose which record survives; differing fields default to that record's values. */
-  onSurvivorChange(side: 'left' | 'right'): void {
+  OnSurvivorChange(side: 'left' | 'right'): void {
     if (!this.mergeState || this.mergeState.IsMerging) return;
     this.mergeState.Config = { ...this.mergeState.Config, SurvivorSide: side };
     for (const field of this.mergeState.Fields) {
       if (!field.IsReadOnly) field.SelectedSide = side;
     }
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnSurvivorChange}. */
+  onSurvivorChange(side: 'left' | 'right'): void {
+    return this.OnSurvivorChange(side);
   }
 
   private async prepareMerge(event: { entityInfo: EntityInfo; records: Record<string, unknown>[] }): Promise<void> {
@@ -912,7 +1046,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   }
 
   /** The user confirmed: merge, then reload the page so the loser disappears from the grid. */
-  async onMergeConfirmed(event: MergeConfirmedEvent): Promise<void> {
+  async OnMergeConfirmed(event: MergeConfirmedEvent): Promise<void> {
     if (!this.mergeState) return;
     this.mergeState.IsMerging = true;
     this.cdr.detectChanges();
@@ -942,10 +1076,20 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnMergeConfirmed}. */
+  async onMergeConfirmed(event: MergeConfirmedEvent): Promise<void> {
+    return this.OnMergeConfirmed(event);
+  }
+
   /** Merge cancelled → close the panel, write nothing. */
-  onMergeCancelled(): void {
+  OnMergeCancelled(): void {
     this.mergeState = null;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnMergeCancelled}. */
+  onMergeCancelled(): void {
+    return this.OnMergeCancelled();
   }
 
   /**

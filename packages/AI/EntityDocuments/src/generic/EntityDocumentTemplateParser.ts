@@ -114,7 +114,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
    * 2. TemplateEngine cached contents for doc.TemplateID
    * 3. RunView on MJ: Template Contents
    */
-  public async resolveDocumentTemplateText(doc: MJEntityDocumentEntity, contextUser: UserInfo): Promise<string> {
+  public async resolveDocumentTemplateText(doc: MJEntityDocumentEntity, contextUser: UserInfo): Promise<string> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
     // 1. Virtual property on extended entity subclass if populated
     const virtualDoc = doc as EntityDocumentVirtualProps;
     if (virtualDoc.TemplateText && virtualDoc.TemplateText.trim().length > 0) {

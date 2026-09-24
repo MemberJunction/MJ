@@ -184,19 +184,91 @@ export interface UserSearchResult {
     `]
 })
 export class UserPickerComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
-    @Input() currentUser!: UserInfo;
-    @Input() excludeUserIds: string[] = [];
-    @Input() placeholder: string = 'Search for a user (press Enter)...';
+    @Input() CurrentUser!: UserInfo;
+
+    /** @deprecated Use {@link CurrentUser}. */
+    @Input() set currentUser(value: UserInfo) {
+        this.CurrentUser = value;
+    }
+    /** @deprecated Use {@link CurrentUser}. */
+    get currentUser(): UserInfo {
+        return this.CurrentUser;
+    }
+    @Input() ExcludeUserIds: string[] = [];
+
+    /** @deprecated Use {@link ExcludeUserIds}. */
+    @Input() set excludeUserIds(value: string[]) {
+        this.ExcludeUserIds = value;
+    }
+    /** @deprecated Use {@link ExcludeUserIds}. */
+    get excludeUserIds(): string[] {
+        return this.ExcludeUserIds;
+    }
+    @Input() Placeholder: string = 'Search for a user (press Enter)...';
+
+    /** @deprecated Use {@link Placeholder}. */
+    @Input() set placeholder(value: string) {
+        this.Placeholder = value;
+    }
+    /** @deprecated Use {@link Placeholder}. */
+    get placeholder(): string {
+        return this.Placeholder;
+    }
 
     constructor(private cdr: ChangeDetectorRef) {
     super();}
 
-    @Output() userSelected = new EventEmitter<UserSearchResult>();
+    @Output() UserSelected = new EventEmitter<UserSearchResult>();
 
-    searchQuery: string = '';
-    searchResults: UserSearchResult[] = [];
-    isSearching: boolean = false;
-    showResults: boolean = false;
+    /**
+     * @deprecated Use {@link UserSelected}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (userSelected) keeps working. Must stay AFTER UserSelected: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() userSelected = this.UserSelected;
+
+    SearchQuery: string = '';
+
+    /** @deprecated Use {@link SearchQuery}. */
+    get searchQuery(): string {
+        return this.SearchQuery;
+    }
+    /** @deprecated Use {@link SearchQuery}. */
+    set searchQuery(value: string) {
+        this.SearchQuery = value;
+    }
+    SearchResults: UserSearchResult[] = [];
+
+    /** @deprecated Use {@link SearchResults}. */
+    get searchResults(): UserSearchResult[] {
+        return this.SearchResults;
+    }
+    /** @deprecated Use {@link SearchResults}. */
+    set searchResults(value: UserSearchResult[]) {
+        this.SearchResults = value;
+    }
+    IsSearching: boolean = false;
+
+    /** @deprecated Use {@link IsSearching}. */
+    get isSearching(): boolean {
+        return this.IsSearching;
+    }
+    /** @deprecated Use {@link IsSearching}. */
+    set isSearching(value: boolean) {
+        this.IsSearching = value;
+    }
+    ShowResults: boolean = false;
+
+    /** @deprecated Use {@link ShowResults}. */
+    get showResults(): boolean {
+        return this.ShowResults;
+    }
+    /** @deprecated Use {@link ShowResults}. */
+    set showResults(value: boolean) {
+        this.ShowResults = value;
+    }
 
     ngOnInit(): void {
         // Add click outside listener to close dropdown
@@ -210,35 +282,45 @@ export class UserPickerComponent extends BaseAngularComponent implements OnInit,
     private handleClickOutside(event: MouseEvent): void {
         const target = event.target as HTMLElement;
         if (!target.closest('.user-picker')) {
-            this.showResults = false;
+            this.ShowResults = false;
         }
     }
 
-    onSearch(): void {
-        if (!this.searchQuery || this.searchQuery.trim().length < 2) {
-            this.showResults = false;
+    OnSearch(): void {
+        if (!this.SearchQuery || this.SearchQuery.trim().length < 2) {
+            this.ShowResults = false;
             return;
         }
 
-        this.performSearch(this.searchQuery.trim());
+        this.performSearch(this.SearchQuery.trim());
     }
 
+    /** @deprecated Use {@link OnSearch}. */
+    onSearch(): void {
+        return this.OnSearch();
+    }
+
+    OnSelectUser(user: UserSearchResult): void {
+        this.UserSelected.emit(user);
+        this.SearchQuery = '';
+        this.SearchResults = [];
+        this.ShowResults = false;
+    }
+
+    /** @deprecated Use {@link OnSelectUser}. */
     onSelectUser(user: UserSearchResult): void {
-        this.userSelected.emit(user);
-        this.searchQuery = '';
-        this.searchResults = [];
-        this.showResults = false;
+        return this.OnSelectUser(user);
     }
 
     private async performSearch(query: string): Promise<void> {
         if (!query || query.length < 2) {
-            this.searchResults = [];
-            this.showResults = false;
+            this.SearchResults = [];
+            this.ShowResults = false;
             return;
         }
 
-        this.isSearching = true;
-        this.showResults = true;
+        this.IsSearching = true;
+        this.ShowResults = true;
 
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -248,8 +330,8 @@ export class UserPickerComponent extends BaseAngularComponent implements OnInit,
 
             // Build exclude filter
             let excludeFilter = '';
-            if (this.excludeUserIds.length > 0) {
-                const ids = this.excludeUserIds.map(id => `'${id}'`).join(',');
+            if (this.ExcludeUserIds.length > 0) {
+                const ids = this.ExcludeUserIds.map(id => `'${id}'`).join(',');
                 excludeFilter = ` AND ID NOT IN (${ids})`;
             }
 
@@ -267,7 +349,7 @@ export class UserPickerComponent extends BaseAngularComponent implements OnInit,
                 OrderBy: 'Name ASC',
                 MaxRows: 20,
                 ResultType: 'entity_object'
-            }, this.currentUser);
+            }, this.CurrentUser);
 
             console.log('User search result:', {
                 query,
@@ -277,7 +359,7 @@ export class UserPickerComponent extends BaseAngularComponent implements OnInit,
             });
 
             if (result.Success && result.Results) {
-                this.searchResults = result.Results.map(user => ({
+                this.SearchResults = result.Results.map(user => ({
                     id: user.ID,
                     name: user.Name,
                     email: user.Email,
@@ -286,13 +368,13 @@ export class UserPickerComponent extends BaseAngularComponent implements OnInit,
                 }));
             } else {
                 console.warn('User search returned no results or failed:', result.ErrorMessage);
-                this.searchResults = [];
+                this.SearchResults = [];
             }
         } catch (error) {
             console.error('Error searching users:', error);
-            this.searchResults = [];
+            this.SearchResults = [];
         } finally {
-            this.isSearching = false;
+            this.IsSearching = false;
             this.cdr.detectChanges();
         }
     }

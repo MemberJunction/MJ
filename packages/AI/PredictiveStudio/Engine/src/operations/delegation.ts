@@ -22,12 +22,12 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
-import { resolveActiveFileStorageProviderId, buildArtifactStore } from '../training/artifact-store';
+import { ResolveActiveFileStorageProviderId, BuildArtifactStore } from '../training/artifact-store';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../training/types';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
-import { buildProductionExperimentDeps } from '../actions/run-experiment.deps';
+import { BuildProductionExperimentDeps } from '../actions/run-experiment.deps';
 
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
@@ -65,17 +65,22 @@ import type {
  * @param provider the owning provider for data access / multi-provider correctness
  * @param user the acting user threaded through every entity op for isolation/audit
  */
-export async function buildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
+export async function BuildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
   const entityFactory = new MetadataEntityFactory(provider);
-  const providerId = await resolveActiveFileStorageProviderId(user, provider);
+  const providerId = await ResolveActiveFileStorageProviderId(user, provider);
   return {
     entityFactory,
     recordLoader: new RunViewRecordLoader(),
     sidecar: new MJSidecarTrainer(),
-    artifactStore: buildArtifactStore(providerId, entityFactory),
+    artifactStore: BuildArtifactStore(providerId, entityFactory),
     contextUser: user,
     provider,
   };
+}
+
+/** @deprecated Use {@link BuildTrainingDeps}. */
+export async function buildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
+  return BuildTrainingDeps(provider, user);
 }
 
 /**
@@ -88,13 +93,23 @@ export async function buildTrainingDeps(provider: IMetadataProvider, user: UserI
  * @param user the acting user
  * @param engine optional engine override (defaults to a fresh {@link TrainingEngine})
  */
+export async function TrainModelViaEngine(
+  input: TrainModelInput,
+  provider: IMetadataProvider,
+  user: UserInfo,
+  engine: TrainingEngine = new TrainingEngine(),
+): Promise<TrainModelResult> {
+  return engine.trainModel(input, await BuildTrainingDeps(provider, user));
+}
+
+/** @deprecated Use {@link TrainModelViaEngine}. */
 export async function trainModelViaEngine(
   input: TrainModelInput,
   provider: IMetadataProvider,
   user: UserInfo,
   engine: TrainingEngine = new TrainingEngine(),
 ): Promise<TrainModelResult> {
-  return engine.trainModel(input, await buildTrainingDeps(provider, user));
+  return TrainModelViaEngine(input, provider, user, engine);
 }
 
 /**
@@ -102,8 +117,13 @@ export async function trainModelViaEngine(
  * `Draft` and records a plain-language `LEAKAGE WARNING` in the run's `Notes`
  * (§6.4); this reads that single source of truth so the Remote Op and Action agree.
  */
-export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
+export function WasTrainingLeakageFlagged(result: TrainModelResult): boolean {
   return (result.run.Notes ?? '').includes('LEAKAGE WARNING');
+}
+
+/** @deprecated Use {@link WasTrainingLeakageFlagged}. */
+export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
+  return WasTrainingLeakageFlagged(result);
 }
 
 // ----- Scoring ----------------------------------------------------------------
@@ -120,8 +140,13 @@ export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
  * **Production follow-up**: swap `LocalArtifactLoader` for a provider `GetObject`
  * loader; the id contract (read by File id) is unchanged.
  */
-export function buildProductionMLInferenceDeps(): MLInferenceDeps {
+export function BuildProductionMLInferenceDeps(): MLInferenceDeps {
   return { modelLoader: new RunViewMLModelLoader(), sidecar: new MJSidecarPredictor(), artifactLoader: new LocalArtifactLoader() };
+}
+
+/** @deprecated Use {@link BuildProductionMLInferenceDeps}. */
+export function buildProductionMLInferenceDeps(): MLInferenceDeps {
+  return BuildProductionMLInferenceDeps();
 }
 
 /**
@@ -129,8 +154,13 @@ export function buildProductionMLInferenceDeps(): MLInferenceDeps {
  * (see {@link buildProductionMLInferenceDeps}). No provider lookup is needed at score
  * time — the File id IS the artifact key.
  */
+export function BuildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
+  return new ProductionScoreRecordSetRunner({ deps: BuildProductionMLInferenceDeps() });
+}
+
+/** @deprecated Use {@link BuildScoreRecordSetRunner}. */
 export function buildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
-  return new ProductionScoreRecordSetRunner({ deps: buildProductionMLInferenceDeps() });
+  return BuildScoreRecordSetRunner();
 }
 
 /**
@@ -142,11 +172,19 @@ export function buildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
  * @param request the model id + resolved scope + write-back directive + user/provider
  * @param runner optional runner override (defaults to {@link buildScoreRecordSetRunner})
  */
+export function ScoreRecordSetViaRunner(
+  request: ScoreRecordSetRequest,
+  runner: IScoreRecordSetRunner = BuildScoreRecordSetRunner(),
+): Promise<ScoreRecordSetResult> {
+  return runner.run(request);
+}
+
+/** @deprecated Use {@link ScoreRecordSetViaRunner}. */
 export function scoreRecordSetViaRunner(
   request: ScoreRecordSetRequest,
   runner: IScoreRecordSetRunner = buildScoreRecordSetRunner(),
 ): Promise<ScoreRecordSetResult> {
-  return runner.run(request);
+  return ScoreRecordSetViaRunner(request, runner);
 }
 
 // ----- Experiment -------------------------------------------------------------
@@ -163,6 +201,17 @@ export function scoreRecordSetViaRunner(
  * @param user the acting user
  * @param orchestrator optional orchestrator override (defaults to {@link ExperimentOrchestrator})
  */
+export async function RunExperimentSessionViaOrchestrator(
+  plan: ModelingPlanSpec,
+  options: ExperimentRunOptions,
+  provider: IMetadataProvider,
+  user: UserInfo,
+  orchestrator: ExperimentOrchestrator = new ExperimentOrchestrator(),
+): Promise<ExperimentSessionResult> {
+  return orchestrator.runSession(plan, await BuildProductionExperimentDeps(user, provider), options);
+}
+
+/** @deprecated Use {@link RunExperimentSessionViaOrchestrator}. */
 export async function runExperimentSessionViaOrchestrator(
   plan: ModelingPlanSpec,
   options: ExperimentRunOptions,
@@ -170,7 +219,7 @@ export async function runExperimentSessionViaOrchestrator(
   user: UserInfo,
   orchestrator: ExperimentOrchestrator = new ExperimentOrchestrator(),
 ): Promise<ExperimentSessionResult> {
-  return orchestrator.runSession(plan, await buildProductionExperimentDeps(user, provider), options);
+  return RunExperimentSessionViaOrchestrator(plan, options, provider, user, orchestrator);
 }
 
 // ----- Promotion --------------------------------------------------------------
@@ -183,11 +232,19 @@ export async function runExperimentSessionViaOrchestrator(
  * @param request the model id + target status + sign-off + user/provider
  * @param gate optional gate override (defaults to {@link ProductionModelPromotionGate})
  */
-export function promoteModelViaGate(
+export function PromoteModelViaGate(
   request: PromoteModelRequest,
   gate: IModelPromotionGate = new ProductionModelPromotionGate(),
 ): Promise<PromoteModelOutcome> {
   return gate.promote(request);
+}
+
+/** @deprecated Use {@link PromoteModelViaGate}. */
+export function promoteModelViaGate(
+  request: PromoteModelRequest,
+  gate: IModelPromotionGate = new ProductionModelPromotionGate(),
+): Promise<PromoteModelOutcome> {
+  return PromoteModelViaGate(request, gate);
 }
 
 /** Re-export the orchestrator budget type for the operations that map it. */

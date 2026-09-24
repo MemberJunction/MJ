@@ -28,7 +28,7 @@ import {
     ClassifyProvenanceFact,
     ClassifyAuditEntry,
 } from '../shared/classify.types';
-import { deriveDisplayName, formatWeight, tagFontSize, formatDate } from '../shared/classify.format';
+import { DeriveDisplayName, FormatWeight, TagFontSize, FormatDate } from '../shared/classify.format';
 
 @Component({
     standalone: false,
@@ -65,8 +65,8 @@ export class ClassifyItemDrilldownComponent extends BaseAngularComponent {
     public Audit: ClassifyAuditEntry[] = [];
 
     // Template-facing formatters
-    public readonly FormatWeight = formatWeight;
-    public readonly TagFontSize = tagFontSize;
+    public readonly FormatWeight = FormatWeight;
+    public readonly TagFontSize = TagFontSize;
 
     /** Max characters of item text shown in the rendered-content preview. */
     private static readonly TEXT_PREVIEW_MAX = 1200;
@@ -138,7 +138,7 @@ export class ClassifyItemDrilldownComponent extends BaseAngularComponent {
     }
 
     private applyItem(item: Record<string, unknown>): void {
-        this.DisplayName = deriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null });
+        this.DisplayName = DeriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null });
         this.SourceName = (item['ContentSource'] as string) ?? 'Unknown';
         this.URL = (item['URL'] as string) ?? '';
         const text = (item['Text'] as string) ?? '';
@@ -206,9 +206,9 @@ export class ClassifyItemDrilldownComponent extends BaseAngularComponent {
         const lastTagged = item['LastTaggedAt'] as string | null;
         const lastEmbedded = item['LastEmbeddedAt'] as string | null;
 
-        if (created) entries.push({ Label: 'Item created', Timestamp: formatDate(created), Icon: 'fa-solid fa-plus' });
-        if (lastTagged) entries.push({ Label: 'Last tagged', Timestamp: formatDate(lastTagged), Icon: 'fa-solid fa-tags' });
-        if (lastEmbedded) entries.push({ Label: 'Last embedded', Timestamp: formatDate(lastEmbedded), Icon: 'fa-solid fa-vector-square' });
+        if (created) entries.push({ Label: 'Item created', Timestamp: FormatDate(created), Icon: 'fa-solid fa-plus' });
+        if (lastTagged) entries.push({ Label: 'Last tagged', Timestamp: FormatDate(lastTagged), Icon: 'fa-solid fa-tags' });
+        if (lastEmbedded) entries.push({ Label: 'Last embedded', Timestamp: FormatDate(lastEmbedded), Icon: 'fa-solid fa-vector-square' });
 
         this.Audit = entries;
     }

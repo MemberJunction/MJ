@@ -10,7 +10,7 @@
  * @returns The display name for a known language, or — for an unknown id — the
  *          input uppercased as a reasonable fallback (an empty string maps to `''`).
  */
-export function formatLanguageName(language: string): string {
+export function FormatLanguageName(language: string): string {
   const languageMap: Record<string, string> = {
     js: 'JavaScript',
     ts: 'TypeScript',
@@ -65,4 +65,9 @@ export function formatLanguageName(language: string): string {
   };
 
   return languageMap[language.toLowerCase()] || language.toUpperCase();
+}
+
+/** @deprecated Use {@link FormatLanguageName}. */
+export function formatLanguageName(language: string): string {
+  return FormatLanguageName(language);
 }

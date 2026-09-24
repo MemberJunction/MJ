@@ -25,7 +25,7 @@ import 'prismjs/components/prism-yaml';
 import { Colors } from '@/theme/tokens';
 
 /** A contiguous run of source text rendered in a single color. */
-export type HighlightRun = { text: string; color: string };
+export type HighlightRun = { Text: string; Color: string };
 
 /** Base color for plain, un-tokenized source text. */
 const PLAIN_COLOR = Colors.ink;
@@ -108,7 +108,7 @@ function colorForToken(type: string, alias: string | string[], inherited: string
  */
 function flattenTokens(stream: Prism.TokenStream, inherited: string, out: HighlightRun[]): void {
     if (typeof stream === 'string') {
-        if (stream.length > 0) out.push({ text: stream, color: inherited });
+        if (stream.length > 0) out.push({ Text: stream, Color: inherited });
         return;
     }
     if (Array.isArray(stream)) {
@@ -131,13 +131,18 @@ function flattenTokens(stream: Prism.TokenStream, inherited: string, out: Highli
 export function HighlightCode(code: string, language: string | undefined): HighlightRun[] {
     const grammarId = resolveLanguageId(language);
     const grammar = grammarId ? Prism.languages[grammarId] : undefined;
-    if (!grammar) return [{ text: code, color: PLAIN_COLOR }];
+    if (!grammar) return [{ Text: code, Color: PLAIN_COLOR }];
     try {
         const tokens = Prism.tokenize(code, grammar);
         const runs: HighlightRun[] = [];
         flattenTokens(tokens, PLAIN_COLOR, runs);
-        return runs.length > 0 ? runs : [{ text: code, color: PLAIN_COLOR }];
+        return runs.length > 0 ? runs : [{ Text: code, Color: PLAIN_COLOR }];
     } catch {
-        return [{ text: code, color: PLAIN_COLOR }];
+        return [{ Text: code, Color: PLAIN_COLOR }];
     }
+}
+
+/** @deprecated Use {@link HighlightCode}. */
+export function highlightCode(code: string, language: string | undefined): HighlightRun[] {
+    return HighlightCode(code, language);
 }

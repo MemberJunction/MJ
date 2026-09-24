@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
-import { createMarkdownSnapshot } from '../../snapshot-helpers';
+import { CreateMarkdownSnapshot } from '../../snapshot-helpers';
 
 /**
  * Viewer component for Markdown artifacts
@@ -154,8 +154,26 @@ import { createMarkdownSnapshot } from '../../snapshot-helpers';
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'MarkdownArtifactViewerPlugin')
 export class MarkdownArtifactViewerComponent extends BaseArtifactViewerPluginComponent {
-  public markdownContent = '';
-  public viewMode: 'preview' | 'source' = 'preview';
+  public MarkdownContent = '';
+
+  /** @deprecated Use {@link MarkdownContent}. */
+  public get markdownContent() {
+    return this.MarkdownContent;
+  }
+  /** @deprecated Use {@link MarkdownContent}. */
+  public set markdownContent(value) {
+    this.MarkdownContent = value;
+  }
+  public ViewMode: 'preview' | 'source' = 'preview';
+
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): 'preview' | 'source' {
+    return this.ViewMode;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public set viewMode(value: 'preview' | 'source') {
+    this.ViewMode = value;
+  }
 
   /**
    * Markdown artifacts always have content to display
@@ -165,20 +183,25 @@ export class MarkdownArtifactViewerComponent extends BaseArtifactViewerPluginCom
   }
 
   ngOnInit(): void {
-    this.markdownContent = this.getContent();
+    this.MarkdownContent = this.getContent();
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
-    return createMarkdownSnapshot(this.getRawContent(), this.getDisplayTitle());
+    return CreateMarkdownSnapshot(this.getRawContent(), this.getDisplayTitle());
   }
 
-  onCopy(): void {
-    if (this.markdownContent) {
-      navigator.clipboard.writeText(this.markdownContent).then(() => {
+  OnCopy(): void {
+    if (this.MarkdownContent) {
+      navigator.clipboard.writeText(this.MarkdownContent).then(() => {
         console.log('✅ Copied markdown to clipboard');
       }).catch(err => {
         console.error('Failed to copy to clipboard:', err);
       });
     }
+  }
+
+  /** @deprecated Use {@link OnCopy}. */
+  onCopy(): void {
+    return this.OnCopy();
   }
 }

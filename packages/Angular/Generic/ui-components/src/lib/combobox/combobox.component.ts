@@ -228,7 +228,7 @@ export class MJComboboxComponent implements ControlValueAccessor, OnDestroy {
     setTimeout(() => {
       if (!this.isBlurring) return;
       this.isBlurring = false;
-      this.CommitValue();
+      this.commitValue();
       this.Close();
       this.onTouched();
     }, 150);
@@ -300,7 +300,7 @@ export class MJComboboxComponent implements ControlValueAccessor, OnDestroy {
   }
 
   /** Commit the current input text as a value (for AllowCustom or matching item) */
-  private CommitValue(): void {
+  private commitValue(): void {
     if (!this.InputText.trim()) {
       // Empty input — clear the value
       if (this.SelectedValue != null) {
@@ -358,7 +358,7 @@ export class MJComboboxComponent implements ControlValueAccessor, OnDestroy {
         if (this.IsOpen && this.HighlightedIndex >= 0 && this.HighlightedIndex < items.length) {
           this.SelectItem(items[this.HighlightedIndex]);
         } else {
-          this.CommitValue();
+          this.commitValue();
           this.Close();
         }
         break;

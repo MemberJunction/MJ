@@ -18,12 +18,12 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ScheduledJobService, ScheduledJobDialogResult } from '@memberjunction/ng-scheduling';
 import {
-    buildSchedulingAgentContext,
-    resolveScheduledJob,
-    buildScheduleNotFoundError,
+    BuildSchedulingAgentContext,
+    ResolveScheduledJob,
+    BuildScheduleNotFoundError,
     VALID_SCHEDULE_STATUSES,
 } from './scheduling-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Simple cron-to-English mapping for common patterns */
 interface CronParts {
@@ -151,7 +151,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
         if (this.HideToolbar) {
             return;
         }
-        this.navigationService.SetAgentContext(this, buildSchedulingAgentContext({
+        this.navigationService.SetAgentContext(this, BuildSchedulingAgentContext({
             AllJobs: this.AllJobs.map(j => ({
                 ID: j.ID,
                 Name: j.Name,
@@ -226,7 +226,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
                     required: ['query'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['query'], 'query');
+                    const v = ValidateStringParam(params['query'], 'query');
                     if (!v.ok) return v.result;
                     this.SearchQuery = v.value;
                     this.OnSearchChanged();
@@ -242,13 +242,13 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
                     required: ['job'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['job'], 'job');
+                    const v = ValidateStringParam(params['job'], 'job');
                     if (!v.ok) return v.result;
-                    const match = resolveScheduledJob(v.value, this.AllJobs);
+                    const match = ResolveScheduledJob(v.value, this.AllJobs);
                     if (!match) {
                         return {
                             Success: false,
-                            ErrorMessage: buildScheduleNotFoundError(v.value, this.AllJobs.map(j => j.Name)),
+                            ErrorMessage: BuildScheduleNotFoundError(v.value, this.AllJobs.map(j => j.Name)),
                         };
                     }
                     this.navigationService.OpenEntityRecord('MJ: Scheduled Jobs', CompositeKey.FromID(match.ID));

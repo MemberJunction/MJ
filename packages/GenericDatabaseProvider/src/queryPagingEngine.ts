@@ -384,7 +384,7 @@ export class QueryPagingEngine {
      *
      * Preserves the public static API for existing callers and tests.
      */
-    static extractOrderBy(
+    static ExtractOrderBy(
         sql: string,
         dialect: SQLDialect | string = new SQLServerDialect()
     ): { sqlWithoutOrder: string; orderByClause: string | null } {
@@ -398,14 +398,27 @@ export class QueryPagingEngine {
         };
     }
 
+    /** @deprecated Use {@link ExtractOrderBy}. */
+    static extractOrderBy(
+        sql: string,
+        dialect: SQLDialect | string = new SQLServerDialect()
+    ): { sqlWithoutOrder: string; orderByClause: string | null } {
+        return this.ExtractOrderBy(sql, dialect);
+    }
+
     /**
      * Strips a TOP N or TOP (N) clause from the beginning of a SELECT statement.
      */
-    static stripTopClause(sql: string): { sql: string; topRemoved: boolean } {
+    static StripTopClause(sql: string): { sql: string; topRemoved: boolean } {
         const topRegex = /^(SELECT\s+(?:DISTINCT\s+)?)TOP\s+(?:\(\s*\d+\s*\)|\d+)\s+/i;
         const match = sql.match(topRegex);
         if (!match) return { sql, topRemoved: false };
         return { sql: match[1] + sql.substring(match[0].length), topRemoved: true };
+    }
+
+    /** @deprecated Use {@link StripTopClause}. */
+    static stripTopClause(sql: string): { sql: string; topRemoved: boolean } {
+        return this.StripTopClause(sql);
     }
 
     /**

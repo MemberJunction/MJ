@@ -170,19 +170,118 @@ interface DragData {
   `]
 })
 export class CollectionTreeComponent extends BaseAngularComponent implements OnInit  {
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
-  @Input() selectedCollectionId: string | null = null;
-  @Input() userPermissions: Map<string, CollectionPermission> = new Map();
+  @Input() EnvironmentId!: string;
 
-  @Output() collectionSelected = new EventEmitter<MJCollectionEntity>();
-  @Output() collectionCreated = new EventEmitter<MJCollectionEntity>();
-  @Output() collectionDeleted = new EventEmitter<MJCollectionEntity>();
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
 
-  public collections: MJCollectionEntity[] = [];
-  public treeNodes: TreeNode[] = [];
-  public draggedNode: TreeNode | null = null;
-  public dragOverNodeId: string | null = null;
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() SelectedCollectionId: string | null = null;
+
+  /** @deprecated Use {@link SelectedCollectionId}. */
+  @Input() set selectedCollectionId(value: string | null) {
+    this.SelectedCollectionId = value;
+  }
+  /** @deprecated Use {@link SelectedCollectionId}. */
+  get selectedCollectionId(): string | null {
+    return this.SelectedCollectionId;
+  }
+  @Input() UserPermissions: Map<string, CollectionPermission> = new Map();
+
+  /** @deprecated Use {@link UserPermissions}. */
+  @Input() set userPermissions(value: Map<string, CollectionPermission>) {
+    this.UserPermissions = value;
+  }
+  /** @deprecated Use {@link UserPermissions}. */
+  get userPermissions(): Map<string, CollectionPermission> {
+    return this.UserPermissions;
+  }
+
+  @Output() CollectionSelected = new EventEmitter<MJCollectionEntity>();
+
+  /**
+   * @deprecated Use {@link CollectionSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (collectionSelected) keeps working. Must stay AFTER CollectionSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() collectionSelected = this.CollectionSelected;
+  @Output() CollectionCreated = new EventEmitter<MJCollectionEntity>();
+
+  /**
+   * @deprecated Use {@link CollectionCreated}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (collectionCreated) keeps working. Must stay AFTER CollectionCreated: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() collectionCreated = this.CollectionCreated;
+  @Output() CollectionDeleted = new EventEmitter<MJCollectionEntity>();
+
+  /**
+   * @deprecated Use {@link CollectionDeleted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (collectionDeleted) keeps working. Must stay AFTER CollectionDeleted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() collectionDeleted = this.CollectionDeleted;
+
+  public Collections: MJCollectionEntity[] = [];
+
+  /** @deprecated Use {@link Collections}. */
+  public get collections(): MJCollectionEntity[] {
+    return this.Collections;
+  }
+  /** @deprecated Use {@link Collections}. */
+  public set collections(value: MJCollectionEntity[]) {
+    this.Collections = value;
+  }
+  public TreeNodes: TreeNode[] = [];
+
+  /** @deprecated Use {@link TreeNodes}. */
+  public get treeNodes(): TreeNode[] {
+    return this.TreeNodes;
+  }
+  /** @deprecated Use {@link TreeNodes}. */
+  public set treeNodes(value: TreeNode[]) {
+    this.TreeNodes = value;
+  }
+  public DraggedNode: TreeNode | null = null;
+
+  /** @deprecated Use {@link DraggedNode}. */
+  public get draggedNode(): TreeNode | null {
+    return this.DraggedNode;
+  }
+  /** @deprecated Use {@link DraggedNode}. */
+  public set draggedNode(value: TreeNode | null) {
+    this.DraggedNode = value;
+  }
+  public DragOverNodeId: string | null = null;
+
+  /** @deprecated Use {@link DragOverNodeId}. */
+  public get dragOverNodeId(): string | null {
+    return this.DragOverNodeId;
+  }
+  /** @deprecated Use {@link DragOverNodeId}. */
+  public set dragOverNodeId(value: string | null) {
+    this.DragOverNodeId = value;
+  }
 
   constructor(private permissionService: CollectionPermissionService, private confirmService: MJConfirmService) {
   super();}
@@ -197,13 +296,13 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
-        ExtraFilter: `EnvironmentID='${this.environmentId}'`,
+        ExtraFilter: `EnvironmentID='${this.EnvironmentId}'`,
         OrderBy: 'Sequence ASC, Name ASC',
         ResultType: 'entity_object'
-      }, this.currentUser);
+      }, this.CurrentUser);
 
       if (result.Success) {
-        this.collections = result.Results || [];
+        this.Collections = result.Results || [];
         this.buildTree();
       }
     } catch (error) {
@@ -212,12 +311,12 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
   }
 
   private buildTree(): void {
-    const rootCollections = this.collections.filter(c => !c.ParentID);
-    this.treeNodes = rootCollections.map(c => this.buildNode(c, 0));
+    const rootCollections = this.Collections.filter(c => !c.ParentID);
+    this.TreeNodes = rootCollections.map(c => this.buildNode(c, 0));
   }
 
   private buildNode(collection: MJCollectionEntity, level: number): TreeNode {
-    const children = this.collections.filter(c => UUIDsEqual(c.ParentID, collection.ID));
+    const children = this.Collections.filter(c => UUIDsEqual(c.ParentID, collection.ID));
     return {
       collection,
       children: children.map(c => this.buildNode(c, level + 1)),
@@ -226,35 +325,45 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
     };
   }
 
-  toggleNode(node: TreeNode, event: Event): void {
+  ToggleNode(node: TreeNode, event: Event): void {
     event.stopPropagation();
     node.expanded = !node.expanded;
   }
 
+  /** @deprecated Use {@link ToggleNode}. */
+  toggleNode(node: TreeNode, event: Event): void {
+    return this.ToggleNode(node, event);
+  }
+
   IsCollectionSelected(node: TreeNode): boolean {
-    return UUIDsEqual(node.collection.ID, this.selectedCollectionId);
+    return UUIDsEqual(node.collection.ID, this.SelectedCollectionId);
   }
 
   IsCollectionDragging(node: TreeNode): boolean {
-    return UUIDsEqual(this.draggedNode?.collection?.ID, node.collection.ID);
+    return UUIDsEqual(this.DraggedNode?.collection?.ID, node.collection.ID);
   }
 
+  OnSelectCollection(collection: MJCollectionEntity): void {
+    this.SelectedCollectionId = collection.ID;
+    this.CollectionSelected.emit(collection);
+  }
+
+  /** @deprecated Use {@link OnSelectCollection}. */
   onSelectCollection(collection: MJCollectionEntity): void {
-    this.selectedCollectionId = collection.ID;
-    this.collectionSelected.emit(collection);
+    return this.OnSelectCollection(collection);
   }
 
-  async onCreateCollection(parentId: string | null): Promise<void> {
+  async OnCreateCollection(parentId: string | null): Promise<void> {
     // Validate permission if creating child collection
     if (parentId) {
-      const parentCollection = this.collections.find(c => UUIDsEqual(c.ID, parentId));
+      const parentCollection = this.Collections.find(c => UUIDsEqual(c.ID, parentId));
       if (parentCollection) {
         // Check if user has Edit permission on parent
-        if (parentCollection.OwnerID && !UUIDsEqual(parentCollection.OwnerID, this.currentUser.ID)) {
+        if (parentCollection.OwnerID && !UUIDsEqual(parentCollection.OwnerID, this.CurrentUser.ID)) {
           const permission = await this.permissionService.checkPermission(
             parentId,
-            this.currentUser.ID,
-            this.currentUser
+            this.CurrentUser.ID,
+            this.CurrentUser
           );
 
           if (!permission?.canEdit) {
@@ -270,24 +379,24 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
 
     try {
       const md = this.ProviderToUse;
-      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
 
       collection.Name = name;
-      collection.EnvironmentID = this.environmentId;
+      collection.EnvironmentID = this.EnvironmentId;
 
       if (parentId) {
         // Child collection - inherit parent's owner and set parent
-        const parentCollection = this.collections.find(c => UUIDsEqual(c.ID, parentId));
+        const parentCollection = this.Collections.find(c => UUIDsEqual(c.ID, parentId));
         collection.ParentID = parentId;
-        collection.OwnerID = parentCollection?.OwnerID || this.currentUser.ID;
+        collection.OwnerID = parentCollection?.OwnerID || this.CurrentUser.ID;
       } else {
         // Root collection - current user becomes owner
-        collection.OwnerID = this.currentUser.ID;
+        collection.OwnerID = this.CurrentUser.ID;
       }
 
       const saved = await collection.Save();
       if (saved) {
-        this.collectionCreated.emit(collection);
+        this.CollectionCreated.emit(collection);
         await this.loadCollections();
       }
     } catch (error) {
@@ -296,13 +405,18 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  async onDeleteCollection(collection: MJCollectionEntity): Promise<void> {
+  /** @deprecated Use {@link OnCreateCollection}. */
+  async onCreateCollection(parentId: string | null): Promise<void> {
+    return this.OnCreateCollection(parentId);
+  }
+
+  async OnDeleteCollection(collection: MJCollectionEntity): Promise<void> {
     // Validate Delete permission
-    if (collection.OwnerID && !UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
+    if (collection.OwnerID && !UUIDsEqual(collection.OwnerID, this.CurrentUser.ID)) {
       const permission = await this.permissionService.checkPermission(
         collection.ID,
-        this.currentUser.ID,
-        this.currentUser
+        this.CurrentUser.ID,
+        this.CurrentUser
       );
 
       if (!permission?.canDelete) {
@@ -316,7 +430,7 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
     try {
       const deleted = await collection.Delete();
       if (deleted) {
-        this.collectionDeleted.emit(collection);
+        this.CollectionDeleted.emit(collection);
         await this.loadCollections();
       }
     } catch (error) {
@@ -325,8 +439,13 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  onDragStart(event: DragEvent, node: TreeNode): void {
-    this.draggedNode = node;
+  /** @deprecated Use {@link OnDeleteCollection}. */
+  async onDeleteCollection(collection: MJCollectionEntity): Promise<void> {
+    return this.OnDeleteCollection(collection);
+  }
+
+  OnDragStart(event: DragEvent, node: TreeNode): void {
+    this.DraggedNode = node;
     const dragData: DragData = {
       collectionId: node.collection.ID,
       parentId: node.collection.ParentID || null
@@ -338,60 +457,80 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
     (event.target as HTMLElement).style.opacity = '0.4';
   }
 
-  onDragEnd(event: DragEvent): void {
-    // Clean up visual feedback
-    (event.target as HTMLElement).style.opacity = '1';
-    this.draggedNode = null;
-    this.dragOverNodeId = null;
+  /** @deprecated Use {@link OnDragStart}. */
+  onDragStart(event: DragEvent, node: TreeNode): void {
+    return this.OnDragStart(event, node);
   }
 
-  onDragOver(event: DragEvent, targetNode: TreeNode): void {
+  OnDragEnd(event: DragEvent): void {
+    // Clean up visual feedback
+    (event.target as HTMLElement).style.opacity = '1';
+    this.DraggedNode = null;
+    this.DragOverNodeId = null;
+  }
+
+  /** @deprecated Use {@link OnDragEnd}. */
+  onDragEnd(event: DragEvent): void {
+    return this.OnDragEnd(event);
+  }
+
+  OnDragOver(event: DragEvent, targetNode: TreeNode): void {
     event.preventDefault(); // Required to allow drop
 
-    if (!this.draggedNode || UUIDsEqual(this.draggedNode.collection.ID, targetNode.collection.ID)) {
+    if (!this.DraggedNode || UUIDsEqual(this.DraggedNode.collection.ID, targetNode.collection.ID)) {
       event.dataTransfer!.dropEffect = 'none';
       return;
     }
 
     // Check if trying to drop into a descendant
-    if (this.isDescendant(targetNode, this.draggedNode)) {
+    if (this.isDescendant(targetNode, this.DraggedNode)) {
       event.dataTransfer!.dropEffect = 'none';
       return;
     }
 
     event.dataTransfer!.dropEffect = 'move';
-    this.dragOverNodeId = targetNode.collection.ID;
+    this.DragOverNodeId = targetNode.collection.ID;
   }
 
-  onDragLeave(event: DragEvent, targetNode: TreeNode): void {
-    if (this.dragOverNodeId === targetNode.collection.ID) {
-      this.dragOverNodeId = null;
+  /** @deprecated Use {@link OnDragOver}. */
+  onDragOver(event: DragEvent, targetNode: TreeNode): void {
+    return this.OnDragOver(event, targetNode);
+  }
+
+  OnDragLeave(event: DragEvent, targetNode: TreeNode): void {
+    if (this.DragOverNodeId === targetNode.collection.ID) {
+      this.DragOverNodeId = null;
     }
   }
 
-  async onDrop(event: DragEvent, targetNode: TreeNode): Promise<void> {
+  /** @deprecated Use {@link OnDragLeave}. */
+  onDragLeave(event: DragEvent, targetNode: TreeNode): void {
+    return this.OnDragLeave(event, targetNode);
+  }
+
+  async OnDrop(event: DragEvent, targetNode: TreeNode): Promise<void> {
     event.preventDefault();
     event.stopPropagation();
 
-    if (!this.draggedNode) {
+    if (!this.DraggedNode) {
       return;
     }
 
     // Don't allow dropping on itself
-    if (UUIDsEqual(this.draggedNode.collection.ID, targetNode.collection.ID)) {
-      this.dragOverNodeId = null;
+    if (UUIDsEqual(this.DraggedNode.collection.ID, targetNode.collection.ID)) {
+      this.DragOverNodeId = null;
       return;
     }
 
     // Check if trying to drop into a descendant
-    if (this.isDescendant(targetNode, this.draggedNode)) {
+    if (this.isDescendant(targetNode, this.DraggedNode)) {
       alert('Cannot move a collection into its own descendant');
-      this.dragOverNodeId = null;
+      this.DragOverNodeId = null;
       return;
     }
 
     try {
-      const collection = this.draggedNode.collection;
+      const collection = this.DraggedNode.collection;
       const newParentId = targetNode.collection.ID;
 
       // Update the collection's parent
@@ -408,32 +547,42 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
       LogError(error);
       alert('Error moving collection');
     } finally {
-      this.dragOverNodeId = null;
+      this.DragOverNodeId = null;
     }
   }
 
-  onDragOverRoot(event: DragEvent): void {
+  /** @deprecated Use {@link OnDrop}. */
+  async onDrop(event: DragEvent, targetNode: TreeNode): Promise<void> {
+    return this.OnDrop(event, targetNode);
+  }
+
+  OnDragOverRoot(event: DragEvent): void {
     event.preventDefault();
 
-    if (!this.draggedNode) {
+    if (!this.DraggedNode) {
       event.dataTransfer!.dropEffect = 'none';
       return;
     }
 
     event.dataTransfer!.dropEffect = 'move';
-    this.dragOverNodeId = 'root';
+    this.DragOverNodeId = 'root';
   }
 
-  async onDropRoot(event: DragEvent): Promise<void> {
+  /** @deprecated Use {@link OnDragOverRoot}. */
+  onDragOverRoot(event: DragEvent): void {
+    return this.OnDragOverRoot(event);
+  }
+
+  async OnDropRoot(event: DragEvent): Promise<void> {
     event.preventDefault();
     event.stopPropagation();
 
-    if (!this.draggedNode) {
+    if (!this.DraggedNode) {
       return;
     }
 
     try {
-      const collection = this.draggedNode.collection;
+      const collection = this.DraggedNode.collection;
 
       // Move to root level
       collection.ParentID = null;
@@ -448,8 +597,13 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
       LogError(error);
       alert('Error moving collection to root');
     } finally {
-      this.dragOverNodeId = null;
+      this.DragOverNodeId = null;
     }
+  }
+
+  /** @deprecated Use {@link OnDropRoot}. */
+  async onDropRoot(event: DragEvent): Promise<void> {
+    return this.OnDropRoot(event);
   }
 
   private isDescendant(potentialDescendant: TreeNode, ancestor: TreeNode): boolean {
@@ -469,28 +623,33 @@ export class CollectionTreeComponent extends BaseAngularComponent implements OnI
   // Permission checking methods
   canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.CurrentUser.ID)) {
       return true;
     }
 
     // Check permission record
-    const permission = this.userPermissions.get(collection.ID);
+    const permission = this.UserPermissions.get(collection.ID);
     return permission?.canEdit || false;
   }
 
   canDelete(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.CurrentUser.ID)) {
       return true;
     }
 
     // Check permission record
-    const permission = this.userPermissions.get(collection.ID);
+    const permission = this.UserPermissions.get(collection.ID);
     return permission?.canDelete || false;
   }
 
-  canCreateAtRoot(): boolean {
+  CanCreateAtRoot(): boolean {
     // Anyone can create at root level
     return true;
+  }
+
+  /** @deprecated Use {@link CanCreateAtRoot}. */
+  canCreateAtRoot(): boolean {
+    return this.CanCreateAtRoot();
   }
 }

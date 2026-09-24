@@ -29,13 +29,18 @@ export class APIRateLimiterManager extends BaseSingleton<APIRateLimiterManager> 
         return APIRateLimiterManager.getInstance<APIRateLimiterManager>();
     }
 
-    getRateLimiter(key: string, config: RateLimitConfig): APIRateLimiter {
+    GetRateLimiter(key: string, config: RateLimitConfig): APIRateLimiter {
         let limiter = this.limiters.Get(key);
         if (!limiter) {
             limiter = new APIRateLimiter(config);
             this.limiters.Set(key, limiter);
         }
         return limiter;
+    }
+
+    /** @deprecated Use {@link GetRateLimiter}. */
+    getRateLimiter(key: string, config: RateLimitConfig): APIRateLimiter {
+        return this.GetRateLimiter(key, config);
     }
 }
 
@@ -80,7 +85,7 @@ export class APIRateLimiter {
         this.requestQueue$.complete();
     }
 
-    async execute(requestConfig: HttpRequestConfig): Promise<HttpResponse> {
+    async Execute(requestConfig: HttpRequestConfig): Promise<HttpResponse> {
         return new Promise<HttpResponse>((resolve, reject) => {
             this.requestQueue$.next({
                 config: requestConfig,
@@ -89,6 +94,11 @@ export class APIRateLimiter {
                 retryCount: 0
             });
         });
+    }
+
+    /** @deprecated Use {@link Execute}. */
+    async execute(requestConfig: HttpRequestConfig): Promise<HttpResponse> {
+        return this.Execute(requestConfig);
     }
 
     private processRequest(request: QueuedRequest): Observable<void> {

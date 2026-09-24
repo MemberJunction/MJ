@@ -835,9 +835,14 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
  * startup summary `Config` line. Declared before `configInfo` so the assignment
  * inside `loadConfig()` (invoked below) is not in its temporal dead zone.
  */
-export let configFilePath: string | undefined;
+export let ConfigFilePath: string | undefined;
 
-export const configInfo: ConfigInfo = loadConfig();
+export {
+  /** @deprecated Use {@link ConfigFilePath} instead. */
+  ConfigFilePath as configFilePath,
+};
+
+export const configInfo: ConfigInfo = LoadConfig();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 export const {
   dbUsername,
@@ -864,7 +869,7 @@ export const {
   restApiOptions: RESTApiOptions,
 } = configInfo;
 
-export function loadConfig() {
+export function LoadConfig() {
   const configSearchResult = explorer.search(process.cwd());
 
   // Start with DEFAULT_SERVER_CONFIG as base
@@ -874,7 +879,7 @@ export function loadConfig() {
   if (configSearchResult && !configSearchResult.isEmpty) {
     // Resolved config-file path. Surfaced in the startup summary `Config` line at standard
     // level (see StartupLogger). Demoted to verbose-only here to avoid a duplicate inline line.
-    configFilePath = configSearchResult.filepath;
+    ConfigFilePath = configSearchResult.filepath;
     LogStatusEx({ message: `Config file found at ${configSearchResult.filepath}`, verboseOnly: true });
 
     // Merge user config with defaults (user config takes precedence)
@@ -890,4 +895,9 @@ export function loadConfig() {
     throw new Error('Configuration validation failed');
   }
   return configParsing.data;
+}
+
+/** @deprecated Use {@link LoadConfig}. */
+export function loadConfig() {
+  return LoadConfig();
 }

@@ -68,12 +68,12 @@ export interface EntityTableSpec {
  * Kept in a dedicated type so downstream steps can type-check their inputs.
  */
 export interface BasicsStepValue {
-    entityName: string;
-    tableName: string;
-    schemaName: string;
-    description: string;
+    EntityName: string;
+    TableName: string;
+    SchemaName: string;
+    Description: string;
     /** When true, tableName was auto-derived from entityName and will update automatically. */
-    tableNameIsAuto: boolean;
+    TableNameIsAuto: boolean;
 }
 
 // ─── Schema options ───────────────────────────────────────────────────────────
@@ -81,16 +81,16 @@ export interface BasicsStepValue {
 /** Schema option shown in the "Schema" dropdown on Step 1 of the wizard. */
 export interface SchemaOption {
     /** SQL schema name (e.g. '__mj_UDT'). */
-    value: string;
+    Value: string;
     /** Human-readable display name (e.g. 'UDT — User-Defined Tables (default)'). */
-    label: string;
+    Label: string;
     /** True for the `__mj_UDT` schema — pre-selected in the wizard. */
-    isDefault: boolean;
+    IsDefault: boolean;
     /**
      * When true, user must hold `Create in Custom Schema` authorization.
      * The engine gates this option based on the user's authorizations.
      */
-    requiresElevatedAuth: boolean;
+    RequiresElevatedAuth: boolean;
 }
 
 // ─── Entity list models ───────────────────────────────────────────────────────
@@ -100,24 +100,24 @@ export interface SchemaOption {
  * Loaded by `DatabaseDesignerEngine.loadAccessibleEntities()`.
  */
 export interface AccessibleEntity {
-    entityId: string;
-    entityName: string;
-    tableName: string;
-    schemaName: string;
+    entityId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    tableName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    schemaName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Number of user-defined columns (excludes auto-managed ID / __mj_CreatedAt / __mj_UpdatedAt). */
-    fieldCount: number;
-    createdAt: Date;
+    fieldCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    createdAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** True when the current user is the recorded MJ:UDT:Owner for this entity. */
-    isOwner: boolean;
+    isOwner: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Display name of the owner (loaded lazily — may be absent initially). */
-    ownerDisplayName?: string;
+    ownerDisplayName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Full entity detail loaded when the user opens a slide panel or enters the modify wizard. */
 export interface AccessibleEntityDetail extends AccessibleEntity {
     description: string;
-    columns: ColumnSpec[];
-    foreignKeys: ForeignKeySpec[];
+    Columns: ColumnSpec[];
+    ForeignKeys: ForeignKeySpec[];
 }
 
 // ─── Action results ───────────────────────────────────────────────────────────
@@ -168,36 +168,36 @@ export type WizardStep = 'basics' | 'fields' | 'relationships' | 'review';
 
 /** Step definition passed to `WizardStepIndicatorComponent`. */
 export interface WizardStepDef {
-    id: WizardStep;
-    label: string;
-    isComplete: boolean;
-    isActive: boolean;
+    id: WizardStep;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    isComplete: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    isActive: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 // ─── Field type options ───────────────────────────────────────────────────────
 
 /** One entry in the field-type dropdown. */
 export interface FieldTypeOption {
-    value: NonNullable<ColumnSpec['Type']>;
-    label: string;
+    Value: NonNullable<ColumnSpec['Type']>;
+    Label: string;
     /** Short SQL preview shown in the review table. */
-    sqlPreview: string;
-    hasMaxLength: boolean;
-    hasPrecisionScale: boolean;
+    SqlPreview: string;
+    HasMaxLength: boolean;
+    HasPrecisionScale: boolean;
 }
 
 /** Pre-defined field type options — one for each semantic type. */
 export const FIELD_TYPE_OPTIONS: readonly FieldTypeOption[] = [
-    { value: 'string',   label: 'String (NVARCHAR)',       sqlPreview: 'NVARCHAR(n)',          hasMaxLength: true,  hasPrecisionScale: false },
-    { value: 'text',     label: 'Long Text (NVARCHAR MAX)', sqlPreview: 'NVARCHAR(MAX)',        hasMaxLength: false, hasPrecisionScale: false },
-    { value: 'integer',  label: 'Integer (INT)',            sqlPreview: 'INT',                  hasMaxLength: false, hasPrecisionScale: false },
-    { value: 'bigint',   label: 'Big Integer (BIGINT)',     sqlPreview: 'BIGINT',               hasMaxLength: false, hasPrecisionScale: false },
-    { value: 'decimal',  label: 'Decimal',                  sqlPreview: 'DECIMAL(p,s)',         hasMaxLength: false, hasPrecisionScale: true  },
-    { value: 'boolean',  label: 'Boolean (BIT)',            sqlPreview: 'BIT',                  hasMaxLength: false, hasPrecisionScale: false },
-    { value: 'datetime', label: 'Date + Time',              sqlPreview: 'DATETIMEOFFSET',       hasMaxLength: false, hasPrecisionScale: false },
-    { value: 'date',     label: 'Date Only',                sqlPreview: 'DATE',                 hasMaxLength: false, hasPrecisionScale: false },
-    { value: 'uuid',     label: 'Unique ID (GUID)',         sqlPreview: 'UNIQUEIDENTIFIER',     hasMaxLength: false, hasPrecisionScale: false },
-    { value: 'json',     label: 'JSON',                     sqlPreview: 'NVARCHAR(MAX) / JSON', hasMaxLength: false, hasPrecisionScale: false },
-    { value: 'float',    label: 'Float',                    sqlPreview: 'FLOAT',                hasMaxLength: false, hasPrecisionScale: false },
-    { value: 'time',     label: 'Time Only',                sqlPreview: 'TIME',                 hasMaxLength: false, hasPrecisionScale: false },
+    { Value: 'string',   Label: 'String (NVARCHAR)',       SqlPreview: 'NVARCHAR(n)',          HasMaxLength: true,  HasPrecisionScale: false },
+    { Value: 'text',     Label: 'Long Text (NVARCHAR MAX)', SqlPreview: 'NVARCHAR(MAX)',        HasMaxLength: false, HasPrecisionScale: false },
+    { Value: 'integer',  Label: 'Integer (INT)',            SqlPreview: 'INT',                  HasMaxLength: false, HasPrecisionScale: false },
+    { Value: 'bigint',   Label: 'Big Integer (BIGINT)',     SqlPreview: 'BIGINT',               HasMaxLength: false, HasPrecisionScale: false },
+    { Value: 'decimal',  Label: 'Decimal',                  SqlPreview: 'DECIMAL(p,s)',         HasMaxLength: false, HasPrecisionScale: true  },
+    { Value: 'boolean',  Label: 'Boolean (BIT)',            SqlPreview: 'BIT',                  HasMaxLength: false, HasPrecisionScale: false },
+    { Value: 'datetime', Label: 'Date + Time',              SqlPreview: 'DATETIMEOFFSET',       HasMaxLength: false, HasPrecisionScale: false },
+    { Value: 'date',     Label: 'Date Only',                SqlPreview: 'DATE',                 HasMaxLength: false, HasPrecisionScale: false },
+    { Value: 'uuid',     Label: 'Unique ID (GUID)',         SqlPreview: 'UNIQUEIDENTIFIER',     HasMaxLength: false, HasPrecisionScale: false },
+    { Value: 'json',     Label: 'JSON',                     SqlPreview: 'NVARCHAR(MAX) / JSON', HasMaxLength: false, HasPrecisionScale: false },
+    { Value: 'float',    Label: 'Float',                    SqlPreview: 'FLOAT',                HasMaxLength: false, HasPrecisionScale: false },
+    { Value: 'time',     Label: 'Time Only',                SqlPreview: 'TIME',                 HasMaxLength: false, HasPrecisionScale: false },
 ] as const;

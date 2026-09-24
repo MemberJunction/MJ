@@ -3,7 +3,7 @@ import { QuickBooksBaseAction } from '../quickbooks-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { UserInfo } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../../../constants';
 import { ChartOfAccount } from '../../../types';
 
 /**
@@ -47,7 +47,7 @@ interface QBOAccount {
 /**
  * Action to retrieve the Chart of Accounts (GL Codes) from QuickBooks Online
  */
-@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetChartOfAccounts, ERP_INTEGRATION.QuickBooksOnline))
+@RegisterClass(BaseAction, ErpPluginKey(ACCOUNTING_VERBS.GetChartOfAccounts, ERP_INTEGRATION.QuickBooksOnline))
 @RegisterClass(BaseAction, 'GetQuickBooksGLCodesAction')
 export class GetQuickBooksGLCodesAction extends QuickBooksBaseAction {
     

@@ -40,7 +40,7 @@ export class PillColorUtil {
    * @param value The value to analyze
    * @returns The semantic color type
    */
-  static getColorType(value: string | null | undefined): PillColorType {
+  static GetColorType(value: string | null | undefined): PillColorType {
     if (!value) return 'neutral';
 
     const normalizedValue = value.toLowerCase().trim();
@@ -59,6 +59,11 @@ export class PillColorUtil {
     }
 
     return 'neutral';
+  }
+
+  /** @deprecated Use {@link GetColorType}. */
+  static getColorType(value: string | null | undefined): PillColorType {
+    return this.GetColorType(value);
   }
 
   private static matchesAnyPattern(value: string, patterns: string[]): boolean {
@@ -135,27 +140,45 @@ export class PillComponent {
   /**
    * The value to display in the pill
    */
-  @Input() value: string | null | undefined = '';
+  @Input() Value: string | null | undefined = '';
+
+  /** @deprecated Use {@link Value}. */
+  @Input() set value(value: string | null | undefined) {
+    this.Value = value;
+  }
+  /** @deprecated Use {@link Value}. */
+  get value(): string | null | undefined {
+    return this.Value;
+  }
 
   /**
    * Optional: Force a specific color instead of auto-detecting
    */
-  @Input() color: PillColorType | null = null;
+  @Input() Color: PillColorType | null = null;
+
+  /** @deprecated Use {@link Color}. */
+  @Input() set color(value: PillColorType | null) {
+    this.Color = value;
+  }
+  /** @deprecated Use {@link Color}. */
+  get color(): PillColorType | null {
+    return this.Color;
+  }
 
   /**
    * Get the display value
    */
-  get displayValue(): string {
-    return this.value || '';
+  get displayValue(): string {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    return this.Value || '';
   }
 
   /**
    * Get the effective color type (forced or auto-detected)
    */
-  get effectiveColorType(): PillColorType {
-    if (this.color) {
-      return this.color;
+  get effectiveColorType(): PillColorType {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    if (this.Color) {
+      return this.Color;
     }
-    return PillColorUtil.getColorType(this.value);
+    return PillColorUtil.getColorType(this.Value);
   }
 }

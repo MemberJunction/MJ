@@ -16,9 +16,12 @@ vi.mock('mssql', () => ({}));
 vi.mock('../Config/config', () => ({
    configInfo: {},
    currentWorkingDirectory: '/tmp',
-   getSettingValue: vi.fn(),
-   mj_core_schema: () => '__mj',
-   outputDir: '/tmp',
+   GetSettingValue: vi.fn(),
+    get getSettingValue() { return this.GetSettingValue; },
+   MjCoreSchema: () => '__mj',
+    get mj_core_schema() { return this.MjCoreSchema; },
+   OutputDir: '/tmp',
+    get outputDir() { return this.OutputDir; },
 }));
 vi.mock('@memberjunction/core', async (importOriginal) => {
    const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -38,7 +41,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 });
 vi.mock('../Misc/status_logging', () => ({
    logError: vi.fn(),
-   logMessage: vi.fn(),
+   LogMessage: vi.fn(),
+    get logMessage() { return this.LogMessage; },
    logStatus: vi.fn(),
 }));
 vi.mock('../Database/sql', () => ({

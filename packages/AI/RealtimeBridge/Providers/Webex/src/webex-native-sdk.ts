@@ -173,7 +173,7 @@ export interface WebexNativeSdkConfig {
  * neighboring bytes). Defined locally in this binding (the Webex seam carries raw `ArrayBuffer`s
  * elsewhere), so it does not collide with any other export under `index.ts`'s `export *`.
  */
-export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+export function ToArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     if (data instanceof ArrayBuffer) {
         return data;
     }
@@ -182,8 +182,13 @@ export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     return copy.buffer;
 }
 
+/** @deprecated Use {@link ToArrayBuffer}. */
+export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+    return ToArrayBuffer(data);
+}
+
 /** Normalizes the addon's free-form role string onto the bridge's {@link WebexParticipantRole}. */
-export function mapNativeRole(role?: string): WebexParticipantRole {
+export function MapNativeRole(role?: string): WebexParticipantRole {
     switch ((role ?? '').trim().toLowerCase()) {
         case 'host':
             return 'Host';
@@ -195,30 +200,45 @@ export function mapNativeRole(role?: string): WebexParticipantRole {
     }
 }
 
+/** @deprecated Use {@link MapNativeRole}. */
+export function mapNativeRole(role?: string): WebexParticipantRole {
+    return MapNativeRole(role);
+}
+
 /**
  * **Pure mapping** of one native member onto the bridge's {@link WebexParticipant}. Isolated from the
  * addon and from I/O so it is unit-tested directly.
  */
-export function mapNativeParticipant(p: NativeParticipant): WebexParticipant {
+export function MapNativeParticipant(p: NativeParticipant): WebexParticipant {
     return {
         ParticipantId: String(p.participantId),
         DisplayName: p.displayName,
-        Role: mapNativeRole(p.role),
+        Role: MapNativeRole(p.role),
         IsSelf: p.isSelf,
     };
+}
+
+/** @deprecated Use {@link MapNativeParticipant}. */
+export function mapNativeParticipant(p: NativeParticipant): WebexParticipant {
+    return MapNativeParticipant(p);
 }
 
 /**
  * **Pure mapping** of one native inbound audio frame onto the bridge's diarized {@link WebexAudioFrame}.
  * Copies the PCM (see {@link toArrayBuffer}) and resolves the speaker label. Isolated for direct testing.
  */
-export function mapNativeAudioFrame(frame: NativeAudioFrame): WebexAudioFrame {
+export function MapNativeAudioFrame(frame: NativeAudioFrame): WebexAudioFrame {
     return {
-        Pcm: toArrayBuffer(frame.data),
+        Pcm: ToArrayBuffer(frame.data),
         ParticipantId: String(frame.participantId),
         DisplayName: frame.displayName,
         TimestampMs: typeof frame.timestampMs === 'number' ? frame.timestampMs : Date.now(),
     };
+}
+
+/** @deprecated Use {@link MapNativeAudioFrame}. */
+export function mapNativeAudioFrame(frame: NativeAudioFrame): WebexAudioFrame {
+    return MapNativeAudioFrame(frame);
 }
 
 /**
@@ -257,7 +277,7 @@ function unwrapDefault(mod: unknown): unknown {
  * VERIFY against the native Webex media bot addon: the module's default/namespace interop + that it
  * exposes `createClient`.
  */
-export const defaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
+export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
     try {
         // `/* @vite-ignore */`: the specifier is a deployment-supplied, runtime-resolved plugin path (not a
         // build-time constant), so Vite/ESBuild must not try to analyze or pre-bundle it.
@@ -276,6 +296,9 @@ export const defaultNativeLoader: NativeModuleLoader = async (specifier: string)
         );
     }
 };
+
+/** @deprecated Use {@link DefaultNativeLoader}. */
+export const defaultNativeLoader: NativeModuleLoader = DefaultNativeLoader;
 
 /**
  * A **real, two-way** {@link IWebexMeetingSdk} over the native Webex media bot addon (raw-audio send + receive).
@@ -314,7 +337,7 @@ export class WebexNativeMeetingSdk implements IWebexMeetingSdk {
      * @param config Resolved credentials + raw-audio opts + the native module specifier.
      * @param loadModule The native-addon loader (defaults to the lazy specifier loader).
      */
-    constructor(config: WebexNativeSdkConfig, loadModule: NativeModuleLoader = defaultNativeLoader) {
+    constructor(config: WebexNativeSdkConfig, loadModule: NativeModuleLoader = DefaultNativeLoader) {
         this.config = config;
         this.loadModule = loadModule;
     }
@@ -412,7 +435,7 @@ export class WebexNativeMeetingSdk implements IWebexMeetingSdk {
             return [];
         }
         const natives = await this.client.getParticipants();
-        return natives.map(mapNativeParticipant);
+        return natives.map(MapNativeParticipant);
     }
 
     /** Registers the meeting-ended handler. */
@@ -446,8 +469,8 @@ export class WebexNativeMeetingSdk implements IWebexMeetingSdk {
 
     /** Wires the native client's callbacks to this adapter's handlers, mapping native shapes to the seam. */
     private wireClient(client: NativeMeetingClient): void {
-        client.onAudioFrame((frame) => this.audioHandler?.(mapNativeAudioFrame(frame)));
-        client.onParticipantJoin((p) => this.joinHandler?.(mapNativeParticipant(p)));
+        client.onAudioFrame((frame) => this.audioHandler?.(MapNativeAudioFrame(frame)));
+        client.onParticipantJoin((p) => this.joinHandler?.(MapNativeParticipant(p)));
         client.onParticipantLeave((id) => this.leaveHandler?.(String(id)));
         client.onHandRaise((id, raised) => this.handRaiseHandler?.(String(id), raised));
         client.onMeetingEnded(() => this.endedHandler?.());
@@ -471,9 +494,9 @@ export class WebexNativeMeetingSdk implements IWebexMeetingSdk {
  * @returns A factory `(config) => WebexNativeMeetingSdk`.
  */
 export function BindWebexNative(
-    loadModule: NativeModuleLoader = defaultNativeLoader,
+    loadModule: NativeModuleLoader = DefaultNativeLoader,
 ): (config?: Record<string, unknown>) => WebexNativeMeetingSdk {
-    return (config?: Record<string, unknown>) => new WebexNativeMeetingSdk(readNativeConfig(config), loadModule);
+    return (config?: Record<string, unknown>) => new WebexNativeMeetingSdk(ReadNativeConfig(config), loadModule);
 }
 
 /**
@@ -482,7 +505,7 @@ export function BindWebexNative(
  * partially-resolved object (and {@link WebexNativeMeetingSdk.join} then throws a precise error if the
  * required specifier is absent) rather than a half-typed blob.
  */
-export function readNativeConfig(config?: Record<string, unknown>): WebexNativeSdkConfig {
+export function ReadNativeConfig(config?: Record<string, unknown>): WebexNativeSdkConfig {
     const cfg = config ?? {};
     return {
         AccessToken: readString(cfg.AccessToken),
@@ -492,6 +515,11 @@ export function readNativeConfig(config?: Record<string, unknown>): WebexNativeS
         Channels: readNumber(cfg.Channels),
         NativeModuleSpecifier: readString(cfg.NativeModuleSpecifier),
     };
+}
+
+/** @deprecated Use {@link ReadNativeConfig}. */
+export function readNativeConfig(config?: Record<string, unknown>): WebexNativeSdkConfig {
+    return ReadNativeConfig(config);
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */

@@ -196,7 +196,7 @@ export class DeepDiffer {
      * );
      * ```
      */
-    public diff<T = any>(oldValue: T, newValue: T): DeepDiffResult {
+    public Diff<T = any>(oldValue: T, newValue: T): DeepDiffResult {
         const changes: DiffChange[] = [];
         
         // Generate the diff recursively
@@ -229,13 +229,23 @@ export class DeepDiffer {
             formatted
         };
     }
+
+    /** @deprecated Use {@link Diff}. */
+    public diff<T = any>(oldValue: T, newValue: T): DeepDiffResult {
+        return this.Diff(oldValue, newValue);
+    }
     
     /**
      * Update configuration options
      * @param config - Partial configuration to merge with existing config
      */
-    public updateConfig(config: Partial<DeepDiffConfig>): void {
+    public UpdateConfig(config: Partial<DeepDiffConfig>): void {
         this.config = { ...this.config, ...config };
+    }
+
+    /** @deprecated Use {@link UpdateConfig}. */
+    public updateConfig(config: Partial<DeepDiffConfig>): void {
+        return this.UpdateConfig(config);
     }
     
     /**

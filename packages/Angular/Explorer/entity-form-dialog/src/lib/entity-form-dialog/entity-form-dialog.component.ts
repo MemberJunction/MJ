@@ -85,7 +85,16 @@ export class EntityFormDialogComponent {
     return this._visible;
   }
 
-  @ViewChild('dynamicFormContainer', { read: ViewContainerRef }) container!: ViewContainerRef;
+  @ViewChild('dynamicFormContainer', { read: ViewContainerRef }) Container!: ViewContainerRef;
+
+  /** @deprecated Use {@link Container}. */
+  get container(): ViewContainerRef {
+    return this.Container;
+  }
+  /** @deprecated Use {@link Container}. */
+  set container(value: ViewContainerRef) {
+    this.Container = value;
+  }
 
   /**
    * This method can be called to show the form.  
@@ -96,13 +105,13 @@ export class EntityFormDialogComponent {
       return;
     }
     
-    if (!this.container) 
+    if (!this.Container) 
       throw new Error('Container not found');
     if (!this.Record)
       throw new Error('Record is a required property');
 
     // Ensure the container is clear before inserting a new component
-    this.container.clear();
+    this.Container.clear();
 
     // here we want to grab the right type of object to instantiate based on the settings either mode of complete or section
     // if section, we grab a sub-class of BaseFormSectionComponent, if complete, we grab a sub-class of the BaseForComponent class
@@ -115,7 +124,7 @@ export class EntityFormDialogComponent {
 
     if (reg && reg.SubClass) {
       // we have our class registration
-      const component = this.container.createComponent(reg.SubClass);
+      const component = this.Container.createComponent(reg.SubClass);
       if (this.Record && component.instance instanceof BaseFormSectionComponent) {
         component.instance.record = this.Record;
         component.instance.EditMode = true;

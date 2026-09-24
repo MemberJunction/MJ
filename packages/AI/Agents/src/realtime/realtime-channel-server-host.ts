@@ -36,7 +36,7 @@ import {
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { isRealtimeChannelServerDataAware } from './realtime-channel-server-data-context';
+import { IsRealtimeChannelServerDataAware } from './realtime-channel-server-data-context';
 
 /** Entity name — kept in sync with the session machinery's `MJ:`-prefix convention. */
 const CHANNEL_ENTITY = 'MJ: AI Agent Channels';
@@ -377,7 +377,7 @@ export class RealtimeChannelServerHost extends BaseSingleton<RealtimeChannelServ
                 plugin.Initialize(ctx);
                 // Hand the session's MJ data context to channels that need DB access at start
                 // (e.g. the Media channel resolving an agent's media kit), BEFORE OnSessionStarted.
-                if (isRealtimeChannelServerDataAware(plugin)) {
+                if (IsRealtimeChannelServerDataAware(plugin)) {
                     plugin.SetSessionDataContext(contextUser, provider);
                 }
                 await plugin.OnSessionStarted();

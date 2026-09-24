@@ -105,7 +105,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
      * Computes the deterministic SHA-256 key hash, canonical JSON, and display string.
      * Uses KeyFields when provided, or falls back to the full rendered context / record data.
      */
-    public async computeCacheKey(params: ComputeCacheKeyParams): Promise<CacheKeyResult> {
+    public async ComputeCacheKey(params: ComputeCacheKeyParams): Promise<CacheKeyResult> {
         if (params.keyFields && params.keyFields.length > 0) {
             const keyObj: Record<string, unknown> = {};
             const displayParts: string[] = [];
@@ -138,6 +138,11 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             : keyHash.substring(0, 16);
 
         return { keyHash, keyJSON, keyDisplay };
+    }
+
+    /** @deprecated Use {@link ComputeCacheKey}. */
+    public async computeCacheKey(params: ComputeCacheKeyParams): Promise<CacheKeyResult> {
+        return this.ComputeCacheKey(params);
     }
 
     /**
