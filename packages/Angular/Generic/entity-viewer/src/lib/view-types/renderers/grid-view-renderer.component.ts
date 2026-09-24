@@ -1,5 +1,11 @@
-import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, ChangeDetectorRef, inject } from '@angular/core';
-import { EntityInfo, RunViewParams, LogError, CompositeKey } from '@memberjunction/core';
+import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, ChangeDetectorRef, OnDestroy, inject } from '@angular/core';
+import { EntityInfo, RunViewParams, LogError, CompositeKey, RunView, RecordMergeRequest } from '@memberjunction/core';
+import {
+  RecordComparisonService,
+  type FieldComparison,
+  type MergeConfig,
+  type MergeConfirmedEvent,
+} from '@memberjunction/ng-record-merge';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -141,6 +147,8 @@ export interface GridViewConfig {
       (ForeignKeyClick)="onForeignKeyClick($event)"
       (PageChange)="onPageChange($event)"
       (ManageColumnsRequested)="configureRequested.emit()"
+      [ShowMergeButton]="effectiveShowMergeButton"
+      (MergeRecordsRequested)="onMergeRequested($event)"
     >
     </mj-entity-data-grid>
 
@@ -173,6 +181,47 @@ export interface GridViewConfig {
       (Cancelled)="onDeleteCancelled()"
     >
     </mj-ev-confirm-dialog>
+
+    <!-- Self-contained merge panel (Generic) — owned by this wrapper, never bubbles up.
+         Lives inside the @if so the panel rebuilds its comparison (ngOnInit) per request. -->
+    @if (mergeState) {
+      <mj-dialog [Visible]="true" Size="lg" [Closeable]="!mergeState.IsMerging" (Close)="onMergeCancelled()">
+        <div class="mj-ev-merge-survivor" role="radiogroup" aria-label="Record to keep">
+          <span>Keep</span>
+          <button type="button" mjButton size="sm" role="radio"
+            [variant]="mergeState.Config.SurvivorSide === 'left' ? 'primary' : 'secondary'"
+            [attr.aria-checked]="mergeState.Config.SurvivorSide === 'left'"
+            [disabled]="mergeState.IsMerging"
+            (click)="onSurvivorChange('left')">{{ mergeState.Config.LeftLabel }}</button>
+          <button type="button" mjButton size="sm" role="radio"
+            [variant]="mergeState.Config.SurvivorSide === 'right' ? 'primary' : 'secondary'"
+            [attr.aria-checked]="mergeState.Config.SurvivorSide === 'right'"
+            [disabled]="mergeState.IsMerging"
+            (click)="onSurvivorChange('right')">{{ mergeState.Config.RightLabel }}</button>
+          <span class="mj-ev-merge-survivor-note">{{ mergeLoserLabel }} will be deleted; its linked records move to the record you keep.</span>
+        </div>
+        <mj-record-merge-panel
+          [Fields]="mergeState.Fields"
+          [Config]="mergeState.Config"
+          [MergeEnabled]="!mergeState.IsMerging"
+          [IsMerging]="mergeState.IsMerging"
+          (MergeConfirmed)="onMergeConfirmed($event)"
+          (MergeCancelled)="onMergeCancelled()"
+        >
+        </mj-record-merge-panel>
+        @if (mergeState.DependencyNote) {
+          <p class="mj-ev-merge-deps">{{ mergeState.DependencyNote }}</p>
+        }
+      </mj-dialog>
+    }
+    @if (mergeNotice) {
+      <div class="mj-ev-merge-notice" role="status">
+        <span class="mj-ev-merge-notice-text">{{ mergeNotice }}</span>
+        <button type="button" class="mj-ev-merge-notice-dismiss" (click)="onDismissMergeNotice()" title="Dismiss" aria-label="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+    }
   `,
   styles: [
     `
@@ -180,10 +229,63 @@ export interface GridViewConfig {
         display: block;
         height: 100%;
       }
+
+      .mj-ev-merge-survivor {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        font-size: var(--mj-text-sm);
+        color: var(--mj-text-secondary);
+      }
+
+      .mj-ev-merge-survivor-note {
+        color: var(--mj-text-muted);
+      }
+
+      .mj-ev-merge-deps {
+        margin: 0;
+        font-size: var(--mj-text-xs);
+        color: var(--mj-text-muted);
+      }
+
+      .mj-ev-merge-notice {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1001;
+        padding: 8px 14px;
+        border: 1px solid var(--mj-border-subtle);
+        border-radius: var(--mj-radius-md);
+        background: var(--mj-bg-surface-elevated);
+        color: var(--mj-text-primary);
+        font-size: var(--mj-text-sm);
+        box-shadow: var(--mj-shadow-md);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .mj-ev-merge-notice-dismiss {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        padding: 0 2px;
+        cursor: pointer;
+        color: var(--mj-text-muted);
+        font-size: var(--mj-text-sm);
+        line-height: 1;
+      }
+
+      .mj-ev-merge-notice-dismiss:hover {
+        color: var(--mj-text-primary);
+      }
     `,
   ],
 })
-export class GridViewRendererComponent extends BaseAngularComponent implements IViewRenderer<GridViewConfig> {
+export class GridViewRendererComponent extends BaseAngularComponent implements IViewRenderer<GridViewConfig>, OnDestroy {
   /** Change detection ref used to flush dialog visibility toggles driven by grid events. */
   private cdr = inject(ChangeDetectorRef);
 
@@ -609,6 +711,347 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     this.showDeleteConfirm = false;
     this.pendingDeleteRecords = [];
     this.cdr.detectChanges();
+  }
+
+  // ================================================================
+  // Record merge
+  // ================================================================
+
+  /**
+   * The in-flight merge, or null when the panel is closed. Holds everything the panel needs
+   * plus the dependency preview, so the panel itself stays a pure presentation component.
+   */
+  protected mergeState: {
+    Config: MergeConfig;
+    Fields: FieldComparison[];
+    IsMerging: boolean;
+    DependencyNote: string | null;
+    /** The entity and the two records' real keys — the Config only carries their serialized form. */
+    Entity: EntityInfo;
+    Keys: [CompositeKey, CompositeKey];
+  } | null = null;
+
+  /** A one-line status shown under the grid — why a merge was refused, or how one ended. */
+  protected mergeNotice: string | null = null;
+
+  /** Auto-dismiss timer for {@link mergeNotice}; cleared whenever the notice is replaced. */
+  private mergeNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * How long a merge notice stays up before dismissing itself. The banner is fixed-position over
+   * the whole application, so leaving it until the next merge pins it across navigation and every
+   * other record the user visits afterwards.
+   */
+  private static readonly MERGE_NOTICE_TIMEOUT_MS = 8000;
+
+  private readonly comparison = inject(RecordComparisonService);
+
+  ngOnDestroy(): void {
+    // The notice's auto-dismiss outlives the view otherwise, and fires detectChanges on a
+    // destroyed component.
+    if (this.mergeNoticeTimer) {
+      clearTimeout(this.mergeNoticeTimer);
+      this.mergeNoticeTimer = null;
+    }
+  }
+
+  /** Dismiss the merge notice from its own close button. */
+  onDismissMergeNotice(): void {
+    this.setMergeNotice(null);
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Set (or clear) the merge notice, replacing any pending auto-dismiss. Every write to
+   * `mergeNotice` goes through here so a notice cannot outlive its timer or strand an old one.
+   */
+  private setMergeNotice(message: string | null): void {
+    if (this.mergeNoticeTimer) {
+      clearTimeout(this.mergeNoticeTimer);
+      this.mergeNoticeTimer = null;
+    }
+    this.mergeNotice = message;
+    if (message) {
+      this.mergeNoticeTimer = setTimeout(() => {
+        this.mergeNoticeTimer = null;
+        this.mergeNotice = null;
+        this.cdr.detectChanges();
+      }, GridViewRendererComponent.MERGE_NOTICE_TIMEOUT_MS);
+    }
+  }
+
+  /**
+   * Show the Merge button only where merging can actually succeed: the entity opts in and the
+   * user can both update the survivor and delete the loser.
+   */
+  protected get effectiveShowMergeButton(): boolean {
+    const entity = this.entity;
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!entity?.AllowRecordMerge || !user) return false;
+    const permissions = entity.GetUserPermisions(user);
+    return !!permissions && permissions.CanUpdate && permissions.CanDelete;
+  }
+
+  /** The record that will be deleted, named so the user sees the choice before confirming. */
+  protected get mergeLoserLabel(): string {
+    const config = this.mergeState?.Config;
+    if (!config) return '';
+    return config.SurvivorSide === 'left' ? config.RightLabel : config.LeftLabel;
+  }
+
+  /**
+   * The grid asked to merge the selected rows. Compare them, preview what will move, and open
+   * the panel — nothing is written until the user confirms.
+   */
+  async onMergeRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[] }): Promise<void> {
+    this.setMergeNotice(null);
+    try {
+      await this.prepareMerge(event);
+    } catch (err) {
+      // A transport failure in any pre-flight query must not leave the user with nothing.
+      this.setMergeNotice(`Could not prepare the merge: ${err instanceof Error ? err.message : String(err)}`);
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** The user chose which record survives; differing fields default to that record's values. */
+  onSurvivorChange(side: 'left' | 'right'): void {
+    if (!this.mergeState || this.mergeState.IsMerging) return;
+    this.mergeState.Config = { ...this.mergeState.Config, SurvivorSide: side };
+    for (const field of this.mergeState.Fields) {
+      if (!field.IsReadOnly) field.SelectedSide = side;
+    }
+    this.cdr.detectChanges();
+  }
+
+  private async prepareMerge(event: { entityInfo: EntityInfo; records: Record<string, unknown>[] }): Promise<void> {
+    const entity = event.entityInfo ?? this.entity;
+    if (!entity) return;
+
+    // The merge panel is two-sided by construction, so n > 2 has nowhere to render.
+    if (event.records.length !== 2) {
+      this.setMergeNotice('Select exactly two records to merge.');
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // Composite-key safe: the grid renders arbitrary entities, so never assume one key column.
+    const keys = event.records.map(r => CompositeKey.FromEntityRecord(entity, r)) as [CompositeKey, CompositeKey];
+    if (keys.some(k => k.KeyValuePairs.length === 0 || k.KeyValuePairs.some(kv => kv.Value == null || kv.Value === ''))) {
+      this.setMergeNotice('Could not read the primary key of the selected records.');
+      this.cdr.detectChanges();
+      return;
+    }
+    // The merge panel's config is string-keyed, so keys travel through it as compact segments.
+    const [left, right] = keys.map(k => k.ToCompactURLSegment());
+
+    // Subtype records: the merge re-points only the keys that target this entity, then the loser's
+    // delete follows the shared key into the parent row, whose own references never moved.
+    if (entity.ParentID) {
+      this.setMergeNotice(`${entity.DisplayName} records extend a parent type; merging subtype records is not supported yet.`);
+      this.cdr.detectChanges();
+      return;
+    }
+    const childRows = await this.hasIsAChildRows(entity, keys);
+    if (childRows === null) {
+      this.setMergeNotice('Could not verify whether the selected records have subtype rows, so the merge was not started.');
+      this.cdr.detectChanges();
+      return;
+    }
+    if (childRows) {
+      this.setMergeNotice(
+        `${entity.DisplayName} records that another app extends (shared-key subtype rows) cannot be merged yet — ` +
+        'the merge would collide on the shared key. Merge them from the extending app instead.',
+      );
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const result = await this.comparison.GetRecordComparison(
+      {
+        EntityName: entity.Name,
+        Keys: keys.map(k => ({
+          KeyValuePairs: k.KeyValuePairs.map(kv => ({ FieldName: kv.FieldName, Value: String(kv.Value) })),
+        })),
+      },
+      this.ProviderToUse,
+    );
+    if (!result.Success || !result.Output) {
+      this.setMergeNotice(result.ErrorMessage ?? 'Could not compare the selected records.');
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.mergeState = {
+      Config: {
+        EntityName: entity.Name,
+        LeftRecordID: left,
+        RightRecordID: right,
+        SurvivorSide: 'left',
+        LeftLabel: this.labelFor(event.records[0], entity, keys[0]),
+        RightLabel: this.labelFor(event.records[1], entity, keys[1]),
+      },
+      Fields: result.Output.Fields.map(delta => ({
+        FieldName: delta.FieldName,
+        DisplayLabel: delta.DisplayName,
+        LeftValue: delta.Cells[0]?.Value,
+        RightValue: delta.Cells[1]?.Value,
+        HasConflict: delta.Differs,
+        SelectedSide: 'left' as const,
+        // What the ORM will refuse to write — keys, AllowUpdateAPI = 0, timestamps. A field the
+        // metadata does not know cannot be written either.
+        IsReadOnly: entity.FieldByName(delta.FieldName)?.ReadOnly ?? true,
+        DataType: 'string',
+      })),
+      IsMerging: false,
+      DependencyNote: await this.describeDependencies(entity, keys),
+      Entity: entity,
+      Keys: keys,
+    };
+    this.cdr.detectChanges();
+  }
+
+  /** The user confirmed: merge, then reload the page so the loser disappears from the grid. */
+  async onMergeConfirmed(event: MergeConfirmedEvent): Promise<void> {
+    if (!this.mergeState) return;
+    this.mergeState.IsMerging = true;
+    this.cdr.detectChanges();
+
+    const survivorIsLeft = event.Config.SurvivorSide === 'left';
+    const [leftKey, rightKey] = this.mergeState.Keys;
+    const survivor = survivorIsLeft ? leftKey : rightKey;
+    const loser = survivorIsLeft ? rightKey : leftKey;
+
+    const request = new RecordMergeRequest();
+    request.EntityName = event.Config.EntityName;
+    request.SurvivingRecordCompositeKey = survivor;
+    request.RecordsToMerge = [loser];
+    request.FieldMap = this.buildFieldMap(event, survivorIsLeft);
+
+    try {
+      const result = await this.ProviderToUse.MergeRecords(request);
+      this.mergeState = null;
+      this.setMergeNotice(result.Success ? 'Records merged.' : `Merge failed: ${result.OverallStatus}`);
+      if (result.Success) {
+        this.dataRequest.emit(this.currentPageDataRequest());
+      }
+    } catch (err) {
+      this.mergeState = null;
+      this.setMergeNotice(`Merge failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    this.cdr.detectChanges();
+  }
+
+  /** Merge cancelled → close the panel, write nothing. */
+  onMergeCancelled(): void {
+    this.mergeState = null;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Fields whose resolution has to travel, and only those: the survivor already holds the value
+   * for any field resolved to its own side.
+   *
+   * The distinction that matters is "the user did not change this" versus "the user chose the
+   * blank side". Both arrive as an absent value, so deciding from the value alone drops a real
+   * resolution — the survivor silently keeps its old value on the one operation where someone is
+   * reconciling two records field by field, and the loser is gone afterwards. So the skip is
+   * decided from WHICH SIDE was chosen, and a chosen blank is written through as null.
+   */
+  private buildFieldMap(event: MergeConfirmedEvent, survivorIsLeft: boolean): { FieldName: string; Value: unknown }[] {
+    const map: { FieldName: string; Value: unknown }[] = [];
+    for (const field of event.ResolvedFields) {
+      if (field.IsReadOnly || !field.HasConflict) continue;
+      // Resolved to the survivor's own side — nothing to write, whatever the value is.
+      if (field.SelectedSide !== 'custom' && (field.SelectedSide === 'left') === survivorIsLeft) continue;
+      const chosen =
+        field.SelectedSide === 'custom'
+          ? field.CustomValue
+          : (survivorIsLeft ? field.RightValue : field.LeftValue);
+      // A chosen blank is a clear, not a no-op. Normalize undefined to null so the transport
+      // carries an explicit value rather than an absent one.
+      map.push({ FieldName: field.FieldName, Value: chosen === undefined ? null : chosen });
+    }
+    return map;
+  }
+
+  /**
+   * True when any of these records has a row in an IS-A child entity, null when that could not be
+   * determined (a child view the user cannot read answers `Success: false`, which must not pass
+   * for "no rows"). `MergeRecords` has no subtype handling: the child rows share the parent's key,
+   * so merging would collide. Refuse rather than half-merge.
+   */
+  private async hasIsAChildRows(entity: EntityInfo, keys: ReadonlyArray<CompositeKey>): Promise<boolean | null> {
+    const children = entity.ChildEntities;
+    if (children.length === 0) return false;
+
+    // An IS-A child shares its parent's key SEMANTICALLY; nothing requires it to share the column
+    // NAME. `CompositeKey.ToWhereClause()` emits the parent's names, so filtering a child view
+    // with it fails wherever the names differ — and a failed probe refuses the merge, which would
+    // disable merge for that entity permanently. Pair each key's values onto the child's own PK
+    // columns instead, the way the platform's own child discovery does
+    // (SQLServerDataProvider.BuildChildDiscoverySQL).
+    const probes = children
+      .map(child => ({ child, filter: this.buildChildKeyFilter(child, keys) }))
+      .filter((probe): probe is { child: EntityInfo; filter: string } => probe.filter !== null);
+    if (probes.length === 0) return false;
+
+    const results = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews(
+      probes.map(({ child, filter }) => ({
+        EntityName: child.Name,
+        ExtraFilter: filter,
+        Fields: child.PrimaryKeys.map(f => f.Name),
+        ResultType: 'simple' as const,
+        MaxRows: 1,
+      })),
+    );
+    if (results.some(r => !r.Success)) return null;
+    return results.some(r => r.Results.length > 0);
+  }
+
+  /**
+   * `(childPk = v1) OR (childPk = v2)` against one child entity, built from the parent's key
+   * VALUES and the child's own key COLUMN NAMES, paired positionally because an IS-A child shares
+   * its parent's key by design. Null when the child's key arity differs, which means it does not
+   * share the key and cannot hold a subtype row for these records.
+   */
+  private buildChildKeyFilter(child: EntityInfo, keys: ReadonlyArray<CompositeKey>): string | null {
+    const childPkFields = child.PrimaryKeys;
+    if (childPkFields.length === 0 || keys.some(k => k.KeyValuePairs.length !== childPkFields.length)) {
+      return null;
+    }
+    const clauses = keys.map(key =>
+      childPkFields
+        .map((field, i) => `[${field.Name}] = '${String(key.KeyValuePairs[i].Value ?? '').replace(/'/g, "''")}'`)
+        .join(' AND '),
+    );
+    return clauses.map(c => `(${c})`).join(' OR ');
+  }
+
+  /**
+   * How many linked records will move to the survivor — the thing users most want to know.
+   *
+   * Indexes `counts[0]` / `counts[1]` directly: `onMergeRequested` refuses anything other than
+   * exactly two records before reaching here, and the merge panel's config is two-sided by
+   * construction, so this is only ever called with a pair. Widen both together.
+   */
+  private async describeDependencies(entity: EntityInfo, keys: ReadonlyArray<CompositeKey>): Promise<string | null> {
+    try {
+      const counts = await Promise.all(
+        keys.map(key => this.ProviderToUse.GetRecordDependencies(entity.Name, key)),
+      );
+      return `Linked records that would move to the survivor: ${counts[0].length} on the left, ${counts[1].length} on the right.`;
+    } catch (err) {
+      LogError(`Could not load merge dependencies for ${entity.Name}: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  /** A human label for a row — its name field when it has one, else its key. */
+  private labelFor(row: Record<string, unknown>, entity: EntityInfo, key: CompositeKey): string {
+    const nameField = entity.NameField?.Name;
+    const name = nameField ? String(row[nameField] ?? '') : '';
+    return name || key.ToCompactURLSegment();
   }
 
   // ================================================================

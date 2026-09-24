@@ -1,0 +1,62 @@
+# Lockfile drift guard.
+#
+# WHY A DEDICATED CHECK, when `pnpm install --frozen-lockfile` already runs in half a dozen jobs:
+# attribution and speed, not detection. Drift surfaces today as "adopted standards failed",
+# "Source guards failed", "Run unit tests failed" and three more — every one of which reads like
+# the PR broke that thing, in a job that takes minutes to get there. Twice in one day a PR reached
+# `next` with exactly this (#4572, #4604), and both times the several minutes and the misleading
+# names were part of why.
+#
+# This answers one question, in seconds, under a name that says what is wrong.
+#
+# WHAT IT CANNOT DO: make anyone stop. `next-protect` requires exactly ONE status check
+# ('Check migrations'), so this — like every other check in the repo — is advisory. #4604 was
+# merged with five checks already red. Adding this context to the ruleset's
+# required_status_checks is what would actually prevent recurrence; that is a governance change,
+# deliberately not made here.
+name: Lockfile Guard
+
+on:
+  pull_request:
+    paths:
+      - '**/package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/lockfile-guard.yml'
+
+concurrency:
+  group: lockfile-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lockfile-matches-manifests:
+    name: Lockfile matches package.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      # `--lockfile-only` resolves and compares without materialising node_modules, so this is
+      # seconds rather than minutes. It is the same comparison the real install makes, which is
+      # the point: no second implementation to drift from the thing it is protecting.
+      - name: Resolve against the committed lockfile
+        id: check
+        run: |
+          set -o pipefail
+          if pnpm install --frozen-lockfile --lockfile-only 2>&1 | tee /tmp/pnpm.log; then
+            echo "Lockfile is consistent with every package.json."
+            exit 0
+          fi
+
+          echo "::error::pnpm-lock.yaml does not match the package.json files in this PR. Run 'pnpm install --lockfile-only' at the repo root and commit pnpm-lock.yaml."
+          echo
+          echo "─── what pnpm reported ───"
+          # The 'Failure reason' block names the offending manifest and the exact specifiers, which
+          # is the whole diagnosis; surfacing it here saves opening the log.
+          sed -n '/ERR_PNPM_OUTDATED_LOCKFILE/,/^$/p;/Failure reason/,/^$/p' /tmp/pnpm.log || cat /tmp/pnpm.log
+          exit 1

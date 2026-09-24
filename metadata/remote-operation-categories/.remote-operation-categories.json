@@ -99,6 +99,20 @@
   },
   {
     "fields": {
+      "Name": "Web Search",
+      "Description": "External web search operations backed by the WebSearchProvider registry.",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "8050D894-D38C-472C-8189-FE78E4337D56"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:39.174Z",
+      "checksum": "84f42dd0551bf482d37ff608f306bd5dd4c9a1a29a1de9fbd70f8baee31a170f"
+    }
+  },
+  {
+    "fields": {
       "Name": "Record Cloning",
       "Description": "Record cloning operations (describe, plan, execute, and get-lineage via Remote Operations).",
       "ParentID": null

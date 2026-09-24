@@ -78,7 +78,7 @@ export class NavigationPanelComponent extends BaseAngularComponent implements On
   public treeLeafConfig: TreeLeafConfig = {
     EntityName: 'MJ: Entities',
     ParentField: '', // Using JunctionConfig for M2M relationship
-    DisplayField: 'Name',
+    DisplayField: 'DisplayName',
     IDField: 'ID',
     IconField: 'Icon',
     JunctionConfig: {
@@ -86,7 +86,7 @@ export class NavigationPanelComponent extends BaseAngularComponent implements On
       BranchForeignKey: 'ApplicationID',
       LeafForeignKey: 'EntityID'
     },
-    OrderBy: 'Name'
+    OrderBy: 'DisplayName, Name'
   };
 
   @ViewChild('entityTree') entityTree?: TreeComponent;
@@ -394,5 +394,16 @@ export class NavigationPanelComponent extends BaseAngularComponent implements On
       return 'fa-solid fa-table';
     }
     return 'fa-solid fa-file-alt';
+  }
+
+  /**
+   * Get user-friendly display name for an entity.
+   */
+  getEntityDisplayName(entityName?: string): string {
+    if (!entityName) {
+      return '';
+    }
+    const entityInfo = this.metadata.Entities.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    return entityInfo?.DisplayNameOrName || entityName;
   }
 }

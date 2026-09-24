@@ -63,3 +63,18 @@ const repoRoot = path.resolve(pkgRoot, '..', '..');               // monorepo ro
     console.warn(`  [copy-regression-assets] init-templates source not found, skipped: ${srcDir}`);
   }
 }
+
+// ── 3. citizen-builder template → dist/init-templates/citizen-builder ───────
+{
+  const srcDir = path.join(repoRoot, 'citizen-builder');
+  const destDir = path.join(pkgRoot, 'dist', 'init-templates', 'citizen-builder');
+  const srcInitDir = path.join(pkgRoot, 'src', 'init-templates', 'citizen-builder');
+  if (existsSync(srcDir)) {
+    cpSync(srcDir, destDir, { recursive: true });
+    cpSync(srcDir, srcInitDir, { recursive: true });
+    console.log(`[copy-regression-assets] bundled citizen-builder → ${path.relative(pkgRoot, destDir)}/`);
+  } else {
+    console.warn(`  [copy-regression-assets] citizen-builder source not found, skipped: ${srcDir}`);
+  }
+}
+

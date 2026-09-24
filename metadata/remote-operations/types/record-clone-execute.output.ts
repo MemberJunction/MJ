@@ -1,4 +1,5 @@
-import type { RecordClonePlanDetails } from './record-clone-plan.output';
+// RecordClonePlanDetails is declared in record-clone-plan.output.ts. CodeGen concatenates every
+// operation type file into one generated module, so no import is needed (or allowed) here.
 
 /** Record mapping result from clone execution. */
 export interface RecordCloneRecordMapping {

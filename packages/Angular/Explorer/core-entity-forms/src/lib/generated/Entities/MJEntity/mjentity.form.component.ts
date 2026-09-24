@@ -103,7 +103,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJFormChromeRulesRelatedEntityID', sectionName: 'Form Chrome Rules (Related Entity)', isExpanded: false },
             { sectionKey: 'mJIdentityClaims', sectionName: 'Identity Claims', isExpanded: false },
             { sectionKey: 'mJRecordCloneLogItems', sectionName: 'Record Clone Log Items', isExpanded: false },
-            { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false }
+            { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
+            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
         ]);
     }
 }

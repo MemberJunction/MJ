@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Canonicalize } from '@memberjunction/global';
 
 /**
  * Name of the per-record content-hash mirror column. Written on every integration
@@ -34,7 +35,7 @@ export const CONTENT_HASH_COLUMN = '__mj_integration_ContentHash';
  * row; every other row's hash, and therefore its skip-write, is unaffected.
  */
 export function computeContentHash(fields: Record<string, unknown>): string {
-    const canonical = canonicalize(fields);
+    const canonical = Canonicalize(fields);
     return createHash('sha256').update(canonical).digest('hex');
 }
 
@@ -82,21 +83,4 @@ export function computeContentHashWithOverflow(
     return computeContentHash(contentHashBasis(mappedFields, unmappedFields));
 }
 
-/**
- * Stable JSON serialization: object keys sorted recursively, arrays kept in order
- * (array order is semantically meaningful), `undefined` entries omitted. Dates and
- * other non-plain values fall back to their JSON form.
- */
-function canonicalize(value: unknown): string {
-    if (value === null) return 'null';
-    if (value === undefined) return 'null'; // top-level undefined — shouldn't happen, but stay total
-    if (typeof value !== 'object') return JSON.stringify(value);
-    if (Array.isArray(value)) {
-        return `[${value.map(v => (v === undefined ? 'null' : canonicalize(v))).join(',')}]`;
-    }
-    if (value instanceof Date) return JSON.stringify(value.toISOString());
-    const obj = value as Record<string, unknown>;
-    const keys = Object.keys(obj).filter(k => obj[k] !== undefined).sort();
-    const body = keys.map(k => `${JSON.stringify(k)}:${canonicalize(obj[k])}`).join(',');
-    return `{${body}}`;
-}
+

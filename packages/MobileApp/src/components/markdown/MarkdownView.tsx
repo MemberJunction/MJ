@@ -18,7 +18,7 @@ import {
     type SvgCodeBlockToken,
 } from '@memberjunction/markdown-core';
 import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
-import { highlightCode } from './highlight';
+import { HighlightCode } from './highlight';
 
 /**
  * Native markdown renderer.
@@ -218,7 +218,7 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
             </View>
             <ScrollView horizontal directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false}>
                 <Text style={styles.codeText}>
-                    {highlightCode(code, lang).map((run, i) => (
+                    {HighlightCode(code, lang).map((run, i) => (
                         <Text key={i} style={{ color: run.color }}>{run.text}</Text>
                     ))}
                 </Text>

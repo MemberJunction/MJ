@@ -5,7 +5,7 @@
       "strongly-typed PlanJSONObject accessor returning",
       "MJRecordCloneLogEntity_IClonePlan. The column carries the full serialized",
       "clone execution plan detailing nodes, edges, field changes, and effective options.",
-      "Added by migration V202609211955__v6.2.x__Record_Cloning_Logs_And_WorkType.sql."
+      "Added by migration V202609241201__v6.2.x__Record_Cloning_Logs_And_WorkType.sql."
     ],
     "fields": {
       "Name": "MJ: Record Clone Logs"

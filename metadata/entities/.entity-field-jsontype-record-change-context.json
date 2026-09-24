@@ -5,7 +5,7 @@
       "strongly-typed ChangeContextObject accessor returning",
       "MJRecordChangeEntity_IRecordChangeContext. The column carries structured provenance",
       "for operations like cloning, merging, and future replays.",
-      "Added by migration V202609211830__v6.2.x__RecordChange_ChangeContext_And_Clone_Source.sql.",
+      "Added by migration V202609241200__v6.2.x__RecordChange_ChangeContext_And_Clone_Source.sql.",
       "The EntityField row must exist (created by a CodeGen pass over the new column) before",
       "this @lookup resolves on push."
     ],

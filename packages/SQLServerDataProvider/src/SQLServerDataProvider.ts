@@ -28,6 +28,7 @@ import {
   EntityFieldTSType,
   ProviderType,
   UserInfo,
+  PostCommitToken,
   RecordChange,
   IFileSystemProvider,
   TransactionGroupBase,
@@ -421,7 +422,6 @@ export class SQLServerDataProvider
   
   // Transaction state management
   private _transactionState$ = new BehaviorSubject<boolean>(false);
-  private _deferredTasks: Array<{ type: string; data: any; options: any; user: UserInfo }> = [];
 
 
   /**
@@ -1052,16 +1052,15 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Override to defer AI action tasks when a transaction is active.
-   * When inside a transaction, tasks are queued to _deferredTasks and
-   * processed after transaction commit (see processDeferredTasks).
+   * Queue the AI action task only once the save is durable: through {@link RunAfterCommit}, so it
+   * is added right away outside a transaction, after the outermost commit inside one, and never if
+   * that transaction rolls back. `postCommitToken` ties the task to the save's own transaction:
+   * the base dispatches this after an `await`, by which time that transaction may have settled.
    */
-  protected override EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo): void {
-    if (this.isTransactionActive) {
-      this._deferredTasks.push({ type: 'Entity AI Action', data: params, options: null, user });
-    } else {
-      QueueManager.AddTask('Entity AI Action', params, null, user);
-    }
+  protected override EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo, postCommitToken?: PostCommitToken): void {
+    this.RunAfterCommit(async () => {
+      await QueueManager.AddTask('Entity AI Action', params, null, user);
+    }, 'Entity AI Action', postCommitToken);
   }
 
 
@@ -2597,16 +2596,10 @@ IF ${varName} IS NOT NULL
     });
   }
 
-  protected override async AfterPhysicalCommit(): Promise<void> {
-    await this.processDeferredTasks();
-  }
-
   protected override async AbandonPhysicalTransaction(): Promise<void> {
     const stale = this._transaction;
     this._transaction = null;
     this._transactionState$.next(false);
-    const deferredCount = this._deferredTasks.length;
-    this._deferredTasks = [];
     if (stale) {
       try {
         // Through the queue, like commit and rollback: the handle is already nulled above, so any
@@ -2619,9 +2612,6 @@ IF ${varName} IS NOT NULL
           LogError('AbandonPhysicalTransaction: rollback of doomed handle failed', undefined, e);
         }
       }
-    }
-    if (deferredCount > 0) {
-      LogStatus(`Cleared ${deferredCount} deferred tasks after abandoning a doomed transaction`);
     }
   }
 
@@ -2642,11 +2632,6 @@ IF ${varName} IS NOT NULL
     } finally {
       this._transaction = null;
       this._transactionState$.next(false);
-      const deferredCount = this._deferredTasks.length;
-      this._deferredTasks = [];
-      if (deferredCount > 0) {
-        LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
-      }
     }
   }
 
@@ -2668,37 +2653,6 @@ IF ${varName} IS NOT NULL
 
     // Call parent implementation if no transaction
     return super.RefreshIfNeeded();
-  }
-
-  /**
-   * Process any deferred tasks that were queued during a transaction
-   * This is called after a successful transaction commit
-   * @private
-   */
-  private async processDeferredTasks(): Promise<void> {
-    if (this._deferredTasks.length === 0) return;
-
-    LogStatus(`Processing ${this._deferredTasks.length} deferred tasks after transaction commit`);
-    
-    // Copy and clear the deferred tasks array
-    const tasksToProcess = [...this._deferredTasks];
-    this._deferredTasks = [];
-    
-    // Process each deferred task
-    for (const task of tasksToProcess) {
-      try {
-        if (task.type === 'Entity AI Action') {
-          // Process the AI action now that we're outside the transaction
-          await QueueManager.AddTask('Entity AI Action', task.data, task.options, task.user);
-        }
-        // Add other task types here as needed
-      } catch (error) {
-        LogError(`Failed to process deferred ${task.type} task: ${error}`);
-        // Continue processing other tasks even if one fails
-      }
-    }
-    
-    LogStatus(`Completed processing deferred tasks`);
   }
 
   override get FileSystemProvider(): IFileSystemProvider {

@@ -451,9 +451,9 @@ export class ExplorerStateService {
 
     // Add entity breadcrumb if selected
     if (state.selectedEntityName) {
-      const entityInfo = this.metadata.Entities.find(e => e.Name === state.selectedEntityName);
+      const entityInfo = this.metadata.Entities.find(e => e.Name.toLowerCase() === state.selectedEntityName?.toLowerCase());
       breadcrumbs.push({
-        label: state.selectedEntityName,
+        label: entityInfo?.DisplayNameOrName || state.selectedEntityName,
         type: 'entity',
         entityName: state.selectedEntityName,
         icon: entityInfo?.Icon ? this.formatEntityIcon(entityInfo.Icon) : 'fa-solid fa-table'

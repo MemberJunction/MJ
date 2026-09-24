@@ -748,7 +748,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /**
    * Whole-form totals — what the COLLAPSED rail spine shows, since no individual
-   * rail item is visible there. Summed over the RAIL GROUPS (first-class + More), not
+   * rail item is visible there. The expanded rail shows the same unrouted failures
+   * on their own row (see the template), so neither state hides a refused save. Summed over the RAIL GROUPS (first-class + More), not
    * over every registered panel: a panel the chrome dropped from the rail (System
    * Metadata in left-nav, a claimed baked grid) is not something the user can reach
    * from the rail, so the spine must add up to exactly what the expanded rail shows.
@@ -798,6 +799,14 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   public RailErrorTitle(count: number, where: string): string {
     return DescribeSectionErrors(count, where);
+  }
+
+  /** Tooltip / screen-reader text for the rail row that holds failures no section owns. */
+  public RailUnroutedErrorTitle(count: number): string {
+    if (count <= 0) return '';
+    return count === 1
+      ? '1 problem is not in any section shown here'
+      : `${count} problems are not in any section shown here`;
   }
 
   public RailWarningTitle(count: number, where: string): string {

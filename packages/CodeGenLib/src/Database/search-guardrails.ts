@@ -66,12 +66,32 @@ export function isIdentifierFieldName(fieldName: string): boolean {
 }
 
 /**
+ * The field names considered "name-like": human-readable labels a person types into a search
+ * box, as opposed to identifiers they type in full or narrative text they never type at all.
+ *
+ * Exported as data, not just as the predicate below, because the deterministic search-flag
+ * hygiene pass needs the same set inside generated SQL (`buildSearchFlagHygieneSQL`) where a
+ * JavaScript regex cannot run. One list, two consumers — so the SQL cannot drift from the
+ * predicate the LLM path applies.
+ */
+export const NAME_LIKE_FIELD_NAMES = [
+    'Name',
+    'Title',
+    'FirstName',
+    'LastName',
+    'MiddleName',
+    'DisplayName',
+    'FullName',
+    'Label',
+] as const;
+
+/**
  * Name-like field names — human-readable prefixes where `BeginsWith` is the
  * right predicate by default.
  */
 export function isNameLikeFieldName(fieldName: string): boolean {
     if (!fieldName) return false;
-    return /^(Name|Title|FirstName|LastName|MiddleName|DisplayName|FullName|Label)$/i.test(fieldName);
+    return new RegExp(`^(${NAME_LIKE_FIELD_NAMES.join('|')})$`, 'i').test(fieldName);
 }
 
 /**
