@@ -877,7 +877,10 @@ export abstract class BaseIntegrationConnector {
             CompanyIntegration: companyIntegration,
             ObjectName: objectName,
             WatermarkValue: null,   // FULL fetch — discovery wants breadth, not the incremental delta
-            BatchSize: batchSize,
+            // A sample that stops at `maxRecords` never needs a page bigger than that. With the
+            // default page of 500 and a target of 50, every connector that honours BatchSize
+            // fetched ten times the rows it kept, per object, on every discovery.
+            BatchSize: maxRecords > 0 ? Math.min(batchSize, maxRecords) : batchSize,
             ContextUser: contextUser,
             // TELL THE CONNECTOR WHAT THIS CALL IS FOR. Stopping after `maxRecords` here only works
             // when one FetchChanges is one page; a connector that fans out internally (one request

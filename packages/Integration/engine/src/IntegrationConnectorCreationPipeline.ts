@@ -18,6 +18,60 @@ import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
 import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
+import { getHeapStatistics } from 'node:v8';
+import { totalmem } from 'node:os';
+
+/**
+ * Has the heap reached the point where a long stage must stop taking on new work?
+ *
+ * Pure, so the boundary is testable without arranging real memory pressure — the same reason the
+ * overlay deciders in IntegrationSchemaSync are pure.
+ *
+ * A limit of zero means V8 did not report a ceiling. That must read as "do not stop": a missing
+ * reading is not evidence of pressure, and treating it as pressure would halt sampling everywhere
+ * the statistic is unavailable.
+ */
+export function ShouldStopSamplingForHeap(usedBytes: number, limitBytes: number, stopFraction: number): boolean {
+    if (!(limitBytes > 0) || !(stopFraction > 0)) return false;
+    return usedBytes / limitBytes >= stopFraction;
+}
+
+/** One reading of the two numbers the two memory ceilings are measured against. */
+export interface MemorySample {
+    /** V8 heap in use, bytes. */
+    HeapUsed: number;
+    /** V8's heap ceiling (`--max-old-space-size`), bytes; 0 when unknown. */
+    HeapLimit: number;
+    /** Resident set of this process, bytes. */
+    RSS: number;
+    /** Physical memory of the box, bytes; 0 when unknown. */
+    TotalMemory: number;
+}
+
+/** The live reading. Cheap enough per object: counters V8 and the OS already maintain. */
+export function ReadMemorySample(): MemorySample {
+    const heap = getHeapStatistics();
+    return {
+        HeapUsed: heap.used_heap_size,
+        HeapLimit: heap.heap_size_limit,
+        RSS: process.memoryUsage().rss,
+        TotalMemory: totalmem(),
+    };
+}
+
+/**
+ * Stop when EITHER ceiling is close. The heap gate alone cannot save a process the kernel kills:
+ * the kernel measures resident memory against the box, V8 measures the heap against its own
+ * limit, and the two diverge — parsed response bodies, driver buffers and heap fragmentation all
+ * sit in RSS outside the live heap, so RSS runs well above it under load. Observed 2026-09-18 and
+ * 2026-09-21 on a 15.7 GB box: node killed at 15.3 GB and 15.6 GB anon-RSS mid-discovery while
+ * the heap was still under its ceiling, so the heap gate never fired. An unknown reading (a
+ * limit or a box size of 0) is not evidence of pressure, as for the heap.
+ */
+export function ShouldStopForMemory(sample: MemorySample, heapStopFraction: number, rssStopFraction: number): boolean {
+    return ShouldStopSamplingForHeap(sample.HeapUsed, sample.HeapLimit, heapStopFraction)
+        || ShouldStopSamplingForHeap(sample.RSS, sample.TotalMemory, rssStopFraction);
+}
 
 /** Options for the creation/refresh pipeline run. */
 export interface ConnectorCreationPipelineOptions {
@@ -158,6 +212,22 @@ export class IntegrationConnectorCreationPipeline {
      * fires on work that has genuinely stopped, never on work that is merely big.
      */
     private static readonly DEFAULT_RUN_DEADLINE_MS = 45 * 60_000;
+    /**
+     * Heap fraction past which Introspect stops taking on NEW sampling work.
+     *
+     * Higher than a warning threshold on purpose. A warning exists to fire while there is still
+     * room to act; this is the last exit before V8 gives up, and past it the next large allocation
+     * is as likely to abort the process as to succeed. 0.92 leaves roughly the cost of one more
+     * object's sample plus the persist that follows — enough to land what has already been
+     * gathered, which is the entire point of stopping rather than being stopped.
+     */
+    private static readonly HEAP_STOP_FRACTION = 0.92;
+    /**
+     * Resident-set fraction of the box's memory past which the two long stages stop. Lower than
+     * the heap fraction on purpose: the box is shared with everything else that runs on it, and
+     * the kernel does not warn first. See ShouldStopForMemory.
+     */
+    private static readonly RSS_STOP_FRACTION = 0.80;
     /** Just-completed runs by CompanyIntegrationID — coalesces a *sequential* duplicate within the window. */
     private static readonly recentRuns = new Map<string, { result: ConnectorCreationPipelineResult; at: number }>();
     /** Default coalesce window (ms) when the env override is unset/invalid. */
@@ -462,6 +532,28 @@ export class IntegrationConnectorCreationPipeline {
         // otherwise have completed.
         const budgetMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
         const outOfTime = (): boolean => budgetMs > 0 && Date.now() - startMs >= budgetMs;
+        // THE OTHER BUDGET. Introspect accumulates: `schema.Objects` holds every object with every
+        // field for the whole stage and is handed to the persist stage only at the end, so memory
+        // climbs monotonically with the size of the source and is never released mid-stage. On a
+        // large catalog that reaches V8's ceiling before the time budget is anywhere near spent —
+        // 888 objects, some with thousands of columns, is ~97k field descriptors held at once, and
+        // a first discovery samples the whole set TWICE.
+        //
+        // Running out of memory here is not like running out of time. Time ends the stage with
+        // everything gathered so far intact; the heap ceiling ends the PROCESS, so the run loses
+        // every object it had already sampled, writes no result, and stays in flight forever.
+        // Observed 2026-09-19: two hours of sampling discarded by
+        // `FATAL ERROR: Ineffective mark-compacts near heap limit`.
+        //
+        // So memory gets the same treatment time already has — stop taking on new sampling, keep
+        // what is gathered, let the stage finish and persist. A smaller catalog beats no catalog.
+        // Read synchronously and per object: `used_heap_size` is a counter V8 already maintains,
+        // and the alternative (the async whole-machine reading) cannot be afforded per item.
+        const outOfMemory = (): boolean => ShouldStopForMemory(
+            ReadMemorySample(),
+            IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
+            IntegrationConnectorCreationPipeline.RSS_STOP_FRACTION,
+        );
         try {
             // U11 — determinate discovery progress: surface scanned/total on the structured
             // stream (IntegrationTailRunEvents carries counts) so a client can render a real
@@ -518,6 +610,7 @@ export class IntegrationConnectorCreationPipeline {
             const sampledDeclared = new Set<string>();
             let runtimeAdded = 0;
             let unsampledForTime = 0;
+            let unsampledForMemory = 0;
 
             // Per-object progress. Everything below this point is the expensive half of discovery —
             // one read-path sample per object — and it emitted nothing, so a consumer watching a
@@ -550,6 +643,7 @@ export class IntegrationConnectorCreationPipeline {
                 // reached the end of its object list, not one that stalled partway through it.
                 announceSample(d.Name);
                 if (outOfTime()) { unsampledForTime++; continue; }
+                if (outOfMemory()) { unsampledForMemory++; continue; }
                 if (seen.has(key)) {
                     // §case-3 (data-only-discoverable): a DECLARED object the connector ALSO surfaces at
                     // runtime. Sampling populates it IN PLACE so a name-only declaration becomes syncable
@@ -619,6 +713,7 @@ export class IntegrationConnectorCreationPipeline {
                 if (sampledDeclared.has(key) || !inScope(name)) continue;
                 announceSample(name);
                 if (outOfTime()) { unsampledForTime++; continue; }
+                if (outOfMemory()) { unsampledForMemory++; continue; }
                 const existing = schema.Objects.find(o => o.ExternalName.toLowerCase() === key);
                 if (!existing) continue;
                 // Record it here too: two declared entries that differ only by case resolve to the
@@ -640,7 +735,21 @@ export class IntegrationConnectorCreationPipeline {
                 emitter.stageError('Introspect', msg, { code: 'sample-budget-exhausted' });
                 console.warn(`[IntrospectPipeline] ${msg}`);
             }
-            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} unsampled-for-time=${unsampledForTime} total=${schema.Objects.length}`);
+            if (unsampledForMemory > 0) {
+                // Deliberately the code the sync path already emits and the UI already renders,
+                // rather than a second vocabulary for the same condition.
+                const msg =
+                    `This workspace ran short of memory partway through reading your source, so ` +
+                    `${unsampledForMemory} object(s) were not sampled and keep their declared fields ` +
+                    `and catalog widths. Everything sampled before that point was kept. Re-run to ` +
+                    `finish the rest, or give the workspace more memory for a source this size.`;
+                emitter.warning('Introspect', 'HOST_MEMORY_PRESSURE', msg, {
+                    unsampledForMemory,
+                    sampled: announced.size - unsampledForMemory - unsampledForTime,
+                });
+                console.warn(`[IntrospectPipeline] ${msg}`);
+            }
+            console.log(`[IntrospectPipeline] declared=${declaredNames.length} runtime-added=${runtimeAdded} declared-only-sampled=${declaredOnlySampled} unsampled-for-time=${unsampledForTime} unsampled-for-memory=${unsampledForMemory} total=${schema.Objects.length}`);
 
             const fieldCount = schema.Objects.reduce((acc, o) => acc + o.Fields.length, 0);
             emitter.stageComplete('Introspect', {
@@ -654,6 +763,7 @@ export class IntegrationConnectorCreationPipeline {
                 durationMs: Date.now() - startMs,
                 discoverObjectsFailed,
                 unsampledForTime,
+                unsampledForMemory,
             });
             return schema;
         } catch (err) {
@@ -822,15 +932,52 @@ export class IntegrationConnectorCreationPipeline {
         emitter.stageStart('PKClassify', 'Soft PK classifier for objects still missing a PK');
         const md = opts.Provider ?? Metadata.Provider;
         const engine = IntegrationEngineBase.Instance;
-        // Refresh from DB so we see what Persist just wrote
-        await engine.Config(true, opts.ContextUser, md);
+        // See what Persist just wrote — but only that. `Config(true)` reloads every dataset the
+        // engine owns, which on a large catalog is the run's biggest single allocation, made at
+        // the moment the process has the least room for it (Persist has just finished). The two
+        // catalog arrays are all this stage reads; `RefreshCatalog` reloads exactly those and
+        // invalidates the memoised per-object field index by array identity.
+        await engine.Config(false, opts.ContextUser, md);
+        await engine.RefreshCatalog(opts.ContextUser);
         const objects = engine.GetIntegrationObjectsByIntegrationID(opts.CompanyIntegration.IntegrationID);
 
         const classifier = new SoftPKClassifier();
         const verdicts: ConnectorCreationPipelineResult['PKVerdicts'] = [];
         const unresolved: string[] = [];
 
+        // The same reading and the same threshold Introspect uses, so the two long stages agree
+        // about what "out of room" means.
+        const outOfMemoryPK = (): boolean => ShouldStopForMemory(
+            ReadMemorySample(),
+            IntegrationConnectorCreationPipeline.HEAP_STOP_FRACTION,
+            IntegrationConnectorCreationPipeline.RSS_STOP_FRACTION,
+        );
+        // This stage runs right after the run's largest write, so it starts wherever Introspect
+        // left the heap, and then works a tight loop: a classifier verdict per object and a Save()
+        // for each nominee. Two things keep it from being the stage that dies where Introspect
+        // learned to stop:
+        //  1. YIELD. Every YIELD_EVERY objects, hand the loop back to the event loop so the
+        //     collector can run — a loop with no await between allocations never lets it.
+        //  2. GATE, and STOP rather than die. Past the memory fraction, stop classifying. The
+        //     objects not reached come back unresolved, are emitted as skipped, and ONE warning
+        //     says how many and why. A short key list is the symptom a customer sees, and
+        //     "we stopped early under memory pressure" is the only honest explanation for it.
+        // Observed 2026-09-22 on an 888-object catalog: Persist completed, this stage started the
+        // same second, and 44 s later V8 aborted with `Ineffective mark-compacts near heap limit`
+        // — 830 objects kept their fields, 46 kept a key, and the run was marked killed.
+        const YIELD_EVERY = 25;
+        let classifiedCount = 0;
+        let shedForMemory = 0;
+
         for (const obj of objects) {
+            if (classifiedCount > 0 && classifiedCount % YIELD_EVERY === 0) {
+                await new Promise<void>(resolve => setImmediate(resolve));
+                if (outOfMemoryPK()) {
+                    shedForMemory = objects.length - classifiedCount;
+                    break;
+                }
+            }
+            classifiedCount++;
             const fields = engine.GetIntegrationObjectFields(obj.ID);
             const hasPK = fields.some(f => f.IsPrimaryKey);
             if (hasPK) {
@@ -881,6 +1028,19 @@ export class IntegrationConnectorCreationPipeline {
                 unresolved.push(obj.Name);
                 emitter.entitySkippedNoPK(obj.Name);
             }
+        }
+
+        if (shedForMemory > 0) {
+            // Loud, and on the run stream rather than a server console.
+            for (const skipped of objects.slice(objects.length - shedForMemory)) {
+                unresolved.push(skipped.Name);
+                emitter.entitySkippedNoPK(skipped.Name);
+            }
+            emitter.warning('PKClassify', 'HOST_MEMORY_PRESSURE',
+                `Stopped classifying primary keys after ${classifiedCount} of ${objects.length} objects — the ` +
+                `process was at its memory ceiling. The ${shedForMemory} object(s) not reached are reported ` +
+                `without a key; re-run discovery with more memory, or a smaller selection, to classify them.`,
+                { classified: classifiedCount, total: objects.length, shed: shedForMemory });
         }
 
         emitter.stageComplete('PKClassify', {
