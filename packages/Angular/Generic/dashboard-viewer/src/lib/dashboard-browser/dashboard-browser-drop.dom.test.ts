@@ -4,16 +4,18 @@
  * UUIDs, PostgreSQL lower-case; see guides/UUID_COMPARISON_GUIDE.md).
  *
  * The drop handlers used to run a nested `UUIDsEqual` scan (dashboards × dragged IDs). They now
- * share one normalized-Set helper; these specs hold the emitted `DashboardMove` steady across it.
+ * each build a normalized ID Set once; these specs hold the emitted `DashboardMove` steady across that.
  *
  * Constructed directly: the constructor takes only a change detector, and the behaviour under
  * test is what one handler emits.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
+import type { ChangeDetectorRef } from '@angular/core';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
 import { DashboardBrowserComponent, type DashboardMoveEvent } from './dashboard-browser.component';
 
-const cdrStub = { detectChanges: () => undefined, markForCheck: () => undefined };
+/** The handlers under test only ever call markForCheck; the double is checked against the members it claims. */
+const cdrStub = { detectChanges: () => undefined, markForCheck: () => undefined } satisfies Pick<ChangeDetectorRef, 'detectChanges' | 'markForCheck'> as unknown as ChangeDetectorRef;
 
 const SALES = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const OPS = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -37,7 +39,7 @@ describe('DashboardBrowserComponent drops', () => {
     let moves: DashboardMoveEvent[];
 
     beforeEach(() => {
-        browser = new DashboardBrowserComponent(cdrStub as unknown as never);
+        browser = new DashboardBrowserComponent(cdrStub);
         browser.AllowDragDrop = true;
         browser.Dashboards = [dashboard(SALES, 'Sales'), dashboard(OPS, 'Ops'), dashboard(HR, 'HR')];
         moves = [];
