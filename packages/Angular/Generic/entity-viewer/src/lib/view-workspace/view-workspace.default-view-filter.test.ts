@@ -110,6 +110,7 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
     setSetting = vi.fn().mockResolvedValue(true);
     vi.spyOn(UserInfoEngine, 'Instance', 'get').mockReturnValue({
       SetSetting: setSetting,
+      GetSetting: vi.fn().mockReturnValue(undefined),
     } as unknown as UserInfoEngine);
 
     createdView = makeFakeView();
@@ -295,13 +296,16 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
    */
   describe('returning to the config panel from the name prompt', () => {
     it('hands the traditional filter back to the panel', async () => {
+      // In the real flow the panel emitted this very object, which it got from filterDialogState —
+      // so re-assigning filterDialogState is a no-op the panel never sees. It needs its own input.
+      component.filterDialogState = traditionalFilter;
       await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
 
       component.onQuickSaveOpenAdvanced({ Name: 'Partial', Description: '', IsShared: false });
 
       expect(component.isConfigPanelOpen).toBe(true);
       expect(component.showQuickSaveDialog).toBe(false);
-      expect(component.filterDialogState).toEqual(traditionalFilter);
+      expect(component.pendingNewViewFilterState).toBe(traditionalFilter);
     });
 
     it('hands the smart filter back to the panel', async () => {
@@ -344,6 +348,57 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
 
       expect(component.pendingNewViewSmartFilterEnabled).toBe(false);
       expect(component.pendingNewViewSmartFilterPrompt).toBe('');
+      expect(component.pendingNewViewFilterState).toBeNull();
+    });
+  });
+
+  describe('an entity change abandons the staged save', () => {
+    it('does not carry the old entity\'s staged filter or suggested name into the new entity', async () => {
+      component.ngOnInit();
+      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+
+      component.Entity = { ...makeEntity(), ID: 'entity-2', Name: 'Contacts', DisplayNameOrName: 'Contacts' } as unknown as EntityInfo;
+
+      expect(component.showQuickSaveDialog).toBe(false);
+      expect(component.quickSaveSuggestedName).toBe('');
+      expect(component.defaultSaveAsNew).toBe(false);
+
+      await component.onQuickSave({ Name: 'Contacts View', Description: '', IsShared: false, SaveAsNew: true });
+      expect(JSON.parse(createdView.FilterState)).toEqual({ logic: 'and', filters: [] });
+    });
+  });
+
+  describe('a failed save keeps the staged filter', () => {
+    it('reopens the name prompt with the staged filter intact when Save() fails', async () => {
+      createdView.Save.mockResolvedValueOnce(false);
+      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+
+      await component.onQuickSave({ Name: 'Active Accounts', Description: '', IsShared: false, SaveAsNew: true });
+
+      expect(component.showQuickSaveDialog).toBe(true);
+      expect(component.quickSaveSuggestedName).toBe('Active Accounts');
+
+      // Retrying from the reopened prompt still carries the filter.
+      await component.onQuickSave({ Name: 'Active Accounts', Description: '', IsShared: false, SaveAsNew: true });
+      expect(createdView.Save).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(createdView.FilterState)).toEqual(traditionalFilter);
+      expect(component.showQuickSaveDialog).toBe(false);
+      expect(component.quickSaveSuggestedName).toBe('');
+    });
+
+    it('reopens the name prompt when a host cancels BeforeViewSave', async () => {
+      component.BeforeViewSave.subscribe(e => { e.Cancel = true; });
+      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+
+      await component.onQuickSave({ Name: 'Blocked', Description: '', IsShared: false, SaveAsNew: true });
+
+      expect(createdView.Save).not.toHaveBeenCalled();
+      expect(component.showQuickSaveDialog).toBe(true);
+
+      // Cancelling from there abandons it cleanly.
+      component.onQuickSaveClose();
+      expect(component.quickSaveSuggestedName).toBe('');
+      expect(component.defaultSaveAsNew).toBe(false);
     });
   });
 

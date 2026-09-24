@@ -451,6 +451,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Pre-populated sharing preference carried from quick-save dialog into the config panel. */
   public pendingNewViewIsShared: boolean = false;
 
+  /** Traditional filter carried from quick-save dialog back into the config panel. */
+  public pendingNewViewFilterState: CompositeFilterDescriptor | null = null;
+
   /** Smart-filter toggle carried from quick-save dialog back into the config panel. */
   public pendingNewViewSmartFilterEnabled: boolean = false;
 
@@ -575,6 +578,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.showDuplicateDialog = false;
     this.showSharedViewWarning = false;
     this.isFilterDialogOpen = false;
+    // A save staged for the previous entity references that entity's fields — it must not
+    // surface on the next quick-save against the new one.
+    this.clearPendingNewViewState();
   }
 
   // ========================================
@@ -801,6 +807,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.pendingNewViewName = '';
     this.pendingNewViewDescription = '';
     this.pendingNewViewIsShared = false;
+    this.pendingNewViewFilterState = null;
     this.pendingNewViewSmartFilterEnabled = false;
     this.pendingNewViewSmartFilterPrompt = '';
     this.defaultSaveAsNew = false;
@@ -839,10 +846,11 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * Handle a save from the config panel. When {@link AutoSaveView}, persists the view itself
    * (create-new or update) via the BaseEntity; otherwise emits {@link SaveViewRequested} for the host.
    * (Faithful generalization of DataExplorer.onSaveView, minus routing/state-service/notifications.)
+   * Resolves `true` once the view is saved (or handed to the host), `false` if it was not.
    */
-  public async onSaveView(event: ViewSaveEvent): Promise<void> {
+  public async onSaveView(event: ViewSaveEvent): Promise<boolean> {
     if (!this._entity) {
-      return;
+      return false;
     }
 
     if (!this.AutoSaveView) {
@@ -850,7 +858,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       this.isConfigPanelOpen = false;
       this.clearPendingNewViewState();
       this.cdr.detectChanges();
-      return;
+      return true;
     }
 
     this.isSavingView = true;
@@ -871,6 +879,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
     this.isSavingView = false;
     this.cdr.detectChanges();
+    return success;
   }
 
   /**
@@ -1110,10 +1119,13 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * merged in and the dialog supplies just the name/description/sharing. The smart-filter fields
    * used to be hard-coded to `false`/`''` here, which dropped a smart filter on this path too
    * (#4220).
+   *
+   * The staged save is left in place until the save succeeds ({@link onSaveView} clears it). If
+   * the save fails or a host cancels it, the name prompt reopens so the user can retry or cancel
+   * rather than losing the filter with nothing on screen.
    */
   private async executeQuickSave(event: QuickSaveEvent): Promise<void> {
     const staged = this.pendingDefaultViewSave;
-    this.pendingDefaultViewSave = null;
 
     const viewSaveEvent: ViewSaveEvent = {
       Name: event.Name,
@@ -1129,7 +1141,12 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       FilterState: staged?.FilterState ?? this.filterDialogState ?? null,
       AggregatesConfig: staged?.AggregatesConfig ?? null
     };
-    await this.onSaveView(viewSaveEvent);
+    const saved = await this.onSaveView(viewSaveEvent);
+    if (!saved && staged) {
+      this.quickSaveSuggestedName = event.Name;
+      this.showQuickSaveDialog = true;
+      this.cdr.detectChanges();
+    }
   }
 
   /** Handle the shared-view warning action (update / save-as-copy / cancel). */
@@ -1175,11 +1192,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     // Without this the escape hatch out of the name prompt would silently drop the filter.
     const staged = this.pendingDefaultViewSave;
     if (staged) {
+      this.pendingNewViewFilterState = staged.FilterState;
       this.pendingNewViewSmartFilterEnabled = staged.SmartFilterEnabled;
       this.pendingNewViewSmartFilterPrompt = staged.SmartFilterPrompt;
-      if (staged.FilterState) {
-        this.filterDialogState = staged.FilterState;
-      }
     }
 
     this.defaultSaveAsNew = true;
