@@ -16,7 +16,7 @@ import {
   JudgeRanking,
 } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
-import { AIPromptParams, ResolvePromptRunAttribution } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from './AIPromptRunner';
 
 /**
@@ -789,12 +789,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         },
       ];
 
-      const agentId = results[0]?.task?.agentId;
-      const judgeAttribution = ResolvePromptRunAttribution({
-        agentRunId: results[0]?.task?.agentRunId,
-        userId: results[0]?.task?.userId,
-        contextUser: user,
-      });
+      const agentId = results[0]?.task?.AgentID;
+      const judgeUserId = ResolvePromptRunUserID({ UserID: results[0]?.task?.UserID, ContextUser: user }) ?? undefined;
 
       // Execute the judge prompt
       const judgeRunner = new AIPromptRunner();
@@ -807,11 +803,10 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         contextUser: user,
         provider: this.Provider,
         parentPromptRunId,
-        runType: 'ResultSelector',
-        executionOrder: results.length,
+        RunType: 'ResultSelector',
+        ExecutionOrder: results.length,
         agentId,
-        agentRunId: judgeAttribution.agentRunId ?? undefined,
-        userId: judgeAttribution.userId ?? undefined,
+        UserID: judgeUserId,
       });
 
       const judgeEndTime = Date.now();
@@ -834,12 +829,12 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       this.applyRankingsToResults(results, rankings);
 
       // Store judge metadata for later use
-      const bestCandidateId = rankings.find((r) => r.rank === 1)?.candidateId;
+      const bestCandidateId = rankings.find((r) => r.Rank === 1)?.CandidateID;
       const bestResultIndex = results.findIndex((r) => r.task.taskId === bestCandidateId);
       const bestResult = bestResultIndex >= 0 ? results[bestResultIndex] : results[0];
 
       // Update ResultSelector JudgeScore and JudgeID from rankings if present
-      const topRanking = rankings.find((r) => r.rank === 1) || rankings[0];
+      const topRanking = rankings.find((r) => r.Rank === 1) || rankings[0];
       if (judgeResult.promptRun) {
         // The judge runner finalizes its prompt run through a FIRE-AND-FORGET queued UPDATE
         // (AIPromptRunner.finalize -> _promptRunQueue.Update). BaseEntity.Save collapses into an
@@ -848,8 +843,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         // JudgeScore are silently lost. Drain the queue first so this Save is a real write.
         await judgeRunner.WaitForPendingPromptRunSaves();
         judgeResult.promptRun.JudgeID = judgePrompt.ID;
-        if (judgeResult.promptRun.JudgeScore == null && typeof topRanking?.score === 'number') {
-          judgeResult.promptRun.JudgeScore = topRanking.score;
+        if (judgeResult.promptRun.JudgeScore == null && typeof topRanking?.Score === 'number') {
+          judgeResult.promptRun.JudgeScore = topRanking.Score;
         }
         await judgeResult.promptRun.Save();
       }
@@ -858,9 +853,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       for (const result of results) {
         if (result.promptRun) {
           result.promptRun.JudgeID = judgePrompt.ID;
-          const ranking = rankings.find((r) => r.candidateId === result.task.taskId);
-          if (ranking && typeof ranking.score === 'number') {
-            result.promptRun.JudgeScore = ranking.score;
+          const ranking = rankings.find((r) => r.CandidateID === result.task.taskId);
+          if (ranking && typeof ranking.Score === 'number') {
+            result.promptRun.JudgeScore = ranking.Score;
           }
           if (result.task.taskId === bestCandidateId) {
             result.promptRun.WasSelectedResult = true;
@@ -925,10 +920,12 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       if (parsed.rankings && Array.isArray(parsed.rankings)) {
         return parsed.rankings.map((ranking: Record<string, unknown>) => ({
-          candidateId: String(ranking.candidateId),
-          rank: Number(ranking.rank),
-          rationale: (ranking.rationale as string) || 'No rationale provided',
-          score: typeof ranking.score === 'number' ? ranking.score : undefined,
+          // The judge's JSON keys are the prompt's wire format (see `format` above); the typed
+          // JudgeRanking is PascalCase like the rest of the public surface.
+          CandidateID: String(ranking.candidateId),
+          Rank: Number(ranking.rank),
+          Rationale: (ranking.rationale as string) || 'No rationale provided',
+          Score: typeof ranking.score === 'number' ? ranking.score : undefined,
         }));
       }
 
@@ -948,10 +945,10 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    */
   private applyRankingsToResults(results: ExecutionTaskResult[], rankings: JudgeRanking[]): void {
     for (const result of results) {
-      const ranking = rankings.find((r) => r.candidateId === result.task.taskId);
+      const ranking = rankings.find((r) => r.CandidateID === result.task.taskId);
       if (ranking) {
-        result.ranking = ranking.rank;
-        result.judgeRationale = ranking.rationale;
+        result.ranking = ranking.Rank;
+        result.judgeRationale = ranking.Rationale;
       }
     }
   }
@@ -1028,16 +1025,10 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       promptRun.PromptID = task.prompt.ID;
       promptRun.ModelID = task.model.ID;
-      if (task.agentId) {
-        promptRun.AgentID = task.agentId;
+      if (task.AgentID) {
+        promptRun.AgentID = task.AgentID;
       }
-      const attribution = ResolvePromptRunAttribution({
-        agentRunId: task.agentRunId,
-        userId: task.userId,
-        contextUser: task.contextUser,
-      });
-      promptRun.AgentRunID = attribution.agentRunId;
-      promptRun.UserID = attribution.userId;
+      promptRun.UserID = ResolvePromptRunUserID({ UserID: task.UserID, ContextUser: task.contextUser });
       promptRun.RunAt = startTime;
       promptRun.RunType = 'ParallelChild';
       promptRun.ParentID = parentPromptRunId;

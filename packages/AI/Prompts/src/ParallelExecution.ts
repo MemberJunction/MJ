@@ -67,13 +67,10 @@ export interface ExecutionTask {
   vendorId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** ID of the agent this prompt was run as part of */
-  agentId?: string;
-
-  /** ID of the agent run this prompt was run as part of */
-  agentRunId?: string;
+  AgentID?: string;
 
   /** User ID on whose behalf this prompt was executed */
-  userId?: string;
+  UserID?: string;
 }
 
 /**
@@ -145,13 +142,13 @@ export interface ExecutionTaskResult {
  */
 export interface JudgeRanking {
   /** Identifier of the candidate task that was evaluated */
-  candidateId: string;
+  CandidateID: string;
   /** Numerical rank (1 = best) */
-  rank: number;
+  Rank: number;
   /** Rationale explaining the rank */
-  rationale: string;
+  Rationale: string;
   /** Optional numerical score assigned by the judge */
-  score?: number;
+  Score?: number;
 }
 
 /**

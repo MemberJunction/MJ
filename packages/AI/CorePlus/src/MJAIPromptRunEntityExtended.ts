@@ -41,7 +41,6 @@ export class MJAIPromptRunEntityExtended extends MJAIPromptRunEntity {
      * it is serialized into the ValidationSummary JSON field.
      */
     public _jsonRepairInfo: JSONRepairInfo | null = null;
-
     
     /**
      * Parses and extracts all message data from the Messages field.

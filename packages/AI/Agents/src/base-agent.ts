@@ -16,7 +16,7 @@ import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from '.
 import { BuildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
-import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunAttribution } from "@memberjunction/ai-core-plus";
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision } from '@memberjunction/ai-prompts';
@@ -109,8 +109,7 @@ import {
     ExtractPromptResultText,
     GetTaskGraphSubmitter,
     SkillAvailabilityPurpose,
-    ArtifactDirective,
-    AgentRunGuardrailVerdict
+    ArtifactDirective
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -2225,13 +2224,11 @@ export class BaseAgent {
             promptRun.ModelID = modelResolution.modelID;
             promptRun.VendorID = modelResolution.vendorID || null;
             promptRun.AgentID = params.agent.ID;
-            const attribution = ResolvePromptRunAttribution({
-                agentRun: this._agentRun,
-                userId: params.userId,
-                contextUser: params.contextUser,
+            promptRun.UserID = ResolvePromptRunUserID({
+                UserID: params.userId,
+                AgentRun: this._agentRun,
+                ContextUser: params.contextUser,
             });
-            promptRun.AgentRunID = attribution.agentRunId;
-            promptRun.UserID = attribution.userId;
             promptRun.Status = 'Running';
             promptRun.RunAt = new Date();
             promptRun.StreamingEnabled = true;
@@ -3965,13 +3962,11 @@ export class BaseAgent {
         // Attribute the resulting AIPromptRun to this agent. Agents share agent-type-level system
         // prompts, so without this a parent's inference and its sub-agent's are indistinguishable.
         promptParams.agentId = params.agent.ID;
-        const attribution = ResolvePromptRunAttribution({
-            agentRun: this._agentRun,
-            userId: params.userId,
-            contextUser: params.contextUser,
-        });
-        promptParams.agentRunId = attribution.agentRunId ?? undefined;
-        promptParams.userId = attribution.userId ?? undefined;
+        promptParams.UserID = ResolvePromptRunUserID({
+            UserID: params.userId,
+            AgentRun: this._agentRun,
+            ContextUser: params.contextUser,
+        }) ?? undefined;
 
         // Handle case where systemPrompt is optional (e.g., Flow Agent Type)
         if (systemPrompt) {
@@ -5134,7 +5129,13 @@ export class BaseAgent {
     protected async hasExceededAgentRunGuardrails(
         params: ExecuteAgentParams,
         agentRun: MJAIAgentRunEntityExtended
-    ): Promise<AgentRunGuardrailVerdict> {
+    ): Promise<{
+        exceeded: boolean;
+        type?: 'cost' | 'tokens' | 'iterations' | 'time';
+        limit?: number;
+        current?: number;
+        reason?: string;
+    }> {
         const agent = params.agent;
 
         // Refresh the run's accumulated cost/token actuals before comparing them to the agent's
@@ -5148,7 +5149,7 @@ export class BaseAgent {
         // top-up, which only fires if compaction happens to trigger.
         //
         // So mid-run both fields sat at 0, and because the checks below are guarded on
-        // `agent.MaxCostPerRun != null && agentRun.TotalCost != null`, a falsy 0 short-circuited them entirely. The
+        // `agent.MaxCostPerRun && agentRun.TotalCost`, a falsy 0 short-circuited them entirely. The
         // cost and token ceilings were evaluated only at the moment a run ENDED, which is too late
         // to stop anything: they became reporting, not guardrails. Only the iteration and time
         // limits actually interrupted a run, because TotalPromptIterations is incremented in the
@@ -6440,13 +6441,11 @@ The context is now within limits. Please retry your request with the recovered c
                 promptParams.data = { lens, messages: rangeText };
                 promptParams.contextUser = params.contextUser;
                 promptParams.agentId = params.agent.ID;
-                const attribution = ResolvePromptRunAttribution({
-                    agentRun: this._agentRun,
-                    userId: params.userId,
-                    contextUser: params.contextUser,
-                });
-                promptParams.agentRunId = attribution.agentRunId ?? undefined;
-                promptParams.userId = attribution.userId ?? undefined;
+                promptParams.UserID = ResolvePromptRunUserID({
+                    UserID: params.userId,
+                    AgentRun: this._agentRun,
+                    ContextUser: params.contextUser,
+                }) ?? undefined;
                 const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
                 const text = ExtractPromptResultText(result);
                 if (!result.success || text.length === 0) {
@@ -6688,19 +6687,13 @@ The context is now within limits. Please retry your request with the recovered c
                 },
             });
 
-            const attribution = ResolvePromptRunAttribution({
-                agentRun: this._agentRun,
-                userId: params.userId,
-                contextUser: params.contextUser,
-            });
-
             const result = await this._memoryWriteManager.ExecuteWrite(write, {
                 agentId: params.agent.ID,
                 contextUser: params.contextUser,
-                agentRunId: attribution.agentRunId || undefined,
+                agentRunId: this._agentRun?.ID,
                 conversationId: this._agentRun?.ConversationID || undefined,
                 conversationDetailId: params.conversationDetailId,
-                userId: attribution.userId || undefined,
+                userId: params.userId || params.contextUser?.ID,
                 companyId: params.companyId,
                 verbose: params.verbose,
                 provider: this.ProviderToUse,
@@ -15222,13 +15215,11 @@ The context is now within limits. Please retry your request with the recovered c
                     };
                     promptParams.contextUser = params.contextUser;
                     promptParams.agentId = params.agent.ID;
-                    const attribution = ResolvePromptRunAttribution({
-                        agentRun: this._agentRun,
-                        userId: params.userId,
-                        contextUser: params.contextUser,
-                    });
-                    promptParams.agentRunId = attribution.agentRunId ?? undefined;
-                    promptParams.userId = attribution.userId ?? undefined;
+                    promptParams.UserID = ResolvePromptRunUserID({
+                        UserID: params.userId,
+                        AgentRun: this._agentRun,
+                        ContextUser: params.contextUser,
+                    }) ?? undefined;
 
                     const runner = new AIPromptRunner();
                     const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);

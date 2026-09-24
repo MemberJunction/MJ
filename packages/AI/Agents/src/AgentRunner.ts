@@ -14,7 +14,7 @@ import { createHash } from 'crypto';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunAttribution } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
 import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
@@ -1386,11 +1386,7 @@ export class AgentRunner {
             const promptParams = new AIPromptParams();
             promptParams.prompt = prompt;
             promptParams.contextUser = contextUser;
-            const attribution = ResolvePromptRunAttribution({
-                contextUser,
-            });
-            promptParams.agentRunId = attribution.agentRunId ?? undefined;
-            promptParams.userId = attribution.userId ?? undefined;
+            promptParams.UserID = ResolvePromptRunUserID({ ContextUser: contextUser }) ?? undefined;
             promptParams.conversationMessages = [{ role: 'user', content: userMessage }];
             promptParams.provider = provider || this._provider;
 

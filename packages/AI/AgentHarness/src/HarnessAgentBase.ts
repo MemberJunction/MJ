@@ -2,7 +2,7 @@ import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { AIPromptParams, AIPromptRunResult, MJAIPromptRunEntityExtended, ResolvePromptRunAttribution } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
 import { ChatResult, ModelUsage } from '@memberjunction/ai';
 import {
     MJAIAgentHarnessEntity,
@@ -364,14 +364,11 @@ export class HarnessAgentBase extends BaseAgent {
             run.ModelID = (await this.resolveReportedModelId(turn.ReportedModel, promptParams)) ?? ids.ModelID;
             run.VendorID = ids.VendorID;
             run.AgentID = this._agentRunAgentId();
-            const attribution = ResolvePromptRunAttribution({
-                agentRunId: promptParams.agentRunId,
-                agentRun: this.AgentRun,
-                userId: promptParams.userId,
-                contextUser: promptParams.contextUser,
+            run.UserID = ResolvePromptRunUserID({
+                UserID: promptParams.UserID,
+                AgentRun: this.AgentRun,
+                ContextUser: promptParams.contextUser,
             });
-            run.AgentRunID = attribution.agentRunId;
-            run.UserID = attribution.userId;
             run.RunAt = startTime;
             run.CompletedAt = new Date();
             run.Success = !turn.ErrorMessage;

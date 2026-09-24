@@ -571,12 +571,12 @@ export class AIPromptParams {
   /**
    * Optional run type override for prompt execution tracking (e.g., 'ResultSelector', 'ParallelChild', 'Single').
    */
-  runType?: 'ParallelChild' | 'ParallelParent' | 'ResultSelector' | 'Single';
+  RunType?: 'ParallelChild' | 'ParallelParent' | 'ResultSelector' | 'Single';
 
   /**
    * Optional execution order within a parallel execution group or sequence.
    */
-  executionOrder?: number;
+  ExecutionOrder?: number;
 
   /**
    * Additional model-specific parameters that will be passed through to the underlying model.
@@ -889,16 +889,10 @@ export class AIPromptParams {
   agentId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
-   * Attribution only; never used for behaviour. If this prompt was executed as part
-   * of an AI agent run, references that agent run (`AIPromptRun.AgentRunID`).
-   */
-  agentRunId?: string;
-
-  /**
    * Attribution only; never used for behaviour. The user on whose behalf this prompt
    * was executed (`AIPromptRun.UserID`). If omitted, falls back to contextUser?.ID.
    */
-  userId?: string;
+  UserID?: string;
 
   /**
    * Optional file artifacts that may be attached as native content blocks
@@ -913,49 +907,28 @@ export class AIPromptParams {
 }
 
 /**
- * Input parameters for resolving AgentRunID and UserID attribution for prompt runs.
- */
-export interface ResolvePromptRunAttributionInput {
-  /** Explicit agent run ID override, if provided. */
-  agentRunId?: string | null;
-  /** Enclosing agent run or object with ID and/or UserID, if available. */
-  agentRun?: { ID?: string | null; UserID?: string | null } | null;
-  /** Explicit user ID override, if provided. */
-  userId?: string | null;
-  /** Context user on whose behalf the operation is running. */
-  contextUser?: { ID?: string | null } | null;
-}
-
-/**
- * Resolved attribution identifiers for an AI prompt run record.
- */
-export interface ResolvedPromptRunAttribution {
-  /** The resolved agent run ID, or null if direct/unaffiliated. */
-  agentRunId: string | null;
-  /** The resolved user ID, or null if anonymous/unspecified. */
-  userId: string | null;
-}
-
-/**
- * Pure function to resolve AgentRunID and UserID attribution across the AI stack.
+ * Inputs for resolving which user an `AIPromptRun` is attributed to.
  *
- * Attribution precedence:
- * - `agentRunId`: explicit `agentRunId` > `agentRun.ID` > null
- * - `userId`: explicit `userId` > `agentRun.UserID` > `contextUser.ID` > null
+ * Only the USER is attributed on the prompt run. Which agent run a prompt run belongs to is owned by
+ * the agent layer — `AIAgentRunStep.TargetLogID` — and resolved at query time (see `vwAIUsageFacts`),
+ * so the prompt-execution layer carries no reference up into the agent layer.
  */
-export function ResolvePromptRunAttribution(input?: ResolvePromptRunAttributionInput | null): ResolvedPromptRunAttribution {
-  const agentRunId = (input?.agentRunId !== undefined && input?.agentRunId !== null && input?.agentRunId !== '')
-    ? input.agentRunId
-    : (input?.agentRun?.ID || null);
-
-  const userId = (input?.userId !== undefined && input?.userId !== null && input?.userId !== '')
-    ? input.userId
-    : (input?.agentRun?.UserID || input?.contextUser?.ID || null);
-
-  return { agentRunId, userId };
+export interface ResolvePromptRunUserIDInput {
+  /** Explicit user override, if provided. */
+  UserID?: string | null;
+  /** The enclosing agent run, when there is one; its `UserID` is the next fallback. */
+  AgentRun?: { UserID?: string | null } | null;
+  /** The context user the operation runs as; the last fallback. */
+  ContextUser?: { ID?: string | null } | null;
 }
 
-export const resolvePromptRunAttribution = ResolvePromptRunAttribution;
+/**
+ * Resolves `AIPromptRun.UserID`: explicit `UserID` > `AgentRun.UserID` > `ContextUser.ID` > null.
+ * An empty string counts as absent at every level.
+ */
+export function ResolvePromptRunUserID(input?: ResolvePromptRunUserIDInput | null): string | null {
+  return input?.UserID || input?.AgentRun?.UserID || input?.ContextUser?.ID || null;
+}
 
 /**
  * Callback function type for execution progress updates

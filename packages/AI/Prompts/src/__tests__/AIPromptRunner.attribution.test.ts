@@ -1,10 +1,13 @@
 /**
  * Tests for prompt-run attribution stamping (Spec §6 / PR3).
  * Verifies that:
- * 1. Single prompt runs stamp AgentID, AgentRunID, and UserID (with contextUser fallback).
- * 2. Parallel execution planner / coordinator propagate AgentID, AgentRunID, and UserID to child execution tasks.
- * 3. Parallel child prompt runs and result-selector runs inherit AgentID, AgentRunID, and UserID.
- * 4. AIModelRunner stamps AgentRunID and UserID on embedding/model run records.
+ * 1. Single prompt runs stamp AgentID and UserID (with contextUser fallback).
+ * 2. Parallel execution planner / coordinator propagate AgentID and UserID to child execution tasks.
+ * 3. Parallel child prompt runs and result-selector runs inherit AgentID and UserID.
+ * 4. AIModelRunner stamps UserID on embedding/model run records.
+ *
+ * The agent RUN a prompt run belongs to is deliberately not stamped here: it is owned by the agent
+ * layer (AIAgentRunStep.TargetLogID) and resolved at query time by vwAIUsageFacts.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
@@ -100,7 +103,6 @@ class FakePromptRun {
   public RunType?: string;
   public ParentID?: string | null = null;
   public AgentID?: string | null = null;
-  public AgentRunID?: string | null = null;
   public UserID?: string | null = null;
   public PromptID?: string;
   public ModelID?: string;
@@ -179,15 +181,14 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
     runner = new AIPromptRunner();
   });
 
-  it('stamps explicit agentId, agentRunId, and userId onto the AIPromptRun', async () => {
+  it('stamps explicit agentId and UserID onto the AIPromptRun', async () => {
     const prompt = makePrompt();
     const params: AIPromptParams = {
       prompt: prompt as never,
       provider: fakeProvider as never,
       contextUser: testUser,
       agentId: 'agent-uuid-1',
-      agentRunId: 'agent-run-uuid-2',
-      userId: 'user-override-uuid-3',
+      UserID: 'user-override-uuid-3',
     };
 
     const result = await runner.ExecutePrompt(params);
@@ -197,11 +198,10 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
     expect(createdPromptRuns.length).toBeGreaterThanOrEqual(1);
     const run = createdPromptRuns[0];
     expect(run.AgentID).toBe('agent-uuid-1');
-    expect(run.AgentRunID).toBe('agent-run-uuid-2');
     expect(run.UserID).toBe('user-override-uuid-3');
   });
 
-  it('falls back to contextUser.ID when userId is omitted, and leaves agentRunId null for direct runs', async () => {
+  it('falls back to contextUser.ID when UserID is omitted, and leaves AgentID null for direct runs', async () => {
     const prompt = makePrompt();
     const params: AIPromptParams = {
       prompt: prompt as never,
@@ -215,11 +215,10 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
 
     const run = createdPromptRuns[0];
     expect(run.AgentID).toBeNull();
-    expect(run.AgentRunID).toBeNull();
     expect(run.UserID).toBe('user-ctx-100');
   });
 
-  it('leaves UserID null when both userId and contextUser are omitted', async () => {
+  it('leaves UserID null when both UserID and contextUser are omitted', async () => {
     const prompt = makePrompt();
     const params: AIPromptParams = {
       prompt: prompt as never,
@@ -231,7 +230,6 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
     await runner.WaitForPendingPromptRunSaves();
 
     const run = createdPromptRuns[0];
-    expect(run.AgentRunID).toBeNull();
     expect(run.UserID).toBeNull();
   });
 
@@ -249,9 +247,8 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
       priority: 1,
       renderedPrompt: 'test prompt',
       contextUser: testUser,
-      agentId: 'task-agent-1',
-      agentRunId: 'task-agent-run-2',
-      userId: 'task-user-3',
+      AgentID: 'task-agent-1',
+      UserID: 'task-user-3',
     };
 
     type CoordPrivates = {
@@ -265,7 +262,6 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
     expect(childRun.RunType).toBe('ParallelChild');
     expect(childRun.ParentID).toBe('parent-pr-10');
     expect(childRun.AgentID).toBe('task-agent-1');
-    expect(childRun.AgentRunID).toBe('task-agent-run-2');
     expect(childRun.UserID).toBe('task-user-3');
 
     // Test result selector prompt run via ExecutePrompt
@@ -274,12 +270,11 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
       prompt: judgePrompt as never,
       provider: fakeProvider as never,
       parentPromptRunId: 'parent-pr-10',
-      runType: 'ResultSelector',
-      executionOrder: 1,
+      RunType: 'ResultSelector',
+      ExecutionOrder: 1,
       contextUser: testUser,
       agentId: 'selector-agent-1',
-      agentRunId: 'selector-agent-run-2',
-      userId: 'selector-user-3',
+      UserID: 'selector-user-3',
     });
     expect(judgeResult.success).toBe(true);
     await runner.WaitForPendingPromptRunSaves();
@@ -290,7 +285,6 @@ describe('Spec §6 — AIPromptRunner Attribution Writers', () => {
     expect(selectorRun.ParentID).toBe('parent-pr-10');
     expect(selectorRun.ExecutionOrder).toBe(1);
     expect(selectorRun.AgentID).toBe('selector-agent-1');
-    expect(selectorRun.AgentRunID).toBe('selector-agent-run-2');
     expect(selectorRun.UserID).toBe('selector-user-3');
   });
 });
@@ -307,12 +301,11 @@ describe('Spec §6 — AIModelRunner Attribution Writers', () => {
     modelRunner.Provider = fakeProvider as never;
   });
 
-  it('stamps AgentRunID and UserID on model/embedding run record', async () => {
+  it('stamps UserID on model/embedding run record', async () => {
     const params: EmbeddingRunParams = {
       Texts: ['text to embed'],
       ContextUser: testUser,
       ModelID: 'model-embed-1',
-      AgentRunID: 'agent-run-embed-99',
     };
 
     type ModelRunnerPrivates = {
@@ -322,11 +315,10 @@ describe('Spec §6 — AIModelRunner Attribution Writers', () => {
 
     const runRecord = await priv.createRunRecord(null, 'model-embed-1', 'vendor-embed-2', params, Date.now());
     expect(runRecord).toBeDefined();
-    expect(runRecord.AgentRunID).toBe('agent-run-embed-99');
     expect(runRecord.UserID).toBe('user-embedding-1');
   });
 
-  it('falls back to contextUser.ID for UserID and null for AgentRunID when not supplied', async () => {
+  it('falls back to contextUser.ID for UserID when not supplied', async () => {
     const params: EmbeddingRunParams = {
       Texts: ['text to embed'],
       ContextUser: testUser,
@@ -340,7 +332,6 @@ describe('Spec §6 — AIModelRunner Attribution Writers', () => {
 
     const runRecord = await priv.createRunRecord(null, 'model-embed-1', 'vendor-embed-2', params, Date.now());
     expect(runRecord).toBeDefined();
-    expect(runRecord.AgentRunID).toBeNull();
     expect(runRecord.UserID).toBe('user-embedding-1');
   });
 });

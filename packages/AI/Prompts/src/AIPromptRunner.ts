@@ -19,7 +19,7 @@ import {
     TemplateMessageRole,
     ChildPromptParam,
     AIPromptParams,
-    ResolvePromptRunAttribution
+    ResolvePromptRunUserID
 } from '@memberjunction/ai-core-plus';
 // json5 is a CJS module: under this package's ESM output its import namespace has no
 // `parse` — only the default export does. `import * as JSON5` made JSON5.parse
@@ -1031,7 +1031,7 @@ export class AIPromptRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo, params.runType);
+    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo, params.RunType);
 
     // Check for cancellation before model execution
     if (params.cancellationToken?.aborted) {
@@ -1187,15 +1187,10 @@ export class AIPromptRunner {
       throw new Error(`No execution tasks created for parallel execution of prompt ${prompt.Name}`);
     }
 
-    const parallelAttribution = ResolvePromptRunAttribution({
-      agentRunId: params.agentRunId,
-      userId: params.userId,
-      contextUser: params.contextUser,
-    });
+    const parallelUserId = ResolvePromptRunUserID({ UserID: params.UserID, ContextUser: params.contextUser }) ?? undefined;
     for (const task of executionTasks) {
-      task.agentId = params.agentId;
-      task.agentRunId = parallelAttribution.agentRunId ?? undefined;
-      task.userId = parallelAttribution.userId ?? undefined;
+      task.AgentID = params.agentId;
+      task.UserID = parallelUserId;
     }
 
     // Check for cancellation before executing tasks
@@ -2923,13 +2918,7 @@ export class AIPromptRunner {
       if (params.agentId) {
         promptRun.AgentID = params.agentId;
       }
-      const attribution = ResolvePromptRunAttribution({
-        agentRunId: params.agentRunId,
-        userId: params.userId,
-        contextUser: params.contextUser,
-      });
-      promptRun.AgentRunID = attribution.agentRunId;
-      promptRun.UserID = attribution.userId;
+      promptRun.UserID = ResolvePromptRunUserID({ UserID: params.UserID, ContextUser: params.contextUser });
 
       // Set ChildPromptID if this is a hierarchical execution with child prompts
       if (params.childPrompts && params.childPrompts.length > 0) {
@@ -3098,11 +3087,11 @@ export class AIPromptRunner {
       promptRun.SuccessfulValidationCount = 0;
       promptRun.FinalValidationPassed = false; // Will be updated after execution
 
-      if (params.executionOrder !== undefined) {
-        promptRun.ExecutionOrder = params.executionOrder;
+      if (params.ExecutionOrder !== undefined) {
+        promptRun.ExecutionOrder = params.ExecutionOrder;
       }
 
-      const effectiveRunType = runType ?? params.runType;
+      const effectiveRunType = runType ?? params.RunType;
       if (effectiveRunType) {
         promptRun.RunType = effectiveRunType;
       }
@@ -5686,12 +5675,6 @@ export class AIPromptRunner {
           throw new Error('Repair JSON prompt not found in MJ: System category');
         }
         
-        const repairAttribution = ResolvePromptRunAttribution({
-          agentRunId: params.agentRunId,
-          userId: params.userId,
-          contextUser: params.contextUser,
-        });
-
         // Run the repair prompt
         const repairResult = await this.ExecutePrompt({
           parentPromptRunId: currentPromptRun.ID,
@@ -5703,8 +5686,7 @@ export class AIPromptRunner {
           },
           skipValidation: true, // don't want to validate as this would cause recursive infinity scenario if the JSON is invalid. Just one shot, fix or no fix
           agentId: params.agentId,
-          agentRunId: repairAttribution.agentRunId ?? undefined,
-          userId: repairAttribution.userId ?? undefined,
+          UserID: ResolvePromptRunUserID({ UserID: params.UserID, ContextUser: params.contextUser }) ?? undefined,
         });
         
         if (!repairResult.success || !repairResult.result) {
