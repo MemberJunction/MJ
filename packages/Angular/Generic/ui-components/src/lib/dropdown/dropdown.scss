@@ -66,3 +66,19 @@
 .mj-dropdown-no-data { padding: 16px 12px; color: var(--mj-text-muted); text-align: center; font-size: var(--mj-text-sm); }
 
 @media (max-width: 767px) { .mj-dropdown-panel { max-height: 50vh; } }
+
+/* Visually hidden, still in the accessibility tree — carries the word "Filter" that composes the
+   filter box's name with the dropdown's own visible label via an aria-labelledby id list (#3860).
+   Not `display:none` or `visibility:hidden`: both remove the element from the accessibility tree,
+   which is the one thing this element exists to be in. */
+.mj-dropdown-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

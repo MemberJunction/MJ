@@ -28,7 +28,8 @@
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { BaseEntity } from '../generic/baseEntity';
-import { RelatedRecordCollection } from '../generic/relatedRecordCollection';
+import { EntityCompanion } from '../generic/entityCompanion';
+import { RelatedRecordCollection, type RelatedRecordCollectionWire } from '../generic/relatedRecordCollection';
 import { EntityInfo, ValidationErrorInfo, ValidationResult } from '../generic/entityInfo';
 import { EntitySaveOptions } from '../generic/interfaces';
 import { Metadata } from '../generic/metadata';
@@ -756,5 +757,81 @@ describe('LoadRelatedRecords guards', () => {
 
         expect(runViewsLog).toHaveLength(1);
         expect(parent.Lines.IsLoaded).toBe(true);
+    });
+});
+
+describe('recursive companion serialization in RelatedRecordCollection', () => {
+    class LeafCompanion extends EntityCompanion<{ Value: string }> {
+        public readonly Name = 'LeafData';
+        public Value = '';
+
+        constructor(owner: BaseEntity) {
+            super(owner);
+        }
+
+        public override async Serialize(): Promise<{ Value: string } | null> {
+            return this.Value ? { Value: this.Value } : null;
+        }
+
+        public override async Deserialize(data: { Value: string }): Promise<void> {
+            this.Value = data?.Value ?? '';
+        }
+    }
+
+    class ChildWithCompanionEntity extends BaseEntity {
+        public readonly Leaf = this.RegisterCompanion(new LeafCompanion(this));
+        public override CheckPermissions(): boolean {
+            return true;
+        }
+    }
+
+    class ParentOfChildrenEntity extends BaseEntity {
+        public readonly Lines = this.DeclareRelatedRecords<ChildWithCompanionEntity>({
+            Name: 'Lines',
+            RelatedEntity: 'Products',
+            RelatedEntityJoinField: 'Name',
+            Load: 'explicit',
+        });
+        public override CheckPermissions(): boolean {
+            return true;
+        }
+    }
+
+    it('recursively serializes and deserializes companions on collection child items', async () => {
+        const provider = makeProvider();
+        provider.GetEntityObject = async () => new ChildWithCompanionEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+
+        const parent = new ParentOfChildrenEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        parent.NewRecord();
+        parent.Set('Name', 'Parent1');
+
+        const child1 = new ChildWithCompanionEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        child1.NewRecord();
+        child1.Set('Name', 'Child1');
+        child1.Set('Price', 50);
+        child1.Leaf.Value = 'Attendee: Jane Doe';
+
+        parent.Lines.Add(child1);
+
+        const payloads = await parent.SerializeCompanions();
+        expect(payloads).toHaveLength(1);
+        expect(payloads[0].Name).toBe('Lines');
+
+        const linesWire = payloads[0].Data as RelatedRecordCollectionWire;
+        expect(linesWire.Items).toHaveLength(1);
+        expect(linesWire.Items[0].Companions).toHaveLength(1);
+        expect(linesWire.Items[0].Companions![0].Name).toBe('LeafData');
+        expect(linesWire.Items[0].Companions![0].Data).toEqual({ Value: 'Attendee: Jane Doe' });
+
+        // Deserializing into a fresh parent restores the child and its leaf companion
+        const targetParent = new ParentOfChildrenEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        targetParent.NewRecord();
+
+        await targetParent.DeserializeCompanions(payloads, 'request');
+
+        expect(targetParent.Lines.Count).toBe(1);
+        const restoredChild = targetParent.Lines.Items[0];
+        expect(restoredChild.Get('Price')).toBe(50);
+        expect(restoredChild.Leaf.Value).toBe('Attendee: Jane Doe');
     });
 });

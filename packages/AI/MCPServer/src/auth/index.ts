@@ -19,6 +19,7 @@ export * from './types.js';
 
 // Configuration
 export * from './OAuthConfig.js';
+export * from './UpstreamEndpoints.js';
 
 // Protocol helpers
 export * from './WWWAuthenticate.js';

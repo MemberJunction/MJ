@@ -26,75 +26,75 @@
 
 /** One foreign-key relationship between two tables. */
 export interface FKEdge {
-    sourceSchema: string;
-    sourceTable: string;
-    sourceColumn: string;
-    targetSchema: string;
-    targetTable: string;
-    targetColumn: string;
+    SourceSchema: string;
+    SourceTable: string;
+    SourceColumn: string;
+    TargetSchema: string;
+    TargetTable: string;
+    TargetColumn: string;
     /** Hard (declared) vs soft (DBAutoDoc-detected). Affects ranking only. */
-    kind: 'hard' | 'soft';
+    Kind: 'hard' | 'soft';
     /** Soft-FK confidence (0-1). Hard FKs are always 1. */
-    confidence: number;
+    confidence: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** A discovered transitive path from spoke to hub. */
 export interface BridgePath {
     /** The table reachable through the chain (the "spoke" in organic-key terms). */
-    spokeSchema: string;
-    spokeTable: string;
+    SpokeSchema: string;
+    SpokeTable: string;
     /** The table carrying the organic key (the "hub"). */
-    hubSchema: string;
-    hubTable: string;
+    HubSchema: string;
+    HubTable: string;
     /** Field name on the hub being projected (the organic-key match field). */
-    hubKeyField: string;
+    HubKeyField: string;
     /**
      * Ordered list of join hops. hops[0].fromTable === spokeTable;
      * hops[last].toTable === hubTable. For a length-2 path:
      *   hops = [ { fromTable: spoke, toTable: intermediate, ... },
      *            { fromTable: intermediate, toTable: hub, ... } ]
      */
-    hops: BridgeHop[];
+    Hops: BridgeHop[];
     /** Total path length (number of FK joins). */
-    pathLength: number;
+    PathLength: number;
     /**
      * Path confidence = product of edge confidences. Hard-only paths = 1.
      * Soft FKs on the path drag the confidence down (1 × 0.85 = 0.85).
      */
-    pathConfidence: number;
+    PathConfidence: number;
 }
 
 /** One join hop in a bridge path. */
 export interface BridgeHop {
-    fromSchema: string;
-    fromTable: string;
-    fromColumn: string;
-    toSchema: string;
-    toTable: string;
-    toColumn: string;
+    fromSchema: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    fromTable: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    fromColumn: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    toSchema: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    toTable: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    toColumn: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Edge kind for ranking; same as FKEdge.kind. */
-    kind: 'hard' | 'soft';
+    kind: 'hard' | 'soft';  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 export interface FKGraphWalkerOptions {
     /** Maximum path length to explore. PR #2193 examples cap at 3. Default 3. */
-    maxHops?: number;
+    MaxHops?: number;
     /**
      * Minimum confidence threshold for soft FKs to be included in the graph.
      * Hard FKs are always included. Default 0.6.
      */
-    minSoftFKConfidence?: number;
+    MinSoftFKConfidence?: number;
     /**
      * When true, paths through the same table twice are pruned (no cycles).
      * Default true.
      */
-    pruneCycles?: boolean;
+    PruneCycles?: boolean;
 }
 
 const DEFAULTS: Required<FKGraphWalkerOptions> = {
-    maxHops: 3,
-    minSoftFKConfidence: 0.6,
-    pruneCycles: true,
+    MaxHops: 3,
+    MinSoftFKConfidence: 0.6,
+    PruneCycles: true,
 };
 
 /**
@@ -108,7 +108,7 @@ const DEFAULTS: Required<FKGraphWalkerOptions> = {
  * @param spokes - tables to attempt to reach from each hub. Typically every
  *                 table in the database except the hub itself.
  */
-export function findBridgePaths(
+export function FindBridgePaths(
     edges: FKEdge[],
     hubs: Array<{ schema: string; table: string; keyField: string }>,
     spokes: Array<{ schema: string; table: string }>,
@@ -117,7 +117,7 @@ export function findBridgePaths(
     const o = { ...DEFAULTS, ...opts };
 
     // Build the adjacency map keyed by "schema.table".
-    const adjacency = buildAdjacency(edges, o.minSoftFKConfidence);
+    const adjacency = buildAdjacency(edges, o.MinSoftFKConfidence);
 
     const out: BridgePath[] = [];
     for (const hub of hubs) {
@@ -126,7 +126,7 @@ export function findBridgePaths(
             const spokeKey = `${spoke.schema}.${spoke.table}`;
             if (spokeKey === hubKey) continue;
             // BFS from spoke → hub.
-            const paths = bfsPaths(adjacency, spokeKey, hubKey, o.maxHops, o.pruneCycles);
+            const paths = bfsPaths(adjacency, spokeKey, hubKey, o.MaxHops, o.PruneCycles);
             for (const p of paths) {
                 if (p.length === 0) continue; // self
                 if (p.length === 1) continue; // direct FK already handled by existing relationship system
@@ -136,10 +136,20 @@ export function findBridgePaths(
     }
     // Sort: shortest paths first, then highest confidence.
     out.sort((a, b) => {
-        if (a.pathLength !== b.pathLength) return a.pathLength - b.pathLength;
-        return b.pathConfidence - a.pathConfidence;
+        if (a.PathLength !== b.PathLength) return a.PathLength - b.PathLength;
+        return b.PathConfidence - a.PathConfidence;
     });
     return out;
+}
+
+/** @deprecated Use {@link FindBridgePaths}. */
+export function findBridgePaths(
+    edges: FKEdge[],
+    hubs: Array<{ schema: string; table: string; keyField: string }>,
+    spokes: Array<{ schema: string; table: string }>,
+    opts: FKGraphWalkerOptions = {},
+): BridgePath[] {
+    return FindBridgePaths(edges, hubs, spokes, opts);
 }
 
 // ─── Adjacency construction ─────────────────────────────────────────────────
@@ -159,25 +169,25 @@ interface AdjacencyEdge {
 function buildAdjacency(edges: FKEdge[], minSoftFKConfidence: number): Map<string, AdjacencyEdge[]> {
     const out = new Map<string, AdjacencyEdge[]>();
     for (const e of edges) {
-        if (e.kind === 'soft' && e.confidence < minSoftFKConfidence) continue;
-        const aKey = `${e.sourceSchema}.${e.sourceTable}`;
-        const bKey = `${e.targetSchema}.${e.targetTable}`;
+        if (e.Kind === 'soft' && e.confidence < minSoftFKConfidence) continue;
+        const aKey = `${e.SourceSchema}.${e.SourceTable}`;
+        const bKey = `${e.TargetSchema}.${e.TargetTable}`;
         const forward: AdjacencyEdge = {
             fromKey: aKey,
             toKey: bKey,
             fkSourceKey: aKey,
-            fkSourceColumn: e.sourceColumn,
-            fkTargetColumn: e.targetColumn,
-            kind: e.kind,
+            fkSourceColumn: e.SourceColumn,
+            fkTargetColumn: e.TargetColumn,
+            kind: e.Kind,
             confidence: e.confidence,
         };
         const reverse: AdjacencyEdge = {
             fromKey: bKey,
             toKey: aKey,
             fkSourceKey: aKey,
-            fkSourceColumn: e.sourceColumn,
-            fkTargetColumn: e.targetColumn,
-            kind: e.kind,
+            fkSourceColumn: e.SourceColumn,
+            fkTargetColumn: e.TargetColumn,
+            kind: e.Kind,
             confidence: e.confidence,
         };
         push(out, aKey, forward);
@@ -252,13 +262,13 @@ function materializeBridgePath(
     });
     const pathConfidence = edgePath.reduce((acc, e) => acc * e.confidence, 1);
     return {
-        spokeSchema: spoke.schema,
-        spokeTable: spoke.table,
-        hubSchema: hub.schema,
-        hubTable: hub.table,
-        hubKeyField: hub.keyField,
-        hops,
-        pathLength: edgePath.length,
-        pathConfidence,
+        SpokeSchema: spoke.schema,
+        SpokeTable: spoke.table,
+        HubSchema: hub.schema,
+        HubTable: hub.table,
+        HubKeyField: hub.keyField,
+        Hops: hops,
+        PathLength: edgePath.length,
+        PathConfidence: pathConfidence,
     };
 }

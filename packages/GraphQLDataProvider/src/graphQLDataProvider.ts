@@ -15,9 +15,9 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
-         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
+         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
          SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress } from "@memberjunction/core";
-import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
+import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -47,6 +47,48 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  * The client application should use this to notify the user and force re-authentication.
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
+
+/**
+ * One dispatcher lifecycle frame for a durable workflow run (task graph), as delivered by the
+ * `taskGraphFrames` subscription. Mirrors the server's `TaskGraphFrameNotification` — the graph's
+ * owner is a server-side filter key and never appears here.
+ */
+export interface TaskGraphFrameEvent {
+    /** What happened — 'TaskStarted' | 'TaskCompleted' | 'TaskFailed' | 'TaskBlocked' | 'TaskSkipped'
+     *  | 'TaskAwaitingHuman' | 'GraphSettled' | 'GateDecision' | 'ClaimChanged' | 'PassCompleted'
+     *  | 'GraphPaused' | 'GraphResumed' | 'BreakpointHit' | 'NodeProgress'. Open string so a newer
+     *  server can add kinds without breaking an older client, which should ignore what it does not know. */
+    kind: string;
+    parentTaskId: string;
+    taskId?: string;
+    taskName?: string;
+    status?: string;
+    errorMessage?: string;
+    assignedUserId?: string;
+    completedCount?: number;
+    totalCount?: number;
+    /** GateDecision */
+    edgeId?: string;
+    dependsOnTaskId?: string;
+    verdict?: 'satisfied' | 'notTaken' | 'held';
+    conditionText?: string;
+    reason?: string;
+    /** ClaimChanged */
+    claimEvent?: 'claimed' | 'heartbeat-lost' | 'reclaimed';
+    claimedBy?: string;
+    claimExpiresAt?: string;
+    /** PassCompleted */
+    passNumber?: number;
+    eligibleCount?: number;
+    heldCount?: number;
+    claimedCount?: number;
+    /** The dispatcher instance's own load across every graph — not this graph's in-flight count. */
+    instanceInFlightCount?: number;
+    /** NodeProgress */
+    progressMessage?: string;
+    progressPercent?: number;
+    date?: string;
+}
 
 /**
  * Shared, stateless FieldMapper instance. FieldMapper holds no per-call state (only static
@@ -322,7 +364,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * 
      * @param sessionId The session ID to store
      */
-    private async SaveStoredSessionID(sessionId: string): Promise<void> {
+    private async saveStoredSessionID(sessionId: string): Promise<void> {
         try {
             const ls = this.LocalStorageProvider;
             if (ls) {
@@ -373,7 +415,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 this._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, this._sessionId, configData.MJAPIKey, configData.UserAPIKey);
                 // Store the session ID for this connection
-                await this.SaveStoredSessionID(this._sessionId);
+                await this.saveStoredSessionID(this._sessionId);
             }
             else {
                 // Update the singleton instance
@@ -388,7 +430,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     GraphQLDataProvider.Instance._client = this.CreateNewGraphQLClient(configData.URL, configData.Token, GraphQLDataProvider.Instance._sessionId, configData.MJAPIKey, configData.UserAPIKey);
 
                 // Store the session ID for the global instance
-                await GraphQLDataProvider.Instance.SaveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
+                await GraphQLDataProvider.Instance.saveStoredSessionID(GraphQLDataProvider.Instance._sessionId);
 
                 // CRITICAL: Sync this instance with the singleton
                 // This ensures ExecuteGQL() can use this._client.request()
@@ -471,10 +513,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         const d = await this.ExecuteGQL(this._currentUserQuery, null);
         if (d) {
             // convert the user and the user roles _mj__*** fields back to __mj_***
-            const u = this.ConvertBackToMJFields(d.CurrentUser);
-            const roles = u.MJUserRoles_UserIDArray.map(r => this.ConvertBackToMJFields(r));
-            u.MJUserRoles_UserIDArray = roles;
-            const userInfo = new UserInfo(this, {...u, UserRoles: roles}); // need to pass in the UserRoles as a separate property that is what is expected here
+            const convertedUser = this.ConvertBackToMJFields(d.CurrentUser) as Record<string, unknown> & {
+                Roles?: Record<string, unknown>[];
+            };
+            const { Roles: rawRoles, ...userFields } = convertedUser;
+            const roles = (rawRoles ?? []).map((r: Record<string, unknown>) => this.ConvertBackToMJFields(r));
+            // Drop the transport `Roles` field so UserInfo only sees the converted UserRoles copy.
+            const userInfo = new UserInfo(this, {...userFields, UserRoles: roles});
 
             // Auto-stamp TenantContext from the batched CurrentUserTenantContext query.
             // The server serializes whatever TenantContext the middleware set.
@@ -497,10 +542,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
-            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
+            return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
         }
         else if (params.QueryName) {
-            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment);
+            return this.RunQueryByName(params.QueryName, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow, params.Enrichment, params.DataSource);
         }
         else {
             throw new Error("No SQL, QueryID, or QueryName provided to RunQuery");
@@ -569,7 +614,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             StartRow: p.StartRow,
             ForceAuditLog: p.ForceAuditLog,
             AuditLogDescription: p.AuditLogDescription,
-            Enrichment: p.Enrichment
+            Enrichment: p.Enrichment,
+            DataSource: p.DataSource // forward so a batched DataSource:'Materialized' isn't silently downgraded to live
         }));
 
         const result = await this.ExecuteGQL(query, { input });
@@ -580,17 +626,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return [];
     }
 
-    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
+    public async RunQueryByID(QueryID: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment, DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
-                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
+            query GetQueryDataQuery($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject, $DataSource: String) {
+                GetQueryData(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment, DataSource: $DataSource) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
 
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryID };
+        const variables: { QueryID: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment; DataSource?: 'Live' | 'Materialized' } = { QueryID };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -608,6 +654,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         if (Enrichment !== undefined) {
             variables.Enrichment = Enrichment;
+        }
+        if (DataSource !== undefined) {
+            variables.DataSource = DataSource;
         }
 
         const result = await this.ExecuteGQL(query, variables);
@@ -616,17 +665,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
-    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment): Promise<RunQueryResult> {
+    public async RunQueryByName(QueryName: string, CategoryID?: string, CategoryPath?: string, contextUser?: UserInfo, Parameters?: Record<string, any>, MaxRows?: number, StartRow?: number, Enrichment?: RunQueryEnrichment, DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResult> {
         const query = gql`
-            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
-                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
+            query GetQueryDataByNameQuery($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject, $DataSource: String) {
+                GetQueryDataByName(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment, DataSource: $DataSource) {
                     ${this.QueryReturnFieldList}
                 }
             }
         `;
 
         // Build the variables object, adding optional parameters if defined.
-        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment } = { QueryName };
+        const variables: { QueryName: string; CategoryID?: string; CategoryPath?: string; Parameters?: Record<string, any>; MaxRows?: number; StartRow?: number; Enrichment?: RunQueryEnrichment; DataSource?: 'Live' | 'Materialized' } = { QueryName };
         if (CategoryID !== undefined) {
             variables.CategoryID = CategoryID;
         }
@@ -644,6 +693,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         if (Enrichment !== undefined) {
             variables.Enrichment = Enrichment;
+        }
+        if (DataSource !== undefined) {
+            variables.DataSource = DataSource;
         }
 
         const result = await this.ExecuteGQL(query, variables);
@@ -712,6 +764,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || null,
                     Enrichment: item.params.Enrichment || null,
+                    DataSource: item.params.DataSource || null,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -874,6 +927,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // (server caching enabled) is unchanged.
                 if (params.BypassCache !== undefined)
                     innerParams.BypassCache = params.BypassCache;
+                // DataSource lets a caller opt into an entity's materialized snapshot ('Materialized')
+                // vs its live base view ('Live', default). Only forward when set so default is unchanged.
+                if (params.DataSource !== undefined)
+                    innerParams.DataSource = params.DataSource;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1046,6 +1103,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     if (param.BypassCache !== undefined) {
                         innerParam.BypassCache = param.BypassCache;
                     }
+                    if (param.DataSource !== undefined) {
+                        innerParam.DataSource = param.DataSource;
+                    }
 
                     if (!dynamicView) {
                         innerParam.ExcludeUserViewRunID = param.ExcludeUserViewRunID || "";
@@ -1167,6 +1227,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     // response could carry them — but the request never asked. Every layer
                     // downstream looked correct while the caller got Success with no aggregates.
                     Aggregates: item.params.Aggregates ?? null,
+                    // DataSource MUST be forwarded here too (as on the InternalRunView/InternalRunViews maps):
+                    // a CacheLocal batch routes through this smart-cache-check path, so omitting it silently
+                    // downgrades a DataSource:'Materialized' request to a live read.
+                    DataSource: item.params.DataSource,
                 },
                 cacheStatus: item.cacheStatus ? {
                     maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
@@ -1349,7 +1413,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (params.Fields) {
             for (const kv of e.PrimaryKeys) {
                 if (params.Fields.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
-                    fieldList.push(kv.Name); // always include the primary key fields in view run time field list
+                    fieldList.push(SharedFieldMapper.MapFieldName(kv.Name)); // always include the primary key fields; MapFieldName sanitizes a '__mj_'-prefixed PK (materialization surrogate) to '_mj__' to match the server GraphQL type field — a raw '__mj_' name makes the grid RunView query fail with "Cannot query field __mj_MaterializedRowID"
             }
 
             // now add any other fields that were passed in
@@ -1377,7 +1441,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // first make sure we have the primary key field in the view column list, always should, but make sure
                 for (const kv of e.PrimaryKeys) {
                     if (fieldList.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
-                        fieldList.push(kv.Name); // always include the primary key fields in view run time field list
+                        fieldList.push(SharedFieldMapper.MapFieldName(kv.Name)); // always include the primary key fields; MapFieldName sanitizes a '__mj_'-prefixed PK (materialization surrogate) to '_mj__' to match the server GraphQL type field — a raw '__mj_' name makes the grid RunView query fail with "Cannot query field __mj_MaterializedRowID"
                 }
 
                 // Now: include the fields that are part of the view definition
@@ -1654,7 +1718,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         let progressSub: { unsubscribe(): void } | undefined;
         if (options.onProgress) {
             progressChannelId = this.GenerateUUID();
-            progressSub = this.subscribe(REMOTE_OP_PROGRESS_SUBSCRIPTION, { channelId: progressChannelId }).subscribe({
+            progressSub = this.Subscribe(REMOTE_OP_PROGRESS_SUBSCRIPTION, { channelId: progressChannelId }).subscribe({
                 next: (data: { RemoteOperationProgress?: { ProgressJSON?: string } }) => {
                     const json = data?.RemoteOperationProgress?.ProgressJSON;
                     if (json) {
@@ -1758,6 +1822,95 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    /**
+     * Field-level security, client side. The current user's denied-READ set is computable HERE
+     * because `EntityFieldPermission` records ship to clients with entity metadata — so the
+     * provider can exclude denied fields from the selection sets it requests (a GraphQL response
+     * always contains every REQUESTED key, so key-omission — which drives
+     * `EntityField.NotLoaded` marking in the hydration paths — only happens for fields never
+     * requested). Empty for unrestricted users and non-FLS entities.
+     *
+     * **This is an optimization, not the correctness boundary.** It is computed from metadata
+     * this client holds, which can lag the server's — and which it may not hold at all once
+     * metadata filtering lands (issue #3485). What makes a response correct regardless is the
+     * server's own `ReadableFields___`; see {@link ApplyServerFieldAccess}.
+     */
+    private getDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
+        if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
+            return new Set<string>();
+        }
+        return entityInfo.GetDeniedReadFields(this.CurrentUser);
+    }
+
+    /**
+     * The `ReadableFields___` selection to append to a query, or `''` when it should not be asked
+     * for. See {@link ReadableFieldsTransportKey} for what it carries.
+     *
+     * **Gated on the ENTITY's field-security flag, deliberately not on whether THIS user currently
+     * has denials.** Gating on the user's denied set would re-introduce the dependence on local
+     * metadata this key exists to remove: in the window right after a permission change the client
+     * believes it is unrestricted, would not ask, and would silently load the server's nulls as
+     * real values. The entity-level flag is stable configuration by comparison.
+     *
+     * Not asking on non-FLS entities — which is nearly all of them — also keeps this client
+     * working against a server whose generated schema predates the key. On an FLS-enabled entity
+     * the two must match versions, which is the narrow and acceptable coupling: restricting a
+     * non-nullable column is broken on such a server regardless.
+     */
+    private fieldSecurityTransportSelection(entityInfo: EntityInfo): string {
+        return entityInfo?.EnableFieldLevelSecurity ? ReadableFieldsTransportKey : '';
+    }
+
+    /**
+     * Turns fields the SERVER withheld into genuine key-absence on a response payload, so the
+     * hydration paths mark them {@link EntityField.NotLoaded} rather than loading a null over
+     * them.
+     *
+     * This is needed because deleting the key server-side is not sufficient by itself: GraphQL
+     * emits every SELECTED field, so a withheld field the client asked for arrives as an explicit
+     * `null` that is indistinguishable from a genuine one. Rewriting it back to absence here is
+     * what preserves the "key-absence means not-loaded, never means null" contract end to end.
+     *
+     * Two sources, in priority order:
+     *
+     * 1. **The server's `ReadableFields___`** — authoritative. It describes the request that
+     *    actually ran, so it is correct even when this client's metadata is stale, and it stays
+     *    correct once metadata filtering (issue #3485) means the client may not hold the
+     *    permission rules at all. Anything not on that list is withheld, whatever value arrived.
+     * 2. **This client's own denied set** — the fallback, for a server predating the transport
+     *    key. Only null values are pruned here: a non-null arrival means the local set is stale
+     *    in the safe direction (the server actually allowed the field), and dropping a real value
+     *    would be a regression rather than a protection.
+     *
+     * The transport key itself is always removed — it is not an entity field, and leaving it on
+     * the payload would trip `SetMany`'s field-not-found warning during hydration.
+     */
+    protected ApplyServerFieldAccess<T>(entityInfo: EntityInfo, row: T): T {
+        if (!row || typeof row !== 'object') return row;
+        const record = row as Record<string, unknown>;
+        const readable = record[ReadableFieldsTransportKey];
+        delete record[ReadableFieldsTransportKey];
+
+        if (Array.isArray(readable)) {
+            const allowed = new Set(readable.map(n => String(n).trim().toLowerCase()));
+            for (const field of entityInfo.Fields) {
+                if (allowed.has(field.Name.trim().toLowerCase())) continue;
+                delete record[field.Name];
+                delete record[field.CodeName];
+            }
+            return row;
+        }
+
+        const denied = this.getDeniedReadFieldNamesForCurrentUser(entityInfo);
+        if (denied.size === 0) return row;
+        for (const field of entityInfo.Fields) {
+            if (!denied.has(field.Name.trim().toLowerCase())) continue;
+            if (record[field.Name] === null) delete record[field.Name];
+            if (record[field.CodeName] === null) delete record[field.CodeName];
+        }
+        return row;
+    }
+
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         // IS-A parent entity save: the full ORM pipeline (permissions, validation, events)
         // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
@@ -1794,10 +1947,44 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const mutationName = `${type}${graphQLTypeName}`
 
-            // only pass along writable fields, AND the PKEY value if this is an update
-            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
+            // Only pass along writable fields, AND the primary key when the server must NOT mint it:
+            // on an update, and on an IS-A PROMOTION create. An IS-A child's key is ReadOnly because
+            // in IS-A the shared key IS the relationship — it belongs to the root, not to this table.
+            // A promotion is a NEW child bound to a parent that already EXISTS (an Animal that is now
+            // also a Dog): the parent's own Save() is short-circuited above (IsParentEntitySave) on
+            // the premise that this mutation carries the whole chain, so if the key were dropped
+            // here nothing would tell the server which parent row this is about — it would mint a
+            // fresh GUID and INSERT a second copy of the parent. The key is sent ONLY when the
+            // parent is saved: a whole-chain create (new parent + new child) keeps sending no key,
+            // so the server still mints the root identity and pays no parent lookup on that path.
+            //
+            // NotLoaded fields are OMITTED from the mutation input entirely (legal — the
+            // generated Update input types mark every non-PK field optional): their value is
+            // a construction artifact the user was never shown, and the NOT-NULL fabrication
+            // fallback below must never run for them. An explicitly (blind-)set field has its
+            // flag cleared and flows normally — the write-only case.
+            // Denied-READ fields are dropped from both the input and the response selection.
+            // Input: the loop below calls entity.Get(), which throws for a denied field.
+            // Response: a never-requested key comes back absent, which is what marks the field
+            // NotLoaded on the refresh, and a denied NOT-NULL column no longer breaks response
+            // serialization.
+            //
+            // Only the READ verb is filtered here. A readable-but-update-denied field must
+            // still be SENT, or the server cannot reject an attempt to change it — its check
+            // is dirty-only (BaseEntity.CheckFieldLevelUpdatePermissions), so an unchanged
+            // value round-trips safely and a changed one is refused. Create-denied values are
+            // dropped server-side (ApplyFieldLevelCreateSuppression). Filtering either verb
+            // here would replace a visible refusal with a silent success.
+            const isaPromotionCreate = !entity.IsSaved && entity.EntityInfo.IsChildType && entity.ISAParent?.IsSaved === true;
+            const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
+            const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
+            const filteredFields = entity.Fields.filter(f =>
+                (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaPromotionCreate))) &&
+                (f.IsPrimaryKey || (!f.NotLoaded && !isDeniedRead(f.Name))));
                 const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                ${entity.Fields.filter(f => !isDeniedRead(f.Name))
+                    .map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                    ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -1869,6 +2056,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 options.SkipOldValuesCheck === false) {
                 const ov = [];
                 entity.Fields.forEach(f => {
+                    // A NotLoaded field has no real old value — sending a fabricated null
+                    // would feed the server's conflict detection fiction. Omit it entirely.
+                    if (f.NotLoaded && !f.IsPrimaryKey) return;
                     let val = null;
                     if (f.OldValue !== null && f.OldValue !== undefined) {
                         if (f.EntityFieldInfo.TSType === EntityFieldTSType.Date) 
@@ -1913,7 +2103,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         // got our data, send it back to the caller, which is the entity object
                         // and that object needs to update itself from this data.
                         result.Success = true;
-                        result.NewValues = this.ConvertBackToMJFields(results);
+                        // Prune stale-metadata nulls so the entity's post-save refresh
+                        // (finalizeSave) sees key-omission and marks NotLoaded correctly.
+                        result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(results));
                     }
                     else {
                         // the transaction failed, nothing to update, but we need to call Reject so the
@@ -1931,7 +2123,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 if (d && d[mutationName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
-                    result.NewValues = this.ConvertBackToMJFields(d[mutationName]);
+                    // Prune stale-metadata nulls so finalizeSave's re-hydration sees
+                    // key-omission and marks NotLoaded correctly on the refresh.
+                    result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(d[mutationName]));
                     return result.NewValues;
                 }
                 else
@@ -1942,6 +2136,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Success = false;
             result.EndedAt = new Date();
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
+            // A refusal from Validate()/ValidateAsync() on the server arrives twice: as the prose in
+            // `message` (kept above, for the toast) and as `extensions.validationErrors`, the same
+            // reasons with their field names. Rehydrating them here — the result is already
+            // registered on the entity — means `record.LatestResult.Errors` reads exactly as it does
+            // after a local Validate() refusal, so the form paints the fields either way. Empty when
+            // the server sent none (a SQL error, a permission refusal).
+            const extensions = e.response?.errors?.[0]?.extensions;
+            result.Errors = DeserializeValidationErrors(extensions?.validationErrors);
+            // Whether `Message` already renders those errors is a fact only the SERVER knows (it threw
+            // the message), so it states it on the wire and we repeat it — never inferred here. Without
+            // the statement CompleteMessage keeps today's behaviour (the text may read twice).
+            result.MessageIncludesErrors = result.Errors.length > 0 && extensions?.messageIncludesValidationErrors === true;
             LogError(e);
             return null;
         }
@@ -1965,7 +2171,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // build up the param string for the inner query call
                 if (pkeyInnerParamString.length > 0)
                     pkeyInnerParamString += ', ';
-                pkeyInnerParamString += `${field.CodeName}: $${field.CodeName}`;
+                // The GraphQL ARGUMENT name must match the server resolver's @Arg, which sanitizes a '__mj'-prefixed
+                // PK (the materialization surrogate '__mj_MaterializedRowID') to '_mj__…' because GraphQL forbids
+                // names starting with '__'. Mirror that here (same rule as the field-selection mapping below); the
+                // client-side VARIABLE name ($__mj_…) can keep the raw CodeName. Without this, loading a materialized
+                // entity record fails with "Unknown argument __mj_MaterializedRowID … did you mean _mj__…".
+                const pkeyGraphQLArgName = field.CodeName.startsWith('__mj_') ? field.CodeName.replace('__mj_', '_mj__') : field.CodeName;
+                pkeyInnerParamString += `${pkeyGraphQLArgName}: $${field.CodeName}`;
 
                 // build up the variables we are passing along to the query
                 if (field.TSType === EntityFieldTSType.Number) {
@@ -1980,9 +2192,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
+            // Field security: don't request fields this client believes it cannot read — the keys
+            // come back genuinely absent and InnerLoad marks them NotLoaded (D-1). This is an
+            // optimization, NOT the correctness mechanism: it is only as good as this client's
+            // metadata. `ReadableFields___` (requested just below) is what makes the result
+            // correct when that metadata is stale. Empty set for unrestricted users — no change.
+            const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
-                                    ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType)
+                                    ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType && !deniedReadFields.has(f.Name.trim().toLowerCase()))
                                       .map((f) => {
                                         if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
                                           // fields that start with __mj_ need to be converted to _mj__ for the GraphQL query
@@ -1992,6 +2210,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                         }
                                       })
                                       .join('\n                    ')}
+                    ${this.fieldSecurityTransportSelection(entity.EntityInfo)}
                     ${rel}
                 }
             }
@@ -2000,7 +2219,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const d = await this.ExecuteGQL(query, vars)
             if (d && d[graphQLTypeName]) {
                 // the resulting object has all the values in it, but we need to convert any elements that start with _mj__ back to __mj_
-                return this.ConvertBackToMJFields(d[graphQLTypeName]);
+                // (plus the stale-metadata null prune, so InnerLoad's key-omission marking is exact)
+                return this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(d[graphQLTypeName]));
             }
             else
                 return null;
@@ -2063,9 +2283,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const pk = entity.Fields.find(f => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase()); // get the field for the primary key field
                 vars[pk.CodeName] = pk.Value;
                 mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
+                // GraphQL forbids '__'-prefixed arg/field names; sanitize a '__mj_'-prefixed PK to '_mj__' to match
+                // the server (same rule as the single-record Load). The client VARIABLE name keeps the raw CodeName.
+                // (Materialized entities are read-only virtual so no Delete resolver is generated — this is defense-in-depth.)
+                const pkGraphQLName = pk.CodeName.startsWith('__mj_') ? pk.CodeName.replace('__mj_', '_mj__') : pk.CodeName;
                 if (pkeyInnerParamString.length > 0)
                     pkeyInnerParamString += ', ';
-                pkeyInnerParamString += `${pk.CodeName}: $${pk.CodeName}`;
+                pkeyInnerParamString += `${pkGraphQLName}: $${pk.CodeName}`;
 
                 if (pkeyOuterParamString.length > 0)
                     pkeyOuterParamString += ', ';
@@ -2073,7 +2297,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                 if (returnValues.length > 0)
                     returnValues += '\n                    ';
-                returnValues += `${pk.CodeName}`;
+                returnValues += `${pkGraphQLName}`;
             }
 
             mutationInputTypes.push({varName: "options___", inputType: 'DeleteOptionsInput!'}); // only used when doing a transaction group, but it is easier to do in this main loop
@@ -2085,7 +2309,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 SkipEntityAIActions: options?.SkipEntityAIActions ?? false,
                 SkipEntityActions: options?.SkipEntityActions ?? false,
                 ReplayOnly: options?.ReplayOnly ?? false,
-                IsParentEntityDelete: options?.IsParentEntityDelete ?? false
+                IsParentEntityDelete: options?.IsParentEntityDelete ?? false,
+                SkipRecordChanges: options?.SkipRecordChanges ?? false
             };
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
@@ -2169,6 +2394,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.EndedAt = new Date(); // done processing
             result.Success = false;
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
+            // Same rehydration as Save(): a delete refused with field-named reasons keeps them.
+            const extensions = e.response?.errors?.[0]?.extensions;
+            result.Errors = DeserializeValidationErrors(extensions?.validationErrors);
+            result.MessageIncludesErrors = result.Errors.length > 0 && extensions?.messageIncludesValidationErrors === true;
             LogError(e);
 
             return false;
@@ -2553,6 +2782,96 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Executes a GraphQL query/mutation with real upload progress tracking via XMLHttpRequest.
+     * Useful for large payload mutations such as file uploads where byte-level progress reporting is required.
+     */
+    public static async ExecuteGQLWithProgress<T = unknown>(
+        query: string,
+        variables: Record<string, unknown>,
+        onProgress?: (event: { loaded: number; total: number; percent: number }) => void,
+        refreshTokenIfNeeded: boolean = true
+    ): Promise<T> {
+        return GraphQLDataProvider.Instance.ExecuteGQLWithProgress<T>(query, variables, onProgress, refreshTokenIfNeeded);
+    }
+
+    /**
+     * Executes a GraphQL query/mutation with real upload progress tracking via XMLHttpRequest.
+     */
+    public async ExecuteGQLWithProgress<T = unknown>(
+        query: string,
+        variables: Record<string, unknown>,
+        onProgress?: (event: { loaded: number; total: number; percent: number }) => void,
+        refreshTokenIfNeeded: boolean = true
+    ): Promise<T> {
+        if (!this._configData?.URL) {
+            throw new Error('GraphQLDataProvider is not configured with a URL.');
+        }
+
+        const url = this._configData.URL;
+        const payload = JSON.stringify({ query, variables });
+
+        return new Promise<T>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', url);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+
+            if (this._sessionId) {
+                xhr.setRequestHeader('x-session-id', this._sessionId);
+            }
+            if (this._configData?.Token) {
+                xhr.setRequestHeader('authorization', 'Bearer ' + this._configData.Token);
+            }
+            if (this._configData?.MJAPIKey) {
+                xhr.setRequestHeader('x-mj-api-key', this._configData.MJAPIKey);
+            }
+            if (this._configData?.UserAPIKey) {
+                xhr.setRequestHeader('x-api-key', this._configData.UserAPIKey);
+            }
+            for (const [key, value] of this._dynamicHeaders) {
+                xhr.setRequestHeader(key, value);
+            }
+
+            if (xhr.upload && onProgress) {
+                xhr.upload.onprogress = (evt) => {
+                    if (evt.lengthComputable && evt.total > 0) {
+                        const percent = Math.min(100, Math.round((evt.loaded / evt.total) * 100));
+                        onProgress({ loaded: evt.loaded, total: evt.total, percent });
+                    }
+                };
+            }
+
+            xhr.onload = async () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        const json = JSON.parse(xhr.responseText) as { data?: T; errors?: Array<{ message?: string; extensions?: { code?: string } }> };
+                        if (json.errors && json.errors.length > 0) {
+                            const error = json.errors[0];
+                            const code = error?.extensions?.code?.toUpperCase()?.trim();
+                            if (code === 'JWT_EXPIRED' && refreshTokenIfNeeded) {
+                                await this.RefreshToken();
+                                resolve(await this.ExecuteGQLWithProgress<T>(query, variables, onProgress, false));
+                                return;
+                            }
+                            reject(new Error(error.message || 'GraphQL Error'));
+                        } else {
+                            resolve(json.data as T);
+                        }
+                    } catch (err) {
+                        reject(err);
+                    }
+                } else {
+                    reject(new Error(`HTTP error ${xhr.status}: ${xhr.statusText}`));
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('Network error during request'));
+            xhr.onabort = () => reject(new Error('Request aborted'));
+
+            xhr.send(payload);
+        });
+    }
+
+    /**
      * Executes the GQL query with the provided variables. If the token is expired, it will attempt to refresh the token and then re-execute the query. If the token is expired and the refresh fails, it will throw an error.
      * @param query 
      * @param variables 
@@ -2732,7 +3051,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param preservedKeys localStorage keys to keep across logout (e.g. theme preference).
      *        Defaults to an empty set.
      */
-    public static async clearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
+    public static async ClearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
         // Clear all localStorage except explicitly preserved keys
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -2750,6 +3069,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             req.onerror = () => resolve();
             req.onblocked = () => resolve();
         });
+    }
+
+    /** @deprecated Use {@link ClearClientCache}. */
+    public static async clearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
+        return this.ClearClientCache(preservedKeys);
     }
 
     protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string, userAPIKey?: string): GraphQLClient {
@@ -2788,7 +3112,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private _innerCurrentUserQueryString = `CurrentUser {
         ${this.userInfoString()}
-        MJUserRoles_UserIDArray {
+        Roles {
             ${this.userRoleInfoString()}
         }
     }
@@ -2996,6 +3320,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         });
         this._pushStatusSubjects.clear();
+
+        this._taskGraphFrameStreams.forEach((entry, parentTaskId) => {
+            try {
+                entry.subject.complete();
+                entry.subscription.unsubscribe();
+            } catch (e) {
+                console.error(`[GraphQLDataProvider] Error cleaning up frame stream for ${parentTaskId}:`, e);
+            }
+        });
+        this._taskGraphFrameStreams.clear();
     }
 
     /**
@@ -3078,7 +3412,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @param variables Variables to pass to the subscription
      * @returns Observable that emits subscription data
      */
-    public subscribe(subscription: string, variables?: any): Observable<any> {
+    public Subscribe(subscription: string, variables?: any): Observable<any> {
         return new Observable((observer) => {
             const client = this.getOrCreateWSClient();
             this._activeSubscriptionCount++;
@@ -3130,6 +3464,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 unsubscribe();
             };
         });
+    }
+
+    /** @deprecated Use {@link Subscribe}. */
+    public subscribe(subscription: string, variables?: any): Observable<any> {
+        return this.Subscribe(subscription, variables);
     }
 
     public PushStatusUpdates(sessionId: string = null): Observable<string> {
@@ -3279,10 +3618,126 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Shared, refcounted frame streams per watched graph — the client half of the
+     * `taskGraphFrames` subscription. Torn down when the last subscriber leaves; frames are
+     * graph-scoped and a settled graph stops emitting, so no idle reaper is needed.
+     */
+    private _taskGraphFrameStreams: Map<string, {
+        subject: Subject<TaskGraphFrameEvent>;
+        subscription: Subscription;
+        activeSubscribers: number;
+    }> = new Map();
+
+    /**
+     * Live dispatcher lifecycle frames for one workflow run (durable task graph), keyed by the
+     * graph's parent task ID.
+     *
+     * This is the push channel the run console rides: `TaskStarted` / `TaskCompleted` /
+     * `TaskFailed` / `TaskBlocked` / `TaskSkipped` / `TaskAwaitingHuman` / `GraphSettled`, plus the
+     * debugger frames (`GateDecision`, `ClaimChanged`, `PassCompleted`, `GraphPaused`,
+     * `GraphResumed`, `BreakpointHit`, `NodeProgress`). Addressed by graph rather than by session on
+     * purpose — a durable graph outlives the tab that submitted it, so "watch this workflow run"
+     * survives a refresh and works for whoever the server authorizes (the server filter is
+     * owner-scoped and fails closed).
+     *
+     * **Frames are advisory; rows are truth.** Delivery is best-effort and in-process on the server,
+     * so consumers should treat a frame as a trigger to render and reconcile from `MJ: Tasks` rows
+     * on attach, on reconnect, and on `GraphSettled` — never as a substitute for them.
+     *
+     * The stream is shared and refcounted per graph: ten components watching one run cost one
+     * WebSocket subscription. Errors and completions tear the shared entry down so the next call
+     * re-subscribes fresh (the same posture `PushStatusUpdates` takes).
+     */
+    public TaskGraphFrames(parentTaskId: string): Observable<TaskGraphFrameEvent> {
+        const attachTo = (entry: { subject: Subject<TaskGraphFrameEvent>; activeSubscribers: number }): Observable<TaskGraphFrameEvent> => {
+            return new Observable<TaskGraphFrameEvent>((observer) => {
+                entry.activeSubscribers++;
+                const sub = entry.subject.subscribe(observer);
+                return () => {
+                    sub.unsubscribe();
+                    const current = this._taskGraphFrameStreams.get(parentTaskId);
+                    if (!current) return;
+                    current.activeSubscribers--;
+                    if (current.activeSubscribers <= 0) {
+                        // Last watcher left — close the WebSocket subscription rather than letting
+                        // a settled run's stream linger until an idle reaper notices.
+                        current.subscription.unsubscribe();
+                        current.subject.complete();
+                        this._taskGraphFrameStreams.delete(parentTaskId);
+                    }
+                };
+            });
+        };
+
+        const existing = this._taskGraphFrameStreams.get(parentTaskId);
+        if (existing) {
+            return attachTo(existing);
+        }
+
+        const SUBSCRIBE_TO_FRAMES = gql`subscription TaskGraphFrames($parentTaskId: ID!) {
+            taskGraphFrames(parentTaskId: $parentTaskId) {
+                kind
+                parentTaskId
+                taskId
+                taskName
+                status
+                errorMessage
+                assignedUserId
+                completedCount
+                totalCount
+                edgeId
+                dependsOnTaskId
+                verdict
+                conditionText
+                reason
+                claimEvent
+                claimedBy
+                claimExpiresAt
+                passNumber
+                eligibleCount
+                heldCount
+                claimedCount
+                instanceInFlightCount
+                progressMessage
+                progressPercent
+                date
+            }
+        }`;
+
+        const subject = new Subject<TaskGraphFrameEvent>();
+        const subscription = new Subscription();
+        subscription.add(
+            // `subscribe()` already owns the WS client lifecycle, JWT refresh, and reconnect
+            // posture — riding it keeps one implementation of that machinery.
+            this.Subscribe(SUBSCRIBE_TO_FRAMES, { parentTaskId }).subscribe({
+                next: (data: { taskGraphFrames?: TaskGraphFrameEvent }) => {
+                    if (data?.taskGraphFrames) {
+                        subject.next(data.taskGraphFrames);
+                    }
+                },
+                error: (error) => {
+                    subject.error(error);
+                    this._taskGraphFrameStreams.delete(parentTaskId);
+                },
+                complete: () => {
+                    // Token refresh completes the stream by design; consumers re-subscribe and land
+                    // on a fresh WebSocket. Completing the subject propagates that signal.
+                    subject.complete();
+                    this._taskGraphFrameStreams.delete(parentTaskId);
+                },
+            })
+        );
+
+        const entry = { subject, subscription, activeSubscribers: 0 };
+        this._taskGraphFrameStreams.set(parentTaskId, entry);
+        return attachTo(entry);
+    }
+
+    /**
      * Public method to dispose of WebSocket resources
      * Call this when shutting down the provider or on logout
      */
-    public disposeWebSocketResources(): void {
+    public DisposeWebSocketResources(): void {
         // Stop cleanup timer
         if (this._subscriptionCleanupTimer) {
             clearInterval(this._subscriptionCleanupTimer);
@@ -3300,6 +3755,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
         // Dispose WebSocket client
         this.disposeWSClient();
+    }
+
+    /** @deprecated Use {@link DisposeWebSocketResources}. */
+    public disposeWebSocketResources(): void {
+        return this.DisposeWebSocketResources();
     }
 
     /**************************************************************************
@@ -3345,7 +3805,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
             }
         `;
-        return this.subscribe(query, { sessionID: sessionId });
+        return this.Subscribe(query, { sessionID: sessionId });
     }
 
     public SubscribeToCacheInvalidation(): void {
@@ -3369,7 +3829,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         }`;
 
-        const observable = this.subscribe(CACHE_INVALIDATION_SUB);
+        const observable = this.Subscribe(CACHE_INVALIDATION_SUB);
 
         this._cacheInvalidationSubscription = observable.subscribe({
             next: (data: Record<string, { EntityName: string; PrimaryKeyValues: string | null; Action: string; SourceServerID: string; Timestamp: string; OriginSessionID?: string; RecordData?: string }>) => {
@@ -3406,6 +3866,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     },
                 };
 
+                // The event drives BaseEngine caches directly, AND — because this provider
+                // registers the entities its metadata is built from (the MJ_Metadata dataset's
+                // items) with ProviderBase's static event fan-out — it also schedules a debounced
+                // metadata staleness check when the written entity is one of them. See
+                // ProviderBase.handleMetadataMemberEntityEvent; no entity names are listed here.
                 MJGlobal.Instance.RaiseEvent({
                     event: MJEventType.ComponentEvent,
                     eventCode: BaseEntity.BaseEventCode,
@@ -3426,9 +3891,68 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Minimum client-side coalescing window after a metadata member write, in milliseconds.
+     * See {@link MetadataMemberRefreshDelayMs} for why this is tens of seconds and jittered.
+     */
+    public static ClientMemberRefreshWindowMinMs: number = 15_000;
+
+    /**
+     * Random jitter added on top of {@link ClientMemberRefreshWindowMinMs} each time the window
+     * is armed, so the fleet of connected browsers never runs its checks in the same instant.
+     */
+    public static ClientMemberRefreshWindowJitterMs: number = 30_000;
+
+    /**
+     * The client's window is long and RANDOMIZED where the server's is a short debounce,
+     * because the economics are inverted. MJ_Metadata's members are not only permission
+     * entities — they include entities ordinary users and agents write routinely
+     * (`MJ: Dashboards`, `MJ: Queries` and its children, `MJ: Libraries`), and the server
+     * broadcasts every save to every connected browser. With the server-style 500ms window,
+     * one dashboard save would make EVERY session run a staleness check and — since the member
+     * table's timestamp genuinely moved — re-pull the multi-megabyte metadata graph, all
+     * within the same half-second: at 200 sessions, gigabytes of egress per routine save.
+     * A window of 15–45s (uniform jitter per arming) caps each browser at one status check and
+     * at most one pull per window regardless of org-wide write rate, and spreads those pulls
+     * so they cannot stampede the server. Client metadata freshness is a UX nicety, not an
+     * enforcement surface — the server enforces from its OWN metadata on its unchanged ~1–2s
+     * path, so a browser rendering a just-revoked column for up to a window is display-only
+     * (the wire strips it regardless).
+     */
+    protected get MetadataMemberRefreshDelayMs(): number {
+        return GraphQLDataProvider.ClientMemberRefreshWindowMinMs
+            + Math.random() * GraphQLDataProvider.ClientMemberRefreshWindowJitterMs;
+    }
+
+    /**
+     * Coalesce instead of debounce: with a window this long, re-arming on every event would let
+     * steady org-wide write activity postpone the refresh forever. Joining the armed window
+     * guarantees at most one refresh per window at any write rate.
+     */
+    protected get MetadataMemberRefreshRearmsOnNewEvents(): boolean {
+        return false;
+    }
+
+    /**
+     * How this client refreshes after one of the entities its metadata is built from changes
+     * (see ProviderBase.handleMetadataMemberEntityEvent — membership comes from the MJ_Metadata
+     * dataset definition, not a list). A browser must not re-pull the full metadata graph on
+     * every such write, so instead of the base class's hard Refresh this runs the staleness
+     * check: `RefreshIfNeeded` compares server timestamps and refetches only when genuinely
+     * stale, so a spurious event costs one cheap status round-trip. The check-interval throttle
+     * is bypassed because by the time the coalescing window fires, the caller holds positive
+     * evidence at least one member entity was written since the window was armed — the throttle
+     * would otherwise silently drop it. Volume is governed by the window above, not the
+     * throttle.
+     */
+    protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
+        return this.RefreshIfNeeded(undefined, true);
+    }
+
+    /**
      * Unsubscribes from cache invalidation events. Called during cleanup/logout.
      */
     public UnsubscribeFromCacheInvalidation(): void {
+        this.CancelPendingMetadataMemberRefresh();
         if (this._cacheInvalidationSubscription) {
             this._cacheInvalidationSubscription.unsubscribe();
             this._cacheInvalidationSubscription = null;

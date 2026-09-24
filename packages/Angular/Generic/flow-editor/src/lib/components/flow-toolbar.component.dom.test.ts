@@ -97,13 +97,23 @@ describe('FlowToolbarComponent (DOM)', () => {
     expect(events.length).toBe(1);
   });
 
-  it('renders 3 dividers when editable (zoom | mode | auto-layout | view groups)', () => {
+  it('renders 4 dividers when editable (zoom | mode | auto-layout | view | chrome)', () => {
     const fixture = render({ ReadOnly: false });
+    expect(queryAll(fixture, '.mj-flow-toolbar-divider').length).toBe(4);
+  });
+
+  it('renders 3 dividers when read-only (the auto-layout divider is gated out)', () => {
+    const fixture = render({ ReadOnly: true });
     expect(queryAll(fixture, '.mj-flow-toolbar-divider').length).toBe(3);
   });
 
-  it('renders 2 dividers when read-only (the auto-layout divider is gated out)', () => {
-    const fixture = render({ ReadOnly: true });
-    expect(queryAll(fixture, '.mj-flow-toolbar-divider').length).toBe(2);
+  it('emits MinimizeClicked and HideClicked from the chrome buttons', () => {
+    const fixture = render();
+    const minimize = capture(fixture.componentInstance.MinimizeClicked);
+    const hide = capture(fixture.componentInstance.HideClicked);
+    click(fixture, 'button[title="Minimize toolbar"]');
+    click(fixture, 'button[title="Hide toolbar"]');
+    expect(minimize.length).toBe(1);
+    expect(hide.length).toBe(1);
   });
 });

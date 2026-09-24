@@ -44,7 +44,7 @@ import { ITwilioClientBindings } from './twilio-call-sdk';
  * @param streamUrl The `wss://…` Media-Streams endpoint Twilio connects the call's audio to.
  * @returns The TwiML document string to return to Twilio (REST `twiml` param or webhook response body).
  */
-export function buildConnectStreamTwiML(streamUrl: string): string {
+export function BuildConnectStreamTwiML(streamUrl: string): string {
     const escaped = escapeXmlAttribute(streamUrl);
     return (
         '<?xml version="1.0" encoding="UTF-8"?>' +
@@ -54,6 +54,11 @@ export function buildConnectStreamTwiML(streamUrl: string): string {
         '</Connect>' +
         '</Response>'
     );
+}
+
+/** @deprecated Use {@link BuildConnectStreamTwiML}. */
+export function buildConnectStreamTwiML(streamUrl: string): string {
+    return BuildConnectStreamTwiML(streamUrl);
 }
 
 /** One Twilio Media-Streams `media` frame as it appears (post-JSON-parse) on the websocket. */
@@ -86,12 +91,17 @@ export interface TwilioMediaFrame {
  * @param frame The parsed Media-Streams frame object.
  * @returns The decoded PCM16 audio, or `null` when the frame carries no audio payload.
  */
-export function parseTwilioMediaFrame(frame: TwilioMediaFrame): ArrayBuffer | null {
+export function ParseTwilioMediaFrame(frame: TwilioMediaFrame): ArrayBuffer | null {
     if (frame.event !== 'media' || !frame.media || !frame.media.payload) {
         return null;
     }
     const mulaw = base64ToArrayBuffer(frame.media.payload);
     return muLawToPcm16Buffer(mulaw);
+}
+
+/** @deprecated Use {@link ParseTwilioMediaFrame}. */
+export function parseTwilioMediaFrame(frame: TwilioMediaFrame): ArrayBuffer | null {
+    return ParseTwilioMediaFrame(frame);
 }
 
 /**
@@ -103,13 +113,37 @@ export function parseTwilioMediaFrame(frame: TwilioMediaFrame): ArrayBuffer | nu
  * @param streamSid The Media-Streams stream SID the frame is addressed to.
  * @returns A Media-Streams outbound `media` frame ready to JSON-serialize and send.
  */
-export function encodeTwilioMediaFrame(pcm: ArrayBuffer, streamSid: string): TwilioMediaFrame {
+export function EncodeTwilioMediaFrame(pcm: ArrayBuffer, streamSid: string): TwilioMediaFrame {
     const mulaw = pcm16ToMuLawBuffer(pcm);
     return {
         event: 'media',
         streamSid,
         media: { payload: arrayBufferToBase64(mulaw) },
     };
+}
+
+/** @deprecated Use {@link EncodeTwilioMediaFrame}. */
+export function encodeTwilioMediaFrame(pcm: ArrayBuffer, streamSid: string): TwilioMediaFrame {
+    return EncodeTwilioMediaFrame(pcm, streamSid);
+}
+
+/**
+ * **Pure** encode of a Twilio Media-Streams outbound `clear` frame to flush Twilio's internal
+ * audio playback buffer on barge-in / interruption.
+ *
+ * @param streamSid The Media-Streams stream SID the frame is addressed to.
+ * @returns A Media-Streams outbound `clear` frame ready to JSON-serialize and send.
+ */
+export function EncodeTwilioClearFrame(streamSid: string): TwilioMediaFrame {
+    return {
+        event: 'clear',
+        streamSid,
+    };
+}
+
+/** @deprecated Use {@link EncodeTwilioClearFrame}. */
+export function encodeTwilioClearFrame(streamSid: string): TwilioMediaFrame {
+    return EncodeTwilioClearFrame(streamSid);
 }
 
 /** Escapes the five XML attribute-significant characters so a stream URL is safe inside the TwiML attribute. */
@@ -229,7 +263,7 @@ export class RealTwilioBindings implements ITwilioClientBindings {
         return this.rest.CreateCall({
             To: toNumber,
             From: fromNumber,
-            Twiml: buildConnectStreamTwiML(this.streamUrl),
+            Twiml: BuildConnectStreamTwiML(this.streamUrl),
             ...(statusCallback ? { StatusCallback: statusCallback } : {}),
         });
     }
@@ -248,13 +282,13 @@ export class RealTwilioBindings implements ITwilioClientBindings {
     /** @inheritdoc */
     public pushStreamAudio(callSid: string, pcm: ArrayBuffer): void {
         const streamSid = this.mediaPump.GetStreamSid(callSid);
-        this.mediaPump.Send(callSid, encodeTwilioMediaFrame(pcm, streamSid));
+        this.mediaPump.Send(callSid, EncodeTwilioMediaFrame(pcm, streamSid));
     }
 
     /** @inheritdoc */
     public onStreamAudio(callSid: string, cb: (pcm: ArrayBuffer) => void): void {
         this.mediaPump.OnFrame(callSid, (frame) => {
-            const pcm = parseTwilioMediaFrame(frame);
+            const pcm = ParseTwilioMediaFrame(frame);
             if (pcm) {
                 cb(pcm);
             }
@@ -263,7 +297,7 @@ export class RealTwilioBindings implements ITwilioClientBindings {
 
     /** @inheritdoc */
     public async playDigits(callSid: string, digits: string): Promise<void> {
-        await this.rest.UpdateCall(callSid, { Twiml: buildPlayDigitsTwiML(digits) });
+        await this.rest.UpdateCall(callSid, { Twiml: BuildPlayDigitsTwiML(digits) });
     }
 
     /** @inheritdoc */
@@ -278,7 +312,7 @@ export class RealTwilioBindings implements ITwilioClientBindings {
 
     /** @inheritdoc */
     public async redirectCall(callSid: string, toNumber: string): Promise<void> {
-        await this.rest.UpdateCall(callSid, { Twiml: buildDialTwiML(toNumber) });
+        await this.rest.UpdateCall(callSid, { Twiml: BuildDialTwiML(toNumber) });
     }
 
     /** @inheritdoc */
@@ -289,10 +323,16 @@ export class RealTwilioBindings implements ITwilioClientBindings {
             }
         });
     }
+
+    /** @inheritdoc */
+    public flushOutbound(callSid: string): void {
+        const streamSid = this.mediaPump.GetStreamSid(callSid);
+        this.mediaPump.Send(callSid, EncodeTwilioClearFrame(streamSid));
+    }
 }
 
 /** Builds the `<Play digits>` TwiML used to emit DTMF tones on a live call (REST update). */
-export function buildPlayDigitsTwiML(digits: string): string {
+export function BuildPlayDigitsTwiML(digits: string): string {
     return (
         '<?xml version="1.0" encoding="UTF-8"?>' +
         '<Response>' +
@@ -301,14 +341,24 @@ export function buildPlayDigitsTwiML(digits: string): string {
     );
 }
 
+/** @deprecated Use {@link BuildPlayDigitsTwiML}. */
+export function buildPlayDigitsTwiML(digits: string): string {
+    return BuildPlayDigitsTwiML(digits);
+}
+
 /** Builds the `<Dial>` TwiML used to transfer a live call to another number (REST update). */
-export function buildDialTwiML(toNumber: string): string {
+export function BuildDialTwiML(toNumber: string): string {
     return (
         '<?xml version="1.0" encoding="UTF-8"?>' +
         '<Response>' +
         `<Dial>${escapeXmlAttribute(toNumber)}</Dial>` +
         '</Response>'
     );
+}
+
+/** @deprecated Use {@link BuildDialTwiML}. */
+export function buildDialTwiML(toNumber: string): string {
+    return BuildDialTwiML(toNumber);
 }
 
 /** Reads an optional `StatusCallback` string out of the loose dial args without widening to `any`. */

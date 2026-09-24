@@ -26,11 +26,14 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   @ViewChild('searchInput') SearchInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('paletteModal') PaletteModal?: ElementRef<HTMLElement>;
   @Output() AppSelected = new EventEmitter<string>();
   @Output() KnowledgeSearchRequested = new EventEmitter<string>();
 
   IsOpen = false;
   SearchQuery = '';
+  /** The element focus came from, so closing can hand it back (WCAG 2.4.3). */
+  private invoker: HTMLElement | null = null;
   AllApps: BaseApplication[] = [];
   FilteredApps: BaseApplication[] = [];
   SelectedIndex = 0;
@@ -72,6 +75,11 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
    * Called when command palette opens
    */
   private onOpen(): void {
+    // Remember where focus came from BEFORE we take it, so Close() can hand it back.
+    // The palette opens from a global Cmd+K, so the invoker is whatever had focus.
+    const active = document.activeElement;
+    this.invoker = active instanceof HTMLElement && active !== document.body ? active : null;
+
     // Reset state
     this.SearchQuery = '';
     this.SelectedIndex = 0;
@@ -95,6 +103,56 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     this.SearchQuery = '';
     this.SelectedIndex = 0;
     this.IsNavigating = false;
+
+    // Return focus to the invoker. Guarded on the invoker still being in the document —
+    // selecting an app tears down the tab the invoker lived in, and focusing a detached
+    // node silently drops focus to <body>, which is the very thing this prevents.
+    const invoker = this.invoker;
+    this.invoker = null;
+    if (invoker && invoker.isConnected) {
+      invoker.focus();
+    }
+  }
+
+  /**
+   * Focusable descendants of the modal, in DOM order — the trap's cycle.
+   */
+  private focusableInModal(): HTMLElement[] {
+    const modal = this.PaletteModal?.nativeElement;
+    if (!modal) {
+      return [];
+    }
+    // No visibility filter is needed or wanted here: the entire modal lives inside an
+    // `@if (IsOpen)`, so everything this matches is genuinely rendered. (An `offsetParent`
+    // check would be actively wrong — the modal is positioned, and offsetParent is null for
+    // fixed-position subtrees in some engines and for everything under jsdom.)
+    const selector = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(modal.querySelectorAll<HTMLElement>(selector));
+  }
+
+  /**
+   * Keep Tab inside the dialog (WCAG 2.4.3 / 2.1.2). `aria-modal` tells a screen reader the
+   * rest of the page is inert but does NOT stop Tab, so without this a keyboard user tabs
+   * straight out of an open palette into the page behind it and cannot see where they are.
+   */
+  private trapTab(event: KeyboardEvent): void {
+    const focusable = this.focusableInModal();
+    if (focusable.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+
+    if (event.shiftKey && (active === first || !active || !this.PaletteModal?.nativeElement.contains(active))) {
+      event.preventDefault();
+      last.focus();
+    }
+    else if (!event.shiftKey && (active === last || !active || !this.PaletteModal?.nativeElement.contains(active))) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   /**
@@ -204,6 +262,13 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   @HostListener('document:keydown', ['$event'])
   HandleKeyDown(event: KeyboardEvent): void {
     if (!this.IsOpen) return;
+
+    // Tab is handled first: the INPUT guard below would otherwise let Tab fall through to
+    // the browser and walk focus out of the dialog.
+    if (event.key === 'Tab') {
+      this.trapTab(event);
+      return;
+    }
 
     // Skip if user is typing in input (except for navigation keys)
     const target = event.target as HTMLElement;

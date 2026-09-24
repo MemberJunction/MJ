@@ -45,7 +45,7 @@
             <div class="entity-list-item"
               [class.selected]="entity.IsSelected"
               (click)="SelectEntity(entity)">
-              <div class="entity-list-name">{{entity.Name}}</div>
+              <div class="entity-list-name">{{entity.DisplayName}}</div>
               <div class="entity-list-badges">
                 @if (entity.ReferencedByCount > 0) {
                   <span class="dep-badge"

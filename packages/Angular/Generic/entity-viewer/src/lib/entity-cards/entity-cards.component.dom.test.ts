@@ -1,9 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { EntityInfo } from '@memberjunction/core';
+
+// jsdom does not implement scrollIntoView; the component calls it from a deferred
+// setTimeout (scrollToSelectedCard), which otherwise fires AFTER a test completes and
+// surfaces as an unhandled TypeError when the worker lives long enough.
+Element.prototype.scrollIntoView = vi.fn();
 import { renderComponentFixture, query, queryAll, text, capture, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { EntityCardsComponent } from './entity-cards.component';
 import type { CardTemplate } from '../types';
-import { buildPkString } from '../utils/record.util';
+import { BuildPkString } from '../utils/record.util';
 
 /**
  * DOM coverage for <mj-entity-cards> — the card view of an entity's records (~9×). When `records` is
@@ -57,7 +62,7 @@ describe('EntityCardsComponent (DOM)', () => {
   });
 
   it('marks only the card matching selectedRecordId as selected', () => {
-    const key2 = buildPkString(RECORDS[1], ENTITY);
+    const key2 = BuildPkString(RECORDS[1], ENTITY);
     const cards = cardEls(render({ selectedRecordId: key2 }));
     expect(cards[0].classList.contains('selected')).toBe(false);
     expect(cards[1].classList.contains('selected')).toBe(true);

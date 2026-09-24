@@ -1,0 +1,49 @@
+<div class="tgdbg">
+  @if (ShowChrome) {
+    <div class="tgdbg-chrome">
+      <mj-task-graph-debug-toolbar
+        [Paused]="Paused"
+        [Busy]="Busy"
+        [Settled]="IsSettled"
+        [Enabled]="Enabled && !Busy"
+        (Pause)="Pause()"
+        (Resume)="Resume()"
+        (Step)="Step('one')"
+        (StepWave)="Step('wave')"
+        (Cancel)="Cancel()">
+      </mj-task-graph-debug-toolbar>
+      @if (ControlError) {
+        <mj-alert Variant="error" [Message]="ControlError"></mj-alert>
+      }
+    </div>
+  }
+  <div class="tgdbg-body">
+    <mj-task-graph-run-view
+      [Provider]="ProviderToUse"
+      [ParentTaskID]="ParentTaskID"
+      [WorkflowName]="WorkflowName"
+      [LiveUpdates]="LiveUpdates"
+      [PollIntervalSeconds]="PollIntervalSeconds"
+      [Height]="'100%'"
+      [ShowLegend]="ShowLegend"
+      [ShowToolbar]="ShowCanvasToolbar"
+      [ToolbarVisibility]="ToolbarVisibility"
+      [ToolbarAlign]="ToolbarAlign"
+      [LiveFrame]="LatestFrame"
+      [ReplayAt]="ReplayAt"
+      [Breakpoints]="Breakpoints"
+      [PausedAtTaskID]="PausedAtTaskID"
+      [GraphPaused]="Paused"
+      [EdgeOverrides]="EdgeOverrides"
+      [AllowBreakpointEditing]="AllowBreakpointEditing"
+      [ShowVariables]="ShowVariables"
+      [Invocation]="Invocation"
+      (NodeSelected)="OnRunNodeSelected($event)"
+      (ConnectionSelected)="OnRunConnectionSelected($event)"
+      (LegendToggled)="LegendToggled.emit($event)"
+      (Settled)="OnRunSettled()"
+      (BreakpointToggled)="OnRunBreakpointToggled($event)"
+      (EdgeOverrideRequested)="OnRunEdgeOverride($event)">
+    </mj-task-graph-run-view>
+  </div>
+</div>

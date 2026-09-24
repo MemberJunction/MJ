@@ -11,6 +11,7 @@ import {
   MJArtifactEntity
 } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 
 /**
  * Types of searchable content
@@ -26,43 +27,53 @@ export type SearchFilter = 'all' | 'conversations' | 'messages' | 'artifacts' | 
  * Unified search result
  */
 export interface SearchResult {
-  id: string;
-  type: SearchResultType;
-  title: string;
-  preview: string;
-  matchedText?: string;
-  conversationId?: string;
-  conversationName?: string;
-  artifactType?: string;
-  collectionId?: string;
-  collectionName?: string;
-  createdAt: Date;
-  relevanceScore: number;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  type: SearchResultType;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  preview: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  matchedText?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  conversationId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  conversationName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  artifactType?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  collectionId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  collectionName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  createdAt: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  relevanceScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Search results grouped by type
  */
 export interface GroupedSearchResults {
-  conversations: SearchResult[];
-  messages: SearchResult[];
-  artifacts: SearchResult[];
-  collections: SearchResult[];
-  tasks: SearchResult[];
-  total: number;
+  conversations: SearchResult[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  messages: SearchResult[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  artifacts: SearchResult[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  collections: SearchResult[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tasks: SearchResult[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  total: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Date range filter
  */
 export interface DateRange {
-  start: Date | null;
-  end: Date | null;
+  start: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  end: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Service for searching across conversations, messages, and artifacts
  * Provides debounced search with result ranking and filtering
+ */
+/**
+ * NOTE ON `LIKE` ESCAPING
+ *
+ * The predicates below interpolate the user's query into `LIKE '%…%'` via `EscapeSQLString`, which
+ * neutralises quotes but NOT LIKE metacharacters — `%`, `_` and `[` in a search term are still
+ * treated as wildcards rather than literal text. That is this service's long-standing search
+ * behaviour, so it is left as-is deliberately; changing it would change what users' searches match.
+ * If literal matching is wanted, escape the metacharacters and append `ESCAPE '\\'` (see
+ * `escapeLikeValue()` in `@memberjunction/core`, `generic/runQuerySQLFilterImplementations.ts`).
  */
 @Injectable({
   providedIn: 'root'
@@ -86,11 +97,36 @@ export class SearchService {
   private readonly MAX_RECENT_SEARCHES = 10;
 
   // Public observables
-  public readonly searchQuery$ = this._searchQuery$.asObservable();
-  public readonly searchFilter$ = this._searchFilter$.asObservable();
-  public readonly dateRange$ = this._dateRange$.asObservable();
-  public readonly isSearching$ = this._isSearching$.asObservable();
-  public readonly searchResults$ = this._searchResults$.asObservable();
+  public readonly SearchQuery$ = this._searchQuery$.asObservable();
+
+  /** @deprecated Use {@link SearchQuery$}. */
+  public get searchQuery$() {
+    return this.SearchQuery$;
+  }
+  public readonly SearchFilter$ = this._searchFilter$.asObservable();
+
+  /** @deprecated Use {@link SearchFilter$}. */
+  public get searchFilter$() {
+    return this.SearchFilter$;
+  }
+  public readonly DateRange$ = this._dateRange$.asObservable();
+
+  /** @deprecated Use {@link DateRange$}. */
+  public get dateRange$() {
+    return this.DateRange$;
+  }
+  public readonly IsSearching$ = this._isSearching$.asObservable();
+
+  /** @deprecated Use {@link IsSearching$}. */
+  public get isSearching$() {
+    return this.IsSearching$;
+  }
+  public readonly SearchResults$ = this._searchResults$.asObservable();
+
+  /** @deprecated Use {@link SearchResults$}. */
+  public get searchResults$() {
+    return this.SearchResults$;
+  }
 
   private _provider: IMetadataProvider | null = null;
 
@@ -127,7 +163,7 @@ export class SearchService {
   /**
    * Search across all content types
    */
-  public async search(
+  public async Search(
     query: string,
     environmentId: string,
     currentUser: UserInfo
@@ -187,6 +223,15 @@ export class SearchService {
     }
   }
 
+  /** @deprecated Use {@link Search}. */
+  public async search(
+    query: string,
+    environmentId: string,
+    currentUser: UserInfo
+  ): Promise<GroupedSearchResults> {
+    return this.Search(query, environmentId, currentUser);
+  }
+
   /**
    * Search conversations by name and description
    */
@@ -200,7 +245,7 @@ export class SearchService {
     const lowerQuery = query.toLowerCase();
 
     let filter = `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`;
-    filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
+    filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
       filter += ` AND __mj_CreatedAt >= '${dateRange.start.toISOString()}'`;
@@ -242,7 +287,7 @@ export class SearchService {
 
     // First get conversations in this environment
     let filter = `ConversationID IN (SELECT ID FROM vwConversations WHERE EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0))`;
-    filter += ` AND LOWER(Message) LIKE '%${this.escapeSQL(lowerQuery)}%'`;
+    filter += ` AND LOWER(Message) LIKE '%${EscapeSQLString(lowerQuery)}%'`;
     filter += ` AND (HiddenToUser IS NULL OR HiddenToUser=0)`;
 
     if (dateRange.start) {
@@ -286,7 +331,7 @@ export class SearchService {
 
     // Search artifacts directly by name and description
     let filter = `EnvironmentID='${environmentId}'`;
-    filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
+    filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
       filter += ` AND __mj_CreatedAt >= '${dateRange.start.toISOString()}'`;
@@ -369,7 +414,7 @@ export class SearchService {
 
     let filter = `EnvironmentID='${environmentId}'`;
     filter += ` AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
-    filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
+    filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
       filter += ` AND __mj_CreatedAt >= '${dateRange.start.toISOString()}'`;
@@ -429,7 +474,7 @@ export class SearchService {
       )
     ))`;
 
-    filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
+    filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
       filter += ` AND __mj_CreatedAt >= '${dateRange.start.toISOString()}'`;
@@ -632,38 +677,46 @@ export class SearchService {
   }
 
   /**
-   * Escape SQL special characters
-   */
-  private escapeSQL(value: string): string {
-    return value.replace(/'/g, "''");
-  }
-
-  /**
    * Set search filter
    */
-  public setSearchFilter(filter: SearchFilter): void {
+  public SetSearchFilter(filter: SearchFilter): void {
     this._searchFilter$.next(filter);
+  }
+
+  /** @deprecated Use {@link SetSearchFilter}. */
+  public setSearchFilter(filter: SearchFilter): void {
+    return this.SetSearchFilter(filter);
   }
 
   /**
    * Set date range filter
    */
-  public setDateRange(range: DateRange): void {
+  public SetDateRange(range: DateRange): void {
     this._dateRange$.next(range);
+  }
+
+  /** @deprecated Use {@link SetDateRange}. */
+  public setDateRange(range: DateRange): void {
+    return this.SetDateRange(range);
   }
 
   /**
    * Clear all filters
    */
-  public clearFilters(): void {
+  public ClearFilters(): void {
     this._searchFilter$.next('all');
     this._dateRange$.next({ start: null, end: null });
+  }
+
+  /** @deprecated Use {@link ClearFilters}. */
+  public clearFilters(): void {
+    return this.ClearFilters();
   }
 
   /**
    * Clear search results
    */
-  public clearResults(): void {
+  public ClearResults(): void {
     this._searchResults$.next({
       conversations: [],
       messages: [],
@@ -674,11 +727,21 @@ export class SearchService {
     });
   }
 
+  /** @deprecated Use {@link ClearResults}. */
+  public clearResults(): void {
+    return this.ClearResults();
+  }
+
   /**
    * Get recent searches
    */
-  public getRecentSearches(): string[] {
+  public GetRecentSearches(): string[] {
     return [...this.recentSearches];
+  }
+
+  /** @deprecated Use {@link GetRecentSearches}. */
+  public getRecentSearches(): string[] {
+    return this.GetRecentSearches();
   }
 
   /**
@@ -705,9 +768,14 @@ export class SearchService {
   /**
    * Clear recent searches
    */
-  public clearRecentSearches(): void {
+  public ClearRecentSearches(): void {
     this.recentSearches = [];
     this.saveRecentSearches();
+  }
+
+  /** @deprecated Use {@link ClearRecentSearches}. */
+  public clearRecentSearches(): void {
+    return this.ClearRecentSearches();
   }
 
   /**

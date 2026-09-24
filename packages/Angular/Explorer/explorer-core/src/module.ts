@@ -62,6 +62,7 @@ import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.c
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
+import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { SearchModule } from '@memberjunction/ng-search';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
@@ -72,6 +73,7 @@ import { MJLiveKitRoomComponent } from '@memberjunction/ng-mj-livekit-room';
 @NgModule({
   declarations: [
     OAuthCallbackComponent,
+    ClaimRedeemComponent,
     ResourceContainerComponent,
     DashboardResource,
     EntityRecordResource,

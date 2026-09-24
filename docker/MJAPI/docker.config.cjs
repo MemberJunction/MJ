@@ -176,11 +176,14 @@ const mjServerConfig = {
   userHandling: {
     autoCreateNewUsers: process.env.AUTO_CREATE_NEW_USERS ? process.env.AUTO_CREATE_NEW_USERS === 1 : false,
     newUserLimitedToAuthorizedDomains: false,
+    // Authorized EMAIL domains for auto-provisioned users, e.g. ['example.com', '*.example.org'].
+    // Matched against the email domain of the verified identity token — NOT the browser Origin.
     newUserAuthorizedDomains: [],
     newUserRoles: ['UI'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
-    contextUserForNewUserCreation: 'not.set@nowhere.com',
+    // Matched against User.Name first, then User.Email — 'System' is the seeded system user.
+    contextUserForNewUserCreation: 'System',
   },
   databaseSettings: {
     connectionTimeout: 45000,

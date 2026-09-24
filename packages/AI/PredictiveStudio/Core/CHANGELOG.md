@@ -1,5 +1,38 @@
 # @memberjunction/predictive-studio-core
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- a17a228: Consolidate metadata cache API methods and update PredictiveStudio outcome config score band semantics per review.
+  - **Metadata Cache API**:
+    - Make `HasCachedRecordName` and `GetCachedRecordNameOnlyIfCached` required methods on `IMetadataProvider`.
+    - Remove deprecated `GetCachedRecordNameSync` across core and UI consumers (`navigation.service.ts`, `record-origin-crumb.component.ts`, `app-routing.module.ts`).
+  - **Predictive Studio Outcome Config**:
+    - Score band assignment now uses clean half-open intervals `[Min, Max)` with the highest band inclusive `[Min, Max]`, eliminating floating-point sentinel tolerances.
+    - Non-finite and out-of-range normalized model scores (`< 0` or `> 1`) return `null` rather than silently clamping.
+    - Non-standard/neutral target variables default to neutral gray band styling without asserting polarity.
+    - Warn on JSON parse failures in `resolveOutcomeConfig`.
+  - **Lockfile & Dev Scripts**:
+    - Restored `@memberjunction/tag-engine-base` lockfile sync.
+    - Restored MJExplorer dev port 4201.
+
+### Patch Changes
+
+- 6e6e3f1: Surface explicit warnings when candidate feature sets contain unmapped llm-derived features during model training and pipeline generation.
+
+## 6.1.0
+
+## 6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+## 6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ## 6.1.0-edge.1

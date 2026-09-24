@@ -3,15 +3,16 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildRichAdaptiveCard,
-    buildAgentHeader,
-    buildTextBody,
-    buildArtifactCard,
-    buildActionButtons,
-    buildExplorerLink,
-    buildMetadataFooter,
-    buildErrorCard,
-    buildResponseFormElements,
+    BuildRichAdaptiveCard,
+    BuildAgentHeader,
+    BuildTextBody,
+    BuildArtifactCard,
+    BuildActionButtons,
+    BuildExplorerLink,
+    BuildMetadataFooter,
+    BuildErrorCard,
+    BuildResponseFormElements,
+    BuildUnopenableResourceNotes,
 } from '../teams/teams-card-builder.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -44,7 +45,7 @@ describe('teams-card-builder', () => {
     describe('buildAgentHeader', () => {
         it('should create a ColumnSet with agent name', () => {
             const agent = createMockAgent({ Name: 'Sage' });
-            const header = buildAgentHeader(agent as never);
+            const header = BuildAgentHeader(agent as never);
 
             expect(header.type).toBe('ColumnSet');
             const columns = header.columns as Record<string, unknown>[];
@@ -63,7 +64,7 @@ describe('teams-card-builder', () => {
                 Name: 'Research Agent',
                 LogoURL: 'https://example.com/avatar.png',
             });
-            const header = buildAgentHeader(agent as never);
+            const header = BuildAgentHeader(agent as never);
             const columns = header.columns as Record<string, unknown>[];
 
             const imageCol = columns.find(c => {
@@ -77,7 +78,7 @@ describe('teams-card-builder', () => {
 
         it('should NOT include Image for non-HTTPS URLs', () => {
             const agent = createMockAgent({ LogoURL: 'http://insecure.com/avatar.png' });
-            const header = buildAgentHeader(agent as never);
+            const header = BuildAgentHeader(agent as never);
             const columns = header.columns as Record<string, unknown>[];
 
             const imageCol = columns.find(c => {
@@ -89,14 +90,14 @@ describe('teams-card-builder', () => {
 
         it('should NOT include Image for data URIs', () => {
             const agent = createMockAgent({ LogoURL: 'data:image/png;base64,abc123' });
-            const header = buildAgentHeader(agent as never);
+            const header = BuildAgentHeader(agent as never);
             const columns = header.columns as Record<string, unknown>[];
             expect(columns).toHaveLength(1); // Only name column
         });
 
         it('should handle null Name gracefully', () => {
             const agent = createMockAgent({ Name: null });
-            const header = buildAgentHeader(agent as never);
+            const header = BuildAgentHeader(agent as never);
             const columns = header.columns as Record<string, unknown>[];
             const nameCol = columns.find(c => {
                 const items = (c as Record<string, unknown>).items as Record<string, unknown>[];
@@ -108,13 +109,13 @@ describe('teams-card-builder', () => {
 
     describe('buildTextBody', () => {
         it('should convert markdown to TextBlock elements', () => {
-            const elements = buildTextBody('Hello **world**');
+            const elements = BuildTextBody('Hello **world**');
             expect(elements.length).toBeGreaterThan(0);
             expect(elements[0].type).toBe('TextBlock');
         });
 
         it('should handle headers', () => {
-            const elements = buildTextBody('# My Title\n\nSome text');
+            const elements = BuildTextBody('# My Title\n\nSome text');
             const headerEl = elements.find(e =>
                 (e as Record<string, unknown>).size === 'Large' &&
                 (e as Record<string, unknown>).weight === 'Bolder'
@@ -124,13 +125,13 @@ describe('teams-card-builder', () => {
         });
 
         it('should handle code blocks with Monospace font', () => {
-            const elements = buildTextBody('```js\nconsole.log("hi")\n```');
+            const elements = BuildTextBody('```js\nconsole.log("hi")\n```');
             const codeEl = elements.find(e => (e as Record<string, unknown>).fontType === 'Monospace');
             expect(codeEl).toBeDefined();
         });
 
         it('should handle empty text', () => {
-            const elements = buildTextBody('');
+            const elements = BuildTextBody('');
             expect(elements.length).toBeGreaterThan(0);
             expect(elements[0].text).toBe('(empty response)');
         });
@@ -138,7 +139,7 @@ describe('teams-card-builder', () => {
 
     describe('buildArtifactCard', () => {
         it('should create a Container with explorer link', () => {
-            const container = buildArtifactCard('artifact-123', 'https://explorer.example.com');
+            const container = BuildArtifactCard('artifact-123', 'https://explorer.example.com');
             expect(container.type).toBe('Container');
             expect(container.style).toBe('emphasis');
 
@@ -148,7 +149,7 @@ describe('teams-card-builder', () => {
         });
 
         it('should strip trailing slashes from explorer URL', () => {
-            const container = buildArtifactCard('art-1', 'https://explorer.example.com/');
+            const container = BuildArtifactCard('art-1', 'https://explorer.example.com/');
             const selectAction = container.selectAction as Record<string, unknown>;
             expect(selectAction.url).toBe('https://explorer.example.com/resource/artifact/art-1');
         });
@@ -159,7 +160,7 @@ describe('teams-card-builder', () => {
             const commands = [
                 { type: 'open:url' as const, label: 'Visit', url: 'https://example.com' },
             ];
-            const actions = buildActionButtons(commands);
+            const actions = BuildActionButtons(commands);
             expect(actions).toHaveLength(1);
             expect(actions[0].type).toBe('Action.OpenUrl');
             expect(actions[0].url).toBe('https://example.com');
@@ -170,7 +171,7 @@ describe('teams-card-builder', () => {
             const commands = [
                 { type: 'open:resource' as const, label: 'View Customer', resourceType: 'Record' as const, entityName: 'Customers', resourceId: 'abc-123' },
             ];
-            const actions = buildActionButtons(commands, 'https://explorer.myco.com');
+            const actions = BuildActionButtons(commands, 'https://explorer.myco.com');
             expect(actions).toHaveLength(1);
             expect(actions[0].url).toBe('https://explorer.myco.com/resource/record/Customers/abc-123');
         });
@@ -179,7 +180,7 @@ describe('teams-card-builder', () => {
             const commands = [
                 { type: 'open:resource' as const, label: 'Sales Dashboard', resourceType: 'Dashboard' as const, resourceId: 'dash-1' },
             ];
-            const actions = buildActionButtons(commands, 'https://explorer.myco.com/');
+            const actions = BuildActionButtons(commands, 'https://explorer.myco.com/');
             expect(actions[0].url).toBe('https://explorer.myco.com/resource/dashboard/dash-1');
         });
 
@@ -187,7 +188,7 @@ describe('teams-card-builder', () => {
             const commands = [
                 { type: 'open:resource' as const, label: 'View Record', resourceType: 'Record' as const, entityName: 'Orders', resourceId: '456' },
             ];
-            const actions = buildActionButtons(commands);
+            const actions = BuildActionButtons(commands);
             expect(actions).toHaveLength(0);
         });
 
@@ -197,14 +198,14 @@ describe('teams-card-builder', () => {
                 label: `Action ${i}`,
                 url: `https://example.com/${i}`,
             }));
-            const actions = buildActionButtons(commands);
+            const actions = BuildActionButtons(commands);
             expect(actions).toHaveLength(5);
         });
     });
 
     describe('buildExplorerLink', () => {
         it('should return artifact link when artifactId is provided', () => {
-            const action = buildExplorerLink('https://explorer.example.com', 'art-1');
+            const action = BuildExplorerLink('https://explorer.example.com', 'art-1');
             expect(action).not.toBeNull();
             expect(action!.type).toBe('Action.OpenUrl');
             expect(action!.url).toBe('https://explorer.example.com/resource/artifact/art-1');
@@ -212,30 +213,30 @@ describe('teams-card-builder', () => {
         });
 
         it('should return conversation link when only conversationId is provided', () => {
-            const action = buildExplorerLink('https://explorer.example.com', undefined, 'convo-1');
+            const action = BuildExplorerLink('https://explorer.example.com', undefined, 'convo-1');
             expect(action).not.toBeNull();
             expect(action!.url).toContain('/app/Chat/Conversations?conversationId=convo-1');
             expect(action!.title).toBe('Open in MJ Explorer');
         });
 
         it('should prefer artifact link over conversation link', () => {
-            const action = buildExplorerLink('https://explorer.example.com', 'art-1', 'convo-1');
+            const action = BuildExplorerLink('https://explorer.example.com', 'art-1', 'convo-1');
             expect(action!.url).toContain('/resource/artifact/art-1');
         });
 
         it('should return null when no explorer URL', () => {
-            expect(buildExplorerLink(undefined, 'art-1')).toBeNull();
+            expect(BuildExplorerLink(undefined, 'art-1')).toBeNull();
         });
 
         it('should return null when neither artifact nor conversation ID', () => {
-            expect(buildExplorerLink('https://explorer.example.com')).toBeNull();
+            expect(BuildExplorerLink('https://explorer.example.com')).toBeNull();
         });
     });
 
     describe('buildMetadataFooter', () => {
         it('should show timing information', () => {
             const result = createMockResult();
-            const footer = buildMetadataFooter(result as never);
+            const footer = BuildMetadataFooter(result as never);
             expect(footer.type).toBe('TextBlock');
             expect(footer.isSubtle).toBe(true);
             expect((footer.text as string)).toContain('4.2s');
@@ -243,19 +244,19 @@ describe('teams-card-builder', () => {
 
         it('should show step count', () => {
             const result = createMockResult();
-            const footer = buildMetadataFooter(result as never);
+            const footer = BuildMetadataFooter(result as never);
             expect((footer.text as string)).toContain('1 step');
         });
 
         it('should show token count', () => {
             const result = createMockResult();
-            const footer = buildMetadataFooter(result as never);
+            const footer = BuildMetadataFooter(result as never);
             expect((footer.text as string)).toContain('1,240 tokens');
         });
 
         it('should show "Completed" when no timing data available', () => {
             const result = createMockResult({ agentRun: {} });
-            const footer = buildMetadataFooter(result as never);
+            const footer = BuildMetadataFooter(result as never);
             expect(footer.text).toBe('Completed');
         });
 
@@ -269,14 +270,14 @@ describe('teams-card-builder', () => {
                     TotalCostRollup: 0.0345,
                 },
             });
-            const footer = buildMetadataFooter(result as never);
+            const footer = BuildMetadataFooter(result as never);
             expect((footer.text as string)).toContain('$0.03');
         });
     });
 
     describe('buildErrorCard', () => {
         it('should create a full Adaptive Card with error message', () => {
-            const card = buildErrorCard('Something went wrong');
+            const card = BuildErrorCard('Something went wrong');
             expect(card.type).toBe('AdaptiveCard');
             expect(card.version).toBe('1.4');
 
@@ -290,7 +291,7 @@ describe('teams-card-builder', () => {
     describe('buildRichAdaptiveCard', () => {
         it('should produce a valid Adaptive Card structure', () => {
             const agent = createMockAgent({ Name: 'Sage' });
-            const card = buildRichAdaptiveCard(null, agent as never, 'Hello!');
+            const card = BuildRichAdaptiveCard(null, agent as never, 'Hello!');
 
             expect(card.type).toBe('AdaptiveCard');
             expect(card.version).toBe('1.4');
@@ -300,14 +301,14 @@ describe('teams-card-builder', () => {
 
         it('should include agent header as first body element', () => {
             const agent = createMockAgent({ Name: 'Sage' });
-            const card = buildRichAdaptiveCard(null, agent as never, 'Hello!');
+            const card = BuildRichAdaptiveCard(null, agent as never, 'Hello!');
             const body = card.body as Record<string, unknown>[];
             expect(body[0].type).toBe('ColumnSet');
         });
 
         it('should include text content after header', () => {
             const agent = createMockAgent();
-            const card = buildRichAdaptiveCard(null, agent as never, 'Some response text');
+            const card = BuildRichAdaptiveCard(null, agent as never, 'Some response text');
             const body = card.body as Record<string, unknown>[];
 
             const textBlocks = body.filter(e => e.type === 'TextBlock' && !(e as Record<string, unknown>).isSubtle);
@@ -316,7 +317,7 @@ describe('teams-card-builder', () => {
 
         it('should add separator to first text element', () => {
             const agent = createMockAgent();
-            const card = buildRichAdaptiveCard(null, agent as never, 'Response');
+            const card = BuildRichAdaptiveCard(null, agent as never, 'Response');
             const body = card.body as Record<string, unknown>[];
 
             // Second element (after ColumnSet) should have separator
@@ -326,7 +327,7 @@ describe('teams-card-builder', () => {
         it('should include metadata footer when agentRun is present', () => {
             const agent = createMockAgent();
             const result = createMockResult();
-            const card = buildRichAdaptiveCard(result as never, agent as never, 'Response');
+            const card = BuildRichAdaptiveCard(result as never, agent as never, 'Response');
             const body = card.body as Record<string, unknown>[];
 
             const footer = body.find(e =>
@@ -343,7 +344,7 @@ describe('teams-card-builder', () => {
                     { type: 'open:url', label: 'Docs', url: 'https://docs.example.com' },
                 ],
             });
-            const card = buildRichAdaptiveCard(result as never, agent as never, 'Response');
+            const card = BuildRichAdaptiveCard(result as never, agent as never, 'Response');
             const actions = card.actions as Record<string, unknown>[];
             expect(actions).toBeDefined();
             expect(actions.length).toBeGreaterThan(0);
@@ -353,7 +354,7 @@ describe('teams-card-builder', () => {
         it('should include Explorer action (not body link) when conversationId is provided', () => {
             const agent = createMockAgent();
             const result = createMockResult();
-            const card = buildRichAdaptiveCard(result as never, agent as never, 'Response', {
+            const card = BuildRichAdaptiveCard(result as never, agent as never, 'Response', {
                 explorerBaseURL: 'https://explorer.example.com',
                 conversationId: 'convo-123',
             });
@@ -378,7 +379,7 @@ describe('teams-card-builder', () => {
         it('should include Explorer action when artifactId is provided', () => {
             const agent = createMockAgent();
             const result = createMockResult();
-            const card = buildRichAdaptiveCard(result as never, agent as never, 'Response', {
+            const card = BuildRichAdaptiveCard(result as never, agent as never, 'Response', {
                 explorerBaseURL: 'https://explorer.example.com',
                 artifactId: 'artifact-abc',
             });
@@ -392,7 +393,7 @@ describe('teams-card-builder', () => {
         it('should NOT include Explorer link when no explorerBaseURL', () => {
             const agent = createMockAgent();
             const result = createMockResult();
-            const card = buildRichAdaptiveCard(result as never, agent as never, 'Response');
+            const card = BuildRichAdaptiveCard(result as never, agent as never, 'Response');
 
             const actions = card.actions as Record<string, unknown>[] | undefined;
             const explorerAction = actions?.find(a =>
@@ -405,7 +406,7 @@ describe('teams-card-builder', () => {
         it('should NOT include Explorer link when explorerBaseURL set but no IDs', () => {
             const agent = createMockAgent();
             const result = createMockResult();
-            const card = buildRichAdaptiveCard(result as never, agent as never, 'Response', {
+            const card = BuildRichAdaptiveCard(result as never, agent as never, 'Response', {
                 explorerBaseURL: 'https://explorer.example.com',
             });
 
@@ -418,7 +419,97 @@ describe('teams-card-builder', () => {
         });
     });
 
+    describe('unopenable file URIs', () => {
+        const dataUri = 'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,UEsDBBQ=';
+
+        // Regression: Teams rendered Action.OpenUrl over a data: URI, so "Download document"
+        // appeared and did nothing when clicked. MJ inlines file artifacts as data: URIs whenever
+        // no file storage account is configured.
+        it('should not render a button for a data: URI', () => {
+            const cmds = [{ type: 'open:url', label: 'Download document', url: dataUri }];
+            expect(BuildActionButtons(cmds as never)).toEqual([]);
+        });
+
+        it('should still render a button for an http(s) URL', () => {
+            const cmds = [{ type: 'open:url', label: 'Download document', url: 'https://example.com/a.docx' }];
+            const actions = BuildActionButtons(cmds as never);
+            expect(actions).toHaveLength(1);
+            expect(actions[0]['url']).toBe('https://example.com/a.docx');
+        });
+
+        // Security: Teams desktop hands an unrecognised scheme to the OS URI handler, so the
+        // guard is an allow-list rather than a deny-list naming the inert schemes. A deny-list
+        // that listed only data:/blob:/file: let every one of these through as a real button.
+        it.each([
+            ['javascript:', 'javascript:alert(1)'],
+            ['vbscript:', 'vbscript:msgbox(1)'],
+            ['an OS handler scheme', 'ms-msdt:/id PCWDiagnostic'],
+            ['file:', 'file:///etc/passwd'],
+        ])('should not render a button for %s', (_label, url) => {
+            const cmds = [{ type: 'open:url', label: 'Click me', url }];
+            expect(BuildActionButtons(cmds as never)).toEqual([]);
+        });
+
+        // Teams opens localhost fine (that is how the dev Explorer link works), so unlike Slack
+        // it must NOT be screened out.
+        it('should keep localhost buttons that Slack would reject', () => {
+            const cmds = [{ type: 'open:url', label: 'Open', url: 'http://localhost:4201/x' }];
+            expect(BuildActionButtons(cmds as never)).toHaveLength(1);
+        });
+
+        it('should name the dropped file in a body note', () => {
+            const cmds = [{ type: 'open:url', label: 'Download document', url: dataUri }];
+            const notes = BuildUnopenableResourceNotes(cmds as never);
+            expect(notes).toHaveLength(1);
+            expect(notes[0]['text']).toContain('Download document');
+            expect(notes[0]['text']).toContain('View in MJ Explorer');
+        });
+
+        it('should produce no notes when every URL is openable', () => {
+            const cmds = [{ type: 'open:url', label: 'Open', url: 'https://example.com/a' }];
+            expect(BuildUnopenableResourceNotes(cmds as never)).toEqual([]);
+        });
+    });
+
     describe('buildResponseFormElements', () => {
+        // Regression: the submit payload carried only { action } and Teams has no thread history,
+        // so a form answer resolved to the DEFAULT agent — "@Query Builder ..." was answered by
+        // Betty after the user filled in the form.
+        it('should stamp the asking agent into the submit payload', () => {
+            const form = {
+                submitLabel: 'Send',
+                questions: [{ id: 'q1', label: 'Which org?', type: { type: 'text' as const } }],
+            };
+            const els = BuildResponseFormElements(form as never, 'Query Builder');
+            const actionSet = els.find(e => e['type'] === 'ActionSet') as Record<string, unknown>;
+            const action = (actionSet['actions'] as Record<string, unknown>[])[0];
+
+            expect(action['data']).toEqual({ action: 'mj:form_submit', mj_agent: 'Query Builder' });
+        });
+
+        it('should omit mj_agent when no agent name is supplied', () => {
+            const form = {
+                questions: [{ id: 'q1', label: 'Which org?', type: { type: 'text' as const } }],
+            };
+            const els = BuildResponseFormElements(form as never);
+            const actionSet = els.find(e => e['type'] === 'ActionSet') as Record<string, unknown>;
+            const action = (actionSet['actions'] as Record<string, unknown>[])[0];
+
+            expect(action['data']).toEqual({ action: 'mj:form_submit' });
+        });
+
+        // mj_agent must not be mistaken for an answer — extractFormFields keys off `mj_form_`.
+        it('should not name the agent key with the form-field prefix', () => {
+            const form = {
+                questions: [{ id: 'q1', label: 'Which org?', type: { type: 'text' as const } }],
+            };
+            const els = BuildResponseFormElements(form as never, 'Query Builder');
+            const actionSet = els.find(e => e['type'] === 'ActionSet') as Record<string, unknown>;
+            const data = (actionSet['actions'] as Record<string, unknown>[])[0]['data'] as Record<string, unknown>;
+
+            expect(Object.keys(data).some(k => k.startsWith('mj_form_'))).toBe(false);
+        });
+
         it('should render form title and description', () => {
             const form = {
                 title: 'Campaign Settings',
@@ -428,7 +519,7 @@ describe('teams-card-builder', () => {
                     { id: 'name', label: 'Name', required: true, type: { type: 'text' as const } },
                 ],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
 
             const titleEl = elements.find(e =>
                 e.type === 'TextBlock' && (e as Record<string, unknown>).text === '**Campaign Settings**'
@@ -447,7 +538,7 @@ describe('teams-card-builder', () => {
                     { id: 'name', label: 'Your Name', required: true, type: { type: 'text' as const, placeholder: 'Enter name' } },
                 ],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
             const input = elements.find(e => e.type === 'Input.Text');
             expect(input).toBeDefined();
             expect((input as Record<string, unknown>).id).toBe('mj_form_name');
@@ -461,7 +552,7 @@ describe('teams-card-builder', () => {
                     { id: 'bio', label: 'Bio', required: false, type: { type: 'textarea' as const } },
                 ],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
             const input = elements.find(e => e.type === 'Input.Text');
             expect(input).toBeDefined();
             expect((input as Record<string, unknown>).isMultiline).toBe(true);
@@ -473,7 +564,7 @@ describe('teams-card-builder', () => {
                     { id: 'age', label: 'Age', required: true, type: { type: 'number' as const, min: 0, max: 120 } },
                 ],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
             const input = elements.find(e => e.type === 'Input.Number');
             expect(input).toBeDefined();
             expect((input as Record<string, unknown>).min).toBe(0);
@@ -486,7 +577,7 @@ describe('teams-card-builder', () => {
                     { id: 'dob', label: 'Date of Birth', type: { type: 'date' as const } },
                 ],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
             const input = elements.find(e => e.type === 'Input.Date');
             expect(input).toBeDefined();
         });
@@ -497,7 +588,7 @@ describe('teams-card-builder', () => {
                     { id: 'start', label: 'Start Time', type: { type: 'time' as const } },
                 ],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
             const input = elements.find(e => e.type === 'Input.Time');
             expect(input).toBeDefined();
         });
@@ -512,7 +603,7 @@ describe('teams-card-builder', () => {
                     },
                 }],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
             const input = elements.find(e => e.type === 'Input.ChoiceSet');
             expect(input).toBeDefined();
             expect((input as Record<string, unknown>).style).toBe('Expanded');
@@ -529,7 +620,7 @@ describe('teams-card-builder', () => {
                     },
                 }],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
             const input = elements.find(e => e.type === 'Input.ChoiceSet');
             expect(input).toBeDefined();
             expect((input as Record<string, unknown>).style).toBe('Compact');
@@ -545,7 +636,7 @@ describe('teams-card-builder', () => {
                     },
                 }],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
             const input = elements.find(e => e.type === 'Input.ChoiceSet');
             expect(input).toBeDefined();
             expect((input as Record<string, unknown>).isMultiSelect).toBe(true);
@@ -557,7 +648,7 @@ describe('teams-card-builder', () => {
                     { id: 'period', label: 'Period', type: { type: 'daterange' as const } },
                 ],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
             const columnSet = elements.find(e => e.type === 'ColumnSet');
             expect(columnSet).toBeDefined();
             const columns = (columnSet as Record<string, unknown>).columns as Record<string, unknown>[];
@@ -571,7 +662,7 @@ describe('teams-card-builder', () => {
                     { id: 'q', label: 'Q', type: { type: 'text' as const } },
                 ],
             };
-            const elements = buildResponseFormElements(form as never);
+            const elements = BuildResponseFormElements(form as never);
             const actionSet = elements.find(e => e.type === 'ActionSet');
             expect(actionSet).toBeDefined();
             const actions = (actionSet as Record<string, unknown>).actions as Record<string, unknown>[];
@@ -593,7 +684,7 @@ describe('teams-card-builder', () => {
                     }],
                 },
             });
-            const card = buildRichAdaptiveCard(result as never, agent as never, 'Please choose:');
+            const card = BuildRichAdaptiveCard(result as never, agent as never, 'Please choose:');
             const body = card.body as Record<string, unknown>[];
 
             const choiceSet = body.find(e => e.type === 'Input.ChoiceSet');
@@ -607,7 +698,7 @@ describe('teams-card-builder', () => {
     describe('payload size enforcement', () => {
         it('should pass through cards under the size limit', () => {
             const agent = createMockAgent();
-            const card = buildRichAdaptiveCard(null, agent as never, 'Short response');
+            const card = BuildRichAdaptiveCard(null, agent as never, 'Short response');
             const payloadSize = JSON.stringify(card).length;
             expect(payloadSize).toBeLessThan(24_000);
         });
@@ -619,7 +710,7 @@ describe('teams-card-builder', () => {
                 `Paragraph ${i}: ${'Lorem ipsum dolor sit amet. '.repeat(70)}`
             ).join('\n\n');
 
-            const card = buildRichAdaptiveCard(null, agent as never, longText);
+            const card = BuildRichAdaptiveCard(null, agent as never, longText);
             const payloadSize = JSON.stringify(card).length;
             // Should be near or under 24KB limit (with truncation notice overhead)
             expect(payloadSize).toBeLessThan(30_000);
@@ -631,7 +722,7 @@ describe('teams-card-builder', () => {
                 `Paragraph ${i}: ${'Lorem ipsum dolor sit amet. '.repeat(70)}`
             ).join('\n\n');
 
-            const card = buildRichAdaptiveCard(null, agent as never, longText);
+            const card = BuildRichAdaptiveCard(null, agent as never, longText);
             const body = card.body as Record<string, unknown>[];
 
             const truncationNotice = body.find(e =>

@@ -403,12 +403,12 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
 
             // Scroll to results section after a small delay to allow DOM update
             setTimeout(() => {
-                this.ScrollToResults();
+                this.scrollToResults();
             }, 100);
         }
     }
 
-    private ScrollToResults(): void {
+    private scrollToResults(): void {
         if (this.ResultsSectionRef?.nativeElement) {
             this.ResultsSectionRef.nativeElement.scrollIntoView({
                 behavior: 'smooth',

@@ -1,0 +1,117 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-payload-errors-cleared-01 [gpt-5.6-luna@none · OpenAI · native-hybrid-results]",
+    "Description": "A prior attempt recorded an error; the retry succeeded. The contract tracks errors and results — the write must store the results and may clear or keep the error log, but must not invent a new error.",
+    "InputDefinition": {
+      "payload": {
+        "task": "parse dates",
+        "inputData": {
+          "dates": [
+            "2024-01-01"
+          ]
+        },
+        "iterations": 2,
+        "errors": [
+          "TypeError: x is undefined"
+        ]
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Parse the dates."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Execute Code succeeded. output = [\"2024-01-01T00:00:00.000Z\"]"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-payload-errors-cleared-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "payloadChange",
+            "payload": {
+              "newElements.results": {
+                "matcher": "nonEmpty"
+              }
+            },
+            "forbiddenPayloadPaths": [
+              "newElements.errors"
+            ]
+          },
+          {
+            "kind": "payloadChange",
+            "payload": {
+              "updateElements.results": {
+                "matcher": "nonEmpty"
+              }
+            },
+            "forbiddenPayloadPaths": [
+              "newElements.errors"
+            ]
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "native",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "payloadChange",
+                "payload": {
+                  "newElements.results": {
+                    "matcher": "nonEmpty"
+                  }
+                },
+                "forbiddenPayloadPaths": [
+                  "newElements.errors"
+                ]
+              },
+              {
+                "kind": "payloadChange",
+                "payload": {
+                  "updateElements.results": {
+                    "matcher": "nonEmpty"
+                  }
+                },
+                "forbiddenPayloadPaths": [
+                  "newElements.errors"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "1CED1E02-8C46-43EB-A98D-46404C8E4641"
+  }
+}

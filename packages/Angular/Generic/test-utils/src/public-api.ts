@@ -1,3 +1,4 @@
+export * from './lib/assert-a11y.js';
 export * from './lib/render-component-fixture.js';
 export * from './lib/render-template.js';
 export * from './lib/dom-helpers.js';

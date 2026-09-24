@@ -4,7 +4,7 @@
  */
 
 import { TestRunResult, TestSuiteRunResult, OracleResult } from '../types';
-import { formatCost } from './cost-calculator';
+import { FormatCost } from './cost-calculator';
 
 /**
  * Format test run result as human-readable text.
@@ -12,7 +12,7 @@ import { formatCost } from './cost-calculator';
  * @param result - Test run result
  * @returns Formatted text output
  */
-export function formatTestRunResult(result: TestRunResult): string {
+export function FormatTestRunResult(result: TestRunResult): string {
     const lines: string[] = [];
 
     lines.push('='.repeat(80));
@@ -20,18 +20,23 @@ export function formatTestRunResult(result: TestRunResult): string {
     lines.push(`Status: ${result.status}`);
     lines.push(`Score: ${(result.score * 100).toFixed(1)}%`);
     lines.push(`Checks: ${result.passedChecks}/${result.totalChecks} passed`);
-    lines.push(`Duration: ${formatDuration(result.durationMs)}`);
-    lines.push(`Cost: ${formatCost(result.totalCost)}`);
+    lines.push(`Duration: ${FormatDuration(result.durationMs)}`);
+    lines.push(`Cost: ${FormatCost(result.totalCost)}`);
     lines.push('='.repeat(80));
 
     if (result.oracleResults.length > 0) {
         lines.push('\nOracle Results:');
         for (const oracle of result.oracleResults) {
-            lines.push(formatOracleResult(oracle, '  '));
+            lines.push(FormatOracleResult(oracle, '  '));
         }
     }
 
     return lines.join('\n');
+}
+
+/** @deprecated Use {@link FormatTestRunResult}. */
+export function formatTestRunResult(result: TestRunResult): string {
+    return FormatTestRunResult(result);
 }
 
 /**
@@ -40,7 +45,7 @@ export function formatTestRunResult(result: TestRunResult): string {
  * @param result - Test suite run result
  * @returns Formatted text output
  */
-export function formatSuiteRunResult(result: TestSuiteRunResult): string {
+export function FormatSuiteRunResult(result: TestSuiteRunResult): string {
     const lines: string[] = [];
 
     lines.push('='.repeat(80));
@@ -48,18 +53,23 @@ export function formatSuiteRunResult(result: TestSuiteRunResult): string {
     lines.push(`Status: ${result.status}`);
     lines.push(`Tests: ${result.passedTests}/${result.totalTests} passed`);
     lines.push(`Average Score: ${(result.averageScore * 100).toFixed(1)}%`);
-    lines.push(`Duration: ${formatDuration(result.durationMs)}`);
-    lines.push(`Cost: ${formatCost(result.totalCost)}`);
+    lines.push(`Duration: ${FormatDuration(result.durationMs)}`);
+    lines.push(`Cost: ${FormatCost(result.totalCost)}`);
     lines.push('='.repeat(80));
 
     if (result.testResults.length > 0) {
         lines.push('\nTest Results:');
         for (const test of result.testResults) {
-            lines.push(formatTestSummary(test, '  '));
+            lines.push(FormatTestSummary(test, '  '));
         }
     }
 
     return lines.join('\n');
+}
+
+/** @deprecated Use {@link FormatSuiteRunResult}. */
+export function formatSuiteRunResult(result: TestSuiteRunResult): string {
+    return FormatSuiteRunResult(result);
 }
 
 /**
@@ -69,7 +79,7 @@ export function formatSuiteRunResult(result: TestSuiteRunResult): string {
  * @param indent - Indentation prefix
  * @returns Formatted text output
  */
-export function formatOracleResult(result: OracleResult, indent: string = ''): string {
+export function FormatOracleResult(result: OracleResult, indent: string = ''): string {
     const status = result.passed ? '✓' : '✗';
     const lines: string[] = [];
 
@@ -83,6 +93,11 @@ export function formatOracleResult(result: OracleResult, indent: string = ''): s
     return lines.join('\n');
 }
 
+/** @deprecated Use {@link FormatOracleResult}. */
+export function formatOracleResult(result: OracleResult, indent: string = ''): string {
+    return FormatOracleResult(result, indent);
+}
+
 /**
  * Format test summary (for suite results).
  *
@@ -90,9 +105,18 @@ export function formatOracleResult(result: OracleResult, indent: string = ''): s
  * @param indent - Indentation prefix
  * @returns Formatted text output
  */
+export function FormatTestSummary(result: TestRunResult, indent: string = ''): string {
+    const status = result.status === 'Passed' ? '✓' : result.status === 'Skipped' ? '−' : '✗';
+    const skipped = result.skippedChecks ? `, ${result.skippedChecks} skipped` : '';
+    if (result.status === 'Skipped') {
+        return `${indent}${status} ${result.testName}: SKIPPED (not executed)`;
+    }
+    return `${indent}${status} ${result.testName}: ${(result.score * 100).toFixed(1)}% (${result.passedChecks}/${result.totalChecks}${skipped})`;
+}
+
+/** @deprecated Use {@link FormatTestSummary}. */
 export function formatTestSummary(result: TestRunResult, indent: string = ''): string {
-    const status = result.status === 'Passed' ? '✓' : '✗';
-    return `${indent}${status} ${result.testName}: ${(result.score * 100).toFixed(1)}% (${result.passedChecks}/${result.totalChecks})`;
+    return FormatTestSummary(result, indent);
 }
 
 /**
@@ -102,11 +126,19 @@ export function formatTestSummary(result: TestRunResult, indent: string = ''): s
  * @param pretty - Whether to pretty-print (default: true)
  * @returns JSON string
  */
-export function formatTestRunResultAsJSON(
+export function FormatTestRunResultAsJSON(
     result: TestRunResult,
     pretty: boolean = true
 ): string {
     return JSON.stringify(result, null, pretty ? 2 : 0);
+}
+
+/** @deprecated Use {@link FormatTestRunResultAsJSON}. */
+export function formatTestRunResultAsJSON(
+    result: TestRunResult,
+    pretty: boolean = true
+): string {
+    return FormatTestRunResultAsJSON(result, pretty);
 }
 
 /**
@@ -116,11 +148,19 @@ export function formatTestRunResultAsJSON(
  * @param pretty - Whether to pretty-print (default: true)
  * @returns JSON string
  */
-export function formatSuiteRunResultAsJSON(
+export function FormatSuiteRunResultAsJSON(
     result: TestSuiteRunResult,
     pretty: boolean = true
 ): string {
     return JSON.stringify(result, null, pretty ? 2 : 0);
+}
+
+/** @deprecated Use {@link FormatSuiteRunResultAsJSON}. */
+export function formatSuiteRunResultAsJSON(
+    result: TestSuiteRunResult,
+    pretty: boolean = true
+): string {
+    return FormatSuiteRunResultAsJSON(result, pretty);
 }
 
 /**
@@ -129,15 +169,15 @@ export function formatSuiteRunResultAsJSON(
  * @param result - Test run result
  * @returns Markdown output
  */
-export function formatTestRunResultAsMarkdown(result: TestRunResult): string {
+export function FormatTestRunResultAsMarkdown(result: TestRunResult): string {
     const lines: string[] = [];
 
     lines.push(`# Test: ${result.testName}\n`);
-    lines.push(`**Status:** ${result.status === 'Passed' ? '✅ Passed' : '❌ Failed'}`);
+    lines.push(`**Status:** ${result.status === 'Passed' ? '✅ Passed' : result.status === 'Skipped' ? '⏭️ Skipped (not executed)' : `❌ ${result.status}`}`);
     lines.push(`**Score:** ${(result.score * 100).toFixed(1)}%`);
     lines.push(`**Checks:** ${result.passedChecks}/${result.totalChecks} passed`);
-    lines.push(`**Duration:** ${formatDuration(result.durationMs)}`);
-    lines.push(`**Cost:** ${formatCost(result.totalCost)}\n`);
+    lines.push(`**Duration:** ${FormatDuration(result.durationMs)}`);
+    lines.push(`**Cost:** ${FormatCost(result.totalCost)}\n`);
 
     if (result.oracleResults.length > 0) {
         lines.push('## Oracle Results\n');
@@ -154,21 +194,26 @@ export function formatTestRunResultAsMarkdown(result: TestRunResult): string {
     return lines.join('\n');
 }
 
+/** @deprecated Use {@link FormatTestRunResultAsMarkdown}. */
+export function formatTestRunResultAsMarkdown(result: TestRunResult): string {
+    return FormatTestRunResultAsMarkdown(result);
+}
+
 /**
  * Format test suite run result as markdown.
  *
  * @param result - Test suite run result
  * @returns Markdown output
  */
-export function formatSuiteRunResultAsMarkdown(result: TestSuiteRunResult): string {
+export function FormatSuiteRunResultAsMarkdown(result: TestSuiteRunResult): string {
     const lines: string[] = [];
 
     lines.push(`# Test Suite: ${result.suiteName}\n`);
     lines.push(`**Status:** ${result.status === 'Completed' ? '✅ Completed' : `❌ ${result.status}`}`);
     lines.push(`**Tests:** ${result.passedTests}/${result.totalTests} passed`);
     lines.push(`**Average Score:** ${(result.averageScore * 100).toFixed(1)}%`);
-    lines.push(`**Duration:** ${formatDuration(result.durationMs)}`);
-    lines.push(`**Cost:** ${formatCost(result.totalCost)}\n`);
+    lines.push(`**Duration:** ${FormatDuration(result.durationMs)}`);
+    lines.push(`**Cost:** ${FormatCost(result.totalCost)}\n`);
 
     if (result.testResults.length > 0) {
         lines.push('## Test Results\n');
@@ -176,7 +221,7 @@ export function formatSuiteRunResultAsMarkdown(result: TestSuiteRunResult): stri
         lines.push('|------|--------|-------|--------|');
 
         for (const test of result.testResults) {
-            const status = test.status === 'Passed' ? '✅' : '❌';
+            const status = test.status === 'Passed' ? '✅' : test.status === 'Skipped' ? '⏭️ Skipped' : '❌';
             const score = `${(test.score * 100).toFixed(1)}%`;
             const checks = `${test.passedChecks}/${test.totalChecks}`;
             lines.push(`| ${test.testName} | ${status} | ${score} | ${checks} |`);
@@ -186,6 +231,11 @@ export function formatSuiteRunResultAsMarkdown(result: TestSuiteRunResult): stri
     return lines.join('\n');
 }
 
+/** @deprecated Use {@link FormatSuiteRunResultAsMarkdown}. */
+export function formatSuiteRunResultAsMarkdown(result: TestSuiteRunResult): string {
+    return FormatSuiteRunResultAsMarkdown(result);
+}
+
 /**
  * Format test run result as CSV.
  *
@@ -193,7 +243,7 @@ export function formatSuiteRunResultAsMarkdown(result: TestSuiteRunResult): stri
  * @param includeHeaders - Whether to include CSV headers (default: true)
  * @returns CSV output
  */
-export function formatTestRunResultsAsCSV(
+export function FormatTestRunResultsAsCSV(
     results: TestRunResult[],
     includeHeaders: boolean = true
 ): string {
@@ -218,13 +268,21 @@ export function formatTestRunResultsAsCSV(
     return lines.join('\n');
 }
 
+/** @deprecated Use {@link FormatTestRunResultsAsCSV}. */
+export function formatTestRunResultsAsCSV(
+    results: TestRunResult[],
+    includeHeaders: boolean = true
+): string {
+    return FormatTestRunResultsAsCSV(results, includeHeaders);
+}
+
 /**
  * Format duration in milliseconds as human-readable string.
  *
  * @param ms - Duration in milliseconds
  * @returns Formatted duration string
  */
-export function formatDuration(ms: number): string {
+export function FormatDuration(ms: number): string {
     if (ms < 1000) {
         return `${ms}ms`;
     }
@@ -236,6 +294,11 @@ export function formatDuration(ms: number): string {
     const minutes = Math.floor(ms / 60000);
     const seconds = ((ms % 60000) / 1000).toFixed(0);
     return `${minutes}m ${seconds}s`;
+}
+
+/** @deprecated Use {@link FormatDuration}. */
+export function formatDuration(ms: number): string {
+    return FormatDuration(ms);
 }
 
 /**
@@ -257,10 +320,11 @@ function escapeCSV(value: string): string {
  * @param results - Array of test run results
  * @returns Summary statistics
  */
-export function generateSummaryStatistics(results: TestRunResult[]): {
+export function GenerateSummaryStatistics(results: TestRunResult[]): {
     totalTests: number;
     passedTests: number;
     failedTests: number;
+    skippedTests: number;
     passRate: number;
     averageScore: number;
     totalDuration: number;
@@ -270,22 +334,27 @@ export function generateSummaryStatistics(results: TestRunResult[]): {
 } {
     const totalTests = results.length;
     const passedTests = results.filter(r => r.status === 'Passed').length;
-    const failedTests = totalTests - passedTests;
-    const passRate = totalTests > 0 ? passedTests / totalTests : 0;
+    const skippedTests = results.filter(r => r.status === 'Skipped').length;
+    // Failures are HARD statuses only; a skipped test never executed, so it is neither passed nor
+    // failed. Rates and averages are taken over the EXECUTED set so skips don't drag the score to 0.
+    const failedTests = results.filter(r => r.status === 'Failed' || r.status === 'Error' || r.status === 'Timeout').length;
+    const executed = results.filter(r => r.status !== 'Skipped');
+    const passRate = executed.length > 0 ? passedTests / executed.length : 0;
 
-    const totalScore = results.reduce((sum, r) => sum + r.score, 0);
-    const averageScore = totalTests > 0 ? totalScore / totalTests : 0;
+    const totalScore = executed.reduce((sum, r) => sum + r.score, 0);
+    const averageScore = executed.length > 0 ? totalScore / executed.length : 0;
 
     const totalDuration = results.reduce((sum, r) => sum + r.durationMs, 0);
     const totalCost = results.reduce((sum, r) => sum + r.totalCost, 0);
 
-    const avgDuration = totalTests > 0 ? totalDuration / totalTests : 0;
-    const avgCost = totalTests > 0 ? totalCost / totalTests : 0;
+    const avgDuration = executed.length > 0 ? totalDuration / executed.length : 0;
+    const avgCost = executed.length > 0 ? totalCost / executed.length : 0;
 
     return {
         totalTests,
         passedTests,
         failedTests,
+        skippedTests,
         passRate,
         averageScore,
         totalDuration,
@@ -293,4 +362,20 @@ export function generateSummaryStatistics(results: TestRunResult[]): {
         avgDuration,
         avgCost
     };
+}
+
+/** @deprecated Use {@link GenerateSummaryStatistics}. */
+export function generateSummaryStatistics(results: TestRunResult[]): {
+    totalTests: number;
+    passedTests: number;
+    failedTests: number;
+    skippedTests: number;
+    passRate: number;
+    averageScore: number;
+    totalDuration: number;
+    totalCost: number;
+    avgDuration: number;
+    avgCost: number;
+} {
+    return GenerateSummaryStatistics(results);
 }

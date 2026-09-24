@@ -259,6 +259,19 @@ export abstract class SQLDialect implements SQLParserDialect {
     abstract CurrentTimestampUTC(): string;
 
     /**
+     * Wraps a single DML statement so the number of rows it affected comes back as a one-row,
+     * one-column result set — the portable way to read an affected-row count without relying on a
+     * driver-specific `rowsAffected` field.
+     *
+     * SQL Server appends `SELECT @@ROWCOUNT`. PostgreSQL has no `@@ROWCOUNT` at all, so it wraps
+     * the statement in a data-modifying CTE and counts the `RETURNING` rows.
+     *
+     * `dmlStatement` must be exactly one INSERT/UPDATE/DELETE and carry no trailing semicolon:
+     * the PostgreSQL form is a CTE, which cannot wrap a statement batch.
+     */
+    abstract AffectedRowCountSQL(dmlStatement: string, alias: string): string;
+
+    /**
      * Wraps an expression in the dialect's lowercase function — used for
      * case-insensitive comparison when authoring filters that must work on
      * both SS (default case-insensitive collation) and PG (case-sensitive).
@@ -904,4 +917,25 @@ export abstract class SQLDialect implements SQLParserDialect {
      * PostgreSQL: CASE WHEN condition THEN trueVal ELSE falseVal END
      */
     abstract IIF(condition: string, trueVal: string, falseVal: string): string;
+
+    // ─── Nested transactions (savepoints) ────────────────────────────
+
+    /**
+     * SQL that marks a nested transaction savepoint. SQL Server:
+     * `SAVE TRANSACTION name`. PostgreSQL: `SAVEPOINT name`.
+     */
+    abstract CreateSavepointSQL(name: string): string;
+
+    /**
+     * SQL that discards a savepoint after a nested commit, or `null` when the
+     * platform has no release (SQL Server savepoints live until the outer TX
+     * ends). PostgreSQL: `RELEASE SAVEPOINT name`.
+     */
+    abstract ReleaseSavepointSQL(name: string): string | null;
+
+    /**
+     * SQL that undoes work after a savepoint. SQL Server:
+     * `ROLLBACK TRANSACTION name`. PostgreSQL: `ROLLBACK TO SAVEPOINT name`.
+     */
+    abstract RollbackToSavepointSQL(name: string): string;
 }

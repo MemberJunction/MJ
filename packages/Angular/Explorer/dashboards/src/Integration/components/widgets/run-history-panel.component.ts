@@ -3,7 +3,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { IRunViewProvider } from '@memberjunction/core';
 import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../services/integration-data.service';
 
-type RunStatusColorType = 'amber' | 'green' | 'red';
+type RunStatusColorType = 'amber' | 'green' | 'red' | 'gray';
 
 @Component({
   standalone: false,
@@ -250,13 +250,17 @@ export class RunHistoryPanelComponent implements OnChanges {
   StatusColor(run: IntegrationRunRow): RunStatusColorType {
     if (run.Status === 'Success') return 'green';
     if (run.Status === 'Failed') return 'red';
+    // Deliberately stopped — not a defect (red) and not still working (amber).
+    if (run.Status === 'Cancelled') return 'gray';
     return 'amber';
   }
 
   StatusIcon(run: IntegrationRunRow): string {
     if (run.Status === 'Success') return 'fa-solid fa-circle-check';
     if (run.Status === 'Failed') return 'fa-solid fa-circle-xmark';
+    if (run.Status === 'Cancelled') return 'fa-solid fa-ban';
     if (run.Status === 'In Progress') return 'fa-solid fa-spinner fa-spin';
+    // 'Queued' / 'Pending' — waiting to be picked up.
     return 'fa-solid fa-clock';
   }
 

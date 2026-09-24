@@ -9,11 +9,11 @@ import { UUIDsEqual } from '@memberjunction/global';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface SubAgentAdvancedSettingsFormData {
-  executionOrder: number;
-  executionMode: 'Sequential' | 'Parallel';
-  status: 'Active' | 'Disabled' | 'Pending';
-  typeID: string | null;
-  exposeAsAction: boolean;
+  ExecutionOrder: number;
+  ExecutionMode: 'Sequential' | 'Parallel';
+  Status: 'Active' | 'Disabled' | 'Pending';
+  TypeID: string | null;
+  ExposeAsAction: boolean;
 }
 
 /**
@@ -29,23 +29,86 @@ export interface SubAgentAdvancedSettingsFormData {
 export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
-  subAgent!: MJAIAgentEntityExtended;
-  allSubAgents: MJAIAgentEntityExtended[] = []; // For execution order validation
+  SubAgent!: MJAIAgentEntityExtended;
+
+  /** @deprecated Use {@link SubAgent}. */
+  get subAgent(): MJAIAgentEntityExtended {
+    return this.SubAgent;
+  }
+  /** @deprecated Use {@link SubAgent}. */
+  set subAgent(value: MJAIAgentEntityExtended) {
+    this.SubAgent = value;
+  }
+  AllSubAgents: MJAIAgentEntityExtended[] = [];
+
+  /** @deprecated Use {@link AllSubAgents}. */
+  get allSubAgents(): MJAIAgentEntityExtended[] {
+    return this.AllSubAgents;
+  }
+  /** @deprecated Use {@link AllSubAgents}. */
+  set allSubAgents(value: MJAIAgentEntityExtended[]) {
+    this.AllSubAgents = value;
+  } // For execution order validation
   
   // Reactive state management
   private destroy$ = new Subject<void>();
-  public result = new Subject<SubAgentAdvancedSettingsFormData | null>();
+  public Result = new Subject<SubAgentAdvancedSettingsFormData | null>();
+
+  /** @deprecated Use {@link Result}. */
+  public get result() {
+    return this.Result;
+  }
+  /** @deprecated Use {@link Result}. */
+  public set result(value) {
+    this.Result = value;
+  }
   
   // Form and data
-  advancedForm!: FormGroup;
-  isLoading$ = new BehaviorSubject<boolean>(false);
-  isSaving$ = new BehaviorSubject<boolean>(false);
+  AdvancedForm!: FormGroup;
+
+  /** @deprecated Use {@link AdvancedForm}. */
+  get advancedForm(): FormGroup {
+    return this.AdvancedForm;
+  }
+  /** @deprecated Use {@link AdvancedForm}. */
+  set advancedForm(value: FormGroup) {
+    this.AdvancedForm = value;
+  }
+  IsLoading$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  /** @deprecated Use {@link IsLoading$}. */
+  set isLoading$(value) {
+    this.IsLoading$ = value;
+  }
+  IsSaving$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsSaving$}. */
+  get isSaving$() {
+    return this.IsSaving$;
+  }
+  /** @deprecated Use {@link IsSaving$}. */
+  set isSaving$(value) {
+    this.IsSaving$ = value;
+  }
   
   // Dropdown data
-  agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
+  AgentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
+
+  /** @deprecated Use {@link AgentTypes$}. */
+  get agentTypes$() {
+    return this.AgentTypes$;
+  }
+  /** @deprecated Use {@link AgentTypes$}. */
+  set agentTypes$(value) {
+    this.AgentTypes$ = value;
+  }
   
   // Available options
-  executionModeOptions = [
+  ExecutionModeOptions = [
     { 
       text: 'Sequential', 
       value: 'Sequential', 
@@ -60,14 +123,41 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
     }
   ];
 
-  statusOptions = [
+  /** @deprecated Use {@link ExecutionModeOptions}. */
+  get executionModeOptions() {
+    return this.ExecutionModeOptions;
+  }
+  /** @deprecated Use {@link ExecutionModeOptions}. */
+  set executionModeOptions(value) {
+    this.ExecutionModeOptions = value;
+  }
+
+  StatusOptions = [
     { text: 'Active', value: 'Active' },
     { text: 'Disabled', value: 'Disabled' },
     { text: 'Pending', value: 'Pending' }
   ];
 
+  /** @deprecated Use {@link StatusOptions}. */
+  get statusOptions() {
+    return this.StatusOptions;
+  }
+  /** @deprecated Use {@link StatusOptions}. */
+  set statusOptions(value) {
+    this.StatusOptions = value;
+  }
+
   // Execution order validation
-  executionOrderError: string | null = null;
+  ExecutionOrderError: string | null = null;
+
+  /** @deprecated Use {@link ExecutionOrderError}. */
+  get executionOrderError(): string | null {
+    return this.ExecutionOrderError;
+  }
+  /** @deprecated Use {@link ExecutionOrderError}. */
+  set executionOrderError(value: string | null) {
+    this.ExecutionOrderError = value;
+  }
 
   @Output() DialogClose = new EventEmitter<void>();
 
@@ -88,12 +178,12 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
   }
 
   private initializeForm() {
-    this.advancedForm = this.fb.group({
-      executionOrder: [this.subAgent.ExecutionOrder || 0, [Validators.required, Validators.min(0)]],
-      executionMode: [this.subAgent.ExecutionMode || 'Sequential', [Validators.required]],
-      status: [this.subAgent.Status || 'Active', [Validators.required]],
-      typeID: [this.subAgent.TypeID],
-      exposeAsAction: [this.subAgent.ExposeAsAction || false]
+    this.AdvancedForm = this.fb.group({
+      executionOrder: [this.SubAgent.ExecutionOrder || 0, [Validators.required, Validators.min(0)]],
+      executionMode: [this.SubAgent.ExecutionMode || 'Sequential', [Validators.required]],
+      status: [this.SubAgent.Status || 'Active', [Validators.required]],
+      typeID: [this.SubAgent.TypeID],
+      exposeAsAction: [this.SubAgent.ExposeAsAction || false]
     });
 
     this.setupValidationLogic();
@@ -101,7 +191,7 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
 
   private setupValidationLogic() {
     // Execution order validation
-    const executionOrderControl = this.advancedForm.get('executionOrder');
+    const executionOrderControl = this.AdvancedForm.get('executionOrder');
     executionOrderControl?.valueChanges.pipe(
       takeUntil(this.destroy$)
     ).subscribe(order => {
@@ -109,11 +199,11 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
     });
 
     // ExposeAsAction validation (sub-agents cannot be exposed as actions)
-    const exposeAsActionControl = this.advancedForm.get('exposeAsAction');
+    const exposeAsActionControl = this.AdvancedForm.get('exposeAsAction');
     exposeAsActionControl?.valueChanges.pipe(
       takeUntil(this.destroy$)
     ).subscribe(expose => {
-      if (expose && this.subAgent.ParentID) {
+      if (expose && this.SubAgent.ParentID) {
         // Sub-agents cannot be exposed as actions
         exposeAsActionControl.setValue(false);
         MJNotificationService.Instance.CreateSimpleNotification(
@@ -127,28 +217,28 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
 
   private validateExecutionOrder(order: number) {
     if (order == null) {
-      this.executionOrderError = null;
+      this.ExecutionOrderError = null;
       return;
     }
 
     // Check for conflicts with other sub-agents under the same parent (excluding current one)
-    const conflictingAgent = this.allSubAgents.find(agent => 
-      !UUIDsEqual(agent.ID, this.subAgent.ID) && 
-      UUIDsEqual(agent.ParentID, this.subAgent.ParentID) &&
+    const conflictingAgent = this.AllSubAgents.find(agent => 
+      !UUIDsEqual(agent.ID, this.SubAgent.ID) && 
+      UUIDsEqual(agent.ParentID, this.SubAgent.ParentID) &&
       agent.ExecutionOrder === order
     );
 
     if (conflictingAgent) {
-      this.executionOrderError = `Execution order ${order} is already used by "${conflictingAgent.Name}". Please choose a different order.`;
+      this.ExecutionOrderError = `Execution order ${order} is already used by "${conflictingAgent.Name}". Please choose a different order.`;
     } else {
-      this.executionOrderError = null;
+      this.ExecutionOrderError = null;
     }
 
     this.cdr.detectChanges();
   }
 
   private async loadDropdownData() {
-    this.isLoading$.next(true);
+    this.IsLoading$.next(true);
     
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -163,7 +253,7 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
       });
 
       if (agentTypesResult.Success) {
-        this.agentTypes$.next(agentTypesResult.Results || []);
+        this.AgentTypes$.next(agentTypesResult.Results || []);
       }
 
     } catch (error) {
@@ -174,19 +264,24 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
         3000
       );
     } finally {
-      this.isLoading$.next(false);
+      this.IsLoading$.next(false);
     }
   }
 
   // === Validation Helpers ===
 
-  isFieldInvalid(fieldName: string): boolean {
-    const field = this.advancedForm.get(fieldName);
+  IsFieldInvalid(fieldName: string): boolean {
+    const field = this.AdvancedForm.get(fieldName);
     return !!(field && field.invalid && (field.dirty || field.touched));
   }
 
-  getFieldError(fieldName: string): string {
-    const field = this.advancedForm.get(fieldName);
+  /** @deprecated Use {@link IsFieldInvalid}. */
+  isFieldInvalid(fieldName: string): boolean {
+    return this.IsFieldInvalid(fieldName);
+  }
+
+  GetFieldError(fieldName: string): string {
+    const field = this.AdvancedForm.get(fieldName);
     if (field?.errors) {
       if (field.errors['required']) return `${fieldName} is required`;
       if (field.errors['min']) return `${fieldName} must be greater than or equal to ${field.errors['min'].min}`;
@@ -194,32 +289,52 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
     return '';
   }
 
+  /** @deprecated Use {@link GetFieldError}. */
+  getFieldError(fieldName: string): string {
+    return this.GetFieldError(fieldName);
+  }
+
+  HasExecutionOrderError(): boolean {
+    return !!this.ExecutionOrderError;
+  }
+
+  /** @deprecated Use {@link HasExecutionOrderError}. */
   hasExecutionOrderError(): boolean {
-    return !!this.executionOrderError;
+    return this.HasExecutionOrderError();
   }
 
   // === Execution Mode Helpers ===
 
-  getExecutionModeIcon(mode: string): string {
-    const option = this.executionModeOptions.find(opt => opt.value === mode);
+  GetExecutionModeIcon(mode: string): string {
+    const option = this.ExecutionModeOptions.find(opt => opt.value === mode);
     return option?.icon || 'fa-robot';
   }
 
-  getExecutionModeDescription(mode: string): string {
-    const option = this.executionModeOptions.find(opt => opt.value === mode);
+  /** @deprecated Use {@link GetExecutionModeIcon}. */
+  getExecutionModeIcon(mode: string): string {
+    return this.GetExecutionModeIcon(mode);
+  }
+
+  GetExecutionModeDescription(mode: string): string {
+    const option = this.ExecutionModeOptions.find(opt => opt.value === mode);
     return option?.description || '';
+  }
+
+  /** @deprecated Use {@link GetExecutionModeDescription}. */
+  getExecutionModeDescription(mode: string): string {
+    return this.GetExecutionModeDescription(mode);
   }
 
   // === Dialog Actions ===
 
   cancel() {
-    this.result.next(null);
+    this.Result.next(null);
     this.DialogClose.emit();
   }
 
   async save() {
-    if (this.advancedForm.invalid || this.hasExecutionOrderError()) {
-      this.advancedForm.markAllAsTouched();
+    if (this.AdvancedForm.invalid || this.HasExecutionOrderError()) {
+      this.AdvancedForm.markAllAsTouched();
       MJNotificationService.Instance.CreateSimpleNotification(
         'Please fix validation errors before saving',
         'error',
@@ -228,18 +343,18 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
       return;
     }
 
-    this.isSaving$.next(true);
+    this.IsSaving$.next(true);
     
     try {
       const formData: SubAgentAdvancedSettingsFormData = {
-        executionOrder: this.advancedForm.get('executionOrder')?.value,
-        executionMode: this.advancedForm.get('executionMode')?.value,
-        status: this.advancedForm.get('status')?.value,
-        typeID: this.advancedForm.get('typeID')?.value || null,
-        exposeAsAction: false // Sub-agents cannot be exposed as actions
+        ExecutionOrder: this.AdvancedForm.get('executionOrder')?.value,
+        ExecutionMode: this.AdvancedForm.get('executionMode')?.value,
+        Status: this.AdvancedForm.get('status')?.value,
+        TypeID: this.AdvancedForm.get('typeID')?.value || null,
+        ExposeAsAction: false // Sub-agents cannot be exposed as actions
       };
 
-      this.result.next(formData);
+      this.Result.next(formData);
       this.DialogClose.emit();
       
     } catch (error) {
@@ -250,7 +365,7 @@ export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponen
         3000
       );
     } finally {
-      this.isSaving$.next(false);
+      this.IsSaving$.next(false);
     }
   }
 }

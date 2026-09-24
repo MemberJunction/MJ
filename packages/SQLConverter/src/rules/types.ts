@@ -5,7 +5,7 @@
  * or bypass sqlglot entirely for statement types it handles natively.
  */
 
-import { seedCoreMetadataBooleanColumns } from './CoreMetadataBooleanColumns.js';
+import { SeedCoreMetadataBooleanColumns } from './CoreMetadataBooleanColumns.js';
 
 /** Classification labels for SQL batches/statements */
 export type StatementType =
@@ -128,12 +128,47 @@ export interface IConversionRule {
   BypassJustification?: string;
 }
 
+/** DeclareDmlBlockRule: a `DECLARE @var TYPE` item whose shape the rule cannot read. */
+export const GAP_MARKER_UNPARSED = '-- Could not parse';
+
+/** BatchConverter: a batch whose conversion threw; the error text stands in for the SQL. */
+export const GAP_MARKER_BATCH_ERROR = '-- ERROR converting batch';
+
+/**
+ * Marker comments the converter writes into its own output at the points where it
+ * KNOWINGLY could not produce real SQL. Single source of truth: every emitter writes
+ * one of these strings and `convertFile`'s gap scan looks for exactly these, so an
+ * emitter and the scan can never drift apart (a drifted marker would be invisible
+ * again — the failure mode of issue #3857).
+ *
+ * Adding a marker here is all a new rule needs to have its gaps counted and reported.
+ */
+export const CONVERSION_GAP_MARKERS = [
+  GAP_MARKER_UNPARSED,
+  GAP_MARKER_BATCH_ERROR,
+] as const;
+
 /** Conversion statistics tracking */
 export interface ConversionStats {
   TotalBatches: number;
   Converted: number;
   Skipped: number;
   Errors: number;
+  /**
+   * Count of gap markers found in the assembled output (see CONVERSION_GAP_MARKERS).
+   *
+   * DISTINCT from `Errors` on purpose. An error is a throw the converter CAUGHT — the
+   * batch failed loudly and was already counted as a failure. A gap is output the
+   * converter knowingly could NOT produce: the rule returned normally, so the batch is
+   * counted as `Converted` and nothing downstream ever learns the file is unusable.
+   * Both mean the output is not applicable to PostgreSQL; only the second was invisible
+   * (issue #3857 — `Files: 1 (1 OK, 0 errors)` over SQL that PG rejects).
+   *
+   * An errored batch also leaves a marker, so it is counted in BOTH channels. That
+   * overlap is deliberate: the scan reports what is actually IN the file, and keeping
+   * it marker-driven is what makes it future-proof for rules not yet written.
+   */
+  Gaps: number;
   TablesCreated: number;
   ViewsCreated: number;
   ProceduresConverted: number;
@@ -147,6 +182,8 @@ export interface ConversionStats {
   CommentsConverted: number;
   SkippedBatches: string[];
   ErrorBatches: string[];
+  /** The marker lines themselves, so a caller can print WHICH statements were not converted. */
+  GapBatches: string[];
 }
 
 /** Groups for ordering the output */
@@ -164,7 +201,7 @@ export interface OutputGroups {
 }
 
 /** Create a fresh ConversionContext */
-export function createConversionContext(
+export function CreateConversionContext(
   sourceDialect: string,
   targetDialect: string,
   schema: string = '__mj'
@@ -174,7 +211,7 @@ export function createConversionContext(
   // baseline tables from inside migrations that never re-create them, so without
   // this seed InsertRule can't know to rewrite BIT 0/1 literals to FALSE/TRUE.
   const tableColumns = new Map<string, Map<string, string>>();
-  seedCoreMetadataBooleanColumns(tableColumns);
+  SeedCoreMetadataBooleanColumns(tableColumns);
 
   return {
     SourceDialect: sourceDialect,
@@ -188,13 +225,23 @@ export function createConversionContext(
   };
 }
 
+/** @deprecated Use {@link CreateConversionContext}. */
+export function createConversionContext(
+  sourceDialect: string,
+  targetDialect: string,
+  schema: string = '__mj'
+): ConversionContext {
+  return CreateConversionContext(sourceDialect, targetDialect, schema);
+}
+
 /** Create empty conversion stats */
-export function createConversionStats(): ConversionStats {
+export function CreateConversionStats(): ConversionStats {
   return {
     TotalBatches: 0,
     Converted: 0,
     Skipped: 0,
     Errors: 0,
+    Gaps: 0,
     TablesCreated: 0,
     ViewsCreated: 0,
     ProceduresConverted: 0,
@@ -208,11 +255,17 @@ export function createConversionStats(): ConversionStats {
     CommentsConverted: 0,
     SkippedBatches: [],
     ErrorBatches: [],
+    GapBatches: [],
   };
 }
 
+/** @deprecated Use {@link CreateConversionStats}. */
+export function createConversionStats(): ConversionStats {
+  return CreateConversionStats();
+}
+
 /** Create empty output groups */
-export function createOutputGroups(): OutputGroups {
+export function CreateOutputGroups(): OutputGroups {
   return {
     Tables: [],
     HelperFunctions: [],
@@ -225,4 +278,9 @@ export function createOutputGroups(): OutputGroups {
     Comments: [],
     Other: [],
   };
+}
+
+/** @deprecated Use {@link CreateOutputGroups}. */
+export function createOutputGroups(): OutputGroups {
+  return CreateOutputGroups();
 }

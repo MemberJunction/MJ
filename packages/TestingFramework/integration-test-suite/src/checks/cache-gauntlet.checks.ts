@@ -109,7 +109,12 @@ export const CacheGauntletChecks: NamedCheck[] = [
             const created: MJUserSettingEntity[] = [];
             try {
                 // Anti-vacuity floor: the entity must already hold more rows than the limit, or
-                // "returned <= 1 row" would be trivially true regardless of cache behavior.
+                // "returned <= 1 row" would be trivially true regardless of cache behavior. The floor
+                // is CREATED, not assumed — `MJ: User Settings` is empty on a fresh database, so a
+                // check that only holds where someone happened to leave rows behind is not a check.
+                for (let i = 1; i <= 2; i++) { created.push(await makeSetting(ctx, `cg1-floor-${i}`)); }
+                await settle();
+
                 const all = await rv.RunView({ EntityName: ENTITY, Fields: ['ID'], ResultType: 'simple' }, ctx.User);
                 Assert(all.Success, `baseline read failed: ${all.ErrorMessage}`);
                 Assert(all.Results.length >= 2, `need >= 2 existing rows to make MaxRows:1 meaningful (found ${all.Results.length})`);
@@ -226,7 +231,10 @@ export const CacheGauntletChecks: NamedCheck[] = [
             const rv = new RunView();
             const created: MJUserSettingEntity[] = [];
             try {
-                for (let i = 1; i <= 3; i++) { created.push(await makeSetting(ctx, `cg4-${i}`)); }
+                // Four, not three: the window below is StartRow:1 + MaxRows:2, so a full page past the
+                // offset needs four rows to exist. Creating three only worked on a database that
+                // already had a row of its own.
+                for (let i = 1; i <= 4; i++) { created.push(await makeSetting(ctx, `cg4-${i}`)); }
                 await settle();
 
                 const all = await rv.RunView({ EntityName: ENTITY, Fields: ['ID'], ResultType: 'simple' }, ctx.User);
@@ -259,6 +267,12 @@ export const CacheGauntletChecks: NamedCheck[] = [
             const rv = new RunView();
             const created: MJUserSettingEntity[] = [];
             try {
+                // Floor first, for the same reason as CG1: TotalRowCount has to EXCEED the truncated
+                // row count for the #3195 collapse to be observable at all, and that needs at least
+                // two rows to exist before the slot is warmed.
+                for (let i = 1; i <= 2; i++) { created.push(await makeSetting(ctx, `cg5-floor-${i}`)); }
+                await settle();
+
                 const warm = await rv.RunView(subsetParams(1), ctx.User);
                 Assert(warm.Success, `subset warm failed: ${warm.ErrorMessage}`);
                 const before = warm.TotalRowCount ?? -1;

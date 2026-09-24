@@ -1,5 +1,383 @@
 # Change Log - @memberjunction/communication-types
 
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/templates-base-types@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Patch Changes
+
+- b8c2e33: Communication: calendar retrieval, so a provider can be asked what is on a calendar.
+
+  `BaseCommunicationProvider` could send mail, read mail, reply, forward, draft, move, archive, search
+  and subscribe — and had no way to read a calendar. Any caller needing events had to build its own
+  Graph client, which means duplicating token acquisition, the credential-keyed client cache and paging
+  that this provider already owns.
+
+  **`GetEvents` is concrete on the base, not abstract.** Making it abstract would break every existing
+  provider at compile time for a capability most will never have. Providers that support it override
+  and declare `'GetEvents'` in `getSupportedOperations()`; the rest inherit a refusal that names itself,
+  so a caller learns which provider declined instead of receiving an empty list. That is also why the
+  default returns `Success: false` rather than `{Events: []}` — "this provider cannot look" and "there
+  was nothing in the window" are different facts, and a caller advancing a watermark must not read the
+  first as the second.
+
+  **Separate from `GetMessages` rather than a mode of it.** A calendar read is bounded by a time window,
+  not a count and a folder. "The next 200 messages" is a sensible request; "the next 200 events" is not.
+  Folding it in would have left `NumMessages` meaning different things depending on a flag.
+
+  **The endpoint choice is reported, because it silently changes the answer.** Graph exposes calendar
+  data two ways: `/calendarView` requires a window and expands a recurring series into one entry per
+  OCCURRENCE; `/events` needs no window and returns the series MASTER — a weekly stand-up is one row
+  whose start time is whenever the series began. Supplying both bounds selects the first. Since a master
+  and an occurrence are indistinguishable by inspection, the result carries `RecurrenceExpanded` rather
+  than leaving the caller to infer which it received.
+
+  **Cancelled events are excluded server-side, before `$top`.** Filtering them out after the fetch would
+  return fewer than `NumEvents` and read as a quiet calendar rather than a filtered one.
+  `IncludeCancelled` opts back in.
+
+  **A start Graph cannot express as an instant becomes null, never a guess.** Graph sends a naive local
+  string plus a separate `timeZone`; without a tz database a named zone does not determine an instant,
+  and guessing files a meeting hours from when it happened. An explicit offset is honoured regardless of
+  the named zone.
+
+  20 tests, each mutation-checked: pinning either endpoint unconditionally, accepting one bound as a
+  window, dropping the cancelled filter, omitting `RecurrenceExpanded`, leaving the organizer in the
+  attendee list, guessing at a named zone, and turning a thrown Graph error into a successful empty
+  result are all caught.
+
+- d38845a: feat(communication): `GetMessagesParams.ReceivedAfter` / `ReceivedBefore` push inclusive date bounds down to providers that support them (MS Graph, Gmail). Providers declare support via `MessageRetrieval` and report what they applied in `GetMessagesResult.AppliedFilters`. Also fixes both providers silently discarding `UnreadOnly` when `ContextData.Filter` / `ContextData.query` was also supplied.
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/templates-base-types@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/templates-base-types@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- b8c2e33: Communication: calendar retrieval, so a provider can be asked what is on a calendar.
+
+  `BaseCommunicationProvider` could send mail, read mail, reply, forward, draft, move, archive, search
+  and subscribe — and had no way to read a calendar. Any caller needing events had to build its own
+  Graph client, which means duplicating token acquisition, the credential-keyed client cache and paging
+  that this provider already owns.
+
+  **`GetEvents` is concrete on the base, not abstract.** Making it abstract would break every existing
+  provider at compile time for a capability most will never have. Providers that support it override
+  and declare `'GetEvents'` in `getSupportedOperations()`; the rest inherit a refusal that names itself,
+  so a caller learns which provider declined instead of receiving an empty list. That is also why the
+  default returns `Success: false` rather than `{Events: []}` — "this provider cannot look" and "there
+  was nothing in the window" are different facts, and a caller advancing a watermark must not read the
+  first as the second.
+
+  **Separate from `GetMessages` rather than a mode of it.** A calendar read is bounded by a time window,
+  not a count and a folder. "The next 200 messages" is a sensible request; "the next 200 events" is not.
+  Folding it in would have left `NumMessages` meaning different things depending on a flag.
+
+  **The endpoint choice is reported, because it silently changes the answer.** Graph exposes calendar
+  data two ways: `/calendarView` requires a window and expands a recurring series into one entry per
+  OCCURRENCE; `/events` needs no window and returns the series MASTER — a weekly stand-up is one row
+  whose start time is whenever the series began. Supplying both bounds selects the first. Since a master
+  and an occurrence are indistinguishable by inspection, the result carries `RecurrenceExpanded` rather
+  than leaving the caller to infer which it received.
+
+  **Cancelled events are excluded server-side, before `$top`.** Filtering them out after the fetch would
+  return fewer than `NumEvents` and read as a quiet calendar rather than a filtered one.
+  `IncludeCancelled` opts back in.
+
+  **A start Graph cannot express as an instant becomes null, never a guess.** Graph sends a naive local
+  string plus a separate `timeZone`; without a tz database a named zone does not determine an instant,
+  and guessing files a meeting hours from when it happened. An explicit offset is honoured regardless of
+  the named zone.
+
+  20 tests, each mutation-checked: pinning either endpoint unconditionally, accepting one bound as a
+  window, dropping the cancelled filter, omitting `RecurrenceExpanded`, leaving the organizer in the
+  attendee list, guessing at a named zone, and turning a thrown Graph error into a successful empty
+  result are all caught.
+
+- d38845a: feat(communication): `GetMessagesParams.ReceivedAfter` / `ReceivedBefore` push inclusive date bounds down to providers that support them (MS Graph, Gmail). Providers declare support via `MessageRetrieval` and report what they applied in `GetMessagesResult.AppliedFilters`. Also fixes both providers silently discarding `UnreadOnly` when `ContextData.Filter` / `ContextData.query` was also supplied.
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/templates-base-types@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/templates-base-types@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/templates-base-types@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/templates-base-types@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

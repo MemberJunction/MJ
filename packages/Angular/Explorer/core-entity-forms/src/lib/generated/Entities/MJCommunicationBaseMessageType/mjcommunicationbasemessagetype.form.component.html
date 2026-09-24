@@ -116,9 +116,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Communication Provider Message Types','CommunicationBaseMessageTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Communication Provider Message Types')"
+                [NewRecordValues]="NewRecordValues('MJ: Communication Provider Message Types','CommunicationBaseMessageTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJCommunicationProviderMessageTypes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJCommunicationProviderMessageTypes', $event.totalRowCount)"
                 >
@@ -141,9 +141,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Communication Message Types','BaseMessageTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Communication Message Types')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Communication Message Types','BaseMessageTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityCommunicationMessageTypes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityCommunicationMessageTypes', $event.totalRowCount)"
                 >

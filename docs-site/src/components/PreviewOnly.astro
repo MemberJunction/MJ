@@ -1,0 +1,80 @@
+---
+/**
+ * Renders its children hidden, revealing them only when a preview cookie is set.
+ *
+ * ⚠️ NOT a security boundary. The markup ships inside the published HTML, so it
+ * is readable in view-source, in the page's own JS bundle, and by any crawler
+ * that ignores the hidden attribute — and anyone can set the cookie themselves.
+ * This is a soft toggle for previewing unfinished content on the live site.
+ * Never put anything confidential, unreleased-under-embargo, or access-controlled
+ * inside it.
+ *
+ * The docs site is static Astro on GitHub Pages, so there is no server to make
+ * this decision — a client-side cookie check is the only lever available.
+ *
+ * To preview, in the browser console on docs.memberjunction.org:
+ *   document.cookie = 'mj_preview=1; path=/; max-age=86400'
+ * To stop previewing:
+ *   document.cookie = 'mj_preview=; path=/; max-age=0'
+ *
+ * Usage:
+ *   <PreviewOnly label="Certified Program contact form">
+ *     …markup…
+ *   </PreviewOnly>
+ */
+interface Props {
+  /** Cookie that reveals the block. Presence is enough; the value is not checked. */
+  cookie?: string;
+  /** Short description of what is gated, shown as a banner while previewing. */
+  label?: string;
+}
+
+const { cookie = 'mj_preview', label = 'Preview content' } = Astro.props;
+---
+
+<div class="mj-preview-only" data-preview-cookie={cookie} hidden>
+  <p class="mj-preview-only__banner">
+    <strong>Preview only.</strong> {label} — hidden from the public until the <code>{cookie}</code> cookie is set.
+  </p>
+  <slot />
+</div>
+
+<style>
+  .mj-preview-only {
+    border: 2px dashed var(--sl-color-orange, #c2790a);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-block: 1.5rem;
+  }
+  .mj-preview-only__banner {
+    margin-block-start: 0;
+    font-size: 0.875rem;
+    color: var(--sl-color-orange-high, #c2790a);
+  }
+</style>
+
+<script>
+  /*
+   * Reveal every gated block whose cookie is present. Runs on each page load;
+   * Starlight ships no client router here, so there is no navigation event to
+   * re-bind to.
+   */
+  function revealPreviewBlocks() {
+    const blocks = document.querySelectorAll('.mj-preview-only[data-preview-cookie]');
+    if (blocks.length === 0) return;
+
+    const present = new Set(
+      document.cookie
+        .split(';')
+        .map((entry) => entry.trim().split('=')[0])
+        .filter(Boolean),
+    );
+
+    for (const block of blocks) {
+      const name = block.getAttribute('data-preview-cookie');
+      if (name && present.has(name)) block.removeAttribute('hidden');
+    }
+  }
+
+  revealPreviewBlocks();
+</script>

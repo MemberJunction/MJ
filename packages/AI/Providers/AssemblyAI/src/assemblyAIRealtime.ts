@@ -13,6 +13,7 @@ import {
     type RealtimeSessionError,
     type JSONObject,
     type JSONValue,
+    type RealtimeVoiceOption,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -172,6 +173,15 @@ type FetchLike = (
  */
 @RegisterClass(BaseRealtimeModel, 'AssemblyAIRealtime')
 export class AssemblyAIRealtime extends BaseRealtimeModel {
+    /**
+     * The voices the AssemblyAI Voice Agent API can speak with — used to populate the voice picker.
+     */
+    public override get SupportedVoices(): RealtimeVoiceOption[] {
+        return [
+            { ID: 'ivy', Name: 'Ivy' },
+            { ID: 'james', Name: 'James' },
+        ];
+    }
     /**
      * Opens a server-bridged session: connects the agent websocket authenticated with the
      * API key, sends the full session config as the FIRST frame (`session.update` — prompt,
@@ -699,7 +709,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
             return;
         }
         this.responseActive = true;
-        this.outputHandler?.(AssemblyAIRealtimeSession.Base64ToArrayBuffer(audioBase64));
+        this.outputHandler?.(AssemblyAIRealtimeSession.base64ToArrayBuffer(audioBase64));
     }
 
     /**
@@ -809,7 +819,7 @@ export class AssemblyAIRealtimeSession implements IRealtimeSession {
     }
 
     /** Decodes a base64 audio payload into a freshly-allocated `ArrayBuffer`. */
-    private static Base64ToArrayBuffer(base64: string): ArrayBuffer {
+    private static base64ToArrayBuffer(base64: string): ArrayBuffer {
         const bytes = Buffer.from(base64, 'base64');
         const out = new ArrayBuffer(bytes.byteLength);
         new Uint8Array(out).set(bytes);

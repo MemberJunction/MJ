@@ -5,16 +5,17 @@ import {
   SafeJSONParse,
   CleanAndParseJSON,
   CopyScalarsAndArrays,
-  convertCamelCaseToHaveSpaces,
-  createDisplayName,
-  generatePluralName,
-  getIrregularPlural,
-  stripWhitespace,
-  uuidv4,
-  stripTrailingChars,
-  replaceAllSpaces,
+  ConvertCamelCaseToHaveSpaces,
+  CreateDisplayName,
+  GeneratePluralName,
+  GetIrregularPlural,
+  StripWhitespace,
+  Uuidv4,
+  StripTrailingChars,
+  ReplaceAllSpaces,
   IsOnlyTimezoneShift,
   EscapeHTML,
+  EscapeSQLString,
   HighlightSearchMatches,
 } from '../util';
 
@@ -36,6 +37,52 @@ describe('GetGlobalObjectStore', () => {
       store[testKey] = 'test-value';
       expect(store[testKey]).toBe('test-value');
       delete store[testKey];
+    }
+  });
+
+  // The three cases above predate the memoised `typeof` probe and pass either way: they assert
+  // the result is non-null, defined, and writable. The ones below pin what actually changed.
+
+  it('resolves to Node\'s global object, not merely something non-null', () => {
+    expect(GetGlobalObjectStore()).toBe(global);
+  });
+
+  it('is memoised — every call returns the identical reference', () => {
+    const first = GetGlobalObjectStore();
+    const second = GetGlobalObjectStore();
+    expect(second).toBe(first);
+    expect(GetGlobalObjectStore()).toBe(first);
+  });
+
+  it('answers from the memo after the environment changes, by design', async () => {
+    // The environment is fixed at startup, which is what makes memoising sound. Stated as a test
+    // because it is the one surprise the memo introduces: a caller that installs a `window`
+    // mid-process still gets the answer computed on first call. If this ever needs to change,
+    // it is a deliberate decision, not an accident.
+    const before = GetGlobalObjectStore();
+    const g = globalThis as unknown as { window?: unknown };
+    g.window = { installed: 'later' };
+    try {
+      expect(GetGlobalObjectStore()).toBe(before);
+    } finally {
+      delete g.window;
+    }
+  });
+
+  it('treats a declared-but-null window as absent and falls through to global', async () => {
+    // `typeof null === 'object'`, so a bare `typeof window !== 'undefined'` probe would accept a
+    // null window and memoise it as the store — permanently, for the life of the process. SSR
+    // shims that null out `window` exist in the wild, and MJ is embedded by callers whose
+    // environment we do not control. Needs a fresh module so the memo is unset.
+    const g = globalThis as unknown as { window?: unknown };
+    g.window = null;
+    vi.resetModules();
+    try {
+      const fresh = await import('../util');
+      expect(fresh.GetGlobalObjectStore()).toBe(global);
+    } finally {
+      delete g.window;
+      vi.resetModules();
     }
   });
 });
@@ -317,256 +364,256 @@ describe('CopyScalarsAndArrays', () => {
 
 describe('convertCamelCaseToHaveSpaces', () => {
   it('should convert simple camelCase', () => {
-    expect(convertCamelCaseToHaveSpaces('DatabaseVersion')).toBe('Database Version');
+    expect(ConvertCamelCaseToHaveSpaces('DatabaseVersion')).toBe('Database Version');
   });
 
   it('should handle consecutive uppercase letters (acronyms)', () => {
-    expect(convertCamelCaseToHaveSpaces('AIAgentLearningCycle')).toBe('AI Agent Learning Cycle');
+    expect(ConvertCamelCaseToHaveSpaces('AIAgentLearningCycle')).toBe('AI Agent Learning Cycle');
   });
 
   it('should return single word unchanged', () => {
-    expect(convertCamelCaseToHaveSpaces('Database')).toBe('Database');
+    expect(ConvertCamelCaseToHaveSpaces('Database')).toBe('Database');
   });
 
   it('should handle all uppercase', () => {
-    expect(convertCamelCaseToHaveSpaces('ABC')).toBe('ABC');
+    expect(ConvertCamelCaseToHaveSpaces('ABC')).toBe('ABC');
   });
 
   it('should handle single character', () => {
-    expect(convertCamelCaseToHaveSpaces('A')).toBe('A');
+    expect(ConvertCamelCaseToHaveSpaces('A')).toBe('A');
   });
 
   it('should handle empty string', () => {
-    expect(convertCamelCaseToHaveSpaces('')).toBe('');
+    expect(ConvertCamelCaseToHaveSpaces('')).toBe('');
   });
 
   it('should handle lowercase only', () => {
-    expect(convertCamelCaseToHaveSpaces('hello')).toBe('hello');
+    expect(ConvertCamelCaseToHaveSpaces('hello')).toBe('hello');
   });
 
   it('should handle multiple words', () => {
-    expect(convertCamelCaseToHaveSpaces('FirstNameLastName')).toBe('First Name Last Name');
+    expect(ConvertCamelCaseToHaveSpaces('FirstNameLastName')).toBe('First Name Last Name');
   });
 
   it('should handle acronym at the end', () => {
-    expect(convertCamelCaseToHaveSpaces('GetHTMLParser')).toBe('Get HTML Parser');
+    expect(ConvertCamelCaseToHaveSpaces('GetHTMLParser')).toBe('Get HTML Parser');
   });
 
   it('should handle acronym at the beginning', () => {
-    expect(convertCamelCaseToHaveSpaces('HTMLParser')).toBe('HTML Parser');
+    expect(ConvertCamelCaseToHaveSpaces('HTMLParser')).toBe('HTML Parser');
   });
 });
 
 describe('createDisplayName', () => {
   it('should convert snake_case to title case with spaces', () => {
-    expect(createDisplayName('organization_email')).toBe('Organization Email');
+    expect(CreateDisplayName('organization_email')).toBe('Organization Email');
   });
 
   it('should handle single-word snake_case', () => {
-    expect(createDisplayName('name')).toBe('name');
+    expect(CreateDisplayName('name')).toBe('name');
   });
 
   it('should handle multiple underscores', () => {
-    expect(createDisplayName('source_created_at')).toBe('Source Created At');
+    expect(CreateDisplayName('source_created_at')).toBe('Source Created At');
   });
 
   it('should handle mixed snake_case and camelCase segments', () => {
-    expect(createDisplayName('org_emailAddress')).toBe('Org Email Address');
+    expect(CreateDisplayName('org_emailAddress')).toBe('Org Email Address');
   });
 
   it('should pass through PascalCase unchanged (delegates to convertCamelCaseToHaveSpaces)', () => {
-    expect(createDisplayName('OrganizationEmail')).toBe('Organization Email');
+    expect(CreateDisplayName('OrganizationEmail')).toBe('Organization Email');
   });
 
   it('should handle leading/trailing underscores', () => {
-    expect(createDisplayName('_private_field')).toBe('Private Field');
+    expect(CreateDisplayName('_private_field')).toBe('Private Field');
   });
 
   it('should handle consecutive underscores', () => {
-    expect(createDisplayName('field__name')).toBe('Field Name');
+    expect(CreateDisplayName('field__name')).toBe('Field Name');
   });
 
   it('should handle empty string', () => {
-    expect(createDisplayName('')).toBe('');
+    expect(CreateDisplayName('')).toBe('');
   });
 
   it('should handle acronyms in PascalCase', () => {
-    expect(createDisplayName('AIAgentLearningCycle')).toBe('AI Agent Learning Cycle');
+    expect(CreateDisplayName('AIAgentLearningCycle')).toBe('AI Agent Learning Cycle');
   });
 });
 
 describe('generatePluralName', () => {
   it('should handle regular plurals by adding s', () => {
-    expect(generatePluralName('dog')).toBe('dogs');
-    expect(generatePluralName('cat')).toBe('cats');
-    expect(generatePluralName('book')).toBe('books');
+    expect(GeneratePluralName('dog')).toBe('dogs');
+    expect(GeneratePluralName('cat')).toBe('cats');
+    expect(GeneratePluralName('book')).toBe('books');
   });
 
   it('should handle irregular plurals', () => {
-    expect(generatePluralName('child')).toBe('children');
-    expect(generatePluralName('person')).toBe('people');
-    expect(generatePluralName('mouse')).toBe('mice');
-    expect(generatePluralName('foot')).toBe('feet');
-    expect(generatePluralName('tooth')).toBe('teeth');
-    expect(generatePluralName('man')).toBe('men');
-    expect(generatePluralName('woman')).toBe('women');
+    expect(GeneratePluralName('child')).toBe('children');
+    expect(GeneratePluralName('person')).toBe('people');
+    expect(GeneratePluralName('mouse')).toBe('mice');
+    expect(GeneratePluralName('foot')).toBe('feet');
+    expect(GeneratePluralName('tooth')).toBe('teeth');
+    expect(GeneratePluralName('man')).toBe('men');
+    expect(GeneratePluralName('woman')).toBe('women');
   });
 
   it('should handle words ending in consonant + y', () => {
-    expect(generatePluralName('party')).toBe('parties');
-    expect(generatePluralName('city')).toBe('cities');
-    expect(generatePluralName('baby')).toBe('babies');
+    expect(GeneratePluralName('party')).toBe('parties');
+    expect(GeneratePluralName('city')).toBe('cities');
+    expect(GeneratePluralName('baby')).toBe('babies');
   });
 
   it('should handle words ending in vowel + y by just adding s', () => {
-    expect(generatePluralName('day')).toBe('days');
-    expect(generatePluralName('boy')).toBe('boys');
-    expect(generatePluralName('key')).toBe('keys');
+    expect(GeneratePluralName('day')).toBe('days');
+    expect(GeneratePluralName('boy')).toBe('boys');
+    expect(GeneratePluralName('key')).toBe('keys');
   });
 
   it('should handle words ending in ch, sh, x, z by adding es', () => {
-    expect(generatePluralName('match')).toBe('matches');
-    expect(generatePluralName('wish')).toBe('wishes');
-    expect(generatePluralName('box')).toBe('boxes');
-    expect(generatePluralName('buzz')).toBe('buzzes');
+    expect(GeneratePluralName('match')).toBe('matches');
+    expect(GeneratePluralName('wish')).toBe('wishes');
+    expect(GeneratePluralName('box')).toBe('boxes');
+    expect(GeneratePluralName('buzz')).toBe('buzzes');
   });
 
   it('should treat words ending in s as already plural (getSingularForm detects singular)', () => {
     // 'bus' ends in 's', getSingularForm returns 'bu' (different from 'bus'),
     // so generatePluralName considers 'bus' already plural
-    expect(generatePluralName('bus')).toBe('bus');
+    expect(GeneratePluralName('bus')).toBe('bus');
   });
 
   it('should detect already-plural words and return them unchanged', () => {
-    expect(generatePluralName('dogs')).toBe('dogs');
-    expect(generatePluralName('customers')).toBe('customers');
+    expect(GeneratePluralName('dogs')).toBe('dogs');
+    expect(GeneratePluralName('customers')).toBe('customers');
   });
 
   it('should handle capitalizeFirstLetterOnly option', () => {
-    expect(generatePluralName('dog', { capitalizeFirstLetterOnly: true })).toBe('Dogs');
+    expect(GeneratePluralName('dog', { capitalizeFirstLetterOnly: true })).toBe('Dogs');
   });
 
   it('should handle capitalizeEntireWord option', () => {
-    expect(generatePluralName('dog', { capitalizeEntireWord: true })).toBe('DOGS');
+    expect(GeneratePluralName('dog', { capitalizeEntireWord: true })).toBe('DOGS');
   });
 });
 
 describe('getIrregularPlural', () => {
   it('should return irregular plural for known words', () => {
-    expect(getIrregularPlural('child')).toBe('children');
-    expect(getIrregularPlural('knife')).toBe('knives');
-    expect(getIrregularPlural('leaf')).toBe('leaves');
+    expect(GetIrregularPlural('child')).toBe('children');
+    expect(GetIrregularPlural('knife')).toBe('knives');
+    expect(GetIrregularPlural('leaf')).toBe('leaves');
   });
 
   it('should be case-insensitive', () => {
-    expect(getIrregularPlural('Child')).toBe('children');
-    expect(getIrregularPlural('MOUSE')).toBe('mice');
+    expect(GetIrregularPlural('Child')).toBe('children');
+    expect(GetIrregularPlural('MOUSE')).toBe('mice');
   });
 
   it('should return null for regular words', () => {
-    expect(getIrregularPlural('dog')).toBeNull();
-    expect(getIrregularPlural('table')).toBeNull();
+    expect(GetIrregularPlural('dog')).toBeNull();
+    expect(GetIrregularPlural('table')).toBeNull();
   });
 });
 
 describe('stripWhitespace', () => {
   it('should remove all spaces', () => {
-    expect(stripWhitespace('Hello World')).toBe('HelloWorld');
+    expect(StripWhitespace('Hello World')).toBe('HelloWorld');
   });
 
   it('should remove tabs and newlines', () => {
-    expect(stripWhitespace('\tExample\nString ')).toBe('ExampleString');
+    expect(StripWhitespace('\tExample\nString ')).toBe('ExampleString');
   });
 
   it('should handle empty string', () => {
-    expect(stripWhitespace('')).toBe('');
+    expect(StripWhitespace('')).toBe('');
   });
 
   it('should return null or undefined as-is', () => {
-    expect(stripWhitespace(null as unknown as string)).toBeNull();
-    expect(stripWhitespace(undefined as unknown as string)).toBeUndefined();
+    expect(StripWhitespace(null as unknown as string)).toBeNull();
+    expect(StripWhitespace(undefined as unknown as string)).toBeUndefined();
   });
 
   it('should handle string with only whitespace', () => {
-    expect(stripWhitespace('   \t\n  ')).toBe('');
+    expect(StripWhitespace('   \t\n  ')).toBe('');
   });
 
   it('should handle string with no whitespace', () => {
-    expect(stripWhitespace('NoSpaces')).toBe('NoSpaces');
+    expect(StripWhitespace('NoSpaces')).toBe('NoSpaces');
   });
 
   it('should handle multiple consecutive whitespace types', () => {
-    expect(stripWhitespace('  a  b  c  ')).toBe('abc');
+    expect(StripWhitespace('  a  b  c  ')).toBe('abc');
   });
 });
 
 describe('uuidv4', () => {
   it('should return a string', () => {
-    expect(typeof uuidv4()).toBe('string');
+    expect(typeof Uuidv4()).toBe('string');
   });
 
   it('should match UUID v4 format', () => {
-    const uuid = uuidv4();
+    const uuid = Uuidv4();
     const uuidV4Regex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     expect(uuid).toMatch(uuidV4Regex);
   });
 
   it('should generate unique values', () => {
-    const uuid1 = uuidv4();
-    const uuid2 = uuidv4();
-    const uuid3 = uuidv4();
+    const uuid1 = Uuidv4();
+    const uuid2 = Uuidv4();
+    const uuid3 = Uuidv4();
     expect(uuid1).not.toBe(uuid2);
     expect(uuid2).not.toBe(uuid3);
     expect(uuid1).not.toBe(uuid3);
   });
 
   it('should have the correct length', () => {
-    const uuid = uuidv4();
+    const uuid = Uuidv4();
     expect(uuid.length).toBe(36);
   });
 });
 
 describe('stripTrailingChars', () => {
   it('should strip matching trailing characters', () => {
-    expect(stripTrailingChars('example.txt', '.txt', false)).toBe('example');
+    expect(StripTrailingChars('example.txt', '.txt', false)).toBe('example');
   });
 
   it('should not strip when suffix does not match', () => {
-    expect(stripTrailingChars('example.csv', '.txt', false)).toBe('example.csv');
+    expect(StripTrailingChars('example.csv', '.txt', false)).toBe('example.csv');
   });
 
   it('should skip stripping on exact match when skipIfExactMatch is true', () => {
-    expect(stripTrailingChars('.txt', '.txt', true)).toBe('.txt');
+    expect(StripTrailingChars('.txt', '.txt', true)).toBe('.txt');
   });
 
   it('should strip exact match when skipIfExactMatch is false', () => {
-    expect(stripTrailingChars('.txt', '.txt', false)).toBe('');
+    expect(StripTrailingChars('.txt', '.txt', false)).toBe('');
   });
 
   it('should return input when input is empty', () => {
-    expect(stripTrailingChars('', '.txt', false)).toBe('');
+    expect(StripTrailingChars('', '.txt', false)).toBe('');
   });
 
   it('should return input when charsToStrip is empty', () => {
-    expect(stripTrailingChars('test', '', false)).toBe('test');
+    expect(StripTrailingChars('test', '', false)).toBe('test');
   });
 });
 
 describe('replaceAllSpaces', () => {
   it('should remove all spaces', () => {
-    expect(replaceAllSpaces('Hello World')).toBe('HelloWorld');
+    expect(ReplaceAllSpaces('Hello World')).toBe('HelloWorld');
   });
 
   it('should handle multiple spaces', () => {
-    expect(replaceAllSpaces('  Leading spaces')).toBe('Leadingspaces');
+    expect(ReplaceAllSpaces('  Leading spaces')).toBe('Leadingspaces');
   });
 
   it('should handle string with no spaces', () => {
-    expect(replaceAllSpaces('NoSpaces')).toBe('NoSpaces');
+    expect(ReplaceAllSpaces('NoSpaces')).toBe('NoSpaces');
   });
 
   it('should handle empty string', () => {
-    expect(replaceAllSpaces('')).toBe('');
+    expect(ReplaceAllSpaces('')).toBe('');
   });
 });
 
@@ -703,3 +750,26 @@ describe('HighlightSearchMatches', () => {
     expect(HighlightSearchMatches('<i>x</i>', '   ')).toBe('&lt;i&gt;x&lt;/i&gt;');
   });
 });
+
+describe('EscapeSQLString', () => {
+  it('escapes single quotes by doubling them', () => {
+    expect(EscapeSQLString("O'Brien")).toBe("O''Brien");
+    expect(EscapeSQLString("user's 'name'")).toBe("user''s ''name''");
+  });
+
+  it('strips null bytes to prevent injection', () => {
+    expect(EscapeSQLString("test\0injection")).toBe("testinjection");
+    expect(EscapeSQLString("user\0' OR '1'='1")).toBe("user'' OR ''1''=''1");
+  });
+
+  it('handles null and undefined safely', () => {
+    expect(EscapeSQLString(null)).toBe('');
+    expect(EscapeSQLString(undefined)).toBe('');
+  });
+
+  it('handles empty string and clean strings', () => {
+    expect(EscapeSQLString('')).toBe('');
+    expect(EscapeSQLString('plain.email@example.com')).toBe('plain.email@example.com');
+  });
+});
+

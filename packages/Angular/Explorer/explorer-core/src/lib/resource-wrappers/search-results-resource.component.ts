@@ -401,7 +401,16 @@ export class SearchResultsResource extends BaseResourceComponent {
     MinScorePercent = 30;
     /** The MinScore that was sent to the server on the last search. If the user
      *  slides below this, we need to re-query the server to get more results. */
-    serverMinScorePercent = 30;
+    ServerMinScorePercent = 30;
+
+    /** @deprecated Use {@link ServerMinScorePercent}. */
+    get serverMinScorePercent() {
+        return this.ServerMinScorePercent;
+    }
+    /** @deprecated Use {@link ServerMinScorePercent}. */
+    set serverMinScorePercent(value) {
+        this.ServerMinScorePercent = value;
+    }
     /** How many results the server returned (before client-side filtering) */
     ServerResultCount = 0;
     ShowFilterPanel = true;
@@ -415,7 +424,7 @@ export class SearchResultsResource extends BaseResourceComponent {
     private allResults: SearchResultItem[] = [];
 
     /** Selected scope IDs from the search bar (empty = unscoped/global). */
-    private ScopeIDs: string[] = [];
+    private scopeIDs: string[] = [];
 
     /**
      * Phase 2C streaming opt-in. Off by default to preserve Phase 1 request-response UX.
@@ -473,7 +482,7 @@ export class SearchResultsResource extends BaseResourceComponent {
 
         // Carry scope selection from the search bar through into the initial query.
         if (Array.isArray(config?.ScopeIDs)) {
-            this.ScopeIDs = (config.ScopeIDs as unknown[]).filter((x): x is string => typeof x === 'string');
+            this.scopeIDs = (config.ScopeIDs as unknown[]).filter((x): x is string => typeof x === 'string');
         }
 
         // Streaming opt-in: resource config wins; URL query param `?stream=1` is the
@@ -494,7 +503,7 @@ export class SearchResultsResource extends BaseResourceComponent {
         this.UpdateQueryParams({ minRelevance: String(this.MinScorePercent) });
 
         if (this.CurrentQuery) {
-            await this.ExecuteSearch(this.CurrentQuery);
+            await this.executeSearch(this.CurrentQuery);
         }
 
         this.NotifyLoadComplete();
@@ -520,7 +529,7 @@ export class SearchResultsResource extends BaseResourceComponent {
         if (trimmed && trimmed.length >= 2) {
             this.CurrentQuery = trimmed;
             this.ActiveFilters = {};
-            await this.ExecuteSearch(trimmed);
+            await this.executeSearch(trimmed);
         }
     }
 
@@ -542,9 +551,9 @@ export class SearchResultsResource extends BaseResourceComponent {
     OnMinScoreChanged(percent: number): void {
         this.MinScorePercent = percent;
         this.UpdateQueryParams({ minRelevance: String(percent) });
-        if (percent < this.serverMinScorePercent && this.CurrentQuery) {
+        if (percent < this.ServerMinScorePercent && this.CurrentQuery) {
             // User lowered below what server filtered — need to re-query with lower threshold
-            this.ExecuteSearch(this.CurrentQuery);
+            this.executeSearch(this.CurrentQuery);
         } else {
             // User raised or stayed at/above server threshold — client-side filter is sufficient
             this.applyClientFilters();
@@ -563,9 +572,9 @@ export class SearchResultsResource extends BaseResourceComponent {
         if (isNaN(mr) || mr < 0 || mr > 100 || mr === this.MinScorePercent) return;
 
         this.MinScorePercent = mr;
-        if (mr < this.serverMinScorePercent && this.CurrentQuery) {
+        if (mr < this.ServerMinScorePercent && this.CurrentQuery) {
             // Below what the server filtered — re-query with the lower threshold.
-            void this.ExecuteSearch(this.CurrentQuery);
+            void this.executeSearch(this.CurrentQuery);
         } else {
             this.applyClientFilters();
         }
@@ -584,7 +593,7 @@ export class SearchResultsResource extends BaseResourceComponent {
             this.ActiveFilters = {};
             this.MinScorePercent = 30;
             this.ClientFilterText = '';
-            await this.ExecuteSearch(this.CurrentQuery);
+            await this.executeSearch(this.CurrentQuery);
         }
     }
 
@@ -642,17 +651,21 @@ export class SearchResultsResource extends BaseResourceComponent {
 
         if (!result.EntityName || !result.RecordID) return;
 
-        // entity-record, content-item, or unset — navigate to entity record
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+        // entity-record, content-item, or unset — navigate to entity record.
+        // `RecordID` is a compact CompositeKey segment (bare value for a single-column key, "F1|v1||F2|v2"
+        // for a composite one) and the key column can have any name — resolve it against the entity's
+        // metadata instead of assuming `ID`. See ShellComponent.OnSearchResultSelected for the full note.
+        const entityInfo = this.ProviderToUse.EntityByName(result.EntityName);
+        const pkey = CompositeKey.FromURLSegment(entityInfo, result.RecordID);
         this.navigationService.OpenEntityRecord(result.EntityName, pkey);
     }
 
-    private async ExecuteSearch(query: string): Promise<void> {
+    private async executeSearch(query: string): Promise<void> {
         this.IsSearching = true;
         this.HasSearched = false;
         this.cdr.detectChanges();
 
-        this.serverMinScorePercent = this.MinScorePercent;
+        this.ServerMinScorePercent = this.MinScorePercent;
         const request: SearchRequest = {
             Query: query,
             MaxResults: 50,
@@ -660,8 +673,8 @@ export class SearchResultsResource extends BaseResourceComponent {
             IncludeSources: ['vector', 'fulltext', 'entity', 'storage'],
             MinScore: this.MinScorePercent / 100
         };
-        if (this.ScopeIDs.length > 0) {
-            request.ScopeIDs = [...this.ScopeIDs];
+        if (this.scopeIDs.length > 0) {
+            request.ScopeIDs = [...this.scopeIDs];
         }
 
         if (this.EnableStreaming) {
@@ -957,7 +970,7 @@ export class SearchResultsResource extends BaseResourceComponent {
                 Handler: async (params: Record<string, unknown>) => {
                     const query = String(params['query'] ?? '');
                     this.CurrentQuery = query;
-                    await this.ExecuteSearch(query);
+                    await this.executeSearch(query);
                     return { Success: true, Data: { ResultCount: this.TotalCount, ElapsedMs: this.ElapsedMs } };
                 }
             },

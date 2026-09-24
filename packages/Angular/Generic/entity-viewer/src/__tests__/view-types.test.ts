@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RegisterClass } from '@memberjunction/global';
 import type { EntityInfo } from '@memberjunction/core';
 import type { MJViewTypeEntity } from '@memberjunction/core-entities';
@@ -85,7 +85,10 @@ describe('ViewTypeEngine', () => {
   it('GetDescriptor returns null for an unregistered DriverClass (no blank-item fallback)', () => {
     // A seeded MJ: View Types row whose descriptor class was never built (e.g. TagCloudViewType)
     // must NOT resolve to the abstract base fallback — that would render a blank switcher item.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     expect(ViewTypeEngine.Instance.GetDescriptor('TotallyUnregisteredViewType')).toBeNull();
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('BaseViewTypeDescriptor'))).toBe(false);
+    warn.mockRestore();
   });
 
   it('GetAvailableViewTypeRows omits rows whose descriptor is unregistered', () => {

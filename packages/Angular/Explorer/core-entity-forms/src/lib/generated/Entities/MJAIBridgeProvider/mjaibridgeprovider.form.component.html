@@ -150,9 +150,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Session Bridges','ProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridges')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Session Bridges','ProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSessionBridges')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSessionBridges', $event.totalRowCount)"
                 >
@@ -175,9 +175,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Bridge Provider Channels','ProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Provider Channels')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Provider Channels','ProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJAIBridgeProviderChannels')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIBridgeProviderChannels', $event.totalRowCount)"
                 >
@@ -200,9 +200,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Bridge Agent Identities','ProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Agent Identities')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Bridge Agent Identities','ProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJAIBridgeAgentIdentities')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIBridgeAgentIdentities', $event.totalRowCount)"
                 >

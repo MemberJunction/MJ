@@ -60,4 +60,4 @@ that hosts this component as a tab — add a nav item with that driver class to 
 
 ## License
 
-ISC © MemberJunction.com
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

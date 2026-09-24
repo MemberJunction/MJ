@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-    validateGraphNotification,
-    parseCallNotification,
-    buildJoinByUrlRequest,
+    ValidateGraphNotification,
+    ParseCallNotification,
+    BuildJoinByUrlRequest,
     GraphChangeNotification,
 } from '../teams-ingress';
 
@@ -14,34 +14,34 @@ const CLIENT_STATE = 'shared-secret-xyz';
 
 describe('validateGraphNotification', () => {
     it('returns a validation handshake echoing a present validationToken', () => {
-        const result = validateGraphNotification('echo-me-please', CLIENT_STATE, []);
+        const result = ValidateGraphNotification('echo-me-please', CLIENT_STATE, []);
         expect(result).toEqual({ Kind: 'validation', ValidationToken: 'echo-me-please' });
     });
 
     it('rejects an empty validationToken on the handshake', () => {
-        expect(validateGraphNotification('', CLIENT_STATE, [])).toEqual({
+        expect(ValidateGraphNotification('', CLIENT_STATE, [])).toEqual({
             Kind: 'reject',
             Reason: 'empty-validation-token',
         });
     });
 
     it('accepts a real notification when every clientState matches', () => {
-        const result = validateGraphNotification(undefined, CLIENT_STATE, [CLIENT_STATE, CLIENT_STATE]);
+        const result = ValidateGraphNotification(undefined, CLIENT_STATE, [CLIENT_STATE, CLIENT_STATE]);
         expect(result).toEqual({ Kind: 'notification' });
     });
 
     it('rejects when any clientState mismatches', () => {
-        const result = validateGraphNotification(undefined, CLIENT_STATE, [CLIENT_STATE, 'wrong']);
+        const result = ValidateGraphNotification(undefined, CLIENT_STATE, [CLIENT_STATE, 'wrong']);
         expect(result).toEqual({ Kind: 'reject', Reason: 'client-state-mismatch' });
     });
 
     it('rejects a missing clientState (undefined) on a notification', () => {
-        const result = validateGraphNotification(undefined, CLIENT_STATE, [undefined]);
+        const result = ValidateGraphNotification(undefined, CLIENT_STATE, [undefined]);
         expect(result).toEqual({ Kind: 'reject', Reason: 'client-state-mismatch' });
     });
 
     it('accepts an empty notification batch (nothing to verify)', () => {
-        expect(validateGraphNotification(undefined, CLIENT_STATE, [])).toEqual({ Kind: 'notification' });
+        expect(ValidateGraphNotification(undefined, CLIENT_STATE, [])).toEqual({ Kind: 'notification' });
     });
 });
 
@@ -60,14 +60,14 @@ describe('parseCallNotification', () => {
                 participants: [{ id: 'p-alice', role: 'organizer' }],
             },
         };
-        const result = parseCallNotification(notification);
+        const result = ParseCallNotification(notification);
         expect(result.callId).toBe('call-9');
         expect(result.state).toBe('established');
         expect(result.participants).toEqual([{ id: 'p-alice', role: 'organizer' }]);
     });
 
     it('resolves the call id from the resource path when resourceData.id is absent', () => {
-        const result = parseCallNotification({
+        const result = ParseCallNotification({
             resource: 'communications/calls/call-77/participants',
             resourceData: { state: 'establishing' },
         });
@@ -77,16 +77,16 @@ describe('parseCallNotification', () => {
     });
 
     it('normalizes an unknown/absent state', () => {
-        expect(parseCallNotification({ resourceData: { id: 'c1' } }).state).toBe('unknown');
-        expect(parseCallNotification({ resourceData: { id: 'c2', state: 'WeirdState' } }).state).toBe('unknown');
+        expect(ParseCallNotification({ resourceData: { id: 'c1' } }).state).toBe('unknown');
+        expect(ParseCallNotification({ resourceData: { id: 'c2', state: 'WeirdState' } }).state).toBe('unknown');
     });
 
     it('maps the terminated lifecycle state', () => {
-        expect(parseCallNotification({ resourceData: { id: 'c3', state: 'terminated' } }).state).toBe('terminated');
+        expect(ParseCallNotification({ resourceData: { id: 'c3', state: 'terminated' } }).state).toBe('terminated');
     });
 
     it('throws when no call id can be resolved', () => {
-        expect(() => parseCallNotification({ resource: 'communications/presences/x' })).toThrow(
+        expect(() => ParseCallNotification({ resource: 'communications/presences/x' })).toThrow(
             /could not resolve a call id/i,
         );
     });
@@ -100,7 +100,7 @@ describe('buildJoinByUrlRequest', () => {
     const JOIN_URL = 'https://teams.microsoft.com/l/meetup-join/19%3Ameeting_ABC%40thread.v2/0';
 
     it('builds an application-hosted-media join request from a URL + bot name', () => {
-        const req = buildJoinByUrlRequest(JOIN_URL, 'Sage', 'tenant-123');
+        const req = BuildJoinByUrlRequest(JOIN_URL, 'Sage', 'tenant-123');
         expect(req.CallType).toBe('meeting');
         expect(req.AppHostedMedia).toBe(true);
         expect(req.BotDisplayName).toBe('Sage');
@@ -109,11 +109,11 @@ describe('buildJoinByUrlRequest', () => {
     });
 
     it('defaults the bot display name to "AI Agent"', () => {
-        expect(buildJoinByUrlRequest(JOIN_URL).BotDisplayName).toBe('AI Agent');
+        expect(BuildJoinByUrlRequest(JOIN_URL).BotDisplayName).toBe('AI Agent');
     });
 
     it('throws on a join URL with no resolvable thread id', () => {
-        expect(() => buildJoinByUrlRequest('https://teams.microsoft.com/nope')).toThrow(
+        expect(() => BuildJoinByUrlRequest('https://teams.microsoft.com/nope')).toThrow(
             /could not resolve a meeting thread id/i,
         );
     });

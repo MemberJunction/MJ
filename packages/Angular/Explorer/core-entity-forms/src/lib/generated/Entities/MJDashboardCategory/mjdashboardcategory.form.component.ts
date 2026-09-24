@@ -18,6 +18,7 @@ export class MJDashboardCategoryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
             { sectionKey: 'hierarchyStructure', sectionName: 'Hierarchy Structure', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDashboardCategories', sectionName: 'Dashboard Categories', isExpanded: false },
             { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },

@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { TwitterBaseAction, Tweet } from '../twitter-base.action';
+import { Tweet, TwitterApiResponse, TwitterBaseAction, TwitterUser } from '../twitter-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialPost } from '../../../base/base-social.action';
@@ -65,10 +65,10 @@ export class TwitterGetTimelineAction extends TwitterBaseAction {
                     targetUserId = userId;
                 } else if (username) {
                     // Look up user by username
-                    const userResponse = await this.axiosInstance.get(`/users/by/username/${username}`, {
-                        params: { 'user.fields': 'id' }
+                    const userResponse = await this.httpClient.Get<TwitterApiResponse<TwitterUser>>(`/users/by/username/${username}`, {
+                        Query: { 'user.fields': 'id' }
                     });
-                    targetUserId = userResponse.data.data.id;
+                    targetUserId = userResponse.Data.data.id;
                 } else {
                     // Default to authenticated user
                     const currentUser = await this.getCurrentUser();

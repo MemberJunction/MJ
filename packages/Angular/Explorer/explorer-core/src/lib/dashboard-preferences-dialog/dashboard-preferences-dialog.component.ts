@@ -17,19 +17,109 @@ export interface DashboardPreferencesResult {
   styleUrls: ['./dashboard-preferences-dialog.component.css']
 })
 export class DashboardPreferencesDialogComponent extends BaseAngularComponent implements OnInit {
-  @Input() public applicationId: string | null = null;
-  @Input() public scope: 'Global' | 'App' = 'Global';
-  @Output() public result = new EventEmitter<DashboardPreferencesResult>();
+  @Input() public ApplicationId: string | null = null;
 
-  public availableDashboards: MJDashboardEntityExtended[] = [];
-  public configuredDashboards: MJDashboardEntityExtended[] = [];
-  public applicationName: string = '';
-  public loading: boolean = true;
+  /** @deprecated Use {@link ApplicationId}. */
+  @Input() public set applicationId(value: string | null) {
+    this.ApplicationId = value;
+  }
+  /** @deprecated Use {@link ApplicationId}. */
+  public get applicationId(): string | null {
+    return this.ApplicationId;
+  }
+  @Input() public Scope: 'Global' | 'App' = 'Global';
+
+  /** @deprecated Use {@link Scope}. */
+  @Input() public set scope(value: 'Global' | 'App') {
+    this.Scope = value;
+  }
+  /** @deprecated Use {@link Scope}. */
+  public get scope(): 'Global' | 'App' {
+    return this.Scope;
+  }
+  @Output() public Result = new EventEmitter<DashboardPreferencesResult>();
+
+  /**
+   * @deprecated Use {@link Result}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (result) keeps working. Must stay AFTER Result: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public result = this.Result;
+
+  public AvailableDashboards: MJDashboardEntityExtended[] = [];
+
+  /** @deprecated Use {@link AvailableDashboards}. */
+  public get availableDashboards(): MJDashboardEntityExtended[] {
+    return this.AvailableDashboards;
+  }
+  /** @deprecated Use {@link AvailableDashboards}. */
+  public set availableDashboards(value: MJDashboardEntityExtended[]) {
+    this.AvailableDashboards = value;
+  }
+  public ConfiguredDashboards: MJDashboardEntityExtended[] = [];
+
+  /** @deprecated Use {@link ConfiguredDashboards}. */
+  public get configuredDashboards(): MJDashboardEntityExtended[] {
+    return this.ConfiguredDashboards;
+  }
+  /** @deprecated Use {@link ConfiguredDashboards}. */
+  public set configuredDashboards(value: MJDashboardEntityExtended[]) {
+    this.ConfiguredDashboards = value;
+  }
+  public ApplicationName: string = '';
+
+  /** @deprecated Use {@link ApplicationName}. */
+  public get applicationName(): string {
+    return this.ApplicationName;
+  }
+  /** @deprecated Use {@link ApplicationName}. */
+  public set applicationName(value: string) {
+    this.ApplicationName = value;
+  }
+  public Loading: boolean = true;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading(): boolean {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value: boolean) {
+    this.Loading = value;
+  }
   public saving: boolean = false;
   public error: string | null = null;
-  public hasChanges: boolean = false;
-  public isSysAdmin: boolean = false;
-  public preferenceMode: 'personal' | 'system' = 'personal';
+  public HasChanges: boolean = false;
+
+  /** @deprecated Use {@link HasChanges}. */
+  public get hasChanges(): boolean {
+    return this.HasChanges;
+  }
+  /** @deprecated Use {@link HasChanges}. */
+  public set hasChanges(value: boolean) {
+    this.HasChanges = value;
+  }
+  public IsSysAdmin: boolean = false;
+
+  /** @deprecated Use {@link IsSysAdmin}. */
+  public get isSysAdmin(): boolean {
+    return this.IsSysAdmin;
+  }
+  /** @deprecated Use {@link IsSysAdmin}. */
+  public set isSysAdmin(value: boolean) {
+    this.IsSysAdmin = value;
+  }
+  public PreferenceMode: 'personal' | 'system' = 'personal';
+
+  /** @deprecated Use {@link PreferenceMode}. */
+  public get preferenceMode(): 'personal' | 'system' {
+    return this.PreferenceMode;
+  }
+  /** @deprecated Use {@link PreferenceMode}. */
+  public set preferenceMode(value: 'personal' | 'system') {
+    this.PreferenceMode = value;
+  }
 
   private originalConfiguredIds: string[] = [];
   private currentUserPreferences: MJDashboardUserPreferenceEntity[] = [];
@@ -42,7 +132,7 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
       LogError('Error initializing dashboard preferences dialog', null, error);
       this.error = 'Failed to load dashboard preferences';
     } finally {
-      this.loading = false;
+      this.Loading = false;
     }
   }
 
@@ -50,14 +140,14 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
     const md = this.ProviderToUse;
     
     // Check if current user is sysadmin
-    this.isSysAdmin = md.CurrentUser.Type.trim().toLowerCase() === 'owner';
-    console.log('User is sysadmin:', this.isSysAdmin);
+    this.IsSysAdmin = md.CurrentUser.Type.trim().toLowerCase() === 'owner';
+    console.log('User is sysadmin:', this.IsSysAdmin);
     
     // Default to personal preferences for all users (including sysadmin)
-    this.preferenceMode = 'personal';
+    this.PreferenceMode = 'personal';
     
     // Load application name if we're in app scope
-    if (this.scope === 'App' && this.applicationId) {
+    if (this.Scope === 'App' && this.ApplicationId) {
       await this.loadApplicationName();
     }
 
@@ -73,12 +163,12 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
     }
 
     // Filter dashboards by scope
-    const appFilter = this.applicationId ? ` AND ApplicationID='${this.applicationId}'` : ' AND ApplicationID IS NULL';
+    const appFilter = this.ApplicationId ? ` AND ApplicationID='${this.ApplicationId}'` : ' AND ApplicationID IS NULL';
     this.allAvailableDashboards = dashList.Results.filter((d: MJDashboardEntityExtended) => {
-      if (this.scope === 'Global') {
+      if (this.Scope === 'Global') {
         return d.Scope === 'Global' && !d.ApplicationID;
       } else {
-        return UUIDsEqual(d.ApplicationID, this.applicationId) // ignore scope for dashboards that match app id, sometimes they have a global scope as they can be shown globally as well as app specific
+        return UUIDsEqual(d.ApplicationID, this.ApplicationId) // ignore scope for dashboards that match app id, sometimes they have a global scope as they can be shown globally as well as app specific
       }
     });
 
@@ -89,23 +179,23 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
     this.splitDashboards();
     
     // Store original state to detect changes
-    this.originalConfiguredIds = this.configuredDashboards.map(d => d.ID);
+    this.originalConfiguredIds = this.ConfiguredDashboards.map(d => d.ID);
   }
 
   private async loadApplicationName(): Promise<void> {
-    if (!this.applicationId) return;
+    if (!this.ApplicationId) return;
     
     try {
       const md = this.ProviderToUse;
       const ds = await md.GetAndCacheDatasetByName("MJ_Metadata");
       const appList = ds.Results.find(r => r.Code === 'Applications');
       if (appList) {
-        const app = appList.Results.find((a: MJApplicationEntity) => UUIDsEqual(a.ID, this.applicationId));
-        this.applicationName = app?.Name || 'Unknown Application';
+        const app = appList.Results.find((a: MJApplicationEntity) => UUIDsEqual(a.ID, this.ApplicationId));
+        this.ApplicationName = app?.Name || 'Unknown Application';
       }
     } catch (error) {
       LogError('Error loading application name', null, error);
-      this.applicationName = 'Unknown Application';
+      this.ApplicationName = 'Unknown Application';
     }
   }
 
@@ -113,12 +203,12 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const md = this.ProviderToUse;
     
-    const appFilter = this.applicationId ? ` AND ApplicationID='${this.applicationId}'` : '';
-    const baseCondition = `Scope='${this.scope}'${appFilter}`;
+    const appFilter = this.ApplicationId ? ` AND ApplicationID='${this.ApplicationId}'` : '';
+    const baseCondition = `Scope='${this.Scope}'${appFilter}`;
     
     let filter: string;
     
-    if (this.isSysAdmin && this.scope === 'Global' && this.preferenceMode === 'system') {
+    if (this.IsSysAdmin && this.Scope === 'Global' && this.PreferenceMode === 'system') {
       // Load system defaults only (UserID IS NULL)
       filter = `UserID IS NULL AND ${baseCondition}`;
     } else {
@@ -145,17 +235,17 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
     const configuredIds = new Set(this.currentUserPreferences.map(p => p.DashboardID));
     
     // Get configured dashboards in the right order
-    this.configuredDashboards = this.currentUserPreferences
+    this.ConfiguredDashboards = this.currentUserPreferences
       .map(pref => this.allAvailableDashboards.find(d => UUIDsEqual(d.ID, pref.DashboardID)))
       .filter((d): d is MJDashboardEntityExtended => d !== undefined);
     
     // Get available dashboards (not configured)
-    this.availableDashboards = this.allAvailableDashboards
+    this.AvailableDashboards = this.allAvailableDashboards
       .filter(d => !configuredIds.has(d.ID))
       .sort((a, b) => a.Name.localeCompare(b.Name));
   }
 
-  public onDrop(event: CdkDragDrop<MJDashboardEntityExtended[]>): void {
+  public OnDrop(event: CdkDragDrop<MJDashboardEntityExtended[]>): void {
     try {
       if (event.previousContainer === event.container) {
         // Reordering within the same list
@@ -170,8 +260,8 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
         );
         
         // If moving to configured dashboards, sort the available list
-        if (event.container.data === this.configuredDashboards) {
-          this.availableDashboards.sort((a, b) => a.Name.localeCompare(b.Name));
+        if (event.container.data === this.ConfiguredDashboards) {
+          this.AvailableDashboards.sort((a, b) => a.Name.localeCompare(b.Name));
         }
       }
       
@@ -187,12 +277,17 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
     }
   }
 
-  public addDashboard(dashboard: MJDashboardEntityExtended): void {
+  /** @deprecated Use {@link OnDrop}. */
+  public onDrop(event: CdkDragDrop<MJDashboardEntityExtended[]>): void {
+    return this.OnDrop(event);
+  }
+
+  public AddDashboard(dashboard: MJDashboardEntityExtended): void {
     try {
-      const index = this.availableDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
+      const index = this.AvailableDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
       if (index !== -1) {
-        this.availableDashboards.splice(index, 1);
-        this.configuredDashboards.push(dashboard);
+        this.AvailableDashboards.splice(index, 1);
+        this.ConfiguredDashboards.push(dashboard);
         this.checkForChanges();
       }
     } catch (error) {
@@ -206,13 +301,18 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
     }
   }
 
-  public removeDashboard(dashboard: MJDashboardEntityExtended): void {
+  /** @deprecated Use {@link AddDashboard}. */
+  public addDashboard(dashboard: MJDashboardEntityExtended): void {
+    return this.AddDashboard(dashboard);
+  }
+
+  public RemoveDashboard(dashboard: MJDashboardEntityExtended): void {
     try {
-      const index = this.configuredDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
+      const index = this.ConfiguredDashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
       if (index !== -1) {
-        this.configuredDashboards.splice(index, 1);
-        this.availableDashboards.push(dashboard);
-        this.availableDashboards.sort((a, b) => a.Name.localeCompare(b.Name));
+        this.ConfiguredDashboards.splice(index, 1);
+        this.AvailableDashboards.push(dashboard);
+        this.AvailableDashboards.sort((a, b) => a.Name.localeCompare(b.Name));
         this.checkForChanges();
       }
     } catch (error) {
@@ -226,66 +326,76 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
     }
   }
 
-  public async onPreferenceModeChange(): Promise<void> {
+  /** @deprecated Use {@link RemoveDashboard}. */
+  public removeDashboard(dashboard: MJDashboardEntityExtended): void {
+    return this.RemoveDashboard(dashboard);
+  }
+
+  public async OnPreferenceModeChange(): Promise<void> {
     try {
-      this.loading = true;
+      this.Loading = true;
       this.error = null;
       
       // Reload preferences with new mode
       await this.loadCurrentPreferences();
       this.splitDashboards();
-      this.originalConfiguredIds = this.configuredDashboards.map(d => d.ID);
-      this.hasChanges = false;
+      this.originalConfiguredIds = this.ConfiguredDashboards.map(d => d.ID);
+      this.HasChanges = false;
       
     } catch (error) {
       LogError('Error changing preference mode', null, error);
       this.error = 'Error loading preferences. Please try again.';
     } finally {
-      this.loading = false;
+      this.Loading = false;
     }
+  }
+
+  /** @deprecated Use {@link OnPreferenceModeChange}. */
+  public async onPreferenceModeChange(): Promise<void> {
+    return this.OnPreferenceModeChange();
   }
 
   private checkForChanges(): void {
     try {
-      const currentConfiguredIds = this.configuredDashboards.map(d => d.ID);
+      const currentConfiguredIds = this.ConfiguredDashboards.map(d => d.ID);
       
       // Check if the order or selection has changed
-      this.hasChanges = currentConfiguredIds.length !== this.originalConfiguredIds.length ||
+      this.HasChanges = currentConfiguredIds.length !== this.originalConfiguredIds.length ||
                        currentConfiguredIds.some((id, index) => id !== this.originalConfiguredIds[index]);
       
       // Debug logging
       console.log('Dashboard preferences change check:', {
         original: this.originalConfiguredIds,
         current: currentConfiguredIds,
-        hasChanges: this.hasChanges
+        hasChanges: this.HasChanges
       });
     } catch (error) {
       LogError('Error checking for changes', null, error);
-      this.hasChanges = false;
+      this.HasChanges = false;
     }
   }
 
-  public async onSave(): Promise<void> {
-    if (this.saving || !this.hasChanges) {
-      console.log('Save cancelled:', { saving: this.saving, hasChanges: this.hasChanges });
+  public async OnSave(): Promise<void> {
+    if (this.saving || !this.HasChanges) {
+      console.log('Save cancelled:', { saving: this.saving, hasChanges: this.HasChanges });
       return;
     }
 
     try {
       this.saving = true;
-      console.log('Starting save process with configured dashboards:', this.configuredDashboards.map(d => ({ id: d.ID, name: d.Name })));
+      console.log('Starting save process with configured dashboards:', this.ConfiguredDashboards.map(d => ({ id: d.ID, name: d.Name })));
       
       const md = this.ProviderToUse;
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Get existing preferences for this scope
-      const baseCondition = this.scope === 'Global' 
+      const baseCondition = this.Scope === 'Global' 
         ? `Scope='Global' AND ApplicationID IS NULL`
-        : `Scope='App' AND ApplicationID='${this.applicationId}'`;
+        : `Scope='App' AND ApplicationID='${this.ApplicationId}'`;
       
       let userFilter: string;
       
-      if (this.isSysAdmin && this.scope === 'Global' && this.preferenceMode === 'system') {
+      if (this.IsSysAdmin && this.Scope === 'Global' && this.PreferenceMode === 'system') {
         // Managing system defaults
         userFilter = `UserID IS NULL AND ${baseCondition}`;
       } else {
@@ -310,7 +420,7 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
         existingByDashboardId.set(pref.DashboardID, pref);
       });
 
-      const configuredDashboardIds = new Set(this.configuredDashboards.map(d => d.ID));
+      const configuredDashboardIds = new Set(this.ConfiguredDashboards.map(d => d.ID));
 
       // Step 1: Delete preferences that are no longer configured
       const prefsToDelete = existingPreferences.filter(pref => !configuredDashboardIds.has(pref.DashboardID));
@@ -327,8 +437,8 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
       // Step 2: Update existing preferences or create new ones
       const newPreferences: MJDashboardUserPreferenceEntity[] = [];
       
-      for (let i = 0; i < this.configuredDashboards.length; i++) {
-        const dashboard = this.configuredDashboards[i];
+      for (let i = 0; i < this.ConfiguredDashboards.length; i++) {
+        const dashboard = this.ConfiguredDashboards[i];
         const newDisplayOrder = i + 1;
         
         let prefEntity = existingByDashboardId.get(dashboard.ID);
@@ -348,7 +458,7 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
           prefEntity = await md.GetEntityObject<MJDashboardUserPreferenceEntity>('MJ: Dashboard User Preferences');
           
           // Set UserID based on preference mode
-          if (this.isSysAdmin && this.scope === 'Global' && this.preferenceMode === 'system') {
+          if (this.IsSysAdmin && this.Scope === 'Global' && this.PreferenceMode === 'system') {
             prefEntity.UserID = null; // System default
           } else {
             prefEntity.UserID = md.CurrentUser.ID; // Personal preference
@@ -356,8 +466,8 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
           
           prefEntity.DashboardID = dashboard.ID;
           prefEntity.DisplayOrder = newDisplayOrder;
-          prefEntity.Scope = this.scope;
-          prefEntity.ApplicationID = this.applicationId;
+          prefEntity.Scope = this.Scope;
+          prefEntity.ApplicationID = this.ApplicationId;
 
           console.log('Creating preference entity:', {
             UserID: prefEntity.UserID,
@@ -379,7 +489,7 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
       console.log('Successfully processed', newPreferences.length, 'preferences');
 
       // Emit success result
-      this.result.emit({
+      this.Result.emit({
         saved: true,
         preferences: newPreferences
       });
@@ -398,7 +508,12 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
     }
   }
 
+  /** @deprecated Use {@link OnSave}. */
+  public async onSave(): Promise<void> {
+    return this.OnSave();
+  }
+
   public onCancel(): void {
-    this.result.emit({ saved: false });
+    this.Result.emit({ saved: false });
   }
 }

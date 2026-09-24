@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
+import { PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE } from '../StreamingDiscovery.js';
 import { BaseRESTIntegrationConnector, type RESTAuthContext, type RESTResponse, type PaginationState } from '../BaseRESTIntegrationConnector.js';
 import type { FetchContext } from '../BaseIntegrationConnector.js';
 
@@ -32,17 +33,34 @@ const FIELDS: Record<string, MJIntegrationObjectFieldEntity[]> = {
         f({ Name: 'evId', IsPrimaryKey: true, Status: 'Active', Sequence: 1 }),
         f({ Name: 'id', RelatedIntegrationObjectID: 'objOrgKeyless', Status: 'Active', Sequence: 2 }),
     ],
+    // ── 3-level chain: gp (keyed) → par (KEYLESS) → kid. The middle level being keyless is what
+    // forces a buffer, and its being a template-var child itself is what makes each buffered row
+    // cost a real fetch — so the buffer's size is directly readable off the URL log.
+    objGP: [f({ Name: 'gpId', IsPrimaryKey: true, Status: 'Active', Sequence: 1 })],
+    objPar: [
+        f({ Name: 'pid', Status: 'Active', Sequence: 1 }),                                       // no PK declared
+        f({ Name: 'gpId', RelatedIntegrationObjectID: 'objGP', Status: 'Active', Sequence: 2 }),
+    ],
+    objKid: [
+        f({ Name: 'kid', IsPrimaryKey: true, Status: 'Active', Sequence: 1 }),
+        f({ Name: 'pid', RelatedIntegrationObjectID: 'objPar', Status: 'Active', Sequence: 2 }),
+    ],
 };
 const objOrg = { ID: 'objOrg', Name: 'Orgs', APIPath: '/orgs', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
 const objEvents = { ID: 'objEvents', Name: 'events', APIPath: '/orgs/{OrgId}/events', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
 const objOrgKeyless = { ID: 'objOrgKeyless', Name: 'OrgsKL', APIPath: '/orgskl', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
 const objEventsKL = { ID: 'objEventsKL', Name: 'eventsKL', APIPath: '/orgskl/{id}/events', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
-const OBJ_BY_ID: Record<string, MJIntegrationObjectEntity> = { objOrg, objEvents, objOrgKeyless, objEventsKL };
-const OBJ_BY_NAME: Record<string, MJIntegrationObjectEntity> = { Orgs: objOrg, events: objEvents, OrgsKL: objOrgKeyless, eventsKL: objEventsKL };
+const objGP = { ID: 'objGP', Name: 'gps', APIPath: '/gps', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
+const objPar = { ID: 'objPar', Name: 'pars', APIPath: '/gps/{gpId}/pars', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
+const objKid = { ID: 'objKid', Name: 'kids', APIPath: '/pars/{pid}/kids', SupportsPagination: false, PaginationType: 'None', ResponseDataKey: null } as unknown as MJIntegrationObjectEntity;
+const OBJ_BY_ID: Record<string, MJIntegrationObjectEntity> = { objOrg, objEvents, objOrgKeyless, objEventsKL, objGP, objPar, objKid };
+const OBJ_BY_NAME: Record<string, MJIntegrationObjectEntity> = { Orgs: objOrg, events: objEvents, OrgsKL: objOrgKeyless, eventsKL: objEventsKL, gps: objGP, pars: objPar, kids: objKid };
 
 /** Parent rows the (mock) vendor returns. Varied per test. */
 let orgRows: Array<{ OrgId: string }> = [];
 let keylessOrgRows: Array<{ id: string }> = [];
+/** Grandparents for the 3-level chain. Deliberately far more than any buffer should ever read. */
+let gpRows: Array<{ gpId: string }> = [];
 
 class TestConnector extends BaseRESTIntegrationConnector {
     public urls: string[] = [];
@@ -63,6 +81,13 @@ class TestConnector extends BaseRESTIntegrationConnector {
         const m = /^\/orgs\/([^/]+)\/events$/.exec(path);
         if (m) return { Status: 200, Body: [{ id: `e-${m[1]}` }], Headers: {} } as RESTResponse;
         if (path === '/orgskl') return { Status: 200, Body: keylessOrgRows, Headers: {} } as RESTResponse;
+        // gp → par → kid. Two pars per gp so the tagged-on `gpId` is NOT unique across the buffered
+        // slice and the classifier picks `pid`; 100 kids per par so the leaf's target is met quickly.
+        if (path === '/gps') return { Status: 200, Body: gpRows, Headers: {} } as RESTResponse;
+        const mp = /^\/gps\/([^/]+)\/pars$/.exec(path);
+        if (mp) return { Status: 200, Body: [{ pid: `${mp[1]}-a` }, { pid: `${mp[1]}-b` }], Headers: {} } as RESTResponse;
+        const mk = /^\/pars\/([^/]+)\/kids$/.exec(path);
+        if (mk) return { Status: 200, Body: Array.from({ length: 100 }, (_v, i) => ({ kid: `${mk[1]}-k${i}` })), Headers: {} } as RESTResponse;
         const mkl = /^\/orgskl\/([^/]+)\/events$/.exec(path);
         if (mkl) return { Status: 200, Body: [{ evId: `e-${mkl[1]}` }], Headers: {} } as RESTResponse;
         return { Status: 404, Body: [], Headers: {} } as RESTResponse;
@@ -86,11 +111,12 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
     beforeEach(() => {
         orgRows = [{ OrgId: 'org1' }, { OrgId: 'org2' }, { OrgId: 'org3' }];
         keylessOrgRows = [{ id: 'kl1' }, { id: 'kl2' }];
+        gpRows = Array.from({ length: 600 }, (_v, i) => ({ gpId: `gp${i}` }));
         vi.spyOn(IntegrationEngineBase, 'Instance', 'get').mockReturnValue({
             GetIntegrationObjectByID: (id: string) => OBJ_BY_ID[id],
             GetIntegrationObject: (_int: string, name: string) => OBJ_BY_NAME[name],
             GetIntegrationObjectFields: (id: string) => FIELDS[id] ?? [],
-            GetActiveIntegrationObjects: () => [objOrg, objEvents, objOrgKeyless, objEventsKL],
+            GetActiveIntegrationObjects: () => [objOrg, objEvents, objOrgKeyless, objEventsKL, objGP, objPar, objKid],
         } as unknown as IntegrationEngineBase);
     });
 
@@ -171,6 +197,86 @@ describe('BaseRESTIntegrationConnector — discovery-time parent sampling (§sam
             await c.DiscoverFieldsViaFetch(ci, 'events', {} as UserInfo, { MaxRecords: 2 });
             const kids = c.urls.map(u => u.replace('https://api.test', '')).filter(p => p.endsWith('/events'));
             expect(kids.length).toBe(2);   // stopped at the target — did NOT fetch under all 5 parents
+        });
+    });
+
+    describe('the keyless-parent buffer is sized to the CLASSIFIER, not to the leaf target', () => {
+        // A parent that declares no key is the one place the chain cannot stay lazy: it must be read
+        // before it can be descended into. That read used to be sized to the LEAF's target (500),
+        // which is 10x what the value-statistic classifier's significance floor (50) needs — and
+        // because a parent may itself be a child, each of those rows is a fetch up the chain.
+        //
+        // gp(600, keyed) -> par(KEYLESS, 2 per gp) -> kid(100 per par), leaf target 500.
+        //   buffer 50 parents  = 25 `/pars` fetches   <- correct
+        //   buffer 500 parents = 250 `/pars` fetches  <- the old behaviour
+        const parCalls = (c: TestConnector) => c.urls.filter(u => /\/gps\/[^/]+\/pars$/.test(u)).length;
+        // The bound is CONFIGURABLE like every other discovery limit, not a literal. Pinned because
+        // the first version of this fix hardcoded it, which both bypassed the per-connection knob
+        // and duplicated a number the classifier already owns.
+        const ciWith = (cfg: Record<string, unknown>) =>
+            ({ IntegrationID: 'int1', Configuration: JSON.stringify(cfg) } as unknown as MJCompanyIntegrationEntity);
+        const kidCalls = (c: TestConnector) => c.urls.filter(u => /\/pars\/[^/]+\/kids$/.test(u)).length;
+
+        it('reads only the significance floor of keyless parents before descending', async () => {
+            const c = new TestConnector();
+            const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+            await c.DiscoverFieldsViaFetch(ci, 'kids', {} as UserInfo, { MaxRecords: 500 });
+            // 50 parent rows at 2 per grandparent fetch.
+            expect(parCalls(c)).toBe(25);
+        });
+
+        it('still classifies the keyless parent correctly and samples the child through it', async () => {
+            // The saving must not cost accuracy: 50 rows is the classifier's OWN floor, so the key is
+            // still resolved from data — and it resolves to `pid`, not to the tagged-on `gpId`, which
+            // repeats across the slice. A wrong pick here would show up as `/pars/gpN/kids`.
+            const c = new TestConnector();
+            const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+            const fields = await c.DiscoverFieldsViaFetch(ci, 'kids', {} as UserInfo, { MaxRecords: 500 });
+            expect(fields.map(fl => fl.Name)).toEqual(expect.arrayContaining(['kid', 'pid']));
+            expect(c.urls.some(u => /\/pars\/gp\d+-[ab]\/kids$/.test(u))).toBe(true);   // keyed by pid
+            // Target met by flushing the buffer — no need to walk further parents.
+            expect(kidCalls(c)).toBe(5);   // 5 x 100 kids = the 500 target
+        });
+
+        it('honours discoveryParentKeySampleRows from the connection Configuration', async () => {
+            const c = new TestConnector();
+            await c.DiscoverFieldsViaFetch(ciWith({ discoveryParentKeySampleRows: 10 }), 'kids', {} as UserInfo, { MaxRecords: 500 });
+            expect(parCalls(c)).toBe(5);   // 10 parent rows at 2 per grandparent fetch
+        });
+
+        it('honours the env override when the connection says nothing', async () => {
+            const prev = process.env.MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS;
+            process.env.MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS = '20';
+            try {
+                const c = new TestConnector();
+                const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+                await c.DiscoverFieldsViaFetch(ci, 'kids', {} as UserInfo, { MaxRecords: 500 });
+                expect(parCalls(c)).toBe(10);   // 20 parent rows at 2 per fetch
+            } finally {
+                if (prev === undefined) delete process.env.MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS;
+                else process.env.MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS = prev;
+            }
+        });
+
+        it('defaults to the classifier\'s OWN floor, not a copy of it', async () => {
+            // If the classifier's significance floor moves, this must move with it — a drifting
+            // duplicate would silently buffer too few rows and make every keyless parent abstain.
+            expect(PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE).toBe(50);
+            const c = new TestConnector();
+            const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+            await c.DiscoverFieldsViaFetch(ci, 'kids', {} as UserInfo, { MaxRecords: 500 });
+            expect(parCalls(c)).toBe(PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE / 2);
+        });
+
+        it('a target BELOW the floor still buffers only the target — the parent stream may be shorter', async () => {
+            // Math.min(target, floor): asking for 10 records must not sit waiting for 50 parents that
+            // a short parent stream might never produce. The trailing classify-on-what-we-have branch
+            // covers the genuinely-short stream; this covers the small-target case.
+            const c = new TestConnector();
+            const ci = { IntegrationID: 'int1' } as unknown as MJCompanyIntegrationEntity;
+            await c.DiscoverFieldsViaFetch(ci, 'kids', {} as UserInfo, { MaxRecords: 10 });
+            expect(parCalls(c)).toBeLessThanOrEqual(5);   // <=10 parent rows at 2 per fetch
+            expect(kidCalls(c)).toBe(1);                  // one par's 100 kids covers a target of 10
         });
     });
 });

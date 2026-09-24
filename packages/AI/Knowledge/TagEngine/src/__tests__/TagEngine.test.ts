@@ -33,6 +33,10 @@ vi.mock('@memberjunction/global', () => ({
     },
     NormalizeUUID: (id: string) => id.toLowerCase(),
     RegisterClass: vi.fn(),
+    // Needed because @memberjunction/ai-engine-base's PriceUnitTypes marks its base class
+    // @RequiresSubclass(); this mock replaces the module wholesale, so an unlisted symbol
+    // anywhere in the dependency chain stops the suite collecting.
+    RequiresSubclass: () => (target: unknown) => target,
 }));
 
 vi.mock('@memberjunction/core', () => ({
@@ -51,6 +55,9 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
+    // Imported by PriceUnitTypes in @memberjunction/ai-engine-base. Same wholesale-mock
+    // caveat as above: unlisted means uncollectable, not merely unmocked.
+    MJAIModelPriceUnitTypeEntity: class {},
     MJTagEntity: class {},
     MJTaggedItemEntity: class {},
     MJAICredentialBindingEntity: class {},

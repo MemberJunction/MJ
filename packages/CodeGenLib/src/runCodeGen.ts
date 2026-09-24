@@ -11,22 +11,26 @@ import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
-import { applyIncludeSchemaScope } from './Database/schema-scope';
-import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
-import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
+import { ApplyIncludeSchemaScope } from './Database/schema-scope';
+import { PartitionEntitiesByOutputDirectory } from './Config/schema-output';
+import { OutputDir, Commands, configInfo, GetSettingValue, DbPlatform, GetExternalEntitySchemas, InitializeConfig, CommandInfo, ApplyInProcessAdvancedGenerationPolicy, IN_PROCESS_ADVANCED_GENERATION_ENV } from './Config/config';
+import { ResolveDirtySchemasForEmit, SchemaKey, SchemaEmitOptions } from './Misc/schema-emit';
+import { EmitStats } from './Misc/emit-stats';
+import { logError, logStatus, LogWarning, StartSpinner, UpdateSpinner, SucceedSpinner, FailSpinner, WarnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
-import { RunCommandsBase, CommandExecutionResult } from './Misc/runCommand';
+import { RunCommandsBase, CommandExecutionResult, FormatCommandFailureDetail } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
-import { RemoteOperationGeneratorBase } from './Misc/remote_operations_codegen';
+import { RemoteOperationGeneratorBase, ResolveRemoteOperationSchema } from './Misc/remote_operations_codegen';
 import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
-import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, resolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
+import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, ResolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
+import { ReconcileFieldLevelSecurity } from './Database/reconcileFieldLevelSecurity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
@@ -56,19 +60,33 @@ export class RunCodeGenBase {
    */
   protected commandFailures: Array<{ context: string; message: string }> = [];
 
-  /** Record any failed entries from a BEFORE/AFTER command batch, paired by index. */
-  protected recordCommandFailures(phase: string, cmds: CommandInfo[], results: CommandExecutionResult[]): void {
+  /**
+   * Record any failed entries from a BEFORE/AFTER command batch, paired by index.
+   *
+   * Returns just this batch's failures. Callers log what they get back rather than walking
+   * `commandFailures`, which accumulates across phases — iterating the whole array in the
+   * AFTER handler re-logged every BEFORE failure a second time.
+   */
+  protected recordCommandFailures(
+    phase: string,
+    cmds: CommandInfo[],
+    results: CommandExecutionResult[],
+  ): Array<{ context: string; message: string }> {
+    const recorded: Array<{ context: string; message: string }> = [];
     results.forEach((r, i) => {
       if (!r.success) {
         const cmd = cmds[i];
         const cmdText = cmd ? [cmd.command, ...(cmd.args ?? [])].join(' ').trim() : `command #${i + 1}`;
-        const detail = (r.error || r.output || '').trim();
-        this.commandFailures.push({
+        const detail = FormatCommandFailureDetail(r);
+        const failure = {
           context: `${phase} command`,
           message: detail ? `\`${cmdText}\` failed: ${detail}` : `\`${cmdText}\` failed`,
-        });
+        };
+        this.commandFailures.push(failure);
+        recorded.push(failure);
       }
     });
+    return recorded;
   }
 
   /**
@@ -85,8 +103,13 @@ export class RunCodeGenBase {
    * `ClassFactory.CreateInstance` returns the abstract base on a missed
    * lookup, so we disambiguate by constructor identity.
    */
+  public async SetupDataSource(): Promise<DataSourceResult> {
+    return ResolveCodeGenDatabaseProvider(DbPlatform()).SetupDataSource();
+  }
+
+  /** @deprecated Use {@link SetupDataSource}. */
   public async setupDataSource(): Promise<DataSourceResult> {
-    return resolveCodeGenDatabaseProvider(dbPlatform()).SetupDataSource();
+    return this.SetupDataSource();
   }
 
   /**
@@ -102,7 +125,7 @@ export class RunCodeGenBase {
       // Re-initialize config from the specified working directory (e.g. repo root)
       // so CodeGen picks up the correct mj.config.cjs with output directories
       if (workingDirectory) {
-        initializeConfig(workingDirectory);
+        InitializeConfig(workingDirectory);
       }
       // Drop the process-static soft-PK/FK cache so this run re-reads additionalSchemaInfo from disk.
       // RSU rewrites that file (WriteAdditionalSchemaInfo) immediately before invoking this in-process
@@ -110,7 +133,18 @@ export class RunCodeGenBase {
       // are seen as PK-less → entities are skipped ("No primary key found") → 0 rows sync until an MJAPI
       // restart. In-process path only; the CLI Run() keeps load-once. Deterministic — no mtime/TOCTOU.
       ManageMetadataBase.invalidateSoftPKFKConfigCache();
-      return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
+      // In-process runs are the runtime schema-update path, where the CLI's full AI profile turns a
+      // minutes-class step into an hours-class one and a bad AI answer can drop a table. Off unless the
+      // operator opts in; see applyInProcessAdvancedGenerationPolicy for the reasoning.
+      const advancedGeneration = ApplyInProcessAdvancedGenerationPolicy(configInfo);
+      if (advancedGeneration.disabled) {
+        logStatus(`In-process CodeGen: advanced (AI) generation is off for this run; set ${IN_PROCESS_ADVANCED_GENERATION_ENV}=1 to keep it on`);
+      }
+      try {
+        return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
+      } finally {
+        advancedGeneration.restore();
+      }
     } catch (e) {
       logError('In-process CodeGen failed: ' + e);
       return false;
@@ -134,10 +168,10 @@ export class RunCodeGenBase {
     const startMs = Date.now();
     try {
       const startTime = new Date();
-      const platform = dbPlatform();
-      startSpinner('Starting MemberJunction CodeGen (' + platform + ') @ ' + startTime.toLocaleString());
+      const platform = DbPlatform();
+      StartSpinner('Starting MemberJunction CodeGen (' + platform + ') @ ' + startTime.toLocaleString());
 
-      const dataSource = await this.setupDataSource();
+      const dataSource = await this.SetupDataSource();
       const success = await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
 
       let entityCount = 0;
@@ -161,14 +195,15 @@ export class RunCodeGenBase {
         durationSeconds: (Date.now() - startMs) / 1000,
         data: {
           entityCount,
-          skippedDb: skipDatabaseGeneration || getSettingValue('skip_database_generation', false),
-          skippedFiles: skipFileGeneration || getSettingValue('skip_file_generation', false),
+          skippedDb: skipDatabaseGeneration || GetSettingValue('skip_database_generation', false),
+          skippedFiles: skipFileGeneration || GetSettingValue('skip_file_generation', false),
         },
         errors,
       };
     } catch (e) {
-      failSpinner('CodeGen failed: ' + e);
-      logError(e as string);
+      const message = e instanceof Error ? (e.stack ?? e.message) : String(e);
+      FailSpinner('CodeGen failed: ' + e);
+      logError(message);
       return {
         success: false,
         command: 'codegen',
@@ -185,10 +220,11 @@ export class RunCodeGenBase {
   protected async executeCodeGenPipeline(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false): Promise<boolean> {
       const { provider, connection: conn, currentUser } = dataSource;
       const startTime = new Date();
+      ManageMetadataBase.clearFieldTracking();
       const reporter = CodeGenReporter.Instance;
       reporter.startRun();
-      reporter.mark('platform', dbPlatform());
-      reporter.mark('skipDB', skipDatabaseGeneration || getSettingValue('skip_database_generation', false));
+      reporter.mark('platform', DbPlatform());
+      reporter.mark('skipDB', skipDatabaseGeneration || GetSettingValue('skip_database_generation', false));
       let pipelineSuccess = true;
       this.commandFailures = [];
 
@@ -201,9 +237,9 @@ export class RunCodeGenBase {
         logStatus('Loaded ' + m.Entities.length + ' entities from metadata');
 
         if (configInfo.advancedGeneration?.enableAdvancedGeneration) {
-          startSpinner('Initializing AI Engine for advanced generation...');
+          StartSpinner('Initializing AI Engine for advanced generation...');
           await AIEngine.Instance.Config(false, currentUser);
-          succeedSpinner('AI Engine initialized');
+          SucceedSpinner('AI Engine initialized');
         }
         return m;
       });
@@ -214,32 +250,37 @@ export class RunCodeGenBase {
       // so the scope still applies on the `--skipdb` path, which skips manageMetadata entirely but
       // still generates files from configInfo.excludeSchemas. applyIncludeSchemaScope is idempotent, so
       // running both is safe and the second pass is a no-op when the first already ran.
-      applyIncludeSchemaScope(Array.from(new Set(md.Entities.map((e) => e.SchemaName))), configInfo);
+      ApplyIncludeSchemaScope(Array.from(new Set(md.Entities.map((e) => e.SchemaName))), configInfo);
 
       const runCommandsObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCommandsBase>(RunCommandsBase)!;
       const sqlCodeGenObject = MJGlobal.Instance.ClassFactory.CreateInstance<SQLCodeGenBase>(SQLCodeGenBase)!;
 
-      const skipDB = skipDatabaseGeneration || getSettingValue('skip_database_generation', false);
+      const skipDB = skipDatabaseGeneration || GetSettingValue('skip_database_generation', false);
       if (!skipDB) {
-        startSpinner('Handling SQL Script Execution, Metadata Maintenance, and SQL Object Generation...');
+        StartSpinner('Handling SQL Script Execution, Metadata Maintenance, and SQL Object Generation...');
         SQLLogging.initSQLLogging();
 
-        const beforeCommands = commands('BEFORE');
+        const beforeCommands = Commands('BEFORE');
         if (beforeCommands && beforeCommands.length > 0) {
-          updateSpinner('Executing BEFORE commands...');
+          UpdateSpinner('Executing BEFORE commands...');
           const results = await runCommandsObject.runCommands(beforeCommands);
           if (results.some((r) => !r.success)) {
             logError('ERROR running one or more BEFORE commands');
-            this.recordCommandFailures('BEFORE', beforeCommands, results);
+            const recorded = this.recordCommandFailures('BEFORE', beforeCommands, results);
+            pipelineSuccess = false;
+            for (const failure of recorded) {
+              logError(failure.message);
+              reporter.note(failure.message);
+            }
           }
         }
 
-        updateSpinner('Executing before-all SQL Scripts...');
+        UpdateSpinner('Executing before-all SQL Scripts...');
         if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'before-all'))) logError('ERROR running before-all SQL Scripts');
 
         const newUserSetup = configInfo.newUserSetup;
         if (newUserSetup) {
-          updateSpinner('Setting up new user...');
+          UpdateSpinner('Setting up new user...');
           const newUserObject = MJGlobal.Instance.ClassFactory.CreateInstance<CreateNewUserBase>(CreateNewUserBase)!;
           const result = await newUserObject.createNewUser(newUserSetup);
           if (!result.Success) {
@@ -247,13 +288,13 @@ export class RunCodeGenBase {
               logError('ERROR creating new user');
               logError('   ' + result.Message);
             } else {
-              logWarning('Warning: (New User Setup) ' + result.Message);
+              LogWarning('Warning: (New User Setup) ' + result.Message);
             }
           }
         }
 
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
-        updateSpinner('Managing Metadata...');
+        UpdateSpinner('Managing Metadata...');
         const metadataSuccess = await reporter.phase('manageMetadata', () => manageMD.manageMetadata(conn, currentUser));
         // Refresh in-memory metadata UNCONDITIONALLY after manageMetadata, even when it returned
         // false. manageMetadata can return false on non-fatal sub-failures (e.g. failed validator
@@ -263,28 +304,35 @@ export class RunCodeGenBase {
         // 3-bug chain, observed first-run on PG for entities like SystemEvent.
         await provider.Refresh();
         if (!metadataSuccess) {
-          failSpinner('ERROR managing metadata (refresh applied; downstream will use latest available state)');
+          FailSpinner('ERROR managing metadata (refresh applied; downstream will use latest available state)');
           pipelineSuccess = false;
         } else {
-          succeedSpinner('Metadata management completed');
+          SucceedSpinner('Metadata management completed');
         }
 
-        const sqlOutputDir = outputDir('SQL', true);
+        // Field-level security reconciliation. Runs AFTER the refresh above so it sees the
+        // EntityField rows manageMetadata just created for newly-discovered columns: on an
+        // FLS-enabled entity a field with no permission rows is DENIED, so a column added
+        // without this step would be invisible to every user until something else reconciled.
+        // It also removes rows orphaned by a dropped column or a revoked role.
+        await reporter.phase('reconcileFieldPermissions', () => ReconcileFieldLevelSecurity(provider, currentUser));
+
+        const sqlOutputDir = OutputDir('SQL', true);
         let sqlGenerationSucceeded = true;
         if (sqlOutputDir) {
-          startSpinner('Managing SQL Scripts and Execution...');
+          StartSpinner('Managing SQL Scripts and Execution...');
           const sqlSuccess = await reporter.phase('manageSQLScriptsAndExecution', () =>
             sqlCodeGenObject.manageSQLScriptsAndExecution(conn, md.Entities, sqlOutputDir, currentUser),
           );
           if (!sqlSuccess) {
-            failSpinner('Error managing SQL scripts and execution');
+            FailSpinner('Error managing SQL scripts and execution');
             sqlGenerationSucceeded = false;
             pipelineSuccess = false;
           } else {
-            succeedSpinner('SQL scripts and execution completed');
+            SucceedSpinner('SQL scripts and execution completed');
           }
         } else {
-          warnSpinner('SQL output directory NOT found in config file, skipping...');
+          WarnSpinner('SQL output directory NOT found in config file, skipping...');
         }
 
         // ── Post-run CRUD validator ─────────────────────────────────────────
@@ -302,9 +350,9 @@ export class RunCodeGenBase {
         // but the default behavior is to fail loudly and exit non-zero.
         const skipCRUDValidation = process.env.MJ_CODEGEN_SKIP_CRUD_VALIDATION === 'true';
         if (skipCRUDValidation) {
-          logWarning('Skipping post-CodeGen CRUD function validation (MJ_CODEGEN_SKIP_CRUD_VALIDATION=true)');
+          LogWarning('Skipping post-CodeGen CRUD function validation (MJ_CODEGEN_SKIP_CRUD_VALIDATION=true)');
         } else {
-          startSpinner('Validating expected CRUD routines exist in database...');
+          StartSpinner('Validating expected CRUD routines exist in database...');
           try {
             // Use the same baseline filter as manageSQLScriptsAndExecution: only
             // entities flagged IncludeInAPI=true are expected to have routines.
@@ -363,7 +411,7 @@ export class RunCodeGenBase {
               const list = missing
                 .map(m => `  - [${m.schema}] ${m.entity} → missing ${m.type} routine: ${m.expectedRoutine}`)
                 .join('\n');
-              failSpinner(`Post-CodeGen CRUD validation FAILED: ${missing.length} expected routine(s) missing`);
+              FailSpinner(`Post-CodeGen CRUD validation FAILED: ${missing.length} expected routine(s) missing`);
               logError(
                 `Post-CodeGen validation detected ${missing.length} CRUD routine(s) the runtime expects but the database is missing.\n` +
                   `These entities are configured (AllowCreateAPI/AllowUpdateAPI/AllowDeleteAPI=true) to expose mutations via the API,\n` +
@@ -377,13 +425,64 @@ export class RunCodeGenBase {
               );
               return false;
             } else {
-              succeedSpinner(`Post-CodeGen CRUD validation passed (${md.Entities.length} entities checked)`);
+              SucceedSpinner(`Post-CodeGen CRUD validation passed (${md.Entities.length} entities checked)`);
             }
           } catch (e) {
-            failSpinner('Post-CodeGen CRUD validation errored');
+            FailSpinner('Post-CodeGen CRUD validation errored');
             logError(`CRUD validator threw: ${e instanceof Error ? e.message : String(e)}`);
             return false;
           }
+        }
+
+        // Metadata/view coherence. The CRUD validator asks "can the runtime WRITE this
+        // entity"; this asks the prior question — "can it READ it at all".
+        //
+        // A field the metadata declares but the base view does not produce makes every
+        // read of that entity fail with `column "X" does not exist`. Grids render that
+        // as an empty result rather than an error, so the entity looks like it holds no
+        // data. Nothing else in the pipeline notices, and the condition is permanent for
+        // any schema in `excludeSchemas` (CodeGen emits permissions only for those, so
+        // there is no regeneration pass to repair the view) — which by convention
+        // includes `__mj` on essentially every install.
+        //
+        // Reported, not fatal, by default: existing installs may already carry this drift
+        // and failing their next codegen run would be worse than telling them about it.
+        // Set MJ_CODEGEN_STRICT_FIELD_RESOLUTION=true to make it a hard gate; that is the
+        // intended default once fleets are clean.
+        try {
+          StartSpinner('Validating entity fields resolve against their base views...');
+          const baseline = md.Entities.filter(e => e.IncludeInAPI);
+          const gaps = await sqlCodeGenObject.DBProvider.validateEntityFieldsResolve(conn, baseline);
+          if (gaps.length > 0) {
+            const affected = new Set(gaps.map(g => `${g.schema}.${g.entity}`));
+            const list = gaps
+              .map(g => `  - [${g.schema}] ${g.entity} → ${g.baseView} does not produce "${g.field}"${g.isVirtual ? ' (virtual)' : ''}`)
+              .join('\n');
+            const strict = process.env.MJ_CODEGEN_STRICT_FIELD_RESOLUTION === 'true';
+            const summary =
+              `${gaps.length} declared field(s) across ${affected.size} entity(ies) are not produced by their base view.\n` +
+              `Every read of these entities fails with 'column ... does not exist'. A grid shows that as\n` +
+              `"no data" rather than an error, so the entity appears empty while its table is full.\n` +
+              `${list}\n\n` +
+              `Cause: a migration added the column to the base TABLE and registered the EntityField, but did\n` +
+              `not rebuild the base VIEW. For schemas listed in excludeSchemas (typically __mj) CodeGen never\n` +
+              `regenerates the view, so this does not self-heal.\n` +
+              `Fix: rebuild the affected base view(s). PostgreSQL permits appending columns in place via\n` +
+              `CREATE OR REPLACE VIEW, so no DROP/CASCADE is required.`;
+            if (strict) {
+              FailSpinner(`Field-resolution validation FAILED: ${gaps.length} unreadable field(s)`);
+              logError(summary);
+              return false;
+            }
+            WarnSpinner(`Field-resolution validation found ${gaps.length} unreadable field(s)`);
+            LogWarning(summary);
+          } else {
+            SucceedSpinner('Entity fields all resolve against their base views');
+          }
+        } catch (e) {
+          // Never fail the run on the validator's own error — it is a reporter.
+          WarnSpinner('Field-resolution validation could not run');
+          LogWarning(`Field-resolution validator threw: ${e instanceof Error ? e.message : String(e)}`);
         }
         // Surface upstream SQL-pipeline failure even if validator passed: a
         // green validator just means whatever DID get generated is consistent;
@@ -392,48 +491,89 @@ export class RunCodeGenBase {
           return false;
         }
       } else {
-        warnSpinner('Skipping database generation (skip_database_generation = true)');
-
-        const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
-        startSpinner('Checking/Loading AI Generated Code from Metadata...');
-        const metadataSuccess = await reporter.phase('loadGeneratedCode', () => manageMD.loadGeneratedCode(conn, currentUser));
-        if (!metadataSuccess) {
-          failSpinner('ERROR checking/loading AI Generated Code from Metadata');
-          pipelineSuccess = false;
-          return false;
-        } else {
-          succeedSpinner('AI Generated Code loaded from Metadata');
-        }
+        WarnSpinner('Skipping database generation (skip_database_generation = true)');
       }
 
-      const skipFiles = skipFileGeneration || getSettingValue('skip_file_generation', false);
+      // Persisted validators must reach file generation on EVERY path, not just the skip-DB one.
+      //
+      // File generation below runs for both branches, but `ManageMetadataBase.generatedValidators`
+      // — which `GenerateValidateFunction` reads to emit each entity's `Validate()` override — was
+      // only populated here, inside the `else`. On the database-generation path the sole source was
+      // `runValidationGeneration`, which needs AI. So a FULL `mj codegen --no-ai` emitted the entity
+      // subclasses as though no validators existed and silently DELETED every committed
+      // `Validate()` override — not "declined to add new ones", removed the existing ones.
+      //
+      // That is not hypothetical: it is how v6.1.0-edge.5's 56 overrides disappeared in 197fdf8376
+      // ("100% CodeGen idempotency, field change tracking, and churn elimination"), a full
+      // regeneration whose commit message and changeset mention validation nowhere. The
+      // `codegen-drift` CI gate then locked the loss in, because it runs `codegen --no-ai` and
+      // requires the committed file to match that lossy output.
+      //
+      // Loading unconditionally is safe on the AI path too: `GenerateValidateFunction` already
+      // deduplicates by `functionName` over a deterministic sort, so a validator both freshly
+      // generated and read back from `GeneratedCode` yields one emission, not two.
+      const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
+      StartSpinner('Checking/Loading AI Generated Code from Metadata...');
+      const metadataSuccess = await reporter.phase('loadGeneratedCode', () => manageMD.loadGeneratedCode(conn, currentUser));
+      if (!metadataSuccess) {
+        FailSpinner('ERROR checking/loading AI Generated Code from Metadata');
+        pipelineSuccess = false;
+        return false;
+      } else {
+        // Report the COUNT, not just success. Loading zero validators is a legitimate state for a
+        // database that has none, and an invisible catastrophe for one that has plenty: file
+        // generation emits each entity as though it had no `Validate()` override, silently deleting
+        // whatever was committed. Both times that regression shipped, the log said exactly this
+        // line and nothing else. A number here makes the next one visible in CI output.
+        const loadedValidators = ManageMetadataBase.generatedValidators.length;
+        SucceedSpinner(`AI Generated Code loaded from Metadata (${loadedValidators} validator${loadedValidators === 1 ? '' : 's'})`);
+      }
+
+      const skipFiles = skipFileGeneration || GetSettingValue('skip_file_generation', false);
       if (skipFiles) {
-        warnSpinner('Skipping file generation (skip_file_generation = true)');
+        WarnSpinner('Skipping file generation (skip_file_generation = true)');
         SQLLogging.finishSQLLogging();
       } else if (!(await this.runFileGenerationPhase(conn, currentUser, md, skipDB))) {
         pipelineSuccess = false;
         return false;
       }
 
-      startSpinner('Running system integrity checks...');
-      await SystemIntegrityBase.RunIntegrityChecks(conn, true);
-      succeedSpinner('System integrity checks completed');
+      StartSpinner('Running system integrity checks...');
+      const integrityResults = await SystemIntegrityBase.RunIntegrityChecks(conn, true);
+      const integrityFailures = integrityResults.filter((r) => !r.Success);
+      if (integrityFailures.length > 0) {
+        FailSpinner(`System integrity checks FAILED: ${integrityFailures.length} check(s) failed`);
+        pipelineSuccess = false;
+        for (const failure of integrityFailures) {
+          const msg = `Integrity check '${failure.Name}' failed: ${failure.Message}`;
+          logError(msg);
+          reporter.note(msg);
+          this.commandFailures.push({ context: 'INTEGRITY_CHECK', message: msg });
+        }
+      } else {
+        SucceedSpinner('System integrity checks completed');
+      }
 
-      const afterCommands = commands('AFTER');
+      const afterCommands = Commands('AFTER');
       if (afterCommands && afterCommands.length > 0) {
-        startSpinner('Executing AFTER commands...');
+        StartSpinner('Executing AFTER commands...');
         const results = await runCommandsObject.runCommands(afterCommands);
         if (results.some((r) => !r.success)) {
-          failSpinner('ERROR running one or more AFTER commands');
-          this.recordCommandFailures('AFTER', afterCommands, results);
+          FailSpinner('ERROR running one or more AFTER commands');
+          const recorded = this.recordCommandFailures('AFTER', afterCommands, results);
+          pipelineSuccess = false;
+          for (const failure of recorded) {
+            logError(failure.message);
+            reporter.note(failure.message);
+          }
         }
-        else succeedSpinner('AFTER commands completed');
+        else SucceedSpinner('AFTER commands completed');
       }
 
       if (!skipDB) {
-        startSpinner('Executing after-all SQL Scripts...');
-        if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'after-all'))) failSpinner('ERROR running after-all SQL Scripts');
-        else succeedSpinner('After-all SQL Scripts completed');
+        StartSpinner('Executing after-all SQL Scripts...');
+        if (!(await sqlCodeGenObject.runCustomSQLScripts(conn, 'after-all'))) FailSpinner('ERROR running after-all SQL Scripts');
+        else SucceedSpinner('After-all SQL Scripts completed');
       }
 
       const endTime = new Date();
@@ -441,11 +581,12 @@ export class RunCodeGenBase {
       // Visible final summary (succeedSpinner persists a ✔ line in both verbose and
       // non-verbose modes). The detailed/timestamped form stays on logStatus for the
       // verbose log + report.
-      succeedSpinner(`MJ CodeGen complete — ${md.Entities.length} entities in ${totalSeconds.toFixed(2)}s`);
+      SucceedSpinner(`MJ CodeGen complete — ${md.Entities.length} entities in ${totalSeconds.toFixed(2)}s`);
       logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
       // A BEFORE/AFTER command failure fails the run (success=false, exit 1) so it
       // isn't silently swallowed — details flow into the structured result below.
-      return this.commandFailures.length === 0;
+      pipelineSuccess = pipelineSuccess && this.commandFailures.length === 0;
+      return pipelineSuccess;
      } catch (err) {
        pipelineSuccess = false;
        throw err;
@@ -454,6 +595,8 @@ export class RunCodeGenBase {
          reporter.counter('entitiesProcessed', new MJ.Metadata().Entities.length);
          reporter.counter('entitiesNew', ManageMetadataBase.newEntityList.length);
          reporter.counter('entitiesModified', ManageMetadataBase.modifiedEntityList.length);
+         reporter.counter('fieldsNew', ManageMetadataBase.newFieldCount);
+         reporter.counter('fieldsChanged', ManageMetadataBase.changedFieldCount);
          // EntitiesRequiringViewRegen is only defined on newer ManageMetadataBase
          // (added in search-geo-phase-3). Read defensively via property descriptor
          // so this compiles and runs against older versions too.
@@ -463,6 +606,26 @@ export class RunCodeGenBase {
        const { filePath } = await reporter.endRun(pipelineSuccess);
        if (filePath) logStatus('CodeGen report written: ' + filePath);
      }
+  }
+
+  /**
+   * Resolve dirty-schema emit options for one generator call.
+   * `--skipdb` (files only) and `fileEmit.dirtySchemaOnly === false` rebuild
+   * every schema; write-if-changed still keeps mtimes stable. A full run with
+   * no new/modified entities yields an empty Set — the generator then only
+   * writes schema files that are missing.
+   */
+  protected buildSchemaEmitOptions(entities: MJ.EntityInfo[], skipDB: boolean): SchemaEmitOptions {
+    const fileEmit = configInfo.fileEmit;
+    return {
+      dirtySchemas: ResolveDirtySchemasForEmit(
+        entities,
+        [...ManageMetadataBase.newEntityList, ...ManageMetadataBase.modifiedEntityList],
+        skipDB,
+        fileEmit?.dirtySchemaOnly !== false,
+        ManageMetadataBase.deletedEntitySchemaList,
+      ),
+    };
   }
 
   /**
@@ -481,18 +644,19 @@ export class RunCodeGenBase {
     skipDB: boolean,
   ): Promise<boolean> {
       const reporter = CodeGenReporter.Instance;
+      EmitStats.Reset();
       const apiEntities = md.Entities.filter((e) => e.IncludeInAPI);
-      const excludedSchemaNames = configInfo.excludeSchemas.map(s => s.toLowerCase());
+      const excludedSchemaNames = configInfo.excludeSchemas.map(s => SchemaKey(s));
       const includedEntities = apiEntities.filter(
-        (e) => !excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase())
+        (e) => !excludedSchemaNames.includes(SchemaKey(e.SchemaName))
       );
 
       const excludedCount = apiEntities.length - includedEntities.length;
       if (excludedCount > 0) {
         const excludedBySchema = apiEntities
-          .filter((e) => excludedSchemaNames.includes(e.SchemaName.trim().toLowerCase()))
+          .filter((e) => excludedSchemaNames.includes(SchemaKey(e.SchemaName)))
           .reduce((acc, e) => {
-            const schema = e.SchemaName.trim();
+            const schema = (e.SchemaName ?? '').trim() || '(none)';
             acc[schema] = (acc[schema] || 0) + 1;
             return acc;
           }, {} as Record<string, number>);
@@ -503,10 +667,10 @@ export class RunCodeGenBase {
       }
 
       const coreEntities = includedEntities.filter(
-        (e) => e.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
+        (e) => SchemaKey(e.SchemaName) === SchemaKey(mjCoreSchema)
       );
       const nonCoreEntities = includedEntities.filter(
-        (e) => e.SchemaName.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()
+        (e) => SchemaKey(e.SchemaName) !== SchemaKey(mjCoreSchema)
       );
 
       // Entities whose schemas are owned by OTHER packages (see entityPackageName map). They must be
@@ -514,167 +678,294 @@ export class RunCodeGenBase {
       // both emit an ObjectType for the same entity, graphql-js rejects the unified schema at boot with
       // "Schema must contain uniquely named types but contains multiple types named ..." and the API
       // crash-loops.
-      const externalSchemas = getExternalEntitySchemas().map(s => s.toLowerCase());
+      const externalSchemas = GetExternalEntitySchemas().map(s => s.toLowerCase());
       const localNonCoreEntities = externalSchemas.length > 0
-        ? nonCoreEntities.filter(e => !externalSchemas.includes(e.SchemaName.toLowerCase()))
+        ? nonCoreEntities.filter(e => !externalSchemas.includes(SchemaKey(e.SchemaName)))
         : nonCoreEntities;
 
       const isVerbose = configInfo?.verboseOutput ?? false;
-      if (!isVerbose) startSpinner('Generating TypeScript code...');
+      if (!isVerbose) StartSpinner('Generating TypeScript code...');
 
-      const graphQLCoreResolversOutputDir = outputDir('GraphQLCoreEntityResolvers', false);
+      const graphQLCoreResolversOutputDir = OutputDir('GraphQLCoreEntityResolvers', false);
       if (graphQLCoreResolversOutputDir) {
-        if (isVerbose) startSpinner('Generating CORE Entity GraphQL Resolver Code...');
+        if (isVerbose) StartSpinner('Generating CORE Entity GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
         const ok = await reporter.phase('generateGraphQLCore', async () =>
-          graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true),
+          graphQLGenerator.generateGraphQLServerCode(
+            coreEntities,
+            graphQLCoreResolversOutputDir,
+            '@memberjunction/core-entities',
+            true,
+            this.buildSchemaEmitOptions(coreEntities, skipDB),
+          ),
         );
         if (!ok) {
-          failSpinner('Error generating GraphQL server code');
+          FailSpinner('Error generating GraphQL server code');
           return false;
-        } else if (isVerbose) succeedSpinner('CORE Entity GraphQL Resolver Code generated');
+        } else if (isVerbose) SucceedSpinner('CORE Entity GraphQL Resolver Code generated');
       }
 
-      const graphqlOutputDir = outputDir('GraphQLServer', true);
+      const graphqlOutputDir = OutputDir('GraphQLServer', true);
       if (graphqlOutputDir) {
-        if (isVerbose) startSpinner('Generating GraphQL Resolver Code...');
+        if (isVerbose) StartSpinner('Generating GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
         const entityPackageName = typeof configInfo.entityPackageName === 'string'
           ? (configInfo.entityPackageName || 'mj_generatedentities')
           : 'mj_generatedentities';
-        const ok = await reporter.phase('generateGraphQL', async () =>
-          graphQLGenerator.generateGraphQLServerCode(localNonCoreEntities, graphqlOutputDir, entityPackageName, false),
+        const graphqlGroups = PartitionEntitiesByOutputDirectory(
+          localNonCoreEntities,
+          'GraphQLServer',
+          graphqlOutputDir,
+          configInfo.schemaOutput,
         );
+        const ok = await reporter.phase('generateGraphQL', async () => {
+          for (const [dir, group] of graphqlGroups) {
+            const groupOk = graphQLGenerator.generateGraphQLServerCode(
+              group,
+              dir,
+              entityPackageName,
+              false,
+              this.buildSchemaEmitOptions(group, skipDB),
+            );
+            if (!groupOk) {
+              return false;
+            }
+          }
+          return true;
+        });
         if (!ok) {
-          failSpinner('Error generating GraphQL Resolver code');
+          FailSpinner('Error generating GraphQL Resolver code');
           return false;
-        } else if (isVerbose) succeedSpinner('GraphQL Resolver Code generated');
-      } else if (isVerbose) warnSpinner('GraphQL server output directory NOT found in config file, skipping...');
+        } else if (isVerbose) SucceedSpinner('GraphQL Resolver Code generated');
+      } else if (isVerbose) WarnSpinner('GraphQL server output directory NOT found in config file, skipping...');
 
-      const coreEntitySubClassOutputDir = outputDir('CoreEntitySubClasses', false)!;
+      const coreEntitySubClassOutputDir = OutputDir('CoreEntitySubClasses', false)!;
       if (coreEntitySubClassOutputDir && coreEntitySubClassOutputDir.length > 0) {
-        if (isVerbose) startSpinner('Generating CORE Entity Subclass Code...');
+        if (isVerbose) StartSpinner('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
         const ok = await reporter.phase('generateEntitySubclassesCore', () =>
-          entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, coreEntities, coreEntitySubClassOutputDir, skipDB),
+          entitySubClassGeneratorObject.generateAllEntitySubClasses(
+            conn,
+            coreEntities,
+            coreEntitySubClassOutputDir,
+            skipDB,
+            this.buildSchemaEmitOptions(coreEntities, skipDB),
+          ),
         );
         if (!ok) {
-          failSpinner('Error generating entity subclass code');
+          FailSpinner('Error generating entity subclass code');
           return false;
-        } else if (isVerbose) succeedSpinner('CORE Entity Subclass Code generated');
+        } else if (isVerbose) SucceedSpinner('CORE Entity Subclass Code generated');
       }
 
-      const entitySubClassOutputDir = outputDir('EntitySubClasses', true)!;
+      const entitySubClassOutputDir = OutputDir('EntitySubClasses', true)!;
       if (entitySubClassOutputDir) {
-        if (isVerbose) startSpinner('Generating Entity Subclass Code...');
+        if (isVerbose) StartSpinner('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        const ok = await reporter.phase('generateEntitySubclasses', () =>
-          entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, localNonCoreEntities, entitySubClassOutputDir, skipDB),
+        const entityGroups = PartitionEntitiesByOutputDirectory(
+          localNonCoreEntities,
+          'EntitySubClasses',
+          entitySubClassOutputDir,
+          configInfo.schemaOutput,
         );
+        const ok = await reporter.phase('generateEntitySubclasses', async () => {
+          for (const [dir, group] of entityGroups) {
+            const groupOk = await entitySubClassGeneratorObject.generateAllEntitySubClasses(
+              conn,
+              group,
+              dir,
+              skipDB,
+              this.buildSchemaEmitOptions(group, skipDB),
+            );
+            if (!groupOk) {
+              return false;
+            }
+          }
+          return true;
+        });
         if (!ok) {
-          failSpinner('Error generating entity subclass code');
+          FailSpinner('Error generating entity subclass code');
           return false;
-        } else if (isVerbose) succeedSpinner('Entity Subclass Code generated');
-      } else if (isVerbose) warnSpinner('Entity subclass output directory NOT found in config file, skipping...');
+        } else if (isVerbose) SucceedSpinner('Entity Subclass Code generated');
+      } else if (isVerbose) WarnSpinner('Entity subclass output directory NOT found in config file, skipping...');
 
-      const angularCoreEntitiesOutputDir = outputDir('AngularCoreEntities', false);
+      const angularCoreEntitiesOutputDir = OutputDir('AngularCoreEntities', false);
       if (angularCoreEntitiesOutputDir) {
-        if (isVerbose) startSpinner('Generating Angular CORE Entities Code...');
+        if (isVerbose) StartSpinner('Generating Angular CORE Entities Code...');
         const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
         const ok = await reporter.phase('generateAngularCore', () =>
-          angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser),
+          angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser, 'AngularCoreEntities'),
         );
         if (!ok) {
-          failSpinner('Error generating Angular CORE Entities code');
+          FailSpinner('Error generating Angular CORE Entities code');
           return false;
-        } else if (isVerbose) succeedSpinner('Angular CORE Entities Code generated');
+        } else if (isVerbose) SucceedSpinner('Angular CORE Entities Code generated');
       }
 
-      const angularOutputDir = outputDir('Angular', false);
+      const angularOutputDir = OutputDir('Angular', false);
       if (angularOutputDir) {
-        if (isVerbose) startSpinner('Generating Angular Code...');
+        if (isVerbose) StartSpinner('Generating Angular Code...');
         const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
-        const ok = await reporter.phase('generateAngular', () =>
-          angularGenerator.generateAngularCode(localNonCoreEntities, angularOutputDir, '', currentUser),
+        const angularGroups = PartitionEntitiesByOutputDirectory(
+          localNonCoreEntities,
+          'Angular',
+          angularOutputDir,
+          configInfo.schemaOutput,
         );
+        const ok = await reporter.phase('generateAngular', async () => {
+          for (const [dir, group] of angularGroups) {
+            const groupOk = angularGenerator.generateAngularCode(group, dir, '', currentUser, 'Angular');
+            if (!groupOk) {
+              return false;
+            }
+          }
+          return true;
+        });
         if (!ok) {
-          failSpinner('Error generating Angular code');
+          FailSpinner('Error generating Angular code');
           return false;
-        } else if (isVerbose) succeedSpinner('Angular Code generated');
-      } else if (isVerbose) warnSpinner('Angular output directory NOT found in config file, skipping...');
+        } else if (isVerbose) SucceedSpinner('Angular Code generated');
+      } else if (isVerbose) WarnSpinner('Angular output directory NOT found in config file, skipping...');
 
-      const dbSchemaOutputDir = outputDir('DBSchemaJSON', false);
+      const dbSchemaOutputDir = OutputDir('DBSchemaJSON', false);
       if (dbSchemaOutputDir) {
-        if (isVerbose) startSpinner('Generating Database Schema JSON Output...');
+        if (isVerbose) StartSpinner('Generating Database Schema JSON Output...');
         const schemaGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<DBSchemaGeneratorBase>(DBSchemaGeneratorBase)!;
         await reporter.phase('generateDBSchema', async () => {
           if (!schemaGeneratorObject.generateDBSchemaJSONOutput(md.Entities, dbSchemaOutputDir)) {
-            failSpinner('Error generating Database Schema JSON Output, non-fatal, continuing...');
-          } else if (isVerbose) succeedSpinner('Database Schema JSON Output generated');
+            FailSpinner('Error generating Database Schema JSON Output, non-fatal, continuing...');
+          } else if (isVerbose) SucceedSpinner('Database Schema JSON Output generated');
         });
-      } else if (isVerbose) warnSpinner('DB Schema output directory NOT found in config file, skipping...');
+      } else if (isVerbose) WarnSpinner('DB Schema output directory NOT found in config file, skipping...');
 
-      const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
+      const coreActionsOutputDir = OutputDir('CoreActionSubclasses', false);
       await ActionEngineBase.Instance.Config(false, currentUser);
       if (coreActionsOutputDir) {
-        if (isVerbose) startSpinner('Generating CORE Actions Code...');
+        if (isVerbose) StartSpinner('Generating CORE Actions Code...');
         const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
         const ok = await reporter.phase('generateActionsCore', () =>
           actionsGenerator.generateActions(ActionEngineBase.Instance.CoreActions, coreActionsOutputDir),
         );
         if (!ok) {
-          failSpinner('Error generating CORE Actions code');
+          FailSpinner('Error generating CORE Actions code');
           return false;
-        } else if (isVerbose) succeedSpinner('CORE Actions Code generated');
+        } else if (isVerbose) SucceedSpinner('CORE Actions Code generated');
       }
 
-      const actionsOutputDir = outputDir('ActionSubclasses', false);
+      const actionsOutputDir = OutputDir('ActionSubclasses', false);
       if (actionsOutputDir) {
-        if (isVerbose) startSpinner('Generating Actions Code...');
+        if (isVerbose) StartSpinner('Generating Actions Code...');
         const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
         const ok = await reporter.phase('generateActions', () =>
           actionsGenerator.generateActions(ActionEngineBase.Instance.NonCoreActions, actionsOutputDir),
         );
         if (!ok) {
-          failSpinner('Error generating Actions code');
+          FailSpinner('Error generating Actions code');
           return false;
-        } else if (isVerbose) succeedSpinner('Actions Code generated');
-      } else if (isVerbose) warnSpinner('Actions output directory NOT found in config file, skipping...');
+        } else if (isVerbose) SucceedSpinner('Actions Code generated');
+      } else if (isVerbose) WarnSpinner('Actions output directory NOT found in config file, skipping...');
 
       // Remote Operations — emit the typed BaseRemotableOperation subclass for each MJ: Remote Operations row.
       // Two output targets, parallel to the entity-subclass split: `CoreRemoteOperations` (MJ core ops, shipped
       // in @memberjunction/core-entities) and `RemoteOperations` (downstream/user ops, their GeneratedEntities).
-      // NOTE: ops have no SchemaName, so there is no automatic core/non-core PARTITION (the entity split keys on
-      // SchemaName === mjCoreSchema). Each configured target therefore receives the full op set; in practice a
-      // repo configures exactly one (this repo: CoreRemoteOperations only). A per-op core/non-core marker — the
-      // SchemaName-equivalent — is the open decision needed to let a single DB route ops to both targets.
-      const coreRemoteOpsDir = outputDir('CoreRemoteOperations', false);
-      const nonCoreRemoteOpsDir = outputDir('RemoteOperations', false);
+      // Remote operations are scoped to includeSchemas / excludeSchemas and partitioned between core and non-core.
+      const coreRemoteOpsDir = OutputDir('CoreRemoteOperations', false);
+      const nonCoreRemoteOpsDir = OutputDir('RemoteOperations', false);
       if (coreRemoteOpsDir || nonCoreRemoteOpsDir) {
         const remoteOpsResult = await new MJ.RunView().RunView<MJRemoteOperationEntity>(
           { EntityName: 'MJ: Remote Operations', ResultType: 'entity_object' },
           currentUser,
         );
-        const remoteOps = remoteOpsResult.Results ?? [];
+        const allRemoteOps = remoteOpsResult.Results ?? [];
+
+        const allCandidateSchemas = Array.from(new Set([
+          ...md.Entities.map((e) => e.SchemaName),
+          ...(configInfo.includeSchemas ?? []),
+          ...(configInfo.excludeSchemas ?? []),
+        ])).filter(Boolean);
+
+        const opsWithSchema = allRemoteOps.map((op) => ({
+          op,
+          schema: ResolveRemoteOperationSchema(op, md.Entities, allCandidateSchemas, mjCoreSchema),
+        }));
+
+        // Filter operations by excludedSchemaNames (compiled includeSchemas/excludeSchemas scope)
+        // and by includeSchemas (if explicitly configured).
+        const inScopeOpsWithSchema = opsWithSchema.filter(({ schema }) => {
+          const key = SchemaKey(schema);
+          if (excludedSchemaNames.includes(key)) {
+            return false;
+          }
+          if (configInfo.includeSchemas && configInfo.includeSchemas.length > 0) {
+            const includeKeys = configInfo.includeSchemas.map((s) => SchemaKey(s));
+            if (!includeKeys.includes(key)) {
+              return false;
+            }
+          }
+          return true;
+        });
+
+        const excludedOpsCount = allRemoteOps.length - inScopeOpsWithSchema.length;
+        if (excludedOpsCount > 0) {
+          const excludedBySchema = opsWithSchema
+            .filter(({ schema }) => {
+              const key = SchemaKey(schema);
+              if (excludedSchemaNames.includes(key)) return true;
+              if (configInfo.includeSchemas && configInfo.includeSchemas.length > 0) {
+                return !configInfo.includeSchemas.map((s) => SchemaKey(s)).includes(key);
+              }
+              return false;
+            })
+            .reduce((acc, { schema }) => {
+              const s = schema.trim() || '(none)';
+              acc[s] = (acc[s] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+          const details = Object.entries(excludedBySchema)
+            .map(([s, count]) => `${s}: ${count}`)
+            .join(', ');
+          logStatus(`Excluded ${excludedOpsCount} remote operation(s) from code generation by schema: ${details}`);
+        }
+
+        const coreRemoteOps = inScopeOpsWithSchema
+          .filter(({ schema }) => SchemaKey(schema) === SchemaKey(mjCoreSchema))
+          .map(({ op }) => op);
+
+        const nonCoreRemoteOps = inScopeOpsWithSchema
+          .filter(({ schema }) => SchemaKey(schema) !== SchemaKey(mjCoreSchema))
+          .map(({ op }) => op);
+
         const remoteOpsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<RemoteOperationGeneratorBase>(RemoteOperationGeneratorBase)!;
         for (const target of [
-          { dir: coreRemoteOpsDir, label: 'CORE Remote Operation', phase: 'generateRemoteOperationsCore' },
-          { dir: nonCoreRemoteOpsDir, label: 'Remote Operation', phase: 'generateRemoteOperations' },
+          { dir: coreRemoteOpsDir, ops: coreRemoteOps, label: 'CORE Remote Operation', phase: 'generateRemoteOperationsCore' },
+          { dir: nonCoreRemoteOpsDir, ops: nonCoreRemoteOps, label: 'Remote Operation', phase: 'generateRemoteOperations' },
         ]) {
           if (!target.dir) continue;
-          if (isVerbose) startSpinner(`Generating ${target.label} typed bases...`);
+          if (isVerbose) StartSpinner(`Generating ${target.label} typed bases...`);
           const ok = await reporter.phase(target.phase, () =>
-            remoteOpsGenerator.generateRemoteOperations(remoteOps, target.dir!),
+            remoteOpsGenerator.generateRemoteOperations(target.ops, target.dir!),
           );
           if (!ok) {
-            failSpinner(`Error generating ${target.label} code`);
+            FailSpinner(`Error generating ${target.label} code`);
             return false;
-          } else if (isVerbose) succeedSpinner(`${target.label} typed bases generated`);
+          } else if (isVerbose) SucceedSpinner(`${target.label} typed bases generated`);
         }
-      } else if (isVerbose) warnSpinner('Remote Operations output directory NOT found in config file, skipping...');
+      } else if (isVerbose) WarnSpinner('Remote Operations output directory NOT found in config file, skipping...');
+
+      const emit = EmitStats.Snapshot();
+      reporter.counter('filesWritten', emit.filesWritten);
+      reporter.counter('filesSkipped', emit.filesSkipped);
+      reporter.counter('schemasEmitted', emit.schemasEmitted);
+      reporter.counter('schemasSkipped', emit.schemasSkipped);
+      reporter.mark('emitStats', emit);
+      logStatus(
+        `File emit: wrote ${emit.filesWritten}, skipped ${emit.filesSkipped}, ` +
+        `schemas emitted ${emit.schemasEmitted} / skipped ${emit.schemasSkipped} ` +
+        `(assemble ${emit.assembleMs}ms)`,
+      );
 
       SQLLogging.finishSQLLogging();
-      if (!isVerbose) succeedSpinner('TypeScript code generation completed');
+      if (!isVerbose) SucceedSpinner('TypeScript code generation completed');
       return true;
   }
 }
@@ -682,9 +973,14 @@ export class RunCodeGenBase {
 /**
  * Convenience function to run the MemberJunction code generation process.
  */
-export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
+export async function RunMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
   const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
   return await runObject.Run(skipDatabaseGeneration, skipFileGeneration);
+}
+
+/** @deprecated Use {@link RunMemberJunctionCodeGeneration}. */
+export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
+  return RunMemberJunctionCodeGeneration(skipDatabaseGeneration, skipFileGeneration);
 }
 
 /**
@@ -693,10 +989,18 @@ export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: bo
  * `mj codegen` plugin uses this so the runtime host can emit the result
  * (e.g. `--format=json`) before the CLI exits.
  */
-export async function runMemberJunctionCodeGenerationWithResult(
+export async function RunMemberJunctionCodeGenerationWithResult(
   skipDatabaseGeneration: boolean = false,
   skipFileGeneration: boolean = false,
 ): Promise<MJCLIResult> {
   const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
   return await runObject.RunWithResult(skipDatabaseGeneration, skipFileGeneration);
+}
+
+/** @deprecated Use {@link RunMemberJunctionCodeGenerationWithResult}. */
+export async function runMemberJunctionCodeGenerationWithResult(
+  skipDatabaseGeneration: boolean = false,
+  skipFileGeneration: boolean = false,
+): Promise<MJCLIResult> {
+  return RunMemberJunctionCodeGenerationWithResult(skipDatabaseGeneration, skipFileGeneration);
 }

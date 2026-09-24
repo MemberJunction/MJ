@@ -50,7 +50,7 @@
               <i class="fa-solid fa-wand-magic-sparkles"></i>
               <span class="suggest-btn-text">Suggest Document</span>
             </button>
-            <button class="refresh-btn" (click)="LoadData()" title="Refresh data">
+            <button class="refresh-btn" (click)="LoadData(true)" title="Refresh data">
               <i class="fa-solid fa-arrows-rotate"></i>
               Refresh
             </button>
@@ -93,10 +93,10 @@
                     <td class="text-center actions-cell">
                       <button
                         class="sync-btn"
-                        [disabled]="SyncingIds.has(row.EntityDocumentID)"
+                        [disabled]="IsSyncing(row.EntityDocumentID)"
                         (click)="SyncEntity(row.EntityDocumentID)"
                         title="Sync now">
-                        @if (SyncingIds.has(row.EntityDocumentID)) {
+                        @if (IsSyncing(row.EntityDocumentID)) {
                           <i class="fa-solid fa-spinner fa-spin"></i>
                           {{ row.PercentComplete > 0 ? row.PercentComplete + '%' : 'Sync' }}
                         } @else {

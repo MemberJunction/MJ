@@ -18,6 +18,7 @@ export class MJRemoteOperationCategoryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'categoryDetails', sectionName: 'Category Details', isExpanded: true },
             { sectionKey: 'hierarchy', sectionName: 'Hierarchy', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJRemoteOperationCategories', sectionName: 'Remote Operation Categories', isExpanded: false },
             { sectionKey: 'mJRemoteOperations', sectionName: 'Remote Operations', isExpanded: false }

@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { SurveyMonkeyBaseAction } from '../surveymonkey-base.action';
+import { SurveyMonkeyBaseAction, SurveyMonkeySurveyDetails } from '../surveymonkey-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 
@@ -98,8 +98,8 @@ export class CreateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
                 surveyData.buttons_text = buttonsText;
             }
 
-            const response = await this.getAxiosInstance(accessToken).post('/surveys', surveyData);
-            const createdSurvey = response.data;
+            const response = await this.getHttpClient(accessToken).Post<SurveyMonkeySurveyDetails>('/surveys', surveyData);
+            const createdSurvey = response.Data;
 
             const surveyDetails = await this.getSurveyMonkeyDetails(createdSurvey.id, accessToken);
 

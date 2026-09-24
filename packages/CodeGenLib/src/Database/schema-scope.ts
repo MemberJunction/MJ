@@ -1,3 +1,5 @@
+import { SnapshotAuthoredExcludeSchemas } from './heal-schema-params';
+
 /**
  * Schema-scope resolution helpers for CodeGen.
  *
@@ -24,7 +26,7 @@
  * @param existingExcludeSchemas schemas already excluded (system + user config), left untouched
  * @returns the schema names to append to `excludeSchemas`
  */
-export function computeSchemasToExcludeForIncludeList(
+export function ComputeSchemasToExcludeForIncludeList(
   allSchemas: string[],
   includeSchemas: string[],
   existingExcludeSchemas: string[],
@@ -40,6 +42,15 @@ export function computeSchemasToExcludeForIncludeList(
     }
   }
   return toExclude;
+}
+
+/** @deprecated Use {@link ComputeSchemasToExcludeForIncludeList}. */
+export function computeSchemasToExcludeForIncludeList(
+  allSchemas: string[],
+  includeSchemas: string[],
+  existingExcludeSchemas: string[],
+): string[] {
+  return ComputeSchemasToExcludeForIncludeList(allSchemas, includeSchemas, existingExcludeSchemas);
 }
 
 /** The subset of the CodeGen config this module reads and mutates. */
@@ -69,14 +80,22 @@ export interface SchemaScopeConfig {
  * @param config     the config to mutate; `excludeSchemas` is created if absent
  * @returns the schema names that were newly appended (empty when the scope is unused or already applied)
  */
-export function applyIncludeSchemaScope(allSchemas: string[], config: SchemaScopeConfig): string[] {
+export function ApplyIncludeSchemaScope(allSchemas: string[], config: SchemaScopeConfig): string[] {
+  // Capture authored excludes before this run mutates excludeSchemas. Heal EXEC
+  // statements must serialize that original list, not the sibling snapshot.
+  SnapshotAuthoredExcludeSchemas(config.excludeSchemas);
   if (!config.includeSchemas || config.includeSchemas.length === 0) {
     return []; // classic exclude-only behavior, unchanged
   }
   if (!config.excludeSchemas) {
     config.excludeSchemas = [];
   }
-  const toExclude = computeSchemasToExcludeForIncludeList(allSchemas, config.includeSchemas, config.excludeSchemas);
+  const toExclude = ComputeSchemasToExcludeForIncludeList(allSchemas, config.includeSchemas, config.excludeSchemas);
   config.excludeSchemas.push(...toExclude);
   return toExclude;
+}
+
+/** @deprecated Use {@link ApplyIncludeSchemaScope}. */
+export function applyIncludeSchemaScope(allSchemas: string[], config: SchemaScopeConfig): string[] {
+  return ApplyIncludeSchemaScope(allSchemas, config);
 }

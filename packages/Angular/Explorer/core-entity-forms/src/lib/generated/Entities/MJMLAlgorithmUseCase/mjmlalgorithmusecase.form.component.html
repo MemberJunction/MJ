@@ -106,9 +106,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Algorithm Use Case Rankings','MLAlgorithmUseCaseID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Algorithm Use Case Rankings')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Algorithm Use Case Rankings','MLAlgorithmUseCaseID')"
                 [AllowLoad]="IsSectionExpanded('mJMLAlgorithmUseCaseRankings')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMLAlgorithmUseCaseRankings', $event.totalRowCount)"
                 >

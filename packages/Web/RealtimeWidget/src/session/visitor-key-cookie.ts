@@ -25,7 +25,7 @@ function cookieName(widgetKey: string): string {
 }
 
 /** Reads the persisted VisitorKey for this widget, or undefined when absent / no document. */
-export function readVisitorKey(widgetKey: string): string | undefined {
+export function ReadVisitorKey(widgetKey: string): string | undefined {
     if (typeof document === 'undefined' || !document.cookie) {
         return undefined;
     }
@@ -44,8 +44,13 @@ export function readVisitorKey(widgetKey: string): string | undefined {
     return undefined;
 }
 
+/** @deprecated Use {@link ReadVisitorKey}. */
+export function readVisitorKey(widgetKey: string): string | undefined {
+    return ReadVisitorKey(widgetKey);
+}
+
 /** Persists the VisitorKey as a long-lived first-party cookie (Secure on https, SameSite=Lax). */
-export function writeVisitorKey(widgetKey: string, visitorKey: string): void {
+export function WriteVisitorKey(widgetKey: string, visitorKey: string): void {
     if (typeof document === 'undefined' || !visitorKey) {
         return;
     }
@@ -55,10 +60,20 @@ export function writeVisitorKey(widgetKey: string, visitorKey: string): void {
         `; Max-Age=${COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secure}`;
 }
 
+/** @deprecated Use {@link WriteVisitorKey}. */
+export function writeVisitorKey(widgetKey: string, visitorKey: string): void {
+    return WriteVisitorKey(widgetKey, visitorKey);
+}
+
 /** Clears the persisted VisitorKey (RV5 "forget me"). Expires the cookie immediately. */
-export function clearVisitorKey(widgetKey: string): void {
+export function ClearVisitorKey(widgetKey: string): void {
     if (typeof document === 'undefined') {
         return;
     }
     document.cookie = `${cookieName(widgetKey)}=; Max-Age=0; Path=/; SameSite=Lax`;
+}
+
+/** @deprecated Use {@link ClearVisitorKey}. */
+export function clearVisitorKey(widgetKey: string): void {
+    return ClearVisitorKey(widgetKey);
 }

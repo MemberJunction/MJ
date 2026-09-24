@@ -92,6 +92,30 @@ describe('WatermarkService', () => {
             expect(mockWatermark.WatermarkValue).toBe('2024-06-15T00:00:00Z');
         });
 
+        it('restores WatermarkType to Timestamp — the row is shared with the keyset cursor', async () => {
+            // SaveKeysetPosition flips this same row to 'Cursor' mid-run. Creating a watermark
+            // stamps 'Timestamp', but updating one used to leave the type alone — so a map that
+            // saved a cursor and then completed cleanly ended up holding a TIMESTAMP value still
+            // typed as a CURSOR, which the next run hands back to the connector as a seek key.
+            const mockWatermark = createMockWatermark('em-1', 'id-90210');
+            mockWatermark.WatermarkType = 'Cursor';
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [mockWatermark] });
+
+            await service.Update('em-1', '2024-06-15T00:00:00Z', mockContextUser);
+
+            expect(mockWatermark.WatermarkValue).toBe('2024-06-15T00:00:00Z');
+            expect(mockWatermark.WatermarkType).toBe('Timestamp');
+        });
+
+        it('leaves an already-Timestamp row on Timestamp', async () => {
+            const mockWatermark = createMockWatermark('em-1', '2024-01-01T00:00:00Z');
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [mockWatermark] });
+
+            await service.Update('em-1', '2024-06-15T00:00:00Z', mockContextUser);
+
+            expect(mockWatermark.WatermarkType).toBe('Timestamp');
+        });
+
         it('should create new watermark when none exists', async () => {
             // Load returns empty (no existing watermark)
             mockRunViewFn.mockResolvedValue({
@@ -119,6 +143,19 @@ describe('WatermarkService', () => {
 
             await expect(service.Update('em-fail', 'new-value', mockContextUser))
                 .rejects.toThrow('Failed to update watermark');
+        });
+    });
+
+    describe('RestoreValue (§8a floor undo)', () => {
+        it('does NOT touch the type — it undoes a value, it does not declare a run complete', async () => {
+            const mockWatermark = createMockWatermark('em-1', 'id-90210');
+            mockWatermark.WatermarkType = 'Cursor';
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [mockWatermark] });
+
+            await service.RestoreValue('em-1', null, mockContextUser);
+
+            expect(mockWatermark.WatermarkValue).toBeNull();
+            expect(mockWatermark.WatermarkType).toBe('Cursor');
         });
     });
 

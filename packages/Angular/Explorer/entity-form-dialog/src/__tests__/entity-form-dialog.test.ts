@@ -1,22 +1,22 @@
+// Load the JIT compiler BEFORE any Angular library evaluates: npm-published Angular
+// packages ship partial declarations whose static initializers need the compiler facade.
+import '@angular/compiler';
+import { describe, it, expect } from 'vitest';
+import * as publicApi from '../public-api';
+import { EntityFormDialogModule, EntityFormDialogComponent } from '../public-api';
+
 /**
- * Tests for entity-form-dialog package:
- * - Module export verification
+ * Entry-point smoke test: importing the public entry must succeed (catches
+ * broken exports / import-graph breakage) and the load-bearing symbols the
+ * package exists to provide must be real constructors.
  */
-import { describe, it, expect, vi } from 'vitest';
+describe('@memberjunction/ng-entity-form-dialog', () => {
+  it('exposes a non-empty public export surface', () => {
+    expect(Object.keys(publicApi).length).toBeGreaterThan(0);
+  });
 
-vi.mock('@angular/core', () => ({
-  Component: () => (target: Function) => target,
-  NgModule: () => (target: Function) => target,
-  Input: () => () => {},
-  Output: () => () => {},
-  EventEmitter: class { emit() {} },
-  ViewChild: () => () => {},
-  ViewContainerRef: class {},
-  ChangeDetectorRef: class {},
-}));
-
-describe('entity-form-dialog package', () => {
-  it('should be a valid module', () => {
-    expect(true).toBe(true);
+  it('exports its load-bearing classes as constructors', () => {
+    expect(EntityFormDialogModule).toBeTypeOf('function');
+    expect(EntityFormDialogComponent).toBeTypeOf('function');
   });
 });

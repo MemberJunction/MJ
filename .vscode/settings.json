@@ -34,5 +34,6 @@
   "typescript.tsdk": "node_modules/typescript/lib",
   "claudeCode.allowDangerouslySkipPermissions": true,
   "claudeCode.initialPermissionMode": "bypassPermissions",
-  "npm.packageManager": "pnpm"
+  "npm.packageManager": "pnpm",
+  "search.followSymlinks": false
 }

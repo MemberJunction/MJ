@@ -79,15 +79,78 @@ import { ArtifactIconService } from '@memberjunction/ng-artifacts';
   `]
 })
 export class CollectionArtifactCardComponent implements OnInit, OnChanges {
-  @Input() artifact!: MJArtifactEntity;
-  @Input() version?: MJArtifactVersionEntity; // Optional version info
-  @Input() currentUser!: UserInfo;
+  @Input() Artifact!: MJArtifactEntity;
 
-  @Output() selected = new EventEmitter<any>();
-  @Output() viewed = new EventEmitter<any>();
-  @Output() shared = new EventEmitter<any>();
-  @Output() edited = new EventEmitter<any>();
-  @Output() removed = new EventEmitter<any>();
+  /** @deprecated Use {@link Artifact}. */
+  @Input() set artifact(value: MJArtifactEntity) {
+    this.Artifact = value;
+  }
+  /** @deprecated Use {@link Artifact}. */
+  get artifact(): MJArtifactEntity {
+    return this.Artifact;
+  }
+  @Input() version?: MJArtifactVersionEntity; // Optional version info
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+
+  @Output() Selected = new EventEmitter<any>();
+
+  /**
+   * @deprecated Use {@link Selected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (selected) keeps working. Must stay AFTER Selected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() selected = this.Selected;
+  @Output() Viewed = new EventEmitter<any>();
+
+  /**
+   * @deprecated Use {@link Viewed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (viewed) keeps working. Must stay AFTER Viewed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() viewed = this.Viewed;
+  @Output() Shared = new EventEmitter<any>();
+
+  /**
+   * @deprecated Use {@link Shared}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (shared) keeps working. Must stay AFTER Shared: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() shared = this.Shared;
+  @Output() Edited = new EventEmitter<any>();
+
+  /**
+   * @deprecated Use {@link Edited}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (edited) keeps working. Must stay AFTER Edited: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() edited = this.Edited;
+  @Output() Removed = new EventEmitter<any>();
+
+  /**
+   * @deprecated Use {@link Removed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (removed) keeps working. Must stay AFTER Removed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() removed = this.Removed;
 
   canShare: boolean = false;
   canEdit: boolean = false;
@@ -109,21 +172,21 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
   }
 
   private async loadPermissions(): Promise<void> {
-    if (!this.artifact || !this.currentUser) return;
+    if (!this.Artifact || !this.CurrentUser) return;
 
     try {
       this.canShare = await this.artifactPermissionService.checkPermission(
-        this.artifact.ID,
-        this.currentUser.ID,
+        this.Artifact.ID,
+        this.CurrentUser.ID,
         'share',
-        this.currentUser
+        this.CurrentUser
       );
 
       this.canEdit = await this.artifactPermissionService.checkPermission(
-        this.artifact.ID,
-        this.currentUser.ID,
+        this.Artifact.ID,
+        this.CurrentUser.ID,
         'edit',
-        this.currentUser
+        this.CurrentUser
       );
     } catch (err) {
       console.error('Error loading artifact permissions:', err);
@@ -136,31 +199,61 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
    * Get the icon for this artifact using the centralized icon service.
    * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
    */
+  GetIconClass(): string {
+    return this.artifactIconService.getArtifactIcon(this.Artifact);
+  }
+
+  /** @deprecated Use {@link GetIconClass}. */
   getIconClass(): string {
-    return this.artifactIconService.getArtifactIcon(this.artifact);
+    return this.GetIconClass();
   }
 
+  OnSelect(): void {
+    this.Selected.emit(this.Artifact);
+  }
+
+  /** @deprecated Use {@link OnSelect}. */
   onSelect(): void {
-    this.selected.emit(this.artifact);
+    return this.OnSelect();
   }
 
+  OnView(event: Event): void {
+    event.stopPropagation();
+    this.Viewed.emit(this.Artifact);
+  }
+
+  /** @deprecated Use {@link OnView}. */
   onView(event: Event): void {
-    event.stopPropagation();
-    this.viewed.emit(this.artifact);
+    return this.OnView(event);
   }
 
+  OnShare(event: Event): void {
+    event.stopPropagation();
+    this.Shared.emit(this.Artifact);
+  }
+
+  /** @deprecated Use {@link OnShare}. */
   onShare(event: Event): void {
-    event.stopPropagation();
-    this.shared.emit(this.artifact);
+    return this.OnShare(event);
   }
 
+  OnEdit(event: Event): void {
+    event.stopPropagation();
+    this.Edited.emit(this.Artifact);
+  }
+
+  /** @deprecated Use {@link OnEdit}. */
   onEdit(event: Event): void {
-    event.stopPropagation();
-    this.edited.emit(this.artifact);
+    return this.OnEdit(event);
   }
 
-  onRemove(event: Event): void {
+  OnRemove(event: Event): void {
     event.stopPropagation();
-    this.removed.emit(this.artifact);
+    this.Removed.emit(this.Artifact);
+  }
+
+  /** @deprecated Use {@link OnRemove}. */
+  onRemove(event: Event): void {
+    return this.OnRemove(event);
   }
 }

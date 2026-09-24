@@ -96,7 +96,7 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
      * inline ("82% similar to last run"). Authors use this to immediately
      * see how much a reranker swap or fusion-weight tweak shifted the ranking.
      */
-    private PreviousRunRecordIDs: string[] = [];
+    private previousRunRecordIDs: string[] = [];
     public LastRunSimilarityPercent: number | null = null;
 
     public override ngOnDestroy(): void {
@@ -159,9 +159,9 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
                 // Compute Kendall-tau against the prior run, then capture this
                 // run's order as the next baseline.
                 const currentIDs = this.PreviewResults.map(r => r.RecordID);
-                if (this.PreviousRunRecordIDs.length > 0 && currentIDs.length > 0) {
+                if (this.previousRunRecordIDs.length > 0 && currentIDs.length > 0) {
                     const tau = MJSearchScopeFormComponentExtended.kendallTauOnSharedItems(
-                        this.PreviousRunRecordIDs,
+                        this.previousRunRecordIDs,
                         currentIDs,
                     );
                     if (tau !== null) {
@@ -171,7 +171,7 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
                         this.LastRunSimilarityPercent = Math.round((tau + 1) * 50);
                     }
                 }
-                this.PreviousRunRecordIDs = currentIDs;
+                this.previousRunRecordIDs = currentIDs;
             },
         });
     }
