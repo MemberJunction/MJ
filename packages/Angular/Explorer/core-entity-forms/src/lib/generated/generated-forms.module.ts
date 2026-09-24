@@ -379,8 +379,6 @@ import { MJTestSuiteRunFormComponent } from "./Entities/MJTestSuiteRun/mjtestsui
 import { MJTestSuiteTestFormComponent } from "./Entities/MJTestSuiteTest/mjtestsuitetest.form.component";
 import { MJTestTypeFormComponent } from "./Entities/MJTestType/mjtesttype.form.component";
 import { MJThemeFormComponent } from "./Entities/MJTheme/mjtheme.form.component";
-import { MJUsageBudgetEventFormComponent } from "./Entities/MJUsageBudgetEvent/mjusagebudgetevent.form.component";
-import { MJUsageBudgetFormComponent } from "./Entities/MJUsageBudget/mjusagebudget.form.component";
 import { MJUserApplicationEntityFormComponent } from "./Entities/MJUserApplicationEntity/mjuserapplicationentity.form.component";
 import { MJUserApplicationFormComponent } from "./Entities/MJUserApplication/mjuserapplication.form.component";
 import { MJUserFavoriteFormComponent } from "./Entities/MJUserFavorite/mjuserfavorite.form.component";
@@ -918,7 +916,6 @@ declarations: [
     MJMagicLinkRedemptionFormComponent,
     MJScheduledJobTypeFormComponent,
     MJSignatureRequestDocumentFormComponent,
-    MJUsageBudgetEventFormComponent,
     MJUserViewFormComponent
 ],
 imports: [
@@ -1163,8 +1160,7 @@ declarations: [
     MJFormChromeRuleFormComponent,
     MJOpenAppDependencyFormComponent,
     MJSQLDialectFormComponent,
-    MJScheduledJobFormComponent,
-    MJUsageBudgetFormComponent
+    MJScheduledJobFormComponent
 ],
 imports: [
     CommonModule,
