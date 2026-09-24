@@ -13,6 +13,13 @@
 > **Related plans:** `plans/ai-dashboard/plan.md` (the April 2026 UI redesign that produced today's
 > client-side aggregation — PR5 supersedes its data-loading sections, not its layout);
 > `plans/query-entity-materialization.md` (materialization design — PR4 is its first real consumer).
+>
+> **Amended after review (MJ#4402, 2026-09-24).** Three decisions from review supersede the text
+> below wherever it disagrees: `AIPromptRun.AgentRunID` is **not** added — the fact view resolves the
+> agent run through `AIAgentRunStep.TargetLogID` (§6); **materialization is deferred** to a follow-up
+> and every AI query runs live (§7.3); and **budgets are split** into their own PR (§9). References
+> below to `IsMaterialized`, `DataSource: 'Materialized'`, `Query.MaterializationRefreshSchedule`, the
+> `UsageBudget` tables, or the backfill describe the pre-review design.
 
 All file:line references are to `next` @ `ae1bdcaf7d` and were verified by reading the files, not
 taken from the issue. Where the issue was wrong or stale, §1 says so.
@@ -193,6 +200,16 @@ REVIEWER: the parent must exist before arms execute (otherwise children have no 
 
 ## 6. PR3 — migration: dimension keys, precision, indexes (`minor`)
 
+> **Amended after review (MJ#4402, 2026-09-24).** `AIPromptRun.AgentRunID` was dropped: the
+> prompt-execution layer must not hold a key into the agent layer above it, and every value it would
+> carry is derivable from `AIAgentRunStep.TargetLogID`. The migration instead adds
+> `IX_AIAgentRunStep_TargetLogID (TargetLogID, StartedAt, ID) INCLUDE (AgentRunID)` and
+> `vwAIUsageFacts` resolves the agent run with `OUTER APPLY TOP 1 … ORDER BY StartedAt, ID` against
+> the run, then its parent, then its grandparent. `UserID` stays (it is the only record of the user for
+> a direct run) and is written inline; there is no backfill, because the view's
+> `COALESCE(p.UserID, r.UserID)` already covers historical agent-driven runs. The DDL and writer
+> sketches below are the pre-review design and are kept for the record.
+
 **File:** `migrations/v6/V<date +"%Y%m%d%H%M">__v6.1.x__AIPromptRun_Attribution_And_Cost_Precision.sql`. Header: `-- Design: plans/ai-usage-analytics.md §6`. Template for structure: `migrations/v6/V202608042204__v6.1.x__APIKey_Scope_RowFilterID.sql` (but with apply-time `Sequence`, see `V202609081111__v6.1.x__Entity_SubtypeSelector.sql:172`); template for the banner: `V202608301800__v6.1.x__AIPromptRun_Continuous_Units.sql:295-321`.
 
 ### 6.1 Hand DDL (in this order)
@@ -290,6 +307,15 @@ Shape: copy `metadata/queries/.queries.json`'s `CalculateRunCost` record. `Categ
 BUILDER: how `MJ: Query Fields` rows get created for these queries must be verified, not assumed — materialization qualification loads them (`manage-metadata.ts:1786-1790`). Read `packages/MJCoreEntitiesServer/src/custom/` for the Query entity server's field detection on save and follow whatever `CalculateRunCost` relies on; the integration fixture `materialized-read.checks.ts:149-169` shows the manual shape if it is not automatic. Put the answer in the PR body.
 
 ### 7.3 Materialization wiring
+
+> **Amended after review (MJ#4402, 2026-09-24): deferred to a follow-up.** Three framework gaps make
+> a core-shipped materialized query unsound today. The refresher's full rebuild does `SELECT … INTO`
+> a shadow, drops the canonical table and renames the shadow in, recreating only the surrogate index
+> — so the migration-owned indexing §12 of `plans/query-entity-materialization.md` promises does not
+> survive the first refresh. `spCreateVirtualEntity` takes no `@ID`, so the minted entity's ID differs
+> on every install. And CodeGen emits classes for the minted entities, so a clean install drifts from
+> committed generated code. The hourly and daily queries ship live; the `Query` schedule columns and
+> CodeGen wiring move to the follow-up with those fixes.
 - Set `"IsMaterialized": true` on `AIUsageHourly` and `AIUsageDaily`. CodeGen's `processQueryMaterializations` (`manage-metadata.ts:1746`) mints `materialized_AIUsageHourly` / `materialized_vwAIUsageHourly`, a read-only virtual entity, the `MJ: Materialized Results` row (`Status='Building'`) and the join row. The window params must classify as `RowFilterBroad` (they are plain `>=`/`<` predicates on a projected column); if CodeGen refuses with `broad.ambiguous`, simplify the predicate shape until it passes and record why.
 - **Resolved 2026-09-11 (review of PR #4402):** CodeGen writes `KeyColumns`/`RefreshStrategy` for a Query materialization (`manage-metadata.ts:1989-1997`) but has **no authoring path for `RefreshSchedule`** — only `MaterializedBaseViews[].RefreshSchedule` in additionalSchemaInfo exists, and that is the base-view shape. Without a schedule the sweep driver never selects the row and the snapshot stays `Building`. Decision: add `Query.MaterializationRefreshSchedule` (+ `MaterializationIntendedWorkload`) as nullable columns in the §6 migration, have CodeGen copy them onto the minted row, and author the cron in the query JSON next to `IsMaterialized`. Fallback if time forbids the schema change: a `MaterializedQueries` config array mirroring `MaterializedBaseViews`.
 - ORIGINAL TEXT (superseded): `RefreshSchedule` (cron) and `KeyColumns` live on the minted `MJ: Materialized Results` row. BUILDER: find how `plans/query-entity-materialization.md` §9/§10 intend these to be authored (a Query-level hint CodeGen copies, or a metadata record for `MJ: Materialized Results` keyed by the minted ID); implement that way; if neither exists, add a metadata file under `metadata/materialized-results/` referenced by `@lookup:MJ: Queries.Name=AIUsageHourly` through the join and flag it for review. Hourly: `5 * * * *`; daily: `20 0 * * *` (staggered).
@@ -330,6 +356,10 @@ REVIEWER: `grep -rn "?? 0\||| 0" dashboards/src/AI/services dashboards/src/AI/co
 ---
 
 ## 9. PR6 — budgets (`minor`, needs product sign-off before build)
+
+> **Amended after review (MJ#4402, 2026-09-24).** Budgets were split out of #4402 into their own
+> follow-up. That PR must make the case for period-and-scope budget entities over extending the
+> `AIAgent` per-run caps, and land with a working producer so a `Block` budget actually stops a run.
 
 > **Deferred 2026-09-12.** Budgets ship as a follow-up issue, not in MJ#4402. The PR description
 > states this explicitly and links the follow-up. The generic `UsageBudget` design below stays here

@@ -24,22 +24,22 @@ the reporting layer on top.
   now follows: the additive basis is own cost at the prompt-run grain, `Cost IS NULL` means
   unpriced and is never coalesced to zero, rollups are derived from the hierarchy at query time and
   never summed from stored inclusive columns, and coverage ships beside every cost figure.
-- **Attribution keys.** `AIPromptRun` gains `AgentRunID` and `UserID` (backfilled), cost precision
-  is aligned on `decimal(19,8)` across both run tables, and six analytics indexes are added.
-  Sub-agent runs now inherit `CompanyID`.
+- **Attribution.** `AIPromptRun` gains `UserID`, written when the run is created. The agent run a
+  prompt run belongs to is not stored on it: the agent layer owns that link as
+  `AIAgentRunStep.TargetLogID`, now indexed, and the fact view resolves it at query time. Cost
+  precision is aligned on `decimal(19,8)` across both run tables, and six analytics indexes are
+  added. Sub-agent runs now inherit `CompanyID`.
 - **Parallel execution accounting.** The consolidated parent is created before its arms run, so the
   arms persist as `ParallelChild` rows with their own cost and the parent carries none — previously
   the losing arms were never recorded at all.
 - **Semantic layer.** `vwAIUsageFacts` gives one row per prompt run over the base tables, with
   time buckets, every dimension, and the flags that carry semantics no column expresses
   (`IsPriced`, `IsParallelParent`, `IsUnmeasured`, `SourceKind`).
-- **Aggregates.** Eight saved queries in the `AI` category; the hourly and daily grains are
-  materialized, with the refresh cadence declared on the Query itself.
+- **Aggregates.** Eight saved queries in the `AI` category, every cost figure grouped by currency
+  and carried with its priced/unpriced counts. They run live; materializing the hourly and daily
+  grains is a follow-up.
 - **Honest dashboards.** The seven analytics surfaces read the aggregates instead of pulling
   unbounded raw rows, unpriced cost renders as an em dash rather than `$0.00`, and coverage is
   shown beside every total.
 - **`mj-query-pivot`.** A generic pivot over any saved Query in `@memberjunction/ng-query-viewer`;
   the AI Usage Explorer is a thin configuration of it.
-- **Usage budgets.** A generic `UsageBudget` whose observed amount comes from a saved Query, with a
-  scheduled evaluation driver and O(1) block enforcement in the agent guardrails. AI spend is its
-  first configuration, not a hardcoded column.
