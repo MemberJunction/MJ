@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/aiengine@6.1.4
+  - @memberjunction/ai-prompts@6.1.4
+  - @memberjunction/ai-vectors@6.1.4
+  - @memberjunction/ai-vectordb@6.1.4
+  - @memberjunction/ai-vector-sync@6.1.4
+  - @memberjunction/record-comparison@6.1.4
+  - @memberjunction/templates@6.1.4
+  - @memberjunction/ai@6.1.4
+  - @memberjunction/global@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

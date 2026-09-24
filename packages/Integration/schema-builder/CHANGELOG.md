@@ -1,5 +1,16 @@
 # @memberjunction/integration-schema-builder
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/integration-engine@6.1.4
+  - @memberjunction/schema-engine@6.1.4
+  - @memberjunction/global@6.1.4
+  - @memberjunction/sql-dialect@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

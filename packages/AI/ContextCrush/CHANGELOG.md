@@ -1,5 +1,7 @@
 # @memberjunction/context-crush
 
+## 6.1.4
+
 ## 6.1.3
 
 ## 6.1.2

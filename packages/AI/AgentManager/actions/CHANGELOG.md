@@ -1,5 +1,19 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ai-agent-manager@6.1.4
+  - @memberjunction/ai-engine-base@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/actions-base@6.1.4
+  - @memberjunction/actions@6.1.4
+  - @memberjunction/global@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

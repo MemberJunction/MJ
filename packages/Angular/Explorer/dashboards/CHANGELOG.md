@@ -1,5 +1,88 @@
 # @memberjunction/ng-dashboards
 
+## 6.1.4
+
+### Patch Changes
+
+- 6a3e1d2: Cache-invalidation events no longer carry row data unless the deployment opts in, and the consumers that needed that row now re-read it through an access-controlled path.
+
+  The `cacheInvalidation` subscription is delivered to every connected client with no per-user filter, and both publish sites attached the full row (`JSON.stringify(entity.GetAll())`) to every save. Row-level security and any consumer-side scoping apply on the read path, which a push bypasses — so every signed-in session received the contents of rows it had no right to read.
+
+  **Server.** `recordData` is populated only for entities named in the new `cacheSettings.recordDataBroadcastEntities`, default `[]`. `['*']` restores the previous behaviour wholesale. `EntityName` and `PrimaryKeyValues` still broadcast unconditionally — they disclose nothing a client cannot already derive, and they are what tells a consumer _which_ record changed.
+
+  **Core.** New `ResolveEntityEventRow(event, provider?, contextUser?)` and `ResolveEntityEventKey(event)`. The first returns the row from the live entity (local events), from `recordData` (allowlisted entities), or by re-reading that one record by primary key through the provider — as the signed-in user, so the server decides what comes back. A session that may not read the record gets `null` rather than an exception or someone else's data. The second reads identity from the primary key, which is always present.
+
+  **Consumers.** `ConversationEngine` hydrates once in its already-async event dispatcher and passes the row to its five handlers, which stay synchronous; identity now comes from the primary key, so a conversation delete and a project delete need no row at all. The dispatcher asks `EntityEventRowIsFree(event)` first — a row that is already in hand, from the live entity or from allowlisted `recordData`, is never worth skipping, and the per-entity skips below it are about avoiding THE READ. The AI Agent Run form resolves `Status` the same way, behind its id match; `AgentRunID` on a step cannot be gated that way (it is the foreign key being matched), so while that form is open on a Running agent every step save in the deployment costs it one keyed read, bounded by the run's lifetime. The Form Builder cockpit resolves `Name` only after its id match has already missed. A conversation whose re-read comes back null — refused, gone, or failed — is left as it was rather than handed to `SetMany`, and a remote delete on the detail path no longer re-reads a row that is guaranteed gone.
+
+  **Cost, stated plainly for whoever sets the allowlist.** `BaseEngine` is unchanged in code and is the broadest behavioural change here: it applies a remote save in place only when `recordData` is present, so with the default `[]` every remote save of an `AutoRefresh` entity falls through to a full `RunView` reload of each matching config (`LoadSingleConfig(..., bypassCache=true)`), not a keyed read. Remote deletes still apply in place from the primary key. Engine-cached reference entities that every signed-in user may read are the ones worth listing.
+
+  Without the consumer half, defaulting `recordDataBroadcastEntities` to `[]` would have made `ConversationEngine`'s remote handling a silent no-op — including the eviction whose own comment warns that a warm cache "would keep serving without this row forever".
+
+- Updated dependencies [6a3e1d2]
+- Updated dependencies [40f15b9]
+- Updated dependencies [ce7d74f]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ng-core-entity-forms@6.1.4
+  - @memberjunction/ng-entity-viewer@6.1.4
+  - @memberjunction/ng-base-forms@6.1.4
+  - @memberjunction/ai-engine-base@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/tag-engine-base@6.1.4
+  - @memberjunction/api-keys-base@6.1.4
+  - @memberjunction/actions-base@6.1.4
+  - @memberjunction/ng-base-application@6.1.4
+  - @memberjunction/ng-explorer-settings@6.1.4
+  - @memberjunction/ng-shared@6.1.4
+  - @memberjunction/ng-testing@6.1.4
+  - @memberjunction/ng-action-gallery@6.1.4
+  - @memberjunction/ng-actions@6.1.4
+  - @memberjunction/ng-agent-requests@6.1.4
+  - @memberjunction/ng-agents@6.1.4
+  - @memberjunction/ng-ai-test-harness@6.1.4
+  - @memberjunction/ng-archive-manager@6.1.4
+  - @memberjunction/ng-base-types@6.1.4
+  - @memberjunction/ng-clustering@6.1.4
+  - @memberjunction/ng-code-editor@6.1.4
+  - @memberjunction/ng-composer@6.1.4
+  - @memberjunction/ng-container-directives@6.1.4
+  - @memberjunction/ng-conversations@6.1.4
+  - @memberjunction/ng-credentials@6.1.4
+  - @memberjunction/ng-dashboard-viewer@6.1.4
+  - @memberjunction/ng-entity-relationship-diagram@6.1.4
+  - @memberjunction/ng-filter-builder@6.1.4
+  - @memberjunction/ng-list-management@6.1.4
+  - @memberjunction/ng-media-player@6.1.4
+  - @memberjunction/ng-map-view@6.1.4
+  - @memberjunction/ng-notifications@6.1.4
+  - @memberjunction/ng-query-viewer@6.1.4
+  - @memberjunction/ng-react@6.1.4
+  - @memberjunction/ng-record-process-studio@6.1.4
+  - @memberjunction/ng-resource-permissions@6.1.4
+  - @memberjunction/ng-scheduling@6.1.4
+  - @memberjunction/ng-search@6.1.4
+  - @memberjunction/ng-shared-generic@6.1.4
+  - @memberjunction/ng-task-graph-editor@6.1.4
+  - @memberjunction/ng-trees@6.1.4
+  - @memberjunction/ng-user-routines@6.1.4
+  - @memberjunction/ng-versions@6.1.4
+  - @memberjunction/credentials@6.1.4
+  - @memberjunction/graphql-dataprovider@6.1.4
+  - @memberjunction/integration-engine-base@6.1.4
+  - @memberjunction/interactive-component-types@6.1.4
+  - @memberjunction/templates-base-types@6.1.4
+  - @memberjunction/testing-engine-base@6.1.4
+  - @memberjunction/ng-tabstrip@6.1.4
+  - @memberjunction/ng-export-service@6.1.4
+  - @memberjunction/ng-markdown@6.1.4
+  - @memberjunction/ng-ui-components@6.1.4
+  - @memberjunction/ng-word-cloud@6.1.4
+  - @memberjunction/predictive-studio-core@6.1.4
+  - @memberjunction/lists-base@6.1.4
+  - @memberjunction/export-engine@6.1.4
+  - @memberjunction/global@6.1.4
+  - @memberjunction/theme-engine@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

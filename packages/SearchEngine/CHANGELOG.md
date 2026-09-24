@@ -1,5 +1,18 @@
 # @memberjunction/search-engine
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/aiengine@6.1.4
+  - @memberjunction/ai-vectordb@6.1.4
+  - @memberjunction/storage@6.1.4
+  - @memberjunction/ai@6.1.4
+  - @memberjunction/global@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

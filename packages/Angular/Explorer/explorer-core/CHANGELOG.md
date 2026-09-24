@@ -1,5 +1,71 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.1.4
+
+### Patch Changes
+
+- f764bf0: Opening a saved view in its own tab no longer freezes Explorer.
+
+  `NavigationService.OpenView` stores the prefixed resource type (`MJ: User Views`) in the tab configuration. The loaded view component carries the stored ResourceType row name (`User Views`). `syncTabsWithConfiguration` compared the two exactly, so it saw every configuration emission as a content change. It then tore the tab down and reloaded it, and that reload emitted again, so the page never yielded.
+
+  The reload check now uses `TabContainerComponent.IsSameResourceType`, which ignores case and the `MJ: ` prefix. This is the same rule `findResourceTypeTolerant` already used to resolve the type. A tab that points at a different view or a different type still reloads.
+
+  Dynamic views (`NavigationService.OpenDynamicView`, e.g. `#Accounts` from the omnibar) all share the record ID `'dynamic'`, so the reload check now also compares the tab's `Entity`: opening `#Contacts` into a tab showing `#Accounts` reloads it instead of retitling the tab over the Accounts grid. `ComponentCacheManager` folds the entity into its key for the `'dynamic'` marker too, as it already did for an empty record ID. Without that, every dynamic view in an app shared one cache entry, so the reload was handed back the Accounts component it had just detached, and closing a dynamic tab left its component to be reused by the next dynamic view of any entity.
+
+- Updated dependencies [6a3e1d2]
+- Updated dependencies [40f15b9]
+- Updated dependencies [ce7d74f]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ng-dashboards@6.1.4
+  - @memberjunction/ng-entity-viewer@6.1.4
+  - @memberjunction/ng-base-forms@6.1.4
+  - @memberjunction/ai-engine-base@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/ng-auth-services@6.1.4
+  - @memberjunction/ng-base-application@6.1.4
+  - @memberjunction/ng-entity-form-dialog@6.1.4
+  - @memberjunction/ng-entity-permissions@6.1.4
+  - @memberjunction/ng-explorer-settings@6.1.4
+  - @memberjunction/ng-list-detail-grid@6.1.4
+  - @memberjunction/ng-shared@6.1.4
+  - @memberjunction/ng-ai-test-harness@6.1.4
+  - @memberjunction/ng-artifacts@6.1.4
+  - @memberjunction/ng-base-types@6.1.4
+  - @memberjunction/ng-composer@6.1.4
+  - @memberjunction/ng-container-directives@6.1.4
+  - @memberjunction/ng-conversations@6.1.4
+  - @memberjunction/ng-dashboard-viewer@6.1.4
+  - @memberjunction/ng-feedback@6.1.4
+  - @memberjunction/ng-file-storage@6.1.4
+  - @memberjunction/ng-list-management@6.1.4
+  - @memberjunction/ng-mj-livekit-room@6.1.4
+  - @memberjunction/ng-notifications@6.1.4
+  - @memberjunction/ng-query-viewer@6.1.4
+  - @memberjunction/ng-react@6.1.4
+  - @memberjunction/ng-record-changes@6.1.4
+  - @memberjunction/ng-record-selector@6.1.4
+  - @memberjunction/ng-record-tags@6.1.4
+  - @memberjunction/ng-resource-permissions@6.1.4
+  - @memberjunction/ng-search@6.1.4
+  - @memberjunction/ng-shared-generic@6.1.4
+  - @memberjunction/ng-user-avatar@6.1.4
+  - @memberjunction/communication-types@6.1.4
+  - @memberjunction/entity-communications-client@6.1.4
+  - @memberjunction/graphql-dataprovider@6.1.4
+  - @memberjunction/interactive-component-types@6.1.4
+  - @memberjunction/templates-base-types@6.1.4
+  - @memberjunction/ng-export-service@6.1.4
+  - @memberjunction/ng-generic-dialog@6.1.4
+  - @memberjunction/ng-markdown@6.1.4
+  - @memberjunction/ng-ui-components@6.1.4
+  - @memberjunction/ng-word-cloud@6.1.4
+  - @memberjunction/ng-pagination@6.1.4
+  - @memberjunction/lists-base@6.1.4
+  - @memberjunction/export-engine@6.1.4
+  - @memberjunction/global@6.1.4
+  - @memberjunction/theme-engine@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

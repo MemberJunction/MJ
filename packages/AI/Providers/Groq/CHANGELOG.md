@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ai-groq
 
+## 6.1.4
+
+### Patch Changes
+
+- @memberjunction/ai@6.1.4
+- @memberjunction/global@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

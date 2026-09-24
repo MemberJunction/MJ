@@ -1,5 +1,18 @@
 # @memberjunction/ng-task-graph-editor
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/ng-base-types@6.1.4
+  - @memberjunction/ng-flow-editor@6.1.4
+  - @memberjunction/ng-ui-components@6.1.4
+  - @memberjunction/global@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

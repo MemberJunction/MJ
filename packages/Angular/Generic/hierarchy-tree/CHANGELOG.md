@@ -1,5 +1,19 @@
 # @memberjunction/ng-hierarchy-tree
 
+## 6.1.4
+
+### Patch Changes
+
+- 8219647: Declare `@memberjunction/ng-hierarchy-tree`'s license as `BUSL-1.1`, matching every other published package. MJ relicensed to BUSL-1.1 on 2026-08-14 (19937deb8b); this package was added three days later still carrying the pre-relicense `ISC` default and shipped that way in 6.1.3 on npm.
+- Updated dependencies [6a3e1d2]
+- Updated dependencies [ce7d74f]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ng-base-forms@6.1.4
+  - @memberjunction/ng-base-types@6.1.4
+  - @memberjunction/ng-ui-components@6.1.4
+  - @memberjunction/global@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

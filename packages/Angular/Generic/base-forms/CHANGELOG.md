@@ -1,5 +1,37 @@
 # @memberjunction/ng-base-forms
 
+## 6.1.4
+
+### Patch Changes
+
+- ce7d74f: Foreign-key picker: a dismissed panel stays dismissed, and a press anywhere off the field closes it.
+
+  Escape and leaving the field closed the panel, but a lookup still in flight reopened it when its rows arrived, and a keystroke's debounced search fired after blur. On a related entity large enough to be looked up from the database — a person picker on an order, say — any lookup slower than the 200 ms blur grace period reopened the list with nothing focused. Nothing could then close it: Escape is heard only by the focused input, blur had already run, and there was no outside-press handling. Picking a row or scrolling the page was the only way out, and clearing the field started the same lookup again.
+  - Every dismiss retires the lookup sequence and cancels the debounce, so nothing started before it can reopen the panel. This also covers a row picked while a lookup was still loading.
+  - While a dropdown is open, a mouse press anywhere outside the field and its body-portaled panel closes it, whether or not the input has focus.
+  - A blur whose grace period is interrupted by a refocus, or by clearing the value, no longer closes the panel that just opened.
+  - Escape that closes the panel is consumed, so it no longer also closes a dialog, slide panel or window hosting the form. With no panel open the key is left alone.
+  - Destroying the field or rebinding it to another record also retires in-flight work: late rows no longer reopen the panel, re-arm document listeners with no owner, or land on the next record. The body portal likewise skips a field that was destroyed or dismissed before it ran, which used to leave an orphaned panel in the page.
+
+- Updated dependencies [6a3e1d2]
+- Updated dependencies [40f15b9]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ng-entity-viewer@6.1.4
+  - @memberjunction/ng-base-types@6.1.4
+  - @memberjunction/ng-code-editor@6.1.4
+  - @memberjunction/ng-file-storage@6.1.4
+  - @memberjunction/ng-list-management@6.1.4
+  - @memberjunction/ng-notifications@6.1.4
+  - @memberjunction/ng-react@6.1.4
+  - @memberjunction/ng-record-changes@6.1.4
+  - @memberjunction/ng-record-tags@6.1.4
+  - @memberjunction/ng-shared-generic@6.1.4
+  - @memberjunction/interactive-component-types@6.1.4
+  - @memberjunction/ng-markdown@6.1.4
+  - @memberjunction/ng-ui-components@6.1.4
+  - @memberjunction/global@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

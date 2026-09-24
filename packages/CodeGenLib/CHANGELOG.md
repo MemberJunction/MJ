@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/aiengine@6.1.4
+  - @memberjunction/ai-prompts@6.1.4
+  - @memberjunction/actions-base@6.1.4
+  - @memberjunction/actions@6.1.4
+  - @memberjunction/external-data-sources@6.1.4
+  - @memberjunction/external-data-source-databricks@6.1.4
+  - @memberjunction/external-data-source-mongodb@6.1.4
+  - @memberjunction/external-data-source-mysql@6.1.4
+  - @memberjunction/external-data-source-oracle@6.1.4
+  - @memberjunction/external-data-source-postgres@6.1.4
+  - @memberjunction/external-data-source-sqlserver@6.1.4
+  - @memberjunction/external-data-source-snowflake@6.1.4
+  - @memberjunction/generic-database-provider@6.1.4
+  - @memberjunction/core-entities-server@6.1.4
+  - @memberjunction/postgresql-dataprovider@6.1.4
+  - @memberjunction/query-processor@6.1.4
+  - @memberjunction/sqlserver-dataprovider@6.1.4
+  - @memberjunction/server-bootstrap-lite@6.1.4
+  - @memberjunction/ai-provider-bundle@6.1.4
+  - @memberjunction/ai@6.1.4
+  - @memberjunction/cli-core@6.1.4
+  - @memberjunction/config@6.1.4
+  - @memberjunction/global@6.1.4
+  - @memberjunction/sql-dialect@6.1.4
+  - @memberjunction/sql-parser@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

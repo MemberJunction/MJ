@@ -1,5 +1,22 @@
 # @memberjunction/tag-engine
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/ai-engine-base@6.1.4
+  - @memberjunction/clustering-engine@6.1.4
+  - @memberjunction/ai-core-plus@6.1.4
+  - @memberjunction/aiengine@6.1.4
+  - @memberjunction/tag-engine-base@6.1.4
+  - @memberjunction/ai-prompts@6.1.4
+  - @memberjunction/ai-vectors-memory@6.1.4
+  - @memberjunction/ai@6.1.4
+  - @memberjunction/global@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes

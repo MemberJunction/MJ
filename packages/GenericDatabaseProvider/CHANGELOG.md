@@ -1,5 +1,24 @@
 # @memberjunction/generic-database-provider
 
+## 6.1.4
+
+### Patch Changes
+
+- Updated dependencies [6a3e1d2]
+  - @memberjunction/core@6.1.4
+  - @memberjunction/core-entities@6.1.4
+  - @memberjunction/aiengine@6.1.4
+  - @memberjunction/ai-vectors-memory@6.1.4
+  - @memberjunction/actions-base@6.1.4
+  - @memberjunction/actions@6.1.4
+  - @memberjunction/encryption@6.1.4
+  - @memberjunction/queue@6.1.4
+  - @memberjunction/query-processor@6.1.4
+  - @memberjunction/geo-core@6.1.4
+  - @memberjunction/global@6.1.4
+  - @memberjunction/sql-dialect@6.1.4
+  - @memberjunction/sql-parser@6.1.4
+
 ## 6.1.3
 
 ### Patch Changes
