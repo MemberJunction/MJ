@@ -422,4 +422,110 @@ describe('ClonePlanner', () => {
         expect(plan.Nodes.length).toBe(1); // Child was skipped
         expect(plan.Warnings.some((w) => w.Code === 'SERVER_GENERATED_CHILD_SKIPPED')).toBe(true);
     });
+
+    describe('composite primary keys', () => {
+        const junction: Partial<EntityInfo> = {
+            ID: 'ent-junction-id',
+            Name: 'ParentTags',
+            BaseView: 'vwParentTags',
+            TrackRecordChanges: true,
+            AllowCreateAPI: true,
+            PrimaryKeys: [
+                { Name: 'ParentID', Type: 'uniqueidentifier' } as EntityFieldInfo,
+                { Name: 'TagID', Type: 'uniqueidentifier' } as EntityFieldInfo,
+            ],
+            FirstPrimaryKey: { Name: 'ParentID' } as EntityFieldInfo,
+            Fields: [
+                { Name: 'ParentID', IsPrimaryKey: true, Type: 'uniqueidentifier', RelatedEntityID: 'ent-parent-id', RelatedEntity: 'ParentEntity', IsSPParameter: () => true } as unknown as EntityFieldInfo,
+                { Name: 'TagID', IsPrimaryKey: true, Type: 'uniqueidentifier', RelatedEntityID: 'ent-tag-id', RelatedEntity: 'Tags', IsSPParameter: () => true } as unknown as EntityFieldInfo,
+            ],
+            RelatedEntities: [],
+            GetUserPermisions: () => ({ CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true }),
+            CloneConfiguration: { Enabled: true },
+        };
+        const parentWithTags = {
+            ...parentEntity,
+            Fields: [
+                { Name: 'ID', PrimaryKey: true, IsPrimaryKey: true, Type: 'uniqueidentifier', IsSPParameter: () => true } as EntityFieldInfo,
+                { Name: 'Name', PrimaryKey: false, IsPrimaryKey: false, Type: 'nvarchar', IsSPParameter: () => true } as EntityFieldInfo,
+            ],
+            PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier' } as EntityFieldInfo],
+            RelatedEntities: [
+                {
+                    ID: 'rel-tags',
+                    Name: 'Tags',
+                    EntityID: 'ent-parent-id',
+                    RelatedEntityID: 'ent-junction-id',
+                    RelatedEntity: 'ParentTags',
+                    RelatedEntityJoinField: 'ParentID',
+                    Type: 'One To Many',
+                } as EntityRelationshipInfo,
+            ],
+        } as EntityInfo;
+        const list = [parentWithTags, junction as EntityInfo];
+        const provider = {
+            ...mockProvider,
+            Entities: list,
+            EntityByName: (n: string) => list.find((e) => e.Name.toLowerCase() === n.toLowerCase()) ?? null,
+            EntityByID: (id: string) => list.find((e) => e.ID === id) ?? null,
+        } as IMetadataProvider;
+
+        it("gives a junction row a key with the cloned parent's new ID and the other column kept", async () => {
+            mockRunViewInstance
+                .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'parent-1', Name: 'Parent' }] })
+                .mockResolvedValue({ Success: true, Results: [{ ParentID: 'parent-1', TagID: 'tag-9' }] });
+
+            const plan = await new ClonePlanner({ Provider: provider }).Plan(
+                { EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } },
+                standardUser
+            );
+
+            const root = plan.Nodes.find((n) => n.EntityName === 'ParentEntity')!;
+            const tag = plan.Nodes.find((n) => n.EntityName === 'ParentTags');
+            expect(tag).toBeDefined();
+            expect(tag!.Action).toBe('Create');
+            expect(tag!.TargetKey).toBe(`ParentID|${root.TargetKey}||TagID|tag-9`);
+            expect(plan.Warnings.some((w) => w.Code === 'TARGET_KEY_UNCHANGED')).toBe(false);
+        });
+
+        it('mints a key for an IS-A subtype cloned on its own (parent not in the clone)', async () => {
+            const subtype = {
+                ...(childEntity as EntityInfo),
+                Name: 'SubtypeEntity',
+                ID: 'ent-subtype-id',
+                PrimaryKeys: [{ Name: 'ID' } as EntityFieldInfo],
+                Fields: [
+                    { Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', RelatedEntityID: 'ent-parent-id', RelatedEntity: 'ParentEntity', IsSPParameter: () => true } as unknown as EntityFieldInfo,
+                    { Name: 'Name', IsPrimaryKey: false, Type: 'nvarchar', IsSPParameter: () => true } as EntityFieldInfo,
+                ],
+                RelatedEntities: [],
+                CloneConfiguration: { Enabled: true },
+            } as unknown as EntityInfo;
+            const subtypeProvider = { ...provider, EntityByName: (n: string) => (n === 'SubtypeEntity' ? subtype : null) } as IMetadataProvider;
+            mockRunViewInstance.mockResolvedValue({ Success: true, Results: [{ ID: 'sub-1', Name: 'Sub' }] });
+
+            const plan = await new ClonePlanner({ Provider: subtypeProvider }).Plan(
+                { EntityName: 'SubtypeEntity', SourceRecordKey: { ID: 'sub-1' } },
+                standardUser
+            );
+
+            expect(plan.Warnings.some((w) => w.Code === 'TARGET_KEY_UNCHANGED')).toBe(false);
+            const root = plan.Nodes.find((n) => n.EntityName === 'SubtypeEntity')!;
+            expect(root.TargetKey).toMatch(/^[0-9a-f-]{36}$/i);
+            expect(root.TargetKey).not.toBe('sub-1');
+        });
+
+        it('blocks a composite-key root whose key would not change', async () => {
+            const junctionRootProvider = { ...provider, EntityByName: (n: string) => (n === 'ParentTags' ? (junction as EntityInfo) : null) } as IMetadataProvider;
+            mockRunViewInstance.mockResolvedValue({ Success: true, Results: [{ ParentID: 'parent-1', TagID: 'tag-9' }] });
+
+            const plan = await new ClonePlanner({ Provider: junctionRootProvider }).Plan(
+                { EntityName: 'ParentTags', SourceRecordKey: { KeyValuePairs: [{ FieldName: 'ParentID', Value: 'parent-1' }, { FieldName: 'TagID', Value: 'tag-9' }] } },
+                standardUser
+            );
+
+            expect(plan.Blocked).toBe(true);
+            expect(plan.Warnings.find((w) => w.Code === 'TARGET_KEY_UNCHANGED')?.Message).toContain('ParentID, TagID');
+        });
+    });
 });

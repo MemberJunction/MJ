@@ -171,6 +171,103 @@ describe('CloneMaterializer', () => {
         expect(stagedChild?.Get('ParentID')).not.toBe('source-parent-uuid');
     });
 
+    it('writes every column of a composite target key onto a junction row', async () => {
+        const junctionInfo = {
+            ID: 'ent-junction-id',
+            Name: 'ParentTags',
+            PrimaryKeys: [{ Name: 'ParentID' } as EntityFieldInfo, { Name: 'TagID' } as EntityFieldInfo],
+            FirstPrimaryKey: { Name: 'ParentID' } as EntityFieldInfo,
+            Fields: [
+                { Name: 'ParentID', IsPrimaryKey: true, Type: 'uniqueidentifier', RelatedEntity: 'ParentEntity' } as unknown as EntityFieldInfo,
+                { Name: 'TagID', IsPrimaryKey: true, Type: 'uniqueidentifier', RelatedEntity: 'Tags' } as unknown as EntityFieldInfo,
+                { Name: 'Note', IsPrimaryKey: false, Type: 'nvarchar' } as EntityFieldInfo,
+            ],
+            RelatedEntities: [],
+        } as unknown as EntityInfo;
+        const dataProvider = {
+            ...mockDataProvider,
+            GetEntityObject: async <T extends BaseEntity>(name: string): Promise<T> =>
+                new MockEntity((name === 'ParentTags' ? junctionInfo : parentEntityInfo) as EntityInfo, dataProvider) as unknown as T,
+        } as unknown as IEntityDataProvider;
+        const provider = {
+            ...mockMetadataProvider,
+            Entities: [parentEntityInfo as EntityInfo, junctionInfo],
+            EntityByName: (n: string) => (n === 'ParentTags' ? junctionInfo : n === 'ParentEntity' ? (parentEntityInfo as EntityInfo) : null),
+            GetEntityObject: async <T extends BaseEntity>(n: string): Promise<T> => dataProvider.GetEntityObject<T>(n),
+        } as unknown as IMetadataProvider;
+
+        const sourceRoot = new MockEntity(parentEntityInfo as EntityInfo, dataProvider);
+        sourceRoot.NewRecord();
+        sourceRoot.Set('ID', 'p-1');
+        const sourceTag = new MockEntity(junctionInfo, dataProvider);
+        sourceTag.NewRecord();
+        sourceTag.Set('ParentID', 'p-1');
+        sourceTag.Set('TagID', 't-9');
+        sourceTag.Set('Note', 'keep me');
+        const loaded = new Map<string, BaseEntity>([['p-1', sourceRoot], ['ParentID|p-1||TagID|t-9', sourceTag]]);
+
+        const plan = {
+            RootEntityName: 'ParentEntity', RootSourceKey: 'p-1', RootTargetKey: 'p-new', PlanHash: 'h', Blocked: false, Warnings: [],
+            Nodes: [
+                { NodeKey: 'root', EntityName: 'ParentEntity', SourceKey: 'ID|p-1', TargetKey: 'p-new', Action: 'Create', Depth: 0, Route: 'RootSave', FieldChanges: [] },
+                { NodeKey: 'tag', EntityName: 'ParentTags', SourceKey: 'ParentID|p-1||TagID|t-9', TargetKey: 'ParentID|p-new||TagID|t-9', Action: 'Create', Depth: 1, Route: 'Collection', FieldChanges: [] },
+            ],
+            Edges: [{ FromKey: 'root', ToKey: 'tag', JoinField: 'ParentID', Policy: 'Deep' }],
+            Excluded: [],
+        } as unknown as ClonePlan;
+
+        const result = await new CloneMaterializer(provider).Materialize(plan, mockUser, loaded);
+        const tag = result.StagedEntities.get('tag')!;
+
+        expect(result.RootEntity.Get('ID')).toBe('p-new');
+        expect(tag.Get('ParentID')).toBe('p-new');
+        expect(tag.Get('TagID')).toBe('t-9');
+        expect(tag.Get('Note')).toBe('keep me');
+    });
+
+    it("stamps a soft-link child's RecordID with the parent's record-id string", async () => {
+        const noteInfo = {
+            ID: 'ent-note-id',
+            Name: 'Notes',
+            PrimaryKeys: [{ Name: 'ID' } as EntityFieldInfo],
+            FirstPrimaryKey: { Name: 'ID' } as EntityFieldInfo,
+            Fields: [
+                { Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier' } as EntityFieldInfo,
+                { Name: 'RecordID', IsPrimaryKey: false, Type: 'nvarchar' } as EntityFieldInfo,
+            ],
+            RelatedEntities: [],
+        } as unknown as EntityInfo;
+        const dataProvider = {
+            ...mockDataProvider,
+            GetEntityObject: async <T extends BaseEntity>(name: string): Promise<T> =>
+                new MockEntity((name === 'Notes' ? noteInfo : parentEntityInfo) as EntityInfo, dataProvider) as unknown as T,
+        } as unknown as IEntityDataProvider;
+        const provider = {
+            ...mockMetadataProvider,
+            EntityByName: (n: string) => (n === 'Notes' ? noteInfo : n === 'ParentEntity' ? (parentEntityInfo as EntityInfo) : null),
+            GetEntityObject: async <T extends BaseEntity>(n: string): Promise<T> => dataProvider.GetEntityObject<T>(n),
+        } as unknown as IMetadataProvider;
+        const sourceRoot = new MockEntity(parentEntityInfo as EntityInfo, dataProvider);
+        sourceRoot.NewRecord();
+        sourceRoot.Set('ID', 'p-1');
+        const sourceNote = new MockEntity(noteInfo, dataProvider);
+        sourceNote.NewRecord();
+        sourceNote.Set('ID', 'n-1');
+        sourceNote.Set('RecordID', 'p-1');
+        const plan = {
+            RootEntityName: 'ParentEntity', RootSourceKey: 'p-1', RootTargetKey: 'p-new', PlanHash: 'h', Blocked: false, Warnings: [],
+            Nodes: [
+                { NodeKey: 'root', EntityName: 'ParentEntity', SourceKey: 'ID|p-1', TargetKey: 'p-new', Action: 'Create', Depth: 0, Route: 'RootSave', FieldChanges: [] },
+                { NodeKey: 'note', EntityName: 'Notes', SourceKey: 'ID|n-1', TargetKey: 'n-new', Action: 'Create', Depth: 1, Route: 'Sidecar', FieldChanges: [] },
+            ],
+            Edges: [{ FromKey: 'root', ToKey: 'note', JoinField: 'RecordID', Policy: 'Deep', Kind: 'SoftLink' }],
+            Excluded: [],
+        } as unknown as ClonePlan;
+
+        const result = await new CloneMaterializer(provider).Materialize(plan, mockUser, new Map([['p-1', sourceRoot], ['n-1', sourceNote]]));
+        expect(result.StagedEntities.get('note')!.Get('RecordID')).toBe('p-new');
+    });
+
     it('falls back to sidecar entities when collection dynamic declaration fails', async () => {
         const materializer = new CloneMaterializer(mockMetadataProvider);
 

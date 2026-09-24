@@ -25,6 +25,7 @@ import {
     RecordCloneResult,
 } from '@memberjunction/record-cloning-base';
 import { CloneMaterializer } from './CloneMaterializer';
+import { ToRecordKeyString } from './CloneKeys';
 
 function toCompositeKey(key: CompositeKeyLike | CompositeKey | string | null | undefined, defaultFieldName = 'ID'): CompositeKeyLike {
     if (!key) {
@@ -41,26 +42,6 @@ function toCompositeKey(key: CompositeKeyLike | CompositeKey | string | null | u
     return {
         KeyValuePairs: [{ FieldName: defaultFieldName, Value: String(key) }],
     };
-}
-
-function toScalarKey(key: CompositeKeyLike | CompositeKey | string | null | undefined): string {
-    if (!key) return '';
-    let val: string;
-    if (typeof key === 'string') {
-        val = key;
-    } else if (key instanceof CompositeKey) {
-        val = key.ToCompactURLSegment ? key.ToCompactURLSegment() : key.Values();
-    } else if (key.KeyValuePairs && key.KeyValuePairs.length > 0) {
-        val = String(key.KeyValuePairs[0].Value ?? '');
-    } else {
-        return '';
-    }
-    if (val.includes('|')) {
-        const firstSegment = val.split('||')[0];
-        const parts = firstSegment.split('|');
-        return parts.slice(1).join('|');
-    }
-    return val;
 }
 
 export interface CloneExecutorOptions {
@@ -150,7 +131,7 @@ export class CloneExecutor {
                     entity.SetCloneContext({
                         CloneLogID: cloneLogId,
                         SourceEntityName: planNode?.EntityName || entity.EntityInfo.Name,
-                        SourceRecordID: toScalarKey(planNode?.SourceKey),
+                        SourceRecordID: ToRecordKeyString(planNode?.SourceKey),
                         RootEntityName: plan.RootEntityName || entity.EntityInfo.Name,
                         RootSourceRecordID: plan.RootSourceKey || '',
                         RootTargetRecordID: plan.RootTargetKey || '',
@@ -300,9 +281,9 @@ export class CloneExecutor {
                     linkEntity.NewRecord();
                     linkEntity.LinkType = 'ClonedFrom';
                     linkEntity.SourceEntityID = entity.EntityInfo.ID;
-                    linkEntity.SourceRecordID = toScalarKey(entity.PrimaryKey ?? planNode.TargetKey);
+                    linkEntity.SourceRecordID = ToRecordKeyString(entity.PrimaryKey ?? planNode.TargetKey);
                     linkEntity.TargetEntityID = entity.EntityInfo.ID;
-                    linkEntity.TargetRecordID = toScalarKey(planNode.SourceKey);
+                    linkEntity.TargetRecordID = ToRecordKeyString(planNode.SourceKey);
                     linkEntity.Metadata = JSON.stringify({ CloneLogID: cloneLogId });
                     if (!(await linkEntity.Save())) {
                         LogError(`[RecordCloning] Record link for ${nodeKey} not saved: ${linkEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -325,8 +306,8 @@ export class CloneExecutor {
                 logEntity.StartedAt = startedAt;
                 logEntity.InitiatedByUserID = contextUser?.ID ?? '';
                 logEntity.RootEntityID = md.EntityByName(plan.RootEntityName ?? '')?.ID ?? '';
-                logEntity.RootSourceRecordID = toScalarKey(plan.RootSourceKey) ?? '';
-                logEntity.RootTargetRecordID = toScalarKey(rootEntity.PrimaryKey ?? plan.RootTargetKey) ?? null;
+                logEntity.RootSourceRecordID = ToRecordKeyString(plan.RootSourceKey) ?? '';
+                logEntity.RootTargetRecordID = ToRecordKeyString(rootEntity.PrimaryKey ?? plan.RootTargetKey) ?? null;
                 logEntity.PlanHash = plan.PlanHash || plan.Hash;
                 logEntity.PlanJSON = JSON.stringify(plan);
                 logEntity.CreatedCount = stagedEntities.size + sidecarEntities.length;

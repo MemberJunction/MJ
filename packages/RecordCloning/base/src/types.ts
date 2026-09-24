@@ -93,7 +93,9 @@ export type CloneWarningCode =
     /** A request option was ignored because the entity's `UserEditable` does not allow it. */
     | 'OPTION_OVERRIDE_IGNORED'
     /** A request tried to widen scope without the `Clone Records: Override Scope` authorization; it was ignored. */
-    | 'SCOPE_OVERRIDE_FORBIDDEN';
+    | 'SCOPE_OVERRIDE_FORBIDDEN'
+    /** A row's new primary key would equal its source key (no key column is remapped), so the copy would collide. */
+    | 'TARGET_KEY_UNCHANGED';
 
 /**
  * Warning or notification emitted by the planning or execution engine.

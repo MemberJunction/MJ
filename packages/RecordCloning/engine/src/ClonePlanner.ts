@@ -32,6 +32,7 @@ import {
     NormalizeClonePresets,
 } from '@memberjunction/record-cloning-base';
 import { CloneAuthorizer } from './CloneAuthorization';
+import { DeriveTargetKey, IsUuidColumn, KeyStrategyFor, ToRecordKeyString } from './CloneKeys';
 
 export interface ClonePlannerOptions {
     Provider?: IMetadataProvider;
@@ -382,37 +383,55 @@ export class ClonePlanner {
             planBlocked = true;
         }
 
-        // Allocate target keys & build key map for Created nodes only
+        // Allocate target keys for Created nodes (see CloneKeys.ts). Minted UUID keys go first and
+        // into the key map, so derived keys (composite or natural) can remap their FK columns to them.
         const keyMap: Record<string, string> = {};
-        for (const depNode of flatGraphNodes) {
+        const targetKeys = new Map<string, string | null>();
+        const unchangedKeyNodes = new Set<string>();
+        const createNodes = flatGraphNodes.filter((n) => !referenceNodeKeys.has(`${n.EntityName}::${n.RecordID}`));
+
+        for (const depNode of createNodes) {
+            if (KeyStrategyFor(depNode.EntityInfo) !== 'mint') continue;
             const nodeKey = `${depNode.EntityName}::${depNode.RecordID}`;
-            if (referenceNodeKeys.has(nodeKey)) {
-                // Referenced nodes retain their existing identity; do not remap foreign keys pointing to them
-                continue;
-            }
-
-            const entInfo = depNode.EntityInfo;
-            const pkField = entInfo.FirstPrimaryKey?.Name;
             const targetUuid = GenerateUUID();
-            keyMap[depNode.RecordID] = targetUuid;
-            if (pkField) {
-                keyMap[`${depNode.EntityName}::${depNode.RecordID}`] = targetUuid;
+            targetKeys.set(nodeKey, targetUuid);
+            // Single-column key: map the source value (and the record id) to the new UUID so FK columns remap.
+            const sourceValue = String(depNode.RecordKey?.KeyValuePairs?.[0]?.Value ?? '');
+            for (const k of [depNode.RecordID, sourceValue]) {
+                if (!k) continue;
+                keyMap[k] = targetUuid;
+                keyMap[`${depNode.EntityName}::${k}`] = targetUuid;
             }
+        }
 
-            // Map single-column scalar primary key value so foreign key remapping matches
-            if (depNode.RecordKey?.KeyValuePairs?.length === 1) {
-                const scalarVal = String(depNode.RecordKey.KeyValuePairs[0].Value ?? '');
-                if (scalarVal) {
-                    keyMap[scalarVal] = targetUuid;
-                    keyMap[`${depNode.EntityName}::${scalarVal}`] = targetUuid;
+        // Rows whose key the database assigns: FK key columns pointing at them are filled at save.
+        const serverAssigned = new Set<string>();
+        for (const depNode of createNodes) {
+            if (KeyStrategyFor(depNode.EntityInfo) !== 'server') continue;
+            const sourceValue = String(depNode.RecordKey?.KeyValuePairs?.[0]?.Value ?? '');
+            if (sourceValue) serverAssigned.add(`${depNode.EntityName}::${sourceValue}`);
+        }
+
+        for (const depNode of createNodes) {
+            const nodeKey = `${depNode.EntityName}::${depNode.RecordID}`;
+            const strategy = KeyStrategyFor(depNode.EntityInfo);
+            if (strategy === 'server') {
+                targetKeys.set(nodeKey, null); // the database assigns it on insert
+            } else if (strategy === 'derived') {
+                const derived = DeriveTargetKey(depNode.EntityInfo, depNode.RecordKey, keyMap, serverAssigned);
+                const pks = depNode.EntityInfo.PrimaryKeys ?? [];
+                const onlyKey = pks.length === 1 ? depNode.EntityInfo.Fields.find((f) => f.Name === pks[0].Name) ?? pks[0] : null;
+                if (!derived.Changed && onlyKey && IsUuidColumn(onlyKey)) {
+                    // A single UUID key that is also an FK (an IS-A subtype) whose parent is not in the
+                    // clone: mint it; saving the subtype creates its parent row under the same ID.
+                    const targetUuid = GenerateUUID();
+                    targetKeys.set(nodeKey, targetUuid);
+                    keyMap[depNode.RecordID] = targetUuid;
+                    keyMap[`${depNode.EntityName}::${String(depNode.RecordKey.KeyValuePairs[0]?.Value ?? '')}`] = targetUuid;
+                    continue;
                 }
-            }
-            if (typeof depNode.RecordKey?.ToCompactURLSegment === 'function') {
-                const compact = depNode.RecordKey.ToCompactURLSegment();
-                if (compact) {
-                    keyMap[compact] = targetUuid;
-                    keyMap[`${depNode.EntityName}::${compact}`] = targetUuid;
-                }
+                targetKeys.set(nodeKey, ToRecordKeyString(derived.Key));
+                if (!derived.Changed) unchangedKeyNodes.add(nodeKey);
             }
         }
 
@@ -481,7 +500,19 @@ export class ClonePlanner {
                 planBlocked = true;
             }
 
-            const targetKey = keyMap[depNode.RecordID];
+            const targetKey = targetKeys.get(nodeKey) ?? null;
+
+            // A derived key with no remapped column equals the source key; saving would collide.
+            if (unchangedKeyNodes.has(nodeKey)) {
+                warnings.push({
+                    Code: 'TARGET_KEY_UNCHANGED',
+                    Severity: 'Error',
+                    NodeKey: nodeKey,
+                    Message: `A copy of this '${depNode.EntityName}' row would keep the same primary key (${depNode.EntityInfo.PrimaryKeys.map((k) => k.Name).join(', ')}), because none of its key columns point at a record being cloned. Skip that relationship, or clone it from a parent whose key it contains.`,
+                });
+                nodeBlocked = true;
+                planBlocked = true;
+            }
 
             const fieldMappingResult = MapFieldsForClone({
                 EntityName: depNode.EntityName,
@@ -663,7 +694,8 @@ export class ClonePlanner {
         }
         const createCount = nodes.filter((n) => n.Action === 'Create').length;
 
-        const rootTargetKey = keyMap[key.ToConcatenatedString()] ?? GenerateUUID();
+        // The root's own planned key; empty when the database assigns it on insert.
+        const rootTargetKey = targetKeys.get(`${entityName}::${key.ToConcatenatedString()}`) ?? '';
 
         return {
             PlanVersion: 1,

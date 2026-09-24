@@ -6,6 +6,7 @@
  */
 
 import { UUIDsEqual } from '@memberjunction/global';
+import { CompositeKey } from '@memberjunction/core';
 import { IRecordProcessor, RecordProcessorContext, RecordProcessorRegistry, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import { CloneEdgePolicy, CloneRequestOptions, RecordCloneRequest } from '@memberjunction/record-cloning-base';
 import { ClonePlanner } from './ClonePlanner';
@@ -46,10 +47,10 @@ export class CloneRecordProcessor implements IRecordProcessor {
         const planner = new ClonePlanner({ Provider: provider });
         const executor = new CloneExecutor({ Provider: provider });
 
-        const pkFieldName = entityInfo.FirstPrimaryKey?.Name || 'ID';
         const request: RecordCloneRequest = {
             EntityName: entityInfo.Name,
-            SourceRecordKey: { [pkFieldName]: record.RecordID },
+            // RecordID is a record-id string: the bare value for one key column, the full segment for several.
+            SourceRecordKey: CompositeKey.FromURLSegment(entityInfo, String(record.RecordID)),
             Options: this._config.Options,
             EdgeOverrides: this._config.EdgeOverrides,
             FieldOverrides: this._config.FieldOverrides,

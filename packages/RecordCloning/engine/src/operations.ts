@@ -56,6 +56,7 @@ import { SqlEquals } from '@memberjunction/record-graph';
 import { ClonePlanner } from './ClonePlanner';
 import { CloneExecutor } from './CloneExecutor';
 import { CloneAuthorizer } from './CloneAuthorization';
+import { KeyFromPairs, ToRecordKeyString } from './CloneKeys';
 
 type PlanValue = string | number | boolean | null;
 
@@ -65,17 +66,7 @@ function toCompositeKey(entity: EntityInfo, key: RecordCloneKey | undefined): Co
     if (pairs.length === 0) {
         throw new Error(`A record key with at least one field is required for entity '${entity.Name}'.`);
     }
-    return new CompositeKey(pairs.map((p) => new KeyValuePair(p.FieldName, p.Value)));
-}
-
-/** Renders any engine key shape as a record-id string (`CompositeKey.FromURLSegment` form). */
-function keyToString(key: CompositeKeyLike | CompositeKey | string | null | undefined): string {
-    if (!key) return '';
-    if (typeof key === 'string') return key;
-    if (key instanceof CompositeKey) return key.ToCompactURLSegment();
-    const pairs = key.KeyValuePairs ?? [];
-    if (pairs.length === 0) return '';
-    return new CompositeKey(pairs.map((p) => new KeyValuePair(p.FieldName, p.Value))).ToCompactURLSegment();
+    return KeyFromPairs(pairs.map((p) => new KeyValuePair(p.FieldName, p.Value)));
 }
 
 /** Plan values are free-form in the engine; the contract carries primitives only. */
@@ -95,8 +86,8 @@ export function ToPlanDetails(plan: ClonePlan): RecordClonePlanDetails {
         Nodes: plan.Nodes.map((n) => ({
             Key: n.Key ?? n.NodeKey ?? '',
             EntityName: n.EntityName,
-            SourceKey: keyToString(n.SourceKey),
-            TargetKey: n.TargetKey ? keyToString(n.TargetKey) : null,
+            SourceKey: ToRecordKeyString(n.SourceKey),
+            TargetKey: n.TargetKey ? ToRecordKeyString(n.TargetKey) : null,
             Action: n.Action,
             Reason: n.Reason,
             Depth: n.Depth,
@@ -280,8 +271,8 @@ export class RecordCloneOperationsHandler {
         const result: RecordCloneResult = await new CloneExecutor({ Provider: this.Provider }).Execute(plan, contextUser);
         const toMapping = (m: { EntityName: string; SourceKey: CompositeKeyLike; TargetKey: CompositeKeyLike; Depth?: number }): RecordCloneRecordMapping => ({
             EntityName: m.EntityName,
-            SourceKey: keyToString(m.SourceKey),
-            TargetKey: keyToString(m.TargetKey),
+            SourceKey: ToRecordKeyString(m.SourceKey),
+            TargetKey: ToRecordKeyString(m.TargetKey),
             Depth: m.Depth,
         });
 
@@ -291,7 +282,7 @@ export class RecordCloneOperationsHandler {
             CloneLogID: result.CloneLogID ?? null,
             Roots: (result.Roots ?? []).map(toMapping),
             Created: (result.Created ?? []).map(toMapping),
-            Skipped: (result.Skipped ?? []).map((s) => ({ EntityName: s.EntityName, SourceKey: keyToString(s.SourceKey), Reason: s.Reason })),
+            Skipped: (result.Skipped ?? []).map((s) => ({ EntityName: s.EntityName, SourceKey: ToRecordKeyString(s.SourceKey), Reason: s.Reason })),
             Counts: result.Counts ?? plan.Counts,
             Warnings: result.Warnings ?? plan.Warnings,
             Plan: result.Success ? undefined : ToPlanDetails(plan),
@@ -310,7 +301,7 @@ export class RecordCloneOperationsHandler {
             throw new Error(`Entity '${input.EntityName}' not found.`);
         }
 
-        const recordId = toCompositeKey(entity, input.Key).Values();
+        const recordId = ToRecordKeyString(toCompositeKey(entity, input.Key));
         const direction = input.Direction ?? 'both';
         const rv = RunView.FromMetadataProvider(md);
 

@@ -16,23 +16,32 @@ import {
     UserInfo,
 } from '@memberjunction/core';
 import { ClonePlan, ClonePlanNode, CompositeKeyLike } from '@memberjunction/record-cloning-base';
+import { SingleKeyField, ToCompositeKey, ToRecordKeyString } from './CloneKeys';
 
-function toScalarKey(key: CompositeKeyLike | string | null | undefined): string {
-    if (!key) return '';
-    let val: string;
-    if (typeof key === 'string') {
-        val = key;
-    } else if (key.KeyValuePairs && key.KeyValuePairs.length > 0) {
-        val = String(key.KeyValuePairs[0].Value ?? '');
-    } else {
-        return '';
+/** A loaded source row keyed by any of the forms callers use: full record-id string, or first value. */
+function findLoadedSource(loaded: Map<string, BaseEntity> | undefined, key: CompositeKey, raw: unknown): BaseEntity | undefined {
+    if (!loaded) return undefined;
+    const candidates = [
+        ToRecordKeyString(key),
+        key.ToConcatenatedString(),
+        typeof raw === 'string' ? raw : '',
+        key.KeyValuePairs.length === 1 ? String(key.KeyValuePairs[0].Value ?? '') : '',
+    ];
+    for (const c of candidates) {
+        if (c && loaded.has(c)) return loaded.get(c);
     }
-    if (val.includes('|')) {
-        const firstSegment = val.split('||')[0];
-        const parts = firstSegment.split('|');
-        return parts.slice(1).join('|');
+    return undefined;
+}
+
+/** Writes every column of a planned target key (single or composite) onto the new row. */
+function applyTargetKey(entity: BaseEntity, targetKey: CompositeKeyLike | string | null | undefined): void {
+    if (!targetKey) return; // server-assigned key
+    const ck = ToCompositeKey(entity.EntityInfo, targetKey);
+    for (const pair of ck.KeyValuePairs) {
+        // An empty column points at a parent whose key the database assigns; the save fills it in.
+        if (pair.Value === null || pair.Value === undefined || pair.Value === '') continue;
+        entity.Set(pair.FieldName, pair.Value);
     }
-    return val;
 }
 
 export interface MaterializedGraph {
@@ -79,36 +88,19 @@ export class CloneMaterializer {
 
         rootEntity.NewRecord();
 
-        // Load root source if not provided
-        const rootSourceKey = toScalarKey(rootPlanNode.SourceKey);
-        let sourceRoot = loadedSources?.get(rootSourceKey) ?? (typeof rootPlanNode.SourceKey === 'string' ? loadedSources?.get(rootPlanNode.SourceKey) : undefined);
+        // Load root source if not provided (every key column, single or composite)
+        const rootCompKey = ToCompositeKey(rootEntity.EntityInfo, rootPlanNode.SourceKey);
+        let sourceRoot = findLoadedSource(loadedSources, rootCompKey, rootPlanNode.SourceKey);
         if (!sourceRoot) {
             sourceRoot = await md.GetEntityObject<BaseEntity>(rootPlanNode.EntityName, contextUser);
-            const rootCompKey = typeof rootPlanNode.SourceKey === 'string'
-                ? CompositeKey.FromURLSegment(rootEntity.EntityInfo, rootPlanNode.SourceKey)
-                : (() => {
-                    const ck = new CompositeKey();
-                    if (rootPlanNode.SourceKey?.KeyValuePairs && rootPlanNode.SourceKey.KeyValuePairs.length > 0) {
-                        ck.KeyValuePairs = rootPlanNode.SourceKey.KeyValuePairs;
-                    } else {
-                        ck.LoadFromEntityInfoAndRecord(rootEntity.EntityInfo, {
-                            [rootEntity.EntityInfo.FirstPrimaryKey?.Name || 'ID']: rootSourceKey,
-                        });
-                    }
-                    return ck;
-                })();
             await sourceRoot.InnerLoad(rootCompKey);
         }
 
         // Copy data from root source
         rootEntity.CopyFrom(sourceRoot, false);
 
-        // Assign planned target primary key if configured
-        const rootPkField = rootEntity.EntityInfo.FirstPrimaryKey?.Name;
-        const rootTargetKey = toScalarKey(rootPlanNode.TargetKey);
-        if (rootPkField && rootTargetKey) {
-            rootEntity.Set(rootPkField, rootTargetKey);
-        }
+        // Assign the planned target key (minted UUID or derived composite; none when server-assigned)
+        applyTargetKey(rootEntity, rootPlanNode.TargetKey);
 
         // Apply mapped field values to root
         this.applyFieldChanges(rootEntity, rootPlanNode);
@@ -155,44 +147,33 @@ export class CloneMaterializer {
                     }
                 }
 
-                // Load source child record
-                const childSourceKey = toScalarKey(childNode.SourceKey);
-                let sourceChild = loadedSources?.get(childSourceKey) ?? (typeof childNode.SourceKey === 'string' ? loadedSources?.get(childNode.SourceKey) : undefined);
+                // Load source child record (every key column, single or composite)
+                const childCompKey = ToCompositeKey(childEntity.EntityInfo, childNode.SourceKey);
+                let sourceChild = findLoadedSource(loadedSources, childCompKey, childNode.SourceKey);
                 if (!sourceChild) {
                     sourceChild = await md.GetEntityObject<BaseEntity>(childNode.EntityName, contextUser);
-                    const childCompKey = typeof childNode.SourceKey === 'string'
-                        ? CompositeKey.FromURLSegment(childEntity.EntityInfo, childNode.SourceKey)
-                        : (() => {
-                            const ck = new CompositeKey();
-                            if (childNode.SourceKey?.KeyValuePairs && childNode.SourceKey.KeyValuePairs.length > 0) {
-                                ck.KeyValuePairs = childNode.SourceKey.KeyValuePairs;
-                            } else {
-                                ck.LoadFromEntityInfoAndRecord(childEntity.EntityInfo, {
-                                    [childEntity.EntityInfo.FirstPrimaryKey?.Name || 'ID']: childSourceKey,
-                                });
-                            }
-                            return ck;
-                        })();
                     await sourceChild.InnerLoad(childCompKey);
                 }
 
                 // Copy data from source child
                 childEntity.CopyFrom(sourceChild, false);
 
-                const childPkField = childEntity.EntityInfo.FirstPrimaryKey?.Name;
-                const childTargetKey = toScalarKey(childNode.TargetKey);
-                if (childPkField && childTargetKey) {
-                    childEntity.Set(childPkField, childTargetKey);
-                }
+                // Assign the planned target key (minted UUID or derived composite; none when server-assigned)
+                applyTargetKey(childEntity, childNode.TargetKey);
 
-                // CRITICAL RULE (§6.7): Re-set the join field immediately after CopyFrom
+                // CRITICAL RULE (§6.7): Re-set the join field immediately after CopyFrom.
+                // Foreign keys reference a single-column key, so both sides of the join use that column.
                 if (edge.Kind === 'ForwardFK') {
                     // In a ForwardFK, parentEntity owns the FK pointing to childEntity
-                    parentEntity.Set(edge.JoinField, childTargetKey || childEntity.Get(childPkField || 'ID'));
+                    const childKeyField = SingleKeyField(childEntity.EntityInfo, 'Pointing a row at its cloned prerequisite');
+                    parentEntity.Set(edge.JoinField, childEntity.Get(childKeyField));
+                } else if (edge.Kind === 'SoftLink') {
+                    // Polymorphic EntityID/RecordID rows store the parent's record-id string, which
+                    // works for a composite parent key too.
+                    childEntity.Set(edge.JoinField, ToRecordKeyString(parentEntity.PrimaryKey));
                 } else {
-                    const parentPkField = parentEntity.EntityInfo.FirstPrimaryKey?.Name || 'ID';
-                    const parentPkValue = parentEntity.Get(parentPkField);
-                    childEntity.Set(edge.JoinField, parentPkValue);
+                    const parentKeyField = SingleKeyField(parentEntity.EntityInfo, 'Joining a cloned child to its parent');
+                    childEntity.Set(edge.JoinField, parentEntity.Get(parentKeyField));
                 }
 
                 // Apply mapped field values
