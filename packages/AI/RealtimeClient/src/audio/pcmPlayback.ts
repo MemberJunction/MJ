@@ -1,4 +1,4 @@
-import { pcm16ToFloat32 } from './pcmUtils';
+import { Pcm16ToFloat32 } from './pcmUtils';
 import { IRealtimeAudioMeter, RealtimeAudioMeter } from './audioMeter';
 
 /**
@@ -71,7 +71,7 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
 
     /** @inheritdoc */
     public Enqueue(pcm16: ArrayBuffer): void {
-        const samples = pcm16ToFloat32(pcm16);
+        const samples = Pcm16ToFloat32(pcm16);
         if (samples.length === 0) {
             return;
         }

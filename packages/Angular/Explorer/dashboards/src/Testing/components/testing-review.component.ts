@@ -1105,10 +1105,28 @@ interface ReviewFormState {
   `]
 })
 export class TestingReviewComponent implements OnInit, OnDestroy {
-  @Input() initialState: Record<string, unknown> | null = null;
+  @Input() InitialState: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link InitialState}. */
+  @Input() set initialState(value: Record<string, unknown> | null) {
+    this.InitialState = value;
+  }
+  /** @deprecated Use {@link InitialState}. */
+  get initialState(): Record<string, unknown> | null {
+    return this.InitialState;
+  }
   /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
   @Input() HideToolbar = false;
-  @Output() stateChange = new EventEmitter<Record<string, unknown>>();
+  @Output() StateChange = new EventEmitter<Record<string, unknown>>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
 
   private destroy$ = new Subject<void>();
 
@@ -1179,8 +1197,8 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   // ------------------------------------------------------------------
 
   private restoreState(): void {
-    if (!this.initialState) return;
-    const view = this.initialState['viewMode'] as string | undefined;
+    if (!this.InitialState) return;
+    const view = this.InitialState['viewMode'] as string | undefined;
     if (view === 'queue' || view === 'history') {
       this.CurrentView = view;
     }
@@ -1408,7 +1426,7 @@ export class TestingReviewComponent implements OnInit, OnDestroy {
   }
 
   private emitState(): void {
-    this.stateChange.emit({
+    this.StateChange.emit({
       viewMode: this.CurrentView,
       // Richer state for the dashboard's agent context (queue depth, reviewed
       // count, avg human rating, agreement rate, history search).

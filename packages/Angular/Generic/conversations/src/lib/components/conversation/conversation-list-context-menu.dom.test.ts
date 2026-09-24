@@ -292,8 +292,8 @@ describe('ConversationListComponent (DOM) — sharing from the menu', () => {
     rightClickOn(f, rowFor(f, 'Loose One'));
     findItem(f, 'Share').click();
     f.detectChanges();
-    expect(f.componentInstance.shareContexts.map(c => c.ResourceID).sort()).toEqual(['U1', 'U2', 'U3']);
-    expect(f.componentInstance.isShareDialogOpen).toBe(true);
+    expect(f.componentInstance.ShareContexts.map(c => c.ResourceID).sort()).toEqual(['U1', 'U2', 'U3']);
+    expect(f.componentInstance.IsShareDialogOpen).toBe(true);
   });
 
   it('opens the dialog with just the clicked row when it is not part of the selection', () => {
@@ -301,7 +301,7 @@ describe('ConversationListComponent (DOM) — sharing from the menu', () => {
     rightClickOn(f, rowFor(f, 'Work One'));
     findItem(f, 'Share').click();
     f.detectChanges();
-    expect(f.componentInstance.shareContexts.map(c => c.ResourceID)).toEqual(['A1']);
+    expect(f.componentInstance.ShareContexts.map(c => c.ResourceID)).toEqual(['A1']);
   });
 
   it('closes the menu when Share is chosen', () => {
@@ -317,8 +317,8 @@ describe('ConversationListComponent (DOM) — sharing from the menu', () => {
     rightClickOn(f, rowFor(f, 'Loose One'));
     findItem(f, 'Share').click();
     f.detectChanges();
-    f.componentInstance.onShareDialogResult({ Action: 'save' });
-    expect(f.componentInstance.isShareDialogOpen).toBe(false);
+    f.componentInstance.OnShareDialogResult({ Action: 'save' });
+    expect(f.componentInstance.IsShareDialogOpen).toBe(false);
   });
 
   it('leaves out conversations you do not own and says how many', () => {
@@ -331,8 +331,8 @@ describe('ConversationListComponent (DOM) — sharing from the menu', () => {
     rightClickOn(f, rowFor(f, 'Loose One'));
     findItem(f, 'Share').click();
     f.detectChanges();
-    expect(f.componentInstance.shareContexts.map(c => c.ResourceID)).toEqual(['U1']);
-    expect(f.componentInstance.shareNotice).toContain('1 of 2');
+    expect(f.componentInstance.ShareContexts.map(c => c.ResourceID)).toEqual(['U1']);
+    expect(f.componentInstance.ShareNotice).toContain('1 of 2');
   });
 
   it('closes the dialog on cancel', () => {
@@ -340,8 +340,8 @@ describe('ConversationListComponent (DOM) — sharing from the menu', () => {
     rightClickOn(f, rowFor(f, 'Loose One'));
     findItem(f, 'Share').click();
     f.detectChanges();
-    f.componentInstance.onShareDialogResult({ Action: 'cancel' });
-    expect(f.componentInstance.isShareDialogOpen).toBe(false);
+    f.componentInstance.OnShareDialogResult({ Action: 'cancel' });
+    expect(f.componentInstance.IsShareDialogOpen).toBe(false);
   });
 });
 
@@ -371,8 +371,8 @@ describe('ConversationListComponent (DOM) — who can share from the menu', () =
     rightClickOn(f, rowFor(f, 'Loose One'));
     findItem(f, 'Share').click();
     f.detectChanges();
-    expect(f.componentInstance.shareContexts.map(s => s.ResourceID).sort()).toEqual(['U1', 'U2']);
-    expect(f.componentInstance.shareNotice).toBeNull();
+    expect(f.componentInstance.ShareContexts.map(s => s.ResourceID).sort()).toEqual(['U1', 'U2']);
+    expect(f.componentInstance.ShareNotice).toBeNull();
   });
 
   it('leaves out a conversation you hold only Edit access to', () => {
@@ -380,8 +380,8 @@ describe('ConversationListComponent (DOM) — who can share from the menu', () =
     rightClickOn(f, rowFor(f, 'Loose One'));
     findItem(f, 'Share').click();
     f.detectChanges();
-    expect(f.componentInstance.shareContexts.map(s => s.ResourceID)).toEqual(['U1']);
-    expect(f.componentInstance.shareNotice).toContain('1 of 2');
+    expect(f.componentInstance.ShareContexts.map(s => s.ResourceID)).toEqual(['U1']);
+    expect(f.componentInstance.ShareNotice).toContain('1 of 2');
   });
 
   it('disables Share when none of the targets can be shared', () => {
@@ -400,7 +400,7 @@ describe('ConversationListComponent (DOM) — who can share from the menu', () =
     f.detectChanges();
     const alert = f.debugElement.injector.get(DialogService).alert as unknown as ReturnType<typeof vi.fn>;
     expect(alert).toHaveBeenCalledTimes(1);
-    expect(f.componentInstance.isShareDialogOpen).toBe(false);
+    expect(f.componentInstance.IsShareDialogOpen).toBe(false);
   });
 });
 

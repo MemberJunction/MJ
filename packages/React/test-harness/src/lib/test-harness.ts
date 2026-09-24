@@ -63,14 +63,19 @@ export class ReactTestHarness {
     this.componentRunner = new ComponentRunner(this.browserManager);
   }
 
-  async initialize(): Promise<void> {
+  async Initialize(): Promise<void> {
     await this.browserManager.initialize();
+  }
+
+  /** @deprecated Use {@link Initialize}. */
+  async initialize(): Promise<void> {
+    return this.Initialize();
   }
 
   /**
    * Test a component with its full hierarchy of child components
    */
-  async testComponent(
+  async TestComponent(
     options: ComponentExecutionOptions
   ): Promise<ComponentExecutionResult> {
     // Check if contextUser is required for library lint rules
@@ -127,12 +132,19 @@ export class ReactTestHarness {
     return result;
   }
 
+  /** @deprecated Use {@link TestComponent}. */
+  async testComponent(
+    options: ComponentExecutionOptions
+  ): Promise<ComponentExecutionResult> {
+    return this.TestComponent(options);
+  }
+
 
   /**
    * Test a simple component from code string
    * This is a convenience method for testing component code directly
    */
-  async testComponentCode(
+  async TestComponentCode(
     componentCode: string,
     props?: Record<string, any>,
     options?: Partial<ComponentExecutionOptions>
@@ -158,14 +170,23 @@ export class ReactTestHarness {
       ...options
     };
     
-    return this.testComponent(fullOptions);
+    return this.TestComponent(fullOptions);
+  }
+
+  /** @deprecated Use {@link TestComponentCode}. */
+  async testComponentCode(
+    componentCode: string,
+    props?: Record<string, any>,
+    options?: Partial<ComponentExecutionOptions>
+  ): Promise<ComponentExecutionResult> {
+    return this.TestComponentCode(componentCode, props, options);
   }
 
   /**
    * Test a component from a file path
    * This is a convenience method for the CLI
    */
-  async testComponentFromFile(
+  async TestComponentFromFile(
     filePath: string,
     props: Record<string, any>,
     options: Omit<ComponentExecutionOptions, 'componentSpec'>
@@ -195,13 +216,22 @@ export class ReactTestHarness {
       dependencies: []
     };
     
-    return this.testComponent({
+    return this.TestComponent({
       ...options,
       componentSpec: spec
     });
   }
 
-  async runTest(
+  /** @deprecated Use {@link TestComponentFromFile}. */
+  async testComponentFromFile(
+    filePath: string,
+    props: Record<string, any>,
+    options: Omit<ComponentExecutionOptions, 'componentSpec'>
+  ): Promise<ComponentExecutionResult> {
+    return this.TestComponentFromFile(filePath, props, options);
+  }
+
+  async RunTest(
     name: string,
     testFn: () => Promise<void>
   ): Promise<{ name: string; passed: boolean; error?: string; duration: number }> {
@@ -229,7 +259,15 @@ export class ReactTestHarness {
     }
   }
 
-  async runTests(tests: Array<{ name: string; fn: () => Promise<void> }>): Promise<{
+  /** @deprecated Use {@link RunTest}. */
+  async runTest(
+    name: string,
+    testFn: () => Promise<void>
+  ): Promise<{ name: string; passed: boolean; error?: string; duration: number }> {
+    return this.RunTest(name, testFn);
+  }
+
+  async RunTests(tests: Array<{ name: string; fn: () => Promise<void> }>): Promise<{
     total: number;
     passed: number;
     failed: number;
@@ -240,7 +278,7 @@ export class ReactTestHarness {
     const results = [];
 
     for (const test of tests) {
-      const result = await this.runTest(test.name, test.fn);
+      const result = await this.RunTest(test.name, test.fn);
       results.push(result);
     }
 
@@ -261,31 +299,77 @@ export class ReactTestHarness {
     return { total, passed, failed, duration, results };
   }
 
-  getAssertionHelpers() {
+  /** @deprecated Use {@link RunTests}. */
+  async runTests(tests: Array<{ name: string; fn: () => Promise<void> }>): Promise<{
+    total: number;
+    passed: number;
+    failed: number;
+    duration: number;
+    results: Array<{ name: string; passed: boolean; error?: string; duration: number }>;
+  }> {
+    return this.RunTests(tests);
+  }
+
+  GetAssertionHelpers() {
     return AssertionHelpers;
   }
 
-  createMatcher(html: string) {
+  /** @deprecated Use {@link GetAssertionHelpers}. */
+  getAssertionHelpers() {
+    return this.GetAssertionHelpers();
+  }
+
+  CreateMatcher(html: string) {
     return AssertionHelpers.createMatcher(html);
   }
 
-  async close(): Promise<void> {
+  /** @deprecated Use {@link CreateMatcher}. */
+  createMatcher(html: string) {
+    return this.CreateMatcher(html);
+  }
+
+  async Close(): Promise<void> {
     await this.browserManager.close();
   }
 
-  async screenshot(path?: string): Promise<Buffer> {
+  /** @deprecated Use {@link Close}. */
+  async close(): Promise<void> {
+    return this.Close();
+  }
+
+  async Screenshot(path?: string): Promise<Buffer> {
     return await this.browserManager.screenshot(path);
   }
 
-  async reload(): Promise<void> {
+  /** @deprecated Use {@link Screenshot}. */
+  async screenshot(path?: string): Promise<Buffer> {
+    return this.Screenshot(path);
+  }
+
+  async Reload(): Promise<void> {
     await this.browserManager.reload();
   }
 
-  async navigateTo(url: string): Promise<void> {
+  /** @deprecated Use {@link Reload}. */
+  async reload(): Promise<void> {
+    return this.Reload();
+  }
+
+  async NavigateTo(url: string): Promise<void> {
     await this.browserManager.navigateTo(url);
   }
 
-  async evaluateInPage<T>(fn: (...args: any[]) => T, ...args: any[]): Promise<T> {
+  /** @deprecated Use {@link NavigateTo}. */
+  async navigateTo(url: string): Promise<void> {
+    return this.NavigateTo(url);
+  }
+
+  async EvaluateInPage<T>(fn: (...args: any[]) => T, ...args: any[]): Promise<T> {
     return await this.browserManager.evaluateInPage(fn, ...args);
+  }
+
+  /** @deprecated Use {@link EvaluateInPage}. */
+  async evaluateInPage<T>(fn: (...args: any[]) => T, ...args: any[]): Promise<T> {
+    return this.EvaluateInPage(fn, ...args);
   }
 }

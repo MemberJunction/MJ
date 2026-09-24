@@ -203,8 +203,8 @@ describe('ConversationListComponent (DOM) — the selection bar', () => {
     const { f } = render((c) => selectRows(c, ['U1', 'U2']));
     barButton(f, 'Share').click();
     f.detectChanges();
-    expect(f.componentInstance.shareContexts.map(s => s.ResourceID).sort()).toEqual(['U1', 'U2']);
-    expect(f.componentInstance.isShareDialogOpen).toBe(true);
+    expect(f.componentInstance.ShareContexts.map(s => s.ResourceID).sort()).toEqual(['U1', 'U2']);
+    expect(f.componentInstance.IsShareDialogOpen).toBe(true);
   });
 
   it('disables Share when no selected conversation can be shared', () => {
@@ -423,7 +423,7 @@ describe('ConversationListComponent (DOM) — long-press on touch', () => {
     row.dispatchEvent(dragStart);
     f.detectChanges();
     expect(dragStart.defaultPrevented).toBe(true);
-    expect(f.componentInstance.draggedConversationIds).toEqual([]);
+    expect(f.componentInstance.DraggedConversationIds).toEqual([]);
     expect(selected(f)).toEqual(['U1']);
   });
 

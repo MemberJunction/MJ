@@ -1,4 +1,4 @@
-import { schemaNameMatches } from '../Misc/schema-emit';
+import { SchemaNameMatches } from '../Misc/schema-emit';
 
 /**
  * Per-schema output override. Lets a brownfield / demo schema emit into its
@@ -20,26 +20,34 @@ export type SchemaOutputKind = 'EntitySubClasses' | 'GraphQLServer' | 'Angular' 
 /**
  * First matching override wins. Returns undefined when no override applies.
  */
-export function findSchemaOutputOverride(
+export function FindSchemaOutputOverride(
   schemaName: string,
   overrides: readonly SchemaOutputOverride[] | undefined,
 ): SchemaOutputOverride | undefined {
   if (!overrides || overrides.length === 0) {
     return undefined;
   }
-  return overrides.find((entry) => schemaNameMatches(entry.schema, schemaName));
+  return overrides.find((entry) => SchemaNameMatches(entry.schema, schemaName));
+}
+
+/** @deprecated Use {@link FindSchemaOutputOverride}. */
+export function findSchemaOutputOverride(
+  schemaName: string,
+  overrides: readonly SchemaOutputOverride[] | undefined,
+): SchemaOutputOverride | undefined {
+  return FindSchemaOutputOverride(schemaName, overrides);
 }
 
 /**
  * Resolve the output directory for one entity's schema + artifact kind.
  * `undefined` means "use the default `outputDir(kind)`". `null` means skip.
  */
-export function resolveSchemaOutputDirectory(
+export function ResolveSchemaOutputDirectory(
   schemaName: string,
   kind: SchemaOutputKind,
   overrides: readonly SchemaOutputOverride[] | undefined,
 ): string | null | undefined {
-  const match = findSchemaOutputOverride(schemaName, overrides);
+  const match = FindSchemaOutputOverride(schemaName, overrides);
   if (!match) {
     return undefined;
   }
@@ -48,6 +56,15 @@ export function resolveSchemaOutputDirectory(
   }
   const dir = match[kind as 'EntitySubClasses' | 'GraphQLServer' | 'Angular'];
   return dir;
+}
+
+/** @deprecated Use {@link ResolveSchemaOutputDirectory}. */
+export function resolveSchemaOutputDirectory(
+  schemaName: string,
+  kind: SchemaOutputKind,
+  overrides: readonly SchemaOutputOverride[] | undefined,
+): string | null | undefined {
+  return ResolveSchemaOutputDirectory(schemaName, kind, overrides);
 }
 
 /**
@@ -62,7 +79,7 @@ export function resolveSchemaOutputDirectory(
  * at all, and dropping the group there left `entity_subclasses.ts` unwritten
  * and MJAPI unable to start (MemberJunction/MJ#4477).
  */
-export function partitionEntitiesByOutputDirectory<T extends { SchemaName: string }>(
+export function PartitionEntitiesByOutputDirectory<T extends { SchemaName: string }>(
   entities: readonly T[],
   kind: SchemaOutputKind,
   defaultDirectory: string | null,
@@ -73,7 +90,7 @@ export function partitionEntitiesByOutputDirectory<T extends { SchemaName: strin
     groups.set(defaultDirectory, []);
   }
   for (const entity of entities) {
-    const resolved = resolveSchemaOutputDirectory(entity.SchemaName, kind, overrides);
+    const resolved = ResolveSchemaOutputDirectory(entity.SchemaName, kind, overrides);
     if (resolved === null) {
       continue;
     }
@@ -89,4 +106,14 @@ export function partitionEntitiesByOutputDirectory<T extends { SchemaName: strin
     }
   }
   return groups;
+}
+
+/** @deprecated Use {@link PartitionEntitiesByOutputDirectory}. */
+export function partitionEntitiesByOutputDirectory<T extends { SchemaName: string }>(
+  entities: readonly T[],
+  kind: SchemaOutputKind,
+  defaultDirectory: string | null,
+  overrides: readonly SchemaOutputOverride[] | undefined,
+): Map<string, T[]> {
+  return PartitionEntitiesByOutputDirectory(entities, kind, defaultDirectory, overrides);
 }

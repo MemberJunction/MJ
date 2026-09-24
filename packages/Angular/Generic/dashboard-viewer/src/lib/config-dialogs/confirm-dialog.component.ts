@@ -16,38 +16,119 @@ export type ConfirmDialogType = 'warning' | 'danger' | 'info';
 })
 export class ConfirmDialogComponent {
     /** Whether the dialog is visible */
-    @Input() visible = false;
+    @Input() Visible = false;
+
+    /** @deprecated Use {@link Visible}. */
+    @Input() set visible(value: ConfirmDialogComponent['Visible']) {
+      this.Visible = value;
+    }
+    /** @deprecated Use {@link Visible}. */
+    get visible(): ConfirmDialogComponent['Visible'] {
+      return this.Visible;
+    }
 
     /** Dialog type (affects icon and button styling) */
-    @Input() type: ConfirmDialogType = 'warning';
+    @Input() Type: ConfirmDialogType = 'warning';
+
+    /** @deprecated Use {@link Type}. */
+    @Input() set type(value: ConfirmDialogType) {
+      this.Type = value;
+    }
+    /** @deprecated Use {@link Type}. */
+    get type(): ConfirmDialogType {
+      return this.Type;
+    }
 
     /** Dialog title */
-    @Input() title = 'Confirm Action';
+    @Input() Title = 'Confirm Action';
+
+    /** @deprecated Use {@link Title}. */
+    @Input() set title(value: ConfirmDialogComponent['Title']) {
+      this.Title = value;
+    }
+    /** @deprecated Use {@link Title}. */
+    get title(): ConfirmDialogComponent['Title'] {
+      return this.Title;
+    }
 
     /** Dialog message */
-    @Input() message = 'Are you sure you want to proceed?';
+    @Input() Message = 'Are you sure you want to proceed?';
+
+    /** @deprecated Use {@link Message}. */
+    @Input() set message(value: ConfirmDialogComponent['Message']) {
+      this.Message = value;
+    }
+    /** @deprecated Use {@link Message}. */
+    get message(): ConfirmDialogComponent['Message'] {
+      return this.Message;
+    }
 
     /** Confirm button text */
-    @Input() confirmText = 'Confirm';
+    @Input() ConfirmText = 'Confirm';
+
+    /** @deprecated Use {@link ConfirmText}. */
+    @Input() set confirmText(value: ConfirmDialogComponent['ConfirmText']) {
+      this.ConfirmText = value;
+    }
+    /** @deprecated Use {@link ConfirmText}. */
+    get confirmText(): ConfirmDialogComponent['ConfirmText'] {
+      return this.ConfirmText;
+    }
 
     /** Cancel button text */
-    @Input() cancelText = 'Cancel';
+    @Input() CancelText = 'Cancel';
+
+    /** @deprecated Use {@link CancelText}. */
+    @Input() set cancelText(value: ConfirmDialogComponent['CancelText']) {
+      this.CancelText = value;
+    }
+    /** @deprecated Use {@link CancelText}. */
+    get cancelText(): ConfirmDialogComponent['CancelText'] {
+      return this.CancelText;
+    }
 
     /** Custom icon class (optional, uses default based on type if not provided) */
-    @Input() icon = '';
+    @Input() Icon = '';
+
+    /** @deprecated Use {@link Icon}. */
+    @Input() set icon(value: ConfirmDialogComponent['Icon']) {
+      this.Icon = value;
+    }
+    /** @deprecated Use {@link Icon}. */
+    get icon(): ConfirmDialogComponent['Icon'] {
+      return this.Icon;
+    }
 
     /** Emitted when user confirms */
-    @Output() confirmed = new EventEmitter<void>();
+    @Output() Confirmed = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link Confirmed}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (confirmed) keeps working. Must stay AFTER Confirmed: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() confirmed = this.Confirmed;
 
     /** Emitted when user cancels */
-    @Output() cancelled = new EventEmitter<void>();
+    @Output() Cancelled = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link Cancelled}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (cancelled) keeps working. Must stay AFTER Cancelled: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() cancelled = this.Cancelled;
 
     constructor(private cdr: ChangeDetectorRef) {}
 
-    public getIcon(): string {
-        if (this.icon) return this.icon;
+    public GetIcon(): string {
+        if (this.Icon) return this.Icon;
 
-        switch (this.type) {
+        switch (this.Type) {
             case 'danger':
                 return 'fa-solid fa-trash';
             case 'info':
@@ -57,11 +138,26 @@ export class ConfirmDialogComponent {
         }
     }
 
-    public confirm(): void {
-        this.confirmed.emit();
+    /** @deprecated Use {@link GetIcon}. */
+    public getIcon(): string {
+      return this.GetIcon();
     }
 
+    public Confirm(): void {
+        this.Confirmed.emit();
+    }
+
+    /** @deprecated Use {@link Confirm}. */
+    public confirm(): void {
+      return this.Confirm();
+    }
+
+    public Cancel(): void {
+        this.Cancelled.emit();
+    }
+
+    /** @deprecated Use {@link Cancel}. */
     public cancel(): void {
-        this.cancelled.emit();
+      return this.Cancel();
     }
 }

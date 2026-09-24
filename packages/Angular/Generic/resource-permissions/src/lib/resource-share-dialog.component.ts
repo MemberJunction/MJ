@@ -204,12 +204,12 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
     }
 
     /** Highlight grants whose level has been changed from their loaded state. */
-    public isModified(grant: ResourceShareGrant): boolean {
+    public IsModified(grant: ResourceShareGrant): boolean {
         return !grant.IsNew && grant.LevelTouched;
     }
 
     /** A level button lights up only when the grant has one level to show. */
-    public isLevelActive(grant: ResourceShareGrant, level: ResourceShareLevel): boolean {
+    public IsLevelActive(grant: ResourceShareGrant, level: ResourceShareLevel): boolean {
         if (!grant.LevelTouched && grant.InitialLevel === null && !grant.IsNew) return false;
         return grant.Level === level;
     }
@@ -218,7 +218,7 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
      * Why a grant does not simply read as "everyone, one level": levels that
      * differ across resources, or access held on only some of them.
      */
-    public scopeLabel(grant: ResourceShareGrant): string {
+    public ScopeLabel(grant: ResourceShareGrant): string {
         if (grant.IsNew || this.ActiveContexts.length < 2) return '';
         const parts: string[] = [];
         if (!grant.LevelTouched && grant.InitialLevel === null) parts.push('Mixed');
@@ -229,7 +229,7 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
     }
 
     /** Adds a person, to every resource the dialog is sharing. */
-    public async addUserShare(user: MJUserEntity): Promise<void> {
+    public async AddUserShare(user: MJUserEntity): Promise<void> {
         if (this.ActiveContexts.length === 0 || !this.Adapter) return;
         this.Grants = [
             ...this.Grants,
@@ -249,7 +249,7 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
     }
 
-    public removeUserShare(grant: ResourceShareGrant): void {
+    public RemoveUserShare(grant: ResourceShareGrant): void {
         if (grant.IsNew) {
             this.Grants = this.Grants.filter((g) => g !== grant);
         } else {
@@ -259,20 +259,20 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
     }
 
-    public undoRemove(grant: ResourceShareGrant): void {
+    public UndoRemove(grant: ResourceShareGrant): void {
         grant.MarkedForRemoval = false;
         this.updateAvailableUsers();
         this.cdr.detectChanges();
     }
 
     /** Sets one level for the person across every resource, filling in any gaps. */
-    public setLevel(grant: ResourceShareGrant, level: ResourceShareLevel): void {
+    public SetLevel(grant: ResourceShareGrant, level: ResourceShareLevel): void {
         grant.Level = level;
         grant.LevelTouched = true;
         this.cdr.detectChanges();
     }
 
-    public async onSave(): Promise<void> {
+    public async OnSave(): Promise<void> {
         const contexts = this.ActiveContexts;
         if (!this.Adapter || contexts.length === 0) return;
         if (!this.HasChanges) {
@@ -360,12 +360,47 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         this.Result.emit({ Action: 'cancel' });
     }
 
-    public getUserInitials(user: MJUserEntity): string {
+    public GetUserInitials(user: MJUserEntity): string {
         const name = user.Name || user.Email || '?';
         const parts = name.split(' ');
         if (parts.length >= 2) {
             return (parts[0][0] + parts[1][0]).toUpperCase();
         }
         return name.substring(0, 2).toUpperCase();
+    }
+
+    /** @deprecated Use {@link IsModified}. */
+    public isModified(grant: ResourceShareGrant): boolean {
+        return this.IsModified(grant);
+    }
+
+    /** @deprecated Use {@link AddUserShare}. */
+    public async addUserShare(user: MJUserEntity): Promise<void> {
+        return this.AddUserShare(user);
+    }
+
+    /** @deprecated Use {@link RemoveUserShare}. */
+    public removeUserShare(grant: ResourceShareGrant): void {
+        return this.RemoveUserShare(grant);
+    }
+
+    /** @deprecated Use {@link UndoRemove}. */
+    public undoRemove(grant: ResourceShareGrant): void {
+        return this.UndoRemove(grant);
+    }
+
+    /** @deprecated Use {@link SetLevel}. */
+    public setLevel(grant: ResourceShareGrant, level: ResourceShareLevel): void {
+        return this.SetLevel(grant, level);
+    }
+
+    /** @deprecated Use {@link OnSave}. */
+    public async onSave(): Promise<void> {
+        return this.OnSave();
+    }
+
+    /** @deprecated Use {@link GetUserInitials}. */
+    public getUserInitials(user: MJUserEntity): string {
+        return this.GetUserInitials(user);
     }
 }

@@ -333,28 +333,28 @@ describe('ConversationListComponent (DOM) — bulk move and pin', () => {
 
   it('moves every selected conversation into the chosen folder', async () => {
     const { f, engine } = renderSelected(['U1', 'U2']);
-    await f.componentInstance.bulkMoveToFolder('proj1');
+    await f.componentInstance.BulkMoveToFolder('proj1');
     expect(engine['MoveMultipleConversationsToProject']).toHaveBeenCalledWith(['U1', 'U2'], 'proj1', currentUser);
   });
 
   it('moves selected conversations out of their folders when "No folder" is chosen', async () => {
     const { f, engine } = renderSelected(['U1']);
-    await f.componentInstance.bulkMoveToFolder(null);
+    await f.componentInstance.BulkMoveToFolder(null);
     expect(engine['MoveMultipleConversationsToProject']).toHaveBeenCalledWith(['U1'], null, currentUser);
   });
 
   it('keeps the selection after a move so a second bulk action can follow', async () => {
     const { f } = renderSelected(['U1', 'U2']);
-    await f.componentInstance.bulkMoveToFolder('proj1');
+    await f.componentInstance.BulkMoveToFolder('proj1');
     expect(f.componentInstance.isSelectionMode).toBe(true);
     expect(selected(f.componentInstance)).toEqual(['U1', 'U2']);
   });
 
   it('pins and unpins the whole selection', async () => {
     const { f, engine } = renderSelected(['U1', 'U2']);
-    await f.componentInstance.bulkSetPinned(true);
+    await f.componentInstance.BulkSetPinned(true);
     expect(engine['PinMultipleConversations']).toHaveBeenCalledWith(['U1', 'U2'], true, currentUser);
-    await f.componentInstance.bulkSetPinned(false);
+    await f.componentInstance.BulkSetPinned(false);
     expect(engine['PinMultipleConversations']).toHaveBeenCalledWith(['U1', 'U2'], false, currentUser);
   });
 
@@ -366,14 +366,14 @@ describe('ConversationListComponent (DOM) — bulk move and pin', () => {
       })
     };
     const { f, alert } = renderSelected(['U1', 'U2'], failing);
-    await f.componentInstance.bulkMoveToFolder('proj1');
+    await f.componentInstance.BulkMoveToFolder('proj1');
     expect(alert).toHaveBeenCalledTimes(1);
     expect(String(alert.mock.calls[0][1])).toContain('Loose Two');
   });
 
   it('does nothing when a bulk action runs with an empty selection', async () => {
     const { f, engine } = renderSelected([]);
-    await f.componentInstance.bulkSetPinned(true);
+    await f.componentInstance.BulkSetPinned(true);
     expect(engine['PinMultipleConversations']).not.toHaveBeenCalled();
   });
 });
@@ -659,7 +659,7 @@ describe('ConversationListComponent (DOM) — dropping onto a conversation adopt
     const { f, move } = renderDraggable(['U1', 'U2']);
     f.componentInstance.onConversationDragStart(byId('U1'), dragEvt());
     // A1 lives in the Work folder
-    await f.componentInstance.onConversationRowDrop(byId('A1'), dragEvt());
+    await f.componentInstance.OnConversationRowDrop(byId('A1'), dragEvt());
     const [ids, projectId] = move.mock.calls[0];
     expect([...(ids as string[])].sort()).toEqual(['U1', 'U2']);
     expect(projectId).toBe('proj1');
@@ -668,7 +668,7 @@ describe('ConversationListComponent (DOM) — dropping onto a conversation adopt
   it('moves a conversation out of its folder when dropped on an ungrouped conversation', async () => {
     const { f, move } = renderDraggable();
     f.componentInstance.onConversationDragStart(byId('A1'), dragEvt());
-    await f.componentInstance.onConversationRowDrop(byId('U1'), dragEvt());
+    await f.componentInstance.OnConversationRowDrop(byId('U1'), dragEvt());
     expect(move).toHaveBeenCalledWith(['A1'], null, currentUser);
   });
 
@@ -676,7 +676,7 @@ describe('ConversationListComponent (DOM) — dropping onto a conversation adopt
     const { f } = renderDraggable();
     f.componentInstance.onConversationDragStart(byId('U1'), dragEvt());
     const over = dragEvt();
-    f.componentInstance.onConversationRowDragOver(byId('A2'), over);
+    f.componentInstance.OnConversationRowDragOver(byId('A2'), over);
     expect(over.preventDefault).toHaveBeenCalled();
     expect(f.componentInstance.dragOverTargetId).toBe('proj1');
   });
@@ -684,7 +684,7 @@ describe('ConversationListComponent (DOM) — dropping onto a conversation adopt
   it('marks the Ungrouped section while dragging over a conversation with no folder', () => {
     const { f } = renderDraggable();
     f.componentInstance.onConversationDragStart(byId('A1'), dragEvt());
-    f.componentInstance.onConversationRowDragOver(byId('U1'), dragEvt());
+    f.componentInstance.OnConversationRowDragOver(byId('U1'), dragEvt());
     expect(f.componentInstance.dragOverTargetId).toBe('ungrouped');
   });
 
@@ -692,7 +692,7 @@ describe('ConversationListComponent (DOM) — dropping onto a conversation adopt
     const { f } = renderDraggable(['U1', 'U2']);
     f.componentInstance.onConversationDragStart(byId('U1'), dragEvt());
     const over = dragEvt();
-    f.componentInstance.onConversationRowDragOver(byId('U2'), over);
+    f.componentInstance.OnConversationRowDragOver(byId('U2'), over);
     expect(over.preventDefault).not.toHaveBeenCalled();
     expect(f.componentInstance.dragOverTargetId).toBeNull();
   });
@@ -702,14 +702,14 @@ describe('ConversationListComponent (DOM) — dropping onto a conversation adopt
     const node = f.componentInstance.folderTree[0];
     f.componentInstance.onFolderDragStart(node, dragEvt());
     const over = dragEvt();
-    f.componentInstance.onConversationRowDragOver(byId('U1'), over);
+    f.componentInstance.OnConversationRowDragOver(byId('U1'), over);
     expect(over.preventDefault).not.toHaveBeenCalled();
   });
 
   it('saves nothing when the drop target is the folder the conversation is already in', async () => {
     const { f, move } = renderDraggable();
     f.componentInstance.onConversationDragStart(byId('A1'), dragEvt());
-    await f.componentInstance.onConversationRowDrop(byId('A2'), dragEvt()); // both already in Work
+    await f.componentInstance.OnConversationRowDrop(byId('A2'), dragEvt()); // both already in Work
     expect(move).not.toHaveBeenCalled();
   });
 });
@@ -731,7 +731,7 @@ describe('ConversationListComponent (DOM) — the selection only holds rows on s
       c.toggleFolder('proj2'); // hides B1
       c.pinnedExpanded = false; // hides P1
     });
-    f.componentInstance.contextSelectAll();
+    f.componentInstance.ContextSelectAll();
     expect(selected(f.componentInstance)).toEqual(['A1', 'A2', 'U1', 'U2']);
   });
 
@@ -739,7 +739,7 @@ describe('ConversationListComponent (DOM) — the selection only holds rows on s
     const f = render({}, (c) => {
       c.searchQuery = 'Loose';
     });
-    f.componentInstance.contextSelectAll();
+    f.componentInstance.ContextSelectAll();
     expect(selected(f.componentInstance)).toEqual(['U1', 'U2']);
   });
 
@@ -817,7 +817,7 @@ describe('ConversationListComponent (DOM) — a Ctrl-click selection includes th
     const f = render({ selectedConversationId: 'P1' });
     f.componentInstance.handleConversationClick(byId('U1'), click('ctrl'));
     f.componentInstance.onConversationDragStart(byId('U1'), new MouseEvent('dragstart') as unknown as DragEvent);
-    expect([...f.componentInstance.draggedConversationIds].sort()).toEqual(['P1', 'U1']);
+    expect([...f.componentInstance.DraggedConversationIds].sort()).toEqual(['P1', 'U1']);
   });
 
   it('selects only the clicked row when no conversation is open', () => {

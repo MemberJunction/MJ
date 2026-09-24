@@ -34,8 +34,8 @@ interface BulkAssignHost {
   users: unknown[];
   error: string;
   Provider: unknown;
-  clearSelection(): void;
-  loadInitialData(): Promise<void>;
+  ClearSelection(): void;
+  LoadInitialData(): Promise<void>;
 }
 
 /** Minimal MJUserRoleEntity stand-in: only what `executeBulkRoleAssign` touches. */
@@ -73,8 +73,11 @@ function makeComponent(opts: {
   };
   // Stubbed on the instance so the real implementations (which reload from the server and touch
   // Angular change detection) never run.
-  c.clearSelection = vi.fn();
-  c.loadInitialData = vi.fn().mockResolvedValue(undefined);
+  // Stubbed under the CANONICAL names. The camelCase spellings are now @deprecated aliases that
+  // forward to these, and the component calls the canonical ones internally — so a stub on an alias
+  // intercepts nothing and the real LoadInitialData runs against an unconfigured provider.
+  c.ClearSelection = vi.fn();
+  c.LoadInitialData = vi.fn().mockResolvedValue(undefined);
   Object.assign(c, {
     isLoading: false,
     showBulkRoleAssign: true,
@@ -131,7 +134,7 @@ describe('UserManagementComponent.executeBulkRoleAssign — a SERVER refusal mus
 
     await c.executeBulkRoleAssign();
 
-    expect(c.clearSelection).not.toHaveBeenCalled();
+    expect(c.ClearSelection).not.toHaveBeenCalled();
   });
 
   it('keeps the generic message when the server named no row', async () => {
@@ -164,7 +167,7 @@ describe('UserManagementComponent.executeBulkRoleAssign — a SERVER refusal mus
 
     expect(tg.Submit).toHaveBeenCalledOnce();
     expect(c.error).toBe('');
-    expect(c.clearSelection).toHaveBeenCalledOnce();
+    expect(c.ClearSelection).toHaveBeenCalledOnce();
   });
 
   it('still reports a CLIENT-side refusal before the group is ever submitted', async () => {

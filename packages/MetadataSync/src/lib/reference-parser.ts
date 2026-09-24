@@ -38,7 +38,7 @@ const REFERENCE_PATTERNS: ReadonlyArray<readonly [ReferenceType, RegExp]> = [
  * @returns The parsed reference, or `null` when the string is not a
  *          recognized reference (including bare prefixes like `"@file:"`)
  */
-export function parseMetadataReference(reference: string): ParsedReference | null {
+export function ParseMetadataReference(reference: string): ParsedReference | null {
   for (const [type, pattern] of REFERENCE_PATTERNS) {
     const match = reference.match(pattern);
     if (!match) {
@@ -52,6 +52,11 @@ export function parseMetadataReference(reference: string): ParsedReference | nul
   }
 
   return null;
+}
+
+/** @deprecated Use {@link ParseMetadataReference}. */
+export function parseMetadataReference(reference: string): ParsedReference | null {
+  return ParseMetadataReference(reference);
 }
 
 /**

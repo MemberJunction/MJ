@@ -13,7 +13,7 @@
  * perform no mutation and have no side effects.
  */
 
-import { boundNameList, AGENT_CONTEXT_NAME_LIST_CAP } from '../../../shared/agent-tool-validation';
+import { BoundNameList, AGENT_CONTEXT_NAME_LIST_CAP } from '../../../shared/agent-tool-validation';
 
 /** A config section descriptor — the salient slice the agent needs to navigate. */
 export interface ConfigSectionCandidate {
@@ -102,7 +102,7 @@ export interface KnowledgeConfigAgentContextInput {
  *
  * @returns the matched section, or null on a miss.
  */
-export function resolveConfigSection<T extends ConfigSectionCandidate>(
+export function ResolveConfigSection<T extends ConfigSectionCandidate>(
     input: string,
     sections: readonly T[],
 ): T | null {
@@ -117,13 +117,21 @@ export function resolveConfigSection<T extends ConfigSectionCandidate>(
     ) ?? null;
 }
 
+/** @deprecated Use {@link ResolveConfigSection}. */
+export function resolveConfigSection<T extends ConfigSectionCandidate>(
+    input: string,
+    sections: readonly T[],
+): T | null {
+    return ResolveConfigSection(input, sections);
+}
+
 /**
  * Resolve a search-scope or index reference by id (exact) → name (exact) →
  * name contains, all case-insensitive. Pure + deterministic.
  *
  * @returns the matched candidate, or null on a miss.
  */
-export function resolveByIDOrName<T extends { ID: string; Name: string }>(
+export function ResolveByIDOrName<T extends { ID: string; Name: string }>(
     input: string,
     candidates: readonly T[],
 ): T | null {
@@ -136,18 +144,35 @@ export function resolveByIDOrName<T extends { ID: string; Name: string }>(
     return candidates.find(c => c.Name.toLowerCase().includes(needle)) ?? null;
 }
 
+/** @deprecated Use {@link ResolveByIDOrName}. */
+export function resolveByIDOrName<T extends { ID: string; Name: string }>(
+    input: string,
+    candidates: readonly T[],
+): T | null {
+    return ResolveByIDOrName(input, candidates);
+}
+
 /**
  * Build a tolerant "not found" error message that lists a bounded sample of the
  * available names so the agent can correct itself.
  */
+export function BuildConfigNotFoundError(
+    input: string,
+    kind: string,
+    available: readonly string[],
+): string {
+    const sample = BoundNameList(available, 10).join(', ');
+    const more = available.length > 10 ? ` (+${available.length - 10} more)` : '';
+    return `No ${kind} matches "${input}". Available ${kind}s: ${sample}${more}.`;
+}
+
+/** @deprecated Use {@link BuildConfigNotFoundError}. */
 export function buildConfigNotFoundError(
     input: string,
     kind: string,
     available: readonly string[],
 ): string {
-    const sample = boundNameList(available, 10).join(', ');
-    const more = available.length > 10 ? ` (+${available.length - 10} more)` : '';
-    return `No ${kind} matches "${input}". Available ${kind}s: ${sample}${more}.`;
+    return BuildConfigNotFoundError(input, kind, available);
 }
 
 /**
@@ -161,7 +186,7 @@ export function buildConfigNotFoundError(
  * Keeping this a pure function (no `this`) makes the context shape unit-testable
  * and decouples it from change-detection timing.
  */
-export function buildKnowledgeConfigAgentContext(
+export function BuildKnowledgeConfigAgentContext(
     input: KnowledgeConfigAgentContextInput,
 ): Record<string, unknown> {
     const scopeNames = input.SearchScopes.map(s => s.Name);
@@ -171,7 +196,7 @@ export function buildKnowledgeConfigAgentContext(
         ActiveSection: input.ActiveSection,
         ActiveSectionLabel: input.ActiveSectionLabel,
         SectionCount: input.Sections.length,
-        AvailableSections: boundNameList(input.Sections.map(s => s.ID)),
+        AvailableSections: BoundNameList(input.Sections.map(s => s.ID)),
         IsLoading: input.IsLoading,
         HasUnsavedChanges: input.HasUnsavedChanges,
 
@@ -179,9 +204,9 @@ export function buildKnowledgeConfigAgentContext(
         VectorSetupComplete: input.VectorSetupComplete,
         SetupStepsCompleted: input.SetupStepsCompleted,
         VectorDBProviderCount: input.VectorDBProviderCount,
-        VectorDBProviderNames: boundNameList(input.VectorDBProviderNames),
+        VectorDBProviderNames: BoundNameList(input.VectorDBProviderNames),
         VectorIndexCount: input.VectorIndexCount,
-        VectorIndexNames: boundNameList(indexNames),
+        VectorIndexNames: BoundNameList(indexNames),
         EmbeddingModelName: input.EmbeddingModelName,
         EmbeddingModelCount: input.EmbeddingModelCount,
 
@@ -192,7 +217,7 @@ export function buildKnowledgeConfigAgentContext(
 
         // Search-scope landscape
         SearchScopeCount: input.SearchScopes.length,
-        SearchScopeNames: boundNameList(scopeNames),
+        SearchScopeNames: BoundNameList(scopeNames),
         ActiveScopeID: input.ActiveScopeID,
         ActiveScopeName: input.ActiveScopeName,
         ActiveScopeTab: input.ActiveScopeTab,
@@ -219,4 +244,11 @@ export function buildKnowledgeConfigAgentContext(
     }
 
     return ctx;
+}
+
+/** @deprecated Use {@link BuildKnowledgeConfigAgentContext}. */
+export function buildKnowledgeConfigAgentContext(
+    input: KnowledgeConfigAgentContextInput,
+): Record<string, unknown> {
+    return BuildKnowledgeConfigAgentContext(input);
 }

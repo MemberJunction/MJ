@@ -16,7 +16,7 @@ import type { ConnectorCreationPipelineOptions } from '../IntegrationConnectorCr
 import type { SourceObjectInfo } from '../types.js';
 
 type IntrospectHost = {
-    StageIntrospect: (
+    stageIntrospect: (
         emitter: unknown,
         opts: ConnectorCreationPipelineOptions
     ) => Promise<{ Objects: SourceObjectInfo[] }>;
@@ -88,7 +88,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
         const fetchFields = vi.fn(async () => [sampledField('id', 50, true), sampledField('note', 900)]);
         const opts = makeOpts({ declared: [declaredObject('Invoice')], discoverFieldsViaFetch: fetchFields });
 
-        const schema = await host().StageIntrospect(makeEmitter(), opts);
+        const schema = await host().stageIntrospect(makeEmitter(), opts);
 
         expect(fetchFields).toHaveBeenCalledWith(opts.CompanyIntegration, 'Invoice', opts.ContextUser, expect.anything());
         const note = schema.Objects[0].Fields.find((f) => f.Name === 'note');
@@ -98,7 +98,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
     it('adds columns the declaration never mentioned', async () => {
         const opts = makeOpts({ declared: [declaredObject('Invoice')] });
 
-        const schema = await host().StageIntrospect(makeEmitter(), opts);
+        const schema = await host().stageIntrospect(makeEmitter(), opts);
 
         expect(schema.Objects[0].Fields.map((f) => f.Name)).toContain('undeclared_col');
     });
@@ -114,7 +114,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
         });
         const emitter = makeEmitter();
 
-        const schema = await host().StageIntrospect(emitter, opts);
+        const schema = await host().stageIntrospect(emitter, opts);
 
         expect(fetchFields).toHaveBeenCalledTimes(2);
         expect(schema.Objects.every((o) => o.Fields.find((f) => f.Name === 'note')?.MaxLength === 900)).toBe(true);
@@ -132,7 +132,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
             discoverFieldsViaFetch: fetchFields,
         });
 
-        await host().StageIntrospect(makeEmitter(), opts);
+        await host().stageIntrospect(makeEmitter(), opts);
 
         expect(fetchFields).toHaveBeenCalledTimes(1);
     });
@@ -142,7 +142,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
         const fetchFields = vi.fn(async () => [sampledField('id', 50, true), sampledField('note', 900)]);
         const opts = makeOpts({ declared: [declaredObject('Invoice'), declaredObject('invoice')], discoverFieldsViaFetch: fetchFields });
 
-        await host().StageIntrospect(makeEmitter(), opts);
+        await host().stageIntrospect(makeEmitter(), opts);
 
         expect(fetchFields).toHaveBeenCalledTimes(1);
     });
@@ -160,7 +160,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
             discoverFieldsViaFetch: fetchFields,
         });
 
-        const schema = await host().StageIntrospect(makeEmitter(), opts);
+        const schema = await host().stageIntrospect(makeEmitter(), opts);
 
         const sampledNames = fetchFields.mock.calls.map((c) => (c as unknown[])[1]);
         expect(sampledNames).toEqual(expect.arrayContaining(['Invoice', 'Customer']));
@@ -180,7 +180,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
             objectNames: ['Invoice'],
         });
 
-        await host().StageIntrospect(makeEmitter(), opts);
+        await host().stageIntrospect(makeEmitter(), opts);
 
         expect(fetchFields).toHaveBeenCalledTimes(1);
         expect(fetchFields).toHaveBeenCalledWith(opts.CompanyIntegration, 'Invoice', opts.ContextUser, expect.anything());
@@ -194,7 +194,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
         });
         const emitter = makeEmitter();
 
-        const schema = await host().StageIntrospect(emitter, opts);
+        const schema = await host().stageIntrospect(emitter, opts);
 
         expect(schema.Objects[0].Fields.map((f) => f.Name)).toEqual(['id', 'note']);
         expect(schema.Objects[0].Fields.find((f) => f.Name === 'note')?.MaxLength).toBe(255);
@@ -207,7 +207,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
             discoverFieldsViaFetch: vi.fn(async () => [sampledField('id', 50), sampledField('note', 900, true)]),
         });
 
-        const schema = await host().StageIntrospect(makeEmitter(), opts);
+        const schema = await host().stageIntrospect(makeEmitter(), opts);
 
         expect(schema.Objects[0].PrimaryKeyFields).toEqual(['id']);
     });
@@ -228,7 +228,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
             const opts = makeOpts({ declared, discoverFieldsViaFetch: fetchFields, runDeadlineMs: 60 });
             const emitter = makeEmitter();
 
-            const schema = await host().StageIntrospect(emitter, opts);
+            const schema = await host().stageIntrospect(emitter, opts);
 
             expect(fetchFields.mock.calls.length).toBeLessThan(12);   // did NOT walk the whole catalog
             expect(schema.Objects).toHaveLength(12);                  // every object still returned
@@ -244,7 +244,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
             const opts = makeOpts({ declared, discoverFieldsViaFetch: fetchFields, runDeadlineMs: 60_000 });
             const emitter = makeEmitter();
 
-            await host().StageIntrospect(emitter, opts);
+            await host().stageIntrospect(emitter, opts);
 
             expect(fetchFields.mock.calls.length).toBe(6);
             expect(emitter.errors.some((e) => e.meta?.code === 'sample-budget-exhausted')).toBe(false);
@@ -255,7 +255,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
             const declared = Array.from({ length: 4 }, (_v, i) => declaredObject(`Obj${i}`));
             const opts = makeOpts({ declared, discoverFieldsViaFetch: fetchFields, runDeadlineMs: 0 });
 
-            await host().StageIntrospect(makeEmitter(), opts);
+            await host().stageIntrospect(makeEmitter(), opts);
 
             expect(fetchFields.mock.calls.length).toBe(4);   // 0 disables, it does not mean "no time"
         });
@@ -274,7 +274,7 @@ describe('StageIntrospect — declared ∪ runtime sampling', () => {
         });
         const emitter = makeEmitter();
 
-        await host().StageIntrospect(emitter, opts);
+        await host().stageIntrospect(emitter, opts);
 
         expect(emitter.errors.some((e) => e.meta?.code === 'discover-fields-fallback')).toBe(true);
     });

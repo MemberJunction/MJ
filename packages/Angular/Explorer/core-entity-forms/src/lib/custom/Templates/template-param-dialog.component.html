@@ -158,7 +158,7 @@
               <i class="fa-solid fa-chart-line"></i>
               Test Results
               @if (testResult) {
-                @if (testResult.success) {
+                @if (testResult.Success) {
                   <span class="result-badge success"><i class="fa-solid fa-check"></i> Success</span>
                 } @else {
                   <span class="result-badge error"><i class="fa-solid fa-times"></i> Failed</span>
@@ -175,17 +175,17 @@
             } @else if (testResult) {
               <div style="flex: 1; display: flex; flex-direction: column;">
                 <!-- Result Header with Stats -->
-                <div class="result-stats" [class.success]="testResult.success" [class.error]="!testResult.success">
+                <div class="result-stats" [class.success]="testResult.Success" [class.error]="!testResult.Success">
                   <div class="result-stat">
                     <div class="result-stat-label">STATUS</div>
                     <div class="result-stat-value">
-                      {{ testResult.success ? 'Success' : 'Failed' }}
+                      {{ testResult.Success ? 'Success' : 'Failed' }}
                     </div>
                   </div>
-                  @if (testResult.executionTimeMs) {
+                  @if (testResult.ExecutionTimeMs) {
                     <div class="result-stat">
                       <div class="result-stat-label">EXECUTION TIME</div>
-                      <div class="result-stat-value">{{ testResult.executionTimeMs }}ms</div>
+                      <div class="result-stat-value">{{ testResult.ExecutionTimeMs }}ms</div>
                     </div>
                   }
                   <div class="result-stat">
@@ -199,23 +199,23 @@
                 </div>
                 <!-- Result Content -->
                 <div style="flex: 1; display: flex; flex-direction: column;">
-                  @if (testResult.success && testResult.output) {
+                  @if (testResult.Success && testResult.Output) {
                     <div style="margin-bottom: 12px; flex: 1; display: flex; flex-direction: column;">
                       <h6 class="output-header">
                         <i class="fa-solid fa-check-circle success-icon"></i>
                         Template Output
                       </h6>
                       <div class="output-box">
-                        {{ testResult.output }}
+                        {{ testResult.Output }}
                       </div>
                     </div>
-                  } @else if (!testResult.success && testResult.error) {
+                  } @else if (!testResult.Success && testResult.Error) {
                     <div style="margin-bottom: 12px; flex: 1; display: flex; flex-direction: column;">
                       <h6 class="output-header">
                         <i class="fa-solid fa-exclamation-triangle error-icon"></i>
                         Error Details
                       </h6>
-                      <div class="error-output-box">{{ testResult.error }}</div>
+                      <div class="error-output-box">{{ testResult.Error }}</div>
                     </div>
                   }
                 </div>

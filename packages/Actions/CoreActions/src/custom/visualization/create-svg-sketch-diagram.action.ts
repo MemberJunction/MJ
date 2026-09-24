@@ -17,7 +17,7 @@ import {
     Branding,
 } from './shared/svg-types';
 import { SVGUtils } from './shared/svg-utils';
-import { getPalette, generateCSS, getFontSpec } from './shared/svg-theming';
+import { GetPalette, GenerateCSS, GetFontSpec } from './shared/svg-theming';
 
 /**
  * Action that generates hand-drawn/sketch-style SVG diagrams using Rough.js.
@@ -244,11 +244,11 @@ export class CreateSVGSketchDiagramAction extends BaseAction {
         }
 
         // Add styles
-        const css = generateCSS(branding);
+        const css = GenerateCSS(branding);
         SVGUtils.addStyles(svg, css);
 
         // Get palette
-        const palette = getPalette(branding.palette);
+        const palette = GetPalette(branding.palette);
         const ns = svg.namespaceURI!;
 
         // Create container
@@ -364,7 +364,7 @@ export class CreateSVGSketchDiagramAction extends BaseAction {
 
         // Add title
         if (title) {
-            this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+            this.addTitle(doc, svg, title, vb.width, GetFontSpec(branding.font));
         }
 
         // Add interactivity
@@ -431,11 +431,11 @@ export class CreateSVGSketchDiagramAction extends BaseAction {
         }
 
         // Add styles
-        const css = generateCSS(branding);
+        const css = GenerateCSS(branding);
         SVGUtils.addStyles(svg, css);
 
         // Get palette
-        const palette = getPalette(branding.palette);
+        const palette = GetPalette(branding.palette);
         const ns = svg.namespaceURI!;
 
         // Create container
@@ -521,7 +521,7 @@ export class CreateSVGSketchDiagramAction extends BaseAction {
 
         // Add title
         if (title) {
-            this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+            this.addTitle(doc, svg, title, vb.width, GetFontSpec(branding.font));
         }
 
         // Add interactivity
@@ -613,11 +613,11 @@ export class CreateSVGSketchDiagramAction extends BaseAction {
         }
 
         // Add styles
-        const css = generateCSS(branding);
+        const css = GenerateCSS(branding);
         SVGUtils.addStyles(svg, css);
 
         // Get palette
-        const palette = getPalette(branding.palette);
+        const palette = GetPalette(branding.palette);
         const ns = svg.namespaceURI!;
 
         // Create container
@@ -729,7 +729,7 @@ export class CreateSVGSketchDiagramAction extends BaseAction {
 
         // Add title
         if (title) {
-            this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+            this.addTitle(doc, svg, title, vb.width, GetFontSpec(branding.font));
         }
 
         // Add interactivity

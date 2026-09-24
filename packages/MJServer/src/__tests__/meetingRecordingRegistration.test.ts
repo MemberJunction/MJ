@@ -43,8 +43,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
 });
 
 import {
-  registerMeetingRecordingFile,
-  resolveMeetingConversation,
+  RegisterMeetingRecordingFile,
+  ResolveMeetingConversation,
   type MeetingRecordingEgressResult,
 } from '../resolvers/meetingRecordingRegistration';
 
@@ -124,7 +124,7 @@ describe('registerMeetingRecordingFile', () => {
       .mockResolvedValueOnce({ Success: true, Results: [{ ID: 'conv-existing' }] });
 
     const { provider, created } = makeProvider();
-    const result = await registerMeetingRecordingFile(egress, user, provider);
+    const result = await RegisterMeetingRecordingFile(egress, user, provider);
 
     expect(result.Success).toBe(true);
     expect(result.RecordingFileID).toBe('file-123');
@@ -153,7 +153,7 @@ describe('registerMeetingRecordingFile', () => {
   it('prefers matching the conversation by EgressID when present', async () => {
     runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'conv-by-egress' }] });
     const { provider } = makeProvider();
-    const result = await registerMeetingRecordingFile(egress, user, provider);
+    const result = await RegisterMeetingRecordingFile(egress, user, provider);
     expect(result.ConversationID).toBe('conv-by-egress');
     // Only the EgressID lookup ran (no fall-through to room-name lookup).
     expect(runViewMock).toHaveBeenCalledTimes(1);
@@ -162,7 +162,7 @@ describe('registerMeetingRecordingFile', () => {
   it('creates a Meeting-Room Conversation when none exists', async () => {
     runViewMock.mockResolvedValue({ Success: true, Results: [] }); // neither lookup matches
     const { provider, created } = makeProvider();
-    const result = await registerMeetingRecordingFile(egress, user, provider);
+    const result = await RegisterMeetingRecordingFile(egress, user, provider);
     expect(result.Success).toBe(true);
     const conv = created.conversation[0];
     expect(conv.fields.Type).toBe('Meeting Room');
@@ -173,7 +173,7 @@ describe('registerMeetingRecordingFile', () => {
   it('returns a graceful failure when the storage provider is not configured', async () => {
     delete process.env.MJ_MEETING_RECORDING_STORAGE_PROVIDER;
     const { provider } = makeProvider();
-    const result = await registerMeetingRecordingFile(egress, user, provider);
+    const result = await RegisterMeetingRecordingFile(egress, user, provider);
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toMatch(/MJ_MEETING_RECORDING_STORAGE_PROVIDER/);
     expect(result.RecordingFileID).toBeUndefined();
@@ -182,14 +182,14 @@ describe('registerMeetingRecordingFile', () => {
   it('returns a graceful failure when no account is linked to the configured provider', async () => {
     storage.accountsByProvider = new Map(); // no accounts for prov-sink
     const { provider } = makeProvider();
-    const result = await registerMeetingRecordingFile(egress, user, provider);
+    const result = await RegisterMeetingRecordingFile(egress, user, provider);
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toMatch(/No active MJStorage account/i);
   });
 
   it('returns a graceful failure when the egress has no output yet', async () => {
     const { provider } = makeProvider();
-    const result = await registerMeetingRecordingFile({ ...egress, OutputLocation: undefined }, user, provider);
+    const result = await RegisterMeetingRecordingFile({ ...egress, OutputLocation: undefined }, user, provider);
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toMatch(/no output/i);
   });
@@ -204,7 +204,7 @@ describe('registerMeetingRecordingFile', () => {
       runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'conv-1' }] });
 
       const { provider, created } = makeProvider();
-      const result = await registerMeetingRecordingFile(egress, user, provider);
+      const result = await RegisterMeetingRecordingFile(egress, user, provider);
 
       expect(result.Success).toBe(true);
       // Bytes were read from the sink and uploaded into the canonical provider.
@@ -221,7 +221,7 @@ describe('registerMeetingRecordingFile', () => {
       process.env.MJ_MEETING_RECORDING_CANONICAL_STORAGE_PROVIDER = 'prov-sink'; // same as sink
       runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'conv-1' }] });
       const { provider, created } = makeProvider();
-      const result = await registerMeetingRecordingFile(egress, user, provider);
+      const result = await RegisterMeetingRecordingFile(egress, user, provider);
       expect(result.Success).toBe(true);
       expect(storage.getObject).not.toHaveBeenCalled();
       expect(created.file[0].fields.ProviderID).toBe('prov-sink');
@@ -231,7 +231,7 @@ describe('registerMeetingRecordingFile', () => {
   it('fails gracefully (no throw) when the Files row save fails', async () => {
     runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ ID: 'conv-1' }] });
     const { provider } = makeProvider({ fileSaveOk: false });
-    const result = await registerMeetingRecordingFile(egress, user, provider);
+    const result = await RegisterMeetingRecordingFile(egress, user, provider);
     expect(result.Success).toBe(false);
     expect(result.ErrorMessage).toMatch(/Files row/i);
   });
@@ -241,7 +241,7 @@ describe('resolveMeetingConversation', () => {
   it('falls back to creating a conversation when neither lookup matches', async () => {
     runViewMock.mockResolvedValue({ Success: true, Results: [] });
     const { provider, created } = makeProvider();
-    const id = await resolveMeetingConversation(egress, user, provider);
+    const id = await ResolveMeetingConversation(egress, user, provider);
     expect(id).toBe('conv-new');
     expect(created.conversation).toHaveLength(1);
   });

@@ -5,13 +5,13 @@ import sql from 'mssql';
  * and its configuration. Used to track multiple connections (read-write, read-only).
  */
 export class DataSourceInfo {
-  dataSource: sql.ConnectionPool;
-  host: string;
-  port: number;
-  instance?: string;
-  database: string;
-  userName: string;
-  type: "Admin" | "Read-Write" | "Read-Only" | "Other";
+  dataSource: sql.ConnectionPool;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  host: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  port: number;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  instance?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+  database: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  userName: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+  type: "Admin" | "Read-Write" | "Read-Only" | "Other";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
   constructor(init: {
     dataSource: sql.ConnectionPool,

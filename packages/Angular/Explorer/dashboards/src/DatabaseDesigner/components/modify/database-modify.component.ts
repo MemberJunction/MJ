@@ -148,7 +148,7 @@ export class DatabaseModifyComponent implements OnInit, OnDestroy {
     }
 
     public get ExistingColumns(): ColumnSpec[] {
-        return this.EntityDetail?.columns ?? [];
+        return this.EntityDetail?.Columns ?? [];
     }
 
     // ─── Private helpers ───────────────────────────────────────────────────
@@ -163,7 +163,7 @@ export class DatabaseModifyComponent implements OnInit, OnDestroy {
         try {
             this.EntityDetail = await DatabaseDesignerEngine.Instance.loadEntityDetail(this._entityId);
             if (this.EntityDetail) {
-                this.EditedColumns = [...this.EntityDetail.columns];
+                this.EditedColumns = [...this.EntityDetail.Columns];
             }
         } catch (err) {
             this.LoadError = err instanceof Error ? err.message : String(err);
@@ -175,7 +175,7 @@ export class DatabaseModifyComponent implements OnInit, OnDestroy {
 
     /** True if the user added new columns or changed any existing column. */
     private hasChanges(): boolean {
-        const original = this.EntityDetail?.columns ?? [];
+        const original = this.EntityDetail?.Columns ?? [];
         if (this.EditedColumns.length !== original.length) return true;
         return this.EditedColumns.some((col, i) =>
             col.Name         !== original[i]?.Name         ||

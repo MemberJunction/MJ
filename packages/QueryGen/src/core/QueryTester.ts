@@ -12,7 +12,7 @@ import {
   UserInfo,
   LogError,
 } from '@memberjunction/core';
-import { extractErrorMessage } from '../utils/error-handlers';
+import { ExtractErrorMessage } from '../utils/error-handlers';
 import {
   GeneratedQuery,
   QueryTestResult,
@@ -63,7 +63,7 @@ export class QueryTester {
    * @param maxAttempts - Maximum number of retry attempts (default: 5)
    * @returns Test result with success status, SQL, and sample data
    */
-  async testQuery(
+  async TestQuery(
     query: GeneratedQuery,
     maxAttempts: number = 5
   ): Promise<QueryTestResult> {
@@ -94,7 +94,7 @@ export class QueryTester {
           attempts: attempt,
         };
       } catch (error: unknown) {
-        lastError = extractErrorMessage(error, 'Query Testing');
+        lastError = ExtractErrorMessage(error, 'Query Testing');
         if (this.config.verbose) {
           LogError(`Attempt ${attempt}/${maxAttempts} failed: ${lastError}`);
         }
@@ -112,6 +112,14 @@ export class QueryTester {
       error: lastError,
       attempts: maxAttempts,
     };
+  }
+
+  /** @deprecated Use {@link TestQuery}. */
+  async testQuery(
+    query: GeneratedQuery,
+    maxAttempts: number = 5
+  ): Promise<QueryTestResult> {
+    return this.TestQuery(query, maxAttempts);
   }
 
   /**
@@ -138,7 +146,7 @@ export class QueryTester {
       return renderedSQL;
     } catch (error: unknown) {
       throw new Error(
-        `Template rendering failed: ${extractErrorMessage(error, 'Nunjucks')}`
+        `Template rendering failed: ${ExtractErrorMessage(error, 'Nunjucks')}`
       );
     }
   }
@@ -236,7 +244,7 @@ export class QueryTester {
       return result;
     } catch (error: unknown) {
       throw new Error(
-        `SQL execution failed: ${extractErrorMessage(error, 'Database')}`
+        `SQL execution failed: ${ExtractErrorMessage(error, 'Database')}`
       );
     }
   }

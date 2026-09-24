@@ -165,28 +165,28 @@ describe('ConversationListComponent (DOM) — sort buttons', () => {
 
   it('sorts A→Z when Name is clicked', () => {
     const f = renderSeeded();
-    f.componentInstance.setSort('name');
+    f.componentInstance.SetSort('name');
     expect(names(f.componentInstance.ungroupedConversations)).toEqual(['Alpha', 'Beta', 'Cedar']);
   });
 
   it('flips to Z→A when the active Name button is clicked again', () => {
     const f = renderSeeded();
-    f.componentInstance.setSort('name');
-    f.componentInstance.setSort('name');
+    f.componentInstance.SetSort('name');
+    f.componentInstance.SetSort('name');
     expect(names(f.componentInstance.ungroupedConversations)).toEqual(['Cedar', 'Beta', 'Alpha']);
   });
 
   it('flips to oldest first when the active Date button is clicked again', () => {
     const f = renderSeeded();
-    f.componentInstance.setSort('date');
+    f.componentInstance.SetSort('date');
     expect(names(f.componentInstance.ungroupedConversations)).toEqual(['Alpha', 'Beta', 'Cedar']);
   });
 
   it('switching back to Date restores newest first rather than the last Date direction', () => {
     const f = renderSeeded();
-    f.componentInstance.setSort('date');   // date, now oldest first
-    f.componentInstance.setSort('name');   // name, A→Z
-    f.componentInstance.setSort('date');   // back to date
+    f.componentInstance.SetSort('date');   // date, now oldest first
+    f.componentInstance.SetSort('name');   // name, A→Z
+    f.componentInstance.SetSort('date');   // back to date
     expect(names(f.componentInstance.ungroupedConversations)).toEqual(['Cedar', 'Beta', 'Alpha']);
   });
 
@@ -212,7 +212,7 @@ describe('ConversationListComponent (DOM) — sort buttons', () => {
         ],
         [project('proj1', 'Work')]
       );
-      c.setSort('name');
+      c.SetSort('name');
     });
     expect(names(f.componentInstance.pinnedConversations)).toEqual(['Alpha', 'Zulu']);
     expect(names(f.componentInstance.folderTree[0].conversations)).toEqual(['Bravo', 'Yankee']);
@@ -224,7 +224,7 @@ describe('ConversationListComponent (DOM) — sort buttons', () => {
         conv('c1', '', '2026-01-01'),
         conv('c2', 'Alpha', '2026-02-01')
       ]);
-      c.setSort('name');
+      c.SetSort('name');
     });
     expect(names(f.componentInstance.ungroupedConversations)).toEqual(['Alpha', '']);
   });

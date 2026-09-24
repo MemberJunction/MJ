@@ -71,7 +71,12 @@ export class ClassifyTypesTabComponent extends BaseAngularComponent {
     public ContentTypeCards: ContentTypeCard[] = [];
 
     /** Template-facing formatter (exposed so `formatNumber(...)` resolves in the view). */
-    public readonly formatNumber = formatNumber;
+    public readonly FormatNumber = formatNumber;
+
+    /** @deprecated Use {@link FormatNumber}. */
+    public get formatNumber() {
+        return this.FormatNumber;
+    }
 
     /** Bubble Add/Edit intents to the host, which owns the slide-in CRUD form. */
     @Output() AddTypeRequested = new EventEmitter<void>();
@@ -90,12 +95,22 @@ export class ClassifyTypesTabComponent extends BaseAngularComponent {
         this.cdr.detectChanges();
     }
 
-    public onAddType(): void {
+    public OnAddType(): void {
         this.AddTypeRequested.emit();
     }
 
-    public onEditType(card: ContentTypeCard): void {
+    /** @deprecated Use {@link OnAddType}. */
+    public onAddType(): void {
+        return this.OnAddType();
+    }
+
+    public OnEditType(card: ContentTypeCard): void {
         this.EditTypeRequested.emit(card);
+    }
+
+    /** @deprecated Use {@link OnEditType}. */
+    public onEditType(card: ContentTypeCard): void {
+        return this.OnEditType(card);
     }
 
     /** Rebuild the card view models from the current inputs. */
