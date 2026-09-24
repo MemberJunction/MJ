@@ -43,3 +43,6 @@ export * from './handlers/BoundWorkHandler';
 export * from './host/HostedSubscriptionPlanner';
 export * from './host/WorkQueueHost';
 export * from './host/WorkQueueSweeper';
+export * from './operations/WorkQueueOperatorService';
+export * from './operations/operatorAuthorization';
+export * from './operations/WorkQueueOperations';
