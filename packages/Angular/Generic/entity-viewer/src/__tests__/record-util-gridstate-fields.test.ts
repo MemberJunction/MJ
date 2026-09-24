@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
-import { computeFieldsList } from '../lib/utils/record.util';
+import { ComputeFieldsList } from '../lib/utils/record.util';
 import type { ViewGridState } from '../lib/types';
 
 /**
- * `computeFieldsList`'s GRID-STATE branch — the SELECT list behind a saved view.
+ * `ComputeFieldsList`'s GRID-STATE branch — the SELECT list behind a saved view.
  *
  * The host-column branch a few lines above already resolves every name against the entity and adds
  * the ENTITY's spelling, with a comment explaining why: the list is interpolated into the GraphQL
@@ -60,16 +60,16 @@ function stateOf(...names: string[]): ViewGridState {
   } as unknown as ViewGridState;
 }
 
-describe('computeFieldsList — grid-state columns', () => {
+describe('ComputeFieldsList — grid-state columns', () => {
   it('drops a name that matches no field, so a stale state cannot reach the query', () => {
-    const fields = computeFieldsList(entity(), stateOf('Name', 'OrderTotal'));
+    const fields = ComputeFieldsList(entity(), stateOf('Name', 'OrderTotal'));
 
     expect(fields).not.toContain('OrderTotal');
     expect(fields).toContain('Name');
   });
 
   it("adds the ENTITY's spelling, not the saved one — GraphQL is case sensitive", () => {
-    const fields = computeFieldsList(entity(), stateOf('sTaTuS'));
+    const fields = ComputeFieldsList(entity(), stateOf('sTaTuS'));
 
     expect(fields).toContain('Status');
     expect(fields).not.toContain('sTaTuS');
@@ -80,7 +80,7 @@ describe('computeFieldsList — grid-state columns', () => {
     // The state belongs to another entity entirely. Post-#4244 the grid renders this entity's own
     // DefaultInView columns, so the fetch has to agree — otherwise every one of those columns
     // renders an empty cell, which reads as missing data rather than a stale-state problem.
-    const fields = computeFieldsList(entity(), stateOf('OrderNumber', 'OrderTotal', 'CustomerName'));
+    const fields = ComputeFieldsList(entity(), stateOf('OrderNumber', 'OrderTotal', 'CustomerName'));
 
     expect(fields).toContain('Name');
     expect(fields).toContain('Status');
@@ -90,7 +90,7 @@ describe('computeFieldsList — grid-state columns', () => {
   it('does NOT fall back when at least one saved name resolves', () => {
     // A partial match is a real preference — a saved view whose entity lost a field. Widening it to
     // DefaultInView would silently re-add columns the user had removed.
-    const fields = computeFieldsList(entity(), stateOf('Memo', 'FieldTheSchemaDropped'));
+    const fields = ComputeFieldsList(entity(), stateOf('Memo', 'FieldTheSchemaDropped'));
 
     expect(fields).toContain('Memo');
     expect(fields).not.toContain('Status');
@@ -102,14 +102,14 @@ describe('computeFieldsList — grid-state columns', () => {
       columnSettings: [{ Name: 'Memo', hidden: true }],
     } as unknown as ViewGridState;
 
-    const fields = computeFieldsList(entity(), hiddenOnly);
+    const fields = ComputeFieldsList(entity(), hiddenOnly);
 
     expect(fields).not.toContain('Memo');
     expect(fields).toContain('Status');
   });
 
   it('keeps the primary key and name field regardless', () => {
-    const fields = computeFieldsList(entity(), stateOf('OrderTotal'));
+    const fields = ComputeFieldsList(entity(), stateOf('OrderTotal'));
 
     expect(fields).toContain('ID');
     expect(fields).toContain('Name');
@@ -117,7 +117,7 @@ describe('computeFieldsList — grid-state columns', () => {
 
   it('leaves a fully valid saved view exactly as it was', () => {
     // The normal path must not move: only the named columns, no DefaultInView widening.
-    const fields = computeFieldsList(entity(), stateOf('Memo'));
+    const fields = ComputeFieldsList(entity(), stateOf('Memo'));
 
     expect(fields).toContain('Memo');
     expect(fields).not.toContain('Status');
