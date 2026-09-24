@@ -6,7 +6,7 @@
  * and we will dynamically instantiate that sub-class from that point forward
  ******************************************************************************************************/
 
-import { AreClassesRelated, GetRootClass, IsRootClass } from './ClassUtils';
+import { AreClassesRelated, GetClassInheritance, GetRootClass, IsRootClass } from './ClassUtils';
 import { ClassRequiresSubclass } from './RequiresSubclass';
 import { ClassIsOptionalKeyedSpecialization } from './OptionalKeyedSpecialization';
 
@@ -38,6 +38,45 @@ export class ClassRegistration {
      * to discover registrations beyond exact-key matching.
      */
     Metadata?: Record<string, unknown>;
+    /**
+     * Best-effort source location (one stack frame) of the code that made this registration —
+     * e.g. `SomeModule.js:16:1`. Populated by {@link ClassFactory.Register} and used to name BOTH
+     * sides of a registration collision: by the time a collision is detected, the incumbent's
+     * registration call has long since returned. `undefined` on engines without
+     * `Error.captureStackTrace`.
+     */
+    RegisteredFrom?: string;
+}
+
+/**
+ * Captures the source location of whoever called into {@link ClassFactory.Register}, skipping MJ's
+ * own registration plumbing (`Register` itself and the `@RegisterClass` decorator wrapper).
+ *
+ * Captured for EVERY registration, because a collision can only be explained by naming both
+ * registrants and the incumbent is gone by the time the collision is found. Cost is one short stack
+ * frame — measured at 0.6ms for the 530 registrations a single Open App server package makes.
+ */
+function captureRegistrationOrigin(): string | undefined {
+    const captureStack = (Error as unknown as { captureStackTrace?: (target: object, constructorOpt?: unknown) => void }).captureStackTrace;
+    if (typeof captureStack !== 'function') {
+        return undefined; // non-V8 engine — provenance simply stays unavailable
+    }
+    const previousLimit = Error.stackTraceLimit;
+    try {
+        Error.stackTraceLimit = 6;
+        const holder: { stack?: string } = {};
+        captureStack(holder, captureRegistrationOrigin);
+        const frames = (holder.stack ?? '').split('\n').slice(1);
+        // First frame that is NOT MJGlobal's own registration plumbing == the actual registrant.
+        const frame = frames.find(f => !/(ClassFactory|RegisterClass)\.(ts|js|mjs|cjs):\d+/.test(f)) ?? frames[0];
+        return frame?.trim().replace(/^at\s+/, '') || undefined;
+    }
+    catch {
+        return undefined; // diagnostics must never break a registration
+    }
+    finally {
+        Error.stackTraceLimit = previousLimit;
+    }
 }
  
 
@@ -240,12 +279,11 @@ export class ClassFactory {
             // get all of the existing registrations for the effective base class and key
             const registrations = this.GetAllRegistrations(effectiveBaseClass, key);
 
+            // An explicit priority that is already taken for this base class + key. Detected here but
+            // REPORTED after the push, so the report can name the winner resolution actually picks.
+            let collisions: ClassRegistration[] = [];
             if (priority > 0) {
-                // validate to make sure that the combination of base class and key for the provided priority # is not already registered, if it is, then print a warning
-                const existing = registrations.filter(r => r.Priority === priority);
-                if (existing && existing.length > 0) {
-                    console.warn(`*** ClassFactory.Register: Registering class ${subClassName} for base class ${effectiveBaseClassName} and key/priority ${key}/${priority}. ${existing.length} registrations already exist for that combination. While this is allowed it is not desired and when matching class requests occur, we will simply use the LAST registration we happen to have which can lead to unintended behavior. ***`);
-                }
+                collisions = registrations.filter(r => r.Priority === priority);
             }
             else if (priority === 0 || priority === null || priority === undefined) {
                 // when priority is not provided or is zero, which is logically the same, check to see what the highest earlier registration was and increment by 1
@@ -279,6 +317,7 @@ export class ClassFactory {
             reg.Key = key;
             reg.Priority = priority;
             if (metadata !== undefined) reg.Metadata = metadata;
+            reg.RegisteredFrom = captureRegistrationOrigin();
 
             this._registrations.push(reg);
             // Invalidate the GetRegistration memo — a new registration may change the
@@ -287,7 +326,68 @@ export class ClassFactory {
             // A new registration may resolve a key that previously fell back, so allow the
             // diagnostic to be emitted again if it fails a second time.
             this._reportedResolutionFailures.clear();
+
+            if (collisions.length > 0) {
+                console.warn(this.describeRegistrationCollision(effectiveBaseClass, effectiveBaseClassName, reg, collisions));
+            }
         }
+    }
+
+    /**
+     * Builds the warning emitted when a registration's EXPLICIT priority is already taken for the same
+     * base class + key (MJ#3976). Diagnostic only — resolution is unchanged (last registered wins).
+     *
+     * The previous message named only the newcomer, which was undiagnosable in a large module graph.
+     * This one names both registrants and where each came from, how they relate, which registration
+     * resolution actually picks, and what to change.
+     */
+    private describeRegistrationCollision(
+        effectiveBaseClass: unknown,
+        effectiveBaseClassName: string,
+        newcomer: ClassRegistration,
+        collisions: ClassRegistration[]
+    ): string {
+        const newcomerName = (newcomer.SubClass as NamedClass).name;
+        const from = (origin?: string) => origin ? ` — registered from ${origin}` : '';
+        // Name-based, like AreClassesRelated, so a class loaded through two module paths still relates.
+        const inherits = (descendant: unknown, ancestor: unknown) =>
+            GetClassInheritance(descendant).some(c => c.name === (ancestor as NamedClass).name);
+
+        const lines: string[] = [
+            `*** ClassFactory.Register: Registering class ${newcomerName} for base class ${effectiveBaseClassName} and key/priority ${newcomer.Key}/${newcomer.Priority} COLLIDES with ${collisions.length} existing registration${collisions.length === 1 ? '' : 's'} at that same key and priority. ***`,
+            `    newcomer:   ${newcomerName}${from(newcomer.RegisteredFrom)}`,
+        ];
+        let allRelated = true;
+        for (const incumbent of collisions) {
+            const incumbentName = (incumbent.SubClass as NamedClass).name;
+            lines.push(`    incumbent:  ${incumbentName}${from(incumbent.RegisteredFrom)}`);
+            if (inherits(newcomer.SubClass, incumbent.SubClass)) {
+                lines.push(`    relation:   ${newcomerName} extends ${incumbentName}`);
+            }
+            else if (inherits(incumbent.SubClass, newcomer.SubClass)) {
+                lines.push(`    relation:   ${incumbentName} extends ${newcomerName}`);
+            }
+            else {
+                allRelated = false;
+                lines.push(`    relation:   unrelated — neither ${newcomerName} nor ${incumbentName} extends the other`);
+            }
+        }
+
+        // Ask resolution rather than predicting it, so the report can never disagree with CreateInstance.
+        const winner = this.GetRegistration(effectiveBaseClass, newcomer.Key);
+        const winnerName = winner ? (winner.SubClass as NamedClass).name : 'nothing';
+        if (winner && winner.Priority > newcomer.Priority) {
+            lines.push(`    resolution: neither — ${winnerName} at priority ${winner.Priority} outranks this collision.`);
+        }
+        else if (allRelated) {
+            lines.push(`    resolution: ${winnerName} wins because it registered last at this priority.`);
+            lines.push(`    fix:        an override does not need an explicit priority — omit it and the auto-increment ranks it above the class it extends. A registration with NO priority is auto-assigned priority 1, which is why an explicit priority of 1 collides with it.`);
+        }
+        else {
+            lines.push(`    resolution: ${winnerName} wins only because it registered last — these classes are not in one inheritance line, so the winner depends on module load order.`);
+            lines.push(`    fix:        give the registrations distinct keys or priorities, or remove the duplicate.`);
+        }
+        return lines.join('\n');
     }
 
     /**

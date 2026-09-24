@@ -156,3 +156,121 @@ describe('AreClassesRelated', () => {
         expect(AreClassesRelated('DerivedA', DerivedA)).toBe(false);
     });
 });
+
+/**
+ * MJ#3976 — the EXPLICIT-priority collision report. When two classes share a (base class, key,
+ * priority), resolution picks the last one registered. That is unchanged here; what these tests pin
+ * is that the warning is actionable: it names BOTH registrants, where each registered from, how they
+ * relate, and which one resolution actually picks. The previous message named only the newcomer.
+ *
+ * Shapes mirror the real report (bizapps-tasks): the generated class registers with NO priority
+ * (auto-assigned 1) and the app's custom subclass passes an explicit priority of 1.
+ */
+class GeneratedTaskEntity extends Base {}
+class CustomTaskEntity extends GeneratedTaskEntity {}
+class ServerTaskEntity extends CustomTaskEntity {}
+class OtherTaskEntity extends Base {}
+
+describe('ClassFactory.Register — explicit-priority collision report (MJ#3976)', () => {
+    const KEY = 'MJ_BizApps_Tasks: Tasks';
+    let factory: ClassFactory;
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        factory = new ClassFactory();
+        warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => {
+        warnSpy.mockRestore();
+    });
+
+    const report = (): string => warnSpy.mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+
+    it('a no-priority registration lands at 1, so an explicit priority of 1 collides with it', () => {
+        factory.Register(Base, GeneratedTaskEntity, KEY, 0, true);
+        factory.Register(Base, CustomTaskEntity, KEY, 1, true);
+
+        expect(factory.GetAllRegistrations(Base, KEY).map(r => [r.SubClass.name, r.Priority])).toEqual([
+            ['GeneratedTaskEntity', 1],
+            ['CustomTaskEntity', 1],
+        ]);
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('names the newcomer AND the incumbent, the key, and their relationship', () => {
+        factory.Register(Base, GeneratedTaskEntity, KEY, 0, true);
+        factory.Register(Base, CustomTaskEntity, KEY, 1, true);
+
+        const text = report();
+        expect(text).toContain('Registering class CustomTaskEntity');
+        expect(text).toContain('incumbent:  GeneratedTaskEntity');
+        expect(text).toContain(KEY);
+        expect(text).toContain('CustomTaskEntity extends GeneratedTaskEntity');
+    });
+
+    it('names the registration resolution will actually pick', () => {
+        factory.Register(Base, GeneratedTaskEntity, KEY, 0, true);
+        factory.Register(Base, CustomTaskEntity, KEY, 1, true);
+
+        expect(report()).toContain('resolution: CustomTaskEntity wins');
+        expect(factory.GetRegistration(Base, KEY)!.SubClass).toBe(CustomTaskEntity);
+    });
+
+    it('explains the auto-priority trap in the fix line for an override', () => {
+        factory.Register(Base, GeneratedTaskEntity, KEY, 0, true);
+        factory.Register(Base, CustomTaskEntity, KEY, 1, true);
+
+        expect(report()).toMatch(/fix:.*omit/i);
+        expect(report()).toMatch(/auto-assigned priority 1/);
+    });
+
+    it('reports where each colliding registration was made', () => {
+        factory.Register(Base, GeneratedTaskEntity, KEY, 0, true);
+        factory.Register(Base, CustomTaskEntity, KEY, 1, true);
+
+        // Both registrations happen in THIS file, so both provenance strings name it.
+        expect(report().match(/ClassFactory\.collision\.test/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    });
+
+    it('records provenance on every registration, colliding or not', () => {
+        factory.Register(Base, GeneratedTaskEntity, KEY, 0, true);
+        expect(factory.GetAllRegistrations(Base, KEY)[0].RegisteredFrom).toContain('ClassFactory.collision.test');
+    });
+
+    it('says the outcome is load-order dependent when the colliding classes are unrelated', () => {
+        factory.Register(Base, CustomTaskEntity, KEY, 1, true);
+        factory.Register(Base, OtherTaskEntity, KEY, 1, true);
+
+        const text = report();
+        expect(text).toContain('unrelated');
+        expect(text).toMatch(/load order/i);
+        expect(text).toContain('resolution: OtherTaskEntity wins');
+    });
+
+    it('says neither wins when a higher priority already outranks the collision', () => {
+        factory.Register(Base, ServerTaskEntity, KEY, 5, true);
+        factory.Register(Base, GeneratedTaskEntity, KEY, 1, true);
+        factory.Register(Base, CustomTaskEntity, KEY, 1, true);
+
+        expect(report()).toContain('resolution: neither — ServerTaskEntity at priority 5');
+    });
+
+    it('does NOT change resolution — equal priority still picks the last registered', () => {
+        // The report is diagnostic only. Reverse order: the ancestor registers last and still wins.
+        factory.Register(Base, CustomTaskEntity, KEY, 1, true);
+        factory.Register(Base, GeneratedTaskEntity, KEY, 1, true);
+
+        expect(factory.GetRegistration(Base, KEY)!.SubClass).toBe(GeneratedTaskEntity);
+        expect(report()).toContain('resolution: GeneratedTaskEntity wins');
+    });
+
+    it('the real-world stack emits exactly one report — the server subclass collides with nothing', () => {
+        factory.Register(Base, GeneratedTaskEntity, KEY, 0, true);
+        factory.Register(Base, CustomTaskEntity, KEY, 1, true);
+        factory.Register(Base, ServerTaskEntity, KEY, 0, true);  // no priority, as it ships today → 2
+
+        expect(factory.GetRegistration(Base, KEY)!.SubClass).toBe(ServerTaskEntity);
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+    });
+});
