@@ -4,19 +4,19 @@
 import type { ComposeEmailCommand } from '@memberjunction/ai-core-plus';
 import { describe, it, expect } from 'vitest';
 import {
-    buildRichResponse,
-    buildAgentContextBlock,
-    buildTextBlocks,
-    buildArtifactCard,
-    buildActionButtons,
-    buildMediaBlocks,
-    buildErrorBlocks,
-    buildMetadataFooter,
-    buildDivider,
-    buildResponseForm,
-    buildFormModal,
-    buildNotificationBlocks,
-    getFullResponseText,
+    BuildRichResponse,
+    BuildAgentContextBlock,
+    BuildTextBlocks,
+    BuildArtifactCard,
+    BuildActionButtons,
+    BuildMediaBlocks,
+    BuildErrorBlocks,
+    BuildMetadataFooter,
+    BuildDivider,
+    BuildResponseForm,
+    BuildFormModal,
+    BuildNotificationBlocks,
+    GetFullResponseText,
 } from '../slack/slack-block-builder.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ describe('slack-block-builder', () => {
     describe('buildAgentContextBlock', () => {
         it('should create a context block with agent name', () => {
             const agent = createMockAgent({ Name: 'Sage' });
-            const block = buildAgentContextBlock(agent as never);
+            const block = BuildAgentContextBlock(agent as never);
 
             expect(block.type).toBe('context');
             const elements = block.elements as Record<string, unknown>[];
@@ -63,7 +63,7 @@ describe('slack-block-builder', () => {
                 Name: 'Research Agent',
                 LogoURL: 'https://example.com/avatar.png'
             });
-            const block = buildAgentContextBlock(agent as never);
+            const block = BuildAgentContextBlock(agent as never);
             const elements = block.elements as Record<string, unknown>[];
             const imageEl = elements.find(e => (e as Record<string, unknown>).type === 'image');
             expect(imageEl).toBeDefined();
@@ -72,7 +72,7 @@ describe('slack-block-builder', () => {
 
         it('should NOT include image element for non-HTTPS URLs', () => {
             const agent = createMockAgent({ LogoURL: 'http://insecure.com/avatar.png' });
-            const block = buildAgentContextBlock(agent as never);
+            const block = BuildAgentContextBlock(agent as never);
             const elements = block.elements as Record<string, unknown>[];
             const imageEl = elements.find(e => (e as Record<string, unknown>).type === 'image');
             expect(imageEl).toBeUndefined();
@@ -80,7 +80,7 @@ describe('slack-block-builder', () => {
 
         it('should NOT include image element for data URIs', () => {
             const agent = createMockAgent({ LogoURL: 'data:image/png;base64,abc123' });
-            const block = buildAgentContextBlock(agent as never);
+            const block = BuildAgentContextBlock(agent as never);
             const elements = block.elements as Record<string, unknown>[];
             const imageEl = elements.find(e => (e as Record<string, unknown>).type === 'image');
             expect(imageEl).toBeUndefined();
@@ -88,7 +88,7 @@ describe('slack-block-builder', () => {
 
         it('should handle null Name gracefully', () => {
             const agent = createMockAgent({ Name: null });
-            const block = buildAgentContextBlock(agent as never);
+            const block = BuildAgentContextBlock(agent as never);
             const elements = block.elements as Record<string, unknown>[];
             const textEl = elements.find(e => (e as Record<string, unknown>).type === 'mrkdwn');
             expect((textEl as Record<string, unknown>).text).toBe('*Agent*');
@@ -97,20 +97,20 @@ describe('slack-block-builder', () => {
 
     describe('buildTextBlocks', () => {
         it('should convert markdown to Block Kit sections', () => {
-            const blocks = buildTextBlocks('Hello **world**');
+            const blocks = BuildTextBlocks('Hello **world**');
             expect(blocks.length).toBeGreaterThan(0);
             expect(blocks[0].type).toBe('section');
         });
 
         it('should handle empty text', () => {
-            const blocks = buildTextBlocks('');
+            const blocks = BuildTextBlocks('');
             expect(blocks.length).toBeGreaterThan(0); // At least the fallback block
         });
     });
 
     describe('buildArtifactCard', () => {
         it('should render title as header block', () => {
-            const blocks = buildArtifactCard({
+            const blocks = BuildArtifactCard({
                 Title: 'Research Report',
                 Summary: 'Key findings from the analysis'
             });
@@ -120,7 +120,7 @@ describe('slack-block-builder', () => {
         });
 
         it('should render summary as section block', () => {
-            const blocks = buildArtifactCard({ Title: 'Test', Summary: 'A summary' });
+            const blocks = BuildArtifactCard({ Title: 'Test', Summary: 'A summary' });
             const sectionBlock = blocks.find(b =>
                 b.type === 'section' &&
                 ((b as Record<string, unknown>).text as Record<string, unknown>).text === 'A summary'
@@ -129,7 +129,7 @@ describe('slack-block-builder', () => {
         });
 
         it('should render sources as context block', () => {
-            const blocks = buildArtifactCard({
+            const blocks = BuildArtifactCard({
                 Title: 'Test',
                 Sources: [
                     { Title: 'Wikipedia', URL: 'https://wikipedia.org' },
@@ -144,7 +144,7 @@ describe('slack-block-builder', () => {
         });
 
         it('should render view button when URL is provided', () => {
-            const blocks = buildArtifactCard({ Title: 'Test', URL: 'https://example.com/report' });
+            const blocks = BuildArtifactCard({ Title: 'Test', URL: 'https://example.com/report' });
             const actionsBlock = blocks.find(b => b.type === 'actions');
             expect(actionsBlock).toBeDefined();
         });
@@ -154,18 +154,18 @@ describe('slack-block-builder', () => {
                 Heading: `Section ${i}`,
                 Content: `Content ${i}`
             }));
-            const blocks = buildArtifactCard({ Title: 'Test', Sections: sections });
+            const blocks = BuildArtifactCard({ Title: 'Test', Sections: sections });
             const sectionBlocks = blocks.filter(b => b.type === 'section');
             expect(sectionBlocks.length).toBeLessThanOrEqual(5);
         });
     });
 
-    describe('buildActionButtons', () => {
+    describe('BuildActionButtons', () => {
         it('should create URL buttons for open:url commands', () => {
             const commands = [
                 { type: 'open:url' as const, label: 'Visit', url: 'https://example.com' }
             ];
-            const blocks = buildActionButtons(commands);
+            const blocks = BuildActionButtons(commands);
             expect(blocks).toHaveLength(1);
             expect(blocks[0].type).toBe('actions');
             const elements = (blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[];
@@ -176,7 +176,7 @@ describe('slack-block-builder', () => {
             const commands = [
                 { type: 'open:resource' as const, label: 'View Customer', resourceType: 'Record' as const, entityName: 'Customers', resourceId: '123' }
             ];
-            const blocks = buildActionButtons(commands);
+            const blocks = BuildActionButtons(commands);
             // No buttons (no URL), just a context block with resource info
             expect(blocks).toHaveLength(1);
             expect(blocks[0].type).toBe('context');
@@ -190,7 +190,7 @@ describe('slack-block-builder', () => {
             const commands = [
                 { type: 'open:resource' as const, label: 'View Customer', resourceType: 'Record' as const, entityName: 'Customers', resourceId: 'abc-123' }
             ];
-            const blocks = buildActionButtons(commands, 'https://explorer.myco.com');
+            const blocks = BuildActionButtons(commands, 'https://explorer.myco.com');
             expect(blocks).toHaveLength(1);
             expect(blocks[0].type).toBe('actions');
             const elements = (blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[];
@@ -201,7 +201,7 @@ describe('slack-block-builder', () => {
             const commands = [
                 { type: 'open:resource' as const, label: 'Sales Dashboard', resourceType: 'Dashboard' as const, resourceId: 'dash-1' }
             ];
-            const blocks = buildActionButtons(commands, 'https://explorer.myco.com/');
+            const blocks = BuildActionButtons(commands, 'https://explorer.myco.com/');
             const elements = ((blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[]);
             expect(elements[0].url).toBe('https://explorer.myco.com/resource/dashboard/dash-1');
         });
@@ -211,7 +211,7 @@ describe('slack-block-builder', () => {
                 { type: 'open:url' as const, label: 'Docs', url: 'https://docs.example.com' },
                 { type: 'open:resource' as const, label: 'View Record', resourceType: 'Record' as const, entityName: 'Orders', resourceId: '456' }
             ];
-            const blocks = buildActionButtons(commands); // no explorer URL
+            const blocks = BuildActionButtons(commands); // no explorer URL
             // Should have actions block (URL button) + context block (resource info)
             expect(blocks).toHaveLength(2);
             expect(blocks[0].type).toBe('actions');
@@ -224,7 +224,7 @@ describe('slack-block-builder', () => {
                 label: `Action ${i}`,
                 url: `https://example.com/${i}`
             }));
-            const blocks = buildActionButtons(commands);
+            const blocks = BuildActionButtons(commands);
             const elements = (blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[];
             expect(elements).toHaveLength(5);
         });
@@ -236,7 +236,7 @@ describe('slack-block-builder', () => {
                 { type: 'notification' as const, message: 'Record saved successfully', severity: 'success' as const },
                 { type: 'notification' as const, message: 'Cache refreshed', severity: 'info' as const }
             ];
-            const blocks = buildNotificationBlocks(commands);
+            const blocks = BuildNotificationBlocks(commands);
             expect(blocks).toHaveLength(2);
             expect(blocks[0].type).toBe('context');
             const el0 = ((blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[])[0];
@@ -251,15 +251,15 @@ describe('slack-block-builder', () => {
                 { type: 'refresh:data' as const, scope: 'entity' as const, entityNames: ['Users'] },
                 { type: 'notification' as const, message: 'Done', severity: 'success' as const }
             ];
-            const blocks = buildNotificationBlocks(commands);
+            const blocks = BuildNotificationBlocks(commands);
             expect(blocks).toHaveLength(1); // only the notification
             const el = ((blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[])[0];
             expect(el.text).toContain('Done');
         });
 
         it('should return empty array for undefined commands', () => {
-            expect(buildNotificationBlocks(undefined)).toHaveLength(0);
-            expect(buildNotificationBlocks([])).toHaveLength(0);
+            expect(BuildNotificationBlocks(undefined)).toHaveLength(0);
+            expect(BuildNotificationBlocks([])).toHaveLength(0);
         });
 
         it('should use warning and error icons', () => {
@@ -267,7 +267,7 @@ describe('slack-block-builder', () => {
                 { type: 'notification' as const, message: 'Low disk space', severity: 'warning' as const },
                 { type: 'notification' as const, message: 'Connection failed', severity: 'error' as const }
             ];
-            const blocks = buildNotificationBlocks(commands);
+            const blocks = BuildNotificationBlocks(commands);
             const el0 = ((blocks[0] as Record<string, unknown>).elements as Record<string, unknown>[])[0];
             expect(el0.text).toContain(':warning:');
             const el1 = ((blocks[1] as Record<string, unknown>).elements as Record<string, unknown>[])[0];
@@ -278,7 +278,7 @@ describe('slack-block-builder', () => {
     describe('buildMediaBlocks', () => {
         it('should create image blocks for HTTPS URLs', () => {
             const media = [{ url: 'https://example.com/chart.png', title: 'Chart' }];
-            const blocks = buildMediaBlocks(media);
+            const blocks = BuildMediaBlocks(media);
             expect(blocks).toHaveLength(1);
             expect(blocks[0].type).toBe('image');
             expect(blocks[0].image_url).toBe('https://example.com/chart.png');
@@ -289,14 +289,14 @@ describe('slack-block-builder', () => {
                 { url: 'http://insecure.com/img.png' },
                 { url: 'data:image/png;base64,abc' }
             ];
-            const blocks = buildMediaBlocks(media);
+            const blocks = BuildMediaBlocks(media);
             expect(blocks).toHaveLength(0);
         });
     });
 
     describe('buildErrorBlocks', () => {
         it('should create a warning-styled section block', () => {
-            const blocks = buildErrorBlocks('Something went wrong');
+            const blocks = BuildErrorBlocks('Something went wrong');
             expect(blocks).toHaveLength(1);
             expect(blocks[0].type).toBe('section');
             expect(((blocks[0] as Record<string, unknown>).text as Record<string, unknown>).text)
@@ -307,7 +307,7 @@ describe('slack-block-builder', () => {
     describe('buildMetadataFooter', () => {
         it('should show timing information', () => {
             const result = createMockResult();
-            const block = buildMetadataFooter(result as never);
+            const block = BuildMetadataFooter(result as never);
             expect(block.type).toBe('context');
             const elements = block.elements as Record<string, unknown>[];
             expect((elements[0].text as string)).toContain('4.2s');
@@ -315,21 +315,21 @@ describe('slack-block-builder', () => {
 
         it('should show step count', () => {
             const result = createMockResult();
-            const block = buildMetadataFooter(result as never);
+            const block = BuildMetadataFooter(result as never);
             const elements = block.elements as Record<string, unknown>[];
             expect((elements[0].text as string)).toContain('1 step');
         });
 
         it('should show token count', () => {
             const result = createMockResult();
-            const block = buildMetadataFooter(result as never);
+            const block = BuildMetadataFooter(result as never);
             const elements = block.elements as Record<string, unknown>[];
             expect((elements[0].text as string)).toContain('1,240 tokens');
         });
 
         it('should show "Completed" when no timing data available', () => {
             const result = createMockResult({ agentRun: {} });
-            const block = buildMetadataFooter(result as never);
+            const block = BuildMetadataFooter(result as never);
             const elements = block.elements as Record<string, unknown>[];
             expect((elements[0].text as string)).toBe('Completed');
         });
@@ -337,7 +337,7 @@ describe('slack-block-builder', () => {
 
     describe('buildDivider', () => {
         it('should create a divider block', () => {
-            const block = buildDivider();
+            const block = BuildDivider();
             expect(block.type).toBe('divider');
         });
     });
@@ -345,7 +345,7 @@ describe('slack-block-builder', () => {
     describe('buildRichResponse', () => {
         it('should include agent context header and divider', () => {
             const agent = createMockAgent({ Name: 'Sage' });
-            const blocks = buildRichResponse(null, agent as never, 'Hello!');
+            const blocks = BuildRichResponse(null, agent as never, 'Hello!');
 
             expect(blocks[0].type).toBe('context'); // Agent header
             expect(blocks[1].type).toBe('divider');
@@ -353,7 +353,7 @@ describe('slack-block-builder', () => {
 
         it('should include text content blocks', () => {
             const agent = createMockAgent();
-            const blocks = buildRichResponse(null, agent as never, 'Some response text');
+            const blocks = BuildRichResponse(null, agent as never, 'Some response text');
 
             const sectionBlocks = blocks.filter(b => b.type === 'section');
             expect(sectionBlocks.length).toBeGreaterThan(0);
@@ -362,7 +362,7 @@ describe('slack-block-builder', () => {
         it('should include metadata footer when agentRun is present', () => {
             const agent = createMockAgent();
             const result = createMockResult();
-            const blocks = buildRichResponse(result as never, agent as never, 'Response');
+            const blocks = BuildRichResponse(result as never, agent as never, 'Response');
 
             const contextBlocks = blocks.filter(b => b.type === 'context');
             // At least agent header context + metadata footer context
@@ -373,7 +373,7 @@ describe('slack-block-builder', () => {
             const agent = createMockAgent();
             // Create a very long response that would generate many blocks
             const longText = Array.from({ length: 100 }, (_, i) => `# Section ${i}\n\nParagraph ${i} with some content.`).join('\n\n');
-            const blocks = buildRichResponse(null, agent as never, longText);
+            const blocks = BuildRichResponse(null, agent as never, longText);
 
             expect(blocks.length).toBeLessThanOrEqual(50);
         });
@@ -381,7 +381,7 @@ describe('slack-block-builder', () => {
         it('should add truncation notice when blocks exceed limit', () => {
             const agent = createMockAgent();
             const longText = Array.from({ length: 100 }, (_, i) => `# Section ${i}\n\nParagraph ${i}.`).join('\n\n');
-            const blocks = buildRichResponse(null, agent as never, longText);
+            const blocks = BuildRichResponse(null, agent as never, longText);
 
             if (blocks.length === 50) {
                 // Second-to-last block is the truncation notice
@@ -412,7 +412,7 @@ describe('slack-block-builder', () => {
                     TotalTokensUsed: 1240,
                 },
             });
-            const blocks = buildRichResponse(result as never, agent as never, 'Response', {
+            const blocks = BuildRichResponse(result as never, agent as never, 'Response', {
                 explorerBaseURL: 'https://explorer.example.com',
                 conversationId: 'convo-123',
             });
@@ -436,7 +436,7 @@ describe('slack-block-builder', () => {
                     TotalTokensUsed: 1240,
                 },
             });
-            const blocks = buildRichResponse(result as never, agent as never, 'Response', {
+            const blocks = BuildRichResponse(result as never, agent as never, 'Response', {
                 explorerBaseURL: 'https://explorer.example.com',
             });
 
@@ -459,7 +459,7 @@ describe('slack-block-builder', () => {
                     TotalTokensUsed: 1240,
                 },
             });
-            const blocks = buildRichResponse(result as never, agent as never, 'Response');
+            const blocks = BuildRichResponse(result as never, agent as never, 'Response');
 
             const explorerLink = blocks.find(b => {
                 if (b.type !== 'context') return false;
@@ -480,7 +480,7 @@ describe('slack-block-builder', () => {
                     TotalTokensUsed: 1240,
                 },
             });
-            const blocks = buildRichResponse(result as never, agent as never, 'Response', {
+            const blocks = BuildRichResponse(result as never, agent as never, 'Response', {
                 explorerBaseURL: 'https://explorer.example.com',
                 artifactId: 'artifact-abc-123',
                 conversationId: 'convo-456',
@@ -513,7 +513,7 @@ describe('slack-block-builder', () => {
                     TotalTokensUsed: 1240,
                 },
             });
-            const blocks = buildRichResponse(result as never, agent as never, 'Response', {
+            const blocks = BuildRichResponse(result as never, agent as never, 'Response', {
                 explorerBaseURL: 'https://explorer.example.com',
                 conversationId: 'convo-789',
             });
@@ -534,7 +534,7 @@ describe('slack-block-builder', () => {
         it('should NOT include Explorer link when agentRun has no ID', () => {
             const agent = createMockAgent();
             const result = createMockResult(); // default mock has no ID
-            const blocks = buildRichResponse(result as never, agent as never, 'Response', {
+            const blocks = BuildRichResponse(result as never, agent as never, 'Response', {
                 explorerBaseURL: 'https://explorer.example.com'
             });
 
@@ -559,7 +559,7 @@ describe('slack-block-builder', () => {
                     { id: 'name', label: 'Name', required: true, type: { type: 'text' as const } }
                 ]
             };
-            const blocks = buildResponseForm(form as never);
+            const blocks = BuildResponseForm(form as never);
 
             const titleBlock = blocks.find(b =>
                 b.type === 'section' &&
@@ -582,7 +582,7 @@ describe('slack-block-builder', () => {
                     { id: 'q2', label: 'Email', required: false, type: { type: 'email' as const } }
                 ]
             };
-            const blocks = buildResponseForm(form as never);
+            const blocks = BuildResponseForm(form as never);
 
             const fieldsBlock = blocks.find(b => {
                 if (b.type !== 'context') return false;
@@ -599,7 +599,7 @@ describe('slack-block-builder', () => {
                     { id: 'q1', label: 'Name', required: true, type: { type: 'text' as const } }
                 ]
             };
-            const blocks = buildResponseForm(form as never);
+            const blocks = BuildResponseForm(form as never);
 
             const actionsBlock = blocks.find(b => b.type === 'actions');
             expect(actionsBlock).toBeDefined();
@@ -616,7 +616,7 @@ describe('slack-block-builder', () => {
                 type: { type: 'text' as const }
             }));
             const form = { questions };
-            const blocks = buildResponseForm(form as never);
+            const blocks = BuildResponseForm(form as never);
 
             const actionsBlock = blocks.find(b => b.type === 'actions');
             const elements = (actionsBlock as Record<string, unknown>).elements as Record<string, unknown>[];
@@ -633,7 +633,7 @@ describe('slack-block-builder', () => {
                     { id: 'name', label: 'Your Name', required: true, type: { type: 'text' as const } }
                 ]
             };
-            const modal = buildFormModal(form as never);
+            const modal = BuildFormModal(form as never);
 
             expect(modal.type).toBe('modal');
             expect((modal.title as Record<string, unknown>).text).toBe('Test Form');
@@ -651,7 +651,7 @@ describe('slack-block-builder', () => {
                     { id: 'bio', label: 'Bio', required: false, type: { type: 'textarea' as const } }
                 ]
             };
-            const modal = buildFormModal(form as never);
+            const modal = BuildFormModal(form as never);
             const modalBlocks = modal.blocks as Record<string, unknown>[];
             const element = (modalBlocks[0] as Record<string, unknown>).element as Record<string, unknown>;
             expect(element.type).toBe('plain_text_input');
@@ -664,7 +664,7 @@ describe('slack-block-builder', () => {
                     { id: 'age', label: 'Age', required: true, type: { type: 'number' as const, min: 0, max: 120 } }
                 ]
             };
-            const modal = buildFormModal(form as never);
+            const modal = BuildFormModal(form as never);
             const modalBlocks = modal.blocks as Record<string, unknown>[];
             const element = (modalBlocks[0] as Record<string, unknown>).element as Record<string, unknown>;
             expect(element.type).toBe('number_input');
@@ -678,7 +678,7 @@ describe('slack-block-builder', () => {
                     { id: 'dob', label: 'Date of Birth', required: false, type: { type: 'date' as const } }
                 ]
             };
-            const modal = buildFormModal(form as never);
+            const modal = BuildFormModal(form as never);
             const modalBlocks = modal.blocks as Record<string, unknown>[];
             const element = (modalBlocks[0] as Record<string, unknown>).element as Record<string, unknown>;
             expect(element.type).toBe('datepicker');
@@ -693,7 +693,7 @@ describe('slack-block-builder', () => {
                     }
                 ]
             };
-            const modal = buildFormModal(form as never);
+            const modal = BuildFormModal(form as never);
             const modalBlocks = modal.blocks as Record<string, unknown>[];
             const element = (modalBlocks[0] as Record<string, unknown>).element as Record<string, unknown>;
             expect(element.type).toBe('radio_buttons');
@@ -709,7 +709,7 @@ describe('slack-block-builder', () => {
                     }
                 ]
             };
-            const modal = buildFormModal(form as never);
+            const modal = BuildFormModal(form as never);
             const modalBlocks = modal.blocks as Record<string, unknown>[];
             const element = (modalBlocks[0] as Record<string, unknown>).element as Record<string, unknown>;
             expect(element.type).toBe('static_select');
@@ -724,7 +724,7 @@ describe('slack-block-builder', () => {
                     }
                 ]
             };
-            const modal = buildFormModal(form as never);
+            const modal = BuildFormModal(form as never);
             const modalBlocks = modal.blocks as Record<string, unknown>[];
             const element = (modalBlocks[0] as Record<string, unknown>).element as Record<string, unknown>;
             expect(element.type).toBe('checkboxes');
@@ -737,7 +737,7 @@ describe('slack-block-builder', () => {
                     { id: 'opt', label: 'Optional', required: false, type: { type: 'text' as const } }
                 ]
             };
-            const modal = buildFormModal(form as never);
+            const modal = BuildFormModal(form as never);
             const modalBlocks = modal.blocks as Record<string, unknown>[];
             expect((modalBlocks[0] as Record<string, unknown>).optional).toBe(false);
             expect((modalBlocks[1] as Record<string, unknown>).optional).toBe(true);
@@ -750,7 +750,7 @@ describe('slack-block-builder', () => {
                     { id: 'q', label: 'Q', required: false, type: { type: 'text' as const } }
                 ]
             };
-            const modal = buildFormModal(form as never);
+            const modal = BuildFormModal(form as never);
             expect(((modal.title as Record<string, unknown>).text as string).length).toBeLessThanOrEqual(24);
         });
     });
@@ -758,7 +758,7 @@ describe('slack-block-builder', () => {
     describe('enforceBlockLimit byte-size enforcement', () => {
         it('should pass through blocks under both count and byte limits', () => {
             const agent = createMockAgent();
-            const blocks = buildRichResponse(null, agent as never, 'Short response');
+            const blocks = BuildRichResponse(null, agent as never, 'Short response');
             expect(blocks.length).toBeLessThan(50);
             // No truncation notice
             const hasNotice = blocks.some(b =>
@@ -774,7 +774,7 @@ describe('slack-block-builder', () => {
             const longSections = Array.from({ length: 30 }, (_, i) =>
                 `# Section ${i}\n\n${'A'.repeat(2500)}`
             ).join('\n\n');
-            const blocks = buildRichResponse(null, agent as never, longSections);
+            const blocks = BuildRichResponse(null, agent as never, longSections);
 
             // Should be truncated (byte enforcement)
             const payloadSize = JSON.stringify(blocks).length;
@@ -785,7 +785,7 @@ describe('slack-block-builder', () => {
         it('should store full text for "View Full" modal retrieval', () => {
             const agent = createMockAgent();
             const longText = Array.from({ length: 100 }, (_, i) => `# Section ${i}\n\nParagraph ${i}.`).join('\n\n');
-            const blocks = buildRichResponse(null, agent as never, longText);
+            const blocks = BuildRichResponse(null, agent as never, longText);
 
             // Find the "View Full" button
             const actionsBlock = blocks.find(b => {
@@ -802,7 +802,7 @@ describe('slack-block-builder', () => {
                 expect(storeKey).not.toBe('no_stored_text');
 
                 // Retrieve stored text
-                const retrieved = getFullResponseText(storeKey);
+                const retrieved = GetFullResponseText(storeKey);
                 expect(retrieved).toBe(longText);
             }
         });
@@ -815,12 +815,12 @@ describe('slack-block-builder', () => {
         // completion and the user sees nothing at all, not even an error.
         it('does not throw when an open:url command has no label', () => {
             const cmds = [{ type: 'open:url', url: 'data:application/pdf;base64,QQ==' }];
-            expect(() => buildActionButtons(cmds as never)).not.toThrow();
+            expect(() => BuildActionButtons(cmds as never)).not.toThrow();
         });
 
         it('names the file anyway', () => {
             const cmds = [{ type: 'open:url', url: 'data:application/pdf;base64,QQ==' }];
-            const blocks = buildActionButtons(cmds as never);
+            const blocks = BuildActionButtons(cmds as never);
             expect(JSON.stringify(blocks)).toContain('Generated file');
         });
     });
@@ -847,7 +847,7 @@ describe('slack-block-builder', () => {
                 title: 'Emoji form',
                 questions: [{ id: 'q1', label: '\u{1F44D}'.repeat(200), type: { type: 'unknown_kind' } }],
             };
-            for (const p of placeholdersOf(buildFormModal(form as never))) {
+            for (const p of placeholdersOf(BuildFormModal(form as never))) {
                 expect(p.length).toBeLessThanOrEqual(LIMIT);
             }
         });
@@ -857,7 +857,7 @@ describe('slack-block-builder', () => {
                 title: 'Emoji form',
                 questions: [{ id: 'q1', label: '\u{1F44D}'.repeat(200), type: { type: 'unknown_kind' } }],
             };
-            for (const p of placeholdersOf(buildFormModal(form as never))) {
+            for (const p of placeholdersOf(BuildFormModal(form as never))) {
                 expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(p)).toBe(false);
             }
         });
@@ -867,7 +867,7 @@ describe('slack-block-builder', () => {
                 title: 'Long form',
                 questions: [{ id: 'q1', label: 'x'.repeat(400), type: { type: 'unknown_kind' } }],
             };
-            const placeholders = placeholdersOf(buildFormModal(form as never));
+            const placeholders = placeholdersOf(BuildFormModal(form as never));
             expect(placeholders.length).toBeGreaterThan(0);
             for (const text of placeholders) {
                 expect(text.length).toBeLessThanOrEqual(LIMIT);
@@ -879,7 +879,7 @@ describe('slack-block-builder', () => {
                 title: 'Long form',
                 questions: [{ id: 'q1', label: 'Notes', type: { type: 'text', placeholder: 'y'.repeat(400) } }],
             };
-            for (const text of placeholdersOf(buildFormModal(form as never))) {
+            for (const text of placeholdersOf(BuildFormModal(form as never))) {
                 expect(text.length).toBeLessThanOrEqual(LIMIT);
             }
         });
@@ -889,7 +889,7 @@ describe('slack-block-builder', () => {
                 title: 'Short form',
                 questions: [{ id: 'q1', label: 'Topic', type: { type: 'unknown_kind' } }],
             };
-            expect(placeholdersOf(buildFormModal(form as never))).toContain('Enter Topic');
+            expect(placeholdersOf(BuildFormModal(form as never))).toContain('Enter Topic');
         });
     });
 
@@ -897,7 +897,7 @@ describe('slack-block-builder', () => {
         const DATA_URI = 'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,' + 'UEsDB'.repeat(2000);
 
         it('renders a public https resource link as a real button', () => {
-            const blocks = buildActionButtons(
+            const blocks = BuildActionButtons(
                 [{ type: 'open:resource', label: 'Open Report', resourceType: 'Report', resourceId: 'r-1' } as never],
                 'https://explorer.example.com'
             );
@@ -909,7 +909,7 @@ describe('slack-block-builder', () => {
         it('degrades a localhost resource link to mrkdwn instead of failing the message', () => {
             // Slack rejects the WHOLE message (invalid_blocks) when a button url is not public,
             // so a localhost ExplorerBaseURL used to mean the reply never posted at all.
-            const blocks = buildActionButtons(
+            const blocks = BuildActionButtons(
                 [{ type: 'open:resource', label: 'Open Report', resourceType: 'Report', resourceId: 'r-1' } as never],
                 'http://localhost:4201'
             );
@@ -919,7 +919,7 @@ describe('slack-block-builder', () => {
         });
 
         it('never emits an unopenable data: URI, and does not dump it as text', () => {
-            const blocks = buildActionButtons(
+            const blocks = BuildActionButtons(
                 [{ type: 'open:url', label: 'Download Document', url: DATA_URI } as never],
                 'https://explorer.example.com'
             );
@@ -932,7 +932,7 @@ describe('slack-block-builder', () => {
         });
 
         it('keeps an ordinary https open:url as a button', () => {
-            const blocks = buildActionButtons(
+            const blocks = BuildActionButtons(
                 [{ type: 'open:url', label: 'Docs', url: 'https://example.com/docs' } as never],
                 undefined
             );
@@ -940,16 +940,16 @@ describe('slack-block-builder', () => {
         });
 
         it('artifact card: a localhost URL becomes a link, a public one stays a button', () => {
-            const local = buildArtifactCard({ Title: 'T', URL: 'http://localhost:4201/x' } as never);
+            const local = BuildArtifactCard({ Title: 'T', URL: 'http://localhost:4201/x' } as never);
             expect(local.every((b) => b.type !== 'actions')).toBe(true);
-            const pub = buildArtifactCard({ Title: 'T', URL: 'https://example.com/x' } as never);
+            const pub = BuildArtifactCard({ Title: 'T', URL: 'https://example.com/x' } as never);
             expect(pub.some((b) => b.type === 'actions')).toBe(true);
         });
     });
 
 });
 
-describe('buildActionButtons — compose:email', () => {
+describe('BuildActionButtons — compose:email', () => {
     // A mailto: URL fails isOpenableURI (http/https only), so a button built from one is dropped.
     // Without an explicit branch the command renders as NOTHING AT ALL — these assertions are what
     // stop that regressing back to silence.
@@ -962,7 +962,7 @@ describe('buildActionButtons — compose:email', () => {
     });
 
     it('renders a context note rather than nothing — the label and the route back to Explorer', () => {
-        const blocks = buildActionButtons([cmd()]);
+        const blocks = BuildActionButtons([cmd()]);
         expect(blocks.length).toBeGreaterThan(0);
         const text = JSON.stringify(blocks);
         expect(text).toContain('Open draft in Mail');
@@ -973,7 +973,7 @@ describe('buildActionButtons — compose:email', () => {
     // who will send the mail (Explorer puts the recipients beside the button) is not safe to show
     // every participant — so the fallback carries neither the recipient nor the subject.
     it('discloses neither the recipient nor the subject on the channel', () => {
-        const blocks = buildActionButtons([cmd({ to: ['private.person@example.com'], subject: 'Confidential: settlement terms' })]);
+        const blocks = BuildActionButtons([cmd({ to: ['private.person@example.com'], subject: 'Confidential: settlement terms' })]);
         const text = JSON.stringify(blocks);
         expect(text).not.toContain('private.person@example.com');
         expect(text).not.toContain('settlement');
@@ -981,21 +981,21 @@ describe('buildActionButtons — compose:email', () => {
     });
 
     it('never emits a button carrying a mailto: URL', () => {
-        const blocks = buildActionButtons([cmd()]);
+        const blocks = BuildActionButtons([cmd()]);
         expect(JSON.stringify(blocks)).not.toContain('mailto:');
         const actions = blocks.filter((b) => (b as { type?: string }).type === 'actions');
         expect(actions).toHaveLength(0);
     });
 
     it('still names the draft when no recipient is known', () => {
-        const blocks = buildActionButtons([cmd({ to: undefined })]);
+        const blocks = BuildActionButtons([cmd({ to: undefined })]);
         expect(JSON.stringify(blocks)).toContain('Open draft in Mail');
     });
 
     // The whole note is one italic span. A nested `_..._` around the subject closed the outer
     // italic early (Slack pairs underscores left-to-right), leaving trailing underscores literal.
     it('does not nest italics inside the note', () => {
-        const text = String((buildActionButtons([cmd()])[0] as { elements: { text: string }[] }).elements[0].text);
+        const text = String((BuildActionButtons([cmd()])[0] as { elements: { text: string }[] }).elements[0].text);
         expect(text.startsWith('✉️ _')).toBe(true);
         expect(text.endsWith('_')).toBe(true);
         // exactly the opening and closing pair, no nested ones

@@ -213,7 +213,16 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
   @Output() FilterChange = new EventEmitter<string>();
   @Output() ValueChange = new EventEmitter<unknown>();
 
-  @ContentChild('mjDropdownItem') itemTemplate: TemplateRef<{ $implicit: unknown }> | null = null;
+  @ContentChild('mjDropdownItem') ItemTemplate: TemplateRef<{ $implicit: unknown }> | null = null;
+
+  /** @deprecated Use {@link ItemTemplate}. */
+  get itemTemplate(): TemplateRef<{ $implicit: unknown }> | null {
+    return this.ItemTemplate;
+  }
+  /** @deprecated Use {@link ItemTemplate}. */
+  set itemTemplate(value: TemplateRef<{ $implicit: unknown }> | null) {
+    this.ItemTemplate = value;
+  }
 
   @ViewChild('trigger') private triggerEl!: ElementRef<HTMLElement>;
   @ViewChild('filterInput') private filterInputEl: ElementRef<HTMLInputElement> | undefined;

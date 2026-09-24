@@ -46,7 +46,7 @@ function isScriptUrl(element: Element, attributeName: string, value: string): bo
  *
  * @param container The DOM element containing rendered SVG
  */
-export function sanitizeSvgContent(container: HTMLElement): void {
+export function SanitizeSvgContent(container: HTMLElement): void {
   container.querySelectorAll('script').forEach((script) => script.remove());
   container.querySelectorAll('foreignObject').forEach((fo) => fo.remove());
 
@@ -73,4 +73,9 @@ export function sanitizeSvgContent(container: HTMLElement): void {
       use.remove();
     }
   });
+}
+
+/** @deprecated Use {@link SanitizeSvgContent}. */
+export function sanitizeSvgContent(container: HTMLElement): void {
+  return SanitizeSvgContent(container);
 }

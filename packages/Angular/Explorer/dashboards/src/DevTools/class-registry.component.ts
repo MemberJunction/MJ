@@ -2,8 +2,8 @@ import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef } from '
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { DevToolsPrefs } from './dev-tools-prefs';
-import { buildClassRegistryAgentContext } from './dev-tools-agent-context';
-import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
+import { BuildClassRegistryAgentContext } from './dev-tools-agent-context';
+import { AgentToolResult, ValidateStringParam } from '../shared/agent-tool-validation';
 
 /** Local mirror of MJGlobal's ClassRegistration shape (avoids importing the type). */
 interface ClassRegistration {
@@ -51,7 +51,7 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
     public ngOnInit(): void {
         const prefs = DevToolsPrefs.Get<{ search?: string; expanded?: string[] }>('classRegistry');
         if (prefs?.search) this.SearchQuery = prefs.search;
-        this.refresh();
+        this.Refresh();
         // Restore expansion after groups are built
         if (prefs?.expanded) {
             for (const g of this.Groups) {
@@ -87,7 +87,7 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
     public override async GetResourceDisplayName(): Promise<string> { return 'Class Registry'; }
     public override async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-cubes'; }
 
-    public refresh(): void {
+    public Refresh(): void {
         const factory = MJGlobal.Instance.ClassFactory as unknown as { _registrations: ClassRegistration[] };
         const all = factory._registrations ?? [];
 
@@ -137,6 +137,11 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
 
         this.LastRefreshed = new Date();
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+        return this.Refresh();
     }
 
     public OnGroupExpandedChange(group: RegistrationGroup, expanded: boolean): void {
@@ -246,7 +251,7 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
     /** Publish the current Class Registry browse state to the AI agent. */
     private publishAgentContext(): void {
         const visible = this.FilteredGroups;
-        const context = buildClassRegistryAgentContext({
+        const context = BuildClassRegistryAgentContext({
             TotalClassCount: this.Stats.total,
             BaseClassCount: this.Stats.baseClasses,
             OverrideCount: this.Stats.withOverrides,
@@ -291,7 +296,7 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
 
     /** Apply (or clear, on empty string) the registry search query. */
     private toolSearch(params: Record<string, unknown>): AgentToolResult {
-        const validated = validateStringParam(params['query'], 'query');
+        const validated = ValidateStringParam(params['query'], 'query');
         if (!validated.ok) {
             return validated.result;
         }
@@ -302,7 +307,7 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
 
     /** Narrow to a single base class by exact name (case-insensitive). */
     private toolFilterByBaseClass(params: Record<string, unknown>): AgentToolResult {
-        const validated = validateStringParam(params['baseClass'], 'baseClass');
+        const validated = ValidateStringParam(params['baseClass'], 'baseClass');
         if (!validated.ok) {
             return validated.result;
         }

@@ -13,11 +13,11 @@ import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Metadata, DatabaseProviderBase } from '@memberjunction/core';
-import { getSystemUser } from '../../utils/user-helpers';
+import { GetSystemUser } from '../../utils/user-helpers';
 import { QueryTester } from '../../core/QueryTester';
-import { extractErrorMessage } from '../../utils/error-handlers';
+import { ExtractErrorMessage } from '../../utils/error-handlers';
 import { GeneratedQuery, QueryMetadataRecord } from '../../data/schema';
-import { loadConfig } from '../config';
+import { LoadConfig } from '../config';
 
 /**
  * Execute the validate command
@@ -25,7 +25,7 @@ import { loadConfig } from '../config';
  * Loads query metadata files and validates each query template.
  * Reports success/failure statistics.
  */
-export async function validateCommand(options: Record<string, unknown>): Promise<void> {
+export async function ValidateCommand(options: Record<string, unknown>): Promise<void> {
   const spinner = ora('Initializing validation...').start();
 
   try {
@@ -33,10 +33,10 @@ export async function validateCommand(options: Record<string, unknown>): Promise
     const verbose = Boolean(options.verbose);
 
     // Load configuration
-    const config = loadConfig(options);
+    const config = LoadConfig(options);
 
     // 1. Get system user from UserCache (populated by provider initialization)
-    const contextUser = getSystemUser();
+    const contextUser = GetSystemUser();
 
     // 2. Verify database connection and load metadata
     spinner.text = 'Loading metadata...';
@@ -98,7 +98,7 @@ export async function validateCommand(options: Record<string, unknown>): Promise
           }
         } catch (error: unknown) {
           failCount++;
-          const errorMsg = extractErrorMessage(error, 'Query Validation');
+          const errorMsg = ExtractErrorMessage(error, 'Query Validation');
           errors.push({ file, error: `${queryRecord.fields.Name}: ${errorMsg}` });
           if (verbose) {
             spinner.warn(`${filePrefix} ${chalk.red('✗')} ${queryRecord.fields.Name}: ${errorMsg}`);
@@ -137,9 +137,14 @@ export async function validateCommand(options: Record<string, unknown>): Promise
 
   } catch (error: unknown) {
     spinner.fail(chalk.red('Validation failed'));
-    console.error(chalk.red(extractErrorMessage(error, 'Query Validation')));
+    console.error(chalk.red(ExtractErrorMessage(error, 'Query Validation')));
     process.exit(1);
   }
+}
+
+/** @deprecated Use {@link ValidateCommand}. */
+export async function validateCommand(options: Record<string, unknown>): Promise<void> {
+  return ValidateCommand(options);
 }
 
 /**

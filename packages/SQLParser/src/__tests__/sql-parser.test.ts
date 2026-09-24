@@ -512,3 +512,17 @@ GROUP BY YEAR(e.StartDate)`;
         });
     });
 });
+
+// Found by IT94 (MSP5) in the 6.2.0-edge.0 release gate: a Query saved with this SQL derived its
+// parameter rows but zero field rows, because the column extraction silently fell back to [].
+describe('ExtractSelectColumns — template expression inside a quoted literal', () => {
+    it('extracts the SELECT columns of a query that compares to a quoted template value', () => {
+        const cols = SQLParser.ExtractSelectColumns("SELECT ID, Name FROM __mj.AIVendor WHERE Name = '{{ VendorName }}'", tsqlDialect);
+        expect(cols.map(c => c.OutputName)).toEqual(['ID', 'Name']);
+    });
+
+    it('resolves the real table alias, not the WHERE keyword', () => {
+        const refs = SQLParser.ExtractTableRefs("SELECT ID, Name FROM __mj.AIVendor WHERE Name = '{{ VendorName }}'", tsqlDialect);
+        expect(refs).toEqual([{ TableName: 'AIVendor', SchemaName: '__mj', Alias: 'AIVendor' }]);
+    });
+});

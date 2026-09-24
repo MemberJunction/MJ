@@ -12,9 +12,27 @@ interface View { s: number; tx: number; ty: number; }
  * svg is scaled to fit its container.
  */
 export class PanZoomController {
-  public view: View = { s: 1, tx: 0, ty: 0 };
+  public View: View = { s: 1, tx: 0, ty: 0 };
+
+  /** @deprecated Use {@link View}. */
+  public get view(): View {
+    return this.View;
+  }
+  /** @deprecated Use {@link View}. */
+  public set view(value: View) {
+    this.View = value;
+  }
   /** True when the last gesture actually dragged — renderers use it to suppress click-select. */
-  public moved = false;
+  public Moved = false;
+
+  /** @deprecated Use {@link Moved}. */
+  public get moved() {
+    return this.Moved;
+  }
+  /** @deprecated Use {@link Moved}. */
+  public set moved(value) {
+    this.Moved = value;
+  }
 
   private panning = false;
   private startX = 0;
@@ -41,7 +59,7 @@ export class PanZoomController {
     try {
       const v = JSON.parse(raw) as Partial<View>;
       if (v && typeof v.s === 'number' && typeof v.tx === 'number' && typeof v.ty === 'number') {
-        this.view = { s: v.s, tx: v.tx, ty: v.ty };
+        this.View = { s: v.s, tx: v.tx, ty: v.ty };
       }
     } catch { /* ignore bad cache */ }
   }
@@ -63,7 +81,7 @@ export class PanZoomController {
 
   public ZoomIn(): void { const vb = this.vb(); this.zoomAt(vb.w / 2, vb.h / 2, 1.25); }
   public ZoomOut(): void { const vb = this.vb(); this.zoomAt(vb.w / 2, vb.h / 2, 1 / 1.25); }
-  public Reset(): void { this.view = { s: 1, tx: 0, ty: 0 }; this.apply(); this.persist(); }
+  public Reset(): void { this.View = { s: 1, tx: 0, ty: 0 }; this.apply(); this.persist(); }
   /** Re-assert this controller's own view onto its group (defensive on mode switch). */
   public Reapply(): void { this.apply(); }
 
@@ -83,31 +101,31 @@ export class PanZoomController {
     this.zoomAt((e.clientX - r.left) * k, (e.clientY - r.top) * k, e.deltaY > 0 ? 0.9 : 1.1);
   }
   private onDown(e: MouseEvent): void {
-    this.panning = true; this.moved = false;
+    this.panning = true; this.Moved = false;
     this.startX = e.clientX; this.startY = e.clientY;
-    this.startTx = this.view.tx; this.startTy = this.view.ty;
+    this.startTx = this.View.tx; this.startTy = this.View.ty;
   }
   private onMove(e: MouseEvent): void {
     if (!this.panning) return;
     const k = this.toVbScale();
     const dx = (e.clientX - this.startX) * k, dy = (e.clientY - this.startY) * k;
-    if (Math.abs(dx) + Math.abs(dy) > 3) this.moved = true;
-    this.view.tx = this.startTx + dx; this.view.ty = this.startTy + dy;
+    if (Math.abs(dx) + Math.abs(dy) > 3) this.Moved = true;
+    this.View.tx = this.startTx + dx; this.View.ty = this.startTy + dy;
     this.apply();
   }
-  private onUp(): void { if (this.panning && this.moved) this.persist(); this.panning = false; }
+  private onUp(): void { if (this.panning && this.Moved) this.persist(); this.panning = false; }
 
   private zoomAt(cx: number, cy: number, factor: number): void {
-    const ns = Math.max(this.minS, Math.min(this.maxS, this.view.s * factor));
-    this.view.tx = cx - (cx - this.view.tx) * (ns / this.view.s);
-    this.view.ty = cy - (cy - this.view.ty) * (ns / this.view.s);
-    this.view.s = ns;
+    const ns = Math.max(this.minS, Math.min(this.maxS, this.View.s * factor));
+    this.View.tx = cx - (cx - this.View.tx) * (ns / this.View.s);
+    this.View.ty = cy - (cy - this.View.ty) * (ns / this.View.s);
+    this.View.s = ns;
     this.apply(); this.persist();
   }
   private apply(): void {
-    this.group.setAttribute('transform', `translate(${this.view.tx},${this.view.ty}) scale(${this.view.s})`);
+    this.group.setAttribute('transform', `translate(${this.View.tx},${this.View.ty}) scale(${this.View.s})`);
   }
   private persist(): void {
-    UserInfoEngine.Instance.SetSettingDebounced(this.storageKey, JSON.stringify(this.view));
+    UserInfoEngine.Instance.SetSettingDebounced(this.storageKey, JSON.stringify(this.View));
   }
 }

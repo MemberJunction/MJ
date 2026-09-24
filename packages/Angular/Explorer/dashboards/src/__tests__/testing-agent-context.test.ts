@@ -10,12 +10,12 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildTestingAgentContext,
-    isValidTestingTab,
-    isValidTestingStatusFilter,
-    isValidTestingTimeRange,
-    capList,
-    resolveTestRunByReference,
+    BuildTestingAgentContext,
+    IsValidTestingTab,
+    IsValidTestingStatusFilter,
+    IsValidTestingTimeRange,
+    CapList,
+    ResolveTestRunByReference,
     TESTING_CONTEXT_LIST_CAP,
     TESTING_CONTEXT_BREAKDOWN_CAP,
     TestingAgentContextInput,
@@ -28,56 +28,56 @@ describe('testing-agent-context', () => {
     describe('isValidTestingTab', () => {
         it('accepts each known tab', () => {
             for (const tab of ['dashboard', 'runs', 'analytics', 'review']) {
-                expect(isValidTestingTab(tab)).toBe(true);
+                expect(IsValidTestingTab(tab)).toBe(true);
             }
         });
 
         it('rejects unknown / non-string input', () => {
-            expect(isValidTestingTab('settings')).toBe(false);
-            expect(isValidTestingTab('')).toBe(false);
-            expect(isValidTestingTab(undefined)).toBe(false);
-            expect(isValidTestingTab(null)).toBe(false);
-            expect(isValidTestingTab(42)).toBe(false);
+            expect(IsValidTestingTab('settings')).toBe(false);
+            expect(IsValidTestingTab('')).toBe(false);
+            expect(IsValidTestingTab(undefined)).toBe(false);
+            expect(IsValidTestingTab(null)).toBe(false);
+            expect(IsValidTestingTab(42)).toBe(false);
         });
     });
 
     describe('isValidTestingStatusFilter', () => {
         it('accepts each known status', () => {
             for (const s of ['all', 'running', 'passed', 'failed', 'error']) {
-                expect(isValidTestingStatusFilter(s)).toBe(true);
+                expect(IsValidTestingStatusFilter(s)).toBe(true);
             }
         });
 
         it('rejects unknown / non-string input', () => {
-            expect(isValidTestingStatusFilter('skipped')).toBe(false);
-            expect(isValidTestingStatusFilter(undefined)).toBe(false);
-            expect(isValidTestingStatusFilter(0)).toBe(false);
+            expect(IsValidTestingStatusFilter('skipped')).toBe(false);
+            expect(IsValidTestingStatusFilter(undefined)).toBe(false);
+            expect(IsValidTestingStatusFilter(0)).toBe(false);
         });
     });
 
     describe('isValidTestingTimeRange', () => {
         it('accepts each known range', () => {
             for (const r of ['today', 'week', 'month', '90days']) {
-                expect(isValidTestingTimeRange(r)).toBe(true);
+                expect(IsValidTestingTimeRange(r)).toBe(true);
             }
         });
 
         it('rejects unknown / non-string input', () => {
-            expect(isValidTestingTimeRange('year')).toBe(false);
-            expect(isValidTestingTimeRange('90 days')).toBe(false);
-            expect(isValidTestingTimeRange(null)).toBe(false);
+            expect(IsValidTestingTimeRange('year')).toBe(false);
+            expect(IsValidTestingTimeRange('90 days')).toBe(false);
+            expect(IsValidTestingTimeRange(null)).toBe(false);
         });
     });
 
     describe('capList', () => {
         it('caps to the default list cap', () => {
             const names = Array.from({ length: TESTING_CONTEXT_LIST_CAP + 10 }, (_, i) => `n${i}`);
-            expect(capList(names).length).toBe(TESTING_CONTEXT_LIST_CAP);
+            expect(CapList(names).length).toBe(TESTING_CONTEXT_LIST_CAP);
         });
 
         it('honors an explicit cap and never mutates the input', () => {
             const names = ['a', 'b', 'c', 'd'];
-            const out = capList(names, 2);
+            const out = CapList(names, 2);
             expect(out).toEqual(['a', 'b']);
             expect(names.length).toBe(4); // input untouched
             expect(out).not.toBe(names);
@@ -85,7 +85,7 @@ describe('testing-agent-context', () => {
 
         it('falls back to the default on a non-finite cap', () => {
             const names = Array.from({ length: TESTING_CONTEXT_LIST_CAP + 5 }, (_, i) => `n${i}`);
-            expect(capList(names, Number.NaN).length).toBe(TESTING_CONTEXT_LIST_CAP);
+            expect(CapList(names, Number.NaN).length).toBe(TESTING_CONTEXT_LIST_CAP);
         });
     });
 
@@ -97,30 +97,30 @@ describe('testing-agent-context', () => {
         ];
 
         it('matches by exact id (case-insensitive)', () => {
-            const r = resolveTestRunByReference('aaaa-1111', candidates);
-            expect(r.ok).toBe(true);
-            if (r.ok) expect(r.run.testName).toBe('Login Flow');
+            const r = ResolveTestRunByReference('aaaa-1111', candidates);
+            expect(r.Ok).toBe(true);
+            if (r.Ok) expect(r.Run.testName).toBe('Login Flow');
         });
 
         it('matches by exact test name', () => {
-            const r = resolveTestRunByReference('Checkout Flow', candidates);
-            expect(r.ok && r.run.id).toBe('BBBB-2222');
+            const r = ResolveTestRunByReference('Checkout Flow', candidates);
+            expect(r.Ok && r.Run.id).toBe('BBBB-2222');
         });
 
         it('falls back to a contains match on the name', () => {
-            const r = resolveTestRunByReference('search', candidates);
-            expect(r.ok && r.run.id).toBe('CCCC-3333');
+            const r = ResolveTestRunByReference('search', candidates);
+            expect(r.Ok && r.Run.id).toBe('CCCC-3333');
         });
 
         it('errors with a sample on a miss', () => {
-            const r = resolveTestRunByReference('nope', candidates);
-            expect(r.ok).toBe(false);
-            if (!r.ok) expect(r.error).toContain('Login Flow');
+            const r = ResolveTestRunByReference('nope', candidates);
+            expect(r.Ok).toBe(false);
+            if (!r.Ok) expect(r.Error).toContain('Login Flow');
         });
 
         it('errors on empty input or empty candidate set', () => {
-            expect(resolveTestRunByReference('', candidates).ok).toBe(false);
-            expect(resolveTestRunByReference('x', []).ok).toBe(false);
+            expect(ResolveTestRunByReference('', candidates).Ok).toBe(false);
+            expect(ResolveTestRunByReference('x', []).Ok).toBe(false);
         });
     });
 
@@ -142,7 +142,7 @@ describe('testing-agent-context', () => {
         };
 
         it('publishes the KPI slice (rounded) on the dashboard tab', () => {
-            const ctx = buildTestingAgentContext(base);
+            const ctx = BuildTestingAgentContext(base);
             expect(ctx).toMatchObject({
                 ActiveTab: 'dashboard',
                 ActiveRunCount: 2,
@@ -161,14 +161,14 @@ describe('testing-agent-context', () => {
         });
 
         it('does NOT include per-surface slices on the dashboard tab', () => {
-            const ctx = buildTestingAgentContext(base);
+            const ctx = BuildTestingAgentContext(base);
             expect(ctx['SelectedRunId']).toBeUndefined();
             expect(ctx['TopFailingTests']).toBeUndefined();
             expect(ctx['View']).toBeUndefined();
         });
 
         it('coerces non-finite numeric inputs to 0', () => {
-            const ctx = buildTestingAgentContext({
+            const ctx = BuildTestingAgentContext({
                 ...base,
                 PassRate: Number.NaN,
                 TotalTestCost: Number.POSITIVE_INFINITY,
@@ -190,7 +190,7 @@ describe('testing-agent-context', () => {
             };
 
             it('publishes the Runs slice with selected run id+NAME', () => {
-                const ctx = buildTestingAgentContext({ ...base, ActiveTab: 'runs', Runs: runs });
+                const ctx = BuildTestingAgentContext({ ...base, ActiveTab: 'runs', Runs: runs });
                 expect(ctx).toMatchObject({
                     StatusFilter: 'failed',
                     TimeRange: 'week',
@@ -205,7 +205,7 @@ describe('testing-agent-context', () => {
 
             it('bounds VisibleRunNames and flags truncation', () => {
                 const many = Array.from({ length: TESTING_CONTEXT_LIST_CAP + 3 }, (_, i) => `run-${i}`);
-                const ctx = buildTestingAgentContext({
+                const ctx = BuildTestingAgentContext({
                     ...base,
                     ActiveTab: 'runs',
                     Runs: { ...runs, VisibleRunNames: many },
@@ -215,7 +215,7 @@ describe('testing-agent-context', () => {
             });
 
             it('omits the Runs slice when the active tab is not runs', () => {
-                const ctx = buildTestingAgentContext({ ...base, ActiveTab: 'analytics', Runs: runs });
+                const ctx = BuildTestingAgentContext({ ...base, ActiveTab: 'analytics', Runs: runs });
                 expect(ctx['SelectedRunId']).toBeUndefined();
             });
         });
@@ -230,7 +230,7 @@ describe('testing-agent-context', () => {
             };
 
             it('publishes breakdowns bounded to the breakdown cap', () => {
-                const ctx = buildTestingAgentContext({ ...base, ActiveTab: 'analytics', Analytics: analytics });
+                const ctx = BuildTestingAgentContext({ ...base, ActiveTab: 'analytics', Analytics: analytics });
                 expect(ctx['SelectedDays']).toBe(90);
                 expect(ctx['VersionCount']).toBe(4);
                 expect((ctx['TopFailingTests'] as string[]).length).toBe(TESTING_CONTEXT_BREAKDOWN_CAP);
@@ -249,7 +249,7 @@ describe('testing-agent-context', () => {
             };
 
             it('publishes the Review slice (rounded)', () => {
-                const ctx = buildTestingAgentContext({ ...base, ActiveTab: 'review', Review: review });
+                const ctx = BuildTestingAgentContext({ ...base, ActiveTab: 'review', Review: review });
                 expect(ctx).toMatchObject({
                     View: 'history',
                     PendingCount: 9,

@@ -68,7 +68,16 @@ import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid
     },
 })
 export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy {
-    @ViewChild('innerGrid') innerGrid!: EntityDataGridComponent;
+    @ViewChild('innerGrid') InnerGrid!: EntityDataGridComponent;
+
+    /** @deprecated Use {@link InnerGrid}. */
+    get innerGrid(): EntityDataGridComponent {
+      return this.InnerGrid;
+    }
+    /** @deprecated Use {@link InnerGrid}. */
+    set innerGrid(value: EntityDataGridComponent) {
+      this.InnerGrid = value;
+    }
 
     private elementRef = inject(ElementRef);
     private cdr = inject(ChangeDetectorRef);
@@ -163,8 +172,13 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
         return this.shouldSizeToRows() ? this.sizedHeightPx : this.Height;
     }
 
-    get hostHeightStyle(): string {
+    get HostHeightStyle(): string {
         return this.shouldSizeToRows() ? `${this.sizedHeightPx}px` : '100%';
+    }
+
+    /** @deprecated Use {@link HostHeightStyle}. */
+    get hostHeightStyle(): string {
+      return this.HostHeightStyle;
     }
 
     private shouldSizeToRows(): boolean {
@@ -238,7 +252,7 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
      * button and by the parent-form refresh broadcast.
      */
     public async Refresh(): Promise<void> {
-        await this.innerGrid?.Refresh();
+        await this.InnerGrid?.Refresh();
     }
 
     private subscribeToFormRefresh(): void {
@@ -293,14 +307,14 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     /** Emitted when a row is double-clicked and NavigateOnDoubleClick is true */
     @Output() Navigate = new EventEmitter<FormNavigationEvent>();
 
-    onRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
+    OnRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
         // Re-emit the event for any consumers
         this.AfterRowDoubleClick.emit(event);
 
         // Emit navigation event if enabled
         if (this.NavigateOnDoubleClick && event.row) {
             // Use the inner grid's resolved EntityInfo - works for both ViewID and EntityName params
-            const entityInfo = this.innerGrid?.EntityInfo;
+            const entityInfo = this.InnerGrid?.EntityInfo;
             if (!entityInfo) return;
 
             const pkey = buildCompositeKey(event.row, entityInfo);
@@ -313,12 +327,22 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
         }
     }
 
-    onRowClick(event: AfterRowClickEventArgs): void {
+    /** @deprecated Use {@link OnRowDoubleClick}. */
+    onRowDoubleClick(event: AfterRowDoubleClickEventArgs): void {
+      return this.OnRowDoubleClick(event);
+    }
+
+    OnRowClick(event: AfterRowClickEventArgs): void {
         // Re-emit the event for any consumers
         this.AfterRowClick.emit(event);
     }
 
-    onDataLoad(event: AfterDataLoadEventArgs): void {
+    /** @deprecated Use {@link OnRowClick}. */
+    onRowClick(event: AfterRowClickEventArgs): void {
+      return this.OnRowClick(event);
+    }
+
+    OnDataLoad(event: AfterDataLoadEventArgs): void {
         this.AfterDataLoad.emit(event);
         if (!this.shouldSizeToRows()) {
             return;
@@ -332,6 +356,11 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
         // AG Grid decides whether it needs a horizontal scrollbar only after it lays the new
         // rows/columns out, so the measurement has to follow the load, not accompany it.
         this.scheduleScrollbarMeasure();
+    }
+
+    /** @deprecated Use {@link OnDataLoad}. */
+    onDataLoad(event: AfterDataLoadEventArgs): void {
+      return this.OnDataLoad(event);
     }
 
     private applySizedHeight(): void {
@@ -426,11 +455,16 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
      * SingleRecordComponent) can call NavigationService.OpenNewEntityRecord
      * and pre-populate the foreign-key fields from NewRecordValues.
      */
-    onNewRecordTabRequested(event: { entityInfo: EntityInfo; defaultValues: Record<string, unknown> }): void {
+    OnNewRecordTabRequested(event: { entityInfo: EntityInfo; defaultValues: Record<string, unknown> }): void {
         this.Navigate.emit({
             Kind: 'new-record',
             EntityName: event.entityInfo.Name,
             DefaultValues: event.defaultValues,
         });
+    }
+
+    /** @deprecated Use {@link OnNewRecordTabRequested}. */
+    onNewRecordTabRequested(event: { entityInfo: EntityInfo; defaultValues: Record<string, unknown> }): void {
+      return this.OnNewRecordTabRequested(event);
     }
 }

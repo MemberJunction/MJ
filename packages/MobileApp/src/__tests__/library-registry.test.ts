@@ -266,8 +266,8 @@ describe('AssessSpec — libraries', () => {
             { name: 'dayjs', globalVariable: 'dayjs' },
         ]);
         const verdict = AssessSpec(spec);
-        expect(verdict.renderable).toBe(true);
-        expect(verdict.mode).toBe('native');
+        expect(verdict.Renderable).toBe(true);
+        expect(verdict.Mode).toBe('native');
     });
 
     it('routes to the DOM host for a library the native runtime cannot supply', () => {
@@ -278,10 +278,10 @@ describe('AssessSpec — libraries', () => {
             { name: 'chart.js', globalVariable: 'Chart' },
         ]);
         const verdict = AssessSpec(spec);
-        expect(verdict.renderable).toBe(true);
-        expect(verdict.mode).toBe('dom');
-        expect(verdict.domLibraries).toContain('chart.js');
-        expect(verdict.domLibraries).not.toContain('lodash');
+        expect(verdict.Renderable).toBe(true);
+        expect(verdict.Mode).toBe('dom');
+        expect(verdict.DomLibraries).toContain('chart.js');
+        expect(verdict.DomLibraries).not.toContain('lodash');
     });
 
     it('renders a spec whose child carries its own code and its own libraries', () => {
@@ -297,7 +297,7 @@ describe('AssessSpec — libraries', () => {
                 },
             ],
         } as ComponentSpec;
-        expect(AssessSpec(spec).renderable).toBe(true);
+        expect(AssessSpec(spec).Renderable).toBe(true);
     });
 
     it('routes the whole component to the DOM host when a CHILD needs a browser library', () => {
@@ -314,8 +314,8 @@ describe('AssessSpec — libraries', () => {
             ],
         } as ComponentSpec;
         const verdict = AssessSpec(spec);
-        expect(verdict.mode).toBe('dom');
-        expect(verdict.domLibraries).toContain('chart.js');
+        expect(verdict.Mode).toBe('dom');
+        expect(verdict.DomLibraries).toContain('chart.js');
     });
 
     it('does not decline a child the spec names instead of carrying', () => {
@@ -327,7 +327,7 @@ describe('AssessSpec — libraries', () => {
             ...SpecWith([]),
             dependencies: [{ name: 'DataGrid', location: 'registry' }],
         } as ComponentSpec;
-        expect(AssessSpec(spec).renderable).toBe(true);
+        expect(AssessSpec(spec).Renderable).toBe(true);
     });
 
     it('detects a browser-only library at any depth, not just the first', () => {
@@ -347,10 +347,10 @@ describe('AssessSpec — libraries', () => {
                 },
             ],
         } as ComponentSpec;
-        expect(AssessSpec(spec).domLibraries).toContain('leaflet');
+        expect(AssessSpec(spec).DomLibraries).toContain('leaflet');
     });
 
     it('still declines a spec with no code', () => {
-        expect(AssessSpec({ name: 'X', code: '' } as ComponentSpec).renderable).toBe(false);
+        expect(AssessSpec({ name: 'X', code: '' } as ComponentSpec).Renderable).toBe(false);
     });
 });

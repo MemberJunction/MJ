@@ -6,102 +6,102 @@ import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 
 export interface TestingDashboardKPIs {
-  totalTestsActive: number;
-  passRateThisMonth: number;
-  totalCostThisMonth: number;
-  averageDuration: number;
-  testsPendingReview: number;
-  totalTestRuns: number;
-  failedTests: number;
-  skippedTests: number;
-  passRateTrend: number; // Percentage change from previous period
+  TotalTestsActive: number;
+  PassRateThisMonth: number;
+  TotalCostThisMonth: number;
+  AverageDuration: number;
+  TestsPendingReview: number;
+  TotalTestRuns: number;
+  FailedTests: number;
+  SkippedTests: number;
+  PassRateTrend: number; // Percentage change from previous period
 }
 
 export interface TestRunSummary {
-  id: string;
-  testId: string;
-  testName: string;
-  suiteName: string;
-  testType: string;
-  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Timeout';
-  score: number; // 0-1.0000
-  duration: number; // milliseconds
-  cost: number; // USD
-  runDateTime: Date;
-  targetType: string;
-  targetLogID: string;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  testId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  testName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  suiteName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  testType: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Timeout';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  score: number; // 0-1.0000 — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  duration: number; // milliseconds — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cost: number; // USD — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  runDateTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  targetType: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  targetLogID: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   // Execution context (machine / CI / run-by) — present for runs persisted with this metadata.
-  machineName?: string | null;
-  machineID?: string | null;
-  runByUserName?: string | null;
-  runByUserEmail?: string | null;
-  runContextDetails?: string | null;
+  machineName?: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  machineID?: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  runByUserName?: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  runByUserEmail?: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  runContextDetails?: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface SuiteHierarchyNode {
-  id: string;
-  name: string;
-  parentID: string | null;
-  level: number;
-  children: SuiteHierarchyNode[];
-  testCount: number;
-  passRate: number;
-  totalCost: number;
-  averageScore: number;
-  expanded?: boolean;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  parentID: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  level: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  children: SuiteHierarchyNode[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  testCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  passRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalCost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  averageScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  expanded?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface VersionMetrics {
-  version: string; // GitCommit + AgentVersion combination
-  gitCommit: string;
-  agentVersion: string;
-  runDate: Date;
-  totalTests: number;
-  passRate: number;
-  averageScore: number;
-  totalCost: number;
-  averageDuration: number;
-  newFailures: number;
-  newPasses: number;
+  version: string; // GitCommit + AgentVersion combination — case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  gitCommit: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  agentVersion: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  runDate: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalTests: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  passRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  averageScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalCost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  averageDuration: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  newFailures: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  newPasses: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface TestTrendData {
-  timestamp: Date;
-  totalRuns: number;
-  passed: number;
-  failed: number;
-  skipped: number;
-  errors: number;
-  averageScore: number;
-  totalCost: number;
-  averageDuration: number;
+  timestamp: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalRuns: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  passed: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  failed: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  skipped: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  errors: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  averageScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalCost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  averageDuration: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface FeedbackPending {
-  testRunID: string;
-  testName: string;
-  automatedScore: number;
-  automatedStatus: string;
-  runDateTime: Date;
-  reason: 'no-feedback' | 'high-score-failed' | 'low-score-passed';
+  testRunID: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  testName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  automatedScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  automatedStatus: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  runDateTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  reason: 'no-feedback' | 'high-score-failed' | 'low-score-passed';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface TestAnalytics {
-  topFailingTests: Array<{ testName: string; failureCount: number; failureRate: number }>;
-  mostExpensiveTests: Array<{ testName: string; totalCost: number; avgCost: number }>;
-  slowestTests: Array<{ testName: string; avgDuration: number; maxDuration: number }>;
-  costByType: Array<{ testType: string; totalCost: number; testCount: number }>;
-  costBySuite: Array<{ suiteName: string; totalCost: number; testCount: number }>;
-  passingRateByType: Array<{ testType: string; passRate: number; totalTests: number }>;
+  topFailingTests: Array<{ testName: string; failureCount: number; failureRate: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  mostExpensiveTests: Array<{ testName: string; totalCost: number; avgCost: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  slowestTests: Array<{ testName: string; avgDuration: number; maxDuration: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  costByType: Array<{ testType: string; totalCost: number; testCount: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  costBySuite: Array<{ suiteName: string; totalCost: number; testCount: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  passingRateByType: Array<{ testType: string; passRate: number; totalTests: number }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface FeedbackStats {
-  totalFeedback: number;
-  reviewedCount: number;
-  avgRating: number;
-  agreementRate: number;
-  disagreementRate: number;
-  accuracyRate: number;
+  TotalFeedback: number;
+  ReviewedCount: number;
+  AvgRating: number;
+  AgreementRate: number;
+  DisagreementRate: number;
+  AccuracyRate: number;
 }
 
 /**
@@ -109,37 +109,37 @@ export interface FeedbackStats {
  */
 export interface TestRunWithFeedbackSummary extends TestRunSummary {
   // Human feedback
-  humanRating: number | null;
-  humanIsCorrect: boolean | null;
-  humanComments: string | null;
-  hasHumanFeedback: boolean;
-  feedbackId: string | null;
+  humanRating: number | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  humanIsCorrect: boolean | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  humanComments: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  hasHumanFeedback: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  feedbackId: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   // Checks (from automated evaluation)
-  passedChecks: number | null;
-  failedChecks: number | null;
-  totalChecks: number | null;
+  passedChecks: number | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  failedChecks: number | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalChecks: number | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
  * Aggregated evaluation metrics
  */
 export interface EvaluationSummaryMetrics {
-  totalRuns: number;
+  totalRuns: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   // Execution
-  execCompletedCount: number;
-  execErrorCount: number;
-  execSuccessRate: number;
+  execCompletedCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  execErrorCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  execSuccessRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   // Human
-  humanReviewedCount: number;
-  humanPendingCount: number;
-  humanAvgRating: number;
-  humanCorrectRate: number;
+  humanReviewedCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  humanPendingCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  humanAvgRating: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  humanCorrectRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   // Auto
-  autoEvaluatedCount: number;
-  autoAvgScore: number;
-  autoPassRate: number;
+  autoEvaluatedCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  autoAvgScore: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  autoPassRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   // Agreement
-  agreementRate: number;
+  agreementRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 // Simple result types for optimized queries (only fields needed for display)
@@ -184,8 +184,8 @@ interface TestRunFeedbackSimple {
  * root service, and the (possibly not-yet-mounted) Runs component consumes it.
  */
 export interface RunsFilterIntent {
-  status?: 'all' | 'running' | 'passed' | 'failed' | 'error';
-  searchText?: string;
+  status?: 'all' | 'running' | 'passed' | 'failed' | 'error';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  searchText?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -201,11 +201,11 @@ export interface RunsFilterIntent {
  */
 export interface RunSelectionIntent {
   /** Target test-run ID to select (and optionally open). */
-  runId: string;
+  runId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** When true, also open the run's record in the entity workspace. */
-  open?: boolean;
+  open?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Monotonic nonce so re-selecting the SAME run id still replays the intent. */
-  nonce: number;
+  nonce: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Injectable({
@@ -225,11 +225,21 @@ export class TestingInstrumentationService {
   private readonly _runsFilterIntent$ = new BehaviorSubject<RunsFilterIntent | null>(null);
 
   /** Observable of agent-driven Runs filter intents. */
-  readonly runsFilterIntent$ = this._runsFilterIntent$.asObservable();
+  readonly RunsFilterIntent$ = this._runsFilterIntent$.asObservable();
+
+  /** @deprecated Use {@link RunsFilterIntent$}. */
+  get runsFilterIntent$() {
+    return this.RunsFilterIntent$;
+  }
 
   /** Publish an agent-driven filter intent for the Runs surface to apply. */
-  setRunsFilterIntent(intent: RunsFilterIntent): void {
+  SetRunsFilterIntent(intent: RunsFilterIntent): void {
     this._runsFilterIntent$.next(intent);
+  }
+
+  /** @deprecated Use {@link SetRunsFilterIntent}. */
+  setRunsFilterIntent(intent: RunsFilterIntent): void {
+    return this.SetRunsFilterIntent(intent);
   }
 
   /**
@@ -244,7 +254,12 @@ export class TestingInstrumentationService {
   private readonly _runSelectionIntent$ = new BehaviorSubject<RunSelectionIntent | null>(null);
 
   /** Observable of agent-driven run-selection intents. */
-  readonly runSelectionIntent$ = this._runSelectionIntent$.asObservable();
+  readonly RunSelectionIntent$ = this._runSelectionIntent$.asObservable();
+
+  /** @deprecated Use {@link RunSelectionIntent$}. */
+  get runSelectionIntent$() {
+    return this.RunSelectionIntent$;
+  }
 
   /** Monotonic source for {@link RunSelectionIntent.nonce}. */
   private _runSelectionNonce = 0;
@@ -254,10 +269,15 @@ export class TestingInstrumentationService {
    * Assigns the next monotonic nonce so re-selecting the same run id still
    * replays. Returns the published intent (with its assigned nonce).
    */
-  setRunSelectionIntent(runId: string, open: boolean = false): RunSelectionIntent {
+  SetRunSelectionIntent(runId: string, open: boolean = false): RunSelectionIntent {
     const intent: RunSelectionIntent = { runId, open, nonce: ++this._runSelectionNonce };
     this._runSelectionIntent$.next(intent);
     return intent;
+  }
+
+  /** @deprecated Use {@link SetRunSelectionIntent}. */
+  setRunSelectionIntent(runId: string, open: boolean = false): RunSelectionIntent {
+    return this.SetRunSelectionIntent(runId, open);
   }
 
   private readonly _suiteFilter$ = new BehaviorSubject<string | null>(null);
@@ -280,20 +300,35 @@ export class TestingInstrumentationService {
   }
 
   // Expose observables
-  readonly isLoading$ = this._isLoading$.asObservable();
-  readonly dateRange$ = this._dateRange$.asObservable();
+  readonly IsLoading$ = this._isLoading$.asObservable();
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  readonly DateRange$ = this._dateRange$.asObservable();
+
+  /** @deprecated Use {@link DateRange$}. */
+  get dateRange$() {
+    return this.DateRange$;
+  }
 
   constructor() {}
 
   // Main data streams
-  readonly kpis$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  readonly Kpis$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadKPIs())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
-  readonly testRuns$ = combineLatest([
+  /** @deprecated Use {@link Kpis$}. */
+  get kpis$() {
+    return this.Kpis$;
+  }
+
+  readonly TestRuns$ = combineLatest([
     this._refreshTrigger$,
     this._dateRange$,
     this._suiteFilter$,
@@ -305,45 +340,75 @@ export class TestingInstrumentationService {
     shareReplay(1)
   );
 
-  readonly suiteHierarchy$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link TestRuns$}. */
+  get testRuns$() {
+    return this.TestRuns$;
+  }
+
+  readonly SuiteHierarchy$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadSuiteHierarchy())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
-  readonly trends$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link SuiteHierarchy$}. */
+  get suiteHierarchy$() {
+    return this.SuiteHierarchy$;
+  }
+
+  readonly Trends$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadTrends())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
-  readonly analytics$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link Trends$}. */
+  get trends$() {
+    return this.Trends$;
+  }
+
+  readonly Analytics$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadAnalytics())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
-  readonly pendingFeedback$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link Analytics$}. */
+  get analytics$() {
+    return this.Analytics$;
+  }
+
+  readonly PendingFeedback$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadPendingFeedback())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
-  readonly feedbackStats$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
+  /** @deprecated Use {@link PendingFeedback$}. */
+  get pendingFeedback$() {
+    return this.PendingFeedback$;
+  }
+
+  readonly FeedbackStats$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
     switchMap(() => from(this.loadFeedbackStats())),
     tap(() => this.checkLoadingComplete()),
     shareReplay(1)
   );
 
+  /** @deprecated Use {@link FeedbackStats$}. */
+  get feedbackStats$() {
+    return this.FeedbackStats$;
+  }
+
   /**
    * Test runs with feedback data joined - for evaluation display
    */
-  readonly testRunsWithFeedback$ = combineLatest([
+  readonly TestRunsWithFeedback$ = combineLatest([
     this._refreshTrigger$,
     this._dateRange$,
     this._suiteFilter$,
@@ -355,13 +420,23 @@ export class TestingInstrumentationService {
     shareReplay(1)
   );
 
+  /** @deprecated Use {@link TestRunsWithFeedback$}. */
+  get testRunsWithFeedback$() {
+    return this.TestRunsWithFeedback$;
+  }
+
   /**
    * Aggregated evaluation metrics from test runs with feedback
    */
-  readonly evaluationMetrics$ = this.testRunsWithFeedback$.pipe(
+  readonly EvaluationMetrics$ = this.TestRunsWithFeedback$.pipe(
     map(runs => this.calculateEvaluationMetrics(runs)),
     shareReplay(1)
   );
+
+  /** @deprecated Use {@link EvaluationMetrics$}. */
+  get evaluationMetrics$() {
+    return this.EvaluationMetrics$;
+  }
 
   private checkLoadingComplete(): void {
     setTimeout(() => {
@@ -369,8 +444,13 @@ export class TestingInstrumentationService {
     }, 100);
   }
 
-  setDateRange(start: Date, end: Date): void {
+  SetDateRange(start: Date, end: Date): void {
     this._dateRange$.next({ start, end });
+  }
+
+  /** @deprecated Use {@link SetDateRange}. */
+  setDateRange(start: Date, end: Date): void {
+    return this.SetDateRange(start, end);
   }
 
   /**
@@ -378,7 +458,7 @@ export class TestingInstrumentationService {
    * range-to-dates computation so both the Runs surface UI and the agent's
    * `FilterTestsByTimeRange` tool resolve identical windows.
    */
-  setDateRangeByName(range: 'today' | 'week' | 'month' | '90days'): void {
+  SetDateRangeByName(range: 'today' | 'week' | 'month' | '90days'): void {
     const now = new Date();
     let start: Date;
     switch (range) {
@@ -397,19 +477,39 @@ export class TestingInstrumentationService {
         start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         break;
     }
-    this.setDateRange(start, now);
+    this.SetDateRange(start, now);
   }
 
-  setSuiteFilter(suiteId: string | null): void {
+  /** @deprecated Use {@link SetDateRangeByName}. */
+  setDateRangeByName(range: 'today' | 'week' | 'month' | '90days'): void {
+    return this.SetDateRangeByName(range);
+  }
+
+  SetSuiteFilter(suiteId: string | null): void {
     this._suiteFilter$.next(suiteId);
   }
 
-  setTestTypeFilter(typeId: string | null): void {
+  /** @deprecated Use {@link SetSuiteFilter}. */
+  setSuiteFilter(suiteId: string | null): void {
+    return this.SetSuiteFilter(suiteId);
+  }
+
+  SetTestTypeFilter(typeId: string | null): void {
     this._testTypeFilter$.next(typeId);
   }
 
-  refresh(): void {
+  /** @deprecated Use {@link SetTestTypeFilter}. */
+  setTestTypeFilter(typeId: string | null): void {
+    return this.SetTestTypeFilter(typeId);
+  }
+
+  Refresh(): void {
     this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  refresh(): void {
+    return this.Refresh();
   }
 
   private async loadKPIs(): Promise<TestingDashboardKPIs> {
@@ -479,15 +579,15 @@ export class TestingInstrumentationService {
     const passRateTrend = previousPassRate > 0 ? passRateThisMonth - previousPassRate : 0;
 
     return {
-      totalTestsActive,
-      passRateThisMonth,
-      totalCostThisMonth,
-      averageDuration,
-      testsPendingReview,
-      totalTestRuns,
-      failedTests: failedRuns.length,
-      skippedTests: skippedRuns.length,
-      passRateTrend
+      TotalTestsActive: totalTestsActive,
+      PassRateThisMonth: passRateThisMonth,
+      TotalCostThisMonth: totalCostThisMonth,
+      AverageDuration: averageDuration,
+      TestsPendingReview: testsPendingReview,
+      TotalTestRuns: totalTestRuns,
+      FailedTests: failedRuns.length,
+      SkippedTests: skippedRuns.length,
+      PassRateTrend: passRateTrend
     };
   }
 
@@ -926,12 +1026,12 @@ export class TestingInstrumentationService {
 
     if (totalFeedback === 0) {
       return {
-        totalFeedback: 0,
-        reviewedCount: 0,
-        avgRating: 0,
-        agreementRate: 0,
-        disagreementRate: 0,
-        accuracyRate: 0
+        TotalFeedback: 0,
+        ReviewedCount: 0,
+        AvgRating: 0,
+        AgreementRate: 0,
+        DisagreementRate: 0,
+        AccuracyRate: 0
       };
     }
 
@@ -949,16 +1049,16 @@ export class TestingInstrumentationService {
     const accuracyRate = agreementRate;
 
     return {
-      totalFeedback,
-      reviewedCount: totalFeedback, // All feedbacks in this query are reviewed
-      avgRating,
-      agreementRate,
-      disagreementRate,
-      accuracyRate
+      TotalFeedback: totalFeedback,
+      ReviewedCount: totalFeedback, // All feedbacks in this query are reviewed
+      AvgRating: avgRating,
+      AgreementRate: agreementRate,
+      DisagreementRate: disagreementRate,
+      AccuracyRate: accuracyRate
     };
   }
 
-  async submitFeedback(testRunID: string, rating: number, isCorrect: boolean, comments: string): Promise<boolean> {
+  async SubmitFeedback(testRunID: string, rating: number, isCorrect: boolean, comments: string): Promise<boolean> {
     try {
       const feedback = await this.metadata.GetEntityObject<MJTestRunFeedbackEntity>('MJ: Test Run Feedbacks');
       feedback.TestRunID = testRunID;
@@ -968,7 +1068,7 @@ export class TestingInstrumentationService {
 
       const result = await feedback.Save();
       if (result) {
-        this.refresh(); // Refresh data after submission
+        this.Refresh(); // Refresh data after submission
         return true;
       }
       return false;
@@ -978,7 +1078,12 @@ export class TestingInstrumentationService {
     }
   }
 
-  async getVersionMetrics(): Promise<VersionMetrics[]> {
+  /** @deprecated Use {@link SubmitFeedback}. */
+  async submitFeedback(testRunID: string, rating: number, isCorrect: boolean, comments: string): Promise<boolean> {
+    return this.SubmitFeedback(testRunID, rating, isCorrect, comments);
+  }
+
+  async GetVersionMetrics(): Promise<VersionMetrics[]> {
     const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Use simple result type with only needed fields
@@ -1032,6 +1137,11 @@ export class TestingInstrumentationService {
     });
 
     return metrics.sort((a, b) => b.runDate.getTime() - a.runDate.getTime());
+  }
+
+  /** @deprecated Use {@link GetVersionMetrics}. */
+  async getVersionMetrics(): Promise<VersionMetrics[]> {
+    return this.GetVersionMetrics();
   }
 
   private createTimeBuckets(start: Date, end: Date): Date[] {

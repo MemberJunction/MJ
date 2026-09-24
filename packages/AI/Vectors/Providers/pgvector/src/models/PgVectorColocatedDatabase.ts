@@ -75,7 +75,7 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
     //  Host connection access
     // ----------------------------------------------------------------
 
-    private get Host(): IColocatedVectorHost {
+    private get host(): IColocatedVectorHost {
         if (!this.ColocatedHost) {
             throw new Error(
                 'PgVectorColocatedDatabase requires a host connection. Call TryWireColocatedHost()/SetColocatedHost() with the active data provider before use.'
@@ -84,16 +84,16 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
         return this.ColocatedHost;
     }
 
-    private get Schema(): string {
-        return this.Host.ColocatedSchema;
+    private get schema(): string {
+        return this.host.ColocatedSchema;
     }
 
-    private Qualify(tableName: string): string {
-        return `"${ValidateSqlIdentifier(this.Schema, 'schema')}"."${ValidateSqlIdentifier(tableName, 'table')}"`;
+    private qualify(tableName: string): string {
+        return `"${ValidateSqlIdentifier(this.schema, 'schema')}"."${ValidateSqlIdentifier(tableName, 'table')}"`;
     }
 
-    private Run<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
-        return this.Host.RunColocatedSQL<T>(sql, params);
+    private run<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
+        return this.host.RunColocatedSQL<T>(sql, params);
     }
 
     // ----------------------------------------------------------------
@@ -101,11 +101,11 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
     // ----------------------------------------------------------------
 
     /** Ensure pgvector is installed and the registry table exists, creating both if permitted. */
-    private async EnsureInfrastructure(): Promise<void> {
-        await this.AssertVectorCapable();
-        await this.Run(`CREATE SCHEMA IF NOT EXISTS "${this.Schema}"`);
-        await this.Run(
-            `CREATE TABLE IF NOT EXISTS ${this.Qualify(INDEX_REGISTRY_TABLE)} (
+    private async ensureInfrastructure(): Promise<void> {
+        await this.assertVectorCapable();
+        await this.run(`CREATE SCHEMA IF NOT EXISTS "${this.schema}"`);
+        await this.run(
+            `CREATE TABLE IF NOT EXISTS ${this.qualify(INDEX_REGISTRY_TABLE)} (
                 name TEXT PRIMARY KEY,
                 dimension INTEGER NOT NULL,
                 metric TEXT NOT NULL DEFAULT 'cosine',
@@ -115,15 +115,15 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
     }
 
     /** Throw a clear, loud error when the host database can't support colocated vectors. */
-    private async AssertVectorCapable(): Promise<void> {
-        const rows = await this.Run<{ ok: boolean }>(
+    private async assertVectorCapable(): Promise<void> {
+        const rows = await this.run<{ ok: boolean }>(
             `SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'vector') AS ok`
         );
         if (rows[0]?.ok) {
             return;
         }
         try {
-            await this.Run(`CREATE EXTENSION IF NOT EXISTS vector`);
+            await this.run(`CREATE EXTENSION IF NOT EXISTS vector`);
         } catch (ex) {
             const msg = ex instanceof Error ? ex.message : String(ex);
             throw new Error(
@@ -134,10 +134,10 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
         }
     }
 
-    private async GetIndexMetric(indexName: string): Promise<string> {
+    private async getIndexMetric(indexName: string): Promise<string> {
         try {
-            const rows = await this.Run<{ metric: string }>(
-                `SELECT metric FROM ${this.Qualify(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
+            const rows = await this.run<{ metric: string }>(
+                `SELECT metric FROM ${this.qualify(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
                 [indexName]
             );
             return rows.length > 0 ? rows[0].metric : 'cosine';
@@ -152,15 +152,15 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
 
     public async ListIndexes(): Promise<IndexList> {
         try {
-            await this.EnsureInfrastructure();
-            const rows = await this.Run<{ name: string; dimension: number; metric: string }>(
-                `SELECT name, dimension, metric FROM ${this.Qualify(INDEX_REGISTRY_TABLE)} ORDER BY name`
+            await this.ensureInfrastructure();
+            const rows = await this.run<{ name: string; dimension: number; metric: string }>(
+                `SELECT name, dimension, metric FROM ${this.qualify(INDEX_REGISTRY_TABLE)} ORDER BY name`
             );
             const indexes: IndexDescription[] = rows.map(row => ({
                 name: row.name,
                 dimension: row.dimension,
                 metric: row.metric as IndexModelMetricEnum,
-                host: this.Schema,
+                host: this.schema,
             }));
             return { indexes };
         } catch (ex) {
@@ -171,36 +171,36 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
 
     public async GetIndex(params: BaseRequestParams): Promise<BaseResponse> {
         try {
-            await this.EnsureInfrastructure();
-            const rows = await this.Run<{ name: string; dimension: number; metric: string }>(
-                `SELECT name, dimension, metric FROM ${this.Qualify(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
+            await this.ensureInfrastructure();
+            const rows = await this.run<{ name: string; dimension: number; metric: string }>(
+                `SELECT name, dimension, metric FROM ${this.qualify(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
                 [params.id]
             );
             if (rows.length === 0) {
-                return this.Failure(`Index "${params.id}" not found`);
+                return this.failure(`Index "${params.id}" not found`);
             }
             const desc: IndexDescription = {
                 name: rows[0].name,
                 dimension: rows[0].dimension,
                 metric: rows[0].metric as IndexModelMetricEnum,
-                host: this.Schema,
+                host: this.schema,
             };
-            return this.Success(desc);
+            return this.success(desc);
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.GetIndex error', undefined, ex);
-            return this.Failure('Error getting index');
+            return this.failure('Error getting index');
         }
     }
 
     public async CreateIndex(params: CreateIndexParams): Promise<BaseResponse> {
         try {
-            await this.EnsureInfrastructure();
+            await this.ensureInfrastructure();
             const tableName = params.id;
             const dimension = params.dimension;
             const metric = params.metric || 'cosine';
 
-            await this.Run(
-                `CREATE TABLE IF NOT EXISTS ${this.Qualify(tableName)} (
+            await this.run(
+                `CREATE TABLE IF NOT EXISTS ${this.qualify(tableName)} (
                     id TEXT PRIMARY KEY,
                     embedding vector(${dimension}),
                     metadata JSONB DEFAULT '{}'::jsonb,
@@ -210,48 +210,48 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
             );
 
             const opsClass = MetricOpsClass(metric);
-            await this.Run(
+            await this.run(
                 `CREATE INDEX IF NOT EXISTS "idx_${tableName}_embedding"
-                 ON ${this.Qualify(tableName)} USING hnsw (embedding ${opsClass})`
+                 ON ${this.qualify(tableName)} USING hnsw (embedding ${opsClass})`
             );
-            await this.Run(
+            await this.run(
                 `CREATE INDEX IF NOT EXISTS "idx_${tableName}_metadata"
-                 ON ${this.Qualify(tableName)} USING gin (metadata)`
+                 ON ${this.qualify(tableName)} USING gin (metadata)`
             );
-            await this.Run(
+            await this.run(
                 `CREATE INDEX IF NOT EXISTS "idx_${tableName}_tsv"
-                 ON ${this.Qualify(tableName)} USING gin (tsv)`
+                 ON ${this.qualify(tableName)} USING gin (tsv)`
             );
 
-            await this.Run(
-                `INSERT INTO ${this.Qualify(INDEX_REGISTRY_TABLE)} (name, dimension, metric)
+            await this.run(
+                `INSERT INTO ${this.qualify(INDEX_REGISTRY_TABLE)} (name, dimension, metric)
                  VALUES ($1, $2, $3)
                  ON CONFLICT (name) DO UPDATE SET dimension = $2, metric = $3`,
                 [tableName, dimension, metric]
             );
 
             LogStatus(`PgVectorColocatedDatabase: Created colocated index "${tableName}" (dim=${dimension}, metric=${metric})`);
-            return this.Success({ name: tableName, dimension, metric });
+            return this.success({ name: tableName, dimension, metric });
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.CreateIndex error', undefined, ex);
-            return this.Failure(ex instanceof Error ? ex.message : 'Error creating index');
+            return this.failure(ex instanceof Error ? ex.message : 'Error creating index');
         }
     }
 
     public async DeleteIndex(params: BaseRequestParams): Promise<BaseResponse> {
         try {
-            await this.EnsureInfrastructure();
-            await this.Run(`DROP TABLE IF EXISTS ${this.Qualify(params.id)} CASCADE`);
-            await this.Run(`DELETE FROM ${this.Qualify(INDEX_REGISTRY_TABLE)} WHERE name = $1`, [params.id]);
-            return this.Success(null);
+            await this.ensureInfrastructure();
+            await this.run(`DROP TABLE IF EXISTS ${this.qualify(params.id)} CASCADE`);
+            await this.run(`DELETE FROM ${this.qualify(INDEX_REGISTRY_TABLE)} WHERE name = $1`, [params.id]);
+            return this.success(null);
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.DeleteIndex error', undefined, ex);
-            return this.Failure('Error deleting index');
+            return this.failure('Error deleting index');
         }
     }
 
     public async EditIndex(_params: EditIndexParams): Promise<BaseResponse> {
-        return this.Failure('EditIndex is not currently supported for colocated pgvector');
+        return this.failure('EditIndex is not currently supported for colocated pgvector');
     }
 
     // ----------------------------------------------------------------
@@ -259,9 +259,9 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
     // ----------------------------------------------------------------
 
     public override async ColocatedQuery(params: ColocatedQueryOptions, _contextUser?: UserInfo): Promise<ColocatedQueryResult> {
-        const metric = await this.GetIndexMetric(params.indexName);
+        const metric = await this.getIndexMetric(params.indexName);
         const built = BuildColocatedQuery({
-            qualifiedTable: this.Qualify(params.indexName),
+            qualifiedTable: this.qualify(params.indexName),
             metric,
             vector: params.vector,
             keyword: params.keyword,
@@ -272,7 +272,7 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
             includeMetadata: params.includeMetadata,
         });
 
-        const rows = await this.Run<Record<string, unknown>>(built.sql, built.params);
+        const rows = await this.run<Record<string, unknown>>(built.sql, built.params);
         const includeMetadata = params.includeMetadata !== false;
         const includeValues = params.includeValues === true;
 
@@ -304,10 +304,10 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
             const vector = 'vector' in params ? params.vector : undefined;
             const indexName = 'id' in params ? (params as { id: string }).id : undefined;
             if (!vector) {
-                return this.Failure('QueryIndex requires a vector in the params');
+                return this.failure('QueryIndex requires a vector in the params');
             }
             if (!indexName) {
-                return this.Failure('QueryIndex requires an index name (params.id)');
+                return this.failure('QueryIndex requires an index name (params.id)');
             }
 
             const result = await this.ColocatedQuery({
@@ -326,11 +326,11 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
                 score: m.score,
                 ...(m.metadata ? { metadata: m.metadata } : {}),
             }));
-            const response: QueryResponse = { matches, namespace: this.Schema };
-            return this.Success(response);
+            const response: QueryResponse = { matches, namespace: this.schema };
+            return this.success(response);
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.QueryIndex error', undefined, ex);
-            return this.Failure('Error querying index');
+            return this.failure('Error querying index');
         }
     }
 
@@ -340,24 +340,24 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
 
     public async CreateRecord(record: VectorRecord, indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.Failure('indexName is required for CreateRecord');
+            return this.failure('indexName is required for CreateRecord');
         }
-        return this.UpsertRecords([record], indexName);
+        return this.upsertRecords([record], indexName);
     }
 
     public async CreateRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.Failure('indexName is required for CreateRecords');
+            return this.failure('indexName is required for CreateRecords');
         }
-        return this.UpsertRecords(records, indexName);
+        return this.upsertRecords(records, indexName);
     }
 
-    private async UpsertRecords(records: VectorRecord[], indexName: string): Promise<BaseResponse> {
+    private async upsertRecords(records: VectorRecord[], indexName: string): Promise<BaseResponse> {
         try {
             for (const record of records) {
                 const content = DeriveContent(record.metadata);
-                await this.Run(
-                    `INSERT INTO ${this.Qualify(indexName)} (id, embedding, metadata, content)
+                await this.run(
+                    `INSERT INTO ${this.qualify(indexName)} (id, embedding, metadata, content)
                      VALUES ($1, $2::vector, $3::jsonb, $4)
                      ON CONFLICT (id) DO UPDATE
                      SET embedding = EXCLUDED.embedding,
@@ -366,10 +366,10 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
                     [record.id, VectorLiteral(record.values), JSON.stringify(record.metadata ?? {}), content]
                 );
             }
-            return this.Success({ upsertedCount: records.length });
+            return this.success({ upsertedCount: records.length });
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.UpsertRecords error', undefined, ex);
-            return this.Failure('Error upserting records');
+            return this.failure('Error upserting records');
         }
     }
 
@@ -377,19 +377,19 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
         try {
             const indexName = params.data?.indexName as string;
             if (!indexName) {
-                return this.Failure('params.data.indexName is required');
+                return this.failure('params.data.indexName is required');
             }
-            const rows = await this.Run<{ id: string; embedding_text: string; metadata: Record<string, unknown> }>(
-                `SELECT id, embedding::text AS embedding_text, metadata FROM ${this.Qualify(indexName)} WHERE id = $1`,
+            const rows = await this.run<{ id: string; embedding_text: string; metadata: Record<string, unknown> }>(
+                `SELECT id, embedding::text AS embedding_text, metadata FROM ${this.qualify(indexName)} WHERE id = $1`,
                 [params.id]
             );
             if (rows.length === 0) {
-                return this.Failure(`Record "${params.id}" not found`);
+                return this.failure(`Record "${params.id}" not found`);
             }
-            return this.Success(this.RowToRecord(rows[0]));
+            return this.success(this.rowToRecord(rows[0]));
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.GetRecord error', undefined, ex);
-            return this.Failure('Error getting record');
+            return this.failure('Error getting record');
         }
     }
 
@@ -398,20 +398,20 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
             const indexName = params.data?.indexName as string;
             const ids = params.data?.ids as string[];
             if (!indexName) {
-                return this.Failure('params.data.indexName is required');
+                return this.failure('params.data.indexName is required');
             }
             if (!ids || ids.length === 0) {
-                return this.Failure('params.data.ids is required');
+                return this.failure('params.data.ids is required');
             }
             const placeholders = ids.map((_v, i) => `$${i + 1}`).join(', ');
-            const rows = await this.Run<{ id: string; embedding_text: string; metadata: Record<string, unknown> }>(
-                `SELECT id, embedding::text AS embedding_text, metadata FROM ${this.Qualify(indexName)} WHERE id IN (${placeholders})`,
+            const rows = await this.run<{ id: string; embedding_text: string; metadata: Record<string, unknown> }>(
+                `SELECT id, embedding::text AS embedding_text, metadata FROM ${this.qualify(indexName)} WHERE id IN (${placeholders})`,
                 ids
             );
-            return this.Success(rows.map(r => this.RowToRecord(r)));
+            return this.success(rows.map(r => this.rowToRecord(r)));
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.GetRecords error', undefined, ex);
-            return this.Failure('Error getting records');
+            return this.failure('Error getting records');
         }
     }
 
@@ -419,7 +419,7 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
         try {
             const indexName = (record as Record<string, unknown>)['indexName'] as string;
             if (!indexName) {
-                return this.Failure('indexName property is required on the UpdateOptions object');
+                return this.failure('indexName property is required on the UpdateOptions object');
             }
             const setClauses: string[] = [];
             const queryParams: unknown[] = [];
@@ -438,17 +438,17 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
                 paramIndex++;
             }
             if (setClauses.length === 0) {
-                return this.Success(null);
+                return this.success(null);
             }
             queryParams.push(record.id);
-            await this.Run(
-                `UPDATE ${this.Qualify(indexName)} SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
+            await this.run(
+                `UPDATE ${this.qualify(indexName)} SET ${setClauses.join(', ')} WHERE id = $${paramIndex}`,
                 queryParams
             );
-            return this.Success(null);
+            return this.success(null);
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.UpdateRecord error', undefined, ex);
-            return this.Failure('Error updating record');
+            return this.failure('Error updating record');
         }
     }
 
@@ -458,39 +458,39 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
 
     public async DeleteRecord(record: VectorRecord, indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.Failure('indexName is required for DeleteRecord');
+            return this.failure('indexName is required for DeleteRecord');
         }
         try {
-            await this.Run(`DELETE FROM ${this.Qualify(indexName)} WHERE id = $1`, [record.id]);
-            return this.Success(null);
+            await this.run(`DELETE FROM ${this.qualify(indexName)} WHERE id = $1`, [record.id]);
+            return this.success(null);
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.DeleteRecord error', undefined, ex);
-            return this.Failure('Error deleting record');
+            return this.failure('Error deleting record');
         }
     }
 
     public async DeleteRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.Failure('indexName is required for DeleteRecords');
+            return this.failure('indexName is required for DeleteRecords');
         }
         try {
             const ids = records.map(r => r.id);
             const placeholders = ids.map((_v, i) => `$${i + 1}`).join(', ');
-            await this.Run(`DELETE FROM ${this.Qualify(indexName)} WHERE id IN (${placeholders})`, ids);
-            return this.Success(null);
+            await this.run(`DELETE FROM ${this.qualify(indexName)} WHERE id IN (${placeholders})`, ids);
+            return this.success(null);
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.DeleteRecords error', undefined, ex);
-            return this.Failure('Error deleting records');
+            return this.failure('Error deleting records');
         }
     }
 
     public async DeleteAllRecords(indexName: string, _namespace?: string): Promise<BaseResponse> {
         try {
-            await this.Run(`DELETE FROM ${this.Qualify(indexName)}`);
-            return this.Success(null);
+            await this.run(`DELETE FROM ${this.qualify(indexName)}`);
+            return this.success(null);
         } catch (ex) {
             LogError('PgVectorColocatedDatabase.DeleteAllRecords error', undefined, ex);
-            return this.Failure('Error deleting all records');
+            return this.failure('Error deleting all records');
         }
     }
 
@@ -509,8 +509,8 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
                 }
             }
             const whereClause = filterParts.length > 0 ? `WHERE ${filterParts.join(' AND ')}` : '';
-            const rows = await this.Run<{ id: string }>(
-                `SELECT id FROM ${this.Qualify(params.IndexName)} ${whereClause}
+            const rows = await this.run<{ id: string }>(
+                `SELECT id FROM ${this.qualify(params.IndexName)} ${whereClause}
                  ORDER BY id LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
                 [...queryParams, limit, offset]
             );
@@ -536,7 +536,7 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
     //  Helpers
     // ----------------------------------------------------------------
 
-    private RowToRecord(row: { id: string; embedding_text: string; metadata: Record<string, unknown> }): VectorRecord {
+    private rowToRecord(row: { id: string; embedding_text: string; metadata: Record<string, unknown> }): VectorRecord {
         return {
             id: row.id,
             values: ParseVectorString(row.embedding_text),
@@ -544,11 +544,11 @@ export class PgVectorColocatedDatabase extends VectorDBBase {
         };
     }
 
-    private Success(data: unknown): BaseResponse {
+    private success(data: unknown): BaseResponse {
         return { success: true, message: '', data };
     }
 
-    private Failure(message?: string): BaseResponse {
+    private failure(message?: string): BaseResponse {
         return { success: false, message: message || 'An error occurred', data: null };
     }
 }

@@ -2,7 +2,7 @@ import { MaterializedColumnSpec } from './codeGenDatabaseProvider';
 import { SQLParser, type SQLSelectColumn } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import {
-    isObject, nodeType, qualifiedColumn, identifiersEqual, isSetOperationRoot, soleStatement,
+    IsObject, NodeType, qualifiedColumn, IdentifiersEqual, IsSetOperationRoot, SoleStatement,
     type AstNode, type AstObject,
 } from './materializationSqlAst';
 
@@ -33,13 +33,13 @@ export interface QueryFieldShape {
 /** The outcome of analyzing a query for materialization. */
 export interface MaterializationAnalysis {
     /** True only if the query can be materialized in v1. */
-    qualifies: boolean;
+    qualifies: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** When `qualifies` is false, a human-readable reason (logged, never guessed-past). */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Physical column spec for the materialized table (surrogate PK first, then the query's output columns). */
-    columns: MaterializedColumnSpec[];
+    Columns: MaterializedColumnSpec[];
     /** Name of the synthetic surrogate primary-key column. */
-    surrogateColumnName: string;
+    SurrogateColumnName: string;
 }
 
 /**
@@ -63,7 +63,7 @@ export const DEFAULT_SURROGATE_SQL_TYPE = 'int IDENTITY(1,1)';
  * On success, returns the column spec with a synthetic surrogate PK prepended; the query's
  * own output columns are emitted as nullable snapshot columns (a snapshot may contain NULLs).
  */
-export function analyzeQueryForMaterialization(opts: {
+export function AnalyzeQueryForMaterialization(opts: {
     queryName: string;
     isParameterized: boolean;
     fields: QueryFieldShape[];
@@ -72,7 +72,7 @@ export function analyzeQueryForMaterialization(opts: {
 }): MaterializationAnalysis {
     const surrogateColumnName = MATERIALIZATION_SURROGATE_COLUMN;
     const surrogateSQLType = opts.surrogateSQLType ?? DEFAULT_SURROGATE_SQL_TYPE;
-    const fail = (reason: string): MaterializationAnalysis => ({ qualifies: false, reason, columns: [], surrogateColumnName });
+    const fail = (reason: string): MaterializationAnalysis => ({ qualifies: false, reason, Columns: [], SurrogateColumnName: surrogateColumnName });
 
     if (opts.isParameterized) {
         return fail(`query "${opts.queryName}" is parameterized — not materializable in v1 (deferred to Phase 2)`);
@@ -98,7 +98,18 @@ export function analyzeQueryForMaterialization(opts: {
         IsPrimaryKey: false,
     }));
 
-    return { qualifies: true, columns: [surrogate, ...dataColumns], surrogateColumnName };
+    return { qualifies: true, Columns: [surrogate, ...dataColumns], SurrogateColumnName: surrogateColumnName };
+}
+
+/** @deprecated Use {@link AnalyzeQueryForMaterialization}. */
+export function analyzeQueryForMaterialization(opts: {
+    queryName: string;
+    isParameterized: boolean;
+    fields: QueryFieldShape[];
+    /** Engine-specific surrogate column type; defaults to SQL Server's identity. */
+    surrogateSQLType?: string;
+}): MaterializationAnalysis {
+    return AnalyzeQueryForMaterialization(opts);
 }
 
 // ─── Phase 2: parameterization qualifying (§9 buckets + §10 refuse-under-uncertainty) ─────────
@@ -132,46 +143,46 @@ export const SAFE_READ_FILTER_OPERATORS: ReadonlySet<string> = new Set<string>([
  */
 export interface ReadFilterSpecEntry {
     /** The materialized output column to filter (proven present in the output at qualify time). */
-    column: string;
+    column: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The normalized `column <op> value` operator — always one of {@link SAFE_READ_FILTER_OPERATORS}. */
-    operator: string;
+    operator: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The `MJ: Query Parameter` name whose incoming value binds into this predicate. */
-    paramName: string;
+    paramName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** `scalar` → single bound value; `list` → `IN (@p0,@p1,…)` bound element-wise. */
-    kind: 'scalar' | 'list';
+    kind: 'scalar' | 'list';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** One parameter's verified classification (input to {@link qualifyParameterizedQuery}). */
 export interface ParamClassification {
     /** Parameter name (the Nunjucks variable). */
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Verified role. `RowFilter` requires `filterColumn`; `Structural` may carry a bounded domain. */
-    role: ParamRole;
+    role: ParamRole;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Bucket 1: the output column the param filters on (must be present in the materialized output). */
-    filterColumn?: string;
+    filterColumn?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Bucket 1: the normalized `column <op> value` operator (Phase 2 — required to reconstruct the predicate). */
-    filterOperator?: string;
+    filterOperator?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Bucket 1: scalar vs. list (`IN`/`NOT IN`) value shape. */
-    filterKind?: 'scalar' | 'list';
+    filterKind?: 'scalar' | 'list';  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Bucket 2: the verifier-bounded value domain (advisory — the runtime guard still recomputes on a miss). */
-    boundedDomain?: string[];
+    boundedDomain?: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** The parameterization-qualification decision for a query. */
 export interface ParamQualification {
     /** True only if the query's params are all safely materializable. */
-    qualifies: boolean;
+    qualifies: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** When `qualifies` is false, a human-readable reason (logged, never guessed past). */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** Resolved mode. `None` for an unparameterized query. */
-    paramMode: ParamMode;
+    paramMode: ParamMode;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** RowFilterBroad: the columns to apply as read-time predicates against the broad materialized table (§6.4). */
-    rowFilterColumns: string[];
+    rowFilterColumns: string[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /**
      * RowFilterBroad: the structured, self-sufficient predicate spec the runtime provider injects at read time
      * (Phase 2). Empty for every other mode. Persisted as JSON on `MJ: Materialized Results . ReadFilterSpec`.
      */
-    readFilterSpec: ReadFilterSpecEntry[];
+    readFilterSpec: ReadFilterSpecEntry[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /**
@@ -189,7 +200,7 @@ export interface ParamQualification {
  *    the domain; otherwise refuse (recompute live). Open decision §17 — defaults OFF.
  *  - a mix of row-filter and structural params is not modeled in v1 → refuse.
  */
-export function qualifyParameterizedQuery(opts: {
+export function QualifyParameterizedQuery(opts: {
     queryName: string;
     params: ParamClassification[];
     /** The query's materialized output column names (for the Bucket-1 column-presence check). */
@@ -275,7 +286,7 @@ export function qualifyParameterizedQuery(opts: {
         if (!opts.sql || !opts.dialect) {
             return refuse(`query "${queryName}" param "${p.name}" filters on "${p.filterColumn}" but no rendered SQL was supplied to prove that predicate binds to the materialized output column of the same name — refusing under uncertainty (the query stays live-only)`);
         }
-        const binding = proveFilterColumnBinding({ sql: opts.sql, dialect: opts.dialect, filterColumn: p.filterColumn });
+        const binding = ProveFilterColumnBinding({ sql: opts.sql, dialect: opts.dialect, filterColumn: p.filterColumn });
         if (!binding.provable) {
             return refuse(`query "${queryName}" param "${p.name}" filters on "${p.filterColumn}" but that predicate cannot be proven to bind to the materialized output column of the same name: ${binding.reason} — a materialized read would filter a different column than the live query. Refusing (the query stays live-only).`);
         }
@@ -297,6 +308,40 @@ export function qualifyParameterizedQuery(opts: {
     return { qualifies: true, paramMode: 'RowFilterBroad', rowFilterColumns, readFilterSpec };
 }
 
+/** @deprecated Use {@link QualifyParameterizedQuery}. */
+export function qualifyParameterizedQuery(opts: {
+    queryName: string;
+    params: ParamClassification[];
+    /** The query's materialized output column names (for the Bucket-1 column-presence check). */
+    outputColumns: string[];
+    /** Whether Bucket-2 per-value cache is supported in this build (default false → structural recomputes). */
+    allowPerValueCache?: boolean;
+    /**
+     * Whether Bucket-1 row-filter broad materialization is enabled in this build (default false).
+     * Phase 2 is not shipped: the read-time row-filter predicate is NOT auto-injected by the provider,
+     * so a caller reading a RowFilterBroad materialization must supply the filter themselves (via
+     * ExtraFilter) or they get the broad/unfiltered set. To avoid that footgun, parameterized row-filter
+     * queries are refused (stay live-only) unless a build explicitly opts in. Flipping this to true is the
+     * Phase-2 enablement switch (finalize the read-time predicate injection first).
+     */
+    allowRowFilterBroad?: boolean;
+    /**
+     * The query's **rendered** SQL (a concrete instance — parameters already substituted). REQUIRED to
+     * qualify a `RowFilter` param: the verifier reports `filterColumn` as a BARE column name, and matching
+     * that name against the output-column list alone cannot tell `o.Status` (the predicate) apart from
+     * `c.Status` (the projected output) in a join, nor `BillRegion` (an alias over `ShipRegion`) apart from
+     * a real `BillRegion` column. Both mis-matches produce a materialized read that filters on a DIFFERENT
+     * column than the live query, with no error and no count-guard signal. See
+     * {@link proveFilterColumnBinding}. When omitted, RowFilter params are REFUSED (fail closed, §10) —
+     * the query stays live-only, which is always correct.
+     */
+    sql?: string;
+    /** Dialect used to parse {@link sql}. Required alongside it; RowFilter params refuse without both. */
+    dialect?: SQLParserDialect;
+}): ParamQualification {
+    return QualifyParameterizedQuery(opts);
+}
+
 // AST-walking primitives are shared with the param verifier + broad-render via ./materializationSqlAst
 // (single source of truth — see that module's header). extractGroupByTerms is GROUP-BY-specific and stays here.
 /**
@@ -313,9 +358,9 @@ export function qualifyParameterizedQuery(opts: {
  */
 function extractGroupByTerms(stmt: AstObject): AstNode[] {
     const gb = stmt.groupby;
-    if (isObject(gb) && Array.isArray(gb.columns)) return gb.columns; // observed shape: { columns: [...] }
+    if (IsObject(gb) && Array.isArray(gb.columns)) return gb.columns; // observed shape: { columns: [...] }
     if (Array.isArray(gb)) return gb; // some dialects emit a bare array
-    if (isObject(gb) && Array.isArray(gb.value)) return gb.value; // …or { value: [...] }
+    if (IsObject(gb) && Array.isArray(gb.value)) return gb.value; // …or { value: [...] }
     return [];
 }
 
@@ -328,9 +373,9 @@ function extractGroupByTerms(stmt: AstObject): AstNode[] {
 function parseSoleSelectRoot(sql: string, dialect: SQLParserDialect): AstObject | null {
     const parsed = SQLParser.Astify(sql, dialect);
     if (!parsed.astParsed || parsed.ast == null) return null;
-    const stmt = soleStatement(parsed.ast);
-    if (!isObject(stmt) || nodeType(stmt) !== 'select') return null;
-    if (isSetOperationRoot(stmt)) return null;
+    const stmt = SoleStatement(parsed.ast);
+    if (!IsObject(stmt) || NodeType(stmt) !== 'select') return null;
+    if (IsSetOperationRoot(stmt)) return null;
     return stmt;
 }
 
@@ -350,15 +395,15 @@ function fromSourceCount(stmt: AstObject): number {
  */
 function sourceRefsMatch(selectQualifier: string | null, refQualifier: string | null, singleSource: boolean): boolean {
     if (singleSource) return true;
-    return identifiersEqual(selectQualifier, refQualifier);
+    return IdentifiersEqual(selectQualifier, refQualifier);
 }
 
 /** Verdict of {@link proveFilterColumnBinding}: provable, or refused with the precise reason. */
 export interface FilterColumnBindingProof {
     /** True ONLY when the predicate column is proven to be the same source column the output column carries. */
-    provable: boolean;
+    provable: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** When not provable, the precise reason (logged; never guessed past). */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -370,10 +415,10 @@ function collectColumnQualifiers(node: AstNode, column: string, found: (string |
         for (const child of node) collectColumnQualifiers(child, column, found);
         return;
     }
-    if (!isObject(node)) return;
+    if (!IsObject(node)) return;
     const qc = qualifiedColumn(node);
     if (qc != null) {
-        if (identifiersEqual(qc.column, column)) found.push(qc.qualifier);
+        if (IdentifiersEqual(qc.column, column)) found.push(qc.Qualifier);
         return; // a column_ref has no further column_ref descendants
     }
     for (const [k, v] of Object.entries(node)) {
@@ -409,7 +454,7 @@ function collectColumnQualifiers(node: AstNode, column: string, found: (string |
  *
  * Pure — no DB/IO.
  */
-export function proveFilterColumnBinding(opts: {
+export function ProveFilterColumnBinding(opts: {
     /** The query's RENDERED SQL (parameters substituted), still carrying the row-filter predicate. */
     sql: string;
     /** Dialect to parse with. */
@@ -457,6 +502,18 @@ export function proveFilterColumnBinding(opts: {
     return { provable: true };
 }
 
+/** @deprecated Use {@link ProveFilterColumnBinding}. */
+export function proveFilterColumnBinding(opts: {
+    /** The query's RENDERED SQL (parameters substituted), still carrying the row-filter predicate. */
+    sql: string;
+    /** Dialect to parse with. */
+    dialect: SQLParserDialect;
+    /** The verifier-reported bare filter column name. */
+    filterColumn: string;
+}): FilterColumnBindingProof {
+    return ProveFilterColumnBinding(opts);
+}
+
 /** Either the proven output column, or the reason the projection could not be proven. */
 type OutputColumnResolution =
     | { provable: true; column: SQLSelectColumn }
@@ -475,7 +532,7 @@ function resolveProvableOutputColumn(selectCols: SQLSelectColumn[], filterColumn
     if (selectCols.some((c) => c.OutputName === '*')) {
         return no('the query projects a wildcard (SELECT *), so the output-to-source column mapping is unknown');
     }
-    const matches = selectCols.filter((c) => identifiersEqual(c.OutputName, filterColumn));
+    const matches = selectCols.filter((c) => IdentifiersEqual(c.OutputName, filterColumn));
     if (matches.length === 0) {
         return no(`no SELECT-list output column is named "${filterColumn}"`);
     }
@@ -486,7 +543,7 @@ function resolveProvableOutputColumn(selectCols: SQLSelectColumn[], filterColumn
     if (output.IsExpression) {
         return no(`the output column "${filterColumn}" is a computed expression, not a plain projection of a source column`);
     }
-    if (!identifiersEqual(output.SourceColumn, filterColumn)) {
+    if (!IdentifiersEqual(output.SourceColumn, filterColumn)) {
         return no(`the output column "${filterColumn}" is an ALIAS over source column "${output.SourceColumn}", so filtering the materialized "${filterColumn}" is not the same predicate as the live "${filterColumn}"`);
     }
     return { provable: true, column: output };
@@ -501,7 +558,7 @@ function resolveProvableOutputColumn(selectCols: SQLSelectColumn[], filterColumn
  * the key is built from the AST GROUP BY terms (not a SELECT-list split), so grouping expressions and
  * grouped-but-unprojected columns both refuse rather than silently producing a too-narrow key.
  */
-export function detectAggregationKeyColumns(opts: {
+export function DetectAggregationKeyColumns(opts: {
     sql: string;
     dialect: SQLParserDialect;
     fields: QueryFieldShape[];
@@ -528,7 +585,7 @@ export function detectAggregationKeyColumns(opts: {
     if (root == null) return null; // multi-statement / non-SELECT / set operation → refuse
     const groupByTerms = extractGroupByTerms(root);
     if (groupByTerms.length === 0 || !selectCols || selectCols.length === 0) return null;
-    if (groupByTerms.some((t) => nodeType(t) !== 'column_ref')) return null; // expression grouping → bail
+    if (groupByTerms.some((t) => NodeType(t) !== 'column_ref')) return null; // expression grouping → bail
     if (!selectCols.some((c) => c.IsExpression)) return null; // no aggregate measure → not an aggregation
 
     // (4) A grouping term is matched to a projected output column by SOURCE COLUMN NAME — which is ambiguous
@@ -543,8 +600,8 @@ export function detectAggregationKeyColumns(opts: {
         // The projected (non-expression) SELECT column whose pre-alias source column IS this grouping column.
         const projected = selectCols.filter(
             (c) => !c.IsExpression
-                && identifiersEqual(c.SourceColumn, gb.column)
-                && sourceRefsMatch(c.TableQualifier, gb.qualifier, singleSource),
+                && IdentifiersEqual(c.SourceColumn, gb.column)
+                && sourceRefsMatch(c.TableQualifier, gb.Qualifier, singleSource),
         );
         if (projected.length !== 1) return null; // unprojected (0) or ambiguous (>1) → bail
         const f = fieldByOutput.get(projected[0].OutputName.trim().toLowerCase());
@@ -552,6 +609,15 @@ export function detectAggregationKeyColumns(opts: {
         key.push({ name: f.Name, type: f.SQLFullType });
     }
     return key.length > 0 ? key : null;
+}
+
+/** @deprecated Use {@link DetectAggregationKeyColumns}. */
+export function detectAggregationKeyColumns(opts: {
+    sql: string;
+    dialect: SQLParserDialect;
+    fields: QueryFieldShape[];
+}): { name: string; type: string }[] | null {
+    return DetectAggregationKeyColumns(opts);
 }
 
 /**
@@ -564,7 +630,7 @@ export function detectAggregationKeyColumns(opts: {
  * then uses DirtyGroupRecompute, which is correct for all measure types). Regex-based because the SQL
  * parser doesn't expose per-measure expression text; the bias is toward the safe (non-additive) answer.
  */
-export function detectAdditiveMeasures(sql: string): boolean {
+export function DetectAdditiveMeasures(sql: string): boolean {
     if (!sql) return false;
     const s = sql.replace(/\s+/g, ' ');
     // Any non-additive aggregate present → not purely additive.
@@ -576,4 +642,9 @@ export function detectAdditiveMeasures(sql: string): boolean {
     if (/\b(SUM|COUNT)\s*\(\s*DISTINCT\b/i.test(s)) return false;
     // Require at least one genuinely additive aggregate.
     return /\b(SUM|COUNT)\s*\(/i.test(s);
+}
+
+/** @deprecated Use {@link DetectAdditiveMeasures}. */
+export function detectAdditiveMeasures(sql: string): boolean {
+    return DetectAdditiveMeasures(sql);
 }

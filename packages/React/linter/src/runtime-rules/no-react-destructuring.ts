@@ -2,7 +2,7 @@ import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, truncateCode } from '../lint-utils';
+import { Traverse, NodePath, TruncateCode } from '../lint-utils';
 
 /**
  * Rule: no-react-destructuring
@@ -21,7 +21,7 @@ export class NoReactDestructuringRule extends BaseLintRule {
   Test(ast: t.File): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         // Check for destructuring from React
         if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init) && path.node.init.name === 'React') {
@@ -37,7 +37,7 @@ export class NoReactDestructuringRule extends BaseLintRule {
             line: path.node.loc?.start.line || 0,
             column: path.node.loc?.start.column || 0,
             message: `Cannot destructure from React. The hooks (${destructuredProps.join(', ')}) are already available as global functions in the React runtime.`,
-            code: truncateCode(path.toString()),
+            code: TruncateCode(path.toString()),
             suggestion: {
               text: `Remove the destructuring statement. React hooks like ${destructuredProps.join(', ')} are already available globally and don't need to be imported or destructured.`,
               example: `// Remove this line entirely:

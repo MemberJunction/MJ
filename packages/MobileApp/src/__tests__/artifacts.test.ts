@@ -58,22 +58,22 @@ describe('LoadArtifact — classify()', () => {
         setupSingle({ type: 'Chart', content: '{"chartType":"bar","data":[{"label":"A","value":1}]}' });
         const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('chart');
-        expect(a?.chart?.kind).toBe('bar');
-        expect(a?.json).toBeDefined();
+        expect(a?.chart?.Kind).toBe('bar');
+        expect(a?.Json).toBeDefined();
     });
 
     it('detects a json-table for an array of objects', async () => {
         setupSingle({ type: 'Data', content: '[{"a":1},{"a":2}]' });
         const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('json-table');
-        expect(a?.rows).toHaveLength(2);
+        expect(a?.Rows).toHaveLength(2);
     });
 
     it('detects generic json for a non-chart object', async () => {
         setupSingle({ type: 'Config', content: '{"a":1,"b":2}' });
         const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('json');
-        expect(a?.json).toEqual({ a: 1, b: 2 });
+        expect(a?.Json).toEqual({ a: 1, b: 2 });
     });
 
     it('falls through to text when {…} content is not valid JSON', async () => {
@@ -98,7 +98,7 @@ describe('LoadArtifact — classify()', () => {
         setupSingle({ type: 'TypeScript Code', content: 'const x = 1;' });
         const a = await LoadArtifact('a1');
         expect(a?.kind).toBe('code');
-        expect(a?.language).toBe('typescript');
+        expect(a?.Language).toBe('typescript');
     });
 
     it('detects markdown from the type name', async () => {
@@ -130,8 +130,8 @@ describe('LoadArtifact — classify()', () => {
             ],
         });
         const a = await LoadArtifact('a1');
-        expect(a?.version).toBe(3);
-        expect(a?.versionCount).toBe(3);
+        expect(a?.Version).toBe(3);
+        expect(a?.VersionCount).toBe(3);
     });
 
     it('returns null when the artifact fails to load', async () => {
@@ -189,17 +189,17 @@ describe('LoadConversationArtifacts — categorize + preview + attribution', () 
         const result = await LoadConversationArtifacts('conv-1');
         const byId = new Map(result.map((r) => [r.id, r]));
 
-        expect(byId.get('art-chart')?.category).toBe('chart');
-        expect(byId.get('art-table')?.category).toBe('table');
-        expect(byId.get('art-doc')?.category).toBe('document');
+        expect(byId.get('art-chart')?.Category).toBe('chart');
+        expect(byId.get('art-table')?.Category).toBe('table');
+        expect(byId.get('art-doc')?.Category).toBe('document');
 
         // Attribution flows from the referencing conversation detail.
-        expect(byId.get('art-chart')?.agentId).toBe('agent-1');
-        expect(byId.get('art-chart')?.agentName).toBe('Analyst');
-        expect(byId.get('art-table')?.agentId).toBeNull();
+        expect(byId.get('art-chart')?.AgentId).toBe('agent-1');
+        expect(byId.get('art-chart')?.AgentName).toBe('Analyst');
+        expect(byId.get('art-table')?.AgentId).toBeNull();
 
         // Preview prefers the description, else the first content line.
-        expect(byId.get('art-doc')?.preview).toBe('A written memo about Q3');
-        expect(byId.get('art-chart')?.preview.length).toBeGreaterThan(0);
+        expect(byId.get('art-doc')?.Preview).toBe('A written memo about Q3');
+        expect(byId.get('art-chart')?.Preview.length).toBeGreaterThan(0);
     });
 });

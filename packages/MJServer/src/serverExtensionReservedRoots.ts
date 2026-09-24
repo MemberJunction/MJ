@@ -40,11 +40,16 @@ export const CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS: readonly string[] = 
  * static `/graphql` baseline) is still protected. `/` as graphqlRootPath is
  * already reserved as the server root and does not prefix-match every path.
  */
-export function coreReservedServerExtensionRoots(graphqlRootPath: string): string[] {
+export function CoreReservedServerExtensionRoots(graphqlRootPath: string): string[] {
     const graphql = typeof graphqlRootPath === 'string' ? graphqlRootPath.trim() : '';
     return [
         ...(graphql ? [graphql] : []),
         ...CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS,
         ...CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS,
     ];
+}
+
+/** @deprecated Use {@link CoreReservedServerExtensionRoots}. */
+export function coreReservedServerExtensionRoots(graphqlRootPath: string): string[] {
+    return CoreReservedServerExtensionRoots(graphqlRootPath);
 }

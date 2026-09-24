@@ -14,7 +14,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../Config/config', () => ({
     mjCoreSchema: '__mj',
-    resolveEntityPackageName: () => 'mj_generatedentities',
+    ResolveEntityPackageName: () => 'mj_generatedentities',
+    get resolveEntityPackageName() { return this.ResolveEntityPackageName; },
 }));
 
 import { GraphQLServerGeneratorBase } from '../Misc/graphql_server_codegen';

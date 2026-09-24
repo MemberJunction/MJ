@@ -25,7 +25,7 @@ export class UserAvatarService {
    * @param authHeaders - Optional headers for authenticated requests (e.g., { 'Authorization': 'Bearer token' })
    * @returns Promise<boolean> - true if avatar was synced and saved, false otherwise
    */
-  async syncFromImageUrl(
+  async SyncFromImageUrl(
     user: MJUserEntity,
     imageUrl: string,
     authHeaders?: Record<string, string>
@@ -65,6 +65,15 @@ export class UserAvatarService {
     }
   }
 
+  /** @deprecated Use {@link SyncFromImageUrl}. */
+  async syncFromImageUrl(
+    user: MJUserEntity,
+    imageUrl: string,
+    authHeaders?: Record<string, string>
+  ): Promise<boolean> {
+    return this.SyncFromImageUrl(user, imageUrl, authHeaders);
+  }
+
   /**
    * Converts a Blob to a Base64 data URI string
    * Returns format: "data:image/png;base64,iVBORw0KG..."
@@ -82,7 +91,7 @@ export class UserAvatarService {
    * Converts a File to a Base64 data URI string
    * Used for file uploads in settings UI
    */
-  fileToBase64(file: File): Promise<string> {
+  FileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -91,10 +100,15 @@ export class UserAvatarService {
     });
   }
 
+  /** @deprecated Use {@link FileToBase64}. */
+  fileToBase64(file: File): Promise<string> {
+    return this.FileToBase64(file);
+  }
+
   /**
    * Validates if a string is a valid URL
    */
-  isValidUrl(url: string): boolean {
+  IsValidUrl(url: string): boolean {
     if (!url || url.trim().length === 0) {
       return false;
     }
@@ -107,16 +121,26 @@ export class UserAvatarService {
     }
   }
 
+  /** @deprecated Use {@link IsValidUrl}. */
+  isValidUrl(url: string): boolean {
+    return this.IsValidUrl(url);
+  }
+
   /**
    * Validates if a string is a valid Base64 data URI
    */
-  isValidBase64DataUri(dataUri: string): boolean {
+  IsValidBase64DataUri(dataUri: string): boolean {
     if (!dataUri || !dataUri.startsWith('data:')) {
       return false;
     }
 
     const regex = /^data:image\/(png|jpeg|jpg|gif|webp);base64,/;
     return regex.test(dataUri);
+  }
+
+  /** @deprecated Use {@link IsValidBase64DataUri}. */
+  isValidBase64DataUri(dataUri: string): boolean {
+    return this.IsValidBase64DataUri(dataUri);
   }
 
   /**
@@ -127,7 +151,7 @@ export class UserAvatarService {
    * @param defaultUrl - Optional default URL if no avatar is set
    * @returns The URL to display, or null if using an icon
    */
-  getAvatarDisplayUrl(user: MJUserEntity, defaultUrl: string = 'assets/user.png'): string | null {
+  GetAvatarDisplayUrl(user: MJUserEntity, defaultUrl: string = 'assets/user.png'): string | null {
     if (user.UserImageURL) {
       return user.UserImageURL;
     }
@@ -139,10 +163,15 @@ export class UserAvatarService {
     return defaultUrl;
   }
 
+  /** @deprecated Use {@link GetAvatarDisplayUrl}. */
+  getAvatarDisplayUrl(user: MJUserEntity, defaultUrl: string = 'assets/user.png'): string | null {
+    return this.GetAvatarDisplayUrl(user, defaultUrl);
+  }
+
   /**
    * Gets the icon class for an avatar if using icon mode
    */
-  getAvatarIconClass(user: MJUserEntity, defaultIcon: string = 'fa-solid fa-user'): string | null {
+  GetAvatarIconClass(user: MJUserEntity, defaultIcon: string = 'fa-solid fa-user'): string | null {
     if (user.UserImageIconClass) {
       return user.UserImageIconClass;
     }
@@ -152,5 +181,10 @@ export class UserAvatarService {
     }
 
     return null;
+  }
+
+  /** @deprecated Use {@link GetAvatarIconClass}. */
+  getAvatarIconClass(user: MJUserEntity, defaultIcon: string = 'fa-solid fa-user'): string | null {
+    return this.GetAvatarIconClass(user, defaultIcon);
   }
 }

@@ -6,17 +6,17 @@ import { ConsoleManager } from '../lib/console-manager';
 import { TextFormatter } from '../lib/text-formatter';
 
 export interface ConversationOptions {
-  verbose?: boolean;
-  timeout?: number;
-  historyLimit?: number;
+  verbose?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  timeout?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  historyLimit?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ConversationTurn {
-  userMessage: string;
-  agentResponse?: string;
-  timestamp: string;
-  success: boolean;
-  error?: string;
+  userMessage: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  agentResponse?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  timestamp: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  success: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  error?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class ConversationService {
@@ -25,7 +25,7 @@ export class ConversationService {
   private conversationMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
   private rl?: readline.Interface;
 
-  async startChat(
+  async StartChat(
     agentName: string, 
     initialPrompt?: string, 
     options: ConversationOptions = {}
@@ -81,6 +81,15 @@ Next steps:
 Log file: ${logger.getLogFilePath()}`);
       }
     }
+  }
+
+  /** @deprecated Use {@link StartChat}. */
+  async startChat(
+    agentName: string, 
+    initialPrompt?: string, 
+    options: ConversationOptions = {}
+  ): Promise<void> {
+    return this.StartChat(agentName, initialPrompt, options);
   }
 
   private async conversationLoop(
@@ -186,10 +195,10 @@ Log file: ${logger.getLogFilePath()}`);
         // Display agent response
         const agentMessage = this.extractAgentResponse(result.result);
         const formattedMessage = TextFormatter.formatText(agentMessage, {
-          maxWidth: 80,
-          indent: 3,
-          preserveParagraphs: true,
-          highlightCode: true
+          MaxWidth: 80,
+          Indent: 3,
+          PreserveParagraphs: true,
+          HighlightCode: true
         });
         console.log(chalk.green(`\n🤖 ${agentName}: `));
         console.log(formattedMessage);
@@ -280,15 +289,25 @@ Log file: ${logger.getLogFilePath()}`);
     return exitCommands.includes(input.toLowerCase());
   }
 
-  public getConversationHistory(): ConversationTurn[] {
+  public GetConversationHistory(): ConversationTurn[] {
     return [...this.conversationHistory];
   }
 
-  public clearHistory(): void {
+  /** @deprecated Use {@link GetConversationHistory}. */
+  public getConversationHistory(): ConversationTurn[] {
+    return this.GetConversationHistory();
+  }
+
+  public ClearHistory(): void {
     this.conversationHistory = [];
   }
 
-  public async exportConversation(filePath?: string): Promise<string> {
+  /** @deprecated Use {@link ClearHistory}. */
+  public clearHistory(): void {
+    return this.ClearHistory();
+  }
+
+  public async ExportConversation(filePath?: string): Promise<string> {
     const exportData = {
       timestamp: new Date().toISOString(),
       totalTurns: this.conversationHistory.length,
@@ -306,6 +325,11 @@ Log file: ${logger.getLogFilePath()}`);
     }
 
     return exportJson;
+  }
+
+  /** @deprecated Use {@link ExportConversation}. */
+  public async exportConversation(filePath?: string): Promise<string> {
+    return this.ExportConversation(filePath);
   }
 
   private extractAgentResponse(result: any): string {

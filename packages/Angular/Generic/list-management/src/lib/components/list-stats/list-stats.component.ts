@@ -70,12 +70,66 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
   }
   private _refreshTrigger = 0;
 
-  public memberCount = 0;
-  public activeShareCount = 0;
-  public growthThisMonth = 0;
-  public lastActivityAt: Date | null = null;
-  public recent: RecentActivity[] = [];
-  public loading = false;
+  public MemberCount = 0;
+
+  /** @deprecated Use {@link MemberCount}. */
+  public get memberCount() {
+    return this.MemberCount;
+  }
+  /** @deprecated Use {@link MemberCount}. */
+  public set memberCount(value) {
+    this.MemberCount = value;
+  }
+  public ActiveShareCount = 0;
+
+  /** @deprecated Use {@link ActiveShareCount}. */
+  public get activeShareCount() {
+    return this.ActiveShareCount;
+  }
+  /** @deprecated Use {@link ActiveShareCount}. */
+  public set activeShareCount(value) {
+    this.ActiveShareCount = value;
+  }
+  public GrowthThisMonth = 0;
+
+  /** @deprecated Use {@link GrowthThisMonth}. */
+  public get growthThisMonth() {
+    return this.GrowthThisMonth;
+  }
+  /** @deprecated Use {@link GrowthThisMonth}. */
+  public set growthThisMonth(value) {
+    this.GrowthThisMonth = value;
+  }
+  public LastActivityAt: Date | null = null;
+
+  /** @deprecated Use {@link LastActivityAt}. */
+  public get lastActivityAt(): Date | null {
+    return this.LastActivityAt;
+  }
+  /** @deprecated Use {@link LastActivityAt}. */
+  public set lastActivityAt(value: Date | null) {
+    this.LastActivityAt = value;
+  }
+  public Recent: RecentActivity[] = [];
+
+  /** @deprecated Use {@link Recent}. */
+  public get recent(): RecentActivity[] {
+    return this.Recent;
+  }
+  /** @deprecated Use {@link Recent}. */
+  public set recent(value: RecentActivity[]) {
+    this.Recent = value;
+  }
+  public Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
 
   private initialized = false;
 
@@ -84,7 +138,7 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
     if (this._listId) await this.load();
   }
 
-  public formatRelative(d: Date | null): string {
+  public FormatRelative(d: Date | null): string {
     if (!d || isNaN(d.getTime())) return 'never';
     const diff = Date.now() - d.getTime();
     if (diff < 60_000) return 'just now';
@@ -100,9 +154,14 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
     return `${months}mo ago`;
   }
 
+  /** @deprecated Use {@link FormatRelative}. */
+  public formatRelative(d: Date | null): string {
+    return this.FormatRelative(d);
+  }
+
   private async load(): Promise<void> {
     if (!this._listId) return;
-    this.loading = true;
+    this.Loading = true;
     this.cdr.markForCheck();
     try {
       const md = this.ProviderToUse;
@@ -169,9 +228,9 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
         }),
       ]);
 
-      this.memberCount = members.Results?.length ?? 0;
-      this.growthThisMonth = growth.Results?.length ?? 0;
-      this.activeShareCount = shares.Results?.length ?? 0;
+      this.MemberCount = members.Results?.length ?? 0;
+      this.GrowthThisMonth = growth.Results?.length ?? 0;
+      this.ActiveShareCount = shares.Results?.length ?? 0;
 
       const auditRows = audits.Results ?? [];
       const latestAuditAt =
@@ -180,10 +239,10 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
       const parsedLatestMember = rawLatestMember ? new Date(rawLatestMember as Date | string) : null;
       const latestMemberAt =
         parsedLatestMember && !isNaN(parsedLatestMember.getTime()) ? parsedLatestMember : null;
-      this.lastActivityAt = newestOf(latestAuditAt, latestMemberAt);
+      this.LastActivityAt = newestOf(latestAuditAt, latestMemberAt);
 
       if (auditRows.length === 0) {
-        this.recent = [];
+        this.Recent = [];
         return;
       }
 
@@ -210,7 +269,7 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
       const typeById = new Map<string, string>();
       for (const t of types.Results ?? []) typeById.set(String(t.ID), String(t.Name));
 
-      this.recent = auditRows.map((r) => ({
+      this.Recent = auditRows.map((r) => ({
         ID: String(r.ID),
         EventType: typeById.get(String(r.AuditLogTypeID)) ?? '(unknown event)',
         Description: r.Description ?? '',
@@ -218,7 +277,7 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
         When: new Date(r.__mj_CreatedAt),
       }));
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.markForCheck();
     }
   }

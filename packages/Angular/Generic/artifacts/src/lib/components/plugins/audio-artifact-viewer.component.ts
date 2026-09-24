@@ -76,7 +76,16 @@ export class AudioArtifactViewerComponent extends BaseArtifactViewerPluginCompon
     private readonly fileService = inject(ArtifactFileService);
     private readonly cdr = inject(ChangeDetectorRef);
 
-    public audioUrl = '';
+    public AudioUrl = '';
+
+    /** @deprecated Use {@link AudioUrl}. */
+    public get audioUrl() {
+        return this.AudioUrl;
+    }
+    /** @deprecated Use {@link AudioUrl}. */
+    public set audioUrl(value) {
+        this.AudioUrl = value;
+    }
     public errorMessage = '';
 
     /**
@@ -88,7 +97,7 @@ export class AudioArtifactViewerComponent extends BaseArtifactViewerPluginCompon
 
     /** Set the resolved URL and recompute the single-element {@link MediaTracks} array in lockstep. */
     private setAudioUrl(url: string): void {
-        this.audioUrl = url;
+        this.AudioUrl = url;
         this.MediaTracks = url
             ? [
                   {
@@ -139,15 +148,25 @@ export class AudioArtifactViewerComponent extends BaseArtifactViewerPluginCompon
         this.cdr.markForCheck();
     }
 
-    public onMediaError(): void {
+    public OnMediaError(): void {
         this.errorMessage = 'The audio could not be played. It may be corrupt or in an unsupported format.';
         this.setAudioUrl('');
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link OnMediaError}. */
+    public onMediaError(): void {
+        return this.OnMediaError();
+    }
+
     /** Fired when the generic player reaches the end of the track. No-op affordance hook. */
-    public onMediaEnded(): void {
+    public OnMediaEnded(): void {
         // Playback finished — nothing to persist for a one-shot artifact viewer.
+    }
+
+    /** @deprecated Use {@link OnMediaEnded}. */
+    public onMediaEnded(): void {
+        return this.OnMediaEnded();
     }
 
     public override GetCurrentStateSnapshot(): DataSnapshot | null {

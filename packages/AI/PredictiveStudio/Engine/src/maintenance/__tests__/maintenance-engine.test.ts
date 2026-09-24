@@ -5,8 +5,8 @@ import type {
   MJMLModelScoringBindingEntity,
 } from '@memberjunction/core-entities';
 
-import { MaintenanceEngine, runMaintenancePass } from '../maintenance-engine';
-import { resolveComparisonMetric, readMetric } from '../metrics';
+import { MaintenanceEngine, RunMaintenancePass } from '../maintenance-engine';
+import { ResolveComparisonMetric, ReadMetric } from '../metrics';
 import { RowCountProxyDriftDetector } from '../seams';
 import type {
   IMaintenanceLoader,
@@ -579,7 +579,7 @@ describe('MaintenanceEngine.runMaintenancePass (+ free-function entry)', () => {
     loader.bindings.set('b1', binding);
     loader.models.set('m1', model);
 
-    const result = await runMaintenancePass([asBinding(binding)], DEFAULT_RETRAINING_POLICY, deps);
+    const result = await RunMaintenancePass([asBinding(binding)], DEFAULT_RETRAINING_POLICY, deps);
 
     expect(result.entries).toHaveLength(1);
   });
@@ -589,7 +589,7 @@ describe('maintenance metric helpers', () => {
   it('resolveComparisonMetric honors a pinned metric name', () => {
     const inc = new FakeModel('m1');
     const ch = new FakeModel('m2');
-    expect(resolveComparisonMetric('accuracy', asModel(inc), asModel(ch))).toBe('accuracy');
+    expect(ResolveComparisonMetric('accuracy', asModel(inc), asModel(ch))).toBe('accuracy');
   });
 
   it('resolveComparisonMetric auto-picks roc_auc for classification when present on both', () => {
@@ -597,7 +597,7 @@ describe('maintenance metric helpers', () => {
     inc.HoldoutMetrics = JSON.stringify({ roc_auc: 0.8, accuracy: 0.7 });
     const ch = new FakeModel('m2');
     ch.HoldoutMetrics = JSON.stringify({ roc_auc: 0.85, accuracy: 0.72 });
-    expect(resolveComparisonMetric('auto', asModel(inc), asModel(ch))).toBe('roc_auc');
+    expect(ResolveComparisonMetric('auto', asModel(inc), asModel(ch))).toBe('roc_auc');
   });
 
   it('resolveComparisonMetric auto-picks r2 for regression', () => {
@@ -606,14 +606,14 @@ describe('maintenance metric helpers', () => {
     inc.HoldoutMetrics = JSON.stringify({ r2: 0.6, rmse: 5 });
     const ch = new FakeModel('m2');
     ch.HoldoutMetrics = JSON.stringify({ r2: 0.65, rmse: 4 });
-    expect(resolveComparisonMetric('auto', asModel(inc), asModel(ch))).toBe('r2');
+    expect(ResolveComparisonMetric('auto', asModel(inc), asModel(ch))).toBe('r2');
   });
 
   it('readMetric returns null for missing / unparseable metrics', () => {
-    expect(readMetric(null, 'roc_auc')).toBeNull();
-    expect(readMetric('{not json', 'roc_auc')).toBeNull();
-    expect(readMetric(JSON.stringify({ accuracy: 0.7 }), 'roc_auc')).toBeNull();
-    expect(readMetric(JSON.stringify({ roc_auc: 0.82 }), 'roc_auc')).toBe(0.82);
+    expect(ReadMetric(null, 'roc_auc')).toBeNull();
+    expect(ReadMetric('{not json', 'roc_auc')).toBeNull();
+    expect(ReadMetric(JSON.stringify({ accuracy: 0.7 }), 'roc_auc')).toBeNull();
+    expect(ReadMetric(JSON.stringify({ roc_auc: 0.82 }), 'roc_auc')).toBe(0.82);
   });
 });
 

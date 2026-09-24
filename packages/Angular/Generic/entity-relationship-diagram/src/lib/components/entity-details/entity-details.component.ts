@@ -25,48 +25,192 @@ export interface EntityDetailsOpenRecordEvent {
   styleUrls: ['./entity-details.component.css']
 })
 export class EntityDetailsComponent extends BaseAngularComponent implements OnChanges {
-  @ViewChild('fieldsListContainer', { static: false }) fieldsListContainer!: ElementRef;
-  @ViewChild('relationshipsListContainer', { static: false }) relationshipsListContainer!: ElementRef;
+  @ViewChild('fieldsListContainer', { static: false }) FieldsListContainer!: ElementRef;
+
+  /** @deprecated Use {@link FieldsListContainer}. */
+  get fieldsListContainer(): ElementRef {
+    return this.FieldsListContainer;
+  }
+  /** @deprecated Use {@link FieldsListContainer}. */
+  set fieldsListContainer(value: ElementRef) {
+    this.FieldsListContainer = value;
+  }
+  @ViewChild('relationshipsListContainer', { static: false }) RelationshipsListContainer!: ElementRef;
+
+  /** @deprecated Use {@link RelationshipsListContainer}. */
+  get relationshipsListContainer(): ElementRef {
+    return this.RelationshipsListContainer;
+  }
+  /** @deprecated Use {@link RelationshipsListContainer}. */
+  set relationshipsListContainer(value: ElementRef) {
+    this.RelationshipsListContainer = value;
+  }
 
   /** The currently selected entity to display details for */
-  @Input() selectedEntity: EntityInfo | null = null;
+  @Input() SelectedEntity: EntityInfo | null = null;
+
+  /** @deprecated Use {@link SelectedEntity}. */
+  @Input() set selectedEntity(value: EntityInfo | null) {
+    this.SelectedEntity = value;
+  }
+  /** @deprecated Use {@link SelectedEntity}. */
+  get selectedEntity(): EntityInfo | null {
+    return this.SelectedEntity;
+  }
 
   /** All entity fields for looking up field information */
-  @Input() allEntityFields: EntityFieldInfo[] = [];
+  @Input() AllEntityFields: EntityFieldInfo[] = [];
+
+  /** @deprecated Use {@link AllEntityFields}. */
+  @Input() set allEntityFields(value: EntityFieldInfo[]) {
+    this.AllEntityFields = value;
+  }
+  /** @deprecated Use {@link AllEntityFields}. */
+  get allEntityFields(): EntityFieldInfo[] {
+    return this.AllEntityFields;
+  }
 
   /** Whether the fields section is expanded */
-  @Input() fieldsSectionExpanded = true;
+  @Input() FieldsSectionExpanded = true;
+
+  /** @deprecated Use {@link FieldsSectionExpanded}. */
+  @Input() set fieldsSectionExpanded(value: EntityDetailsComponent['FieldsSectionExpanded']) {
+    this.FieldsSectionExpanded = value;
+  }
+  /** @deprecated Use {@link FieldsSectionExpanded}. */
+  get fieldsSectionExpanded(): EntityDetailsComponent['FieldsSectionExpanded'] {
+    return this.FieldsSectionExpanded;
+  }
 
   /** Whether the relationships section is expanded */
-  @Input() relationshipsSectionExpanded = true;
+  @Input() RelationshipsSectionExpanded = true;
+
+  /** @deprecated Use {@link RelationshipsSectionExpanded}. */
+  @Input() set relationshipsSectionExpanded(value: EntityDetailsComponent['RelationshipsSectionExpanded']) {
+    this.RelationshipsSectionExpanded = value;
+  }
+  /** @deprecated Use {@link RelationshipsSectionExpanded}. */
+  get relationshipsSectionExpanded(): EntityDetailsComponent['RelationshipsSectionExpanded'] {
+    return this.RelationshipsSectionExpanded;
+  }
 
   /** Emitted when user clicks to open the entity record */
-  @Output() openEntity = new EventEmitter<EntityInfo>();
+  @Output() OpenEntity = new EventEmitter<EntityInfo>();
+
+  /**
+   * @deprecated Use {@link OpenEntity}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntity) keeps working. Must stay AFTER OpenEntity: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntity = this.OpenEntity;
 
   /** Emitted when user clicks the close button */
-  @Output() closePanel = new EventEmitter<void>();
+  @Output() ClosePanel = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ClosePanel}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closePanel) keeps working. Must stay AFTER ClosePanel: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closePanel = this.ClosePanel;
 
   /** Emitted when fields section is toggled */
-  @Output() fieldsSectionToggle = new EventEmitter<void>();
+  @Output() FieldsSectionToggle = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link FieldsSectionToggle}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (fieldsSectionToggle) keeps working. Must stay AFTER FieldsSectionToggle: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() fieldsSectionToggle = this.FieldsSectionToggle;
 
   /** Emitted when relationships section is toggled */
-  @Output() relationshipsSectionToggle = new EventEmitter<void>();
+  @Output() RelationshipsSectionToggle = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link RelationshipsSectionToggle}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (relationshipsSectionToggle) keeps working. Must stay AFTER RelationshipsSectionToggle: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() relationshipsSectionToggle = this.RelationshipsSectionToggle;
 
   /** Emitted when a related entity is selected (clicked in relationships list) */
-  @Output() entitySelected = new EventEmitter<EntityInfo>();
+  @Output() EntitySelected = new EventEmitter<EntityInfo>();
+
+  /**
+   * @deprecated Use {@link EntitySelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (entitySelected) keeps working. Must stay AFTER EntitySelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() entitySelected = this.EntitySelected;
 
   /** Emitted when requesting to open an entity record */
-  @Output() openRecord = new EventEmitter<EntityDetailsOpenRecordEvent>();
+  @Output() OpenRecord = new EventEmitter<EntityDetailsOpenRecordEvent>();
 
-  public fieldFilter: 'all' | 'keys' | 'foreign_keys' | 'regular' = 'all';
-  public expandedFieldDescriptions = new Set<string>();
-  public expandedFieldValues = new Set<string>();
-  public expandedFieldDetails = new Set<string>();
+  /**
+   * @deprecated Use {@link OpenRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openRecord) keeps working. Must stay AFTER OpenRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openRecord = this.OpenRecord;
+
+  public FieldFilter: 'all' | 'keys' | 'foreign_keys' | 'regular' = 'all';
+
+  /** @deprecated Use {@link FieldFilter}. */
+  public get fieldFilter(): 'all' | 'keys' | 'foreign_keys' | 'regular' {
+    return this.FieldFilter;
+  }
+  /** @deprecated Use {@link FieldFilter}. */
+  public set fieldFilter(value: 'all' | 'keys' | 'foreign_keys' | 'regular') {
+    this.FieldFilter = value;
+  }
+  public ExpandedFieldDescriptions = new Set<string>();
+
+  /** @deprecated Use {@link ExpandedFieldDescriptions}. */
+  public get expandedFieldDescriptions() {
+    return this.ExpandedFieldDescriptions;
+  }
+  /** @deprecated Use {@link ExpandedFieldDescriptions}. */
+  public set expandedFieldDescriptions(value) {
+    this.ExpandedFieldDescriptions = value;
+  }
+  public ExpandedFieldValues = new Set<string>();
+
+  /** @deprecated Use {@link ExpandedFieldValues}. */
+  public get expandedFieldValues() {
+    return this.ExpandedFieldValues;
+  }
+  /** @deprecated Use {@link ExpandedFieldValues}. */
+  public set expandedFieldValues(value) {
+    this.ExpandedFieldValues = value;
+  }
+  public ExpandedFieldDetails = new Set<string>();
+
+  /** @deprecated Use {@link ExpandedFieldDetails}. */
+  public get expandedFieldDetails() {
+    return this.ExpandedFieldDetails;
+  }
+  /** @deprecated Use {@link ExpandedFieldDetails}. */
+  public set expandedFieldDetails(value) {
+    this.ExpandedFieldDetails = value;
+  }
   private previousSelectedEntityId: string | null = null;
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['selectedEntity'] && !changes['selectedEntity'].firstChange) {
-      const currentEntityId = this.selectedEntity?.ID || null;
+      const currentEntityId = this.SelectedEntity?.ID || null;
 
       // Check if entity actually changed
       if (currentEntityId !== this.previousSelectedEntityId) {
@@ -81,46 +225,71 @@ export class EntityDetailsComponent extends BaseAngularComponent implements OnCh
   private resetScrollPositions(): void {
     // Use setTimeout to ensure the DOM is updated
     setTimeout(() => {
-      if (this.fieldsListContainer?.nativeElement) {
-        this.fieldsListContainer.nativeElement.scrollTop = 0;
+      if (this.FieldsListContainer?.nativeElement) {
+        this.FieldsListContainer.nativeElement.scrollTop = 0;
       }
-      if (this.relationshipsListContainer?.nativeElement) {
-        this.relationshipsListContainer.nativeElement.scrollTop = 0;
+      if (this.RelationshipsListContainer?.nativeElement) {
+        this.RelationshipsListContainer.nativeElement.scrollTop = 0;
       }
     }, 0);
   }
 
-  public onOpenEntity(): void {
-    if (this.selectedEntity) {
-      this.openRecord.emit({
+  public OnOpenEntity(): void {
+    if (this.SelectedEntity) {
+      this.OpenRecord.emit({
         EntityName: 'MJ: Entities',
-        RecordID: this.selectedEntity.ID
+        RecordID: this.SelectedEntity.ID
       });
     }
   }
 
+  /** @deprecated Use {@link OnOpenEntity}. */
+  public onOpenEntity(): void {
+    return this.OnOpenEntity();
+  }
+
+  public OnClosePanel(): void {
+    this.ClosePanel.emit();
+  }
+
+  /** @deprecated Use {@link OnClosePanel}. */
   public onClosePanel(): void {
-    this.closePanel.emit();
+    return this.OnClosePanel();
   }
 
+  public ToggleFieldsSection(): void {
+    this.FieldsSectionToggle.emit();
+  }
+
+  /** @deprecated Use {@link ToggleFieldsSection}. */
   public toggleFieldsSection(): void {
-    this.fieldsSectionToggle.emit();
+    return this.ToggleFieldsSection();
   }
 
+  public ToggleRelationshipsSection(): void {
+    this.RelationshipsSectionToggle.emit();
+  }
+
+  /** @deprecated Use {@link ToggleRelationshipsSection}. */
   public toggleRelationshipsSection(): void {
-    this.relationshipsSectionToggle.emit();
+    return this.ToggleRelationshipsSection();
   }
 
+  public SetFieldFilter(filter: 'all' | 'keys' | 'foreign_keys' | 'regular'): void {
+    this.FieldFilter = filter;
+  }
+
+  /** @deprecated Use {@link SetFieldFilter}. */
   public setFieldFilter(filter: 'all' | 'keys' | 'foreign_keys' | 'regular'): void {
-    this.fieldFilter = filter;
+    return this.SetFieldFilter(filter);
   }
 
-  public getEntityFields(entityId: string): EntityFieldInfo[] {
+  public GetEntityFields(entityId: string): EntityFieldInfo[] {
     if (!entityId) return [];
 
-    let fields = this.allEntityFields.filter(f => UUIDsEqual(f.EntityID, entityId));
+    let fields = this.AllEntityFields.filter(f => UUIDsEqual(f.EntityID, entityId));
 
-    switch (this.fieldFilter) {
+    switch (this.FieldFilter) {
       case 'keys':
         return fields.filter(f => f.IsPrimaryKey || f.Name.toLowerCase().includes('id'));
       case 'foreign_keys':
@@ -132,18 +301,23 @@ export class EntityDetailsComponent extends BaseAngularComponent implements OnCh
     }
   }
 
-  public getRelatedEntities(entityId: string): EntityInfo[] {
+  /** @deprecated Use {@link GetEntityFields}. */
+  public getEntityFields(entityId: string): EntityFieldInfo[] {
+    return this.GetEntityFields(entityId);
+  }
+
+  public GetRelatedEntities(entityId: string): EntityInfo[] {
     if (!entityId) return [];
 
     const relatedEntityIds = new Set<string>();
 
     // Get entities that this entity references (foreign keys)
-    this.allEntityFields
+    this.AllEntityFields
       .filter(f => UUIDsEqual(f.EntityID, entityId) && f.RelatedEntityID)
       .forEach(f => relatedEntityIds.add(f.RelatedEntityID!));
 
     // Get entities that reference this entity
-    this.allEntityFields
+    this.AllEntityFields
       .filter(f => UUIDsEqual(f.RelatedEntityID, entityId))
       .forEach(f => relatedEntityIds.add(f.EntityID));
 
@@ -163,56 +337,106 @@ export class EntityDetailsComponent extends BaseAngularComponent implements OnCh
     return retVals;
   }
 
+  /** @deprecated Use {@link GetRelatedEntities}. */
+  public getRelatedEntities(entityId: string): EntityInfo[] {
+    return this.GetRelatedEntities(entityId);
+  }
+
+  public OnFieldClick(field: EntityFieldInfo): void {
+    this.ToggleFieldDetails(field.ID);
+  }
+
+  /** @deprecated Use {@link OnFieldClick}. */
   public onFieldClick(field: EntityFieldInfo): void {
-    this.toggleFieldDetails(field.ID);
+    return this.OnFieldClick(field);
   }
 
+  public ToggleFieldDescription(fieldId: string): void {
+    if (this.ExpandedFieldDescriptions.has(fieldId)) {
+      this.ExpandedFieldDescriptions.delete(fieldId);
+    } else {
+      this.ExpandedFieldDescriptions.add(fieldId);
+    }
+  }
+
+  /** @deprecated Use {@link ToggleFieldDescription}. */
   public toggleFieldDescription(fieldId: string): void {
-    if (this.expandedFieldDescriptions.has(fieldId)) {
-      this.expandedFieldDescriptions.delete(fieldId);
+    return this.ToggleFieldDescription(fieldId);
+  }
+
+  public ToggleFieldValues(fieldId: string): void {
+    if (this.ExpandedFieldValues.has(fieldId)) {
+      this.ExpandedFieldValues.delete(fieldId);
     } else {
-      this.expandedFieldDescriptions.add(fieldId);
+      this.ExpandedFieldValues.add(fieldId);
     }
   }
 
+  /** @deprecated Use {@link ToggleFieldValues}. */
   public toggleFieldValues(fieldId: string): void {
-    if (this.expandedFieldValues.has(fieldId)) {
-      this.expandedFieldValues.delete(fieldId);
+    return this.ToggleFieldValues(fieldId);
+  }
+
+  public ToggleFieldDetails(fieldId: string): void {
+    if (this.ExpandedFieldDetails.has(fieldId)) {
+      this.ExpandedFieldDetails.delete(fieldId);
     } else {
-      this.expandedFieldValues.add(fieldId);
+      this.ExpandedFieldDetails.add(fieldId);
     }
   }
 
+  /** @deprecated Use {@link ToggleFieldDetails}. */
   public toggleFieldDetails(fieldId: string): void {
-    if (this.expandedFieldDetails.has(fieldId)) {
-      this.expandedFieldDetails.delete(fieldId);
-    } else {
-      this.expandedFieldDetails.add(fieldId);
-    }
+    return this.ToggleFieldDetails(fieldId);
   }
 
+  public IsFieldDescriptionExpanded(fieldId: string): boolean {
+    return this.ExpandedFieldDescriptions.has(fieldId);
+  }
+
+  /** @deprecated Use {@link IsFieldDescriptionExpanded}. */
   public isFieldDescriptionExpanded(fieldId: string): boolean {
-    return this.expandedFieldDescriptions.has(fieldId);
+    return this.IsFieldDescriptionExpanded(fieldId);
   }
 
+  public IsFieldValuesExpanded(fieldId: string): boolean {
+    return this.ExpandedFieldValues.has(fieldId);
+  }
+
+  /** @deprecated Use {@link IsFieldValuesExpanded}. */
   public isFieldValuesExpanded(fieldId: string): boolean {
-    return this.expandedFieldValues.has(fieldId);
+    return this.IsFieldValuesExpanded(fieldId);
   }
 
+  public IsFieldDetailsExpanded(fieldId: string): boolean {
+    return this.ExpandedFieldDetails.has(fieldId);
+  }
+
+  /** @deprecated Use {@link IsFieldDetailsExpanded}. */
   public isFieldDetailsExpanded(fieldId: string): boolean {
-    return this.expandedFieldDetails.has(fieldId);
+    return this.IsFieldDetailsExpanded(fieldId);
   }
 
-  public hasFieldPossibleValues(field: EntityFieldInfo): boolean {
+  public HasFieldPossibleValues(field: EntityFieldInfo): boolean {
     return field.EntityFieldValues && field.EntityFieldValues.length > 0;
   }
 
-  public getFieldPossibleValues(field: EntityFieldInfo): string[] {
+  /** @deprecated Use {@link HasFieldPossibleValues}. */
+  public hasFieldPossibleValues(field: EntityFieldInfo): boolean {
+    return this.HasFieldPossibleValues(field);
+  }
+
+  public GetFieldPossibleValues(field: EntityFieldInfo): string[] {
     if (!field.EntityFieldValues) return [];
     return field.EntityFieldValues.map(v => v.Value).slice(0, 10);
   }
 
-  public getSortedEntityFieldValues(field: EntityFieldInfo): EntityFieldValueInfo[] {
+  /** @deprecated Use {@link GetFieldPossibleValues}. */
+  public getFieldPossibleValues(field: EntityFieldInfo): string[] {
+    return this.GetFieldPossibleValues(field);
+  }
+
+  public GetSortedEntityFieldValues(field: EntityFieldInfo): EntityFieldValueInfo[] {
     if (!field.EntityFieldValues) return [];
     return field.EntityFieldValues.sort((a, b) => {
       if (a.Sequence !== undefined && b.Sequence !== undefined) {
@@ -222,19 +446,34 @@ export class EntityDetailsComponent extends BaseAngularComponent implements OnCh
     });
   }
 
-  public onRelatedEntityClick(event: Event, field: EntityFieldInfo): void {
+  /** @deprecated Use {@link GetSortedEntityFieldValues}. */
+  public getSortedEntityFieldValues(field: EntityFieldInfo): EntityFieldValueInfo[] {
+    return this.GetSortedEntityFieldValues(field);
+  }
+
+  public OnRelatedEntityClick(event: Event, field: EntityFieldInfo): void {
     event.stopPropagation();
     if (field.RelatedEntityID) {
       // Find the related entity and select it in the ERD
       const md = this.ProviderToUse;
       const relatedEntity = md.Entities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
       if (relatedEntity) {
-        this.entitySelected.emit(relatedEntity);
+        this.EntitySelected.emit(relatedEntity);
       }
     }
   }
 
+  /** @deprecated Use {@link OnRelatedEntityClick}. */
+  public onRelatedEntityClick(event: Event, field: EntityFieldInfo): void {
+    return this.OnRelatedEntityClick(event, field);
+  }
+
+  public SelectEntity(entity: EntityInfo, _zoomTo: boolean = false): void {
+    this.EntitySelected.emit(entity);
+  }
+
+  /** @deprecated Use {@link SelectEntity}. */
   public selectEntity(entity: EntityInfo, _zoomTo: boolean = false): void {
-    this.entitySelected.emit(entity);
+    return this.SelectEntity(entity, _zoomTo);
   }
 }

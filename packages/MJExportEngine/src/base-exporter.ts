@@ -16,17 +16,17 @@ export abstract class BaseExporter {
    * @param data Array of data objects or arrays to export
    * @returns Export result with buffer and metadata
    */
-  abstract export(data: ExportData): Promise<ExportResult>;
+  abstract export(data: ExportData): Promise<ExportResult>;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
   /**
    * Get the MIME type for this export format
    */
-  abstract getMimeType(): string;
+  abstract getMimeType(): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
   /**
    * Get the file extension for this export format
    */
-  abstract getFileExtension(): string;
+  abstract getFileExtension(): string;  // case-violation-ok-legacy-back-compat: abstract member — there is nothing for a stub to delegate to
 
   /**
    * Derive columns from data if not explicitly provided

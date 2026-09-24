@@ -7,7 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import crypto from 'crypto';
 import { Request } from 'express';
-import { verifySlackSignature } from '../slack/slack-routes.js';
+import { VerifySlackSignature } from '../slack/slack-routes.js';
 
 const SIGNING_SECRET = 'test-signing-secret-12345';
 
@@ -47,13 +47,13 @@ describe('verifySlackSignature', () => {
         it('should accept a correctly signed request', () => {
             const timestamp = '1700000000'; // Matches Date.now mock
             const req = createSignedRequest({ type: 'event_callback', event: {} }, timestamp);
-            expect(verifySlackSignature(req, SIGNING_SECRET)).toBe(true);
+            expect(VerifySlackSignature(req, SIGNING_SECRET)).toBe(true);
         });
 
         it('should accept a request within the 5-minute window', () => {
             const timestamp = (1700000000 - 200).toString(); // 200 seconds ago
             const req = createSignedRequest({ type: 'event_callback' }, timestamp);
-            expect(verifySlackSignature(req, SIGNING_SECRET)).toBe(true);
+            expect(VerifySlackSignature(req, SIGNING_SECRET)).toBe(true);
         });
     });
 
@@ -61,13 +61,13 @@ describe('verifySlackSignature', () => {
         it('should reject requests older than 5 minutes', () => {
             const timestamp = (1700000000 - 600).toString(); // 10 minutes ago
             const req = createSignedRequest({ type: 'event_callback' }, timestamp);
-            expect(verifySlackSignature(req, SIGNING_SECRET)).toBe(false);
+            expect(VerifySlackSignature(req, SIGNING_SECRET)).toBe(false);
         });
 
         it('should reject requests with exactly 5 minutes + 1 second age', () => {
             const timestamp = (1700000000 - 301).toString(); // Just over 5 minutes
             const req = createSignedRequest({ type: 'event_callback' }, timestamp);
-            expect(verifySlackSignature(req, SIGNING_SECRET)).toBe(false);
+            expect(VerifySlackSignature(req, SIGNING_SECRET)).toBe(false);
         });
     });
 
@@ -81,7 +81,7 @@ describe('verifySlackSignature', () => {
                 },
                 body: { type: 'event_callback' }
             } as unknown as Request;
-            expect(verifySlackSignature(req, SIGNING_SECRET)).toBe(false);
+            expect(VerifySlackSignature(req, SIGNING_SECRET)).toBe(false);
         });
 
         it('should reject a request signed with a different secret', () => {
@@ -99,7 +99,7 @@ describe('verifySlackSignature', () => {
                 body
             } as unknown as Request;
 
-            expect(verifySlackSignature(req, SIGNING_SECRET)).toBe(false);
+            expect(VerifySlackSignature(req, SIGNING_SECRET)).toBe(false);
         });
     });
 
@@ -111,7 +111,7 @@ describe('verifySlackSignature', () => {
                 },
                 body: {}
             } as unknown as Request;
-            expect(verifySlackSignature(req, SIGNING_SECRET)).toBe(false);
+            expect(VerifySlackSignature(req, SIGNING_SECRET)).toBe(false);
         });
 
         it('should reject a request with no signature header', () => {
@@ -121,7 +121,7 @@ describe('verifySlackSignature', () => {
                 },
                 body: {}
             } as unknown as Request;
-            expect(verifySlackSignature(req, SIGNING_SECRET)).toBe(false);
+            expect(VerifySlackSignature(req, SIGNING_SECRET)).toBe(false);
         });
 
         it('should reject a request with no headers at all', () => {
@@ -129,7 +129,7 @@ describe('verifySlackSignature', () => {
                 headers: {},
                 body: {}
             } as unknown as Request;
-            expect(verifySlackSignature(req, SIGNING_SECRET)).toBe(false);
+            expect(VerifySlackSignature(req, SIGNING_SECRET)).toBe(false);
         });
     });
 
@@ -142,7 +142,7 @@ describe('verifySlackSignature', () => {
                 },
                 body: {}
             } as unknown as Request;
-            expect(verifySlackSignature(req, SIGNING_SECRET)).toBe(false);
+            expect(VerifySlackSignature(req, SIGNING_SECRET)).toBe(false);
         });
     });
 });

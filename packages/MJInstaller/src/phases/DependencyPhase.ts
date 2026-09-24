@@ -29,7 +29,7 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner, type ProcessResult } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
-import { classifyTurboFailures } from '../util/turboOutput.js';
+import { ClassifyTurboFailures } from '../util/turboOutput.js';
 import path from 'node:path';
 
 /**
@@ -51,9 +51,14 @@ import path from 'node:path';
  * Exported for unit testing; consumed by `DependencyPhase.ensureCliDependency`
  * and `DependencyPhase.ensureHoistedDependencies`.
  */
-export function tagToNpmVersion(tag: string): string {
+export function TagToNpmVersion(tag: string): string {
   const stripped = tag.startsWith('v') ? tag.slice(1) : tag;
   return /^\d+\.\d+\.\d+(-[\w.-]+)?(\+[\w.-]+)?$/.test(stripped) ? stripped : 'latest';
+}
+
+/** @deprecated Use {@link TagToNpmVersion}. */
+export function tagToNpmVersion(tag: string): string {
+  return TagToNpmVersion(tag);
 }
 
 /**
@@ -435,7 +440,7 @@ export class DependencyPhase {
     // in a later phase. Everything else is a real failure.
     // turbo writes its summary to stdout, so both streams go to the classifier.
     const combinedOutput = result.Stdout + '\n' + result.Stderr;
-    const verdict = classifyTurboFailures(combinedOutput, CODEGEN_MANAGED_PACKAGES);
+    const verdict = ClassifyTurboFailures(combinedOutput, CODEGEN_MANAGED_PACKAGES);
 
     if (verdict.ToleratedOnly) {
       const failList = verdict.FailedPackages.join(', ');
@@ -546,7 +551,7 @@ export class DependencyPhase {
       return;
     }
 
-    const npmVersion = tagToNpmVersion(tag);
+    const npmVersion = TagToNpmVersion(tag);
 
     if (!pkg['devDependencies']) {
       pkg['devDependencies'] = {};
@@ -600,7 +605,7 @@ export class DependencyPhase {
 
     const pkgPath = path.join(dir, 'package.json');
     const pkg = await this.fileSystem.ReadJSON<Record<string, Record<string, string>>>(pkgPath);
-    const npmVersion = tagToNpmVersion(tag);
+    const npmVersion = TagToNpmVersion(tag);
 
     let modified = false;
 

@@ -55,9 +55,9 @@ export class UserRoutineEngine extends BaseEngine<UserRoutineEngine> {
   }
 
   // Private storage for entity data (populated by BaseEngine.Load via Configs)
-  private _Routines: MJUserRoutineEntity[] = [];
-  private _Recipients: MJUserRoutineRecipientEntity[] = [];
-  private _Runs: MJUserRoutineRunEntity[] = [];
+  private _routines: MJUserRoutineEntity[] = [];
+  private _recipients: MJUserRoutineRecipientEntity[] = [];
+  private _runs: MJUserRoutineRunEntity[] = [];
 
   // Track the user ID we loaded data for
   private _loadedForUserId: string | null = null;
@@ -86,19 +86,19 @@ export class UserRoutineEngine extends BaseEngine<UserRoutineEngine> {
       {
         Type: 'entity',
         EntityName: 'MJ: User Routines',
-        PropertyName: '_Routines',
+        PropertyName: '_routines',
         CacheLocal: true,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Routine Recipients',
-        PropertyName: '_Recipients',
+        PropertyName: '_recipients',
         CacheLocal: true,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Routine Runs',
-        PropertyName: '_Runs',
+        PropertyName: '_runs',
         CacheLocal: true,
       },
     ];
@@ -117,17 +117,17 @@ export class UserRoutineEngine extends BaseEngine<UserRoutineEngine> {
    * need the per-user view should read the {@link Routines} getter inside the subscription.
    */
   public get Routines$(): Observable<MJUserRoutineEntity[]> {
-    return this.ObserveProperty<MJUserRoutineEntity>('_Routines');
+    return this.ObserveProperty<MJUserRoutineEntity>('_routines');
   }
 
   /** Observable stream of the recipients cache (raw). */
   public get Recipients$(): Observable<MJUserRoutineRecipientEntity[]> {
-    return this.ObserveProperty<MJUserRoutineRecipientEntity>('_Recipients');
+    return this.ObserveProperty<MJUserRoutineRecipientEntity>('_recipients');
   }
 
   /** Observable stream of the runs cache (raw). */
   public get Runs$(): Observable<MJUserRoutineRunEntity[]> {
-    return this.ObserveProperty<MJUserRoutineRunEntity>('_Runs');
+    return this.ObserveProperty<MJUserRoutineRunEntity>('_runs');
   }
 
   // ========================================================================
@@ -137,7 +137,7 @@ export class UserRoutineEngine extends BaseEngine<UserRoutineEngine> {
   /** The loaded user's routines, sorted by name. */
   public get Routines(): MJUserRoutineEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserRoutineEntity>('_Routines')
+    return this.GetConfigData<MJUserRoutineEntity>('_routines')
       .filter((r) => UUIDsEqual(r.UserID, this._loadedForUserId))
       .sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
   }
@@ -145,7 +145,7 @@ export class UserRoutineEngine extends BaseEngine<UserRoutineEngine> {
   /** All recipients across the loaded user's routines. */
   public get Recipients(): MJUserRoutineRecipientEntity[] {
     const routineIds = this.loadedRoutineIdSet();
-    return this.GetConfigData<MJUserRoutineRecipientEntity>('_Recipients').filter((r) =>
+    return this.GetConfigData<MJUserRoutineRecipientEntity>('_recipients').filter((r) =>
       routineIds.has(NormalizeUUID(r.RoutineID)),
     );
   }
@@ -156,7 +156,7 @@ export class UserRoutineEngine extends BaseEngine<UserRoutineEngine> {
    */
   public get RecentRuns(): MJUserRoutineRunEntity[] {
     const routineIds = this.loadedRoutineIdSet();
-    return this.GetConfigData<MJUserRoutineRunEntity>('_Runs')
+    return this.GetConfigData<MJUserRoutineRunEntity>('_runs')
       .filter((r) => routineIds.has(NormalizeUUID(r.RoutineID)))
       .sort((a, b) => new Date(b.StartedAt).getTime() - new Date(a.StartedAt).getTime())
       .slice(0, RECENT_RUNS_CAP);
@@ -173,7 +173,7 @@ export class UserRoutineEngine extends BaseEngine<UserRoutineEngine> {
 
   /** Runs for one routine, most recent first. */
   public RunsForRoutine(routineId: string, maxRuns?: number): MJUserRoutineRunEntity[] {
-    const runs = this.GetConfigData<MJUserRoutineRunEntity>('_Runs')
+    const runs = this.GetConfigData<MJUserRoutineRunEntity>('_runs')
       .filter((r) => UUIDsEqual(r.RoutineID, routineId))
       .sort((a, b) => new Date(b.StartedAt).getTime() - new Date(a.StartedAt).getTime());
     return maxRuns != null && maxRuns > 0 ? runs.slice(0, maxRuns) : runs;
@@ -181,14 +181,14 @@ export class UserRoutineEngine extends BaseEngine<UserRoutineEngine> {
 
   /** Recipients for one routine, in Sequence order. */
   public RecipientsForRoutine(routineId: string): MJUserRoutineRecipientEntity[] {
-    return this.GetConfigData<MJUserRoutineRecipientEntity>('_Recipients')
+    return this.GetConfigData<MJUserRoutineRecipientEntity>('_recipients')
       .filter((r) => UUIDsEqual(r.RoutineID, routineId))
       .sort((a, b) => a.Sequence - b.Sequence);
   }
 
   /** Routines for an arbitrary user (server-side / admin scenarios; raw cache scan). */
   public GetRoutinesForUser(userId: string): MJUserRoutineEntity[] {
-    return (this._Routines || [])
+    return (this._routines || [])
       .filter((r) => UUIDsEqual(r.UserID, userId))
       .sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
   }

@@ -18,25 +18,45 @@
  */
 
 /** The live CDK overlay container on document.body, or null if none has been created yet. */
-export function getOverlayContainerElement(): HTMLElement | null {
+export function GetOverlayContainerElement(): HTMLElement | null {
   if (typeof document === 'undefined') return null;
   return document.querySelector('.cdk-overlay-container');
 }
 
+/** @deprecated Use {@link GetOverlayContainerElement}. */
+export function getOverlayContainerElement(): HTMLElement | null {
+  return GetOverlayContainerElement();
+}
+
 /** First element matching `selector` inside the overlay container (null if no overlay / no match). */
+export function OverlayQuery(selector: string): Element | null {
+  return GetOverlayContainerElement()?.querySelector(selector) ?? null;
+}
+
+/** @deprecated Use {@link OverlayQuery}. */
 export function overlayQuery(selector: string): Element | null {
-  return getOverlayContainerElement()?.querySelector(selector) ?? null;
+  return OverlayQuery(selector);
 }
 
 /** All elements matching `selector` inside the overlay container. */
-export function overlayQueryAll(selector: string): Element[] {
-  const container = getOverlayContainerElement();
+export function OverlayQueryAll(selector: string): Element[] {
+  const container = GetOverlayContainerElement();
   return container ? Array.from(container.querySelectorAll(selector)) : [];
 }
 
+/** @deprecated Use {@link OverlayQueryAll}. */
+export function overlayQueryAll(selector: string): Element[] {
+  return OverlayQueryAll(selector);
+}
+
 /** Trimmed textContent of the first overlay element matching `selector` (''. if absent). */
+export function OverlayText(selector: string): string {
+  return OverlayQuery(selector)?.textContent?.trim() ?? '';
+}
+
+/** @deprecated Use {@link OverlayText}. */
 export function overlayText(selector: string): string {
-  return overlayQuery(selector)?.textContent?.trim() ?? '';
+  return OverlayText(selector);
 }
 
 /**
@@ -44,7 +64,12 @@ export function overlayText(selector: string): string {
  * container across a test file, and a panel left open by one test would otherwise be visible to the
  * next test's overlay queries (a cross-test leak the fixture teardown does NOT clean up).
  */
-export function clearOverlayContainers(): void {
+export function ClearOverlayContainers(): void {
   if (typeof document === 'undefined') return;
   document.querySelectorAll('.cdk-overlay-container').forEach((el) => el.remove());
+}
+
+/** @deprecated Use {@link ClearOverlayContainers}. */
+export function clearOverlayContainers(): void {
+  return ClearOverlayContainers();
 }

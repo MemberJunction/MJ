@@ -46,8 +46,13 @@ export class LeakageGuardEnforcer {
    *
    * @param fieldName candidate column/feature name
    */
-  public isFieldAllowed(fieldName: string): boolean {
+  public IsFieldAllowed(fieldName: string): boolean {
     return !this.denyFields.has(normalizeName(fieldName));
+  }
+
+  /** @deprecated Use {@link IsFieldAllowed}. */
+  public isFieldAllowed(fieldName: string): boolean {
+    return this.IsFieldAllowed(fieldName);
   }
 
   /**
@@ -55,8 +60,13 @@ export class LeakageGuardEnforcer {
    *
    * @param sourceRef the source's `Ref` (entity name / Query id / etc.)
    */
-  public isSourceAllowed(sourceRef: string): boolean {
+  public IsSourceAllowed(sourceRef: string): boolean {
     return !this.denySources.has(normalizeName(sourceRef));
+  }
+
+  /** @deprecated Use {@link IsSourceAllowed}. */
+  public isSourceAllowed(sourceRef: string): boolean {
+    return this.IsSourceAllowed(sourceRef);
   }
 
   /**
@@ -67,13 +77,18 @@ export class LeakageGuardEnforcer {
    * @param columns candidate column names
    * @returns `{ allowed, denied }` partition
    */
-  public partitionColumns(columns: string[]): { allowed: string[]; denied: string[] } {
+  public PartitionColumns(columns: string[]): { allowed: string[]; denied: string[] } {
     const allowed: string[] = [];
     const denied: string[] = [];
     for (const c of columns) {
-      (this.isFieldAllowed(c) ? allowed : denied).push(c);
+      (this.IsFieldAllowed(c) ? allowed : denied).push(c);
     }
     return { allowed, denied };
+  }
+
+  /** @deprecated Use {@link PartitionColumns}. */
+  public partitionColumns(columns: string[]): { allowed: string[]; denied: string[] } {
+    return this.PartitionColumns(columns);
   }
 }
 
@@ -113,7 +128,7 @@ export interface DominanceResult {
  * @param threshold dominance threshold (e.g. `0.6` from `LeakageGuard.SingleFeatureDominanceThreshold`)
  * @returns the {@link DominanceResult}
  */
-export function detectSingleFeatureDominance(featureImportance: FeatureImportance, threshold: number): DominanceResult {
+export function DetectSingleFeatureDominance(featureImportance: FeatureImportance, threshold: number): DominanceResult {
   const effectiveThreshold = clampDominanceThreshold(threshold);
   const entries = Object.entries(featureImportance ?? {});
   if (entries.length === 0) {
@@ -143,4 +158,9 @@ export function detectSingleFeatureDominance(featureImportance: FeatureImportanc
     TopShare: topShare,
     Threshold: effectiveThreshold,
   };
+}
+
+/** @deprecated Use {@link DetectSingleFeatureDominance}. */
+export function detectSingleFeatureDominance(featureImportance: FeatureImportance, threshold: number): DominanceResult {
+  return DetectSingleFeatureDominance(featureImportance, threshold);
 }

@@ -13,8 +13,8 @@
 import ora from 'ora';
 import chalk from 'chalk';
 import { Metadata, DatabaseProviderBase, EntityInfo, LogStatus } from '@memberjunction/core';
-import { loadConfig } from '../config';
-import { getSystemUser } from '../../utils/user-helpers';
+import { LoadConfig } from '../config';
+import { GetSystemUser } from '../../utils/user-helpers';
 import { EntityGrouper } from '../../core/EntityGrouper';
 import { QuestionGenerator } from '../../core/QuestionGenerator';
 import { QueryWriter } from '../../core/QueryWriter';
@@ -24,9 +24,9 @@ import { MetadataExporter } from '../../core/MetadataExporter';
 import { QueryDatabaseWriter } from '../../core/QueryDatabaseWriter';
 import { EmbeddingService } from '../../vectors/EmbeddingService';
 import { SimilaritySearch } from '../../vectors/SimilaritySearch';
-import { formatEntityMetadataForPrompt } from '../../utils/entity-helpers';
-import { extractErrorMessage } from '../../utils/error-handlers';
-import { buildQueryCategory, extractUniqueCategories } from '../../utils/category-builder';
+import { FormatEntityMetadataForPrompt } from '../../utils/entity-helpers';
+import { ExtractErrorMessage } from '../../utils/error-handlers';
+import { BuildQueryCategory, ExtractUniqueCategories } from '../../utils/category-builder';
 import { ValidatedQuery, GoldenQuery, EntityGroup, QueryCategoryInfo } from '../../data/schema';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
@@ -38,13 +38,13 @@ import { fileURLToPath } from 'url';
  * Full orchestration of query generation workflow with progress reporting.
  * Uses ora for spinners and chalk for colored output.
  */
-export async function generateCommand(options: Record<string, unknown>): Promise<void> {
+export async function GenerateCommand(options: Record<string, unknown>): Promise<void> {
   const spinner = ora('Initializing query generation...').start();
 
   try {
     // 1. Load configuration
     spinner.text = 'Loading configuration...';
-    const config = loadConfig(options);
+    const config = LoadConfig(options);
 
     // Show model/vendor overrides if configured
     if (config.modelOverride || config.vendorOverride) {
@@ -60,7 +60,7 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     }
 
     // 2. Get system user from UserCache (populated by provider initialization)
-    const contextUser = getSystemUser();
+    const contextUser = GetSystemUser();
 
     // 3. Verify database connection and metadata
     spinner.text = 'Loading metadata...';
@@ -150,11 +150,11 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     spinner.start('Building category structure...');
     const categoryMap = new Map<string, QueryCategoryInfo>();
     for (const group of entityGroups) {
-      const category = buildQueryCategory(config, group);
+      const category = BuildQueryCategory(config, group);
       // Use primary entity name as key for lookup during query generation
       categoryMap.set(group.primaryEntity.Name, category);
     }
-    const uniqueCategories = extractUniqueCategories(Array.from(categoryMap.values()));
+    const uniqueCategories = ExtractUniqueCategories(Array.from(categoryMap.values()));
     spinner.succeed(chalk.green(`Created ${uniqueCategories.length} ${uniqueCategories.length === 1 ? 'category' : 'categories'}`));
 
     // 6. Generate queries for each entity group
@@ -202,14 +202,14 @@ export async function generateCommand(options: Record<string, unknown>): Promise
           const queryWriter = new QueryWriter(contextUser, config);
           const generatedQuery = await queryWriter.generateQuery(
             question,
-            group.entities.map((e: EntityInfo) => formatEntityMetadataForPrompt(e, group.entities)),
+            group.entities.map((e: EntityInfo) => FormatEntityMetadataForPrompt(e, group.entities)),
             fewShotExamples
           );
 
           // Test and fix query
           // Access the database provider through Metadata.Provider
           const dataProvider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: CLI tool, single-provider context
-          const entityMetadata = group.entities.map((e: EntityInfo) => formatEntityMetadataForPrompt(e, group.entities));
+          const entityMetadata = group.entities.map((e: EntityInfo) => FormatEntityMetadataForPrompt(e, group.entities));
           const queryTester = new QueryTester(
             dataProvider,
             entityMetadata,
@@ -277,7 +277,7 @@ export async function generateCommand(options: Record<string, unknown>): Promise
 
         spinner.warn(
           chalk.yellow(
-            `${groupPrefix} Error processing ${entityDisplay}: ${extractErrorMessage(error, 'Query Generation')}`
+            `${groupPrefix} Error processing ${entityDisplay}: ${ExtractErrorMessage(error, 'Query Generation')}`
           )
         );
       }
@@ -313,9 +313,14 @@ export async function generateCommand(options: Record<string, unknown>): Promise
 
   } catch (error: unknown) {
     spinner.fail(chalk.red('Query generation failed'));
-    console.error(chalk.red(extractErrorMessage(error, 'Query Generation')));
+    console.error(chalk.red(ExtractErrorMessage(error, 'Query Generation')));
     process.exit(1);
   }
+}
+
+/** @deprecated Use {@link GenerateCommand}. */
+export async function generateCommand(options: Record<string, unknown>): Promise<void> {
+  return GenerateCommand(options);
 }
 
 /**
@@ -353,7 +358,7 @@ async function loadGoldenQueries(config: { verbose: boolean }): Promise<GoldenQu
     return goldenQueries;
   } catch (error: unknown) {
     if (config.verbose) {
-      LogStatus(`[Warning] Failed to load golden queries: ${extractErrorMessage(error, 'loadGoldenQueries')}`);
+      LogStatus(`[Warning] Failed to load golden queries: ${ExtractErrorMessage(error, 'loadGoldenQueries')}`);
     }
     return [];
   }

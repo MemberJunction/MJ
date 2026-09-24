@@ -4,10 +4,10 @@ import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity,
 import { SortAgentRunStepsByExecutionOrder } from './agent-run-step-order';
 
 export interface AgentRunData {
-  steps: MJAIAgentRunStepEntity[];
-  subRuns: MJAIAgentRunEntity[];
-  actionLogs: MJActionExecutionLogEntity[];
-  promptRuns: MJAIPromptRunEntity[];
+  steps: MJAIAgentRunStepEntity[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  subRuns: MJAIAgentRunEntity[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  actionLogs: MJActionExecutionLogEntity[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  promptRuns: MJAIPromptRunEntity[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -24,12 +24,66 @@ export class AIAgentRunDataHelper {
   private errorSubject$ = new BehaviorSubject<string | null>(null);
   
   // Public observables
-  steps$ = this.stepsSubject$.asObservable();
-  subRuns$ = this.subRunsSubject$.asObservable();
-  actionLogs$ = this.actionLogsSubject$.asObservable();
-  promptRuns$ = this.promptRunsSubject$.asObservable();
-  loading$ = this.loadingSubject$.asObservable();
-  error$ = this.errorSubject$.asObservable();
+  Steps$ = this.stepsSubject$.asObservable();
+
+  /** @deprecated Use {@link Steps$}. */
+  get steps$() {
+    return this.Steps$;
+  }
+  /** @deprecated Use {@link Steps$}. */
+  set steps$(value) {
+    this.Steps$ = value;
+  }
+  SubRuns$ = this.subRunsSubject$.asObservable();
+
+  /** @deprecated Use {@link SubRuns$}. */
+  get subRuns$() {
+    return this.SubRuns$;
+  }
+  /** @deprecated Use {@link SubRuns$}. */
+  set subRuns$(value) {
+    this.SubRuns$ = value;
+  }
+  ActionLogs$ = this.actionLogsSubject$.asObservable();
+
+  /** @deprecated Use {@link ActionLogs$}. */
+  get actionLogs$() {
+    return this.ActionLogs$;
+  }
+  /** @deprecated Use {@link ActionLogs$}. */
+  set actionLogs$(value) {
+    this.ActionLogs$ = value;
+  }
+  PromptRuns$ = this.promptRunsSubject$.asObservable();
+
+  /** @deprecated Use {@link PromptRuns$}. */
+  get promptRuns$() {
+    return this.PromptRuns$;
+  }
+  /** @deprecated Use {@link PromptRuns$}. */
+  set promptRuns$(value) {
+    this.PromptRuns$ = value;
+  }
+  Loading$ = this.loadingSubject$.asObservable();
+
+  /** @deprecated Use {@link Loading$}. */
+  get loading$() {
+    return this.Loading$;
+  }
+  /** @deprecated Use {@link Loading$}. */
+  set loading$(value) {
+    this.Loading$ = value;
+  }
+  Error$ = this.errorSubject$.asObservable();
+
+  /** @deprecated Use {@link Error$}. */
+  get error$() {
+    return this.Error$;
+  }
+  /** @deprecated Use {@link Error$}. */
+  set error$(value) {
+    this.Error$ = value;
+  }
   
   // Cache for sub-agent data with size limit
   private readonly MAX_CACHE_SIZE = 100; // Maximum 100 sub-agent entries
@@ -66,7 +120,7 @@ export class AIAgentRunDataHelper {
   /**
    * Load all data for an agent run
    */
-  async loadAgentRunData(agentRunId: string, forceReload = false): Promise<void> {
+  async LoadAgentRunData(agentRunId: string, forceReload = false): Promise<void> {
     if (!agentRunId) {
       this.errorSubject$.next('No agent run ID provided');
       return;
@@ -92,6 +146,11 @@ export class AIAgentRunDataHelper {
     } finally {
       this.loadingSubject$.next(false);
     }
+  }
+
+  /** @deprecated Use {@link LoadAgentRunData}. */
+  async loadAgentRunData(agentRunId: string, forceReload = false): Promise<void> {
+    return this.LoadAgentRunData(agentRunId, forceReload);
   }
   
   private async loadStepsAndSubRuns(agentRunId: string) {
@@ -194,7 +253,7 @@ export class AIAgentRunDataHelper {
   /**
    * Load sub-agent data (for expanding sub-agent nodes)
    */
-  async loadSubAgentData(subAgentRunId: string): Promise<{ steps: MJAIAgentRunStepEntity[], promptRuns: MJAIPromptRunEntity[] }> {
+  async LoadSubAgentData(subAgentRunId: string): Promise<{ steps: MJAIAgentRunStepEntity[], promptRuns: MJAIPromptRunEntity[] }> {
     // Check cache first
     const cachedData = this.subAgentDataCache.get(subAgentRunId);
     if (cachedData) {
@@ -263,11 +322,16 @@ export class AIAgentRunDataHelper {
     
     return data;
   }
+
+  /** @deprecated Use {@link LoadSubAgentData}. */
+  async loadSubAgentData(subAgentRunId: string): Promise<{ steps: MJAIAgentRunStepEntity[], promptRuns: MJAIPromptRunEntity[] }> {
+    return this.LoadSubAgentData(subAgentRunId);
+  }
   
   /**
    * Clear all data
    */
-  clearData() {
+  ClearData() {
     this.stepsSubject$.next([]);
     this.subRunsSubject$.next([]);
     this.actionLogsSubject$.next([]);
@@ -275,11 +339,16 @@ export class AIAgentRunDataHelper {
     this.clearCache();
     this.currentAgentRunId = null;
   }
+
+  /** @deprecated Use {@link ClearData}. */
+  clearData() {
+    return this.ClearData();
+  }
   
   /**
    * Clear just the cache for the current agent run
    */
-  clearCurrentRunCache() {
+  ClearCurrentRunCache() {
     // Clear all cache entries related to current run
     if (this.currentAgentRunId) {
       const keysToRemove: string[] = [];
@@ -289,6 +358,11 @@ export class AIAgentRunDataHelper {
       }
       keysToRemove.forEach(key => this.removeCacheEntry(key));
     }
+  }
+
+  /** @deprecated Use {@link ClearCurrentRunCache}. */
+  clearCurrentRunCache() {
+    return this.ClearCurrentRunCache();
   }
   
   /**
@@ -324,7 +398,7 @@ export class AIAgentRunDataHelper {
   /**
    * Get cache statistics for monitoring
    */
-  getCacheStats() {
+  GetCacheStats() {
     return {
       size: this.subAgentDataCache.size,
       maxSize: this.MAX_CACHE_SIZE,
@@ -332,16 +406,26 @@ export class AIAgentRunDataHelper {
       accessOrder: [...this.cacheAccessOrder]
     };
   }
+
+  /** @deprecated Use {@link GetCacheStats}. */
+  getCacheStats() {
+    return this.GetCacheStats();
+  }
   
   /**
    * Get current data snapshot
    */
-  getCurrentData(): AgentRunData {
+  GetCurrentData(): AgentRunData {
     return {
       steps: this.stepsSubject$.value,
       subRuns: this.subRunsSubject$.value,
       actionLogs: this.actionLogsSubject$.value,
       promptRuns: this.promptRunsSubject$.value
     };
+  }
+
+  /** @deprecated Use {@link GetCurrentData}. */
+  getCurrentData(): AgentRunData {
+    return this.GetCurrentData();
   }
 }

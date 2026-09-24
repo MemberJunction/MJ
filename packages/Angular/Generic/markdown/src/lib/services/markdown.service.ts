@@ -130,15 +130,20 @@ export class MarkdownService {
   };
 
   constructor() {
-    this.configureMarked(this.currentConfig);
+    this.ConfigureMarked(this.currentConfig);
   }
 
   /**
    * Configure the underlying engine with the provided options.
    */
-  public configureMarked(config: MarkdownConfig): void {
+  public ConfigureMarked(config: MarkdownConfig): void {
     this.currentConfig = { ...DEFAULT_MARKDOWN_CONFIG, ...config };
     this.engine.configureMarked(this.currentConfig, { highlightFn: this.prismHighlight });
+  }
+
+  /** @deprecated Use {@link ConfigureMarked}. */
+  public configureMarked(config: MarkdownConfig): void {
+    return this.ConfigureMarked(config);
   }
 
   /**
@@ -147,12 +152,12 @@ export class MarkdownService {
    * @param config Optional config overrides for this parse operation
    * @returns The rendered HTML string
    */
-  public parse(markdown: string, config?: Partial<MarkdownConfig>): string {
+  public Parse(markdown: string, config?: Partial<MarkdownConfig>): string {
     if (!markdown) return '';
 
     // Apply config overrides if provided (re-injects the Prism highlighter)
     if (config) {
-      this.configureMarked({ ...this.currentConfig, ...config });
+      this.ConfigureMarked({ ...this.currentConfig, ...config });
     }
 
     let html = this.engine.parseToHtml(markdown);
@@ -168,10 +173,15 @@ export class MarkdownService {
     // widget, anything binding parse() output to innerHTML), so the sanitizer runs here.
     // enableJavaScript is the explicit opt-out.
     if (!this.currentConfig.enableJavaScript) {
-      html = this.sanitizeHtml(html);
+      html = this.SanitizeHtml(html);
     }
 
     return html;
+  }
+
+  /** @deprecated Use {@link Parse}. */
+  public parse(markdown: string, config?: Partial<MarkdownConfig>): string {
+    return this.Parse(markdown, config);
   }
 
   /**
@@ -180,7 +190,7 @@ export class MarkdownService {
    * what is kept and removed. Where no DOM is available to sanitize with, the markup is
    * escaped and rendered as text rather than trusted.
    */
-  public sanitizeHtml(html: string): string {
+  public SanitizeHtml(html: string): string {
     const instance = getPurifier();
     if (!instance) {
       return escapeHtml(html);
@@ -188,11 +198,21 @@ export class MarkdownService {
     return instance.sanitize(html);
   }
 
+  /** @deprecated Use {@link SanitizeHtml}. */
+  public sanitizeHtml(html: string): string {
+    return this.SanitizeHtml(html);
+  }
+
   /**
    * Parse markdown asynchronously (useful for large documents)
    */
+  public async ParseAsync(markdown: string, config?: Partial<MarkdownConfig>): Promise<string> {
+    return this.Parse(markdown, config);
+  }
+
+  /** @deprecated Use {@link ParseAsync}. */
   public async parseAsync(markdown: string, config?: Partial<MarkdownConfig>): Promise<string> {
-    return this.parse(markdown, config);
+    return this.ParseAsync(markdown, config);
   }
 
   /**
@@ -269,7 +289,7 @@ export class MarkdownService {
    * Call this after the HTML has been inserted into the DOM
    * @param container The DOM element containing mermaid code blocks
    */
-  public async renderMermaid(container: HTMLElement): Promise<boolean> {
+  public async RenderMermaid(container: HTMLElement): Promise<boolean> {
     if (!this.currentConfig.enableMermaid) return false;
 
     // Find all mermaid code blocks BEFORE touching the engine — this is the branch the
@@ -323,6 +343,11 @@ export class MarkdownService {
     return true;
   }
 
+  /** @deprecated Use {@link RenderMermaid}. */
+  public async renderMermaid(container: HTMLElement): Promise<boolean> {
+    return this.RenderMermaid(container);
+  }
+
   /**
    * Mark mermaid blocks as un-renderable, so the failure is VISIBLE rather than a block of
    * raw diagram source the reader can't explain. The `.mermaid-error` class carries the
@@ -347,18 +372,23 @@ export class MarkdownService {
    * Call this after the HTML has been inserted into the DOM
    * @param container The DOM element containing code blocks
    */
-  public highlightCode(container: HTMLElement): void {
+  public HighlightCode(container: HTMLElement): void {
     if (!this.currentConfig.enableHighlight) return;
 
     // Prism.highlightAllUnder handles finding and highlighting code blocks
     Prism.highlightAllUnder(container);
   }
 
+  /** @deprecated Use {@link HighlightCode}. */
+  public highlightCode(container: HTMLElement): void {
+    return this.HighlightCode(container);
+  }
+
   /**
    * Add copy buttons to code blocks
    * @param container The DOM element containing code blocks
    */
-  public addCodeCopyButtons(container: HTMLElement): void {
+  public AddCodeCopyButtons(container: HTMLElement): void {
     if (!this.currentConfig.enableCodeCopy) return;
 
     const codeBlocks = container.querySelectorAll('pre > code');
@@ -407,52 +437,87 @@ export class MarkdownService {
     });
   }
 
+  /** @deprecated Use {@link AddCodeCopyButtons}. */
+  public addCodeCopyButtons(container: HTMLElement): void {
+    return this.AddCodeCopyButtons(container);
+  }
+
   /**
    * Initialize collapsible heading functionality
    * This method is a no-op - the component handles event binding
    * @param container The DOM element containing collapsible sections
    */
-  public initializeCollapsibleHeadings(_container: HTMLElement): void {
+  public InitializeCollapsibleHeadings(_container: HTMLElement): void {
     // Event binding is handled by the component's setupCollapsibleListeners
     // This method exists for API compatibility but does nothing
+  }
+
+  /** @deprecated Use {@link InitializeCollapsibleHeadings}. */
+  public initializeCollapsibleHeadings(_container: HTMLElement): void {
+    return this.InitializeCollapsibleHeadings(_container);
   }
 
   /**
    * Get the list of headings from the last parsed document
    * Useful for building table of contents
    */
-  public getHeadingList(): HeadingInfo[] {
+  public GetHeadingList(): HeadingInfo[] {
     return this.engine.getHeadingList();
+  }
+
+  /** @deprecated Use {@link GetHeadingList}. */
+  public getHeadingList(): HeadingInfo[] {
+    return this.GetHeadingList();
   }
 
   /**
    * Get the current configuration
    */
-  public getConfig(): ResolvedMarkdownConfig {
+  public GetConfig(): ResolvedMarkdownConfig {
     return this.engine.getConfig();
+  }
+
+  /** @deprecated Use {@link GetConfig}. */
+  public getConfig(): ResolvedMarkdownConfig {
+    return this.GetConfig();
   }
 
   /**
    * Reset configuration to defaults
    */
+  public ResetConfig(): void {
+    this.ConfigureMarked(DEFAULT_MARKDOWN_CONFIG);
+  }
+
+  /** @deprecated Use {@link ResetConfig}. */
   public resetConfig(): void {
-    this.configureMarked(DEFAULT_MARKDOWN_CONFIG);
+    return this.ResetConfig();
   }
 
   /**
    * Check if a language is supported by Prism
    */
-  public isLanguageSupported(lang: string): boolean {
+  public IsLanguageSupported(lang: string): boolean {
     return !!Prism.languages[lang];
+  }
+
+  /** @deprecated Use {@link IsLanguageSupported}. */
+  public isLanguageSupported(lang: string): boolean {
+    return this.IsLanguageSupported(lang);
   }
 
   /**
    * Get list of supported Prism languages
    */
-  public getSupportedLanguages(): string[] {
+  public GetSupportedLanguages(): string[] {
     return Object.keys(Prism.languages).filter(
       lang => typeof Prism.languages[lang] === 'object'
     );
+  }
+
+  /** @deprecated Use {@link GetSupportedLanguages}. */
+  public getSupportedLanguages(): string[] {
+    return this.GetSupportedLanguages();
   }
 
   /**

@@ -107,7 +107,7 @@ export class RealtimeSurfaceTabsModel {
   public static readonly ActivityTabKey = 'activity';
 
   /** The activity tab definition, appended last whenever {@link showActivity} is true. */
-  private static readonly ActivityTab: RealtimeSurfaceTab = {
+  private static readonly activityTab: RealtimeSurfaceTab = {
     Key: RealtimeSurfaceTabsModel.ActivityTabKey,
     Title: 'Activity',
     Icon: 'fa-solid fa-wave-square',
@@ -139,7 +139,7 @@ export class RealtimeSurfaceTabsModel {
    */
   public get Tabs(): RealtimeSurfaceTab[] {
     return this.showActivity
-      ? [...this.channelTabs, RealtimeSurfaceTabsModel.ActivityTab]
+      ? [...this.channelTabs, RealtimeSurfaceTabsModel.activityTab]
       : [...this.channelTabs];
   }
 
@@ -158,7 +158,7 @@ export class RealtimeSurfaceTabsModel {
     return tabs.find(t => t.Key === this.ActiveKey)
       ?? tabs.find(t => t.Key === RealtimeSurfaceTabsModel.ActivityTabKey)
       ?? tabs[0]
-      ?? RealtimeSurfaceTabsModel.ActivityTab;
+      ?? RealtimeSurfaceTabsModel.activityTab;
   }
 
   /**

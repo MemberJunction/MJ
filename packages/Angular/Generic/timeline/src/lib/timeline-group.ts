@@ -40,7 +40,7 @@ import {
  * const name = getFieldValue(obj, 'name');  // Uses obj['name']
  * ```
  */
-export function getFieldValue(record: any, fieldName: string): unknown {
+export function GetFieldValue(record: any, fieldName: string): unknown {
   if (record == null) {
     return undefined;
   }
@@ -54,6 +54,11 @@ export function getFieldValue(record: any, fieldName: string): unknown {
   return record[fieldName];
 }
 
+/** @deprecated Use {@link GetFieldValue}. */
+export function getFieldValue(record: any, fieldName: string): unknown {
+  return GetFieldValue(record, fieldName);
+}
+
 /**
  * Extracts an ID from a record, trying common ID field names.
  *
@@ -61,14 +66,14 @@ export function getFieldValue(record: any, fieldName: string): unknown {
  * @param idFieldName - Optional explicit ID field name
  * @returns The record ID as a string, or a generated fallback ID
  */
-export function getRecordId(record: any, idFieldName?: string): string {
+export function GetRecordId(record: any, idFieldName?: string): string {
   if (record == null) {
     return `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   // Try explicit field name first
   if (idFieldName) {
-    const id = getFieldValue(record, idFieldName);
+    const id = GetFieldValue(record, idFieldName);
     if (id != null) {
       return String(id);
     }
@@ -77,7 +82,7 @@ export function getRecordId(record: any, idFieldName?: string): string {
   // Try common ID field names
   const commonIdFields = ['ID', 'id', 'Id', '_id', 'uuid', 'UUID'];
   for (const field of commonIdFields) {
-    const id = getFieldValue(record, field);
+    const id = GetFieldValue(record, field);
     if (id != null) {
       return String(id);
     }
@@ -85,6 +90,11 @@ export function getRecordId(record: any, idFieldName?: string): string {
 
   // Fallback: generate a unique ID
   return `generated-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/** @deprecated Use {@link GetRecordId}. */
+export function getRecordId(record: any, idFieldName?: string): string {
+  return GetRecordId(record, idFieldName);
 }
 
 // ============================================================================
@@ -363,11 +373,16 @@ export class TimelineGroup<T = any> {
    *
    * @returns The merged card configuration
    */
-  getEffectiveCardConfig(): TimelineCardConfig {
+  GetEffectiveCardConfig(): TimelineCardConfig {
     return {
       ...DEFAULT_CARD_CONFIG,
       ...this.CardConfig
     };
+  }
+
+  /** @deprecated Use {@link GetEffectiveCardConfig}. */
+  getEffectiveCardConfig(): TimelineCardConfig {
+    return this.GetEffectiveCardConfig();
   }
 
   /**
@@ -377,8 +392,13 @@ export class TimelineGroup<T = any> {
    * @param fieldName - The field name to extract
    * @returns The field value
    */
+  GetValue(record: T, fieldName: string): unknown {
+    return GetFieldValue(record, fieldName);
+  }
+
+  /** @deprecated Use {@link GetValue}. */
   getValue(record: T, fieldName: string): unknown {
-    return getFieldValue(record, fieldName);
+    return this.GetValue(record, fieldName);
   }
 
   /**
@@ -387,8 +407,13 @@ export class TimelineGroup<T = any> {
    * @param record - The source record
    * @returns The record ID
    */
+  GetId(record: T): string {
+    return GetRecordId(record, this.IdFieldName);
+  }
+
+  /** @deprecated Use {@link GetId}. */
   getId(record: T): string {
-    return getRecordId(record, this.IdFieldName);
+    return this.GetId(record);
   }
 
   /**
@@ -397,9 +422,14 @@ export class TimelineGroup<T = any> {
    * @param record - The source record
    * @returns The title string
    */
-  getTitle(record: T): string {
-    const value = this.getValue(record, this.TitleFieldName);
+  GetTitle(record: T): string {
+    const value = this.GetValue(record, this.TitleFieldName);
     return value != null ? String(value) : '';
+  }
+
+  /** @deprecated Use {@link GetTitle}. */
+  getTitle(record: T): string {
+    return this.GetTitle(record);
   }
 
   /**
@@ -408,8 +438,8 @@ export class TimelineGroup<T = any> {
    * @param record - The source record
    * @returns The date object
    */
-  getDate(record: T): Date {
-    const value = this.getValue(record, this.DateFieldName);
+  GetDate(record: T): Date {
+    const value = this.GetValue(record, this.DateFieldName);
     if (value instanceof Date) {
       return value;
     }
@@ -419,18 +449,28 @@ export class TimelineGroup<T = any> {
     return new Date();
   }
 
+  /** @deprecated Use {@link GetDate}. */
+  getDate(record: T): Date {
+    return this.GetDate(record);
+  }
+
   /**
    * Gets the subtitle from a record.
    *
    * @param record - The source record
    * @returns The subtitle string, or undefined
    */
-  getSubtitle(record: T): string | undefined {
+  GetSubtitle(record: T): string | undefined {
     if (!this.SubtitleFieldName) {
       return undefined;
     }
-    const value = this.getValue(record, this.SubtitleFieldName);
+    const value = this.GetValue(record, this.SubtitleFieldName);
     return value != null ? String(value) : undefined;
+  }
+
+  /** @deprecated Use {@link GetSubtitle}. */
+  getSubtitle(record: T): string | undefined {
+    return this.GetSubtitle(record);
   }
 
   /**
@@ -439,7 +479,7 @@ export class TimelineGroup<T = any> {
    * @param record - The source record
    * @returns The description string, or undefined
    */
-  getDescription(record: T): string | undefined {
+  GetDescription(record: T): string | undefined {
     // Use custom summary function if provided
     if (this.SummaryFunction) {
       return this.SummaryFunction(record);
@@ -447,11 +487,16 @@ export class TimelineGroup<T = any> {
 
     // Use description field
     if (this.DescriptionFieldName) {
-      const value = this.getValue(record, this.DescriptionFieldName);
+      const value = this.GetValue(record, this.DescriptionFieldName);
       return value != null ? String(value) : undefined;
     }
 
     return undefined;
+  }
+
+  /** @deprecated Use {@link GetDescription}. */
+  getDescription(record: T): string | undefined {
+    return this.GetDescription(record);
   }
 
   /**
@@ -460,13 +505,18 @@ export class TimelineGroup<T = any> {
    * @param record - The source record
    * @returns The image URL, or undefined
    */
-  getImageUrl(record: T): string | undefined {
+  GetImageUrl(record: T): string | undefined {
     const fieldName = this.CardConfig?.imageField || this.ImageFieldName;
     if (!fieldName) {
       return undefined;
     }
-    const value = this.getValue(record, fieldName);
+    const value = this.GetValue(record, fieldName);
     return value != null ? String(value) : undefined;
+  }
+
+  /** @deprecated Use {@link GetImageUrl}. */
+  getImageUrl(record: T): string | undefined {
+    return this.GetImageUrl(record);
   }
 
   /**
@@ -475,11 +525,16 @@ export class TimelineGroup<T = any> {
    * @param record - The source record
    * @returns The event configuration (from EventConfigFunction or defaults)
    */
-  getEventConfig(record: T): TimelineEventConfig {
+  GetEventConfig(record: T): TimelineEventConfig {
     if (this.EventConfigFunction) {
       return this.EventConfigFunction(record);
     }
     return {};
+  }
+
+  /** @deprecated Use {@link GetEventConfig}. */
+  getEventConfig(record: T): TimelineEventConfig {
+    return this.GetEventConfig(record);
   }
 
   // ============================================================================

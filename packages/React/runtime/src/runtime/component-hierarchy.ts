@@ -117,7 +117,7 @@ export class ComponentHierarchyRegistrar {
    * @param options - Registration options
    * @returns Registration result with details about success/failures
    */
-  async registerHierarchy(
+  async RegisterHierarchy(
     rootSpec: ComponentSpec,
     options: HierarchyRegistrationOptions
   ): Promise<HierarchyRegistrationResult> {
@@ -297,13 +297,21 @@ export class ComponentHierarchyRegistrar {
     };
   }
 
+  /** @deprecated Use {@link RegisterHierarchy}. */
+  async registerHierarchy(
+    rootSpec: ComponentSpec,
+    options: HierarchyRegistrationOptions
+  ): Promise<HierarchyRegistrationResult> {
+    return this.RegisterHierarchy(rootSpec, options);
+  }
+
   /**
    * Registers a single component from a specification
    * @param spec - Component specification
    * @param options - Registration options
    * @returns Registration result for this component
    */
-  async registerSingleComponent(
+  async RegisterSingleComponent(
     spec: ComponentSpec,
     options: {
       styles?: ComponentStyles;
@@ -423,6 +431,20 @@ export class ComponentHierarchyRegistrar {
     }
   }
 
+  /** @deprecated Use {@link RegisterSingleComponent}. */
+  async registerSingleComponent(
+    spec: ComponentSpec,
+    options: {
+      styles?: ComponentStyles;
+      namespace?: string;
+      version?: string;
+      allowOverride?: boolean;
+      allLibraries: MJComponentLibraryEntity[];
+    }
+  ): Promise<{ success: boolean; error?: ComponentRegistrationError }> {
+    return this.RegisterSingleComponent(spec, options);
+  }
+
   /**
    * Recursively registers child components
    * @param children - Array of child component specifications
@@ -440,7 +462,7 @@ export class ComponentHierarchyRegistrar {
   ): Promise<void> {
     for (const child of children) {
       // Register this child
-      const childResult = await this.registerSingleComponent(child, {
+      const childResult = await this.RegisterSingleComponent(child, {
         styles: options.styles,
         namespace: options.namespace,
         version: options.version,
@@ -483,7 +505,7 @@ export class ComponentHierarchyRegistrar {
  * @param options - Registration options
  * @returns Registration result
  */
-export async function registerComponentHierarchy(
+export async function RegisterComponentHierarchy(
   rootSpec: ComponentSpec,
   compiler: ComponentCompiler,
   registry: ComponentRegistry,
@@ -494,12 +516,23 @@ export async function registerComponentHierarchy(
   return registrar.registerHierarchy(rootSpec, options);
 }
 
+/** @deprecated Use {@link RegisterComponentHierarchy}. */
+export async function registerComponentHierarchy(
+  rootSpec: ComponentSpec,
+  compiler: ComponentCompiler,
+  registry: ComponentRegistry,
+  runtimeContext: RuntimeContext,
+  options: HierarchyRegistrationOptions
+): Promise<HierarchyRegistrationResult> {
+  return RegisterComponentHierarchy(rootSpec, compiler, registry, runtimeContext, options);
+}
+
 /**
  * Validates a component specification before registration
  * @param spec - Component specification to validate
  * @returns Array of validation errors (empty if valid)
  */
-export function validateComponentSpec(spec: ComponentSpec): string[] {
+export function ValidateComponentSpec(spec: ComponentSpec): string[] {
   const errors: string[] = [];
 
   if (!spec.name) {
@@ -519,7 +552,7 @@ export function validateComponentSpec(spec: ComponentSpec): string[] {
   // Validate child components recursively
   const children = spec.dependencies || [];
   children.forEach((child, index) => {
-    const childErrors = validateComponentSpec(child);
+    const childErrors = ValidateComponentSpec(child);
     childErrors.forEach(error => {
       errors.push(`Child ${index} (${child.name || 'unnamed'}): ${error}`);
     });
@@ -528,20 +561,30 @@ export function validateComponentSpec(spec: ComponentSpec): string[] {
   return errors;
 }
 
+/** @deprecated Use {@link ValidateComponentSpec}. */
+export function validateComponentSpec(spec: ComponentSpec): string[] {
+  return ValidateComponentSpec(spec);
+}
+
 /**
  * Flattens a component hierarchy into a list of all components
  * @param rootSpec - The root component specification
  * @returns Array of all component specifications in the hierarchy
  */
-export function flattenComponentHierarchy(rootSpec: ComponentSpec): ComponentSpec[] {
+export function FlattenComponentHierarchy(rootSpec: ComponentSpec): ComponentSpec[] {
   const components: ComponentSpec[] = [rootSpec];
   
   const children = rootSpec.dependencies || [];
   children.forEach(child => {
-    components.push(...flattenComponentHierarchy(child));
+    components.push(...FlattenComponentHierarchy(child));
   });
 
   return components;
+}
+
+/** @deprecated Use {@link FlattenComponentHierarchy}. */
+export function flattenComponentHierarchy(rootSpec: ComponentSpec): ComponentSpec[] {
+  return FlattenComponentHierarchy(rootSpec);
 }
 
 /**
@@ -550,7 +593,7 @@ export function flattenComponentHierarchy(rootSpec: ComponentSpec): ComponentSpe
  * @param includeEmpty - Whether to include components without code
  * @returns Total component count
  */
-export function countComponentsInHierarchy(
+export function CountComponentsInHierarchy(
   rootSpec: ComponentSpec,
   includeEmpty: boolean = false
 ): number {
@@ -562,8 +605,16 @@ export function countComponentsInHierarchy(
 
   const children = rootSpec.dependencies || [];
   children.forEach(child => {
-    count += countComponentsInHierarchy(child, includeEmpty);
+    count += CountComponentsInHierarchy(child, includeEmpty);
   });
 
   return count;
+}
+
+/** @deprecated Use {@link CountComponentsInHierarchy}. */
+export function countComponentsInHierarchy(
+  rootSpec: ComponentSpec,
+  includeEmpty: boolean = false
+): number {
+  return CountComponentsInHierarchy(rootSpec, includeEmpty);
 }

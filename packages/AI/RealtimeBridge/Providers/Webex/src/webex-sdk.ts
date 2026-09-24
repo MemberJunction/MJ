@@ -103,10 +103,10 @@ export interface IWebexMeetingSdk {
      * @param args Join parameters (meeting link, meeting number, bot name, auth).
      * @returns The bot member + meeting handles.
      */
-    join(args: WebexJoinArgs): Promise<WebexJoinResult>;
+    join(args: WebexJoinArgs): Promise<WebexJoinResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /** Leaves the meeting (the bot's `Meeting.leave()`) and releases SDK resources. */
-    leave(): Promise<void>;
+    leave(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends one raw PCM audio frame as the bot's outbound audio (the agent's voice into the meeting),
@@ -114,7 +114,7 @@ export interface IWebexMeetingSdk {
      *
      * @param pcm The PCM audio bytes to send.
      */
-    sendAudioFrame(pcm: ArrayBuffer): void;
+    sendAudioFrame(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for inbound raw per-participant audio frames (what the agent hears, carrying
@@ -122,21 +122,21 @@ export interface IWebexMeetingSdk {
      *
      * @param cb Invoked with each inbound audio frame.
      */
-    onAudioFrame(cb: (frame: WebexAudioFrame) => void): void;
+    onAudioFrame(cb: (frame: WebexAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a member joins. "Latest handler wins."
      *
      * @param cb Invoked with the member who joined.
      */
-    onParticipantJoin(cb: (participant: WebexParticipant) => void): void;
+    onParticipantJoin(cb: (participant: WebexParticipant) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a member leaves. "Latest handler wins."
      *
      * @param cb Invoked with the member id that left.
      */
-    onParticipantLeave(cb: (participantId: string) => void): void;
+    onParticipantLeave(cb: (participantId: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for native raised-hand signals. "Latest handler wins."
@@ -147,28 +147,28 @@ export interface IWebexMeetingSdk {
      *
      * @param cb Invoked with the member id and whether the hand is now raised.
      */
-    onHandRaise(cb: (participantId: string, raised: boolean) => void): void;
+    onHandRaise(cb: (participantId: string, raised: boolean) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Returns the current member roster (including the bot).
      *
      * @returns The current members.
      */
-    getParticipants(): Promise<WebexParticipant[]>;
+    getParticipants(): Promise<WebexParticipant[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Posts a message to the Webex meeting space chat (everyone).
      *
      * @param text The chat message text.
      */
-    postChatMessage(text: string): Promise<void>;
+    postChatMessage(text: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Mutes a member (requires the bot be a host/cohost with the relevant privilege).
      *
      * @param participantId The member to mute.
      */
-    muteParticipant(participantId: string): Promise<void>;
+    muteParticipant(participantId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when the meeting ends (host ended / meeting state → ENDED).
@@ -176,7 +176,7 @@ export interface IWebexMeetingSdk {
      *
      * @param cb Invoked when the meeting has ended.
      */
-    onMeetingEnded(cb: () => void): void;
+    onMeetingEnded(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
