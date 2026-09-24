@@ -290,11 +290,16 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
     // User Actions
     // ========================================
 
-    public onClose(): void {
+    public OnClose(): void {
         this.Close.emit();
     }
 
-    public onEntityLinkClick(field: DetailField): void {
+    /** @deprecated Use {@link OnClose}. */
+    public onClose(): void {
+      return this.OnClose();
+    }
+
+    public OnEntityLinkClick(field: DetailField): void {
         if (field.targetEntityName && field.value != null) {
             this.EntityLinkClick.emit({
                 entityName: field.targetEntityName,
@@ -304,39 +309,74 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
         }
     }
 
-    public onNavigatePrev(): void {
+    /** @deprecated Use {@link OnEntityLinkClick}. */
+    public onEntityLinkClick(field: DetailField): void {
+      return this.OnEntityLinkClick(field);
+    }
+
+    public OnNavigatePrev(): void {
         this.NavigateRow.emit('prev');
     }
 
-    public onNavigateNext(): void {
+    /** @deprecated Use {@link OnNavigatePrev}. */
+    public onNavigatePrev(): void {
+      return this.OnNavigatePrev();
+    }
+
+    public OnNavigateNext(): void {
         this.NavigateRow.emit('next');
     }
 
-    public toggleFieldExpand(field: DetailField): void {
+    /** @deprecated Use {@link OnNavigateNext}. */
+    public onNavigateNext(): void {
+      return this.OnNavigateNext();
+    }
+
+    public ToggleFieldExpand(field: DetailField): void {
         field.isExpanded = !field.isExpanded;
         this.cdr.markForCheck();
     }
 
-    public copyValue(field: DetailField): void {
+    /** @deprecated Use {@link ToggleFieldExpand}. */
+    public toggleFieldExpand(field: DetailField): void {
+      return this.ToggleFieldExpand(field);
+    }
+
+    public CopyValue(field: DetailField): void {
         const textToCopy = field.value != null ? String(field.value) : '';
         navigator.clipboard.writeText(textToCopy);
     }
 
-    public copyRowAsJson(): void {
+    /** @deprecated Use {@link CopyValue}. */
+    public copyValue(field: DetailField): void {
+      return this.CopyValue(field);
+    }
+
+    public CopyRowAsJson(): void {
         if (this._rowData) {
             const json = JSON.stringify(this._rowData, null, 2);
             navigator.clipboard.writeText(json);
         }
     }
 
-    public isJson(value: string): boolean {
+    /** @deprecated Use {@link CopyRowAsJson}. */
+    public copyRowAsJson(): void {
+      return this.CopyRowAsJson();
+    }
+
+    public IsJson(value: string): boolean {
         if (!value || typeof value !== 'string') return false;
         const trimmed = value.trim();
         return (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
                (trimmed.startsWith('[') && trimmed.endsWith(']'));
     }
 
-    public formatJson(value: string): string {
+    /** @deprecated Use {@link IsJson}. */
+    public isJson(value: string): boolean {
+      return this.IsJson(value);
+    }
+
+    public FormatJson(value: string): string {
         try {
             return JSON.stringify(JSON.parse(value), null, 2);
         } catch {
@@ -344,15 +384,25 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
         }
     }
 
+    /** @deprecated Use {@link FormatJson}. */
+    public formatJson(value: string): string {
+      return this.FormatJson(value);
+    }
+
     // ========================================
     // Resize Handling
     // ========================================
 
-    public onResizeStart(event: MouseEvent): void {
+    public OnResizeStart(event: MouseEvent): void {
         event.preventDefault();
         this.IsResizing = true;
         document.body.style.cursor = 'ew-resize';
         document.body.style.userSelect = 'none';
+    }
+
+    /** @deprecated Use {@link OnResizeStart}. */
+    public onResizeStart(event: MouseEvent): void {
+      return this.OnResizeStart(event);
     }
 
     @HostListener('document:mousemove', ['$event'])
@@ -422,27 +472,42 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
         }
     }
 
-    public toggleHideEmptyFields(): void {
+    public ToggleHideEmptyFields(): void {
         this.HideEmptyFields = !this.HideEmptyFields;
         this.persistHideEmptyFieldsPreference();
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link ToggleHideEmptyFields}. */
+    public toggleHideEmptyFields(): void {
+      return this.ToggleHideEmptyFields();
+    }
+
     /**
      * Returns visible fields based on HideEmptyFields setting
      */
-    public getVisibleFields(fields: DetailField[]): DetailField[] {
+    public GetVisibleFields(fields: DetailField[]): DetailField[] {
         if (!this.HideEmptyFields) {
             return fields;
         }
         return fields.filter(f => f.value !== null && f.value !== undefined && f.value !== '');
     }
 
+    /** @deprecated Use {@link GetVisibleFields}. */
+    public getVisibleFields(fields: DetailField[]): DetailField[] {
+      return this.GetVisibleFields(fields);
+    }
+
     /**
      * Returns count of empty fields for display
      */
-    public getEmptyFieldCount(fields: DetailField[]): number {
+    public GetEmptyFieldCount(fields: DetailField[]): number {
         return fields.filter(f => f.value === null || f.value === undefined || f.value === '').length;
+    }
+
+    /** @deprecated Use {@link GetEmptyFieldCount}. */
+    public getEmptyFieldCount(fields: DetailField[]): number {
+      return this.GetEmptyFieldCount(fields);
     }
 
     // ========================================
@@ -454,14 +519,14 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
         if (!this.Visible) return;
 
         if (event.key === 'Escape') {
-            this.onClose();
+            this.OnClose();
         } else if (event.key === 'ArrowUp' || event.key === 'k') {
             if (this.RowIndex > 0) {
-                this.onNavigatePrev();
+                this.OnNavigatePrev();
             }
         } else if (event.key === 'ArrowDown' || event.key === 'j') {
             if (this.RowIndex < this.TotalRows - 1) {
-                this.onNavigateNext();
+                this.OnNavigateNext();
             }
         }
     }

@@ -1,5 +1,453 @@
 # @memberjunction/integration-connectors
 
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/external-data-sources@6.2.0-edge.0
+  - @memberjunction/integration-engine@6.2.0-edge.0
+  - @memberjunction/integration-engine-base@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- a16f0db: <!-- Bump type is `minor`, not `major`, even though this IS a breaking change. The repo sits
+       at an unpublished 6.0.0 (nothing above 5.51.0 is on npm) and 6.0.0 is itself the era open
+       that carries the 6.x breaking changes — so this ships *inside* it. Under the fixed group
+       and changesets pre-mode, a `major` here resolves to 7.0.0-edge.0 and burns the entire 6.x
+       era in one release; verified by running `changeset version`. publish.yml's era gate only
+       hard-fails *unsuffixed* versions, so `7.0.0-edge.0` would sail through it. Use `major`
+       only once 6.x has actually shipped and you mean to open 7. -->
+
+  **BREAKING (6.x): remove the 36 vendor connectors from `@memberjunction/integration-connectors`.**
+
+  Every one of them was a duplicate — the same class shipped from both this monorepo and the
+  [MemberJunction/Integrations](https://github.com/MemberJunction/Integrations) repo, where each connector
+  is a self-contained Open App (`@memberjunction/connector-<vendor>`) with its own versioning, changesets,
+  metadata, CI gates and seed migrations for SQL Server **and** PostgreSQL. The Integrations copy is the
+  one that ships to customers; keeping a second copy here meant fixing everything twice and letting the
+  two drift. The Integrations repo is now the single source of truth, and connectors version independently
+  of the MJ core release train.
+
+  Removed: Aptify, Blackbaud, ConstantContact, Cvent, DynamicsDataverse, FileFeed, Fonteva, GrowthZone,
+  Hivebrite, HubSpot, iMIS, MJToMJ, MagnetMail, Mailchimp, MemberSuite, NeonCRM, NetForum, NetSuite,
+  NimbleAMS, Novi, ORCID, OpenWater, PathLMS, PheedLoop, PropFuel, QuickBooks, Rasa, Reach360,
+  RelationalDB, Rhythm, SageIntacct, Salesforce, SharePoint, Wicket, WildApricot, YourMembership — plus
+  their unit tests, fixtures and the `generate-integration-actions.ts` CLI that existed only to instantiate
+  them.
+
+  **What remains** is the three External Data Source connector base classes —
+  `BaseExternalDataSourceConnector`, `BaseSqlExternalDataSourceConnector` and
+  `BaseDocumentDataSourceConnector`. These are _not_ duplicated: six shipped Open Apps (SQL Server,
+  PostgreSQL, MySQL, Oracle, Snowflake, MongoDB) import them from this package rather than carrying their
+  own copy, so the package stays — reduced to that shared layer.
+
+  **Migration.** Install the Open App for each connector you use. Its seed migration writes the _same_
+  `__mj.Integration` row (same hardcoded ID as the original monorepo seed) with `ClassName` and
+  `ImportPath` re-pointed to the connector's npm package, so existing `CompanyIntegration` records keep
+  working. Direct imports change from `@memberjunction/integration-connectors` to
+  `@memberjunction/connector-<vendor>`. **A deployment that upgrades to 6.x without installing the
+  corresponding Open App will have catalog rows pointing at a package that no longer contains those
+  classes, and those integrations will fail to resolve.** Applied migrations under `migrations/v5/**` are
+  untouched — the re-point happens forward, through each Open App's own migration.
+
+  **The same-ID re-point holds for 16 of the 24 monorepo-seeded integrations, but NOT for seven of them.**
+  Comparing every `spCreateIntegration` seed in `migrations/v5/**` against every Open App seed in the
+  Integrations repo, these seven do not re-point an existing row and need a manual step before or during a
+  6.x upgrade:
+
+  | Integration      | monorepo seed                   | Open App seed                   | what happens on install                                  |
+  | ---------------- | ------------------------------- | ------------------------------- | -------------------------------------------------------- |
+  | Mailchimp        | `987FA1B5-…` `Mailchimp`        | `D9C7F5B4-…` `mailchimp`        | **install fails** — `UQ_Integration_Name` violation      |
+  | Blackbaud        | `2BBF275A-…` `Blackbaud`        | `0159550E-…` `blackbaud`        | **install fails** — same, collation is `CI`              |
+  | HubSpot          | `3DD4C246-…` `HubSpot`          | `71EC4CCB-…` `HubSpot`          | **install fails** — same                                 |
+  | MagnetMail       | `7F9BD70C-…` `MagnetMail`       | `98A49146-…` `magnetmail`       | **install fails** — same                                 |
+  | Wild Apricot     | `4FB2B6BF-…` `Wild Apricot`     | `FE1334F6-…` `Wild Apricot`     | **install fails** — same                                 |
+  | Constant Contact | `16B66076-…` `Constant Contact` | `65BB124A-…` `constant-contact` | installs a **second** row; the original silently dangles |
+  | File Feed        | `D26F22CE-…` `File Feed`        | _(no seed migration at all)_    | nothing re-points it; the row dangles                    |
+
+  For the five collision cases the Open App migration aborts on `UQ_Integration_Name`, so the connector
+  cannot be installed at all until the pre-existing row is renamed or removed; for the last two the install
+  succeeds but leaves the original row pointing at the emptied package. Repointing those seven rows —
+  either by aligning the Open App seed IDs or by a forward re-point migration — is a prerequisite for the
+  6.x cut, not an upgrade footnote.
+
+  Also in this change:
+  - `@memberjunction/server-bootstrap` drops its `@memberjunction/integration-connectors` dependency and
+    the 35 corresponding entries from its generated class-registration manifest. That dependency existed
+    solely to statically pin `@RegisterClass` classes against tree-shaking; the remaining base classes are
+    abstract and register nothing, so it no longer served a purpose.
+  - `@memberjunction/integration-connectors` drops `jsonwebtoken`, `mssql`, `zod` and
+    `@memberjunction/global`, none of which the remaining source imports.
+  - `packages/Integration/docs/connector-development.md` and `INTEGRATION_ACTIONS.md` now direct new
+    connector work to the Integrations repo, with a table mapping each monorepo convention to its Open App
+    equivalent (including the registration-key change from the bare class symbol to the npm package name).
+
+### Patch Changes
+
+- Updated dependencies [323df0f]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [405c035]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [6242df1]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [2003cd3]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [bb79505]
+- Updated dependencies [d40251e]
+- Updated dependencies [653c51d]
+- Updated dependencies [52490a7]
+- Updated dependencies [a59e52d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [29187f8]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [5b30129]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [9cce262]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [79afbff]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [e3a1425]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [0967ba7]
+- Updated dependencies [64915b9]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fefca2]
+- Updated dependencies [5c1d762]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [d31cba4]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [ca3657d]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [4f20e10]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [ec71199]
+- Updated dependencies [1f66f31]
+- Updated dependencies [4b1257f]
+- Updated dependencies [c4e98ce]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/integration-engine@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/integration-engine-base@6.1.0
+  - @memberjunction/external-data-sources@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/external-data-sources@6.1.0-edge.7
+  - @memberjunction/integration-engine@6.1.0-edge.7
+  - @memberjunction/integration-engine-base@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/integration-engine@6.1.0-edge.6
+  - @memberjunction/external-data-sources@6.1.0-edge.6
+  - @memberjunction/integration-engine-base@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [323df0f]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [405c035]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [653c51d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [79afbff]
+- Updated dependencies [e3a1425]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [64915b9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [5c1d762]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [4f20e10]
+- Updated dependencies [1f66f31]
+  - @memberjunction/integration-engine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/external-data-sources@6.1.0-edge.5
+  - @memberjunction/integration-engine-base@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [6242df1]
+- Updated dependencies [d40251e]
+- Updated dependencies [a59e52d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [29187f8]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cce262]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d31cba4]
+- Updated dependencies [d078c54]
+- Updated dependencies [ec71199]
+- Updated dependencies [c4e98ce]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/integration-engine@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/integration-engine-base@6.1.0-edge.4
+  - @memberjunction/external-data-sources@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [2003cd3]
+- Updated dependencies [bb79505]
+- Updated dependencies [52490a7]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [5b30129]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [ca3657d]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/integration-engine@6.1.0-edge.3
+  - @memberjunction/external-data-sources@6.1.0-edge.3
+  - @memberjunction/integration-engine-base@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Patch Changes

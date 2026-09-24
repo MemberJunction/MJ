@@ -9,8 +9,8 @@
  * @module @memberjunction/ai-agents
  */
 import { PipeValue } from './pipeline.types';
-import { getValue } from './path';
-import { valueToText } from './coerce';
+import { GetValue } from './path';
+import { ValueToText } from './coerce';
 
 /** Binding scope: `$` = current upstream value; other keys = map/let bindings. */
 export type TemplateScope = Record<string, PipeValue>;
@@ -19,8 +19,13 @@ const WHOLE = /^\s*\{\{\s*([^}]+?)\s*\}\}\s*$/;
 const EMBEDDED = /\{\{\s*([^}]+?)\s*\}\}/g;
 
 /** Recursively resolve templates in a tool's `with` params object. */
-export function resolveParams(params: Record<string, unknown>, scope: TemplateScope): Record<string, unknown> {
+export function ResolveParams(params: Record<string, unknown>, scope: TemplateScope): Record<string, unknown> {
     return resolveValue(params, scope) as Record<string, unknown>;
+}
+
+/** @deprecated Use {@link ResolveParams}. */
+export function resolveParams(params: Record<string, unknown>, scope: TemplateScope): Record<string, unknown> {
+    return ResolveParams(params, scope);
 }
 
 function resolveValue(value: unknown, scope: TemplateScope): unknown {
@@ -39,13 +44,13 @@ function resolveValue(value: unknown, scope: TemplateScope): unknown {
 function resolveString(s: string, scope: TemplateScope): unknown {
     const whole = WHOLE.exec(s);
     if (whole) {
-        return resolvePath(whole[1], scope); // raw value
+        return ResolvePath(whole[1], scope); // raw value
     }
-    return s.replace(EMBEDDED, (_m, path) => valueToText(resolvePath(path, scope) ?? null));
+    return s.replace(EMBEDDED, (_m, path) => ValueToText(ResolvePath(path, scope) ?? null));
 }
 
 /** Resolve a scoped path like `row.Email` or `$.Results[0].Name`. Throws on an unknown binding. */
-export function resolvePath(path: string, scope: TemplateScope): PipeValue | undefined {
+export function ResolvePath(path: string, scope: TemplateScope): PipeValue | undefined {
     const trimmed = path.trim();
     const varMatch = /^[A-Za-z_$][A-Za-z0-9_]*/.exec(trimmed);
     if (!varMatch) {
@@ -61,5 +66,10 @@ export function resolvePath(path: string, scope: TemplateScope): PipeValue | und
     if (rest.startsWith('.')) {
         rest = rest.slice(1);
     }
-    return rest === '' ? root : getValue(root, rest);
+    return rest === '' ? root : GetValue(root, rest);
+}
+
+/** @deprecated Use {@link ResolvePath}. */
+export function resolvePath(path: string, scope: TemplateScope): PipeValue | undefined {
+    return ResolvePath(path, scope);
 }

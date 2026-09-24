@@ -93,6 +93,7 @@ this.router.events.pipe(
 | Nav item (static) | `/app/:appPath/:navItemName` |
 | App default (no nav items) | `/app/:appPath` |
 | Entity record | `/app/:appPath/record/:entityName/:recordId` |
+| New entity record | `/app/:appPath/record/:entityName/new?NewRecordValues=Field\|value\|\|Field2\|value2` |
 | Saved view | `/app/:appPath/view/:viewId` |
 | Dynamic view | `/app/:appPath/view/dynamic/:entityName?ExtraFilter=...` |
 | Dashboard | `/app/:appPath/dashboard/:dashboardId` |
@@ -234,6 +235,17 @@ Sub-navigation state is appended directly to the nav item URL:
 ```
 
 These params are stored in `tab.configuration.queryParams` by the `WorkspaceStateManager` and serialized into the URL by `buildResourceUrl` via `appendQP`.
+
+New-record tabs use the path sentinel `new` (`NEW_ENTITY_RECORD_URL_ID` in
+`@memberjunction/core`; `IsNewEntityRecordUrlId` is the matcher) and an
+optional `NewRecordValues` query param (`NEW_RECORD_VALUES_QUERY_PARAM`).
+The value is `FieldValueCollection` encoding (`Field|value||Field2|value2`);
+`EncodeNewRecordValuesForURL` builds it from an object. Related-entity
+grids pass every join field that filters the grid, so a deeplink such as
+`/app/Home/record/Order%20Headers/new?NewRecordValues=BillToPersonID|<id>||ShipToPersonID|<id>`
+opens a new order already linked back to the person. `recordId === 'new'`
+loads an empty `CompositeKey` (not a UUID named `new`). Refresh and share
+keep those defaults.
 
 ---
 

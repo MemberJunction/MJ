@@ -1,9 +1,9 @@
 import { RegisterClass } from '@memberjunction/global';
-import { FacebookBaseAction, FacebookInsight } from '../facebook-base.action';
+import { FacebookBaseAction, FacebookInsight, FacebookPagedResponse, FacebookPostEngagement } from '../facebook-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
-import axios from 'axios';
+import { HttpGet } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -109,10 +109,10 @@ export class FacebookGetPostInsightsAction extends FacebookBaseAction {
                 : this.getDefaultPostMetrics(includeVideoMetrics);
 
             // Get post insights
-            const insightsResponse = await axios.get(
+            const insightsResponse = await HttpGet<FacebookPagedResponse<FacebookInsight>>(
                 `${this.apiBaseUrl}/${postId}/insights`,
                 {
-                    params: {
+                    Query: {
                         access_token: pageToken,
                         metric: metrics.join(','),
                         period: period
@@ -120,20 +120,20 @@ export class FacebookGetPostInsightsAction extends FacebookBaseAction {
                 }
             );
 
-            const insights: FacebookInsight[] = insightsResponse.data.data || [];
+            const insights: FacebookInsight[] = insightsResponse.Data.data || [];
 
             // Get additional engagement data
-            const engagementResponse = await axios.get(
+            const engagementResponse = await HttpGet<FacebookPostEngagement>(
                 `${this.apiBaseUrl}/${postId}`,
                 {
-                    params: {
+                    Query: {
                         access_token: pageToken,
                         fields: 'reactions.summary(true).limit(0),comments.summary(true).limit(0),shares,likes.summary(true).limit(0)'
                     }
                 }
             );
 
-            const engagementData = engagementResponse.data;
+            const engagementData = engagementResponse.Data;
 
             // Get demographic insights if requested
             let demographics = null;
@@ -279,17 +279,17 @@ export class FacebookGetPostInsightsAction extends FacebookBaseAction {
                 'post_clicks_by_age_gender_unique'
             ];
 
-            const response = await axios.get(
+            const response = await HttpGet<FacebookPagedResponse<FacebookInsight>>(
                 `${this.apiBaseUrl}/${postId}/insights`,
                 {
-                    params: {
+                    Query: {
                         access_token: pageToken,
                         metric: demographicMetrics.join(',')
                     }
                 }
             );
 
-            const insights = response.data.data || [];
+            const insights = response.Data.data || [];
             const demographics: Record<string, any> = {};
 
             for (const insight of insights) {

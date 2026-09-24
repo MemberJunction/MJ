@@ -38,7 +38,7 @@ function cssUrl(u: string): string {
  * Returns CSS scoped to `[data-theme-overlay="<id>"]` (+ a dark companion block);
  * append it to the color overlay so one Blob carries the whole brand.
  */
-export function emitLogoOverlayCss(themeId: string, logos: ThemeLogos): string {
+export function EmitLogoOverlayCss(themeId: string, logos: ThemeLogos): string {
   const sel = `[data-theme-overlay="${themeId}"]`;
   const base: string[] = [];
   if (logos.lightMarkURL) {
@@ -62,6 +62,11 @@ export function emitLogoOverlayCss(themeId: string, logos: ThemeLogos): string {
   }
 
   return css;
+}
+
+/** @deprecated Use {@link EmitLogoOverlayCss}. */
+export function emitLogoOverlayCss(themeId: string, logos: ThemeLogos): string {
+  return EmitLogoOverlayCss(themeId, logos);
 }
 
 /** The four logo variant slots a theme can carry (16.6). */
@@ -115,7 +120,7 @@ const SVG_MIME = 'image/svg+xml';
 const ACCEPTED_RASTER = ['image/png', 'image/webp', 'image/jpeg'];
 
 /** Pull an intrinsic width/height from an SVG's viewBox (preferred) or width/height. */
-export function svgDimensions(svgText: string): { width?: number; height?: number } {
+export function SvgDimensions(svgText: string): { width?: number; height?: number } {
   const vb = /viewBox\s*=\s*["']\s*[-\d.]+\s+[-\d.]+\s+([-\d.]+)\s+([-\d.]+)\s*["']/i.exec(svgText);
   if (vb) return { width: parseFloat(vb[1]), height: parseFloat(vb[2]) };
   const w = /\bwidth\s*=\s*["']\s*([\d.]+)/i.exec(svgText);
@@ -123,12 +128,17 @@ export function svgDimensions(svgText: string): { width?: number; height?: numbe
   return { width: w ? parseFloat(w[1]) : undefined, height: h ? parseFloat(h[1]) : undefined };
 }
 
+/** @deprecated Use {@link SvgDimensions}. */
+export function svgDimensions(svgText: string): { width?: number; height?: number } {
+  return SvgDimensions(svgText);
+}
+
 /**
  * Detect whether an SVG paints with at most one color — the only case where
  * recoloring to a single monochrome tint is safe. `none` and `currentColor` are
  * ignored (they carry no fixed hue); a gradient or >1 distinct color is not single-fill.
  */
-export function isSingleFillSvg(svgText: string): boolean {
+export function IsSingleFillSvg(svgText: string): boolean {
   if (/<(linear|radial)Gradient|url\(#/i.test(svgText)) return false;
   const colors = new Set<string>();
   const add = (raw: string | undefined) => {
@@ -143,8 +153,13 @@ export function isSingleFillSvg(svgText: string): boolean {
   return colors.size <= 1;
 }
 
+/** @deprecated Use {@link IsSingleFillSvg}. */
+export function isSingleFillSvg(svgText: string): boolean {
+  return IsSingleFillSvg(svgText);
+}
+
 /** Validate one logo upload against its slot's rules. */
-export function validateLogo(input: LogoInput): LogoValidationResult {
+export function ValidateLogo(input: LogoInput): LogoValidationResult {
   const rule = RULES[input.slot];
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -159,7 +174,7 @@ export function validateLogo(input: LogoInput): LogoValidationResult {
 
   let { width, height } = input;
   if (isSvg && input.svgText && (width === undefined || height === undefined)) {
-    const d = svgDimensions(input.svgText);
+    const d = SvgDimensions(input.svgText);
     width = width ?? d.width;
     height = height ?? d.height;
   }
@@ -190,7 +205,12 @@ export function validateLogo(input: LogoInput): LogoValidationResult {
     }
   }
 
-  const singleFill = isSvg && !!input.svgText && isSingleFillSvg(input.svgText);
+  const singleFill = isSvg && !!input.svgText && IsSingleFillSvg(input.svgText);
 
   return { ok: errors.length === 0, errors, warnings, isSingleFillSvg: singleFill, aspectRatio };
+}
+
+/** @deprecated Use {@link ValidateLogo}. */
+export function validateLogo(input: LogoInput): LogoValidationResult {
+  return ValidateLogo(input);
 }

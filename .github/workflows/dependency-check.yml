@@ -9,7 +9,7 @@ on:
       - 'packages/**/*.tsx'
       - 'packages/**/package.json'
       - 'package.json'
-      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
 
 jobs:
   check-dependencies:

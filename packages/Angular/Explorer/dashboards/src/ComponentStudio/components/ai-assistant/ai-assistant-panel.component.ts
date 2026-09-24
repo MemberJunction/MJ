@@ -267,8 +267,7 @@ export class AIAssistantPanelComponent extends BaseAngularComponent implements O
 
     public OnTaskClicked(task: MJTaskEntity): void {
         try {
-            const key = CompositeKey.FromID(task.ID);
-            this.navigationService.OpenEntityRecord('MJ: Tasks', key);
+            this.navigationService.OpenEntityRecord('MJ: Tasks', CompositeKey.FromID(task.ID));
         } catch (err) {
             LogError(`AIAssistantPanel.OnTaskClicked: ${err instanceof Error ? err.message : String(err)}`);
         }

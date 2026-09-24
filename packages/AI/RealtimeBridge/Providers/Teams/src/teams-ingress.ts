@@ -17,7 +17,7 @@
  */
 
 import { timingSafeEqual } from 'node:crypto';
-import { buildGraphCreateCallRequest, GraphCallParticipant, GraphCreateCallRequest } from './real-teams-bindings';
+import { BuildGraphCreateCallRequest, GraphCallParticipant, GraphCreateCallRequest } from './real-teams-bindings';
 import { TeamsJoinArgs } from './teams-sdk';
 
 /**
@@ -62,7 +62,7 @@ export type GraphNotificationValidation =
  * @param notificationClientStates The `clientState` of each notification in the POST body (empty for handshake).
  * @returns The discriminated validation result.
  */
-export function validateGraphNotification(
+export function ValidateGraphNotification(
     validationToken: string | undefined,
     expectedClientState: string,
     notificationClientStates: ReadonlyArray<string | undefined>,
@@ -78,6 +78,15 @@ export function validateGraphNotification(
         }
     }
     return { Kind: 'notification' };
+}
+
+/** @deprecated Use {@link ValidateGraphNotification}. */
+export function validateGraphNotification(
+    validationToken: string | undefined,
+    expectedClientState: string,
+    notificationClientStates: ReadonlyArray<string | undefined>,
+): GraphNotificationValidation {
+    return ValidateGraphNotification(validationToken, expectedClientState, notificationClientStates);
 }
 
 /** The normalized lifecycle state of a Teams call, mapped from a Graph call/participant notification. */
@@ -123,7 +132,7 @@ export interface GraphCallResourceData {
  * @returns The normalized call notification.
  * @throws When no call id can be resolved (a notification with no identifiable call is unactionable).
  */
-export function parseCallNotification(notification: GraphChangeNotification): NormalizedCallNotification {
+export function ParseCallNotification(notification: GraphChangeNotification): NormalizedCallNotification {
     const callId = notification.resourceData?.id ?? extractCallIdFromResource(notification.resource);
     if (!callId) {
         throw new Error(
@@ -138,6 +147,11 @@ export function parseCallNotification(notification: GraphChangeNotification): No
     };
 }
 
+/** @deprecated Use {@link ParseCallNotification}. */
+export function parseCallNotification(notification: GraphChangeNotification): NormalizedCallNotification {
+    return ParseCallNotification(notification);
+}
+
 /**
  * Builds the Graph `POST /communications/calls` request body for an on-demand **join-by-URL** trigger, the
  * payload the live `Meeting.JoinByUrl(agentIdentityId, joinUrl)` mutation hands the engine. Thin wrapper over
@@ -150,7 +164,7 @@ export function parseCallNotification(notification: GraphChangeNotification): No
  * @returns The Graph create-call request body.
  * @throws When the join URL carries no resolvable meeting thread id.
  */
-export function buildJoinByUrlRequest(
+export function BuildJoinByUrlRequest(
     joinUrl: string,
     botDisplayName = 'AI Agent',
     tenantId?: string,
@@ -160,7 +174,16 @@ export function buildJoinByUrlRequest(
         BotDisplayName: botDisplayName,
         ...(tenantId ? { TenantId: tenantId } : {}),
     };
-    return buildGraphCreateCallRequest(args);
+    return BuildGraphCreateCallRequest(args);
+}
+
+/** @deprecated Use {@link BuildJoinByUrlRequest}. */
+export function buildJoinByUrlRequest(
+    joinUrl: string,
+    botDisplayName = 'AI Agent',
+    tenantId?: string,
+): GraphCreateCallRequest {
+    return BuildJoinByUrlRequest(joinUrl, botDisplayName, tenantId);
 }
 
 /** Maps a free-form Graph call-state string onto the {@link NormalizedCallState} union. */

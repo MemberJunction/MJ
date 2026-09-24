@@ -70,7 +70,7 @@ export class ClientRegistration {
      * @returns Client registration with credentials
      * @throws Error if no valid client credentials can be obtained
      */
-    public async getOrRegisterClient(
+    public async GetOrRegisterClient(
         connectionId: string,
         serverId: string,
         metadata: AuthServerMetadata,
@@ -144,6 +144,23 @@ export class ClientRegistration {
             `credentials are available. Please configure OAuthClientID and OAuthClientSecretEncrypted ` +
             `on the MCP Server.`
         );
+    }
+
+    /** @deprecated Use {@link GetOrRegisterClient}. */
+    public async getOrRegisterClient(
+        connectionId: string,
+        serverId: string,
+        metadata: AuthServerMetadata,
+        options: {
+            redirectUri: string;
+            scopes?: string;
+            serverName?: string;
+            preConfiguredClientId?: string;
+            preConfiguredClientSecret?: string;
+        },
+        contextUser: UserInfo
+    ): Promise<OAuthClientRegistration> {
+        return this.GetOrRegisterClient(connectionId, serverId, metadata, options, contextUser);
     }
 
     /**
@@ -398,7 +415,7 @@ export class ClientRegistration {
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
 
             if (existing.Success && existing.Results && existing.Results.length > 0) {
-                const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: existing.Results[0].ID }]);
+                const compositeKey = CompositeKey.FromID(existing.Results[0].ID); // first-pk-ok: ENTITY_OAUTH_CLIENT_REGISTRATIONS is the ID-keyed MJ core entity MJ: O Auth Client Registrations
                 await entity.InnerLoad(compositeKey);
             } else {
                 entity.NewRecord();
@@ -437,7 +454,7 @@ export class ClientRegistration {
         try {
             const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
-            const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: registrationId }]);
+            const compositeKey = CompositeKey.FromID(registrationId); // first-pk-ok: ENTITY_OAUTH_CLIENT_REGISTRATIONS is the ID-keyed MJ core entity MJ: O Auth Client Registrations
             const loaded = await entity.InnerLoad(compositeKey);
             if (loaded) {
                 await entity.Delete();
@@ -450,7 +467,7 @@ export class ClientRegistration {
     /**
      * Updates a registration's status.
      */
-    public async updateRegistrationStatus(
+    public async UpdateRegistrationStatus(
         registrationId: string,
         status: OAuthClientRegistrationStatus,
         contextUser: UserInfo,
@@ -459,7 +476,7 @@ export class ClientRegistration {
         try {
             const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
-            const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: registrationId }]);
+            const compositeKey = CompositeKey.FromID(registrationId); // first-pk-ok: ENTITY_OAUTH_CLIENT_REGISTRATIONS is the ID-keyed MJ core entity MJ: O Auth Client Registrations
             const loaded = await entity.InnerLoad(compositeKey);
             if (loaded) {
                 entity.Set('Status', status);
@@ -468,5 +485,15 @@ export class ClientRegistration {
         } catch (error) {
             LogError(`[OAuth] Failed to update registration status: ${error}`);
         }
+    }
+
+    /** @deprecated Use {@link UpdateRegistrationStatus}. */
+    public async updateRegistrationStatus(
+        registrationId: string,
+        status: OAuthClientRegistrationStatus,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<void> {
+        return this.UpdateRegistrationStatus(registrationId, status, contextUser, provider);
     }
 }

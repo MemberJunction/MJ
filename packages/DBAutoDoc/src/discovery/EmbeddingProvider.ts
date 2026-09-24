@@ -17,17 +17,17 @@ import { MJGlobal } from '@memberjunction/global';
 export type EmbeddingProviderName = 'openai' | 'mistral' | 'azure' | 'bedrock' | 'ollama' | 'local';
 
 export interface EmbeddingProviderConfig {
-    provider: EmbeddingProviderName;
-    apiKey: string;
-    model?: string;
-    dimensions?: number;
-    batchSize?: number;
-    endpoint?: string;
+    provider: EmbeddingProviderName;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    apiKey: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    model?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    Dimensions?: number;
+    BatchSize?: number;
+    Endpoint?: string;
 }
 
 export interface EmbeddingProvider {
-    readonly provider: EmbeddingProviderName;
-    embed(texts: string[]): Promise<Float32Array[]>;
+    readonly provider: EmbeddingProviderName;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Embed(texts: string[]): Promise<Float32Array[]>;
 }
 
 /** Provider name → registered MJ embedding driver class (see `@RegisterClass(BaseEmbeddings, ...)`). */
@@ -53,13 +53,18 @@ const PROVIDER_DEFAULT_MODEL: Partial<Record<EmbeddingProviderName, string>> = {
     ollama: 'nomic-embed-text',
 };
 
-export function createEmbeddingProvider(config: EmbeddingProviderConfig): EmbeddingProvider {
+export function CreateEmbeddingProvider(config: EmbeddingProviderConfig): EmbeddingProvider {
     const driverClass = PROVIDER_TO_DRIVER_CLASS[config.provider];
     if (!driverClass) {
         const supported = Object.keys(PROVIDER_TO_DRIVER_CLASS).join(', ');
         throw new Error(`Embedding provider not supported: ${config.provider}. Supported: ${supported}`);
     }
     return new MJEmbeddingProvider(config, driverClass);
+}
+
+/** @deprecated Use {@link CreateEmbeddingProvider}. */
+export function createEmbeddingProvider(config: EmbeddingProviderConfig): EmbeddingProvider {
+    return CreateEmbeddingProvider(config);
 }
 
 /** Wraps a registered `BaseEmbeddings` driver behind the simple `embed(texts)` contract. */
@@ -72,7 +77,7 @@ class MJEmbeddingProvider implements EmbeddingProvider {
     constructor(config: EmbeddingProviderConfig, driverClass: string) {
         this.provider = config.provider;
         this.model = config.model || PROVIDER_DEFAULT_MODEL[config.provider] || '';
-        this.batchSize = config.batchSize ?? 100;
+        this.batchSize = config.BatchSize ?? 100;
 
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
             BaseEmbeddings,
@@ -88,7 +93,7 @@ class MJEmbeddingProvider implements EmbeddingProvider {
         this.embeddings = instance;
     }
 
-    public async embed(texts: string[]): Promise<Float32Array[]> {
+    public async Embed(texts: string[]): Promise<Float32Array[]> {
         const out = new Array<Float32Array>(texts.length);
         for (let i = 0; i < texts.length; i += this.batchSize) {
             const batch = texts.slice(i, i + this.batchSize);

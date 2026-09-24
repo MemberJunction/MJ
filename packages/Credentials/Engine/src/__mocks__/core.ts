@@ -12,30 +12,55 @@ let mockEntityInfos: Array<{ ID: string; Name: string }> = [
     { ID: 'cred-entity-id', Name: 'MJ: Credentials' }
 ];
 
-export function setMockLoadData(entityName: string, data: unknown[]): void {
+export function SetMockLoadData(entityName: string, data: unknown[]): void {
     mockLoadData.set(entityName, data);
 }
 
-export function setMockEntityObject(entityName: string, entity: unknown): void {
+/** @deprecated Use {@link SetMockLoadData}. */
+export function setMockLoadData(entityName: string, data: unknown[]): void {
+    return SetMockLoadData(entityName, data);
+}
+
+export function SetMockEntityObject(entityName: string, entity: unknown): void {
     mockEntityObjects.set(entityName, entity);
 }
 
-export function setMockEntityInfos(infos: Array<{ ID: string; Name: string }>): void {
+/** @deprecated Use {@link SetMockEntityObject}. */
+export function setMockEntityObject(entityName: string, entity: unknown): void {
+    return SetMockEntityObject(entityName, entity);
+}
+
+export function SetMockEntityInfos(infos: Array<{ ID: string; Name: string }>): void {
     mockEntityInfos = infos;
 }
 
-export function clearAllCredentialMocks(): void {
+/** @deprecated Use {@link SetMockEntityInfos}. */
+export function setMockEntityInfos(infos: Array<{ ID: string; Name: string }>): void {
+    return SetMockEntityInfos(infos);
+}
+
+export function ClearAllCredentialMocks(): void {
     mockLoadData.clear();
     mockEntityObjects.clear();
     mockEntityInfos = [{ ID: 'cred-entity-id', Name: 'MJ: Credentials' }];
     _instances.clear();
 }
 
+/** @deprecated Use {@link ClearAllCredentialMocks}. */
+export function clearAllCredentialMocks(): void {
+    return ClearAllCredentialMocks();
+}
+
 // ---- BaseEngine singleton tracking ----
 const _instances: Map<string, unknown> = new Map();
 
-export function resetEngineInstances(): void {
+export function ResetEngineInstances(): void {
     _instances.clear();
+}
+
+/** @deprecated Use {@link ResetEngineInstances}. */
+export function resetEngineInstances(): void {
+    return ResetEngineInstances();
 }
 
 // ---- BaseEngine ----

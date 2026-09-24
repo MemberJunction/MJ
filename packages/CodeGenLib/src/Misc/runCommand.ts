@@ -11,18 +11,44 @@ export type CommandExecutionResult = {
   elapsedTime: number;
 }
 
+const FAILURE_OUTPUT_TAIL_LINES = 40;
+
+/**
+ * Combine the exit-code message with a tail of captured stdout/stderr so AFTER
+ * failures show the actual tsc/pnpm diagnostic instead of just "exited with code N".
+ */
+export function FormatCommandFailureDetail(result: CommandExecutionResult, tailLines: number = FAILURE_OUTPUT_TAIL_LINES): string {
+  const parts: string[] = [];
+  const errorText = (result.error || '').trim();
+  if (errorText) {
+    parts.push(errorText);
+  }
+  const output = (result.output || '').trim();
+  if (output) {
+    const lines = output.split(/\r?\n/);
+    const kept = lines.length > tailLines ? ['…', ...lines.slice(-tailLines)] : lines;
+    parts.push(kept.join('\n'));
+  }
+  return parts.join('\n');
+}
+
+/** @deprecated Use {@link FormatCommandFailureDetail}. */
+export function formatCommandFailureDetail(result: CommandExecutionResult, tailLines: number = FAILURE_OUTPUT_TAIL_LINES): string {
+  return FormatCommandFailureDetail(result, tailLines);
+}
+
 /**
  * Base class that handles the process of running commands which can be done executed from any other area of the system, typically done by the main runMemberJunctionCodeGen process
  */
 export class RunCommandsBase {
-  public async runCommands(commands: CommandInfo[]): Promise<CommandExecutionResult[]>{
+  public async RunCommands(commands: CommandInfo[]): Promise<CommandExecutionResult[]>{
     try {
       const results: CommandExecutionResult[] = [];
 
       for (const command of commands) {
         try {
           // do this in a safe way so that if one command fails, the others can still run
-          results.push(await this.runCommand(command));
+          results.push(await this.RunCommand(command));
         }
         catch (e) {
           // A failed command (non-zero exit / spawn error) rejects. Record it as a
@@ -43,13 +69,29 @@ export class RunCommandsBase {
     }
   }
 
+  /** @deprecated Use {@link RunCommands}. */
+  public async runCommands(commands: CommandInfo[]): Promise<CommandExecutionResult[]> {
+    return this.RunCommands(commands);
+  }
 
-  public async runCommand(command: CommandInfo ): Promise<CommandExecutionResult> {
+
+  public async RunCommand(command: CommandInfo ): Promise<CommandExecutionResult> {
     let cp: ChildProcess = null!;
     try {
+      if (command.isDaemon === true && !(command.timeout && command.timeout > 0)) {
+        const message =
+          `Command "${command.command}" is marked isDaemon but has no timeout. A daemon never exits on its own, ` +
+          `so CodeGen would wait forever. Set timeout (ms) to how long the service needs to boot.`;
+        logError(message);
+        return { output: '', error: message, success: false, elapsedTime: 0 };
+      }
+
       let output = '';
       let startTime = new Date();
-      let bErrors: boolean = false;
+      // Set when the timeout ends the observation window and kills the child itself.
+      // The child's `close` then fires moments later for a kill we performed, which is
+      // not the daemon coming down on its own — see the daemon branch in `close`.
+      let endedByObservationWindow = false;
       const commandName = command.command;
       const absPath = path.resolve(currentWorkingDirectory, command.workingDirectory);
 
@@ -74,13 +116,10 @@ export class RunCommandsBase {
         });
 
         cp.stderr?.on('data', (data) => {
-          const elapsedTime = new Date().getTime() - startTime.getTime();
-          const message: string = data.toString();
-          output += message
-          if (message.toUpperCase().indexOf('ERROR') >= 0) {
-            console.error(`COMMAND: "${command.command}" FAILED: ${elapsedTime/1000} seconds`);
-            bErrors = true;
-          }
+          // tsc / npm / pnpm write the word "error" to stderr on successful
+          // builds (TS diagnostics that were not emitted, deprecation banners,
+          // progress). Exit code is the only honest success signal.
+          output += data.toString();
         });
 
         cp.on('error', (error) => {
@@ -92,17 +131,65 @@ export class RunCommandsBase {
         });
 
         cp.on('close', (code) => {
-          if (code === 0) {
-            const elapsedTime = new Date().getTime() - startTime.getTime();
-            logStatus(`COMMAND: "${command.command}" COMPLETED SUCCESSFULLY: ${elapsedTime/1000} seconds`);
-            resolve({ output: output,
-                      error: null!,
-                      success: !bErrors,
-                      elapsedTime: elapsedTime
-                    });
-          } else {
-            reject(new Error(`Process exited with code ${code}`));
+          // We ended the window ourselves and killed the child, so this close is our
+          // own doing and the race has already settled. Every branch below would
+          // narrate it as an outcome: the daemon branch as a daemon failure, and —
+          // because a killed child closes with a null code, never 0 — the generic
+          // branch as `FAILED: … (Process exited with code null)`, printed directly
+          // under `STAYED UP … boot check passed`. The verdict stays right either way,
+          // but the AFTER log and the diagnostic report would say pass and fail back to
+          // back, and a misread log is the failure this whole change exists to prevent.
+          if (endedByObservationWindow) {
+            return;
           }
+
+          const elapsedTime = new Date().getTime() - startTime.getTime();
+
+          // A daemon's entire assertion is that it STAYS UP, so any close before the
+          // timeout is a failure — exit 0 included. Exit 0 is not the harmless case
+          // here, it is the dangerous one: MJAPI's entry point is
+          // `createMJServer({ resolverPaths }).catch(console.error)`, so a boot failure
+          // is caught, logged and never re-thrown, and Node then exits 0 once the event
+          // loop drains. Treating that as success would report a server that never came
+          // up as a passing boot check — the inverse of the bug isDaemon was added for.
+          // ...unless WE ended the window. The timeout kills the child on the way out,
+          // so its close arrives for a kill we performed, after the race has already
+          // settled as a pass. Reporting that as a daemon failure would print the
+          // opposite of what happened right after a successful boot check.
+          if (command.isDaemon === true && !endedByObservationWindow) {
+            const message = `Daemon exited with code ${code} after ${elapsedTime} ms instead of staying up for its ${command.timeout} ms boot window`;
+            console.error(`COMMAND: "${command.command}" FAILED: ${elapsedTime / 1000} seconds (${message})`);
+            resolve({
+              output,
+              error: message,
+              success: false,
+              elapsedTime,
+            });
+            return;
+          }
+
+          if (code === 0) {
+            logStatus(`COMMAND: "${command.command}" COMPLETED SUCCESSFULLY: ${elapsedTime/1000} seconds`);
+            resolve({
+              output,
+              error: null!,
+              success: true,
+              elapsedTime,
+            });
+            return;
+          }
+
+          // Resolve (do not reject) so callers keep stdout/stderr. The previous
+          // reject-on-nonzero path dropped the captured output and left AFTER
+          // failures looking like a bare "Process exited with code N".
+          const message = `Process exited with code ${code}`;
+          console.error(`COMMAND: "${command.command}" FAILED: ${elapsedTime/1000} seconds (${message})`);
+          resolve({
+            output,
+            error: message,
+            success: false,
+            elapsedTime,
+          });
         });
       });
 
@@ -111,17 +198,25 @@ export class RunCommandsBase {
         const timeoutPromise = new Promise<CommandExecutionResult>((resolve) => {
           setTimeout(() => {
             const elapsedTime = new Date().getTime() - startTime.getTime();
+            // A daemon has no exit of its own — staying up for the whole budget is
+            // the pass. Anything else that reaches the timeout has hung.
+            const isDaemon = command.isDaemon === true;
+            endedByObservationWindow = true;
             if (!cp.killed) {
               treeKill(cp.pid!);
-              console.error(`COMMAND: "${command.command}" COMPLETED ${bErrors ? ' - FAILED' : ' - SUCCESS'} IN ${elapsedTime / 1000} seconds`);
+              if (isDaemon) {
+                logStatus(`COMMAND: "${command.command}" STAYED UP for ${elapsedTime / 1000} seconds — daemon boot check passed.`);
+              } else {
+                console.error(`COMMAND: "${command.command}" TIMED OUT after ${elapsedTime / 1000} seconds`);
+              }
               output += `Process killed after ${timeout} ms`;
             }
 
             resolve({
-              output: output,
-              error: null!,
-              success: !bErrors,
-              elapsedTime: elapsedTime,
+              output,
+              error: isDaemon ? null! : `Timed out after ${timeout} ms`,
+              success: isDaemon,
+              elapsedTime,
             });
           }, timeout);
         });
@@ -145,5 +240,10 @@ export class RunCommandsBase {
       }
       throw e;
     }
+  }
+
+  /** @deprecated Use {@link RunCommand}. */
+  public async runCommand(command: CommandInfo ): Promise<CommandExecutionResult> {
+    return this.RunCommand(command);
   }
 }

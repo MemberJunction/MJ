@@ -21,7 +21,7 @@ import { RealtimeRecordingMedia } from './realtime-recording-capture';
  * @param agent The agent whose recording/attachment storage configuration drives the choice.
  * @returns The resolved storage account id, or `null`.
  */
-export async function resolveRecordingStorageAccountID(
+export async function ResolveRecordingStorageAccountID(
     agent: MJAIAgentEntity, contextUser: UserInfo, provider?: IMetadataProvider
 ): Promise<string | null> {
     const providerID = agent.RecordingStorageProviderID || agent.AttachmentStorageProviderID;
@@ -39,6 +39,13 @@ export async function resolveRecordingStorageAccountID(
         accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
     }
     return accounts[0]?.ID ?? null;
+}
+
+/** @deprecated Use {@link ResolveRecordingStorageAccountID}. */
+export async function resolveRecordingStorageAccountID(
+    agent: MJAIAgentEntity, contextUser: UserInfo, provider?: IMetadataProvider
+): Promise<string | null> {
+    return ResolveRecordingStorageAccountID(agent, contextUser, provider);
 }
 
 /** Input to {@link storeRealtimeRecording}. */
@@ -89,7 +96,7 @@ function recordingFolder(sessionID: string): string {
  * @param fileID The `MJ: Files` id of the recording.
  * @returns `{ Bytes, MimeType }` or `null` when the file/account/object can't be resolved.
  */
-export async function readRealtimeRecordingFile(
+export async function ReadRealtimeRecordingFile(
     fileID: string, contextUser: UserInfo, provider: IMetadataProvider
 ): Promise<{ Bytes: Buffer; MimeType: string } | null> {
     try {
@@ -120,6 +127,13 @@ export async function readRealtimeRecordingFile(
     }
 }
 
+/** @deprecated Use {@link ReadRealtimeRecordingFile}. */
+export async function readRealtimeRecordingFile(
+    fileID: string, contextUser: UserInfo, provider: IMetadataProvider
+): Promise<{ Bytes: Buffer; MimeType: string } | null> {
+    return ReadRealtimeRecordingFile(fileID, contextUser, provider);
+}
+
 /** Input to {@link writeRealtimeRecordingSegment}. */
 export interface WriteRecordingSegmentInput {
     SessionID: string;
@@ -141,7 +155,7 @@ export interface WriteRecordingSegmentInput {
  *
  * @returns `true` on success.
  */
-export async function writeRealtimeRecordingSegment(input: WriteRecordingSegmentInput): Promise<boolean> {
+export async function WriteRealtimeRecordingSegment(input: WriteRecordingSegmentInput): Promise<boolean> {
     const { SessionID, SegmentIndex, Audio, MimeType, StorageAccountID, ContextUser } = input;
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(StorageAccountID, ContextUser);
@@ -153,6 +167,11 @@ export async function writeRealtimeRecordingSegment(input: WriteRecordingSegment
     }
 }
 
+/** @deprecated Use {@link WriteRealtimeRecordingSegment}. */
+export async function writeRealtimeRecordingSegment(input: WriteRecordingSegmentInput): Promise<boolean> {
+    return WriteRealtimeRecordingSegment(input);
+}
+
 /**
  * Writes the capture-time waveform peaks as a `peaks.json` sidecar (a JSON array of numbers) into the
  * session's recording folder via the storage driver. Best-effort and tolerant — a missing/empty peaks
@@ -161,7 +180,7 @@ export async function writeRealtimeRecordingSegment(input: WriteRecordingSegment
  *
  * @returns `true` when a sidecar was written.
  */
-export async function writeRecordingPeaksSidecar(
+export async function WriteRecordingPeaksSidecar(
     sessionID: string, storageAccountID: string, peaks: number[] | undefined, contextUser: UserInfo
 ): Promise<boolean> {
     if (!Array.isArray(peaks) || peaks.length === 0) {
@@ -177,13 +196,20 @@ export async function writeRecordingPeaksSidecar(
     }
 }
 
+/** @deprecated Use {@link WriteRecordingPeaksSidecar}. */
+export async function writeRecordingPeaksSidecar(
+    sessionID: string, storageAccountID: string, peaks: number[] | undefined, contextUser: UserInfo
+): Promise<boolean> {
+    return WriteRecordingPeaksSidecar(sessionID, storageAccountID, peaks, contextUser);
+}
+
 /**
  * Deletes the `seg-*` shards in a session's folder, leaving the consolidated `recording.*` file. Called
  * after {@link storeRealtimeRecording} writes the canonical file at end of call. Never throws.
  *
  * @returns The number of shards deleted.
  */
-export async function deleteRealtimeRecordingSegments(sessionID: string, storageAccountID: string, contextUser: UserInfo): Promise<number> {
+export async function DeleteRealtimeRecordingSegments(sessionID: string, storageAccountID: string, contextUser: UserInfo): Promise<number> {
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
         const folder = recordingFolder(sessionID);
@@ -202,16 +228,30 @@ export async function deleteRealtimeRecordingSegments(sessionID: string, storage
     }
 }
 
+/** @deprecated Use {@link DeleteRealtimeRecordingSegments}. */
+export async function deleteRealtimeRecordingSegments(sessionID: string, storageAccountID: string, contextUser: UserInfo): Promise<number> {
+    return DeleteRealtimeRecordingSegments(sessionID, storageAccountID, contextUser);
+}
+
+/** Outcome of {@link storeRealtimeRecording}. */
+export interface StoreRealtimeRecordingResult {
+    /** The `MJ: Files` id when the recording was stored; null on every failure. */
+    readonly FileID: string | null;
+    /** Why it failed, verbatim from the layer that knew. Null on success. */
+    readonly ErrorMessage: string | null;
+}
+
 /**
  * Uploads a session recording to MJStorage, links it to the `AIAgentSession` (via
  * `MJ: File Entity Record Links`), and stamps `RecordingFileID` / `RecordingMedia` / `RecordingStartedAt`
  * on the session. Never throws — a recording-storage failure must not fail the session; failures are
- * logged and surfaced as a `null` return.
+ * logged AND carried out in the result so the caller can report the real cause (a bare `null` used to
+ * strand reasons like Drive's "Service Accounts do not have storage quota" three layers down).
  *
  * @param input The recording bytes + storage account + session context.
- * @returns The created `MJ: Files` id, or `null` on failure.
+ * @returns The created `MJ: Files` id, or the failure reason.
  */
-export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput): Promise<string | null> {
+export async function StoreRealtimeRecording(input: StoreRealtimeRecordingInput): Promise<StoreRealtimeRecordingResult> {
     const { Audio, MimeType, Media, StartedAt, StorageAccountID, SessionID, ContextUser, Provider, Peaks } = input;
     try {
         // Canonical consolidated file in the session's own folder, alongside (then replacing) its shards.
@@ -227,7 +267,7 @@ export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput)
 
         // Best-effort waveform-peaks sidecar (peaks.json) next to the recording, for fast waveform
         // rendering without re-decoding the audio. A sidecar failure never fails the recording itself.
-        await writeRecordingPeaksSidecar(SessionID, StorageAccountID, Peaks, ContextUser);
+        await WriteRecordingPeaksSidecar(SessionID, StorageAccountID, Peaks, ContextUser);
 
         // Link the file to the session record so it's discoverable via MJ: File Entity Record Links.
         const sessionEntityID = Provider.EntityByName('MJ: AI Agent Sessions')?.ID;
@@ -252,9 +292,15 @@ export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput)
                 LogError(`storeRealtimeRecording: failed to stamp recording fields on session ${SessionID}: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
         }
-        return uploaded.FileID;
+        return { FileID: uploaded.FileID, ErrorMessage: null };
     } catch (error) {
-        LogError(`storeRealtimeRecording failed for session ${SessionID}: ${error instanceof Error ? error.message : String(error)}`);
-        return null;
+        const message = error instanceof Error ? error.message : String(error);
+        LogError(`storeRealtimeRecording failed for session ${SessionID}: ${message}`);
+        return { FileID: null, ErrorMessage: message };
     }
+}
+
+/** @deprecated Use {@link StoreRealtimeRecording}. */
+export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput): Promise<StoreRealtimeRecordingResult> {
+    return StoreRealtimeRecording(input);
 }

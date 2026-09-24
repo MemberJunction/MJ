@@ -1,4 +1,4 @@
-import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, LogError, Metadata } from "@memberjunction/core";
+import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, IEntityDataProvider, LogError, Metadata } from "@memberjunction/core";
 import { MJRemoteOperationEntity, MJRemoteOperationEntity_RemoteOperationLibrary } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -34,9 +34,11 @@ export class MJRemoteOperationEntityServer extends MJRemoteOperationEntity {
      */
     public ForceCodeGeneration = false;
 
-    constructor(Entity: EntityInfo) {
-        super(Entity);
-        // Constructor runs before the entity provider is wired, so the global Metadata is the only check available.
+    constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
+        super(Entity, Provider);
+        // ProviderType is process-wide; this only asserts the server subclass is not
+        // loaded in a client bundle. GetEntityObject rebinds the instance provider
+        // after construct even if a future edit drops the second argument again.
         const md = new Metadata(); // global-provider-ok: constructor-time provider-type check
         if (md.ProviderType !== 'Database') {
             throw new Error('MJRemoteOperationEntityServer is server/database-only — remove @memberjunction/core-entities-server from client applications.');

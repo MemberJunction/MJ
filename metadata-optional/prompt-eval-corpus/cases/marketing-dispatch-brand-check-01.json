@@ -1,0 +1,27 @@
+{
+  "id": "marketing-dispatch-brand-check-01",
+  "agent": "Marketing Agent",
+  "tags": [
+    "sub-agent-dispatch"
+  ],
+  "description": "An explicit brand-compliance request routes to the Brand Guardian, not the Editor. Disambiguation between siblings with overlapping remits.",
+  "input": {
+    "payload": {
+      "draft": {
+        "headline": "Announcing Analytics"
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Check this draft against our brand guidelines before anything else."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "subAgent",
+    "subAgents": [
+      "Brand Guardian Agent"
+    ]
+  }
+}

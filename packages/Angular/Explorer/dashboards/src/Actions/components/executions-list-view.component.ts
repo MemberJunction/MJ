@@ -46,5 +46,14 @@ import { Component, Output, EventEmitter } from '@angular/core';
   `]
 })
 export class ExecutionsListViewComponent {
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
+  @Output() OpenEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
 }

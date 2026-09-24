@@ -29,6 +29,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private _statementCount: number = 0;
   private _emittedStatementCount: number = 0; // Track actually emitted statements
   private _currentBatchVariableCount: number = 0; // Running count of DECLARE @var declarations in current batch
+  private _currentBatchDeclaredNames = new Set<string>(); // Lower-cased @names declared in the current batch (threshold mode)
   private _fileHandle: fs.promises.FileHandle | null = null;
   private _disposed: boolean = false;
   private _compiledPatterns: RegExp[] | undefined;
@@ -87,7 +88,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * @param isMutation - Whether this is a data mutation operation
    * @param simpleSQLFallback - Optional simple SQL to use if logRecordChangeMetadata=false
    */
-  public async logSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+  public async LogSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
     const verbose = this.options.verboseOutput === true;
 
     if (verbose) {
@@ -141,8 +142,10 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     // Use simple SQL fallback if this session has logRecordChangeMetadata=false (default) and fallback is provided
     if (this.options.logRecordChangeMetadata !== true && simpleSQLFallback) {
       processedQuery = simpleSQLFallback;
-      // Update description to indicate we're using the simplified version
-      if (description && !description.includes('(core SP call only)')) {
+      // Tag the description only when the logged text actually differs from what ran.
+      // A save on an entity without record-change tracking hands over a fallback that is
+      // byte-identical to the executed SQL (updates), and tagging that would misreport it.
+      if (description && simpleSQLFallback !== query && !description.includes('(core SP call only)')) {
         logEntry = logEntry.replace(`-- ${description}\n`, `-- ${description} (core SP call only)\n`);
       }
     }
@@ -221,20 +224,28 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
     }
 
     // Batch separator logic:
-    // - Threshold mode: emit separator when accumulated variable declarations reach the threshold.
+    // - Threshold mode: emit separator when accumulated variable declarations reach the threshold,
+    //   OR when this statement would redeclare a name the current batch already declared. Save-call
+    //   variable suffixes are deterministic per record (GenericDatabaseProvider.allocateSaveCallSuffix),
+    //   so the same record saved twice in one window emits identical DECLARE lists; SQL Server rejects
+    //   a redeclared variable inside one batch, so the capture would fail on replay without this guard.
     //   The separator is prepended BEFORE the current statement (ending the previous batch).
     // - Legacy mode (no threshold): emit separator after every statement.
     const threshold = this.options.variableBatchThreshold;
     if (this.options.batchSeparator && threshold && threshold > 0) {
-      const newVarCount = this._countVariableDeclarations(processedQuery);
-      if (newVarCount > 0) {
-        if (this._currentBatchVariableCount > 0 &&
-            this._currentBatchVariableCount + newVarCount >= threshold) {
+      const declaredNames = this._collectVariableDeclarations(processedQuery);
+      if (declaredNames.length > 0) {
+        const redeclaresName = declaredNames.some((name) => this._currentBatchDeclaredNames.has(name));
+        if (this._currentBatchVariableCount > 0 && (redeclaresName || this._currentBatchVariableCount + declaredNames.length >= threshold)) {
           // End the previous batch before this statement
           logEntry = `${this.options.batchSeparator}\n\n` + logEntry;
-          this._currentBatchVariableCount = newVarCount;
+          this._currentBatchVariableCount = declaredNames.length;
+          this._currentBatchDeclaredNames = new Set(declaredNames);
         } else {
-          this._currentBatchVariableCount += newVarCount;
+          this._currentBatchVariableCount += declaredNames.length;
+          for (const name of declaredNames) {
+            this._currentBatchDeclaredNames.add(name);
+          }
         }
       }
     } else if (this.options.batchSeparator) {
@@ -259,6 +270,11 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       console.error(`Session ${this.id}: Error writing to file:`, error);
       throw error;
     }
+  }
+
+  /** @deprecated Use {@link LogSqlStatement}. */
+  public async logSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+    return this.LogSqlStatement(query, parameters, description, isMutation, simpleSQLFallback);
   }
 
   /**
@@ -460,12 +476,26 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * Used by the `variableBatchThreshold` logic to decide when to emit a batch separator.
    */
   private _countVariableDeclarations(sql: string): number {
+    return this._collectVariableDeclarations(sql).length;
+  }
+
+  /**
+   * Returns every variable name declared in `sql`, lower-cased (T-SQL variable names are
+   * case-insensitive), one entry per declaration so the length is the declaration count.
+   * Used by the threshold-mode separator logic both to count declarations and to detect a
+   * statement that would redeclare a name already declared in the current batch.
+   */
+  private _collectVariableDeclarations(sql: string): string[] {
     // Matches @varName followed by a SQL Server type keyword.
     // This covers both DECLARE @v TYPE and continuation @v TYPE (comma-separated multi-var DECLAREs).
     // It does NOT match SET @v = ... or EXEC sp @p = @v because those don't have a type keyword.
-    const varDeclRegex = /@\w+\s+(?:UNIQUEIDENTIFIER|N?VARCHAR|N?CHAR|INT|BIGINT|SMALLINT|TINYINT|BIT|FLOAT|REAL|DECIMAL|NUMERIC|DATETIME(?:2|OFFSET)?|DATE(?!TIME)\b|TIME\b|MONEY|SMALLMONEY|VARBINARY|XML|TABLE|N?TEXT|IMAGE|ROWVERSION|TIMESTAMP|GEOGRAPHY|GEOMETRY)\b/gi;
-    const matches = sql.match(varDeclRegex);
-    return matches ? matches.length : 0;
+    const varDeclRegex =
+      /(@\w+)\s+(?:UNIQUEIDENTIFIER|N?VARCHAR|N?CHAR|INT|BIGINT|SMALLINT|TINYINT|BIT|FLOAT|REAL|DECIMAL|NUMERIC|DATETIME(?:2|OFFSET)?|DATE(?!TIME)\b|TIME\b|MONEY|SMALLMONEY|VARBINARY|XML|TABLE|N?TEXT|IMAGE|ROWVERSION|TIMESTAMP|GEOGRAPHY|GEOMETRY)\b/gi;
+    const names: string[] = [];
+    for (const match of sql.matchAll(varDeclRegex)) {
+      names.push(match[1].toLowerCase());
+    }
+    return names;
   }
 
   /**

@@ -34,6 +34,7 @@ vi.mock('@memberjunction/ai-agents', () => ({
 
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (_target: unknown) => _target,
+    EscapeSQLString: (v: string | null | undefined) => (v == null ? '' : String(v).replace(/\0/g, '').replace(/'/g, "''")),
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({

@@ -21,6 +21,7 @@ export {
   SuiteRunOptions,
   OracleResult,
   TestRunResult,
+  PriorAttemptSummary,
   TestSuiteRunResult,
   ScoringWeights,
   ValidationResult,
@@ -40,7 +41,8 @@ export {
   ResolvedTestVariables,
   TestVariableValue,
   TestRunOutputItem,
-  SuiteFixtureContext
+  SuiteFixtureContext,
+  ReplayTelemetry
 } from '@memberjunction/testing-engine-base';
 
 // Import types we need for local interfaces
@@ -49,7 +51,9 @@ import {
   OracleResult,
   ResolvedTestVariables,
   TestRunOutputItem,
-  SuiteFixtureContext
+  SuiteFixtureContext,
+  PriorAttemptSummary,
+  ReplayTelemetry
 } from '@memberjunction/testing-engine-base';
 
 /**
@@ -124,6 +128,15 @@ export interface DriverExecutionContext {
    * fixture-dependent tests must be run via `mj test suite`.
    */
   fixtures?: SuiteFixtureContext;
+
+  /**
+   * Summaries of this test's earlier FAILED attempts, oldest first, threaded in
+   * by a retry loop so a retry is not a blind re-roll. A driver can read the
+   * latest attempt's `failureMemo` and feed it to its engine (Computer Use sets
+   * `params.PreviousAttemptSummary` from it). Undefined on the first attempt and
+   * wherever nothing retries.
+   */
+  priorAttempts?: PriorAttemptSummary[];
 }
 
 /**
@@ -190,9 +203,12 @@ export interface DriverExecutionResult {
   targetLogId: string;
 
   /**
-   * Execution status
+   * Execution status. 'Skipped' means the driver did not execute the test's checks at
+   * all (env-gated tier, unreachable dependency) — it must NEVER be reported as
+   * 'Passed': a green run that silently didn't execute is indistinguishable from real
+   * coverage. The MJ: Test Runs entity's Status value list already includes 'Skipped'.
    */
-  status: 'Passed' | 'Failed' | 'Error' | 'Timeout';
+  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Timeout';
 
   /**
    * Overall score
@@ -215,9 +231,16 @@ export interface DriverExecutionResult {
   failedChecks: number;
 
   /**
-   * Total number of checks
+   * Total number of checks EXECUTED (passed + failed). Skipped checks are counted
+   * separately in skippedChecks and never inflate the executed totals.
    */
   totalChecks: number;
+
+  /**
+   * Number of checks that were skipped (tier-gated, mutation-gated, or environment
+   * gaps). Optional so existing drivers that never skip need no change.
+   */
+  skippedChecks?: number;
 
   /**
    * Input data used
@@ -269,6 +292,37 @@ export interface DriverExecutionResult {
    * The engine persists each item as a TestRunOutput entity record.
    */
   outputs?: TestRunOutputItem[];
+
+  /**
+   * Machine-readable failure classification a driver may compute from its run
+   * signals (e.g. Computer Use's `nav-loop` / `stuck-page` / `app-error` /
+   * `assertion`). Free-form so each driver owns its own taxonomy; a retry
+   * scheduler keys policy on it. Absent on success.
+   */
+  failureClass?: string;
+
+  /**
+   * Non-blind retry memo a driver may surface from its engine on a non-passing
+   * result — a short "here's what went wrong last time". A retry loop copies it
+   * onto {@link PriorAttemptSummary} so the next attempt can consume it. Absent
+   * on success.
+   */
+  failureMemo?: string;
+
+  /**
+   * Execution-tier label a tiered driver reports — e.g. Computer Use's
+   * `'replay'` / `'replay-with-heal'` / `'llm'`. Free-form so each driver owns
+   * its own tiering. A diverged replay that fell back to the LLM leg reports
+   * `'llm'` (the tier that produced the result). Absent for single-tier drivers.
+   */
+  tier?: string;
+
+  /**
+   * Replay telemetry — present whenever a replay was attempted, so the drift
+   * signal survives a green LLM-fallback. Copied to {@link TestRunResult.replay}.
+   * Absent on pure-LLM runs.
+   */
+  replay?: ReplayTelemetry;
 }
 
 /**

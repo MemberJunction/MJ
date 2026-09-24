@@ -87,7 +87,7 @@ const cancelInFlightMock = vi.fn((_agentSessionID: string, _callID?: string): nu
 // class-property/getter references above).
 const { resolveStorageMock, storeRecordingMock, writeSegmentMock, deleteSegmentsMock } = vi.hoisted(() => ({
     resolveStorageMock: vi.fn(async (): Promise<string | null> => 'storage-acct-1'),
-    storeRecordingMock: vi.fn(async (): Promise<string | null> => 'file-1'),
+    storeRecordingMock: vi.fn(async (): Promise<StoreRealtimeRecordingResult> => ({ FileID: 'file-1', ErrorMessage: null })),
     writeSegmentMock: vi.fn(async (): Promise<boolean> => true),
     deleteSegmentsMock: vi.fn(async (): Promise<number> => 0),
 }));
@@ -163,6 +163,7 @@ vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => {
 import { RealtimeClientSessionResolver } from '../resolvers/RealtimeClientSessionResolver.js';
 import type { AppContext } from '../types.js';
 import type { UserInfo } from '@memberjunction/core';
+import type { StoreRealtimeRecordingResult } from '@memberjunction/ai-agents';
 
 const USER = { ID: 'user-1', Email: 'tester@example.com' };
 
@@ -256,7 +257,7 @@ beforeEach(() => {
     resolveStorageMock.mockReset();
     resolveStorageMock.mockResolvedValue('storage-acct-1');
     storeRecordingMock.mockReset();
-    storeRecordingMock.mockResolvedValue('file-1');
+    storeRecordingMock.mockResolvedValue({ FileID: 'file-1', ErrorMessage: null });
     writeSegmentMock.mockReset();
     writeSegmentMock.mockResolvedValue(true);
     deleteSegmentsMock.mockReset();
@@ -936,16 +937,20 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
         it('UPDATES the most recent same-role turn in place instead of appending', async () => {
             const previous = makeSessionEntity({ ID: 'detail-prev', Message: 'truncated turn that', Role: 'AI' });
             const session = makeSessionEntity();
-            currentProvider = makeProvider(() => session);
+            currentProvider = makeProvider((name) =>
+                name === 'MJ: Conversation Details' ? previous : session,
+            );
+            // The lookup yields an IDENTIFIER, not something to save through — see the re-load test.
             (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
                 Success: true,
-                Results: [previous],
+                Results: [{ ID: 'detail-prev' }],
             }));
             const resolver = makeResolver();
 
             const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'truncated turn', makeCtx(), true);
 
             expect(ok).toBe(true);
+            expect(previous.Load).toHaveBeenCalledWith('detail-prev');
             expect(previous.Message).toBe('truncated turn'); // corrected IN PLACE
             expect(previous.Save).toHaveBeenCalled();
             expect(previous.NewRecord).not.toHaveBeenCalled(); // no duplicate row
@@ -982,16 +987,66 @@ describe('RealtimeClientSessionResolver.RelayRealtimeTranscript', () => {
                 Save: vi.fn(async () => false),
                 LatestResult: { CompleteMessage: 'locked' },
             });
-            currentProvider = makeProvider(() => makeSessionEntity());
+            const session = makeSessionEntity();
+            currentProvider = makeProvider((name) =>
+                name === 'MJ: Conversation Details' ? previous : session,
+            );
             (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
                 Success: true,
-                Results: [previous],
+                Results: [{ ID: 'detail-prev' }],
             }));
             const resolver = makeResolver();
 
             const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'x', makeCtx(), true);
 
             expect(ok).toBe(false);
+            expect(heartbeatMock).not.toHaveBeenCalled();
+        });
+
+        it('saves through a PROVIDER-BOUND entity, never the object the lookup returned', async () => {
+            // The regression this exists for: `ResultType: 'entity_object'` hands back hydrated
+            // entities that carry no context user, so `Save()` on one ran with no principal and
+            // failed with an EMPTY message — indistinguishable from a permission denial. Every
+            // correction of a streamed utterance was silently dropped, and because providers deliver
+            // one utterance as a GROWING series of corrections, the stored turn kept only the words
+            // of the first fragment. Measured live: a 114-second answer persisted as 'So I think'.
+            const fromLookup = makeSessionEntity({ ID: 'detail-prev', Message: 'stale' });
+            const fromProvider = makeSessionEntity({ ID: 'detail-prev', Message: 'stale' });
+            const session = makeSessionEntity();
+            currentProvider = makeProvider((name) =>
+                name === 'MJ: Conversation Details' ? fromProvider : session,
+            );
+            (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
+                Success: true,
+                Results: [fromLookup],
+            }));
+            const resolver = makeResolver();
+
+            await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'the whole answer', makeCtx(), true);
+
+            expect(fromProvider.Save).toHaveBeenCalled();
+            expect(fromProvider.Message).toBe('the whole answer');
+            expect(fromLookup.Save).not.toHaveBeenCalled();
+        });
+
+        it('reports failure when the re-load cannot find the turn, rather than keeping the shorter text', async () => {
+            // A correction that cannot be applied is a truncated transcript, and a truncated
+            // transcript is scored as a candidate who barely spoke. It must never pass as success.
+            const previous = makeSessionEntity({ ID: 'detail-prev', Load: vi.fn(async () => false) });
+            const session = makeSessionEntity();
+            currentProvider = makeProvider((name) =>
+                name === 'MJ: Conversation Details' ? previous : session,
+            );
+            (currentProvider as { RunView?: unknown }).RunView = vi.fn(async () => ({
+                Success: true,
+                Results: [{ ID: 'detail-prev' }],
+            }));
+            const resolver = makeResolver();
+
+            const ok = await resolver.RelayRealtimeTranscript('session-1', 'assistant', 'x', makeCtx(), true);
+
+            expect(ok).toBe(false);
+            expect(previous.Save).not.toHaveBeenCalled();
             expect(heartbeatMock).not.toHaveBeenCalled();
         });
     });
@@ -2714,6 +2769,26 @@ describe('RealtimeClientSessionResolver — app awareness (applicationId / appCo
         const relayArg = executeRelayedToolMock.mock.calls[0][0] as { AllowedAgents?: Array<{ agentId: string }> };
         expect(relayArg.AllowedAgents?.map(a => a.agentId)).toEqual(['skip-1']);
     });
+
+    it('passes the persisted directActions from the session config into ExecuteRelayedTool', async () => {
+        currentProvider = makeProvider(() =>
+            makeSessionEntity({
+                Config_: JSON.stringify({
+                    targetAgentID: 'lead-1',
+                    directActions: { enabled: true, actionNames: ['SendEmail'] },
+                }),
+            }),
+        );
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'SendEmail', '{"To":"user@test.com"}', makeCtx(), makePubSub(),
+        );
+
+        const relayArg = executeRelayedToolMock.mock.calls[0][0] as { DirectActions?: { enabled: boolean; actionNames: string[] } };
+        expect(relayArg.DirectActions).toEqual({ enabled: true, actionNames: ['SendEmail'] });
+    });
 });
 
 describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3371)', () => {
@@ -2959,6 +3034,35 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(deleteSegmentsMock).toHaveBeenCalledWith('session-1', 'storage-acct-1', SYSTEM_USER);
     });
 
+    it('reports the storage layer’s own reason instead of the generic upload failure', async () => {
+        // The live defect: Google Drive refused the write with "Service Accounts do not have storage
+        // quota...", and the client was told only "Storage upload failed." — no layer named the cause.
+        currentProvider = makeRecordingProvider();
+        storeRecordingMock.mockResolvedValue({
+            FileID: null,
+            ErrorMessage: 'Service Accounts do not have storage quota. Leverage shared drives instead.',
+        });
+        const resolver = makeAnonResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('Service Accounts do not have storage quota');
+        // The shards survive a failed consolidation — there is nothing consolidated to replace them.
+        expect(deleteSegmentsMock).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the generic message only when no layer supplied a reason', async () => {
+        currentProvider = makeRecordingProvider();
+        storeRecordingMock.mockResolvedValue({ FileID: null, ErrorMessage: null });
+        const resolver = makeAnonResolver();
+
+        const result = await resolver.UploadRealtimeRecording('session-1', AUDIO_B64, 'audio/wav', makeCtx(), 1000, true);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBe('Storage upload failed.');
+    });
+
     it('still refuses a consent-less recording upload BEFORE any elevated work', async () => {
         currentProvider = makeRecordingProvider();
         const resolver = makeAnonResolver();
@@ -3090,5 +3194,234 @@ describe('RealtimeClientSessionResolver — colleague authorization (allowedAgen
         const input = executeRelayedToolMock.mock.calls[0][0] as { AllowedAgents?: unknown };
         expect(input.AllowedAgents).toBeUndefined();
         expect(hasPermissionMock).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * The other half of the voice/text context flow.
+ *
+ * Voice turns were always persisted as `MJ: Conversation Details`, so anything SAID reached a later
+ * typed turn. Nothing TYPED reached a voice session: `ConversationMessages` was a hardcoded `[]`
+ * with an MVP note. A call started mid-thread therefore opened with no idea what the thread was
+ * about — and the symptom is not an error, it is the agent asking the user to repeat something they
+ * just wrote.
+ */
+describe('RealtimeClientSessionResolver — conversation-history hydration', () => {
+    /** A `MJ: Conversation Details` row as the history query reads it. */
+    interface HistoryRow {
+        ID: string;
+        Role: string;
+        Message: string | null;
+        HiddenToUser: boolean;
+        AgentSessionID: string | null;
+    }
+
+    function row(
+        role: 'User' | 'AI' | 'Error',
+        message: string | null,
+        over: Partial<HistoryRow> = {},
+    ): HistoryRow {
+        return { ID: `h-${message ?? 'x'}`, Role: role, Message: message, HiddenToUser: false, AgentSessionID: null, ...over };
+    }
+
+    /**
+     * Provider that answers BOTH Conversation Details queries separately: the prior-leg transcript
+     * (filtered by `AgentSessionID IN (…)`) and the conversation history (`ConversationID=…`).
+     * Routing on the filter is what keeps the two from being confused for one another.
+     */
+    function makeProvider(opts: {
+        chain?: Record<string, { UserID: string; LastSessionID?: string | null }>;
+        legRows?: Array<{ ID: string; Role: string; Message: string | null; HiddenToUser: boolean }>;
+        historyRows?: HistoryRow[];
+        historyFails?: boolean;
+    }): { provider: unknown; runView: ReturnType<typeof vi.fn> } {
+        const runView = vi.fn(async (params: { EntityName: string; ExtraFilter?: string }) => {
+            if (params.EntityName === 'MJ: Conversation Details') {
+                if (params.ExtraFilter?.startsWith('AgentSessionID IN')) {
+                    return { Success: true, Results: opts.legRows ?? [] };
+                }
+                return opts.historyFails
+                    ? { Success: false, ErrorMessage: 'db down', Results: [] }
+                    : { Success: true, Results: opts.historyRows ?? [] };
+            }
+            return { Success: true, Results: [] };
+        });
+        const provider = {
+            GetEntityObject: vi.fn(async () => {
+                const entity = makeSessionEntity();
+                entity.Load = vi.fn(async (id: string) => {
+                    const r = opts.chain?.[id];
+                    if (!r) return false;
+                    entity.ID = id;
+                    entity.UserID = r.UserID;
+                    entity.LastSessionID = r.LastSessionID ?? null;
+                    return true;
+                });
+                return entity;
+            }),
+            RunView: runView,
+        };
+        return { provider, runView };
+    }
+
+    function historyArg(): Array<{ role: string; content: unknown }> {
+        return (prepareClientSessionMock.mock.calls[0][0] as { ConversationMessages: Array<{ role: string; content: unknown }> })
+            .ConversationMessages;
+    }
+
+    /** A successful prepare, so the start reaches the point where the history is threaded. */
+    const prepOk = {
+        Success: true,
+        ClientConfig: {
+            Provider: 'openai',
+            Model: 'gpt-realtime',
+            EphemeralToken: 'ek_abc',
+            ExpiresAt: '2026-01-01T00:00:00Z',
+            SessionConfig: {},
+        },
+    };
+
+    beforeEach(() => {
+        hasPermissionMock.mockResolvedValue(true);
+        createSessionMock.mockResolvedValue(makeSessionEntity({ ID: 'session-new' }));
+        prepareClientSessionMock.mockResolvedValue(prepOk);
+    });
+
+    it('hydrates the typed conversation as role-mapped chat messages', async () => {
+        const { provider } = makeProvider({
+            historyRows: [row('User', 'what does my pipeline look like'), row('AI', 'eleven open deals')],
+        });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1');
+
+        expect(historyArg()).toEqual([
+            { role: 'user', content: 'what does my pipeline look like' },
+            { role: 'assistant', content: 'eleven open deals' },
+        ]);
+    });
+
+    it('scopes the read to the session\'s conversation', async () => {
+        const { provider, runView } = makeProvider({ historyRows: [row('User', 'hi')] });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), "conv-o'brien");
+
+        const call = runView.mock.calls.find(
+            (c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='),
+        );
+        // The apostrophe must be doubled, not passed through — this string is concatenated into SQL.
+        expect((call![0] as { ExtraFilter: string }).ExtraFilter).toBe("ConversationID='conv-o''brien'");
+    });
+
+    it('skips hidden rows, error rows, and empty messages', async () => {
+        const { provider } = makeProvider({
+            historyRows: [
+                row('User', 'kept'),
+                row('User', 'system anchor', { HiddenToUser: true }),
+                row('Error', 'the agent blew up'),
+                row('AI', '   '),
+                row('AI', null),
+            ],
+        });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1');
+
+        expect(historyArg()).toEqual([{ role: 'user', content: 'kept' }]);
+    });
+
+    it('KEEPS turns from an earlier voice call that is not being resumed', async () => {
+        // A call the user had last week is part of this conversation. The model should know it —
+        // only the legs framed as the resumed transcript are removed, and there are none here.
+        const { provider } = makeProvider({
+            historyRows: [row('User', 'said last week', { AgentSessionID: 'sess-old' }), row('User', 'typed today')],
+        });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1');
+
+        expect(historyArg().map((m) => m.content)).toEqual(['said last week', 'typed today']);
+    });
+
+    it('DROPS turns the resumed transcript already framed, so the prompt carries one account of them', async () => {
+        // The whole reason the leg ids travel with the prior transcript. A voice turn is an ordinary
+        // Conversation Detail, so without this the resumed leg arrives twice in one prompt.
+        const { provider } = makeProvider({
+            chain: { 'prior-1': { UserID: 'user-1' } },
+            legRows: [{ ID: 'l-1', Role: 'User', Message: 'said on the last call', HiddenToUser: false }],
+            historyRows: [
+                row('User', 'said on the last call', { AgentSessionID: 'prior-1' }),
+                row('User', 'typed afterwards'),
+            ],
+        });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', 'prior-1');
+
+        expect(historyArg().map((m) => m.content)).toEqual(['typed afterwards']);
+        const prior = (prepareClientSessionMock.mock.calls[0][0] as { PriorTranscript?: string }).PriorTranscript;
+        expect(prior).toBe('User: said on the last call');
+    });
+
+    it('matches covered session ids case-insensitively', async () => {
+        // SQL Server returns uppercase ids and PostgreSQL lowercase; a case-sensitive compare would
+        // double-inject the resumed leg on one of the two.
+        const { provider } = makeProvider({
+            chain: { 'PRIOR-1': { UserID: 'user-1' } },
+            legRows: [{ ID: 'l-1', Role: 'User', Message: 'said on the last call', HiddenToUser: false }],
+            historyRows: [row('User', 'said on the last call', { AgentSessionID: 'prior-1' })],
+        });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1', 'PRIOR-1');
+
+        expect(historyArg()).toEqual([]);
+    });
+
+    it('keeps only the NEWEST turns when the conversation is long', async () => {
+        const many = Array.from({ length: 45 }, (_, i) => row('User', `turn ${i}`, { ID: `h-${i}` }));
+        const { provider } = makeProvider({ historyRows: many });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1');
+
+        const history = historyArg();
+        expect(history).toHaveLength(30);
+        expect(history[0].content).toBe('turn 15');
+        expect(history[29].content).toBe('turn 44');
+    });
+
+    it('drops the OLDEST turns first when the character budget is exceeded', async () => {
+        // 5 turns x 3000 chars = 15000, over the 8000 budget: the freshest context is what survives.
+        const big = Array.from({ length: 5 }, (_, i) => row('User', `${i}`.repeat(3000), { ID: `h-${i}` }));
+        const { provider } = makeProvider({ historyRows: big });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1');
+
+        const history = historyArg();
+        expect(history).toHaveLength(2);
+        expect(String(history[1].content).startsWith('4')).toBe(true);
+    });
+
+    it('starts the session COLD rather than failing when the history read fails', async () => {
+        const { provider } = makeProvider({ historyFails: true });
+        currentProvider = provider;
+
+        const result = await makeResolver().StartRealtimeClientSession('target-1', makeCtx(), 'conv-1');
+
+        expect(result.AgentSessionId).toBe('session-new');
+        expect(historyArg()).toEqual([]);
+    });
+
+    it('passes an empty history, and runs no query, when the session has no conversation', async () => {
+        const { provider, runView } = makeProvider({ historyRows: [row('User', 'should never be read')] });
+        currentProvider = provider;
+
+        await makeResolver().StartRealtimeClientSession('target-1', makeCtx());
+
+        expect(historyArg()).toEqual([]);
+        expect(runView.mock.calls.some((c) => (c[0] as { ExtraFilter?: string }).ExtraFilter?.startsWith('ConversationID='))).toBe(false);
     });
 });

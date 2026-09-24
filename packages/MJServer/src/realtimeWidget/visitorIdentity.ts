@@ -24,7 +24,7 @@
  * @module @memberjunction/server/widget
  */
 
-import { RunView, UserInfo, LogError, LogStatus, type IMetadataProvider } from '@memberjunction/core';
+import { CompositeKey, RunView, UserInfo, LogError, LogStatus, type IMetadataProvider } from '@memberjunction/core';
 import type { MJConversationEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 
 const CONVERSATIONS_ENTITY = 'MJ: Conversations';
@@ -32,14 +32,14 @@ const AGENT_NOTES_ENTITY = 'MJ: AI Agent Notes';
 
 /** A resolved polymorphic identity: the entity the visitor maps to, and that record's id. */
 export interface ResolvedVisitorIdentity {
-  entityId: string;
-  recordId: string;
+  entityId: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  recordId: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** The deployment-configurable resolution target (defaults to the core `Users` entity keyed by `Email`). */
 export interface IdentityResolutionTarget {
-  entityName?: string;
-  emailField?: string;
+  entityName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  EmailField?: string;
 }
 
 /**
@@ -47,7 +47,7 @@ export interface IdentityResolutionTarget {
  * target (default: the `Users` entity keyed by `Email`). Returns undefined when no record matches — the
  * visitor simply stays anonymous. Never throws; email is escaped for the filter literal.
  */
-export async function resolveIdentityByEmail(
+export async function ResolveIdentityByEmail(
   email: string,
   contextUser: UserInfo,
   provider: IMetadataProvider,
@@ -59,18 +59,25 @@ export async function resolveIdentityByEmail(
       return undefined;
     }
     const entityName = target?.entityName?.trim() || 'Users';
-    const emailField = target?.emailField?.trim() || 'Email';
-    const entityId = provider.EntityByName(entityName)?.ID;
-    if (!entityId) {
+    const emailField = target?.EmailField?.trim() || 'Email';
+    const entityInfo = provider.EntityByName(entityName);
+    if (!entityInfo) {
       LogError(`[VisitorIdentity] identity-resolution entity '${entityName}' not found in metadata.`);
       return undefined;
     }
+    const entityId = entityInfo.ID;
+    // The identity entity is configurable, so its key column(s) can have any name — and may be
+    // composite. Select every key column and carry the record id in the compact record-id form
+    // (the bare value for a single-column key, "F1|v1||F2|v2" for a composite one) that
+    // CompositeKey.FromURLSegment reads back, so LinkedRecordID / PrimaryScopeRecordID round-trip
+    // for any key shape instead of being truncated to the first column.
+    const pkNames = entityInfo.PrimaryKeys.map(pk => pk.Name);
     const rv = new RunView();
-    const result = await rv.RunView<{ ID: string }>(
+    const result = await rv.RunView<Record<string, unknown>>(
       {
         EntityName: entityName,
         ExtraFilter: `${emailField} = '${trimmed.replace(/'/g, "''")}'`,
-        Fields: ['ID'],
+        Fields: pkNames,
         MaxRows: 1,
         ResultType: 'simple',
       },
@@ -80,12 +87,30 @@ export async function resolveIdentityByEmail(
       LogError(`[VisitorIdentity] identity lookup failed for '${entityName}.${emailField}': ${result.ErrorMessage}`);
       return undefined;
     }
-    const recordId = result.Results?.[0]?.ID;
+    const row = result.Results?.[0];
+    if (!row) {
+      return undefined;
+    }
+    const key = CompositeKey.FromEntityRecord(entityInfo, row);
+    if (key.KeyValuePairs.length === 0 || key.KeyValuePairs.some(kv => kv.Value == null)) {
+      return undefined;
+    }
+    const recordId = key.ToCompactURLSegment();
     return recordId ? { entityId, recordId } : undefined;
   } catch (e) {
     LogError(`[VisitorIdentity] resolveIdentityByEmail failed: ${e instanceof Error ? e.message : String(e)}`);
     return undefined;
   }
+}
+
+/** @deprecated Use {@link ResolveIdentityByEmail}. */
+export async function resolveIdentityByEmail(
+  email: string,
+  contextUser: UserInfo,
+  provider: IMetadataProvider,
+  target?: IdentityResolutionTarget,
+): Promise<ResolvedVisitorIdentity | undefined> {
+  return ResolveIdentityByEmail(email, contextUser, provider, target);
 }
 
 /** Loads every conversation sharing a VisitorKey within one application (entity objects, for mutation). */
@@ -119,7 +144,7 @@ async function loadVisitorConversations(
  *
  * @returns the number of conversations stamped (0 when nothing matched the key).
  */
-export async function mergeVisitorIdentity(args: {
+export async function MergeVisitorIdentity(args: {
   visitorKey: string;
   applicationId: string;
   identity: ResolvedVisitorIdentity;
@@ -157,6 +182,17 @@ export async function mergeVisitorIdentity(args: {
     LogError(`[VisitorIdentity] mergeVisitorIdentity failed: ${e instanceof Error ? e.message : String(e)}`);
     return 0;
   }
+}
+
+/** @deprecated Use {@link MergeVisitorIdentity}. */
+export async function mergeVisitorIdentity(args: {
+  visitorKey: string;
+  applicationId: string;
+  identity: ResolvedVisitorIdentity;
+  contextUser: UserInfo;
+  provider: IMetadataProvider;
+}): Promise<number> {
+  return MergeVisitorIdentity(args);
 }
 
 /** Re-keys notes scoped to `(Conversations entity, conversationId)` onto the resolved pair. */
@@ -202,7 +238,7 @@ async function rekeyAnonymousNotes(
  *
  * @returns a summary of what was archived/cleared.
  */
-export async function forgetVisitor(args: {
+export async function ForgetVisitor(args: {
   visitorKey: string;
   applicationId: string;
   contextUser: UserInfo;
@@ -255,4 +291,14 @@ export async function forgetVisitor(args: {
     LogError(`[VisitorIdentity] forgetVisitor failed: ${e instanceof Error ? e.message : String(e)}`);
   }
   return { notesArchived, conversationsCleared };
+}
+
+/** @deprecated Use {@link ForgetVisitor}. */
+export async function forgetVisitor(args: {
+  visitorKey: string;
+  applicationId: string;
+  contextUser: UserInfo;
+  provider: IMetadataProvider;
+}): Promise<{ notesArchived: number; conversationsCleared: number }> {
+  return ForgetVisitor(args);
 }

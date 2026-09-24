@@ -1,0 +1,67 @@
+name: MJ workspace setup
+description: >-
+  pnpm + Node + a frozen-lockfile install + the MJExplorer environment file CI has to synthesize.
+  Extracted because the Unit Tests workflow now runs these same five steps in four separate jobs
+  (build, each test shard, the ESM guard, the nightly coverage lane) and they must not drift —
+  a shard installing differently from the job that built its dist/ produces failures that look
+  like test failures.
+
+  NOTE: the caller must run actions/checkout BEFORE using this action. A local composite action
+  cannot check out the repository it lives in.
+
+inputs:
+  node-version:
+    description: Node major version to install.
+    required: false
+    default: '24'
+  install:
+    description: >-
+      Run `pnpm install --frozen-lockfile`. Set to 'false' for jobs that only run plain-node
+      scripts and need no dependency tree.
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v4
+
+    - name: Set up node
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'pnpm'
+
+    - name: Install dependencies
+      if: inputs.install == 'true'
+      shell: bash
+      run: pnpm install --frozen-lockfile
+
+    # MJExplorer's environment.ts is gitignored (it carries per-deployment auth config), so CI
+    # has to synthesize one or the Explorer packages fail to compile.
+    - name: Create MJExplorer environment file
+      shell: bash
+      run: |
+        mkdir -p packages/MJExplorer/src/environments
+        cat > packages/MJExplorer/src/environments/environment.ts << 'ENVEOF'
+        export const environment = {
+          GRAPHQL_URI: "http://localhost:4000",
+          GRAPHQL_WS_URI: "ws://localhost:4000",
+          REDIRECT_URI: "http://localhost:4200",
+          CLIENT_ID: "00000000-0000-0000-0000-000000000000",
+          TENANT_ID: "00000000-0000-0000-0000-000000000000",
+          CLIENT_AUTHORITY: "https://login.microsoftonline.com/common",
+          AUTH_TYPE: "msal" as const,
+          NODE_ENV: "test",
+          AUTOSAVE_DEBOUNCE_MS: 1200,
+          SEARCH_DEBOUNCE_MS: 800,
+          MIN_SEARCH_LENGTH: 3,
+          MJ_CORE_SCHEMA_NAME: "__mj",
+          production: false,
+          APPLICATION_NAME: "MJ Explorer CI",
+          APPLICATION_INSTANCE: "CI",
+          AUTH0_DOMAIN: "",
+          AUTH0_CLIENTID: ""
+        };
+        ENVEOF

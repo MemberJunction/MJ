@@ -206,12 +206,45 @@ test('pr transitions: certifiedBuild immutable once set', () => {
 
 test('pr transitions: new lines must start as candidate', () => {
   const base = minimal();
+  // A line declared certified with NO evidence it was ever a candidate is still refused.
   const head = structuredClone(base);
-  head.lines['6.2'] = certifiedLine();
+  head.lines['6.2'] = { ...certifiedLine(), candidateDate: undefined };
+  delete head.lines['6.2'].candidateDate;
   assert.ok(checkPrTransitions(base, head).some((e) => e.includes('must start as "candidate"')));
   const ok = structuredClone(base);
   ok.lines['6.2'] = { status: 'candidate' };
   assert.deepEqual(checkPrTransitions(base, ok), []);
+});
+
+test('pr transitions: a new line carrying candidateDate may arrive past candidate', () => {
+  // `main` only advances by release merges and every push to `main` publishes, so a line
+  // certified on `next` between two releases cannot be walked through candidate->certified
+  // on `main` in two PRs — that would be two publishes. candidateDate is the evidence the
+  // candidacy happened; checkLineTransition holds it immutable once set, so it cannot be
+  // backdated later. Regression for line 5.51 (cut 2026-07-31, certified 2026-08-14, with
+  // v6.1.0-edge.2 merging 2026-08-12 in between).
+  const base = minimal();
+  const head = structuredClone(base);
+  head.lines['5.51'] = {
+    status: 'certified',
+    certifiedBuild: '5.51.0',
+    candidateDate: '2026-07-31',
+    certifiedDate: '2026-08-14',
+    supportEnds: '2027-02-14',
+    upgradeImpact: 'none',
+    scorecard: 'certifications/5.51.0.md',
+  };
+  assert.deepEqual(checkPrTransitions(base, head), []);
+
+  // Still refused for any post-candidate status with no candidateDate.
+  for (const status of ['certified', 'maintenance', 'eol', 'withdrawn']) {
+    const bad = structuredClone(base);
+    bad.lines['5.52'] = { status };
+    assert.ok(
+      checkPrTransitions(base, bad).some((e) => e.includes('must start as "candidate"')),
+      `status ${status} without candidateDate should be refused`,
+    );
+  }
 });
 
 test('pr transitions: removing a line is rejected', () => {

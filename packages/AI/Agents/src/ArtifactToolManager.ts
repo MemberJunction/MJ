@@ -130,14 +130,14 @@ export class ArtifactToolManager {
   Initialize(inputArtifacts: InputArtifact[]): void {
     this.Clear();
     for (const artifact of inputArtifacts) {
-      const alphaId = this.NextAlphaId();
+      const alphaId = this.nextAlphaId();
       this.artifacts.set(alphaId, {
         alphaId,
         name: artifact.name,
         typeName: artifact.typeName,
         mimeType: artifact.mimeType,
         content: artifact.content,
-        library: this.ResolveLibrary(artifact.typeName, artifact.toolLibraryClass),
+        library: this.resolveLibrary(artifact.typeName, artifact.toolLibraryClass),
         annotation: artifact.annotation,
         deliveryMode: artifact.deliveryMode,
         forceToolsOnly: artifact.forceToolsOnly,
@@ -147,14 +147,14 @@ export class ArtifactToolManager {
 
   /** Register a mid-run artifact and return its alpha ID */
   RegisterArtifact(artifact: InputArtifact): string {
-    const alphaId = this.NextAlphaId();
+    const alphaId = this.nextAlphaId();
     this.artifacts.set(alphaId, {
       alphaId,
       name: artifact.name,
       typeName: artifact.typeName,
       mimeType: artifact.mimeType,
       content: artifact.content,
-      library: this.ResolveLibrary(artifact.typeName, artifact.toolLibraryClass),
+      library: this.resolveLibrary(artifact.typeName, artifact.toolLibraryClass),
     });
     return alphaId;
   }
@@ -604,7 +604,7 @@ export class ArtifactToolManager {
   // ─── PRIVATE ───
 
   /** Generate next alpha-sequence ID: A, B, ... Z, AA, AB, ... */
-  private NextAlphaId(): string {
+  private nextAlphaId(): string {
     const index = this.nextAlphaIndex++;
     if (index < 26) {
       return String.fromCharCode(65 + index); // A-Z
@@ -630,12 +630,12 @@ export class ArtifactToolManager {
    * The engine is expected to be configured by AgentRunner before Initialize
    * is called, so path (1) is the normal case.
    */
-  private ResolveLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
-    const chain = this.ResolveLibraryChain(typeName);
+  private resolveLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
+    const chain = this.resolveLibraryChain(typeName);
     if (chain.length > 1) return new CompositeArtifactToolLibrary(chain);
     if (chain.length === 1) return chain[0];
     // Engine didn't yield anything — fall back to a single leaf library.
-    return this.ResolveLeafLibrary(typeName, toolLibraryClass);
+    return this.resolveLeafLibrary(typeName, toolLibraryClass);
   }
 
   /**
@@ -644,7 +644,7 @@ export class ArtifactToolManager {
    * Returns the chain leaf-first. Levels without a ToolLibraryClass are
    * skipped. Returns [] if the engine isn't loaded or the type isn't found.
    */
-  private ResolveLibraryChain(typeName: string): BaseArtifactToolLibrary[] {
+  private resolveLibraryChain(typeName: string): BaseArtifactToolLibrary[] {
     const engine = ArtifactMetadataEngine.Instance;
     if (!engine.ArtifactTypes?.length) return [];
 
@@ -669,7 +669,7 @@ export class ArtifactToolManager {
    * Single-library fallback when the metadata engine isn't available.
    * Uses the provided `toolLibraryClass` hint first, then name-based heuristics.
    */
-  private ResolveLeafLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
+  private resolveLeafLibrary(typeName: string, toolLibraryClass?: string): BaseArtifactToolLibrary {
     if (toolLibraryClass) {
       const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactToolLibrary>(BaseArtifactToolLibrary, toolLibraryClass);
       if (instance) return instance;

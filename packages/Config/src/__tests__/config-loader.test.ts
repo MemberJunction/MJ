@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { buildMJConfig } from '../config-loader';
+import { BuildMJConfig } from '../config-loader';
 
 // Mock cosmiconfig at the module level
 vi.mock('cosmiconfig', () => ({
@@ -8,12 +8,12 @@ vi.mock('cosmiconfig', () => ({
 
 describe('buildMJConfig', () => {
     it('should return empty object when no package defaults provided', () => {
-        const result = buildMJConfig({});
+        const result = BuildMJConfig({});
         expect(result).toEqual({});
     });
 
     it('should include codegen defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             codegen: { outputDir: './generated', language: 'typescript' }
         });
         expect(result.outputDir).toBe('./generated');
@@ -21,7 +21,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should include server defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             server: { port: 4000, host: 'localhost' }
         });
         expect(result.port).toBe(4000);
@@ -29,14 +29,14 @@ describe('buildMJConfig', () => {
     });
 
     it('should include mcpServer defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             mcpServer: { mcpPort: 5000 }
         });
         expect(result.mcpPort).toBe(5000);
     });
 
     it('should include a2aServer defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             a2aServer: { a2aPort: 6000 }
         });
         expect(result.a2aPort).toBe(6000);
@@ -44,14 +44,14 @@ describe('buildMJConfig', () => {
 
     it('should include queryGen defaults under queryGen key', () => {
         const queryGenConfig = { maxResults: 100, timeout: 30 };
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             queryGen: queryGenConfig
         });
         expect(result.queryGen).toEqual(queryGenConfig);
     });
 
     it('should merge multiple package defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             codegen: { outputDir: './gen' },
             server: { port: 4000 }
         });
@@ -60,7 +60,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should deep merge overlapping package defaults', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             codegen: { database: { host: 'localhost' } },
             server: { database: { port: 1433 } }
         });
@@ -71,7 +71,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should apply user config overrides on top of package defaults', () => {
-        const result = buildMJConfig(
+        const result = BuildMJConfig(
             { server: { port: 4000, host: 'localhost' } },
             { port: 8080 }
         );
@@ -80,7 +80,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should handle undefined userConfigOverrides', () => {
-        const result = buildMJConfig(
+        const result = BuildMJConfig(
             { server: { port: 4000 } },
             undefined
         );
@@ -88,7 +88,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should give user overrides highest priority', () => {
-        const result = buildMJConfig(
+        const result = BuildMJConfig(
             {
                 codegen: { mode: 'codegen-mode' },
                 server: { mode: 'server-mode' }
@@ -99,7 +99,7 @@ describe('buildMJConfig', () => {
     });
 
     it('should handle all package defaults provided together', () => {
-        const result = buildMJConfig({
+        const result = BuildMJConfig({
             codegen: { codegenFlag: true },
             server: { serverFlag: true },
             mcpServer: { mcpFlag: true },
@@ -130,8 +130,8 @@ describe('loadMJConfig', () => {
             search: vi.fn().mockResolvedValue(null)
         });
 
-        const { loadMJConfig } = await import('../config-loader');
-        const result = await loadMJConfig({
+        const { LoadMJConfig } = await import('../config-loader');
+        const result = await LoadMJConfig({
             defaultConfig: { port: 3000 }
         });
 
@@ -147,9 +147,9 @@ describe('loadMJConfig', () => {
             search: vi.fn().mockResolvedValue(null)
         });
 
-        const { loadMJConfig } = await import('../config-loader');
+        const { LoadMJConfig } = await import('../config-loader');
 
-        await expect(loadMJConfig({
+        await expect(LoadMJConfig({
             requireConfigFile: true,
             searchFrom: '/some/path'
         })).rejects.toThrow('No mj.config.cjs file found');
@@ -164,8 +164,8 @@ describe('loadMJConfig', () => {
             })
         });
 
-        const { loadMJConfig } = await import('../config-loader');
-        const result = await loadMJConfig({
+        const { LoadMJConfig } = await import('../config-loader');
+        const result = await LoadMJConfig({
             defaultConfig: { port: 3000, host: 'localhost' }
         });
 
@@ -187,8 +187,8 @@ describe('loadMJConfig', () => {
             })
         });
 
-        const { loadMJConfig } = await import('../config-loader');
-        const result = await loadMJConfig({
+        const { LoadMJConfig } = await import('../config-loader');
+        const result = await LoadMJConfig({
             defaultConfig: { port: 3000, host: 'localhost' }
         });
 
@@ -205,8 +205,8 @@ describe('loadMJConfig', () => {
             })
         });
 
-        const { loadMJConfig } = await import('../config-loader');
-        const result = await loadMJConfig({
+        const { LoadMJConfig } = await import('../config-loader');
+        const result = await LoadMJConfig({
             defaultConfig: { port: 3000 }
         });
 
@@ -220,8 +220,8 @@ describe('loadMJConfig', () => {
             search: mockSearch
         });
 
-        const { loadMJConfig } = await import('../config-loader');
-        await loadMJConfig();
+        const { LoadMJConfig } = await import('../config-loader');
+        await LoadMJConfig();
 
         expect(mockSearch).toHaveBeenCalledWith(process.cwd());
     });
@@ -233,8 +233,8 @@ describe('loadMJConfig', () => {
             search: mockSearch
         });
 
-        const { loadMJConfig } = await import('../config-loader');
-        await loadMJConfig({ searchFrom: '/custom/path' });
+        const { LoadMJConfig } = await import('../config-loader');
+        await LoadMJConfig({ searchFrom: '/custom/path' });
 
         expect(mockSearch).toHaveBeenCalledWith('/custom/path');
     });
@@ -249,8 +249,8 @@ describe('loadMJConfig', () => {
             })
         });
 
-        const { loadMJConfig } = await import('../config-loader');
-        await loadMJConfig({
+        const { LoadMJConfig } = await import('../config-loader');
+        await LoadMJConfig({
             verbose: true,
             defaultConfig: { port: 3000 }
         });
@@ -265,8 +265,8 @@ describe('loadMJConfig', () => {
             search: vi.fn().mockResolvedValue(null)
         });
 
-        const { loadMJConfig } = await import('../config-loader');
-        await loadMJConfig({ verbose: true });
+        const { LoadMJConfig } = await import('../config-loader');
+        await LoadMJConfig({ verbose: true });
 
         expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('No user config file found'));
     });
@@ -288,8 +288,8 @@ describe('loadMJConfig', () => {
             })
         });
 
-        const { loadMJConfig } = await import('../config-loader');
-        await loadMJConfig({
+        const { LoadMJConfig } = await import('../config-loader');
+        await LoadMJConfig({
             verbose: true,
             defaultConfig: defaults
         });
@@ -301,10 +301,10 @@ describe('loadMJConfig', () => {
 describe('loadMJConfigSync', () => {
     it('should throw an error when config file cannot be loaded', async () => {
         // loadMJConfigSync uses require(), which will fail for nonexistent files
-        const { loadMJConfigSync } = await import('../config-loader');
+        const { LoadMJConfigSync } = await import('../config-loader');
 
         expect(() => {
-            loadMJConfigSync('/nonexistent/path/config.cjs');
+            LoadMJConfigSync('/nonexistent/path/config.cjs');
         }).toThrow('Failed to load config from');
     });
 });

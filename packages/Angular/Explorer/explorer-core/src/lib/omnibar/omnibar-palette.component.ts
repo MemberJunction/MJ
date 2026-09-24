@@ -390,9 +390,15 @@ export class OmnibarPaletteComponent implements OnDestroy {
             this.search.RecordRecentSearch(typed);
         }
         switch (nav.kind) {
-            case 'record':
-                this.navigation.OpenEntityRecord(nav.entityName, CompositeKey.FromID(nav.recordId));
+            case 'record': {
+                // `recordId` is a compact CompositeKey segment (bare value for a single-column key,
+                // "F1|v1||F2|v2" for a composite one) on an ARBITRARY entity, so the key column can
+                // have any name. `FromID` hardcoded `ID` and broke record-open for every entity whose
+                // key is called something else; resolve against the entity's metadata instead.
+                const entityInfo = this.search.Provider.EntityByName(nav.entityName);
+                this.navigation.OpenEntityRecord(nav.entityName, CompositeKey.FromURLSegment(entityInfo, nav.recordId));
                 break;
+            }
             case 'entity-list':
                 this.navigation.OpenDynamicView(nav.entityName);
                 break;

@@ -109,8 +109,8 @@
     [attr.aria-valuemin]="MinPanelWidth"
     [attr.aria-valuemax]="MaxPanelWidth"
     [class.active]="IsResizing"
-    (mousedown)="onResizeStart($event)"
-    (keydown)="onResizeKeydown($event)">
+    (mousedown)="OnResizeStart($event)"
+    (keydown)="OnResizeKeydown($event)">
     <div class="resize-handle-grip"></div>
   </div>
 

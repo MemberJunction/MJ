@@ -85,7 +85,12 @@ export class RequiredWhenValidator extends SemanticValidator {
 
       if (!hasValue) {
         const message = constraint.errorTemplate
-          ? constraint.errorTemplate.replace(`{${constraint.dependsOn}}`, String(dependentPropValue))
+          // Function replacement — the dependent value is user data that may contain
+          // `$`. See issue #3171.
+          ? constraint.errorTemplate.replace(
+              `{${constraint.dependsOn}}`,
+              () => String(dependentPropValue),
+            )
           : `${context.propertyName} is required when ${constraint.dependsOn} is ${dependentPropValue}`;
 
         violations.push(

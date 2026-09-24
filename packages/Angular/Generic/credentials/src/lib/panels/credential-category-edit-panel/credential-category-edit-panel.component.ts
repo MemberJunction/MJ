@@ -15,27 +15,99 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 })
 export class CredentialCategoryEditPanelComponent extends BaseAngularComponent implements OnInit {
     @Input() category: MJCredentialCategoryEntity | null = null;
-    @Input() isOpen = false;
+    @Input() IsOpen = false;
+
+    /** @deprecated Use {@link IsOpen}. */
+    @Input() set isOpen(value: CredentialCategoryEditPanelComponent['IsOpen']) {
+      this.IsOpen = value;
+    }
+    /** @deprecated Use {@link IsOpen}. */
+    get isOpen(): CredentialCategoryEditPanelComponent['IsOpen'] {
+      return this.IsOpen;
+    }
 
     @Output() close = new EventEmitter<void>();
-    @Output() saved = new EventEmitter<MJCredentialCategoryEntity>();
-    @Output() deleted = new EventEmitter<string>();
+    @Output() Saved = new EventEmitter<MJCredentialCategoryEntity>();
+
+    /**
+     * @deprecated Use {@link Saved}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (saved) keeps working. Must stay AFTER Saved: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() saved = this.Saved;
+    @Output() Deleted = new EventEmitter<string>();
+
+    /**
+     * @deprecated Use {@link Deleted}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (deleted) keeps working. Must stay AFTER Deleted: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() deleted = this.Deleted;
 
     public isLoading = false;
-    public isSaving = false;
-    public isNew = false;
+    public IsSaving = false;
+
+    /** @deprecated Use {@link IsSaving}. */
+    public get isSaving() {
+      return this.IsSaving;
+    }
+    /** @deprecated Use {@link IsSaving}. */
+    public set isSaving(value) {
+      this.IsSaving = value;
+    }
+    public IsNew = false;
+
+    /** @deprecated Use {@link IsNew}. */
+    public get isNew() {
+      return this.IsNew;
+    }
+    /** @deprecated Use {@link IsNew}. */
+    public set isNew(value) {
+      this.IsNew = value;
+    }
 
     // All categories for parent selection
-    public allCategories: MJCredentialCategoryEntity[] = [];
+    public AllCategories: MJCredentialCategoryEntity[] = [];
+
+    /** @deprecated Use {@link AllCategories}. */
+    public get allCategories(): MJCredentialCategoryEntity[] {
+      return this.AllCategories;
+    }
+    /** @deprecated Use {@link AllCategories}. */
+    public set allCategories(value: MJCredentialCategoryEntity[]) {
+      this.AllCategories = value;
+    }
 
     // Form fields
     public name = '';
     public description = '';
-    public parentId = '';
-    public iconClass = '';
+    public ParentId = '';
+
+    /** @deprecated Use {@link ParentId}. */
+    public get parentId() {
+      return this.ParentId;
+    }
+    /** @deprecated Use {@link ParentId}. */
+    public set parentId(value) {
+      this.ParentId = value;
+    }
+    public IconClass = '';
+
+    /** @deprecated Use {@link IconClass}. */
+    public get iconClass() {
+      return this.IconClass;
+    }
+    /** @deprecated Use {@link IconClass}. */
+    public set iconClass(value) {
+      this.IconClass = value;
+    }
 
     // Icon suggestions
-    public iconSuggestions: { icon: string; label: string }[] = [
+    public IconSuggestions: { icon: string; label: string }[] = [
         { icon: 'fa-solid fa-folder', label: 'Folder' },
         { icon: 'fa-solid fa-lock', label: 'Lock' },
         { icon: 'fa-solid fa-shield-halved', label: 'Shield' },
@@ -50,6 +122,15 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
         { icon: 'fa-solid fa-globe', label: 'Web' }
     ];
 
+    /** @deprecated Use {@link IconSuggestions}. */
+    public get iconSuggestions(): { icon: string; label: string }[] {
+      return this.IconSuggestions;
+    }
+    /** @deprecated Use {@link IconSuggestions}. */
+    public set iconSuggestions(value: { icon: string; label: string }[]) {
+      this.IconSuggestions = value;
+    }
+
     private get _metadata() { return this.ProviderToUse; }
 
     constructor(private cdr: ChangeDetectorRef, private confirmService: MJConfirmService) { super(); }
@@ -58,31 +139,46 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
         this.loadCategories();
     }
 
-    public get panelTitle(): string {
-        return this.isNew ? 'Create Category' : 'Edit Category';
+    public get PanelTitle(): string {
+        return this.IsNew ? 'Create Category' : 'Edit Category';
     }
 
-    public get canSave(): boolean {
+    /** @deprecated Use {@link PanelTitle}. */
+    public get panelTitle(): string {
+      return this.PanelTitle;
+    }
+
+    public get CanSave(): boolean {
         return this.name.trim().length > 0;
     }
 
-    public get availableParentCategories(): MJCredentialCategoryEntity[] {
+    /** @deprecated Use {@link CanSave}. */
+    public get canSave(): boolean {
+      return this.CanSave;
+    }
+
+    public get AvailableParentCategories(): MJCredentialCategoryEntity[] {
         // Exclude the current category and its descendants from parent options
-        if (!this.category || this.isNew) {
-            return this.allCategories;
+        if (!this.category || this.IsNew) {
+            return this.AllCategories;
         }
 
         const currentId = this.category.ID;
         const descendantIds = this.getDescendantIds(currentId);
         descendantIds.add(currentId);
 
-        return this.allCategories.filter(c => !descendantIds.has(c.ID));
+        return this.AllCategories.filter(c => !descendantIds.has(c.ID));
+    }
+
+    /** @deprecated Use {@link AvailableParentCategories}. */
+    public get availableParentCategories(): MJCredentialCategoryEntity[] {
+      return this.AvailableParentCategories;
     }
 
     private getDescendantIds(categoryId: string): Set<string> {
         const descendants = new Set<string>();
         const findChildren = (parentId: string): void => {
-            for (const cat of this.allCategories) {
+            for (const cat of this.AllCategories) {
                 if (UUIDsEqual(cat.ParentID, parentId)) {
                     descendants.add(cat.ID);
                     findChildren(cat.ID);
@@ -93,11 +189,11 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
         return descendants;
     }
 
-    public async open(category: MJCredentialCategoryEntity | null, preselectedParentId?: string): Promise<void> {
+    public async Open(category: MJCredentialCategoryEntity | null, preselectedParentId?: string): Promise<void> {
         this.isLoading = true;
-        this.isOpen = true;
+        this.IsOpen = true;
         this.category = category;
-        this.isNew = !category || !category.ID;
+        this.IsNew = !category || !category.ID;
         this.cdr.markForCheck();
 
         await this.loadCategories();
@@ -106,11 +202,16 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
         if (category && category.ID) {
             this.populateFromCategory(category);
         } else if (preselectedParentId) {
-            this.parentId = preselectedParentId;
+            this.ParentId = preselectedParentId;
         }
 
         this.isLoading = false;
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link Open}. */
+    public async open(category: MJCredentialCategoryEntity | null, preselectedParentId?: string): Promise<void> {
+      return this.Open(category, preselectedParentId);
     }
 
     private async loadCategories(): Promise<void> {
@@ -123,7 +224,7 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
             });
 
             if (result.Success) {
-                this.allCategories = result.Results;
+                this.AllCategories = result.Results;
             }
         } catch (error) {
             console.error('Error loading categories:', error);
@@ -134,35 +235,40 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
     private resetForm(): void {
         this.name = '';
         this.description = '';
-        this.parentId = '';
-        this.iconClass = '';
+        this.ParentId = '';
+        this.IconClass = '';
     }
 
     private populateFromCategory(category: MJCredentialCategoryEntity): void {
         this.name = category.Name || '';
         this.description = category.Description || '';
-        this.parentId = category.ParentID || '';
-        this.iconClass = category.IconClass || '';
+        this.ParentId = category.ParentID || '';
+        this.IconClass = category.IconClass || '';
     }
 
-    public selectIcon(icon: string): void {
-        this.iconClass = icon;
+    public SelectIcon(icon: string): void {
+        this.IconClass = icon;
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link SelectIcon}. */
+    public selectIcon(icon: string): void {
+      return this.SelectIcon(icon);
+    }
+
     public async save(): Promise<void> {
-        if (!this.canSave) {
+        if (!this.CanSave) {
             MJNotificationService.Instance.CreateSimpleNotification('Please enter a category name', 'warning', 3000);
             return;
         }
 
-        this.isSaving = true;
+        this.IsSaving = true;
         this.cdr.markForCheck();
 
         try {
             let entity: MJCredentialCategoryEntity;
 
-            if (this.isNew) {
+            if (this.IsNew) {
                 entity = await this._metadata.GetEntityObject<MJCredentialCategoryEntity>('MJ: Credential Categories');
             } else {
                 entity = this.category!;
@@ -170,20 +276,20 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
 
             entity.Name = this.name.trim();
             entity.Description = this.description.trim() || null;
-            entity.ParentID = this.parentId || null;
-            entity.IconClass = this.iconClass.trim() || null;
+            entity.ParentID = this.ParentId || null;
+            entity.IconClass = this.IconClass.trim() || null;
 
             const success = await entity.Save();
 
             if (success) {
-                const action = this.isNew ? 'created' : 'updated';
+                const action = this.IsNew ? 'created' : 'updated';
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Category "${entity.Name}" ${action} successfully`,
                     'success',
                     3000
                 );
-                this.saved.emit(entity);
-                this.closePanel();
+                this.Saved.emit(entity);
+                this.ClosePanel();
             } else {
                 const errorMessage = entity.LatestResult?.Message || 'Unknown error';
                 console.error('Save failed:', errorMessage);
@@ -201,18 +307,18 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
                 3000
             );
         } finally {
-            this.isSaving = false;
+            this.IsSaving = false;
             this.cdr.markForCheck();
         }
     }
 
-    public async deleteCategory(): Promise<void> {
-        if (this.isNew || !this.category) return;
+    public async DeleteCategory(): Promise<void> {
+        if (this.IsNew || !this.category) return;
 
         const confirmed = await this.confirmService.ConfirmDelete({ title: 'Delete Category', message: `Delete "${this.category.Name}"?`, detail: 'This action cannot be undone.' });
         if (!confirmed) return;
 
-        this.isSaving = true;
+        this.IsSaving = true;
         this.cdr.markForCheck();
 
         try {
@@ -223,8 +329,8 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
                     'success',
                     3000
                 );
-                this.deleted.emit(this.category.ID);
-                this.closePanel();
+                this.Deleted.emit(this.category.ID);
+                this.ClosePanel();
             } else {
                 const errorMessage = this.category.LatestResult?.Message || 'Unknown error';
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -241,34 +347,54 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
                 3000
             );
         } finally {
-            this.isSaving = false;
+            this.IsSaving = false;
             this.cdr.markForCheck();
         }
     }
 
-    public closePanel(): void {
-        this.isOpen = false;
+    /** @deprecated Use {@link DeleteCategory}. */
+    public async deleteCategory(): Promise<void> {
+      return this.DeleteCategory();
+    }
+
+    public ClosePanel(): void {
+        this.IsOpen = false;
         this.category = null;
         this.resetForm();
         this.close.emit();
         this.cdr.markForCheck();
     }
 
-    public onBackdropClick(event: MouseEvent): void {
+    /** @deprecated Use {@link ClosePanel}. */
+    public closePanel(): void {
+      return this.ClosePanel();
+    }
+
+    public OnBackdropClick(event: MouseEvent): void {
         if ((event.target as HTMLElement).classList.contains('panel-backdrop')) {
-            this.closePanel();
+            this.ClosePanel();
         }
     }
 
-    public getParentPath(categoryId: string): string {
+    /** @deprecated Use {@link OnBackdropClick}. */
+    public onBackdropClick(event: MouseEvent): void {
+      return this.OnBackdropClick(event);
+    }
+
+    public GetParentPath(categoryId: string): string {
         const parts: string[] = [];
-        let current = this.allCategories.find(c => UUIDsEqual(c.ID, categoryId));
+        let current = this.AllCategories.find(c => UUIDsEqual(c.ID, categoryId));
 
         while (current) {
             parts.unshift(current.Name);
-            current = current.ParentID ? this.allCategories.find(c => UUIDsEqual(c.ID, current!.ParentID)) : undefined;
+            current = current.ParentID ? this.AllCategories.find(c => UUIDsEqual(c.ID, current!.ParentID)) : undefined;
         }
 
         return parts.join(' / ');
+    }
+
+    /** @deprecated Use {@link GetParentPath}. */
+    public getParentPath(categoryId: string): string {
+      return this.GetParentPath(categoryId);
     }
 }

@@ -7,13 +7,13 @@ export const PUSH_STATUS_UPDATES_TOPIC = 'PUSH_STATUS_UPDATES';
 @ObjectType()
 export class PushStatusNotification {
   @Field(() => String, { nullable: true })
-  message?: string;
+  message?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field((_type) => Date)
-  date!: Date;
+  date!: Date;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
   @Field((_type) => ID)
-  sessionId!: string;
+  sessionId!: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**
@@ -55,13 +55,18 @@ export interface StatusUpdateParams {
  * payload shape and the required-identity guarantee live in exactly one place. Adding a field to
  * the push is a one-line change here; a new publisher physically cannot omit `ownerUserId`.
  */
-export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
+export function PublishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
   const payload: PushStatusNotificationPayload = {
     sessionId: params.sessionId,
     ownerUserId: params.ownerUserId,
     message: params.message,
   };
   pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
+}
+
+/** @deprecated Use {@link PublishStatusUpdate}. */
+export function publishStatusUpdate(pubSub: PubSubEngine, params: StatusUpdateParams): void {
+  return PublishStatusUpdate(pubSub, params);
 }
 
 /** Minimal shape of the subscription's connection context needed by the filter. */
@@ -82,7 +87,7 @@ export interface StatusUpdatesFilterContext {
  * `sessionId` is no longer sufficient. Fails CLOSED — a missing owner or connection identity never
  * matches.
  */
-export function statusUpdatesFilter(data: {
+export function StatusUpdatesFilter(data: {
   payload: PushStatusNotificationPayload;
   args: PushStatusNotificationArgs;
   context: StatusUpdatesFilterContext | undefined;
@@ -98,14 +103,23 @@ export function statusUpdatesFilter(data: {
   return UUIDsEqual(payload.ownerUserId, connectionUserId);
 }
 
+/** @deprecated Use {@link StatusUpdatesFilter}. */
+export function statusUpdatesFilter(data: {
+  payload: PushStatusNotificationPayload;
+  args: PushStatusNotificationArgs;
+  context: StatusUpdatesFilterContext | undefined;
+}): boolean {
+  return StatusUpdatesFilter(data);
+}
+
 @Resolver()
 export class PushStatusResolver {
   @Subscription(() => PushStatusNotification, {
     topics: PUSH_STATUS_UPDATES_TOPIC,
     filter: (data: ResolverFilterData<PushStatusNotificationPayload, PushStatusNotificationArgs, StatusUpdatesFilterContext>) =>
-      statusUpdatesFilter(data),
+      StatusUpdatesFilter(data),
   })
-  statusUpdates(
+  statusUpdates(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
     @Root() { message }: PushStatusNotificationPayload,
     @Arg('sessionId', () => String) sessionId: string
   ): PushStatusNotification {

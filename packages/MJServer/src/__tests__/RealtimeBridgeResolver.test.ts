@@ -17,11 +17,19 @@ const h = vi.hoisted(() => ({
   stopRecording: vi.fn(async () => ({ EgressID: 'eg-1', RoomName: 'room-1', Status: 'EGRESS_COMPLETE' })),
 }));
 
+// These two are instantiated with `new` by the resolver, so they must be constructible. They were
+// `vi.fn(() => ({...}))`, which vitest 3 tolerated as a constructor but vitest 4 rejects with
+// "is not a constructor" — classes express the intent and work under both.
 vi.mock('@memberjunction/livekit-room-server', () => ({
-  LiveKitTokenService: vi.fn(() => ({ MintClientToken: h.mintClientToken })),
+  LiveKitTokenService: class {
+    MintClientToken = h.mintClientToken;
+  },
   // SetSessionFactory is exercised by the resolver's module-load binding of the realtime-session factory.
   LiveKitAgentRoomCoordinator: { Instance: { StartAgentRoomSession: vi.fn(), SetSessionFactory: vi.fn() } },
-  LiveKitEgressService: vi.fn(() => ({ StartRoomRecording: h.startRecording, StopRecording: h.stopRecording })),
+  LiveKitEgressService: class {
+    StartRoomRecording = h.startRecording;
+    StopRecording = h.stopRecording;
+  },
 }));
 
 // Mock the agent factory so importing the resolver doesn't pull the heavy @memberjunction/ai-agents graph
@@ -42,8 +50,10 @@ vi.mock('@memberjunction/ai-agents', () => ({
 // Mock the meeting-recording registration so the thin resolver is tested in isolation (no MJStorage /
 // core-entities graph). Its own behavior is covered by meetingRecordingRegistration.test.ts.
 vi.mock('../resolvers/meetingRecordingRegistration', () => ({
-  registerMeetingRecordingFile: vi.fn(async () => ({ Success: true, RecordingFileID: 'file-1', ConversationID: 'conv-1' })),
-  correlateRecordingStart: vi.fn(async () => true),
+  RegisterMeetingRecordingFile: vi.fn(async () => ({ Success: true, RecordingFileID: 'file-1', ConversationID: 'conv-1' })),
+    get registerMeetingRecordingFile() { return this.RegisterMeetingRecordingFile; },
+  CorrelateRecordingStart: vi.fn(async () => true),
+    get correlateRecordingStart() { return this.CorrelateRecordingStart; },
 }));
 
 import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput } from '../resolvers/RealtimeBridgeResolver';

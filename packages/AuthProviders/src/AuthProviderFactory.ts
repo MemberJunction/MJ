@@ -1,16 +1,22 @@
 import { AuthProviderConfig, LogStatusEx } from '@memberjunction/core';
 import { IAuthProvider } from './IAuthProvider.js';
 import { BaseAuthProvider } from './BaseAuthProvider.js';
+import { IsEnvironmentConfigurable } from './IEnvironmentConfigurableProvider.js';
 import { MJGlobal, BaseSingleton, MJLruCache } from '@memberjunction/global';
 
-// Import providers to ensure they're registered
-import './providers/Auth0Provider.js';
-import './providers/MSALProvider.js';
-import './providers/OktaProvider.js';
-import './providers/CognitoProvider.js';
-import './providers/GoogleProvider.js';
-import './providers/WorkOSProvider.js';
-import './providers/MagicLinkProvider.js';
+// NOTE: this file deliberately contains NO list of concrete providers.
+//
+// It used to carry a literal `import './providers/Auth0Provider.js'` roster, which made the
+// built-ins look like a closed set that had to be edited to add a provider. They never were:
+// providers are @RegisterClass plugins resolved by key, and `index.ts` already exports all of
+// them by name, so importing anything from '@memberjunction/auth-providers' loads and registers
+// every built-in. HostIdentityProvider — added later — was never in that roster and has always
+// registered fine through the package entry point and the server-bootstrap manifest, which is
+// the proof the roster was redundant rather than load-bearing.
+//
+// Adding a provider is therefore: ship a @RegisterClass(BaseAuthProvider, 'x') subclass (in this
+// package, or in any package covered by a class-registration manifest) and add an
+// `MJ: Authentication Providers` row naming 'x' as its DriverClass. No edit here.
 
 /**
  * Factory and registry for managing authentication providers
@@ -46,7 +52,7 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
    * Creates an authentication provider instance based on configuration
    * Uses MJGlobal ClassFactory to instantiate the correct provider class
    */
-  static createProvider(config: AuthProviderConfig): IAuthProvider {
+  static CreateProvider(config: AuthProviderConfig): IAuthProvider {
     try {
       // Use MJGlobal ClassFactory to create the provider instance
       // The provider type in config should match the key used in @RegisterClass
@@ -68,10 +74,15 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
     }
   }
 
+  /** @deprecated Use {@link CreateProvider}. */
+  static createProvider(config: AuthProviderConfig): IAuthProvider {
+    return this.CreateProvider(config);
+  }
+
   /**
    * Registers a new authentication provider
    */
-  register(provider: IAuthProvider): void {
+  Register(provider: IAuthProvider): void {
     if (!provider.validateConfig()) {
       throw new Error(`Invalid configuration for provider: ${provider.name}`);
     }
@@ -88,10 +99,15 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
     LogStatusEx({ message: `Registered auth provider: ${provider.name} with issuer: ${provider.issuer}`, verboseOnly: true });
   }
 
+  /** @deprecated Use {@link Register}. */
+  register(provider: IAuthProvider): void {
+    return this.Register(provider);
+  }
+
   /**
    * Gets a provider by its issuer URL
    */
-  getByIssuer(issuer: string): IAuthProvider | undefined {
+  GetByIssuer(issuer: string): IAuthProvider | undefined {
     // Check cache first
     const cached = this.issuerCache.Get(issuer);
     if (cached) {
@@ -110,6 +126,11 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
     return undefined;
   }
 
+  /** @deprecated Use {@link GetByIssuer}. */
+  getByIssuer(issuer: string): IAuthProvider | undefined {
+    return this.GetByIssuer(issuer);
+  }
+
   /**
    * Gets all providers matching an issuer URL.
    * Unlike getByIssuer() which returns only the first match, this returns
@@ -117,7 +138,7 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
    * (e.g. MJExplorer + MJCentral) share the same Auth0 domain but have
    * different audiences (client IDs).
    */
-  getAllByIssuer(issuer: string): IAuthProvider[] {
+  GetAllByIssuer(issuer: string): IAuthProvider[] {
     // Check multi-provider cache first
     const cached = this.issuerMultiCache.Get(issuer);
     if (cached) {
@@ -138,40 +159,65 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
     return matches;
   }
 
+  /** @deprecated Use {@link GetAllByIssuer}. */
+  getAllByIssuer(issuer: string): IAuthProvider[] {
+    return this.GetAllByIssuer(issuer);
+  }
+
   /**
    * Gets a provider by its name
    */
-  getByName(name: string): IAuthProvider | undefined {
+  GetByName(name: string): IAuthProvider | undefined {
     return this.providers.get(name);
+  }
+
+  /** @deprecated Use {@link GetByName}. */
+  getByName(name: string): IAuthProvider | undefined {
+    return this.GetByName(name);
   }
 
   /**
    * Gets all registered providers
    */
-  getAllProviders(): IAuthProvider[] {
+  GetAllProviders(): IAuthProvider[] {
     return Array.from(this.providers.values());
+  }
+
+  /** @deprecated Use {@link GetAllProviders}. */
+  getAllProviders(): IAuthProvider[] {
+    return this.GetAllProviders();
   }
 
   /**
    * Checks if any providers are registered
    */
-  hasProviders(): boolean {
+  HasProviders(): boolean {
     return this.providers.size > 0;
+  }
+
+  /** @deprecated Use {@link HasProviders}. */
+  hasProviders(): boolean {
+    return this.HasProviders();
   }
 
   /**
    * Clears all registered providers (useful for testing)
    */
-  clear(): void {
+  Clear(): void {
     this.providers.clear();
     this.issuerCache.Clear();
     this.issuerMultiCache.Clear();
   }
 
+  /** @deprecated Use {@link Clear}. */
+  clear(): void {
+    return this.Clear();
+  }
+
   /**
    * Gets all registered provider types from the ClassFactory
    */
-  static getRegisteredProviderTypes(): string[] {
+  static GetRegisteredProviderTypes(): string[] {
     // Get all registrations for BaseAuthProvider from ClassFactory
     const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseAuthProvider);
     // Extract unique keys (provider types) from registrations
@@ -182,10 +228,57 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
     return Array.from(new Set(providerTypes));
   }
 
+  /** @deprecated Use {@link GetRegisteredProviderTypes}. */
+  static getRegisteredProviderTypes(): string[] {
+    return this.GetRegisteredProviderTypes();
+  }
+
+  /**
+   * Collects provider configurations from environment variables by asking every registered
+   * provider class to configure itself.
+   *
+   * This replaces the hard-coded env block that used to live in MJServer's config and
+   * enumerated Entra / Auth0 / Cognito inline. Discovery is now driven by the same
+   * `@RegisterClass` registry that resolves drivers, so a third-party provider gets the
+   * env-var experience without a core edit — see {@link IEnvironmentConfigurableProvider}.
+   *
+   * A provider whose variables are absent returns null and is skipped. A provider whose
+   * mapping throws is skipped with an error rather than taking down startup, because one
+   * malformed mapping must not cost a deployment its other providers.
+   *
+   * @param env Environment to read from; defaults to `process.env`.
+   * @returns One config per provider that found its variables, deduplicated by name.
+   */
+  static DiscoverFromEnvironment(env: NodeJS.ProcessEnv = process.env): AuthProviderConfig[] {
+    const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseAuthProvider);
+    const configs = new Map<string, AuthProviderConfig>();
+
+    for (const registration of registrations) {
+      const providerClass: unknown = registration.SubClass;
+      if (!IsEnvironmentConfigurable(providerClass)) {
+        continue;
+      }
+      try {
+        const config = providerClass.ConfigFromEnvironment(env);
+        if (config && !configs.has(config.name)) {
+          configs.set(config.name, config);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        LogStatusEx({
+          message: `Auth provider '${registration.Key}' failed to build a configuration from environment variables: ${message}`,
+          verboseOnly: true
+        });
+      }
+    }
+
+    return Array.from(configs.values());
+  }
+
   /**
    * Checks if a provider type is registered
    */
-  static isProviderTypeRegistered(type: string): boolean {
+  static IsProviderTypeRegistered(type: string): boolean {
     try {
       // Try to get the registration for this specific type
       const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseAuthProvider, type.toLowerCase());
@@ -193,5 +286,10 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
     } catch {
       return false;
     }
+  }
+
+  /** @deprecated Use {@link IsProviderTypeRegistered}. */
+  static isProviderTypeRegistered(type: string): boolean {
+    return this.IsProviderTypeRegistered(type);
   }
 }

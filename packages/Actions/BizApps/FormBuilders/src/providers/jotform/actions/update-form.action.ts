@@ -88,7 +88,7 @@ export class UpdateJotFormAction extends JotFormBaseAction {
                 existingForm = await this.getJotFormDetails(formId, apiToken, region);
             }
 
-            const axiosInstance = this.getAxiosInstance(apiToken, region);
+            const httpClient = this.getHttpClient(apiToken, region);
 
             // Update properties (including title)
             if (title || properties) {
@@ -113,7 +113,7 @@ export class UpdateJotFormAction extends JotFormBaseAction {
                 }
 
                 // Update properties via PUT endpoint
-                await axiosInstance.put(
+                await httpClient.Put(
                     `/form/${formId}/properties`,
                     { properties: propertiesToUpdate }
                 );
@@ -148,7 +148,7 @@ export class UpdateJotFormAction extends JotFormBaseAction {
                 }
 
                 // Update questions via POST endpoint
-                await axiosInstance.post(
+                await httpClient.Post(
                     `/form/${formId}/questions`,
                     { questions: questionsToUpdate }
                 );

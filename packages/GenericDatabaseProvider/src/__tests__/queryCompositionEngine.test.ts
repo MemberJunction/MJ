@@ -66,6 +66,40 @@ describe('QueryCompositionEngine', () => {
         vi.restoreAllMocks();
     });
 
+
+    // ================================================================
+    // renameSQLIdentifier — $-expansion in the replacement (issue #3171)
+    // ================================================================
+    describe('renameSQLIdentifier', () => {
+        /**
+         * The search side is regex-escaped (`\\$&`) but the replacement side was
+         * passed as a STRING, so `$$`/`$&`/`` $` ``/`$'` in the NEW name were
+         * expanded instead of inserted. `SymbolTable.Register` returns the CTE name
+         * verbatim (or `name__N`) with no sanitisation, and both SQL Server bracketed
+         * identifiers and PG quoted identifiers may legally contain `$` — so this
+         * reaches executed SQL. Same defect the rest of #3171 fixed elsewhere.
+         */
+        const rename = (sql: string, oldName: string, newName: string): string =>
+            (engine as unknown as {
+                renameSQLIdentifier(s: string, o: string, n: string): string;
+            }).renameSQLIdentifier(sql, oldName, newName);
+
+        for (const newName of ['pool$$bridge__2', 'pool$&bridge__2', 'pool$`bridge__2', "pool$'bridge__2", 'pool$1bridge__2']) {
+            it(`substitutes a new name containing ${JSON.stringify(newName)} verbatim`, () => {
+                expect(rename('SELECT * FROM [poolbridge]', 'poolbridge', newName))
+                    .toBe(`SELECT * FROM ${newName}`);
+            });
+        }
+
+        it('still renames all three identifier forms', () => {
+            expect(rename('[a], "a", a', 'a', 'b')).toBe('b, b, b');
+        });
+
+        it('still leaves a longer identifier that merely contains the name alone', () => {
+            expect(rename('SELECT MyAcronymBridge', 'AcronymBridge', 'x')).toBe('SELECT MyAcronymBridge');
+        });
+    });
+
     // ================================================================
     // HasCompositionTokens
     // ================================================================

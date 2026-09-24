@@ -67,7 +67,7 @@ export interface RerankerConfiguration {
  * @param configJson - JSON string from AIAgent.RerankerConfiguration
  * @returns Parsed configuration with defaults applied, or null if disabled/invalid
  */
-export function parseRerankerConfiguration(configJson: string | null | undefined): RerankerConfiguration | null {
+export function ParseRerankerConfiguration(configJson: string | null | undefined): RerankerConfiguration | null {
     if (!configJson || configJson.trim().length === 0) {
         return null;
     }
@@ -98,4 +98,9 @@ export function parseRerankerConfiguration(configJson: string | null | undefined
     } catch {
         return null;
     }
+}
+
+/** @deprecated Use {@link ParseRerankerConfiguration}. */
+export function parseRerankerConfiguration(configJson: string | null | undefined): RerankerConfiguration | null {
+    return ParseRerankerConfiguration(configJson);
 }

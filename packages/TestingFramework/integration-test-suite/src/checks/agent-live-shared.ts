@@ -28,11 +28,19 @@ export const AGENT_LIVE_FIXTURE_TAG = '(mj-integration-test — safe to delete)'
 export const AGENT_LIVE_SETTLE_MS = Number(process.env.AGENT_LIVE_SETTLE_MS ?? 5000);
 
 /** A unique per-run marker string (the rig's isolation technique). */
-export function newMarker(prefix: string): string {
+export function NewMarker(prefix: string): string {
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
+/** @deprecated Use {@link NewMarker}. */
+export function newMarker(prefix: string): string {
+    return NewMarker(prefix);
+}
+
+export const Sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));
+
+/** @deprecated Use {@link Sleep}. */
+export const sleep = Sleep;
 
 /**
  * A minimal agent invoker exposing RunAIAgent(params). Backed by SERVER-IN-PROCESS
@@ -61,7 +69,7 @@ export interface AgentInvoker {
  * a harness-attributed error. Shared so the two invokers' fallback policy and error message cannot
  * drift (#3251 review follow-up). Callers are async, so the throw always surfaces as a rejection.
  */
-export function resolveContextUserOrThrow(explicitUser: UserInfo | undefined, boundUser: UserInfo, invokerName: string): UserInfo {
+export function ResolveContextUserOrThrow(explicitUser: UserInfo | undefined, boundUser: UserInfo, invokerName: string): UserInfo {
     const contextUser = explicitUser ?? boundUser;
     if (!contextUser) {
         throw new Error(
@@ -71,12 +79,17 @@ export function resolveContextUserOrThrow(explicitUser: UserInfo | undefined, bo
     return contextUser;
 }
 
-export function makeAIClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
+/** @deprecated Use {@link ResolveContextUserOrThrow}. */
+export function resolveContextUserOrThrow(explicitUser: UserInfo | undefined, boundUser: UserInfo, invokerName: string): UserInfo {
+    return ResolveContextUserOrThrow(explicitUser, boundUser, invokerName);
+}
+
+export function MakeAIClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
     return {
         // async so a missing user surfaces as a REJECTION, never a sync throw — RunAIAgent
         // returns a Promise, and a sync throw would escape a `.catch(...)`-style caller.
         RunAIAgent: async (params: ExecuteAgentParams) => {
-            const contextUser = resolveContextUserOrThrow(params.contextUser, user, 'makeAIClient');
+            const contextUser = ResolveContextUserOrThrow(params.contextUser, user, 'makeAIClient');
             // base-agent stamps AIAgentRun.ConversationID from params.data.conversationId
             // (base-agent.ts:7893), while carry-forward reads the top-level params.conversationId
             // (:5714) — so a conversation-linked run must carry it in BOTH places.
@@ -92,20 +105,30 @@ export function makeAIClient(provider: IMetadataProvider, user: UserInfo): Agent
     };
 }
 
+/** @deprecated Use {@link MakeAIClient}. */
+export function makeAIClient(provider: IMetadataProvider, user: UserInfo): AgentInvoker {
+    return MakeAIClient(provider, user);
+}
+
 /** Message-literal typed via the params type so no `@memberjunction/ai` ChatMessage import is needed. */
 export type WireMessages = ExecuteAgentParams['conversationMessages'];
 
 /** One user-turn message array for a wire run. */
-export function userTurn(text: string): WireMessages {
+export function UserTurn(text: string): WireMessages {
     return [{ role: 'user', content: text }] as WireMessages;
+}
+
+/** @deprecated Use {@link UserTurn}. */
+export function userTurn(text: string): WireMessages {
+    return UserTurn(text);
 }
 
 /** Options threaded to a wire run (conversation-linked runs pass conversationDetailId). */
 export interface WireRunOptions {
-    conversationDetailId?: string;
-    conversationId?: string;
-    planMode?: boolean;
-    requestedSkillIDs?: string[];
+    conversationDetailId?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    ConversationId?: string;
+    PlanMode?: boolean;
+    RequestedSkillIDs?: string[];
 }
 
 /**
@@ -114,7 +137,7 @@ export interface WireRunOptions {
  * contextUser can be resolved (issue #3251) — call sites pass ctx.User, so that path indicates a
  * harness bug.
  */
-export async function runAgentOverWire(
+export async function RunAgentOverWire(
     client: AgentInvoker,
     agent: MJAIAgentEntityExtended,
     messages: WireMessages,
@@ -124,11 +147,21 @@ export async function runAgentOverWire(
         agent,
         conversationMessages: messages,
         conversationDetailId: opts.conversationDetailId,
-        conversationId: opts.conversationId,
-        planMode: opts.planMode,
-        requestedSkillIDs: opts.requestedSkillIDs,
+        conversationId: opts.ConversationId,
+        planMode: opts.PlanMode,
+        requestedSkillIDs: opts.RequestedSkillIDs,
     };
     return client.RunAIAgent(params);
+}
+
+/** @deprecated Use {@link RunAgentOverWire}. */
+export async function runAgentOverWire(
+    client: AgentInvoker,
+    agent: MJAIAgentEntityExtended,
+    messages: WireMessages,
+    opts: WireRunOptions = {}
+): Promise<ExecuteAgentResult> {
+    return RunAgentOverWire(client, agent, messages, opts);
 }
 
 /**
@@ -146,7 +179,7 @@ function runViewFor(provider?: IMetadataProvider): RunView {
  * miss, fall back to the newest AIAgentRun matching `fallbackFilter` (an ExtraFilter). Returns
  * undefined only when neither path yields a run.
  */
-export async function resolveRunId(
+export async function ResolveRunId(
     result: ExecuteAgentResult,
     user: UserInfo,
     fallbackFilter?: string,
@@ -168,6 +201,16 @@ export async function resolveRunId(
         BypassCache: true,
     }, user);
     return r.Success ? r.Results?.[0]?.ID : undefined;
+}
+
+/** @deprecated Use {@link ResolveRunId}. */
+export async function resolveRunId(
+    result: ExecuteAgentResult,
+    user: UserInfo,
+    fallbackFilter?: string,
+    provider?: IMetadataProvider
+): Promise<string | undefined> {
+    return ResolveRunId(result, user, fallbackFilter, provider);
 }
 
 /**
@@ -271,7 +314,7 @@ export interface StepRow {
     OutputData: string | null;
 }
 
-export async function getRunSteps(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<StepRow[]> {
+export async function GetRunSteps(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<StepRow[]> {
     const r = await runViewFor(provider).RunView<StepRow>({
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID='${runId}'`,
@@ -281,6 +324,11 @@ export async function getRunSteps(runId: string, user: UserInfo, provider?: IMet
         BypassCache: true,
     }, user);
     return RequireRows(r, `step read for run ${runId}`);
+}
+
+/** @deprecated Use {@link GetRunSteps}. */
+export async function getRunSteps(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<StepRow[]> {
+    return GetRunSteps(runId, user, provider);
 }
 
 /** The projection of an AIPromptRun row these checks read. */
@@ -301,7 +349,7 @@ export interface PromptRunRow {
  * (sumPromptRunTokens vs AIAgentRun.TotalTokensUsed). Teardown deliberately uses the wider
  * PROMPT_RUN_BEARING_STEP_TYPES — it must reach every prompt run, not just the counted ones.
  */
-export async function getPromptRuns(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<PromptRunRow[]> {
+export async function GetPromptRuns(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<PromptRunRow[]> {
     // Reached through the run's steps — AIPromptRun has no AgentRunID (see PromptRunIdsFromSteps).
     // A run that made no model call legitimately has none.
     const promptRunIds = await ResolvePromptRunIdsForAgentRuns([runId], user, provider, ROLLUP_BEARING_STEP_TYPES);
@@ -319,15 +367,25 @@ export async function getPromptRuns(runId: string, user: UserInfo, provider?: IM
     return RequireRows(r, `prompt-run read for run ${runId}`);
 }
 
+/** @deprecated Use {@link GetPromptRuns}. */
+export async function getPromptRuns(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<PromptRunRow[]> {
+    return GetPromptRuns(runId, user, provider);
+}
+
 /** Sum of TokensUsed across every AIPromptRun for a run (nulls coalesced to 0). */
-export function sumPromptRunTokens(rows: PromptRunRow[]): number {
+export function SumPromptRunTokens(rows: PromptRunRow[]): number {
     return rows.reduce((acc, p) => acc + (Number(p.TokensUsed) || 0), 0);
+}
+
+/** @deprecated Use {@link SumPromptRunTokens}. */
+export function sumPromptRunTokens(rows: PromptRunRow[]): number {
+    return SumPromptRunTokens(rows);
 }
 
 /** A single decoded chat message from an AIPromptRun.Messages payload. */
 export interface DecodedMessage {
-    role: string;
-    content: string;
+    role: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    content: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Normalize a message content value (string or content-part array) to a searchable string. */
@@ -342,7 +400,7 @@ function contentToString(content: unknown): string {
  * Decode an AIPromptRun.Messages field (a JSON string) into role/content pairs. Handles both the
  * bare-array shape and the `{ messages: [...] }` wrapper (same two shapes ParseMessagesData handles).
  */
-export function decodeMessages(messagesJson: string | null): DecodedMessage[] {
+export function DecodeMessages(messagesJson: string | null): DecodedMessage[] {
     if (!messagesJson) {
         return [];
     }
@@ -363,9 +421,14 @@ export function decodeMessages(messagesJson: string | null): DecodedMessage[] {
     });
 }
 
+/** @deprecated Use {@link DecodeMessages}. */
+export function decodeMessages(messagesJson: string | null): DecodedMessage[] {
+    return DecodeMessages(messagesJson);
+}
+
 /** The chat messages of a run's FIRST Prompt step (via its TargetLogID → AIPromptRun.Messages). */
-export async function firstPromptMessages(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<DecodedMessage[]> {
-    const steps = await getRunSteps(runId, user, provider);
+export async function FirstPromptMessages(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<DecodedMessage[]> {
+    const steps = await GetRunSteps(runId, user, provider);
     const firstPrompt = steps.find(s => s.StepType === 'Prompt' && s.TargetLogID);
     if (!firstPrompt?.TargetLogID) {
         return [];
@@ -378,11 +441,16 @@ export async function firstPromptMessages(runId: string, user: UserInfo, provide
         BypassCache: true,
     }, user);
     const row = r.Success ? r.Results?.[0] : undefined;
-    return decodeMessages(row?.Messages ?? null);
+    return DecodeMessages(row?.Messages ?? null);
+}
+
+/** @deprecated Use {@link FirstPromptMessages}. */
+export async function firstPromptMessages(runId: string, user: UserInfo, provider?: IMetadataProvider): Promise<DecodedMessage[]> {
+    return FirstPromptMessages(runId, user, provider);
 }
 
 /** Best-effort delete one row by id via the run-scoped provider (never throws). */
-export async function deleteById(entity: string, id: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
+export async function DeleteById(entity: string, id: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
     try {
         const e = await provider.GetEntityObject(entity, user);
         if (await e.InnerLoad(CompositeKey.FromID(id))) {
@@ -393,12 +461,17 @@ export async function deleteById(entity: string, id: string, provider: IMetadata
     }
 }
 
+/** @deprecated Use {@link DeleteById}. */
+export async function deleteById(entity: string, id: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
+    return DeleteById(entity, id, provider, user);
+}
+
 /**
  * FK-safe purge of a live agent run this family created: delete its AIPromptRuns and
  * AIAgentRunSteps (children), then the run header. Best-effort per row so partial failures
  * still make progress. Deletes are done through loaded entity objects on the run-scoped provider.
  */
-export async function purgeAgentRun(runId: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
+export async function PurgeAgentRun(runId: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
     const rv = RunView.FromMetadataProvider(provider);
     // Steps first (they reference prompt runs via TargetLogID on prompt-run-bearing steps), then the run.
     const stepsResult = await rv.RunView<{ ID: string; StepType: string; TargetLogID: string | null }>({
@@ -415,10 +488,15 @@ export async function purgeAgentRun(runId: string, provider: IMetadataProvider, 
     // set, since teardown must not orphan any). Resolved from the step rows we already
     // hold, and BEFORE the steps are deleted below — the steps are the only path to them.
     for (const prId of PromptRunIdsFromSteps(steps)) {
-        await deleteById('MJ: AI Prompt Runs', prId, provider, user);
+        await DeleteById('MJ: AI Prompt Runs', prId, provider, user);
     }
     for (const s of steps) {
-        await deleteById('MJ: AI Agent Run Steps', s.ID, provider, user);
+        await DeleteById('MJ: AI Agent Run Steps', s.ID, provider, user);
     }
-    await deleteById('MJ: AI Agent Runs', runId, provider, user);
+    await DeleteById('MJ: AI Agent Runs', runId, provider, user);
+}
+
+/** @deprecated Use {@link PurgeAgentRun}. */
+export async function purgeAgentRun(runId: string, provider: IMetadataProvider, user: UserInfo): Promise<void> {
+    return PurgeAgentRun(runId, provider, user);
 }

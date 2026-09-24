@@ -64,8 +64,15 @@ const dynamicPackageEntrySchema = z.object({
   // entries are pure side-effect imports (their @RegisterClass decorators fire on
   // load), so StartupExport is optional and unset for the client array.
   StartupExport: z.string().optional(),
-  AppName: z.string(),
+  // Written by `mj app install`; hand-authored entries (see @memberjunction/dynamic-packages
+  // README) need not carry it, and the loader treats it as optional — so must this schema, or
+  // every getValidatedConfig() command aborts with a misleading "credentials missing" error.
+  AppName: z.string().optional(),
   Enabled: z.boolean().default(true),
+  // Hand-authored per-process scoping, read by @memberjunction/dynamic-packages: process IDs
+  // (or prefixes — `cli:sync` covers every `mj sync` command) the entry loads in / never loads in.
+  Processes: z.array(z.string()).optional(),
+  ExcludeProcesses: z.array(z.string()).optional(),
 });
 
 // Schema for Open App configuration section
@@ -106,10 +113,19 @@ const openAppsConfigSchema = z.object({
 // `server` is consumed by @memberjunction/server-bootstrap at MJAPI boot (B1).
 // `client` is consumed by `mj codegen manifest --open-app-client-bootstrap`, which
 // appends a side-effect import per entry to MJExplorer's class-registrations manifest.
-const dynamicPackagesSchema = z.object({
+export const DynamicPackagesSchema = z.object({
   server: z.array(dynamicPackageEntrySchema).optional(),
   client: z.array(dynamicPackageEntrySchema).optional(),
+  // Per-process on/off switch keyed by process ID or prefix (`{ 'cli:codegen': 'none' }`);
+  // the most specific key wins. MJ_DYNAMIC_PACKAGES / --no-app-packages override it.
+  // Values are validated by the loader's own parser (which also accepts the env-var synonyms
+  // `off`/`skip`/`0`/`on`/`1`/…, and warns on anything else), not narrowed here — a stricter
+  // schema than the loader turns a harmless typo into a hard failure of unrelated commands.
+  policy: z.record(z.string(), z.string()).optional(),
 }).optional();
+
+/** @deprecated Use {@link DynamicPackagesSchema}. */
+export const dynamicPackagesSchema = DynamicPackagesSchema;
 
 // Schema for database-dependent config (required fields)
 const mjConfigSchema = z.object({
@@ -147,7 +163,7 @@ const mjConfigSchema = z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),
   openApps: openAppsConfigSchema,
-  dynamicPackages: dynamicPackagesSchema,
+  dynamicPackages: DynamicPackagesSchema,
 });
 
 // Schema for non-database commands (all fields optional)
@@ -182,17 +198,33 @@ const mjConfigSchemaOptional = z.object({
     schemaPlaceholders: z.array(schemaPlaceholderSchema).optional(),
   }).passthrough().optional(),
   openApps: openAppsConfigSchema,
-  dynamicPackages: dynamicPackagesSchema,
+  dynamicPackages: DynamicPackagesSchema,
 });
 
 // Don't validate at module load - let commands decide when they need validated config
-export const config = result?.config as MJConfig | undefined;
+export const Config = result?.config as MJConfig | undefined;
+
+/** @deprecated Use {@link Config}. */
+export const config = Config;
+
+/**
+ * The discovered mj.config.cjs BEFORE any Zod parse, plus its path. The dynamic-package loader
+ * needs the raw object (a parsed config keeps only the keys its schema names) and the file path
+ * (the resolution anchor for packages the host, not the CLI, declares).
+ */
+export const GetRawConfig = (): { config: Record<string, unknown> | undefined; configFilePath?: string } => ({
+  config: result?.config as Record<string, unknown> | undefined,
+  configFilePath: result?.filepath || undefined,
+});
+
+/** @deprecated Use {@link GetRawConfig}. */
+export const getRawConfig = GetRawConfig;
 
 /**
  * Get validated config for commands that require database connection.
  * Throws error if config is invalid.
  */
-export const getValidatedConfig = (): MJConfig => {
+export const GetValidatedConfig = (): MJConfig => {
   const parsedConfig = mjConfigSchema.safeParse(result?.config);
   if (!parsedConfig.success) {
     const fieldEnvMap: Record<string, string> = {
@@ -219,21 +251,27 @@ export const getValidatedConfig = (): MJConfig => {
   return parsedConfig.data;
 };
 
+/** @deprecated Use {@link GetValidatedConfig}. */
+export const getValidatedConfig = GetValidatedConfig;
+
 /**
  * Get optional config for commands that don't require database connection.
  * Returns undefined if no config exists, or partial config if it exists.
  */
-export const getOptionalConfig = (): Partial<MJConfig> | undefined => {
+export const GetOptionalConfig = (): Partial<MJConfig> | undefined => {
   const parsedConfig = mjConfigSchemaOptional.safeParse(result?.config);
   return parsedConfig.success ? parsedConfig.data : undefined;
 };
+
+/** @deprecated Use {@link GetOptionalConfig}. */
+export const getOptionalConfig = GetOptionalConfig;
 
 /**
  * Legacy function for backward compatibility with codegen.
  * Validates and returns updated config.
  * Returns undefined silently if config is invalid (command will handle the error).
  */
-export const updatedConfig = (): MJConfig | undefined => {
+export const UpdatedConfig = (): MJConfig | undefined => {
   const freshSearchResult = explorer.search(process.cwd());
   // Merge fresh config with DEFAULT_CLI_CONFIG
   const freshMergedConfig: any = freshSearchResult?.config
@@ -245,6 +283,9 @@ export const updatedConfig = (): MJConfig | undefined => {
   return maybeConfig.success ? maybeConfig.data : undefined;
 };
 
+/** @deprecated Use {@link UpdatedConfig}. */
+export const updatedConfig = UpdatedConfig;
+
 /**
  * Builds a SkywayConfig from the MJ CLI config and optional overrides.
  *
@@ -254,7 +295,7 @@ export const updatedConfig = (): MJConfig | undefined => {
  * - Placeholder mapping (schemaPlaceholders, legacy mjSchema, flyway:defaultSchema)
  * - Baseline configuration
  */
-export const getSkywayConfig = async (
+export const GetSkywayConfig = async (
   mjConfig: MJConfig,
   tag?: string,
   schema?: string,
@@ -353,6 +394,9 @@ export const getSkywayConfig = async (
     Placeholders: Object.keys(placeholders).length > 0 ? placeholders : undefined,
   };
 };
+
+/** @deprecated Use {@link GetSkywayConfig}. */
+export const getSkywayConfig = GetSkywayConfig;
 
 /**
  * Creates the appropriate Skyway database provider based on the dialect.

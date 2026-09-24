@@ -33,29 +33,34 @@ const STORE_KEY = 'mj-msal-tokens';
 
 /** Persisted MSAL/Azure AD token bundle. */
 export type MJAuthTokens = {
-    idToken: string;
-    accessToken: string;
-    refreshToken?: string;
+    idToken: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    accessToken: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    refreshToken?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
     /** Epoch ms when idToken expires (or 0 if unknown). */
-    expiresAt: number;
+    expiresAt: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 };
 
 /**
  * The redirect URI is built from our app's `scheme` in app.json (`mjmobile`).
  * Computed once at module load — the same value is registered in Azure AD.
  */
-export function getRedirectUri(): string {
+export function GetRedirectUri(): string {
     return makeRedirectUri({
         scheme: 'mjmobile',
         path: 'auth',
     });
 }
 
+/** @deprecated Use {@link GetRedirectUri}. */
+export function getRedirectUri(): string {
+    return GetRedirectUri();
+}
+
 /**
  * Build the OIDC discovery document (authorize/token/logout endpoints) for the
  * configured Azure AD authority (`Env.msalAuthority`).
  */
-export function getDiscovery(): DiscoveryDocument {
+export function GetDiscovery(): DiscoveryDocument {
     return {
         authorizationEndpoint: `${Env.msalAuthority}/oauth2/v2.0/authorize`,
         tokenEndpoint: `${Env.msalAuthority}/oauth2/v2.0/token`,
@@ -63,19 +68,29 @@ export function getDiscovery(): DiscoveryDocument {
     };
 }
 
+/** @deprecated Use {@link GetDiscovery}. */
+export function getDiscovery(): DiscoveryDocument {
+    return GetDiscovery();
+}
+
 /**
  * Build the AuthRequest. PKCE is enabled by default in expo-auth-session.
  */
-export function buildAuthRequest(): AuthRequest {
+export function BuildAuthRequest(): AuthRequest {
     return new AuthRequest({
         clientId: Env.msalClientId,
         scopes: [...Env.msalScopes],
-        redirectUri: getRedirectUri(),
+        redirectUri: GetRedirectUri(),
         responseType: ResponseType.Code,
         usePKCE: true,
         // Force a fresh consent on first run to avoid silent-failure surprises.
         prompt: undefined,
     });
+}
+
+/** @deprecated Use {@link BuildAuthRequest}. */
+export function buildAuthRequest(): AuthRequest {
+    return BuildAuthRequest();
 }
 
 /**
@@ -117,31 +132,41 @@ function bundleFromResponse(resp: TokenResponse): MJAuthTokens {
  * @returns The exchanged (and persisted) {@link MJAuthTokens}.
  * @throws If the token endpoint rejects the exchange.
  */
-export async function exchangeCodeForTokens(code: string, codeVerifier: string): Promise<MJAuthTokens> {
+export async function ExchangeCodeForTokens(code: string, codeVerifier: string): Promise<MJAuthTokens> {
     const resp = await exchangeCodeAsync(
         {
             clientId: Env.msalClientId,
             code,
-            redirectUri: getRedirectUri(),
+            redirectUri: GetRedirectUri(),
             extraParams: { code_verifier: codeVerifier },
         },
-        getDiscovery(),
+        GetDiscovery(),
     );
     const tokens = bundleFromResponse(resp);
-    await persistTokens(tokens);
+    await PersistTokens(tokens);
     return tokens;
 }
 
+/** @deprecated Use {@link ExchangeCodeForTokens}. */
+export async function exchangeCodeForTokens(code: string, codeVerifier: string): Promise<MJAuthTokens> {
+    return ExchangeCodeForTokens(code, codeVerifier);
+}
+
 /** Persist the token bundle to expo-secure-store (keychain on iOS). */
-export async function persistTokens(tokens: MJAuthTokens): Promise<void> {
+export async function PersistTokens(tokens: MJAuthTokens): Promise<void> {
     await SecureStore.setItemAsync(STORE_KEY, JSON.stringify(tokens));
+}
+
+/** @deprecated Use {@link PersistTokens}. */
+export async function persistTokens(tokens: MJAuthTokens): Promise<void> {
+    return PersistTokens(tokens);
 }
 
 /**
  * Load the persisted token bundle from secure-store.
  * @returns The stored {@link MJAuthTokens}, or `null` if absent/unreadable.
  */
-export async function loadStoredTokens(): Promise<MJAuthTokens | null> {
+export async function LoadStoredTokens(): Promise<MJAuthTokens | null> {
     try {
         const raw = await SecureStore.getItemAsync(STORE_KEY);
         if (!raw) return null;
@@ -151,17 +176,27 @@ export async function loadStoredTokens(): Promise<MJAuthTokens | null> {
     }
 }
 
+/** @deprecated Use {@link LoadStoredTokens}. */
+export async function loadStoredTokens(): Promise<MJAuthTokens | null> {
+    return LoadStoredTokens();
+}
+
 /** Delete the persisted token bundle from secure-store (best-effort; swallows errors). */
-export async function clearStoredTokens(): Promise<void> {
+export async function ClearStoredTokens(): Promise<void> {
     await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined);
+}
+
+/** @deprecated Use {@link ClearStoredTokens}. */
+export async function clearStoredTokens(): Promise<void> {
+    return ClearStoredTokens();
 }
 
 /**
  * Use the refresh token to get a fresh idToken/accessToken. Throws if the
  * refresh token is missing or rejected.
  */
-export async function refreshTokens(): Promise<MJAuthTokens> {
-    const current = await loadStoredTokens();
+export async function RefreshTokens(): Promise<MJAuthTokens> {
+    const current = await LoadStoredTokens();
     if (!current?.refreshToken) {
         throw new Error('No refresh token stored — user must re-authenticate.');
     }
@@ -171,27 +206,37 @@ export async function refreshTokens(): Promise<MJAuthTokens> {
             refreshToken: current.refreshToken,
             scopes: [...Env.msalScopes],
         },
-        getDiscovery(),
+        GetDiscovery(),
     );
     const tokens = bundleFromResponse(resp);
-    await persistTokens(tokens);
+    await PersistTokens(tokens);
     return tokens;
+}
+
+/** @deprecated Use {@link RefreshTokens}. */
+export async function refreshTokens(): Promise<MJAuthTokens> {
+    return RefreshTokens();
 }
 
 /**
  * Returns a usable idToken — refreshes if expired or near-expiry.
  * Throws if no tokens are stored or refresh fails.
  */
-export async function getValidIdToken(): Promise<string> {
-    const current = await loadStoredTokens();
+export async function GetValidIdToken(): Promise<string> {
+    const current = await LoadStoredTokens();
     if (!current) throw new Error('No tokens stored.');
     const nowMs = Date.now();
     // Refresh if expired or within 60s of expiry
     if (!current.expiresAt || current.expiresAt - nowMs < 60_000) {
-        const refreshed = await refreshTokens();
+        const refreshed = await RefreshTokens();
         return refreshed.idToken;
     }
     return current.idToken;
+}
+
+/** @deprecated Use {@link GetValidIdToken}. */
+export async function getValidIdToken(): Promise<string> {
+    return GetValidIdToken();
 }
 
 /**
@@ -201,8 +246,13 @@ export async function getValidIdToken(): Promise<string> {
  * @param tokens The bundle to test (or `null`).
  * @returns `true` when the caller should refresh / re-authenticate.
  */
-export function isExpired(tokens: MJAuthTokens | null): boolean {
+export function IsExpired(tokens: MJAuthTokens | null): boolean {
     if (!tokens) return true;
     if (!tokens.expiresAt) return false; // unknown expiry — let server tell us
     return tokens.expiresAt - Date.now() < 60_000;
+}
+
+/** @deprecated Use {@link IsExpired}. */
+export function isExpired(tokens: MJAuthTokens | null): boolean {
+    return IsExpired(tokens);
 }

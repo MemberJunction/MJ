@@ -183,9 +183,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Providers','SearchProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope Providers')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Providers','SearchProviderID')"
                 [AllowLoad]="IsSectionExpanded('mJSearchScopeProviders')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSearchScopeProviders', $event.totalRowCount)"
                 >

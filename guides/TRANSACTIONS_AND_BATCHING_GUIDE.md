@@ -2,7 +2,9 @@
 
 > **Deep dive on entity graphs specifically** — metadata declaration, flow diagrams for the local
 > save and the network round trip, cache-backed sources and load modes:
-> [Related-Record Collections](../packages/MJCore/docs/related-record-collections.md).
+> [Related-Record Collections](../packages/MJCore/docs/related-record-collections.md) (1:N, FK on
+> the related row) and [Embedded Records](../packages/MJCore/docs/embedded-records.md) (1:1, FK on
+> the owner).
 
 MemberJunction has **three** different mechanisms that all sound like "do several things at once,"
 and picking the wrong one produces bugs that do not announce themselves — torn writes, saves that
@@ -52,14 +54,17 @@ already unwound its own scope. `RunInEntityTransaction()` wraps that for you and
 ### Join semantics — the important part
 
 The provider arbitrates. If a transaction is **already in flight**, `BeginEntityTransaction()` joins
-it (a `SAVE TRANSACTION` savepoint) rather than starting a second physical transaction; only the
-outermost commit commits for real. **Participants never ask whether someone else already opened a
-transaction.**
+it (a dialect savepoint — SQL Server `SAVE TRANSACTION`, PostgreSQL `SAVEPOINT`) rather than starting
+a second physical transaction; only the outermost commit commits for real. **Participants never ask
+whether someone else already opened a transaction.** Inspect `TransactionDepth` (public on
+`DatabaseProviderBase`), not `IsInTransaction` — SQL Server deliberately leaves `IsInTransaction`
+false so `RunMaybeSerial` can fan out. After a server abort, call `ResetTransactionState()` rather
+than poking private fields.
 
 That is not a nicety, it is a correctness requirement. Before 6.2 MemberJunction had two transaction
 mechanisms that were blind to each other:
 
-- `DatabaseProviderBase.BeginTransaction()` — depth-counted, re-entrant, savepoint-aware.
+- `GenericDatabaseProvider.BeginTransaction()` — depth-counted, re-entrant, dialect savepoints. A server abort of the ambient TX is not recoverable (`DoomedTransactionError`); the outer `Commit` fails and `Save()` returns false. While doomed, every statement without an explicit `connectionSource` throws. Concurrent nested scopes on one provider instance are unsupported — do not let a nested unit outlive its outer scope (`Promise.all` over throwing units on one provider starts a fresh physical TX); use `allSettled` or serialize.
 - `BeginISATransaction()` — four lines that opened a brand-new `sql.Transaction` on the pool with no
   depth awareness at all.
 
@@ -75,8 +80,14 @@ disagree. If you called any of them, switch to `BeginEntityTransaction()` — or
 
 > **Concurrency note.** The ambient transaction lives on the *provider instance*, not a global.
 > MJServer builds per-request providers, so an ambient transaction is effectively request-scoped.
-> Long-lived single-provider processes (CLI tools, workers) must not run concurrent transactional
-> work on one provider instance.
+> Long-lived CLI tools must not run parallel Saves on one provider instance. `mj sync push` is
+> atomic by default: every save runs on the host provider inside the push transaction, **one
+> JSON-root graph at a time**, so nothing interleaves. An entity directory that opts into isolated
+> transactions (`push.isolatedTransactions`, or `--isolated-transactions`) runs its graphs
+> in parallel on `DatabaseProviderBase.CreateIndependentInstance()`, which forks a provider that
+> **shares the connection pool and metadata cache** but has its own transaction stack (SQL Server and
+> PostgreSQL). Those saves commit as they go and are not rolled back with the push.
+> `ReleaseIndependentInstance()` must not close the pool.
 
 ### Client-side
 
@@ -153,6 +164,22 @@ export class JournalEntryEntity extends mjBizAppsAccountingJournalEntryEntity {
         return result;
     }
 }
+```
+
+When the FK lives on **this** record (`Deal.OrderID`) the join inverts and so does the save
+order: the peer persists first, the owner stamps the FK, then the owner persists. That is an
+**embedded record**, not a collection. Declare it on the FK field
+(`EntityField.EmbeddedRecord`) and CodeGen emits `deal.OrderID_Object` /
+`deal.OrderID_EnsureObject()`. Same graph executor, same `MJ.SaveEntityGraph` wire path,
+recursive companion payload so the order's lines ride along. See
+[Embedded Records](../packages/MJCore/docs/embedded-records.md).
+
+```typescript
+const deal = await md.GetEntityObject<DealEntity>('Deals');
+// OrderID is nullable — Ensure() provisions the peer (required FKs exist after NewRecord).
+const order = deal.OrderID_EnsureObject();
+order.OrderDate = new Date('2002-01-01');
+await deal.Save(); // Order first, stamp Deal.OrderID, save Deal
 ```
 
 Then use it. The API is the same on both tiers:
@@ -279,6 +306,12 @@ Deprecated since 6.2. It opens a second physical transaction blind to any alread
 
 **❌ Setting `Load: 'immediate'` on a collection whose parent is commonly listed in grids.**
 Use `'explicit'` plus `IncludeRelatedRecords` on the specific views that need children.
+
+**❌ Inventing a "header-only" save that skips companions.**
+The graph executor's recursion guard is private on `BaseEntity`. Application
+code that previously passed a public `IsGraphNodeSave` flag dropped *every*
+companion, including owner-held embeds. Use `SkipRelatedCollections: true` —
+embeds still persist, collections do not.
 
 ---
 

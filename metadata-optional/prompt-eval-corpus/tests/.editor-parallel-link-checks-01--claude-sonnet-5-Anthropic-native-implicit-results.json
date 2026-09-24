@@ -1,0 +1,73 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "editor-parallel-link-checks-01 [claude-sonnet-5 · Anthropic · native-implicit-results]",
+    "Description": "Two URLs to validate. Tests whether the model batches the same action twice in one turn rather than serializing across iterations.",
+    "InputDefinition": {
+      "payload": {
+        "draft": {
+          "links": [
+            "https://example.org/a",
+            "https://example.org/b"
+          ]
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Validate both links in the draft before we publish."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "editor-parallel-link-checks-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "URL Link Validator"
+          }
+        ],
+        "allowAdditionalActions": true
+      }
+    },
+    "Configuration": {
+      "agentName": "Editor Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "URL Link Validator"
+              }
+            ],
+            "allowAdditionalActions": true
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "EA39FFC5-7F4D-4A4B-A280-4DA645814DA7"
+  }
+}

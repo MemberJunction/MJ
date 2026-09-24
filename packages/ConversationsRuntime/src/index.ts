@@ -13,6 +13,26 @@ export { ConversationsRuntime } from './ConversationsRuntime';
 
 // Sub-components and their public types
 export { MentionParser, type Mention, type MentionParseResult } from './mentions/MentionParser';
+export { MentionAutocomplete } from './mentions/MentionAutocomplete';
+export { IntersectAcceptedSkills } from './mentions/SkillNarrowing';
+export type { MentionSuggestion, MentionSuggestionPreset } from './mentions/MentionSuggestion';
+export {
+    BuildConversationTimeline,
+    CollectRealtimeSessionIDs,
+    FindRealtimeSessionMeta,
+    IsVisibleRealtimeTurn,
+    MapRealtimeSessionMeta,
+    REALTIME_SESSION_META_FIELDS,
+    SessionCardIsSameDayRange,
+    SessionCardStatusChip,
+    SessionCardTitle,
+    type ConversationTimelineItem,
+    type RealtimeSessionMetaRow,
+    type RealtimeSessionStatusChip,
+    type RealtimeSessionTimelineGroup,
+    type RealtimeSessionTimelineMeta,
+    type RealtimeTimelineSourceDetail,
+} from './timeline/RealtimeSessionTimeline';
 export {
     ConversationBridge,
     type ConversationSwitchEvent,

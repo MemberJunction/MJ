@@ -731,6 +731,36 @@ describe('OpenAIRealtime', () => {
             } as RealtimeServerEvent);
             expect(fn).not.toHaveBeenCalled();
         });
+
+        it('clears every registered callback-handler field on Close, mirroring Gemini/ElevenLabs', async () => {
+            // A handler closure typically captures the caller's dispatch/UI context. If Close()
+            // left these set, that context would stay reachable for as long as the caller happens
+            // to retain the closed session object — the gap this test guards against.
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            session.OnOutput(vi.fn());
+            session.OnTranscript(vi.fn());
+            session.OnToolCall(vi.fn());
+            session.OnInterruption(vi.fn());
+            session.OnUsage(vi.fn());
+            session.OnError(vi.fn());
+            session.OnClose(vi.fn());
+
+            await session.Close();
+
+            const handlerFields = [
+                'outputHandler',
+                'transcriptHandler',
+                'toolCallHandler',
+                'interruptionHandler',
+                'usageHandler',
+                'errorHandler',
+                'closeHandler',
+            ] as const;
+            const privateSession = session as unknown as Record<(typeof handlerFields)[number], unknown>;
+            for (const field of handlerFields) {
+                expect(privateSession[field]).toBeUndefined();
+            }
+        });
     });
 });
 
@@ -1174,7 +1204,7 @@ describe('QA hardening regressions (plan A-items)', () => {
     describe('A2: profile-gated live reconfigure', () => {
         it('OpenAI still advertises and performs live reconfigure with its transcription model', async () => {
             const session = (await driver.StartSession({ Model: 'gpt-realtime-2.1', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true });
+            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             const frame = driver.Fake.Sent.slice(before)[0];
@@ -1191,7 +1221,7 @@ describe('QA hardening regressions (plan A-items)', () => {
                 ...OPENAI_REALTIME_PROFILE,
                 supportsLiveReconfigure: false,
             });
-            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: false });
+            expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: false, SupportsDynamicToolSet: true });
             const before = driver.Fake.Sent.length;
             session.Reconfigure({ DisableAutoResponse: true });
             expect(driver.Fake.Sent.length).toBe(before);

@@ -1,5 +1,481 @@
 # @memberjunction/sql-dialect
 
+## 6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- c996a56: Field-Level Security: per-field Read/Update/Create control by role.
+
+  Field security is switched **on or off per entity**, explicitly, via a new
+  `Entity.EnableFieldLevelSecurity` flag. Nothing is inferred from whether permission rows happen to
+  exist, so adding a rule can never change access on an entity that has not opted in.
+
+  A new `EntityFieldPermission` table holds one row per (field, role) with three independent
+  verbs — `ReadAccess`, `UpdateAccess`, `CreateAccess` — each `Allow`, `Deny`, or `No Access`:
+  - **`No Access`** is neutral, and the default. It grants nothing and blocks nothing; another
+    role's Allow still wins.
+  - **`Allow`** grants the action for that role.
+  - **`Deny`** wins over everything. One Deny anywhere across the user's roles beats any number of
+    Allows.
+
+  **Read is required for Update and Create.** A field a user cannot see is one they cannot change,
+  so this is enforced twice: a CHECK constraint refuses the combination within a row, and the
+  aggregation clamps it again across roles — because two individually legal rows held by one user
+  (role A grants Read+Update, role B denies Read) would otherwise aggregate to write-only access
+  that no constraint could see.
+
+  **Turning the flag on is safe.** It snapshots the entity's existing entity-level permissions into
+  per-field rows, so enabling changes nothing until an administrator tightens a specific field.
+  Turning it off keeps the rows, inactive, so re-enabling does not lose the configuration. Those rows
+  maintain themselves: adding a column, granting a role entity access, or dropping either one is
+  reconciled automatically, and an administrator's tightening is never overwritten by that process.
+
+  **Nobody is exempt** — no admin bypass, no Owner carve-out, and no exempt account anywhere in
+  permission evaluation. That includes the **MJ system user**, the account the server runs its own
+  work as: it is not special-cased at runtime, and gets its access from ordinary `Allow` rows
+  written for the standard roles it holds. What is protected instead is the CONFIGURATION — a rule
+  that _denies_ anything to a role the system user holds is refused, and so is giving that account a
+  role which already denies a field. Grants save normally, since they are what the server's own
+  access depends on. Restricting that account would matter because its engine caches are
+  process-wide, so a partially loaded cache would reach every user; a configuration rule stops that
+  somewhere an administrator can see it, rather than behind a bypass that has to be trusted.
+  Primary keys, `__mj_` columns, and the security/identity entities can never be restricted.
+
+  Enforcement (server-side and authoritative):
+  - **Reads.** Denied columns are stripped from RunView results on both the cache-hit and cache-miss
+    paths, and from single-record GraphQL responses.
+  - **The audit trail.** `MJ: Record Changes` rows carry another entity's old and new values, and the
+    audit entity's own field security is off — so without a dedicated control, anyone with entity read
+    on it could read a denied field straight out of the payload, in the default configuration. Each
+    row is now projected against **the entity it is about**, resolved per row from its `EntityID`:
+    denied keys are dropped from `ChangesJSON` and `FullRecordJSON`, and `ChangesDescription` is
+    withheld entirely. Prose cannot be safely redacted — it would leak on the first value that
+    appears in an unexpected form — so it is dropped rather than edited, and callers degrade to a
+    generic label. Rows are never hidden: a user denied one field still sees that a record changed,
+    when, by whom, and which of the fields they may read. It fails closed when the subject entity
+    cannot be resolved, including when a query narrows `Fields` such that no `EntityID` reaches the
+    projection — otherwise `Fields: ['ChangesJSON']` would be a one-parameter bypass. Payload queries
+    in the platform now select `EntityID` alongside; a saved query reading Record Changes directly is
+    not projected, for the same reason no `RunQuery` is. On the write side, an update to a Record
+    Change from a caller carrying any denial ignores every payload column the client sends and
+    reloads the stored values first — a narrowed payload hydrates as an ordinary loaded value and
+    save-SQL generation writes every field, so without this a restricted user editing `Comments`
+    would silently overwrite the audit payload with the narrowed copy they were shown. Nothing is
+    manufactured anywhere in this path: a reader gets the stored value or a strict subset of it, and
+    only the stored value is ever persisted.
+  - **Caller-written SQL.** A request is rejected if `ExtraFilter`, `OrderBy`, or an `Aggregates`
+    expression names a denied field. Without this, `MIN(Salary)` or `Salary > 200000` reads the
+    values back without the column ever appearing in a result. `UserSearchString` is not rejected;
+    denied fields are simply excluded from the search.
+  - **Writes.** A save that changes a field the user cannot update is rejected. Values a client
+    sends for fields it cannot read are ignored — such a field was absent from every payload that
+    client received, so any value coming back is fabricated by the transport.
+  - **Creates.** A value supplied for a field the user may not create is dropped and the column
+    takes its default. This never rejects: an error naming the field would confirm it exists and is
+    restricted, and silently defaulting is what an unrestricted user gets by leaving it blank.
+  - **Typed accessors.** `BaseEntity.Get()` and `.Set()` throw for a field the user cannot read, so
+    a restricted field surfaces as a clear failure rather than a silent blank. Entity forms check
+    access before rendering, so a denied field is simply not shown.
+  - **Direct database connections (SQL Server only).** CodeGen emits column-level `DENY SELECT` on
+    base views for roles with an explicit `ReadAccess = 'Deny'` rule on an enabled entity, restricted
+    to custom DBA-created roles, and skips any role a service login belongs to. PostgreSQL emits
+    nothing — it has no DENY, so Deny-wins cannot be expressed there. See the guide.
+
+  RunView caching is unchanged for everyone else: the server keeps full-width slots shared across
+  users and narrows each response at read time, so a permission change takes effect on the next
+  metadata refresh without invalidating cached results. Browsers key their own cache on the fields
+  the user may see, so tightening access does not leave a stale column on screen.
+
+  Also in this release:
+  - **Permission removal now reaches the database.** CodeGen reads live permission state and
+    re-asserts it each run, so deleting a permission row actually revokes the grant or deny.
+    Previously CodeGen only ever added grants, so a deleted `EntityPermission` row left its `GRANT`
+    in place until the view happened to be rebuilt.
+  - **Partial entity objects are now safe.** `EntityField` gains a not-loaded marker, set when the
+    data an entity was loaded from left a field out. Such fields are skipped on save, are never
+    dirty, and are exempt from the required-field check, so the stored value is kept instead of
+    being overwritten with a default. This fixes silent data loss when a user edits an unrelated
+    field on a record containing columns they cannot read.
+  - **`entity_object` requests always fetch every column the user may see**, whether or not the
+    query is cacheable. This was already true on the server but not for clients, so a client could
+    build a partial entity and write defaults over real data on the next save.
+  - **Server-side `BaseEngine` loads now run as the MJ system user**, regardless of which caller
+    reached `Config()` first. Engine data is infrastructure: the cache is process-wide and shared by
+    every user of the process, so its contents must not depend on the first caller's permissions — one
+    carrying entity denials, RLS row scoping, or field denials would otherwise seal a partial cache
+    that then serves everyone until restart. The identity is sticky once applied, so a later
+    `Config(forceRefresh, someUser)` cannot pull the shared cache back under that user's permissions.
+    Restricting what a given user may SEE stays where it belongs, at the point data is served to them.
+    Client-side (`ProviderType.Network`) behavior is unchanged. Resolution goes through a new
+    ClassFactory seam, `WellKnownUserSource` in `@memberjunction/core`, whose server-side
+    implementation answers from `UserCache`; when nothing is registered — a browser, a test, a
+    database with no such row — the engine degrades to acting as the caller exactly as before, with a
+    once-per-engine-class warning. This is a pre-existing `BaseEngine` defect fixed alongside field
+    security rather than because of it: neither depends on the other, though it is what lets the guide
+    say engine caches cannot be narrowed by a restricted caller.
+
+  New guide: `guides/FIELD_LEVEL_SECURITY_GUIDE.md`. Read the configuration limits before
+  restricting anything. Saved queries are not field-filtered; run access to a query is the grant.
+
+- 2741d46: Make the deterministic integration tier runnable against PostgreSQL, and fix the runtime and conversion defects that running it exposed.
+
+  **Why.** MJ #3257 records that the integration suite is meant to run twice per build — once per backend — and that this was never implemented. PostgreSQL therefore shipped with migration parity verified and _runtime_ parity unverified. This change makes the tier run on PostgreSQL for the first time and fixes what that surfaced: **49 of 61 deterministic bundles now pass on PostgreSQL** (measured, MJAPI live; 61/61 executed, none skipped).
+
+  **Harness (closes the #3257 blocker list).** `testing-cli` now branches on platform instead of unconditionally building an `mssql` pool: `mj-provider.ts` gains a PostgreSQL path (dynamic import, declared as an optionalDependency so SQL-Server-only consumers never resolve `pg`) with a PG-native user-cache load, `MJConfig` gains `dbPlatform`, and `getContextUser()` resolves the same user on both backends — System by name, then the well-known System ID, then the first active Owner, with `.trim()` because `Type` is space-padded in both ledgers. `mj.config.cjs` gains `dbPlatform` and a platform-aware `dbPort` default; with `DB_PLATFORM` unset both are exactly the previous SQL Server behaviour.
+
+  **Runtime dialect leaks.**
+  - `SQLDialect` gains `AffectedRowCountSQL()`. `TaskClaimStore` was emitting `SELECT @@ROWCOUNT`, which is T-SQL only — on PostgreSQL the `@@` is consumed as a parameter marker and the bare `ROWCOUNT` folds to lowercase, so _every_ guarded write failed with `column "rowcount" does not exist` (7,168 occurrences in one tier run, now zero). SQL Server keeps `@@ROWCOUNT`; PostgreSQL uses a data-modifying CTE.
+  - `MJDashboardEntityExtended` no longer denies the owner. `Validate()` is synchronous and reads `DashboardEngine`'s cache directly, so in any process using the default `task` startup mode — where engine pre-warm is deferred — an unloaded cache was indistinguishable from "you have no permission", and `mj sync push` failed on a dashboard whose `UserID` _was_ the pushing user. Ownership is now answered from the row itself, which needs no cache; a non-owner still falls through to the engine and is refused when it is cold. `Delete()`, being async, loads the engine for the non-owner case and short-circuits for the owner, so a merely _stale_ cache — a dashboard created since the last `Config()` is absent from the backing array — cannot refuse its own owner either.
+
+    Ownership is read from the **persisted** `UserID` (`GetFieldByName('UserID').OldValue`), never the in-memory one. `UserID` is a settable field on `UpdateMJDashboardInput`, and `ResolverBase.UpdateRecord` loads the row and then applies the client's values _before_ `Save()` runs `Validate()` — so an owner check written against `this.UserID` would be satisfied by a value the caller supplied in the same request. Since this class **is** the permission gate for dashboards, that would let any user who can load one send `UpdateMJDashboard(ID: <someone else's>, UserID: <self>)` and take the record. Transferring ownership is separately gated to the owner, so a user holding `CanEdit` through a share can edit but not appropriate. `MJDashboardEntityExtended.ownership.test.ts` covers both directions, including that the engine is still consulted for the attacker case.
+
+  **Conversion (T-SQL → PostgreSQL).** Five defects, each caught only by applying the output to a fresh database — the converter reported `0 errors` every time:
+  - CASE-expression keywords were quoted as identifiers inside `CHECK` bodies (`"CASE" "WHEN" …`), so the migration would not parse. The missing keyword set was derived by intersecting 2,084 `CHECK` bodies across 67 shipped migrations against the dialect keyword list: exactly `CASE`, `WHEN`, `THEN`, `ELSE`, `END`.
+  - Every `IF EXISTS (…)` batch was classified `SKIP_SQLSERVER` and silently discarded. A guarded `DROP CONSTRAINT` therefore vanished — with exit code 0 — and the paired `ADD CONSTRAINT` later in the same migration failed with "already exists". The rewrite discards the guard, so it fires **only when the guard is a catalog probe** (`sys.check_constraints` / `key_constraints` / `foreign_keys` / `default_constraints` / `objects`) — the form that exists purely because SQL Server has no `DROP CONSTRAINT IF EXISTS`. A guard on data (`IF EXISTS (SELECT 1 FROM Payment WHERE Status = 'Legacy')`) is a real condition; dropping it would make PostgreSQL drop unconditionally while SQL Server does not. Those keep falling through to the generic path, which comments out what it cannot express. This mirrors the `sys.indexes` gate the conditional-index rule already had.
+  - `CREATE SCHEMA` is folded to lowercase to match its unquoted references — `convertIdentifiers` emits the schema half of `[X].[Y]` bare, so a quoted `CREATE` and a bare reference name two different schemas. **`__mj_UDT` is exempt**, because it is the one schema with a producer outside the migration set: the Database Designer creates it, and every table in it, through `UDT_SCHEMA_NAME` — quoted and case-preserved, as do `CreateSchemaDDL`, `QuoteSchema` and the schema-builder's `QuotePostgres`. Folding it would leave the runtime writing into a schema no migration made, and would orphan every UDT entity from its table in `vwSQLTablesAndEntities`, which joins `nspname = e."SchemaName"` case-sensitively. Nothing wants the folded spelling: across `migrations-pg/` there is not one unquoted `__mj_udt` reference, and all 272 other occurrences of the name are prose or JSON string content. No reconciliation DDL is emitted for any schema — a guard at that point would land in the converted output of the migration that CREATES the schema, the one file every affected database has already applied and Flyway will never re-run, so it could only ever fire on a database that does not need it.
+  - T-SQL table variables became the invalid declaration `v_X TABLE;`; they now become `CREATE TEMP TABLE … ON COMMIT DROP`.
+  - `DELETE alias FROM … JOIN …` passed through as T-SQL; it now becomes PostgreSQL's `DELETE … USING` (the UPDATE analogue already existed).
+  - `WITH CHECK ADD CONSTRAINT` survived on non-FK constraints, and `END ELSE BEGIN` left stray tokens. A subtler one: the `DECLARE` indent capture also matched a preceding blank line, which pushed the declaration out of the `DECLARE` section and into the block body.
+
+  **Also fixed.** `spDeleteEntityWithCoreDependencies` could not be invoked on PostgreSQL — `callRoutineSQL` always emitted `SELECT * FROM fn(...)`, which PostgreSQL rejects for a `RETURNS SETOF record` routine with no OUT parameters, so entity pruning silently died and cascaded into 22 missing CRUD routines. `callRoutineSQL` gains an optional `expectsResultSet`; SQL Server ignores it. CodeGen's PostgreSQL audit-SQL folder swap was pinned to `v5` by exact match, so on v6 it wrote into the SQL Server tree. `applyLLMPrimaryKeys` validated primary-key names case-insensitively but then used the model's spelling in the `UPDATE`, matching zero rows on PostgreSQL while reporting success — it now uses the matched column's actual name.
+
+  **Repeatable metadata refresh.** `R__RefreshMetadata` on PostgreSQL now also clears orphaned `EntityField` rows, as the SQL Server file has always done. Without it a from-scratch PostgreSQL database ends up with metadata describing columns its own base views do not have, and every read of those views fails.
+
+  **Two test-authoring fixes, not product changes.** The aggregates bundle passed `MAX(__mj_UpdatedAt)` unquoted and the open-app-teardown fixture called `SYSDATETIMEOFFSET()`; both are SQL-Server-only spellings and are now dialect-quoted.
+
+  **On the `migrations-pg/v6/**`files in this PR.**`CLAUDE.md`says a feature PR ships the T-SQL migration only and that PG counterparts are regenerated by the build engineer at release time. The five files here are`mj migrate convert`output, not hand-authored, and they exist because the tier cannot run on PostgreSQL without them — that is the whole subject of the change. They need the build engineer's sign-off before merge, and should be regenerated rather than merged if the release conversion runs first. Existing`migrations-pg`output is deliberately **not** regenerated against the converter changes above: the v5 files are frozen baselines, and the`\_\_mj_UDT` exemption above means the converter's new output agrees with what they already installed.
+
+  SQL Server is unaffected: every changed path is either PostgreSQL-only or a same-output refactor. Unit tests across the touched packages pass — SQLDialect 404, SQLConverter 1139, MJCoreEntities 597, CodeGenLib 808, TaskGraph 60, testing-cli 23 — zero failures in any of them.
+
+- 4eb87c5: Fix three PostgreSQL conversion defects that each surfaced only when a converted migration was **applied**, not when it was converted — the converter reported "0 gaps" for all three.
+
+  **1. `MERGE` and `MATCHED` were read as identifiers.** Every other word in a `MERGE` statement was already in the quoting keyword sets — `USING`, `ON`, `WHEN`, `THEN`, `NOT`, `INSERT`, `UPDATE`, `SET`, `VALUES`, `AS` — so a converted `MERGE` came out as `"MERGE" __mj."X" AS tgt … WHEN "MATCHED" THEN UPDATE` and PostgreSQL rejected it with `syntax error at or near ""MERGE""`. Structurally the rest of the statement already transpiled to valid PG 15+ `MERGE`; these two tokens were the only thing wrong.
+
+  **2. `INTO` is optional in T-SQL's `MERGE` and required in PostgreSQL's.** `MERGE [dbo].[T] AS tgt` transpiled token-for-token into something PostgreSQL rejects at the _target name_ rather than at `MERGE` — `syntax error at or near "__mj"`, pointing one token past the actual problem. The bare form is now rewritten to `MERGE INTO`. The rewrite is anchored to statement position so the word `MERGE` in a migration's own prose ("re-runnable: MERGE on fixed UUIDs") is not rewritten into "MERGE INTO on fixed UUIDs".
+
+  **3. BIT literals in entity-registration INSERTs on the `--split` path.** CodeGen registers a new entity by INSERTing into `Entity` / `EntityField` / `EntityPermission` — long-lived core-metadata tables that no migration re-creates, so the AST dialect never sees a `CREATE TABLE` for them, has no column types to infer, and emits a BIT literal as the integer it looks like. Applying the result failed with `column "IncludeInAPI" is of type boolean but expression is of type integer`. The rule-based (legacy) path already seeds this catalog through `createConversionContext`; the split path assembles its output from the transpiler directly and bypassed it, so **every** migration registering a new entity produced a file that failed on its first apply.
+
+  `assemblePgSQL` now applies the core-metadata boolean catalog. Ordering is load-bearing and was wrong in the first cut: the INSERT matcher keys on a `schema.Table` reference whose schema is word characters, so while the table is still `${flyway:defaultSchema}."Entity"` it matches nothing and the coercion silently no-ops. It runs **after** schema substitution, and a regression test pins that by asserting on a macro-carrying input. Rewriting is by ordinal position against known-boolean columns, so a non-boolean integer in the same tuple (`UserViewMaxRows`) and a table outside the catalog are both left alone.
+
+  Related but distinct from the `--bake-codegen` registry fix ("Seed the BIT/BOOLEAN registry from the live catalog"), which repaired the same class of failure on the bake path; this one repairs the split-assembly path, which bake cannot reach when a migration has a transpile gap.
+
+### Patch Changes
+
+- 647bd71: Enable layered base views on PostgreSQL. CodeGen writes the inner view and restars the application-owned outer wrapper so `g.*` re-expands after inner regeneration (no more throw). New pg-only migration ships `spRebindLayeredOuterView` plus core MJ inner/outer views. Open App `mj migrate` rebinds layered outers in the app schema before field heal.
+- 9f73528: Nested transactions live on GenericDatabaseProvider. Depth 1 is a physical BEGIN; depth 2+ is a dialect savepoint. A savepoint error on a published handle (`ENOTBEGUN`/`EABORT`/`25P01`) throws `DoomedTransactionError` instead of opening a second physical TX (torn write). Nested begin with no physical TX is corruption. Physical hooks are abstract; `AbandonPhysicalTransaction` unpublishes on EABORT; `AfterPhysicalCommit` runs after the mutex. `TransactionDepth` moved to `@memberjunction/core` with deprecated camelCase aliases (`transactionDepth`, `savepointStack`, `inTransaction`, `inNestedTransaction`) for one release. `ResetTransactionState()` replaces poking private fields. Upgraders: read `TransactionDepth` (not a duck-typed `transactionDepth` that would be undefined).
+- 1fdd5d0: Fix PostgreSQL identifier quoting for column names that collide with SQL keywords, and consolidate the two divergent tokenizers into one shared implementation.
+
+  **The defect.** PostgreSQL identifier auto-quoting used a keyword denylist matched case-INsensitively: a PascalCase word was quoted unless it appeared in a hardcoded keyword set. The set of SQL keywords and the set of MJ column names overlap, so every name in the intersection was emitted unquoted, folded to lowercase on PostgreSQL, and failed with `column "..." does not exist`. Eleven such columns ship in the baseline schema — `Name` (on 175 tables), `Values` (the field-level-encrypted column on `__mj."Credential"`), `Length`, `Precision`, `Log`, `Rank`, `Action`, `Columns`, `Language`, `Month`, and `Text`. SQL Server resolves identifiers case-insensitively, so T-SQL-first authoring never surfaced any of it; the failures only appeared on live PostgreSQL deployments. Addresses MJ #3604, #3590, #3691.
+
+  **The fix.** Keywords are now matched **case-sensitively, in their ALL-CAPS form only**. This generalizes a mechanism that already existed for exactly two words (`TYPE` and `DATA`, which were special-cased by hand for the same reason) to the whole keyword set. Dialects always emit keywords upper-case, so the keyword spelling and the column spelling are textually distinct: `TEXT` is the type, `Text` is the column. Critically, an ALL-CAPS word that is _not_ a keyword is still an identifier — `ID` and `URL` are all-caps by nature, so the rule is `!(isAllUpper && isKeyword)`, not a pure case rule. `SELECT Length, LENGTH(Name)` now correctly yields `SELECT "Length", LENGTH("Name")`.
+
+  **Structural change.** There were two copies of the tokenizer — one in `PostgreSQLCodeGenProvider.quoteSQLForExecution` (all codegen-time SQL, via `ManageMetadataBase.qsql()`) and one in `PostgreSQLDataProvider.autoQuoteIdentifiers` (every runtime raw-SQL statement, via `ExecuteSQL`) — with a comment instructing that they be kept in sync by hand. They had already diverged: 289 keywords versus 312, plus a case-sensitive tier and a dot-qualified-identifier rule present only at runtime. Both now delegate to `AutoQuotePostgreSQLIdentifiers` in `@memberjunction/sql-dialect`, which carries the union of both keyword sets. Two consequences worth noting: codegen-time SQL gains the dot-qualification rule, so `__mj.vwFoo` no longer folds to lowercase during codegen; and runtime gains the transaction-control keywords (`CONSTRAINTS`, `IMMEDIATE`, `DEFERRED`, `SAVEPOINT`, `RELEASE`) that previously existed only in the codegen copy.
+
+  **Compatibility.** A word immediately followed by `(` is treated as a function call and left unquoted, unless it is dot-qualified. Without this, mixed-case function spellings that used to work (`Coalesce(`, `IsNull(`) would have broken under case-sensitive matching; it additionally fixes ALL-CAPS functions that were simply missing from the keyword set (`JSONB_BUILD_OBJECT(` was previously quoted, and failed). The dot exception preserves quoting for MJ's own stored procedures, which are created with quoted mixed-case names.
+
+  Separately, a small tier of structural words stays case-insensitive so SQL authored **outside** this repository keeps parsing — a stored `MJ: Queries` body, a saved `UserView.WhereClause`, a GraphQL `ExtraFilter`, none of which this change can reach and fix. It is the predicate vocabulary only: `AND OR NOT IS NULL LIKE ILIKE IN BETWEEN EXISTS ASC DESC NULLS FIRST LAST`.
+
+  The reverse lookup that recognizes the _follower_ of a contextual pair declines to pair with a key that is dot-qualified or already quoted, and refuses to read backwards across a `--` comment. Both make it the true mirror of the forward lookup: without the first, `t.Order By Name` produced a different result on a second pass, violating the module's stated `f(f(x)) === f(x)`; without the second, a comment line ending in the word `order` left a real column named `By` on the next line unquoted.
+
+  A second, **contextual** tier covers the two-word clause forms without giving up column names: `Order`/`Group` are structural only before `By`, and `Left`/`Right`/`Full`/`Inner`/`Cross`/`Outer` only before `Join`/`Outer`. Both halves of a matched pair are recognized, and it chains through `Full Outer Join`. Everywhere else they are ordinary identifiers, so `SELECT Order FROM …` and `Left(Name, 3)` both still work.
+
+  **A dot-qualified word is an identifier**, checked before the structural and contextual tiers. No SQL dialect has a _structural_ keyword after a `.`, so this makes it impossible for a word added to those sets to fold a legitimate `alias.Column`.
+
+  The ALL-CAPS keyword tier is the one exception, and it is deliberately evaluated first. Several entries exist _specifically_ for their dot-qualified form — `INFORMATION_SCHEMA.COLUMNS`, `.TABLES`, `.ROUTINES` — and the catalog's real relation names are lower case, so quoting the right-hand half yields `INFORMATION_SCHEMA."COLUMNS"`, which does not resolve. CodeGen executes that exact SQL through `qsql()` on every PostgreSQL run (`manage-metadata.ts`, three call sites, two of them unconditional), so an unconditional dot rule turns a working CodeGen run into a hard failure. Because tier 1 is case-SENSITIVE it cannot swallow a real column: `Case` is not `CASE`, so `e.Case` still falls through to the dot rule and quotes. Verified against the newest PostgreSQL baseline — the only ALL-CAPS columns in the shipped schema are `ID, URL, URI, ISO2, ISO3, SQL, BCMID, ISO3166_2`, none of them keywords.
+
+  **Known limitation, deliberately not fixed.** Mixed-case clause keywords beyond the predicate vocabulary do not survive: a stored query body written `Select … From … Where …` fails on PostgreSQL. Widening the case-insensitive tier to the full clause skeleton was tried and reverted. That tier is evaluated case-insensitively, so adding `CASE`/`END`/`LIMIT`/`OFFSET` made those unquotable as column names — reintroducing, for 20 words, exactly the defect class this change eliminates. And it did not even work: `Cast(Amount As Decimal)`, `Insert Into Target (Name)` and `Select Top 10` all still failed, because mixed-case SQL needs a parser rather than a bigger denylist. The failure is a loud syntax error, not silently wrong rows, and rewriting the keywords in upper case fixes it.
+
+  A CI test derives every column name from the newest shipped PostgreSQL baseline's `CREATE TABLE __mj."…"` blocks and fails the build if one collides with the case-insensitive tier. Its scope is exactly that — core-schema columns as of the last baseline; columns added by later migrations, and non-`__mj` schemas, are not covered by it. That scope is adequate for a tier this small (no predicate-vocabulary word can be a column name in any schema) and would not have been for the reverted widening.
+
+  **Comments, template tags and literal prefixes.** The tokenizer is a parity machine, and three regions it did not recognize could invert that parity for the rest of a statement. `--` and (nesting) `/* */` comments are now skipped — an apostrophe inside a comment used to open a string-literal scan that ran to the _opening_ quote of the next real literal, after which literals and code swapped roles. Against this repository's own shipped query SQL that rewrote literal **values**: `WHERE ars."StepType" = 'Prompt'` became `= '"Prompt"'` (no rows), and the `jsonb_build_object` keys in `get-conversation-complete.pg.sql` became `'"ID"'` (JSON whose keys are `"\"ID\""`, so every consumer reading `.ID` got undefined) — all because line 10 of `calculate-ai-agent-run-cost.pg.sql` contains the word `doesn't` in a comment. Nunjucks tags (`{{ … }}`, `{% … %}`, `{# … #}`) are now skipped too, since the names inside them are query PARAMETER names matched exactly at render time and `{{ "ConversationID" | sqlString }}` never substitutes. `E'…'` / `N'…'` / `U&'…'` literal prefixes are recognized as part of the literal rather than tokenized as a word (previously `"E"'…'`), with backslash escapes honoured for the `E` form only. An unterminated `{{`/`{%` now emits its delimiters and resumes scanning rather than consuming the rest of the statement, matching what the dollar-quote branch already did for a missing close tag.
+
+  `""` inside an already-quoted identifier is now consumed explicitly as an escape. This one is **defensive, not a bug fix**: the previous code stopped at the first `"` and then immediately re-entered the same branch at the second, pushing each span verbatim, so the two partitions concatenated identically. Brute-forcing 600,000 inputs over an alphabet built from that construct produced zero differences in output. The explicit form is easier to reason about; nothing observable changed, and the "known limitation" note it replaces was describing a failure that never occurred.
+
+  A test runs the tokenizer over every shipped `metadata/queries/SQL/*.pg.sql` and asserts that string literals and template tags come back byte-identical and that the pass is idempotent, using a literal scanner written independently of the implementation. A second suite covers the quoting-policy tiers directly — dot-qualified words, both halves of each contextual pair, the words that must still quote when their partner is absent, literal prefixes, and the unterminated-delimiter cases — because those decide keyword-vs-identifier and are the only ones whose mistakes can make a real column unreachable.
+
+  **Behavior changes to be aware of.** Both `autoQuoteIdentifiers` and `quoteSQLForExecution` are public methods whose output changes: identifiers that were previously emitted bare are now quoted. Two specific cases are worth calling out. A mixed-case cast type now quotes — write `x::text` or `x::TEXT` rather than `x::Text`, since `Text` is a real column name and must quote. And `INSERT INTO Target(Cols)` with no space before the paren leaves the table name unquoted, because a bare word before `(` is indistinguishable from a call; the spaced form `INSERT INTO Target (Cols)` quotes correctly. A third case, added after review: a **column alias** that collides with a keyword now quotes, which changes the KEY a driver returns. `SELECT COUNT(*) AS Count` previously emitted `Count` bare and PostgreSQL folded the result key to `count`; it now emits `AS "Count"` and the key is `Count`. The same applies to `AS Name`, `AS Type`, `AS Rank` and `AS Value`. The new behaviour is the correct one — it matches the declared `QueryField` name — but a consumer reading the folded lowercase key will break. The only in-repo occurrence is `SQLServerCodeGenProvider.ts:1235`, which is not on this path; stored `Query.SQL` rows in consumer databases can carry such aliases.
+
+  Note also that the compatibility claim below is about **fragments**, not full statements: a stored `UserView.OrderBy` / `ExtraFilter` fragment keeps working, but a complete statement written in Title Case (`Select Name From … Where …`) does not — its keywords quote and it fails. That form previously worked. It does not occur in this repository, and the fix would be worse than the problem, so it is documented rather than changed.
+
+  Neither of the first two patterns occurs in this repository. Note the scope of that check: `autoQuoteIdentifiers` runs inside `ExecuteSQL`, so it also processes hand-written SQL originating in CONSUMER repositories (bizapps and client apps), which were not surveyed. Consumers carrying either spelling will see their output change. SQL Server output is unchanged — `SQLServerCodeGenProvider.quoteSQLForExecution` remains the identity function and shares no code with this path.
+
+  **Coverage.** 404 tests across the package (87 on the shared tokenizer directly), plus delegation suites through both providers' real entry points (the codegen tokenizer had no test coverage at all before this). A CI test extracts all 4,616 column definitions from the shipped PostgreSQL baseline and asserts each one survives quoting, so a newly added colliding column fails the build instead of shipping. Both entry points are additionally proven end-to-end against a live PostgreSQL server, including a control assertion that the same SQL unquoted still fails.
+
+- 44fca09: Fix PostgreSQL auto-quoting of `CURRENT_DATE` and the other niladic datetime/identity functions.
+
+  `AutoQuotePostgreSQLIdentifiers` rewrote a bare `CURRENT_DATE` into `"CURRENT_DATE"`, which PostgreSQL then rejects with `column "CURRENT_DATE" does not exist`. These functions are spelled without parentheses, so the word-before-`(` rule never classified them as functions, and they were absent from `PostgreSQLQuotingKeywords` — `CURRENT_TIMESTAMP`, `CURRENT_USER` and `SESSION_USER` were already listed, but their siblings were not.
+
+  Added to the keyword set: `CURRENT_DATE`, `CURRENT_TIME`, `LOCALTIME`, `LOCALTIMESTAMP`, `CURRENT_CATALOG`, `CURRENT_ROLE`, `CURRENT_SCHEMA`.
+
+  This only exempts the ALL-CAPS spelling, so a mixed-case column such as `Current_Date` still quotes normally — the baseline column guard verifies no shipped column collides.
+
+  The reverse guard in `postgresqlAutoQuote.baseline.test.ts` was itself missing these words from its reserved-word oracle, which is why the gap went undetected; it has been extended so the same class of omission fails the build. `USER` is deliberately left out of both: it is reserved in PostgreSQL, but it is a believable ALL-CAPS identifier in customer schemas this repo's baseline cannot see, and nothing in MJ emits a bare `USER`.
+
+  Surfaced in production by a generated query against a PostgreSQL client that used `CURRENT_DATE` in a date predicate.
+
+  ## Same defect class, found by audit rather than by the next outage
+
+  Running realistic PostgreSQL through the tokenizer showed `CURRENT_DATE` was one instance of a broad gap: **45 of 53 common constructs** came back corrupted. Every one hinges on a word that is not followed by `(`, which is the only position rule 3 can rescue. Also added:
+  - **Ordered-set aggregates and window frames** — `WITHIN`, `ORDINALITY`, `GROUPING`, `SETS`, `ROLLUP`, `CUBE`, `GROUPS`, `EXCLUDE`, `TIES`. `WITHIN` is the sharpest: `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY x)` is how every median is written, and it became `… "WITHIN" GROUP …`.
+  - **The rest of PostgreSQL's reserved words** — `LEADING`, `TRAILING`, `PLACING`, `SYMMETRIC`, `ASYMMETRIC`, `NOTNULL`, `NATURAL`, `SIMILAR`, `VERBOSE`, `ANALYZE`, `ANALYSE`, `FREEZE`, `OVERLAPS`, `AUTHORIZATION`, `BINARY`, `COLLATION`. Being reserved is what makes these unconditionally safe: PostgreSQL will not resolve a same-named column bare either, so nothing can be shadowed.
+  - **Type names in cast position** — `CHARACTER`, `VARYING`, `BOOL`, `INT2`/`INT4`/`INT8`, `FLOAT4`/`FLOAT8`, `BPCHAR`, `TIMETZ`, `TSVECTOR`, `TSQUERY`, `SMALLSERIAL`, `VARBIT`, `JSONPATH`. `DOUBLE PRECISION` worked only because both halves happened to be listed; `CHARACTER VARYING` did not.
+  - **Utility statement verbs** — `REFRESH`, `TRUNCATE`, `EXPLAIN`, `VACUUM`, `REINDEX`, `UNLOGGED`, `PREPARE`, `DEALLOCATE`, plus `ESCAPE`, `UNKNOWN`, `NOWAIT`, `LOCKED`, `CASCADED`, `RESTART`, `STORED`, `OWNED`, `INCLUDING`, `EXCLUDING`, `INHERITS`, `INCREMENT`, `MINVALUE`, `MAXVALUE`, `CYCLE`.
+
+  `ORDINALITY` is worth calling out: `postgresqlDialect.ts` (`ForeignKeyGraphSQL`) and `crossDialect.test.ts` both carry comments saying they _deliberately avoid_ `unnest(...) WITH ORDINALITY` because this tokenizer quoted it. That workaround can now be retired.
+
+  Seventeen non-reserved words are deliberately excluded on the same reasoning as `USER` — `LEVEL`, `MODE`, `OPTION`, `SHARE`, `START`, `CACHE`, `ROLE`, `PASSWORD`, `LOGIN`, `DOMAIN`, `CLUSTER`, `POLICY`, `SEQUENCE`, `LOCAL`, `SKIP`, `EXCLUSIVE`, `SOURCE`. All are legal bare column names in PostgreSQL and believable in a customer schema, and MJ emits none of them through `ExecuteSQL`. A test asserts they stay quoted so the exclusion is deliberate rather than incidental.
+
+  The reserved-word oracle in the baseline test is now transcribed in full rather than sampled, since sampling is precisely what let `CURRENT_DATE` through.
+
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- c996a56: Field-Level Security: per-field Read/Update/Create control by role.
+
+  Field security is switched **on or off per entity**, explicitly, via a new
+  `Entity.EnableFieldLevelSecurity` flag. Nothing is inferred from whether permission rows happen to
+  exist, so adding a rule can never change access on an entity that has not opted in.
+
+  A new `EntityFieldPermission` table holds one row per (field, role) with three independent
+  verbs — `ReadAccess`, `UpdateAccess`, `CreateAccess` — each `Allow`, `Deny`, or `No Access`:
+  - **`No Access`** is neutral, and the default. It grants nothing and blocks nothing; another
+    role's Allow still wins.
+  - **`Allow`** grants the action for that role.
+  - **`Deny`** wins over everything. One Deny anywhere across the user's roles beats any number of
+    Allows.
+
+  **Read is required for Update and Create.** A field a user cannot see is one they cannot change,
+  so this is enforced twice: a CHECK constraint refuses the combination within a row, and the
+  aggregation clamps it again across roles — because two individually legal rows held by one user
+  (role A grants Read+Update, role B denies Read) would otherwise aggregate to write-only access
+  that no constraint could see.
+
+  **Turning the flag on is safe.** It snapshots the entity's existing entity-level permissions into
+  per-field rows, so enabling changes nothing until an administrator tightens a specific field.
+  Turning it off keeps the rows, inactive, so re-enabling does not lose the configuration. Those rows
+  maintain themselves: adding a column, granting a role entity access, or dropping either one is
+  reconciled automatically, and an administrator's tightening is never overwritten by that process.
+
+  **Nobody is exempt** — no admin bypass, no Owner carve-out, and no exempt account anywhere in
+  permission evaluation. That includes the **MJ system user**, the account the server runs its own
+  work as: it is not special-cased at runtime, and gets its access from ordinary `Allow` rows
+  written for the standard roles it holds. What is protected instead is the CONFIGURATION — a rule
+  that _denies_ anything to a role the system user holds is refused, and so is giving that account a
+  role which already denies a field. Grants save normally, since they are what the server's own
+  access depends on. Restricting that account would matter because its engine caches are
+  process-wide, so a partially loaded cache would reach every user; a configuration rule stops that
+  somewhere an administrator can see it, rather than behind a bypass that has to be trusted.
+  Primary keys, `__mj_` columns, and the security/identity entities can never be restricted.
+
+  Enforcement (server-side and authoritative):
+  - **Reads.** Denied columns are stripped from RunView results on both the cache-hit and cache-miss
+    paths, and from single-record GraphQL responses.
+  - **The audit trail.** `MJ: Record Changes` rows carry another entity's old and new values, and the
+    audit entity's own field security is off — so without a dedicated control, anyone with entity read
+    on it could read a denied field straight out of the payload, in the default configuration. Each
+    row is now projected against **the entity it is about**, resolved per row from its `EntityID`:
+    denied keys are dropped from `ChangesJSON` and `FullRecordJSON`, and `ChangesDescription` is
+    withheld entirely. Prose cannot be safely redacted — it would leak on the first value that
+    appears in an unexpected form — so it is dropped rather than edited, and callers degrade to a
+    generic label. Rows are never hidden: a user denied one field still sees that a record changed,
+    when, by whom, and which of the fields they may read. It fails closed when the subject entity
+    cannot be resolved, including when a query narrows `Fields` such that no `EntityID` reaches the
+    projection — otherwise `Fields: ['ChangesJSON']` would be a one-parameter bypass. Payload queries
+    in the platform now select `EntityID` alongside; a saved query reading Record Changes directly is
+    not projected, for the same reason no `RunQuery` is. On the write side, an update to a Record
+    Change from a caller carrying any denial ignores every payload column the client sends and
+    reloads the stored values first — a narrowed payload hydrates as an ordinary loaded value and
+    save-SQL generation writes every field, so without this a restricted user editing `Comments`
+    would silently overwrite the audit payload with the narrowed copy they were shown. Nothing is
+    manufactured anywhere in this path: a reader gets the stored value or a strict subset of it, and
+    only the stored value is ever persisted.
+  - **Caller-written SQL.** A request is rejected if `ExtraFilter`, `OrderBy`, or an `Aggregates`
+    expression names a denied field. Without this, `MIN(Salary)` or `Salary > 200000` reads the
+    values back without the column ever appearing in a result. `UserSearchString` is not rejected;
+    denied fields are simply excluded from the search.
+  - **Writes.** A save that changes a field the user cannot update is rejected. Values a client
+    sends for fields it cannot read are ignored — such a field was absent from every payload that
+    client received, so any value coming back is fabricated by the transport.
+  - **Creates.** A value supplied for a field the user may not create is dropped and the column
+    takes its default. This never rejects: an error naming the field would confirm it exists and is
+    restricted, and silently defaulting is what an unrestricted user gets by leaving it blank.
+  - **Typed accessors.** `BaseEntity.Get()` and `.Set()` throw for a field the user cannot read, so
+    a restricted field surfaces as a clear failure rather than a silent blank. Entity forms check
+    access before rendering, so a denied field is simply not shown.
+  - **Direct database connections (SQL Server only).** CodeGen emits column-level `DENY SELECT` on
+    base views for roles with an explicit `ReadAccess = 'Deny'` rule on an enabled entity, restricted
+    to custom DBA-created roles, and skips any role a service login belongs to. PostgreSQL emits
+    nothing — it has no DENY, so Deny-wins cannot be expressed there. See the guide.
+
+  RunView caching is unchanged for everyone else: the server keeps full-width slots shared across
+  users and narrows each response at read time, so a permission change takes effect on the next
+  metadata refresh without invalidating cached results. Browsers key their own cache on the fields
+  the user may see, so tightening access does not leave a stale column on screen.
+
+  Also in this release:
+  - **Permission removal now reaches the database.** CodeGen reads live permission state and
+    re-asserts it each run, so deleting a permission row actually revokes the grant or deny.
+    Previously CodeGen only ever added grants, so a deleted `EntityPermission` row left its `GRANT`
+    in place until the view happened to be rebuilt.
+  - **Partial entity objects are now safe.** `EntityField` gains a not-loaded marker, set when the
+    data an entity was loaded from left a field out. Such fields are skipped on save, are never
+    dirty, and are exempt from the required-field check, so the stored value is kept instead of
+    being overwritten with a default. This fixes silent data loss when a user edits an unrelated
+    field on a record containing columns they cannot read.
+  - **`entity_object` requests always fetch every column the user may see**, whether or not the
+    query is cacheable. This was already true on the server but not for clients, so a client could
+    build a partial entity and write defaults over real data on the next save.
+  - **Server-side `BaseEngine` loads now run as the MJ system user**, regardless of which caller
+    reached `Config()` first. Engine data is infrastructure: the cache is process-wide and shared by
+    every user of the process, so its contents must not depend on the first caller's permissions — one
+    carrying entity denials, RLS row scoping, or field denials would otherwise seal a partial cache
+    that then serves everyone until restart. The identity is sticky once applied, so a later
+    `Config(forceRefresh, someUser)` cannot pull the shared cache back under that user's permissions.
+    Restricting what a given user may SEE stays where it belongs, at the point data is served to them.
+    Client-side (`ProviderType.Network`) behavior is unchanged. Resolution goes through a new
+    ClassFactory seam, `WellKnownUserSource` in `@memberjunction/core`, whose server-side
+    implementation answers from `UserCache`; when nothing is registered — a browser, a test, a
+    database with no such row — the engine degrades to acting as the caller exactly as before, with a
+    once-per-engine-class warning. This is a pre-existing `BaseEngine` defect fixed alongside field
+    security rather than because of it: neither depends on the other, though it is what lets the guide
+    say engine caches cannot be narrowed by a restricted caller.
+
+  New guide: `guides/FIELD_LEVEL_SECURITY_GUIDE.md`. Read the configuration limits before
+  restricting anything. Saved queries are not field-filtered; run access to a query is the grant.
+
+### Patch Changes
+
+- 44fca09: Fix PostgreSQL auto-quoting of `CURRENT_DATE` and the other niladic datetime/identity functions.
+
+  `AutoQuotePostgreSQLIdentifiers` rewrote a bare `CURRENT_DATE` into `"CURRENT_DATE"`, which PostgreSQL then rejects with `column "CURRENT_DATE" does not exist`. These functions are spelled without parentheses, so the word-before-`(` rule never classified them as functions, and they were absent from `PostgreSQLQuotingKeywords` — `CURRENT_TIMESTAMP`, `CURRENT_USER` and `SESSION_USER` were already listed, but their siblings were not.
+
+  Added to the keyword set: `CURRENT_DATE`, `CURRENT_TIME`, `LOCALTIME`, `LOCALTIMESTAMP`, `CURRENT_CATALOG`, `CURRENT_ROLE`, `CURRENT_SCHEMA`.
+
+  This only exempts the ALL-CAPS spelling, so a mixed-case column such as `Current_Date` still quotes normally — the baseline column guard verifies no shipped column collides.
+
+  The reverse guard in `postgresqlAutoQuote.baseline.test.ts` was itself missing these words from its reserved-word oracle, which is why the gap went undetected; it has been extended so the same class of omission fails the build. `USER` is deliberately left out of both: it is reserved in PostgreSQL, but it is a believable ALL-CAPS identifier in customer schemas this repo's baseline cannot see, and nothing in MJ emits a bare `USER`.
+
+  Surfaced in production by a generated query against a PostgreSQL client that used `CURRENT_DATE` in a date predicate.
+
+  ## Same defect class, found by audit rather than by the next outage
+
+  Running realistic PostgreSQL through the tokenizer showed `CURRENT_DATE` was one instance of a broad gap: **45 of 53 common constructs** came back corrupted. Every one hinges on a word that is not followed by `(`, which is the only position rule 3 can rescue. Also added:
+  - **Ordered-set aggregates and window frames** — `WITHIN`, `ORDINALITY`, `GROUPING`, `SETS`, `ROLLUP`, `CUBE`, `GROUPS`, `EXCLUDE`, `TIES`. `WITHIN` is the sharpest: `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY x)` is how every median is written, and it became `… "WITHIN" GROUP …`.
+  - **The rest of PostgreSQL's reserved words** — `LEADING`, `TRAILING`, `PLACING`, `SYMMETRIC`, `ASYMMETRIC`, `NOTNULL`, `NATURAL`, `SIMILAR`, `VERBOSE`, `ANALYZE`, `ANALYSE`, `FREEZE`, `OVERLAPS`, `AUTHORIZATION`, `BINARY`, `COLLATION`. Being reserved is what makes these unconditionally safe: PostgreSQL will not resolve a same-named column bare either, so nothing can be shadowed.
+  - **Type names in cast position** — `CHARACTER`, `VARYING`, `BOOL`, `INT2`/`INT4`/`INT8`, `FLOAT4`/`FLOAT8`, `BPCHAR`, `TIMETZ`, `TSVECTOR`, `TSQUERY`, `SMALLSERIAL`, `VARBIT`, `JSONPATH`. `DOUBLE PRECISION` worked only because both halves happened to be listed; `CHARACTER VARYING` did not.
+  - **Utility statement verbs** — `REFRESH`, `TRUNCATE`, `EXPLAIN`, `VACUUM`, `REINDEX`, `UNLOGGED`, `PREPARE`, `DEALLOCATE`, plus `ESCAPE`, `UNKNOWN`, `NOWAIT`, `LOCKED`, `CASCADED`, `RESTART`, `STORED`, `OWNED`, `INCLUDING`, `EXCLUDING`, `INHERITS`, `INCREMENT`, `MINVALUE`, `MAXVALUE`, `CYCLE`.
+
+  `ORDINALITY` is worth calling out: `postgresqlDialect.ts` (`ForeignKeyGraphSQL`) and `crossDialect.test.ts` both carry comments saying they _deliberately avoid_ `unnest(...) WITH ORDINALITY` because this tokenizer quoted it. That workaround can now be retired.
+
+  Seventeen non-reserved words are deliberately excluded on the same reasoning as `USER` — `LEVEL`, `MODE`, `OPTION`, `SHARE`, `START`, `CACHE`, `ROLE`, `PASSWORD`, `LOGIN`, `DOMAIN`, `CLUSTER`, `POLICY`, `SEQUENCE`, `LOCAL`, `SKIP`, `EXCLUSIVE`, `SOURCE`. All are legal bare column names in PostgreSQL and believable in a customer schema, and MJ emits none of them through `ExecuteSQL`. A test asserts they stay quoted so the exclusion is deliberate rather than incidental.
+
+  The reserved-word oracle in the baseline test is now transcribed in full rather than sampled, since sampling is precisely what let `CURRENT_DATE` through.
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 9f73528: Nested transactions live on GenericDatabaseProvider. Depth 1 is a physical BEGIN; depth 2+ is a dialect savepoint. A savepoint error on a published handle (`ENOTBEGUN`/`EABORT`/`25P01`) throws `DoomedTransactionError` instead of opening a second physical TX (torn write). Nested begin with no physical TX is corruption. Physical hooks are abstract; `AbandonPhysicalTransaction` unpublishes on EABORT; `AfterPhysicalCommit` runs after the mutex. `TransactionDepth` moved to `@memberjunction/core` with deprecated camelCase aliases (`transactionDepth`, `savepointStack`, `inTransaction`, `inNestedTransaction`) for one release. `ResetTransactionState()` replaces poking private fields. Upgraders: read `TransactionDepth` (not a duck-typed `transactionDepth` that would be undefined).
+
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 4eb87c5: Fix three PostgreSQL conversion defects that each surfaced only when a converted migration was **applied**, not when it was converted — the converter reported "0 gaps" for all three.
+
+  **1. `MERGE` and `MATCHED` were read as identifiers.** Every other word in a `MERGE` statement was already in the quoting keyword sets — `USING`, `ON`, `WHEN`, `THEN`, `NOT`, `INSERT`, `UPDATE`, `SET`, `VALUES`, `AS` — so a converted `MERGE` came out as `"MERGE" __mj."X" AS tgt … WHEN "MATCHED" THEN UPDATE` and PostgreSQL rejected it with `syntax error at or near ""MERGE""`. Structurally the rest of the statement already transpiled to valid PG 15+ `MERGE`; these two tokens were the only thing wrong.
+
+  **2. `INTO` is optional in T-SQL's `MERGE` and required in PostgreSQL's.** `MERGE [dbo].[T] AS tgt` transpiled token-for-token into something PostgreSQL rejects at the _target name_ rather than at `MERGE` — `syntax error at or near "__mj"`, pointing one token past the actual problem. The bare form is now rewritten to `MERGE INTO`. The rewrite is anchored to statement position so the word `MERGE` in a migration's own prose ("re-runnable: MERGE on fixed UUIDs") is not rewritten into "MERGE INTO on fixed UUIDs".
+
+  **3. BIT literals in entity-registration INSERTs on the `--split` path.** CodeGen registers a new entity by INSERTing into `Entity` / `EntityField` / `EntityPermission` — long-lived core-metadata tables that no migration re-creates, so the AST dialect never sees a `CREATE TABLE` for them, has no column types to infer, and emits a BIT literal as the integer it looks like. Applying the result failed with `column "IncludeInAPI" is of type boolean but expression is of type integer`. The rule-based (legacy) path already seeds this catalog through `createConversionContext`; the split path assembles its output from the transpiler directly and bypassed it, so **every** migration registering a new entity produced a file that failed on its first apply.
+
+  `assemblePgSQL` now applies the core-metadata boolean catalog. Ordering is load-bearing and was wrong in the first cut: the INSERT matcher keys on a `schema.Table` reference whose schema is word characters, so while the table is still `${flyway:defaultSchema}."Entity"` it matches nothing and the coercion silently no-ops. It runs **after** schema substitution, and a regression test pins that by asserting on a macro-carrying input. Rewriting is by ordinal position against known-boolean columns, so a non-boolean integer in the same tuple (`UserViewMaxRows`) and a table outside the catalog are both left alone.
+
+  Related but distinct from the `--bake-codegen` registry fix ("Seed the BIT/BOOLEAN registry from the live catalog"), which repaired the same class of failure on the bake path; this one repairs the split-assembly path, which bake cannot reach when a migration has a transpile gap.
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 647bd71: Enable layered base views on PostgreSQL. CodeGen writes the inner view and restars the application-owned outer wrapper so `g.*` re-expands after inner regeneration (no more throw). New pg-only migration ships `spRebindLayeredOuterView` plus core MJ inner/outer views. Open App `mj migrate` rebinds layered outers in the app schema before field heal.
+
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 2741d46: Make the deterministic integration tier runnable against PostgreSQL, and fix the runtime and conversion defects that running it exposed.
+
+  **Why.** MJ #3257 records that the integration suite is meant to run twice per build — once per backend — and that this was never implemented. PostgreSQL therefore shipped with migration parity verified and _runtime_ parity unverified. This change makes the tier run on PostgreSQL for the first time and fixes what that surfaced: **49 of 61 deterministic bundles now pass on PostgreSQL** (measured, MJAPI live; 61/61 executed, none skipped).
+
+  **Harness (closes the #3257 blocker list).** `testing-cli` now branches on platform instead of unconditionally building an `mssql` pool: `mj-provider.ts` gains a PostgreSQL path (dynamic import, declared as an optionalDependency so SQL-Server-only consumers never resolve `pg`) with a PG-native user-cache load, `MJConfig` gains `dbPlatform`, and `getContextUser()` resolves the same user on both backends — System by name, then the well-known System ID, then the first active Owner, with `.trim()` because `Type` is space-padded in both ledgers. `mj.config.cjs` gains `dbPlatform` and a platform-aware `dbPort` default; with `DB_PLATFORM` unset both are exactly the previous SQL Server behaviour.
+
+  **Runtime dialect leaks.**
+  - `SQLDialect` gains `AffectedRowCountSQL()`. `TaskClaimStore` was emitting `SELECT @@ROWCOUNT`, which is T-SQL only — on PostgreSQL the `@@` is consumed as a parameter marker and the bare `ROWCOUNT` folds to lowercase, so _every_ guarded write failed with `column "rowcount" does not exist` (7,168 occurrences in one tier run, now zero). SQL Server keeps `@@ROWCOUNT`; PostgreSQL uses a data-modifying CTE.
+  - `MJDashboardEntityExtended` no longer denies the owner. `Validate()` is synchronous and reads `DashboardEngine`'s cache directly, so in any process using the default `task` startup mode — where engine pre-warm is deferred — an unloaded cache was indistinguishable from "you have no permission", and `mj sync push` failed on a dashboard whose `UserID` _was_ the pushing user. Ownership is now answered from the row itself, which needs no cache; a non-owner still falls through to the engine and is refused when it is cold. `Delete()`, being async, loads the engine for the non-owner case and short-circuits for the owner, so a merely _stale_ cache — a dashboard created since the last `Config()` is absent from the backing array — cannot refuse its own owner either.
+
+    Ownership is read from the **persisted** `UserID` (`GetFieldByName('UserID').OldValue`), never the in-memory one. `UserID` is a settable field on `UpdateMJDashboardInput`, and `ResolverBase.UpdateRecord` loads the row and then applies the client's values _before_ `Save()` runs `Validate()` — so an owner check written against `this.UserID` would be satisfied by a value the caller supplied in the same request. Since this class **is** the permission gate for dashboards, that would let any user who can load one send `UpdateMJDashboard(ID: <someone else's>, UserID: <self>)` and take the record. Transferring ownership is separately gated to the owner, so a user holding `CanEdit` through a share can edit but not appropriate. `MJDashboardEntityExtended.ownership.test.ts` covers both directions, including that the engine is still consulted for the attacker case.
+
+  **Conversion (T-SQL → PostgreSQL).** Five defects, each caught only by applying the output to a fresh database — the converter reported `0 errors` every time:
+  - CASE-expression keywords were quoted as identifiers inside `CHECK` bodies (`"CASE" "WHEN" …`), so the migration would not parse. The missing keyword set was derived by intersecting 2,084 `CHECK` bodies across 67 shipped migrations against the dialect keyword list: exactly `CASE`, `WHEN`, `THEN`, `ELSE`, `END`.
+  - Every `IF EXISTS (…)` batch was classified `SKIP_SQLSERVER` and silently discarded. A guarded `DROP CONSTRAINT` therefore vanished — with exit code 0 — and the paired `ADD CONSTRAINT` later in the same migration failed with "already exists". The rewrite discards the guard, so it fires **only when the guard is a catalog probe** (`sys.check_constraints` / `key_constraints` / `foreign_keys` / `default_constraints` / `objects`) — the form that exists purely because SQL Server has no `DROP CONSTRAINT IF EXISTS`. A guard on data (`IF EXISTS (SELECT 1 FROM Payment WHERE Status = 'Legacy')`) is a real condition; dropping it would make PostgreSQL drop unconditionally while SQL Server does not. Those keep falling through to the generic path, which comments out what it cannot express. This mirrors the `sys.indexes` gate the conditional-index rule already had.
+  - `CREATE SCHEMA` is folded to lowercase to match its unquoted references — `convertIdentifiers` emits the schema half of `[X].[Y]` bare, so a quoted `CREATE` and a bare reference name two different schemas. **`__mj_UDT` is exempt**, because it is the one schema with a producer outside the migration set: the Database Designer creates it, and every table in it, through `UDT_SCHEMA_NAME` — quoted and case-preserved, as do `CreateSchemaDDL`, `QuoteSchema` and the schema-builder's `QuotePostgres`. Folding it would leave the runtime writing into a schema no migration made, and would orphan every UDT entity from its table in `vwSQLTablesAndEntities`, which joins `nspname = e."SchemaName"` case-sensitively. Nothing wants the folded spelling: across `migrations-pg/` there is not one unquoted `__mj_udt` reference, and all 272 other occurrences of the name are prose or JSON string content. No reconciliation DDL is emitted for any schema — a guard at that point would land in the converted output of the migration that CREATES the schema, the one file every affected database has already applied and Flyway will never re-run, so it could only ever fire on a database that does not need it.
+  - T-SQL table variables became the invalid declaration `v_X TABLE;`; they now become `CREATE TEMP TABLE … ON COMMIT DROP`.
+  - `DELETE alias FROM … JOIN …` passed through as T-SQL; it now becomes PostgreSQL's `DELETE … USING` (the UPDATE analogue already existed).
+  - `WITH CHECK ADD CONSTRAINT` survived on non-FK constraints, and `END ELSE BEGIN` left stray tokens. A subtler one: the `DECLARE` indent capture also matched a preceding blank line, which pushed the declaration out of the `DECLARE` section and into the block body.
+
+  **Also fixed.** `spDeleteEntityWithCoreDependencies` could not be invoked on PostgreSQL — `callRoutineSQL` always emitted `SELECT * FROM fn(...)`, which PostgreSQL rejects for a `RETURNS SETOF record` routine with no OUT parameters, so entity pruning silently died and cascaded into 22 missing CRUD routines. `callRoutineSQL` gains an optional `expectsResultSet`; SQL Server ignores it. CodeGen's PostgreSQL audit-SQL folder swap was pinned to `v5` by exact match, so on v6 it wrote into the SQL Server tree. `applyLLMPrimaryKeys` validated primary-key names case-insensitively but then used the model's spelling in the `UPDATE`, matching zero rows on PostgreSQL while reporting success — it now uses the matched column's actual name.
+
+  **Repeatable metadata refresh.** `R__RefreshMetadata` on PostgreSQL now also clears orphaned `EntityField` rows, as the SQL Server file has always done. Without it a from-scratch PostgreSQL database ends up with metadata describing columns its own base views do not have, and every read of those views fails.
+
+  **Two test-authoring fixes, not product changes.** The aggregates bundle passed `MAX(__mj_UpdatedAt)` unquoted and the open-app-teardown fixture called `SYSDATETIMEOFFSET()`; both are SQL-Server-only spellings and are now dialect-quoted.
+
+  **On the `migrations-pg/v6/**`files in this PR.**`CLAUDE.md`says a feature PR ships the T-SQL migration only and that PG counterparts are regenerated by the build engineer at release time. The five files here are`mj migrate convert`output, not hand-authored, and they exist because the tier cannot run on PostgreSQL without them — that is the whole subject of the change. They need the build engineer's sign-off before merge, and should be regenerated rather than merged if the release conversion runs first. Existing`migrations-pg`output is deliberately **not** regenerated against the converter changes above: the v5 files are frozen baselines, and the`\_\_mj_UDT` exemption above means the converter's new output agrees with what they already installed.
+
+  SQL Server is unaffected: every changed path is either PostgreSQL-only or a same-output refactor. Unit tests across the touched packages pass — SQLDialect 404, SQLConverter 1139, MJCoreEntities 597, CodeGenLib 808, TaskGraph 60, testing-cli 23 — zero failures in any of them.
+
+### Patch Changes
+
+- 1fdd5d0: Fix PostgreSQL identifier quoting for column names that collide with SQL keywords, and consolidate the two divergent tokenizers into one shared implementation.
+
+  **The defect.** PostgreSQL identifier auto-quoting used a keyword denylist matched case-INsensitively: a PascalCase word was quoted unless it appeared in a hardcoded keyword set. The set of SQL keywords and the set of MJ column names overlap, so every name in the intersection was emitted unquoted, folded to lowercase on PostgreSQL, and failed with `column "..." does not exist`. Eleven such columns ship in the baseline schema — `Name` (on 175 tables), `Values` (the field-level-encrypted column on `__mj."Credential"`), `Length`, `Precision`, `Log`, `Rank`, `Action`, `Columns`, `Language`, `Month`, and `Text`. SQL Server resolves identifiers case-insensitively, so T-SQL-first authoring never surfaced any of it; the failures only appeared on live PostgreSQL deployments. Addresses MJ #3604, #3590, #3691.
+
+  **The fix.** Keywords are now matched **case-sensitively, in their ALL-CAPS form only**. This generalizes a mechanism that already existed for exactly two words (`TYPE` and `DATA`, which were special-cased by hand for the same reason) to the whole keyword set. Dialects always emit keywords upper-case, so the keyword spelling and the column spelling are textually distinct: `TEXT` is the type, `Text` is the column. Critically, an ALL-CAPS word that is _not_ a keyword is still an identifier — `ID` and `URL` are all-caps by nature, so the rule is `!(isAllUpper && isKeyword)`, not a pure case rule. `SELECT Length, LENGTH(Name)` now correctly yields `SELECT "Length", LENGTH("Name")`.
+
+  **Structural change.** There were two copies of the tokenizer — one in `PostgreSQLCodeGenProvider.quoteSQLForExecution` (all codegen-time SQL, via `ManageMetadataBase.qsql()`) and one in `PostgreSQLDataProvider.autoQuoteIdentifiers` (every runtime raw-SQL statement, via `ExecuteSQL`) — with a comment instructing that they be kept in sync by hand. They had already diverged: 289 keywords versus 312, plus a case-sensitive tier and a dot-qualified-identifier rule present only at runtime. Both now delegate to `AutoQuotePostgreSQLIdentifiers` in `@memberjunction/sql-dialect`, which carries the union of both keyword sets. Two consequences worth noting: codegen-time SQL gains the dot-qualification rule, so `__mj.vwFoo` no longer folds to lowercase during codegen; and runtime gains the transaction-control keywords (`CONSTRAINTS`, `IMMEDIATE`, `DEFERRED`, `SAVEPOINT`, `RELEASE`) that previously existed only in the codegen copy.
+
+  **Compatibility.** A word immediately followed by `(` is treated as a function call and left unquoted, unless it is dot-qualified. Without this, mixed-case function spellings that used to work (`Coalesce(`, `IsNull(`) would have broken under case-sensitive matching; it additionally fixes ALL-CAPS functions that were simply missing from the keyword set (`JSONB_BUILD_OBJECT(` was previously quoted, and failed). The dot exception preserves quoting for MJ's own stored procedures, which are created with quoted mixed-case names.
+
+  Separately, a small tier of structural words stays case-insensitive so SQL authored **outside** this repository keeps parsing — a stored `MJ: Queries` body, a saved `UserView.WhereClause`, a GraphQL `ExtraFilter`, none of which this change can reach and fix. It is the predicate vocabulary only: `AND OR NOT IS NULL LIKE ILIKE IN BETWEEN EXISTS ASC DESC NULLS FIRST LAST`.
+
+  The reverse lookup that recognizes the _follower_ of a contextual pair declines to pair with a key that is dot-qualified or already quoted, and refuses to read backwards across a `--` comment. Both make it the true mirror of the forward lookup: without the first, `t.Order By Name` produced a different result on a second pass, violating the module's stated `f(f(x)) === f(x)`; without the second, a comment line ending in the word `order` left a real column named `By` on the next line unquoted.
+
+  A second, **contextual** tier covers the two-word clause forms without giving up column names: `Order`/`Group` are structural only before `By`, and `Left`/`Right`/`Full`/`Inner`/`Cross`/`Outer` only before `Join`/`Outer`. Both halves of a matched pair are recognized, and it chains through `Full Outer Join`. Everywhere else they are ordinary identifiers, so `SELECT Order FROM …` and `Left(Name, 3)` both still work.
+
+  **A dot-qualified word is an identifier**, checked before the structural and contextual tiers. No SQL dialect has a _structural_ keyword after a `.`, so this makes it impossible for a word added to those sets to fold a legitimate `alias.Column`.
+
+  The ALL-CAPS keyword tier is the one exception, and it is deliberately evaluated first. Several entries exist _specifically_ for their dot-qualified form — `INFORMATION_SCHEMA.COLUMNS`, `.TABLES`, `.ROUTINES` — and the catalog's real relation names are lower case, so quoting the right-hand half yields `INFORMATION_SCHEMA."COLUMNS"`, which does not resolve. CodeGen executes that exact SQL through `qsql()` on every PostgreSQL run (`manage-metadata.ts`, three call sites, two of them unconditional), so an unconditional dot rule turns a working CodeGen run into a hard failure. Because tier 1 is case-SENSITIVE it cannot swallow a real column: `Case` is not `CASE`, so `e.Case` still falls through to the dot rule and quotes. Verified against the newest PostgreSQL baseline — the only ALL-CAPS columns in the shipped schema are `ID, URL, URI, ISO2, ISO3, SQL, BCMID, ISO3166_2`, none of them keywords.
+
+  **Known limitation, deliberately not fixed.** Mixed-case clause keywords beyond the predicate vocabulary do not survive: a stored query body written `Select … From … Where …` fails on PostgreSQL. Widening the case-insensitive tier to the full clause skeleton was tried and reverted. That tier is evaluated case-insensitively, so adding `CASE`/`END`/`LIMIT`/`OFFSET` made those unquotable as column names — reintroducing, for 20 words, exactly the defect class this change eliminates. And it did not even work: `Cast(Amount As Decimal)`, `Insert Into Target (Name)` and `Select Top 10` all still failed, because mixed-case SQL needs a parser rather than a bigger denylist. The failure is a loud syntax error, not silently wrong rows, and rewriting the keywords in upper case fixes it.
+
+  A CI test derives every column name from the newest shipped PostgreSQL baseline's `CREATE TABLE __mj."…"` blocks and fails the build if one collides with the case-insensitive tier. Its scope is exactly that — core-schema columns as of the last baseline; columns added by later migrations, and non-`__mj` schemas, are not covered by it. That scope is adequate for a tier this small (no predicate-vocabulary word can be a column name in any schema) and would not have been for the reverted widening.
+
+  **Comments, template tags and literal prefixes.** The tokenizer is a parity machine, and three regions it did not recognize could invert that parity for the rest of a statement. `--` and (nesting) `/* */` comments are now skipped — an apostrophe inside a comment used to open a string-literal scan that ran to the _opening_ quote of the next real literal, after which literals and code swapped roles. Against this repository's own shipped query SQL that rewrote literal **values**: `WHERE ars."StepType" = 'Prompt'` became `= '"Prompt"'` (no rows), and the `jsonb_build_object` keys in `get-conversation-complete.pg.sql` became `'"ID"'` (JSON whose keys are `"\"ID\""`, so every consumer reading `.ID` got undefined) — all because line 10 of `calculate-ai-agent-run-cost.pg.sql` contains the word `doesn't` in a comment. Nunjucks tags (`{{ … }}`, `{% … %}`, `{# … #}`) are now skipped too, since the names inside them are query PARAMETER names matched exactly at render time and `{{ "ConversationID" | sqlString }}` never substitutes. `E'…'` / `N'…'` / `U&'…'` literal prefixes are recognized as part of the literal rather than tokenized as a word (previously `"E"'…'`), with backslash escapes honoured for the `E` form only. An unterminated `{{`/`{%` now emits its delimiters and resumes scanning rather than consuming the rest of the statement, matching what the dollar-quote branch already did for a missing close tag.
+
+  `""` inside an already-quoted identifier is now consumed explicitly as an escape. This one is **defensive, not a bug fix**: the previous code stopped at the first `"` and then immediately re-entered the same branch at the second, pushing each span verbatim, so the two partitions concatenated identically. Brute-forcing 600,000 inputs over an alphabet built from that construct produced zero differences in output. The explicit form is easier to reason about; nothing observable changed, and the "known limitation" note it replaces was describing a failure that never occurred.
+
+  A test runs the tokenizer over every shipped `metadata/queries/SQL/*.pg.sql` and asserts that string literals and template tags come back byte-identical and that the pass is idempotent, using a literal scanner written independently of the implementation. A second suite covers the quoting-policy tiers directly — dot-qualified words, both halves of each contextual pair, the words that must still quote when their partner is absent, literal prefixes, and the unterminated-delimiter cases — because those decide keyword-vs-identifier and are the only ones whose mistakes can make a real column unreachable.
+
+  **Behavior changes to be aware of.** Both `autoQuoteIdentifiers` and `quoteSQLForExecution` are public methods whose output changes: identifiers that were previously emitted bare are now quoted. Two specific cases are worth calling out. A mixed-case cast type now quotes — write `x::text` or `x::TEXT` rather than `x::Text`, since `Text` is a real column name and must quote. And `INSERT INTO Target(Cols)` with no space before the paren leaves the table name unquoted, because a bare word before `(` is indistinguishable from a call; the spaced form `INSERT INTO Target (Cols)` quotes correctly. A third case, added after review: a **column alias** that collides with a keyword now quotes, which changes the KEY a driver returns. `SELECT COUNT(*) AS Count` previously emitted `Count` bare and PostgreSQL folded the result key to `count`; it now emits `AS "Count"` and the key is `Count`. The same applies to `AS Name`, `AS Type`, `AS Rank` and `AS Value`. The new behaviour is the correct one — it matches the declared `QueryField` name — but a consumer reading the folded lowercase key will break. The only in-repo occurrence is `SQLServerCodeGenProvider.ts:1235`, which is not on this path; stored `Query.SQL` rows in consumer databases can carry such aliases.
+
+  Note also that the compatibility claim below is about **fragments**, not full statements: a stored `UserView.OrderBy` / `ExtraFilter` fragment keeps working, but a complete statement written in Title Case (`Select Name From … Where …`) does not — its keywords quote and it fails. That form previously worked. It does not occur in this repository, and the fix would be worse than the problem, so it is documented rather than changed.
+
+  Neither of the first two patterns occurs in this repository. Note the scope of that check: `autoQuoteIdentifiers` runs inside `ExecuteSQL`, so it also processes hand-written SQL originating in CONSUMER repositories (bizapps and client apps), which were not surveyed. Consumers carrying either spelling will see their output change. SQL Server output is unchanged — `SQLServerCodeGenProvider.quoteSQLForExecution` remains the identity function and shares no code with this path.
+
+  **Coverage.** 404 tests across the package (87 on the shared tokenizer directly), plus delegation suites through both providers' real entry points (the codegen tokenizer had no test coverage at all before this). A CI test extracts all 4,616 column definitions from the shipped PostgreSQL baseline and asserts each one survives quoting, so a newly added colliding column fails the build instead of shipping. Both entry points are additionally proven end-to-end against a live PostgreSQL server, including a control assertion that the same SQL unquoted still fails.
+
 ## 6.1.0-edge.2
 
 ## 6.1.0-edge.1

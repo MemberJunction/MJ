@@ -1,6 +1,6 @@
-# Transformers.js AI Demo
+# In-Browser AI Demo (Transformers.js + Chrome Built-in AI)
 
-**Experimental prototype** for testing client-side AI inference using Transformers.js with Angular.
+**Experimental prototype** for testing client-side AI inference in Angular — via Transformers.js (bring-your-own ONNX model on WebGPU) and via Chrome's built-in Prompt API (the Gemma 4 model that ships inside Chrome Canary).
 
 ## 🎯 Purpose
 
@@ -10,13 +10,15 @@ This standalone Angular app demonstrates running AI models entirely in the brows
 
 ```bash
 # From the experiments/transformers-demo directory
-npm install   # Already done if you see this
+nvm use 24    # Angular 21 CLI; Node 24 (the workspace's .nvmrc)
+npm install
 npm start     # Start dev server on http://localhost:4200
 ```
 
 Navigate to `http://localhost:4200` and choose your experience:
-- **💬 Text Chat** - Interactive text conversation with LLMs
-- **🎤 Audio Chat** - Full voice-to-voice AI assistant (STT → LLM → TTS)
+- **💬 Text Chat** - Interactive text conversation with LLMs (Transformers.js)
+- **🎤 Audio Chat** - Full voice-to-voice AI assistant (STT → LLM → TTS) (Transformers.js)
+- **⚡ Chrome Built-in AI** - Chat + router probe on Chrome's built-in model via the Prompt API (needs Chrome Canary, see below)
 
 ## 🧪 What It Does
 
@@ -32,6 +34,30 @@ Navigate to `http://localhost:4200` and choose your experience:
 - **Text-to-Speech** - SpeechT5 converts responses back to audio
 - **Full offline** - Complete voice assistant running locally
 - **Privacy-first** - no data ever leaves your device
+
+### Chrome Built-in AI Mode (Gemma 4 dev trial)
+
+The third mode does **not** download or bundle a model. It calls the Prompt API (`LanguageModel`), and Chrome runs the model in its own on-device model service. Setup (Built-in AI Early Preview Program, Sep 2026):
+
+1. Install **Chrome Canary 153+** (`brew install --cask google-chrome@canary`).
+2. Enable `chrome://flags/#gemma4-for-built-in-ai` and relaunch. (Equivalent command line:
+   `--enable-features=OptimizationGuideManifestBroker,AIApiFoundationalModel:model_version/v4`.)
+3. Open the app in Canary, pick **Chrome Built-in AI**, click **Connect**. The first connect downloads the
+   `gemma4-2b-it` weights (~2.4 GB) into the Chrome profile; later connects take well under a second.
+4. `chrome://on-device-internals` (enable debug pages first via `chrome://chrome-urls`) shows which model
+   components are installed and which use cases are served.
+
+The page also shows its own evidence: an **activity panel** logs every Prompt API call as it happens (availability,
+session creation and model load, each prompt, first token, streaming, completion stats, router/planner decisions with
+raw JSON, fetches) and reports the number of network requests the page made during each reply via the Resource Timing
+API — turn Wi-Fi off and it keeps answering. A **Hybrid research** toggle tests the pre-processor idea end to end:
+Gemma 4 routes the message locally, decides whether a lookup helps and which tool (Wikipedia or GitHub releases as
+stand-ins for a knowledge base), the page fetches, and Gemma 4 answers over the result. A **Router probe** panel
+classifies a batch of sample requests with a JSON-Schema-constrained response and scores them against hand labels.
+
+Without the flag the same code path runs Chrome's stock Gemini Nano (v3), so the mode doubles as an A/B harness.
+Full results, API-surface notes and the routing-latency analysis are in
+[`FINDINGS-CHROME-BUILTIN-AI.md`](FINDINGS-CHROME-BUILTIN-AI.md).
 
 ## 🏗️ Architecture
 
@@ -179,7 +205,13 @@ Navigate to `http://localhost:4200` and choose your experience:
 - `src/app/ai/chat.service.ts` - Angular service (worker bridge)
 - `src/app/chat/chat.component.ts` - Text chat UI
 
-**Audio Chat (NEW):**
+**Chrome Built-in AI:**
+- `src/app/ai/builtin-ai.service.ts` - Angular service over `LanguageModel` (availability, download monitor, streaming, abort, structured-output router probe)
+- `src/app/ai/builtin-ai-router.ts` - Router system prompt, JSON Schema (`responseConstraint`) and hand-labelled sample requests
+- `src/app/ai/builtin-ai-hybrid.ts` - Hybrid path: planner prompt/schema, Wikipedia + GitHub lookups, grounded-answer prompt
+- `src/app/builtin-chat/builtin-chat.component.ts` - Chat UI + router probe panel (mirrors `chat.component.ts`)
+
+**Audio Chat:**
 - `src/app/ai/audio-messages.ts` - Audio pipeline message protocol
 - `src/app/ai/audio-model-registry.ts` - STT/LLM/TTS model definitions
 - `src/app/ai/audio.worker.ts` - Web Worker (STT → LLM → TTS pipeline)
@@ -219,6 +251,7 @@ Once validated, this will be integrated into MJ as:
 2. **BaseLLM Implementation**: `TransformersLLM` extending `BaseLLM`
 3. **Metadata Registration**: New vendor "Transformers.js" with model definitions
 4. **Cross-Environment**: Works in both Node.js (MJAPI) and Browser (Angular)
+5. **Browser-only provider for Chrome's built-in model**: a `BaseLLM` over `LanguageModel` (no weights to host; availability-gated), usable as a client-side pre-processor/router in front of server-side agents — see `FINDINGS-CHROME-BUILTIN-AI.md`
 
 ## 🐛 Known Issues / Limitations
 

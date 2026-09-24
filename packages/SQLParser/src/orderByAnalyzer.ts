@@ -141,10 +141,10 @@ function tryNunjucksAwareAST(sql: string, dialect: SQLParserDialect): OrderByAna
         if (!stmt) return buildNoOrderByResult(sql);
 
         const stmtRecord = stmt as unknown as Record<string, unknown>;
-        const orderByStmt = findOrderByStatement(stmtRecord);
+        const orderByStmt = FindOrderByStatement(stmtRecord);
         if (!orderByStmt) return buildNoOrderByResult(sql);
 
-        const isLegal = isOrderByLegalInCTE(orderByStmt);
+        const isLegal = IsOrderByLegalInCTE(orderByStmt);
         if (isLegal) {
             // ORDER BY is legal — find positions via scanner for completeness
             const positions = findTopLevelOrderByPositions(sql);
@@ -183,10 +183,10 @@ function buildASTAnalysis(
     stmt: Record<string, unknown>,
     sql: string,
 ): OrderByAnalysis {
-    const orderByStmt = findOrderByStatement(stmt);
+    const orderByStmt = FindOrderByStatement(stmt);
     if (!orderByStmt) return buildNoOrderByResult(sql);
 
-    const isLegal = isOrderByLegalInCTE(orderByStmt);
+    const isLegal = IsOrderByLegalInCTE(orderByStmt);
 
     // Use scanner for precise character positions
     const positions = findTopLevelOrderByPositions(sql);
@@ -330,17 +330,22 @@ function findTopLevelOrderByPositions(sql: string): number[] {
  * that carries the ORDER BY clause. This is the single shared implementation
  * replacing the duplicated versions in both engines.
  */
-export function findOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
+export function FindOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
     if (stmt.orderby) return stmt;
-    if (stmt._next) return findOrderByStatement(stmt._next as Record<string, unknown>);
+    if (stmt._next) return FindOrderByStatement(stmt._next as Record<string, unknown>);
     return null;
+}
+
+/** @deprecated Use {@link FindOrderByStatement}. */
+export function findOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
+    return FindOrderByStatement(stmt);
 }
 
 /**
  * Checks AST properties to determine if ORDER BY is legal in a CTE context.
  * TOP, OFFSET/LIMIT, or FOR XML make ORDER BY legal inside a CTE.
  */
-export function isOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
+export function IsOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
     if (stmt.top) return true;
     if (stmt.limit) return true;
     if (stmt.offset) return true;
@@ -352,6 +357,11 @@ export function isOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
     }
 
     return false;
+}
+
+/** @deprecated Use {@link IsOrderByLegalInCTE}. */
+export function isOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
+    return IsOrderByLegalInCTE(stmt);
 }
 
 // ════════════════════════════════════════════════════════════════════

@@ -133,6 +133,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   @Output() Saved = new EventEmitter<BaseEntity>();
   /** Re-emitted form `RecordSaved` (richer payload). */
   @Output() RecordSaved = new EventEmitter<RecordSavedEvent>();
+  /** Re-emitted form `RecordRefreshed`. */
+  @Output() RecordRefreshed = new EventEmitter<BaseEntity>();
   /** Re-emitted form `RecordDeleted`. */
   @Output() RecordDeleted = new EventEmitter<RecordDeletedEvent>();
   /** Re-emitted form `RecordSaveFailed`. */
@@ -152,8 +154,26 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
   // ── State ───────────────────────────────────────────────────────────────
 
-  public loading = true;
-  public errorTitle: string | null = null;
+  public Loading = true;
+
+  /** @deprecated Use {@link Loading}. */
+  public get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  public set loading(value) {
+    this.Loading = value;
+  }
+  public ErrorTitle: string | null = null;
+
+  /** @deprecated Use {@link ErrorTitle}. */
+  public get errorTitle(): string | null {
+    return this.ErrorTitle;
+  }
+  /** @deprecated Use {@link ErrorTitle}. */
+  public set errorTitle(value: string | null) {
+    this.ErrorTitle = value;
+  }
   public errorDetail: string | null = null;
 
   private _formComponentRef: ComponentRef<BaseFormComponent> | null = null;
@@ -211,12 +231,22 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     this.Form?.CancelEdit();
   }
 
+  /** Refresh the bound record from the database. Full-form mode uses the form's refresh pipeline. */
+  async Refresh(): Promise<boolean> {
+    if (this._isSection) {
+      return this._currentRecord?.IsSaved ? this._currentRecord.Refresh() : false;
+    }
+    const f = this.Form;
+    if (!f) return false;
+    return f.RefreshRecord();
+  }
+
   // ── Core: resolve → load → create → bind → wire ──────────────────────────
 
   private reload(): void {
     this.teardown();
-    this.loading = true;
-    this.errorTitle = null;
+    this.Loading = true;
+    this.ErrorTitle = null;
     this.errorDetail = null;
     void this.loadAndMount();
   }
@@ -283,14 +313,14 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       this.subscribeToFormEvents(instance);
 
       this.FormCreated.emit(instance);
-      this.errorTitle = null;
+      this.ErrorTitle = null;
       this.errorDetail = null;
       this.LoadComplete.emit();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this.fail(`Failed to load ${entityName} record.`, `An unexpected error occurred: ${msg}`);
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.detectChanges();
     }
   }
@@ -402,6 +432,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       form.Navigate.subscribe(e => this.Navigate.emit(e)),
       form.Notification.subscribe(e => this.Notification.emit(e)),
       form.RecordSaved.subscribe(e => this.RecordSaved.emit(e)),
+      form.RecordRefreshed.subscribe(e => this.RecordRefreshed.emit(e.Record)),
       form.RecordDeleted.subscribe(e => this.RecordDeleted.emit(e)),
       form.RecordSaveFailed.subscribe(e => this.RecordSaveFailed.emit(e)),
       form.ValidationFailed.subscribe(e => this.ValidationFailed.emit(e)),
@@ -460,9 +491,9 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   private fail(title: string, detail: string): void {
-    this.errorTitle = title;
+    this.ErrorTitle = title;
     this.errorDetail = detail;
-    this.loading = false;
+    this.Loading = false;
     if (this._formComponentRef) {
       try { this._formComponentRef.destroy(); } catch { /* noop */ }
       this._formComponentRef = null;

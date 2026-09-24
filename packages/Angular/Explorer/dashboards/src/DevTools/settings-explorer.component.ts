@@ -8,7 +8,7 @@ import {
     MJInstanceConfigurationEntity
 } from '@memberjunction/core-entities';
 import { DevToolsPrefs } from './dev-tools-prefs';
-import { buildSettingsExplorerAgentContext } from './dev-tools-agent-context';
+import { BuildSettingsExplorerAgentContext } from './dev-tools-agent-context';
 
 interface SettingRow {
     key: string;
@@ -56,7 +56,7 @@ export class SettingsExplorerComponent extends BaseResourceComponent implements 
         const p = DevToolsPrefs.Get<{ scope?: SettingsScope; search?: string }>('settingsExplorer');
         if (p?.scope) this.Scope = p.scope;
         if (p?.search) this.SearchQuery = p.search;
-        this.refresh();
+        this.Refresh();
         this.NotifyLoadComplete();
     }
 
@@ -80,7 +80,7 @@ export class SettingsExplorerComponent extends BaseResourceComponent implements 
     public override async GetResourceDisplayName(): Promise<string> { return 'Settings Explorer'; }
     public override async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-sliders'; }
 
-    public refresh(): void {
+    public Refresh(): void {
         const userSettings = UserInfoEngine.Instance.UserSettings ?? [];
         this.UserRows = userSettings.map(s => this.toRow(s.Setting ?? '(no key)', s.Value ?? '', s.User ? `User: ${s.User}` : undefined, s.__mj_UpdatedAt));
 
@@ -107,6 +107,11 @@ export class SettingsExplorerComponent extends BaseResourceComponent implements 
         this.LastRefreshed = new Date();
         this.cdr.markForCheck();
         this.publishAgentContext();
+    }
+
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+        return this.Refresh();
     }
 
     public OnScopeChange(scope: SettingsScope): void {
@@ -231,7 +236,7 @@ export class SettingsExplorerComponent extends BaseResourceComponent implements 
     private publishAgentContext(): void {
         const currentScopeCount = this.Scope === 'user' ? this.Counts.user : this.Counts.instance;
         const filtered = this.FilteredRows;
-        const context = buildSettingsExplorerAgentContext({
+        const context = BuildSettingsExplorerAgentContext({
             SettingCount: currentScopeCount,
             UserSettingCount: this.Counts.user,
             InstanceSettingCount: this.Counts.instance,

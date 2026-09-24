@@ -1,0 +1,2140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemberJunction — Person & Organization Header + Overview Showcase</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <style>
+        :root {
+            /* MJ Design Tokens — Dark Theme Default (Matching User Screenshot) */
+            --mj-bg-app: #0b1320;
+            --mj-bg-surface: #0f172a;
+            --mj-bg-surface-card: #141f33;
+            --mj-bg-surface-elevated: #1e293b;
+            --mj-bg-surface-sunken: #090e17;
+            --mj-bg-overlay: rgba(3, 7, 18, 0.75);
+            --mj-bg-hover: rgba(255, 255, 255, 0.05);
+
+            --mj-border-default: #23354e;
+            --mj-border-subtle: #1a283c;
+            --mj-border-strong: #38bdf8;
+
+            --mj-text-primary: #f8fafc;
+            --mj-text-secondary: #94a3b8;
+            --mj-text-muted: #64748b;
+            --mj-text-inverse: #0f172a;
+
+            --mj-brand-primary: #38bdf8;
+            --mj-brand-primary-hover: #0284c7;
+            --mj-brand-primary-bg: rgba(56, 189, 248, 0.12);
+            --mj-brand-accent: #6366f1;
+
+            --mj-status-success: #10b981;
+            --mj-status-success-bg: rgba(16, 185, 129, 0.14);
+            --mj-status-warning: #f59e0b;
+            --mj-status-warning-bg: rgba(245, 158, 11, 0.14);
+            --mj-status-danger: #ef4444;
+            --mj-status-danger-bg: rgba(239, 68, 68, 0.14);
+            --mj-status-info: #0ea5e9;
+            --mj-status-info-bg: rgba(14, 165, 233, 0.14);
+
+            --mj-radius-sm: 6px;
+            --mj-radius-md: 10px;
+            --mj-radius-lg: 14px;
+            --mj-radius-xl: 18px;
+            --mj-radius-pill: 9999px;
+
+            --mj-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+            --mj-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+            --mj-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.45);
+            --mj-shadow-glow: 0 0 20px rgba(56, 189, 248, 0.25);
+
+            --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --mj-font-mono: 'JetBrains Mono', monospace;
+        }
+
+        /* Light Theme Override */
+        [data-theme="light"] {
+            --mj-bg-app: #f1f5f9;
+            --mj-bg-surface: #ffffff;
+            --mj-bg-surface-card: #ffffff;
+            --mj-bg-surface-elevated: #f8fafc;
+            --mj-bg-surface-sunken: #f1f5f9;
+            --mj-bg-overlay: rgba(15, 23, 42, 0.4);
+            --mj-bg-hover: rgba(0, 0, 0, 0.04);
+
+            --mj-border-default: #e2e8f0;
+            --mj-border-subtle: #cbd5e1;
+            --mj-border-strong: #0284c7;
+
+            --mj-text-primary: #0f172a;
+            --mj-text-secondary: #475569;
+            --mj-text-muted: #94a3b8;
+            --mj-text-inverse: #ffffff;
+
+            --mj-brand-primary: #0284c7;
+            --mj-brand-primary-hover: #0369a1;
+            --mj-brand-primary-bg: rgba(2, 132, 199, 0.08);
+            --mj-brand-accent: #4f46e5;
+
+            --mj-status-success: #059669;
+            --mj-status-success-bg: #ecfdf5;
+            --mj-status-warning: #d97706;
+            --mj-status-warning-bg: #fffbeb;
+            --mj-status-danger: #dc2626;
+            --mj-status-danger-bg: #fef2f2;
+            --mj-status-info: #0284c7;
+            --mj-status-info-bg: #f0f9ff;
+
+            --mj-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+            --mj-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.08);
+            --mj-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+            --mj-shadow-glow: 0 0 20px rgba(2, 132, 199, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--mj-font-family);
+            background-color: var(--mj-bg-app);
+            color: var(--mj-text-primary);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* ── Top Control Bar ────────────────────────────────────────── */
+        .showcase-control-bar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: var(--mj-bg-surface);
+            border-bottom: 1px solid var(--mj-border-default);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            box-shadow: var(--mj-shadow-md);
+            backdrop-filter: blur(12px);
+        }
+
+        .showcase-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .showcase-logo {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 16px;
+            box-shadow: 0 2px 8px rgba(56, 189, 248, 0.4);
+        }
+
+        .showcase-title-wrap h1 {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--mj-text-primary);
+            letter-spacing: -0.01em;
+        }
+
+        .showcase-title-wrap p {
+            font-size: 11.5px;
+            color: var(--mj-text-muted);
+        }
+
+        .showcase-selectors {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .segmented-group {
+            display: inline-flex;
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
+            padding: 3px;
+            border-radius: var(--mj-radius-pill);
+            gap: 2px;
+        }
+
+        .segmented-btn {
+            border: none;
+            background: transparent;
+            color: var(--mj-text-secondary);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: var(--mj-radius-pill);
+            cursor: pointer;
+            transition: all 0.18s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .segmented-btn:hover {
+            color: var(--mj-text-primary);
+            background: var(--mj-bg-hover);
+        }
+
+        .segmented-btn.active {
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
+            box-shadow: 0 2px 6px rgba(56, 189, 248, 0.35);
+        }
+
+        .theme-toggle-btn {
+            border: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-primary);
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 600;
+            padding: 7px 14px;
+            border-radius: var(--mj-radius-md);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .theme-toggle-btn:hover {
+            border-color: var(--mj-brand-primary);
+            background: var(--mj-bg-hover);
+        }
+
+        /* ── Philosophy Thesis Banner ────────────────────────────────── */
+        .thesis-banner {
+            max-width: 1440px;
+            margin: 16px auto 0 auto;
+            padding: 12px 20px;
+            border-radius: var(--mj-radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            border: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface-card);
+            box-shadow: var(--mj-shadow-sm);
+        }
+
+        .thesis-tag {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 3px 8px;
+            border-radius: var(--mj-radius-sm);
+            background: var(--mj-brand-primary-bg);
+            color: var(--mj-brand-primary);
+        }
+
+        .thesis-text {
+            font-size: 12.5px;
+            color: var(--mj-text-secondary);
+            flex: 1;
+        }
+
+        .thesis-text strong {
+            color: var(--mj-text-primary);
+        }
+
+        .thesis-nav-hook {
+            font-size: 11.5px;
+            color: var(--mj-brand-accent);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        /* ── Application Workspace Canvas ────────────────────────────── */
+        .workspace-canvas {
+            max-width: 1440px;
+            margin: 16px auto 40px auto;
+            padding: 0 16px;
+        }
+
+        /* Form Shell with Left Nav Rail */
+        .form-shell-layout {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 16px;
+            align-items: start;
+        }
+
+        /* ── Left Nav Rail ───────────────────────────────────────────── */
+        .form-nav-rail {
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-lg);
+            padding: 16px 12px;
+            box-shadow: var(--mj-shadow-sm);
+            position: sticky;
+            top: 76px;
+        }
+
+        .rail-header {
+            padding: 4px 10px 12px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--mj-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .rail-badge-app {
+            font-size: 9.5px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--mj-status-success);
+            font-weight: 700;
+        }
+
+        .rail-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .rail-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-radius: var(--mj-radius-sm);
+            color: var(--mj-text-secondary);
+            font-size: 12.5px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .rail-item:hover {
+            color: var(--mj-text-primary);
+            background: var(--mj-bg-hover);
+        }
+
+        .rail-item.active {
+            background: var(--mj-brand-primary-bg);
+            color: var(--mj-brand-primary);
+            font-weight: 600;
+            border-left: 3px solid var(--mj-brand-primary);
+        }
+
+        .rail-item-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .rail-item-left i {
+            font-size: 13px;
+            width: 16px;
+            text-align: center;
+        }
+
+        .rail-pill {
+            font-size: 10.5px;
+            font-weight: 700;
+            padding: 1px 6px;
+            border-radius: 10px;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-muted);
+        }
+
+        .rail-item.active .rail-pill {
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
+        }
+
+        .rail-divider {
+            height: 1px;
+            background: var(--mj-border-default);
+            margin: 10px 4px;
+        }
+
+        .rail-footer-note {
+            padding: 10px 10px 2px 10px;
+            font-size: 11px;
+            color: var(--mj-text-muted);
+            line-height: 1.4;
+        }
+
+        /* ── Main Form Content Column ────────────────────────────────── */
+        .form-main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-width: 0;
+        }
+
+        /* ══════════════════════════════════════════════════════════════
+           OPTION A: EXECUTIVE COMMAND HUB (Linear / Stripe Style)
+           ══════════════════════════════════════════════════════════════ */
+        .header-opt-a {
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-xl);
+            padding: 24px 28px;
+            box-shadow: var(--mj-shadow-md);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header-opt-a::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #38bdf8 0%, #6366f1 50%, #10b981 100%);
+        }
+
+        .header-opt-a .hero-top-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .header-opt-a .identity-lockup {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .header-opt-a .avatar-box {
+            width: 68px;
+            height: 68px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #1e3a8a 0%, #0284c7 100%);
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--mj-shadow-glow);
+            position: relative;
+            flex-shrink: 0;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header-opt-a .org-avatar-box {
+            background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
+        }
+
+        .header-opt-a .presence-dot {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            width: 14px;
+            height: 14px;
+            background: var(--mj-status-success);
+            border: 2.5px solid var(--mj-bg-surface);
+            border-radius: 50%;
+        }
+
+        .header-opt-a .identity-details h2 {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--mj-text-primary);
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-opt-a .badge-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 5px;
+            flex-wrap: wrap;
+        }
+
+        .pill-badge {
+            font-size: 11.5px;
+            font-weight: 600;
+            padding: 2.5px 9px;
+            border-radius: var(--mj-radius-pill);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .pill-badge--blue { background: var(--mj-brand-primary-bg); color: var(--mj-brand-primary); }
+        .pill-badge--green { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+        .pill-badge--purple { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+        .pill-badge--amber { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+
+        .header-opt-a .meta-contact-row {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            margin-top: 8px;
+            font-size: 12.5px;
+            color: var(--mj-text-secondary);
+            flex-wrap: wrap;
+        }
+
+        .meta-contact-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: color 0.15s ease;
+        }
+
+        .meta-contact-item:hover {
+            color: var(--mj-brand-primary);
+        }
+
+        .header-opt-a .action-cluster {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-action-primary {
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            color: #ffffff;
+            border: none;
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: var(--mj-radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+            transition: all 0.18s ease;
+        }
+
+        .btn-action-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.45);
+        }
+
+        .btn-action-secondary {
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-primary);
+            border: 1px solid var(--mj-border-default);
+            font-family: inherit;
+            font-size: 12.5px;
+            font-weight: 600;
+            padding: 8px 14px;
+            border-radius: var(--mj-radius-sm);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-action-secondary:hover {
+            background: var(--mj-bg-hover);
+            border-color: var(--mj-border-subtle);
+        }
+
+        /* Metric Strip in Option A */
+        .header-opt-a .kpi-ribbon {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            padding-top: 18px;
+            border-top: 1px solid var(--mj-border-default);
+        }
+
+        .kpi-chip {
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
+            padding: 10px 14px;
+            border-radius: var(--mj-radius-md);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            transition: border-color 0.15s ease;
+        }
+
+        .kpi-chip:hover {
+            border-color: var(--mj-border-strong);
+        }
+
+        .kpi-chip-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--mj-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .kpi-chip-val {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--mj-text-primary);
+            font-family: var(--mj-font-family);
+        }
+
+        .kpi-chip-sub {
+            font-size: 11px;
+            color: var(--mj-status-success);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-weight: 600;
+        }
+
+        /* ══════════════════════════════════════════════════════════════
+           OPTION B: RELATIONSHIP & GROWTH COCKPIT (Intelligence Bento)
+           ══════════════════════════════════════════════════════════════ */
+        .header-opt-b {
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-xl);
+            padding: 20px 24px;
+            box-shadow: var(--mj-shadow-md);
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 24px;
+        }
+
+        .header-opt-b .left-identity-col {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .header-opt-b .identity-header-line {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .header-opt-b .avatar-orb {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #10b981 0%, #0284c7 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 800;
+            color: #ffffff;
+            box-shadow: 0 0 16px rgba(16, 185, 129, 0.3);
+            border: 3px solid var(--mj-bg-surface-elevated);
+        }
+
+        .header-opt-b .title-group h2 {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--mj-text-primary);
+        }
+
+        .header-opt-b .title-group p {
+            font-size: 12px;
+            color: var(--mj-text-secondary);
+        }
+
+        .header-opt-b .insight-stream {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .insight-pill {
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
+            font-size: 11.5px;
+            font-weight: 500;
+            padding: 4px 10px;
+            border-radius: var(--mj-radius-sm);
+            color: var(--mj-text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .insight-pill i {
+            color: var(--mj-brand-primary);
+        }
+
+        .header-opt-b .right-intelligence-col {
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-lg);
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .intel-score-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .intel-score-label {
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--mj-text-muted);
+            text-transform: uppercase;
+        }
+
+        .intel-score-badge {
+            font-size: 12.5px;
+            font-weight: 800;
+            color: var(--mj-status-success);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .intel-meter-bar {
+            height: 6px;
+            background: var(--mj-border-default);
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .intel-meter-fill {
+            height: 100%;
+            width: 92%;
+            background: linear-gradient(90deg, #38bdf8 0%, #10b981 100%);
+            border-radius: 3px;
+        }
+
+        .intel-stats-mini {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--mj-text-secondary);
+            margin-top: 4px;
+        }
+
+        /* ══════════════════════════════════════════════════════════════
+           OPTION C: TRANSACTIONAL VELOCITY & HIGH-DENSITY FINANCIALS
+           ══════════════════════════════════════════════════════════════ */
+        .header-opt-c {
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-lg);
+            padding: 16px 20px;
+            box-shadow: var(--mj-shadow-sm);
+        }
+
+        .header-opt-c .top-meta-strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--mj-border-default);
+            margin-bottom: 12px;
+        }
+
+        .header-opt-c .compact-id {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-opt-c .mono-badge {
+            font-family: var(--mj-font-mono);
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
+            color: var(--mj-text-muted);
+        }
+
+        .header-opt-c .name-line {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--mj-text-primary);
+        }
+
+        .header-opt-c .financial-ticker {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+        }
+
+        .ticker-tile {
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
+            padding: 8px 12px;
+            border-radius: var(--mj-radius-sm);
+        }
+
+        .ticker-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--mj-text-muted);
+            text-transform: uppercase;
+        }
+
+        .ticker-val {
+            font-family: var(--mj-font-mono);
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--mj-text-primary);
+            margin-top: 2px;
+        }
+
+        .ticker-val.green { color: var(--mj-status-success); }
+        .ticker-val.blue { color: var(--mj-brand-primary); }
+        .ticker-val.amber { color: var(--mj-status-warning); }
+
+        /* ══════════════════════════════════════════════════════════════
+           OVERVIEW PANELS (The "Killer WOW" Hub)
+           ══════════════════════════════════════════════════════════════ */
+        .overview-panel-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .overview-grid-2col {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+        }
+
+        .overview-grid-3col {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .dashboard-card {
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-lg);
+            padding: 20px;
+            box-shadow: var(--mj-shadow-sm);
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--mj-text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-title i {
+            color: var(--mj-brand-primary);
+        }
+
+        .card-action-link {
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--mj-brand-primary);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .card-action-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Interactive Chart Mockup */
+        .chart-container {
+            position: relative;
+            height: 180px;
+            width: 100%;
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            padding-top: 20px;
+        }
+
+        .chart-bar-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            height: 100%;
+            justify-content: flex-end;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .chart-bar {
+            width: 100%;
+            max-width: 38px;
+            border-radius: 6px 6px 0 0;
+            background: linear-gradient(180deg, #38bdf8 0%, rgba(56, 189, 248, 0.4) 100%);
+            transition: all 0.2s ease;
+        }
+
+        .chart-bar.highlight {
+            background: linear-gradient(180deg, #10b981 0%, rgba(16, 185, 129, 0.4) 100%);
+        }
+
+        .chart-bar-group:hover .chart-bar {
+            filter: brightness(1.2);
+            transform: scaleY(1.05);
+        }
+
+        .chart-label {
+            font-size: 11px;
+            color: var(--mj-text-muted);
+            font-weight: 500;
+        }
+
+        .chart-tooltip {
+            position: absolute;
+            top: -12px;
+            background: var(--mj-bg-surface-elevated);
+            border: 1px solid var(--mj-border-default);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #ffffff;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            box-shadow: var(--mj-shadow-md);
+        }
+
+        .chart-bar-group:hover .chart-tooltip {
+            opacity: 1;
+        }
+
+        /* Order & Subscription Cards */
+        .sub-card-item {
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-md);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            transition: border-color 0.15s ease;
+        }
+
+        .sub-card-item:hover {
+            border-color: var(--mj-brand-primary);
+        }
+
+        .sub-info h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--mj-text-primary);
+        }
+
+        .sub-info p {
+            font-size: 11.5px;
+            color: var(--mj-text-secondary);
+        }
+
+        .sub-progress-wrap {
+            width: 140px;
+        }
+
+        .sub-progress-bar {
+            height: 6px;
+            background: var(--mj-border-default);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .sub-progress-fill {
+            height: 100%;
+            background: var(--mj-brand-primary);
+            border-radius: 3px;
+        }
+
+        /* Recent Orders Data Table */
+        .custom-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12.5px;
+        }
+
+        .custom-table th {
+            text-align: left;
+            padding: 8px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--mj-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            border-bottom: 1px solid var(--mj-border-default);
+        }
+
+        .custom-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--mj-border-subtle);
+            color: var(--mj-text-secondary);
+        }
+
+        .custom-table tr:hover td {
+            background: var(--mj-bg-hover);
+            color: var(--mj-text-primary);
+            cursor: pointer;
+        }
+
+        .table-order-num {
+            font-family: var(--mj-font-mono);
+            font-weight: 600;
+            color: var(--mj-brand-primary);
+        }
+
+        .table-amount {
+            font-family: var(--mj-font-mono);
+            font-weight: 700;
+            color: var(--mj-text-primary);
+        }
+
+        /* AI Copilot & Insights Card */
+        .ai-recommendation-box {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.06) 0%, rgba(99, 102, 241, 0.08) 100%);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            border-radius: var(--mj-radius-md);
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .ai-rec-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12.5px;
+            font-weight: 700;
+            color: var(--mj-brand-primary);
+        }
+
+        .ai-rec-text {
+            font-size: 12px;
+            color: var(--mj-text-secondary);
+            line-height: 1.45;
+        }
+
+        .ai-rec-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .btn-ai-action {
+            font-size: 11.5px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-ai-dismiss {
+            font-size: 11.5px;
+            font-weight: 500;
+            padding: 4px 8px;
+            background: transparent;
+            color: var(--mj-text-muted);
+            border: none;
+            cursor: pointer;
+        }
+
+        /* Timeline Feed */
+        .timeline-feed {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .timeline-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: var(--mj-brand-primary);
+            flex-shrink: 0;
+        }
+
+        .timeline-content h5 {
+            font-size: 12.5px;
+            font-weight: 600;
+            color: var(--mj-text-primary);
+        }
+
+        .timeline-content p {
+            font-size: 11.5px;
+            color: var(--mj-text-secondary);
+        }
+
+        .timeline-time {
+            font-size: 10.5px;
+            color: var(--mj-text-muted);
+            margin-top: 2px;
+        }
+
+        /* ── Architectural Explainer Modal / Drawer ──────────────────── */
+        .arch-explainer-bar {
+            background: var(--mj-bg-surface-sunken);
+            border: 1px dashed var(--mj-border-default);
+            border-radius: var(--mj-radius-lg);
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-top: 16px;
+        }
+
+        .arch-explainer-text h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--mj-text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .arch-explainer-text p {
+            font-size: 12px;
+            color: var(--mj-text-secondary);
+            margin-top: 3px;
+        }
+
+        /* Toast Feedback */
+        .toast-popup {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
+            padding: 10px 18px;
+            border-radius: var(--mj-radius-md);
+            font-weight: 700;
+            font-size: 13px;
+            box-shadow: var(--mj-shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .toast-popup.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body data-theme="dark">
+
+    <!-- ── 1. Top Showcase Control Bar ──────────────────────────────────────── -->
+    <header class="showcase-control-bar">
+        <div class="showcase-brand">
+            <div class="showcase-logo">MJ</div>
+            <div class="showcase-title-wrap">
+                <h1>MemberJunction Form Architecture Showcase</h1>
+                <p>Interactive Headers &amp; "Overview" Left-Nav Panels for People &amp; Organizations</p>
+            </div>
+        </div>
+
+        <div class="showcase-selectors">
+            <!-- Entity Switcher -->
+            <div class="segmented-group">
+                <button class="segmented-btn active" id="btn-entity-person" onclick="switchEntity('person')">
+                    <i class="fa-solid fa-user"></i> Person
+                </button>
+                <button class="segmented-btn" id="btn-entity-org" onclick="switchEntity('org')">
+                    <i class="fa-solid fa-building"></i> Organization
+                </button>
+            </div>
+
+            <!-- Option Switcher -->
+            <div class="segmented-group">
+                <button class="segmented-btn active" id="btn-opt-a" onclick="switchOption('A')">
+                    <i class="fa-solid fa-gem"></i> Option A: Command Hub
+                </button>
+                <button class="segmented-btn" id="btn-opt-b" onclick="switchOption('B')">
+                    <i class="fa-solid fa-compass"></i> Option B: Intelligence Bento
+                </button>
+                <button class="segmented-btn" id="btn-opt-c" onclick="switchOption('C')">
+                    <i class="fa-solid fa-chart-line"></i> Option C: Financial Terminal
+                </button>
+            </div>
+
+            <!-- Light/Dark Mode -->
+            <button class="theme-toggle-btn" onclick="toggleTheme()">
+                <i class="fa-solid fa-sun" id="theme-icon"></i>
+                <span id="theme-label">Light Mode</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- ── 2. Design Thesis Banner ─────────────────────────────────────────── -->
+    <section class="thesis-banner" id="thesis-container">
+        <!-- Injected via JavaScript based on chosen Option -->
+    </section>
+
+    <!-- ── 3. Application Workspace Canvas ─────────────────────────────────── -->
+    <main class="workspace-canvas">
+        <div class="form-shell-layout">
+
+            <!-- Left Navigation Rail (Shows "Overview" as Top Item) -->
+            <aside class="form-nav-rail">
+                <div class="rail-header">
+                    <span>Navigation Rail</span>
+                    <span class="rail-badge-app">Orders Installed</span>
+                </div>
+                <ul class="rail-list" id="nav-rail-items">
+                    <li class="rail-item active" onclick="showToast('Navigated to Orders Overview Panel')">
+                        <div class="rail-item-left">
+                            <i class="fa-solid fa-gauge-high"></i>
+                            <span>Overview</span>
+                        </div>
+                        <span class="rail-pill">Top</span>
+                    </li>
+                    <li class="rail-item" onclick="showToast('Standard Details Panel')">
+                        <div class="rail-item-left">
+                            <i class="fa-solid fa-id-card"></i>
+                            <span>Details</span>
+                        </div>
+                    </li>
+                    <li class="rail-item" onclick="showToast('Orders Relationship Grid')">
+                        <div class="rail-item-left">
+                            <i class="fa-solid fa-shopping-cart"></i>
+                            <span>Orders</span>
+                        </div>
+                        <span class="rail-pill">4</span>
+                    </li>
+                    <li class="rail-item" onclick="showToast('Subscriptions & Licenses')">
+                        <div class="rail-item-left">
+                            <i class="fa-solid fa-rotate"></i>
+                            <span>Subscriptions</span>
+                        </div>
+                        <span class="rail-pill">2</span>
+                    </li>
+                    <li class="rail-item" onclick="showToast('Invoices & AR')">
+                        <div class="rail-item-left">
+                            <i class="fa-solid fa-file-invoice-dollar"></i>
+                            <span>Invoices</span>
+                        </div>
+                    </li>
+                    <li class="rail-item" onclick="showToast('Assigned Tasks')">
+                        <div class="rail-item-left">
+                            <i class="fa-solid fa-list-check"></i>
+                            <span>Tasks</span>
+                        </div>
+                        <span class="rail-pill">12</span>
+                    </li>
+                    <li class="rail-divider"></li>
+                    <li class="rail-item" onclick="showToast('More Related Entities Drawer')">
+                        <div class="rail-item-left">
+                            <i class="fa-solid fa-ellipsis"></i>
+                            <span>More (5)</span>
+                        </div>
+                    </li>
+                </ul>
+                <div class="rail-footer-note">
+                    <i class="fa-solid fa-circle-check" style="color: var(--mj-status-success);"></i>
+                    <strong>Orders App Contribution</strong> automatically prioritized to top slot via <code>BaseFormPanel</code> registration.
+                </div>
+            </aside>
+
+            <!-- Main Form Content Area -->
+            <div class="form-main-content">
+                
+                <!-- Dynamic Header Mount Point -->
+                <div id="header-mount-point"></div>
+
+                <!-- Dynamic Overview Panel Mount Point -->
+                <div id="overview-mount-point"></div>
+
+                <!-- Architecture Explainer Bar -->
+                <div class="arch-explainer-bar">
+                    <div class="arch-explainer-text">
+                        <h4><i class="fa-solid fa-puzzle-piece"></i> How the Orders App Makes "Overview" the Top Left-Nav Item</h4>
+                        <p>
+                            In MemberJunction, when an app (like <strong>Orders</strong>) is installed, it registers a <code>BaseFormPanel</code> with <code>@RegisterClassEx(BaseFormPanel, { metadata: { entity: 'MJ_BizApps_Common: People', slot: 'before-fields', sortKey: 100, contributionKey: 'overview' } })</code>.
+                            In left-nav mode, this panel claims the top-priority slot above default fields, rendering as the initial active dashboard tab. Site admins can override via <code>MJ: Form Chrome Rules</code>, but the app provides this out-of-the-box!
+                        </p>
+                    </div>
+                    <button class="btn-action-secondary" onclick="showToast('Architecture verified against MJ Forms Architecture Guide §7c/7d')">
+                        <i class="fa-solid fa-book"></i> View Policy
+                    </button>
+                </div>
+
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Toast Notification Element -->
+    <div class="toast-popup" id="toast-popup">
+        <i class="fa-solid fa-circle-check"></i>
+        <span id="toast-msg">Action Triggered!</span>
+    </div>
+
+    <!-- ── JavaScript State & Rendering Engine ─────────────────────────────── -->
+    <script>
+        let currentEntity = 'person'; // 'person' | 'org'
+        let currentOption = 'A';      // 'A' | 'B' | 'C'
+
+        const THESES = {
+            'A': {
+                tag: 'Option A: Executive Command Hub',
+                desc: '<strong>Editorial Luxury & Direct Action.</strong> Linear + Stripe inspired design. Deep visual hierarchy, instant contact triggers, clean KPI ribbon, interactive spend trajectory, and 1-click deal creation.',
+                hook: 'Best for Sales Leaders & Relationship Managers who want maximum elegance and immediate actionability.'
+            },
+            'B': {
+                tag: 'Option B: Intelligence & Growth Cockpit',
+                desc: '<strong>Predictive Signals & Bento Insights.</strong> High-signal AI radar, health gauges, buying propensity metrics, license utilization progress bars, and proactive Next Best Action cards.',
+                hook: 'Best for Account Executives & Customer Success teams driving upsell, cross-sell, and retention.'
+            },
+            'C': {
+                tag: 'Option C: Financial Velocity & Precision Terminal',
+                desc: '<strong>High-Density Data & Monospace Financials.</strong> Bloomberg-meets-modern-SaaS. Zero wasted pixels, cash-flow waterfalls, AR aging breakdown, commercial terms strip, and inline rapid order express pad.',
+                hook: 'Best for Finance, Operations, and High-Volume B2B commerce teams requiring tight ledger visibility.'
+            }
+        };
+
+        function updateShowcase() {
+            renderThesis();
+            renderHeader();
+            renderOverview();
+        }
+
+        function switchEntity(entity) {
+            currentEntity = entity;
+            document.getElementById('btn-entity-person').classList.toggle('active', entity === 'person');
+            document.getElementById('btn-entity-org').classList.toggle('active', entity === 'org');
+            updateShowcase();
+        }
+
+        function switchOption(opt) {
+            currentOption = opt;
+            document.getElementById('btn-opt-a').classList.toggle('active', opt === 'A');
+            document.getElementById('btn-opt-b').classList.toggle('active', opt === 'B');
+            document.getElementById('btn-opt-c').classList.toggle('active', opt === 'C');
+            updateShowcase();
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const isDark = body.getAttribute('data-theme') === 'dark';
+            const nextTheme = isDark ? 'light' : 'dark';
+            body.setAttribute('data-theme', nextTheme);
+            document.getElementById('theme-icon').className = isDark ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+            document.getElementById('theme-label').innerText = isDark ? 'Dark Mode' : 'Light Mode';
+            showToast(`Switched to ${nextTheme.toUpperCase()} theme`);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast-popup');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.add('visible');
+            setTimeout(() => { toast.classList.remove('visible'); }, 2200);
+        }
+
+        function renderThesis() {
+            const t = THESES[currentOption];
+            document.getElementById('thesis-container').innerHTML = `
+                <div style="display: flex; align-items: center; gap: 12px; flex: 1;">
+                    <span class="thesis-tag">${t.tag}</span>
+                    <span class="thesis-text">${t.desc}</span>
+                </div>
+                <div class="thesis-nav-hook">
+                    <i class="fa-solid fa-bolt"></i> ${t.hook}
+                </div>
+            `;
+        }
+
+        /* ── Headers Generator ──────────────────────────────────────────────── */
+        function renderHeader() {
+            const mount = document.getElementById('header-mount-point');
+
+            if (currentEntity === 'person') {
+                if (currentOption === 'A') {
+                    mount.innerHTML = `
+                        <div class="header-opt-a">
+                            <div class="hero-top-row">
+                                <div class="identity-lockup">
+                                    <div class="avatar-box">
+                                        AN
+                                        <span class="presence-dot" title="Active in Explorer"></span>
+                                    </div>
+                                    <div class="identity-details">
+                                        <h2>
+                                            Amith Nagarajan
+                                            <span class="pill-badge pill-badge--blue"><i class="fa-solid fa-user-shield"></i> People</span>
+                                            <span class="pill-badge pill-badge--green"><i class="fa-solid fa-circle-check"></i> VIP Customer</span>
+                                            <span class="pill-badge pill-badge--purple"><i class="fa-solid fa-crown"></i> Top 1% LTV</span>
+                                        </h2>
+                                        <div class="meta-contact-row">
+                                            <span class="meta-contact-item" onclick="showToast('Copied: amith@demo.com')">
+                                                <i class="fa-solid fa-envelope"></i> amith@demo.com
+                                            </span>
+                                            <span class="meta-contact-item" onclick="showToast('Calling +1 (408) 555-0199...')">
+                                                <i class="fa-solid fa-phone"></i> +1 (408) 555-0199
+                                            </span>
+                                            <span class="meta-contact-item">
+                                                <i class="fa-solid fa-location-dot"></i> San Jose, CA, US (9:14 AM PDT)
+                                            </span>
+                                            <span class="meta-contact-item">
+                                                <i class="fa-solid fa-building"></i> Acme Global Technologies (CEO)
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="action-cluster">
+                                    <button class="btn-action-secondary" onclick="showToast('Opened Quick Touchpoint Logger')">
+                                        <i class="fa-solid fa-pen-to-square"></i> Log Note
+                                    </button>
+                                    <button class="btn-action-primary" onclick="showToast('Opening New Order Modal...')">
+                                        <i class="fa-solid fa-cart-plus"></i> + Create Order
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="kpi-ribbon">
+                                <div class="kpi-chip">
+                                    <span class="kpi-chip-label">Lifetime Value</span>
+                                    <span class="kpi-chip-val">$142,850</span>
+                                    <span class="kpi-chip-sub"><i class="fa-solid fa-arrow-trend-up"></i> +24% YoY</span>
+                                </div>
+                                <div class="kpi-chip">
+                                    <span class="kpi-chip-label">Active Orders</span>
+                                    <span class="kpi-chip-val">3 Orders</span>
+                                    <span class="kpi-chip-sub" style="color: var(--mj-brand-primary);">1 In Fulfillment</span>
+                                </div>
+                                <div class="kpi-chip">
+                                    <span class="kpi-chip-label">Active Subs</span>
+                                    <span class="kpi-chip-val">2 Licenses</span>
+                                    <span class="kpi-chip-sub">Enterprise Plan</span>
+                                </div>
+                                <div class="kpi-chip">
+                                    <span class="kpi-chip-label">Open Balance</span>
+                                    <span class="kpi-chip-val">$0.00</span>
+                                    <span class="kpi-chip-sub">All Paid · Net 30</span>
+                                </div>
+                                <div class="kpi-chip">
+                                    <span class="kpi-chip-label">Customer Since</span>
+                                    <span class="kpi-chip-val">March 2024</span>
+                                    <span class="kpi-chip-sub" style="color: var(--mj-text-muted);">2 yr 5 mo Tenure</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (currentOption === 'B') {
+                    mount.innerHTML = `
+                        <div class="header-opt-b">
+                            <div class="left-identity-col">
+                                <div class="identity-header-line">
+                                    <div class="avatar-orb">AN</div>
+                                    <div class="title-group">
+                                        <h2>Amith Nagarajan <span style="font-size: 13px; font-weight: 500; color: var(--mj-text-muted);">(Chief Executive Officer)</span></h2>
+                                        <p><i class="fa-solid fa-envelope"></i> amith@demo.com &bull; <i class="fa-solid fa-location-dot"></i> San Jose, CA &bull; <i class="fa-solid fa-building"></i> Acme Global Technologies</p>
+                                    </div>
+                                </div>
+                                <div class="insight-stream">
+                                    <span class="insight-pill"><i class="fa-solid fa-bolt"></i> <strong>High Renewal Propensity:</strong> 96% Likelihood</span>
+                                    <span class="insight-pill"><i class="fa-solid fa-sparkles"></i> <strong>Upsell Fit:</strong> AI Copilot Add-on</span>
+                                    <span class="insight-pill"><i class="fa-solid fa-shield-heart"></i> <strong>NPS Promoter:</strong> Score 10/10</span>
+                                </div>
+                            </div>
+                            <div class="right-intelligence-col">
+                                <div class="intel-score-row">
+                                    <span class="intel-score-label">Account Health Score</span>
+                                    <span class="intel-score-badge"><i class="fa-solid fa-heart-pulse"></i> 94 / 100</span>
+                                </div>
+                                <div class="intel-meter-bar">
+                                    <div class="intel-meter-fill"></div>
+                                </div>
+                                <div class="intel-stats-mini">
+                                    <span>LTV: <strong>$142.8k</strong></span>
+                                    <span>ARR: <strong>$38.4k</strong></span>
+                                    <span>Next Renewal: <strong>42 Days</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (currentOption === 'C') {
+                    mount.innerHTML = `
+                        <div class="header-opt-c">
+                            <div class="top-meta-strip">
+                                <div class="compact-id">
+                                    <span class="mono-badge">PER-00892</span>
+                                    <span class="name-line">Amith Nagarajan</span>
+                                    <span class="pill-badge pill-badge--blue">Acme Global Technologies &bull; CEO</span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn-action-primary" style="padding: 5px 12px; font-size: 11.5px;" onclick="showToast('Opening Quick Order...')">+ Order</button>
+                                    <button class="btn-action-secondary" style="padding: 5px 12px; font-size: 11.5px;" onclick="showToast('Exporting Statement...')"><i class="fa-solid fa-file-pdf"></i> Statement</button>
+                                </div>
+                            </div>
+                            <div class="financial-ticker">
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Total Spend</div>
+                                    <div class="ticker-val blue">$142,850.00</div>
+                                </div>
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Open AR</div>
+                                    <div class="ticker-val green">$0.00</div>
+                                </div>
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Active Orders</div>
+                                    <div class="ticker-val">3</div>
+                                </div>
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Active Subs</div>
+                                    <div class="ticker-val">2</div>
+                                </div>
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Terms</div>
+                                    <div class="ticker-val">Net 30 ACH</div>
+                                </div>
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Aging &gt;30d</div>
+                                    <div class="ticker-val green">$0.00</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                // ORGANIZATION HEADERS
+                if (currentOption === 'A') {
+                    mount.innerHTML = `
+                        <div class="header-opt-a">
+                            <div class="hero-top-row">
+                                <div class="identity-lockup">
+                                    <div class="avatar-box org-avatar-box">
+                                        <i class="fa-solid fa-building-flag"></i>
+                                        <span class="presence-dot" title="Verified Enterprise Account"></span>
+                                    </div>
+                                    <div class="identity-details">
+                                        <h2>
+                                            Acme Global Technologies Inc.
+                                            <span class="pill-badge pill-badge--blue"><i class="fa-solid fa-building"></i> Organization</span>
+                                            <span class="pill-badge pill-badge--green"><i class="fa-solid fa-circle-check"></i> Enterprise Tier 1</span>
+                                            <span class="pill-badge pill-badge--amber"><i class="fa-solid fa-star"></i> Strategic Account</span>
+                                        </h2>
+                                        <div class="meta-contact-row">
+                                            <span class="meta-contact-item" onclick="showToast('Opening website...')">
+                                                <i class="fa-solid fa-globe"></i> www.acmeglobal.com
+                                            </span>
+                                            <span class="meta-contact-item">
+                                                <i class="fa-solid fa-map-pin"></i> HQ: San Francisco, CA &bull; 1,250 Employees
+                                            </span>
+                                            <span class="meta-contact-item">
+                                                <i class="fa-solid fa-user-tie"></i> Key Contact: Amith Nagarajan (CEO)
+                                            </span>
+                                            <span class="meta-contact-item">
+                                                <i class="fa-solid fa-user-check"></i> Account Exec: Sarah Jenkins
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="action-cluster">
+                                    <button class="btn-action-secondary" onclick="showToast('Schedule Quarterly Review...')">
+                                        <i class="fa-solid fa-calendar-check"></i> Schedule QBR
+                                    </button>
+                                    <button class="btn-action-primary" onclick="showToast('Opening Enterprise Order...')">
+                                        <i class="fa-solid fa-cart-plus"></i> + New Order
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="kpi-ribbon">
+                                <div class="kpi-chip">
+                                    <span class="kpi-chip-label">Total Spend (LTV)</span>
+                                    <span class="kpi-chip-val">$1,284,500</span>
+                                    <span class="kpi-chip-sub"><i class="fa-solid fa-arrow-trend-up"></i> +38% YoY</span>
+                                </div>
+                                <div class="kpi-chip">
+                                    <span class="kpi-chip-label">Current ARR</span>
+                                    <span class="kpi-chip-val">$380,000</span>
+                                    <span class="kpi-chip-sub" style="color: var(--mj-brand-primary);">4 Master Contracts</span>
+                                </div>
+                                <div class="kpi-chip">
+                                    <span class="kpi-chip-label">Total Seats</span>
+                                    <span class="kpi-chip-val">450 Seats</span>
+                                    <span class="kpi-chip-sub">94% Active Usage</span>
+                                </div>
+                                <div class="kpi-chip">
+                                    <span class="kpi-chip-label">Pending Invoices</span>
+                                    <span class="kpi-chip-val">$18,500</span>
+                                    <span class="kpi-chip-sub" style="color: var(--mj-status-warning);">Due in 18 days</span>
+                                </div>
+                                <div class="kpi-chip">
+                                    <span class="kpi-chip-label">Contract Renewal</span>
+                                    <span class="kpi-chip-val">In 42 Days</span>
+                                    <span class="kpi-chip-sub">Auto-Renew Enabled</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (currentOption === 'B') {
+                    mount.innerHTML = `
+                        <div class="header-opt-b">
+                            <div class="left-identity-col">
+                                <div class="identity-header-line">
+                                    <div class="avatar-orb" style="background: linear-gradient(135deg, #6366f1 0%, #38bdf8 100%);">
+                                        <i class="fa-solid fa-building"></i>
+                                    </div>
+                                    <div class="title-group">
+                                        <h2>Acme Global Technologies Inc. <span style="font-size: 13px; font-weight: 500; color: var(--mj-text-muted);">(Enterprise SaaS &bull; NASDAQ: ACMG)</span></h2>
+                                        <p><i class="fa-solid fa-location-dot"></i> San Francisco, CA &bull; <i class="fa-solid fa-users"></i> 1,250 Staff &bull; <i class="fa-solid fa-user-tie"></i> CEO: Amith Nagarajan</p>
+                                    </div>
+                                </div>
+                                <div class="insight-stream">
+                                    <span class="insight-pill"><i class="fa-solid fa-chart-pie"></i> <strong>Seat Saturation:</strong> 94% utilized (Needs +50 seats)</span>
+                                    <span class="insight-pill"><i class="fa-solid fa-shield-check"></i> <strong>SLA Uptime:</strong> 99.98% Platinum</span>
+                                    <span class="insight-pill"><i class="fa-solid fa-circle-dollar-to-slot"></i> <strong>Expansion Pipeline:</strong> $120,000 Add-on</span>
+                                </div>
+                            </div>
+                            <div class="right-intelligence-col">
+                                <div class="intel-score-row">
+                                    <span class="intel-score-label">Org Relationship Affinity</span>
+                                    <span class="intel-score-badge"><i class="fa-solid fa-heart-pulse"></i> 98 / 100</span>
+                                </div>
+                                <div class="intel-meter-bar">
+                                    <div class="intel-meter-fill" style="width: 98%;"></div>
+                                </div>
+                                <div class="intel-stats-mini">
+                                    <span>Total ARR: <strong>$380k</strong></span>
+                                    <span>Members: <strong>450 Users</strong></span>
+                                    <span>CSAT: <strong>100% Positive</strong></span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (currentOption === 'C') {
+                    mount.innerHTML = `
+                        <div class="header-opt-c">
+                            <div class="top-meta-strip">
+                                <div class="compact-id">
+                                    <span class="mono-badge">ORG-00441</span>
+                                    <span class="name-line">Acme Global Technologies Inc.</span>
+                                    <span class="pill-badge pill-badge--blue">Tier 1 Strategic &bull; San Francisco, CA</span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button class="btn-action-primary" style="padding: 5px 12px; font-size: 11.5px;" onclick="showToast('Creating Organization Order...')">+ Order</button>
+                                    <button class="btn-action-secondary" style="padding: 5px 12px; font-size: 11.5px;" onclick="showToast('Exporting Aging Report...')"><i class="fa-solid fa-file-invoice"></i> Ledger</button>
+                                </div>
+                            </div>
+                            <div class="financial-ticker">
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Total Spend (LTV)</div>
+                                    <div class="ticker-val blue">$1,284,500.00</div>
+                                </div>
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Annual ARR</div>
+                                    <div class="ticker-val green">$380,000.00</div>
+                                </div>
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Open Invoices</div>
+                                    <div class="ticker-val amber">$18,500.00</div>
+                                </div>
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Active Subs</div>
+                                    <div class="ticker-val">4 Contracts</div>
+                                </div>
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">Credit Limit</div>
+                                    <div class="ticker-val">$250,000.00</div>
+                                </div>
+                                <div class="ticker-tile">
+                                    <div class="ticker-label">DSO (Days)</div>
+                                    <div class="ticker-val green">16.4 Days</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        /* ── Overview Panels Generator ───────────────────────────────────────── */
+        function renderOverview() {
+            const mount = document.getElementById('overview-mount-point');
+
+            if (currentOption === 'A') {
+                mount.innerHTML = `
+                    <div class="overview-panel-container">
+                        
+                        <!-- Top Row: Financial Trajectory & Active Entitlements -->
+                        <div class="overview-grid-2col">
+                            
+                            <!-- Spend & Velocity Chart Card -->
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <span class="card-title">
+                                        <i class="fa-solid fa-chart-area"></i> Revenue &amp; Order Trajectory (Last 6 Months)
+                                    </span>
+                                    <span class="card-action-link" onclick="showToast('Opening Analytics View...')">Detailed Breakdown &rarr;</span>
+                                </div>
+                                <div class="chart-container">
+                                    <div class="chart-bar-group">
+                                        <div class="chart-tooltip">$14,200 (March)</div>
+                                        <div class="chart-bar" style="height: 45%;"></div>
+                                        <span class="chart-label">Mar</span>
+                                    </div>
+                                    <div class="chart-bar-group">
+                                        <div class="chart-tooltip">$18,500 (April)</div>
+                                        <div class="chart-bar" style="height: 58%;"></div>
+                                        <span class="chart-label">Apr</span>
+                                    </div>
+                                    <div class="chart-bar-group">
+                                        <div class="chart-tooltip">$22,400 (May)</div>
+                                        <div class="chart-bar" style="height: 70%;"></div>
+                                        <span class="chart-label">May</span>
+                                    </div>
+                                    <div class="chart-bar-group">
+                                        <div class="chart-tooltip">$19,800 (June)</div>
+                                        <div class="chart-bar" style="height: 62%;"></div>
+                                        <span class="chart-label">Jun</span>
+                                    </div>
+                                    <div class="chart-bar-group">
+                                        <div class="chart-tooltip">$28,900 (July)</div>
+                                        <div class="chart-bar" style="height: 85%;"></div>
+                                        <span class="chart-label">Jul</span>
+                                    </div>
+                                    <div class="chart-bar-group">
+                                        <div class="chart-tooltip">$38,050 (August - Peak)</div>
+                                        <div class="chart-bar highlight" style="height: 100%;"></div>
+                                        <span class="chart-label">Aug (Now)</span>
+                                    </div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--mj-text-secondary); border-top: 1px solid var(--mj-border-default); padding-top: 10px;">
+                                    <span>Avg Order Value: <strong>$23,640</strong></span>
+                                    <span>Repeat Order Rate: <strong style="color: var(--mj-status-success);">100%</strong></span>
+                                    <span>Payment Method: <strong>Corporate ACH (Auto-Pay)</strong></span>
+                                </div>
+                            </div>
+
+                            <!-- Active Subscriptions & Licenses Deck -->
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <span class="card-title">
+                                        <i class="fa-solid fa-rotate"></i> Active Subscriptions &amp; Seats
+                                    </span>
+                                    <span class="card-action-link" onclick="showToast('Manage Subscriptions...')">Manage &rarr;</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div class="sub-card-item">
+                                        <div class="sub-info">
+                                            <h4>Enterprise Platform Unlimited</h4>
+                                            <p>Renews Oct 15, 2026 &bull; $28,000/yr</p>
+                                        </div>
+                                        <div class="sub-progress-wrap">
+                                            <div style="display: flex; justify-content: space-between; font-size: 10.5px; color: var(--mj-text-muted);">
+                                                <span>Seats</span>
+                                                <strong style="color: var(--mj-text-primary);">94 / 100</strong>
+                                            </div>
+                                            <div class="sub-progress-bar">
+                                                <div class="sub-progress-fill" style="width: 94%;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="sub-card-item">
+                                        <div class="sub-info">
+                                            <h4>AI Copilot Suite Add-on</h4>
+                                            <p>Renews Oct 15, 2026 &bull; $10,400/yr</p>
+                                        </div>
+                                        <div class="sub-progress-wrap">
+                                            <div style="display: flex; justify-content: space-between; font-size: 10.5px; color: var(--mj-text-muted);">
+                                                <span>Tokens</span>
+                                                <strong style="color: var(--mj-status-success);">Unlimited</strong>
+                                            </div>
+                                            <div class="sub-progress-bar">
+                                                <div class="sub-progress-fill" style="width: 100%; background: var(--mj-status-success);"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="ai-recommendation-box">
+                                    <div class="ai-rec-header">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i> AI Copilot Expansion Signal
+                                    </div>
+                                    <div class="ai-rec-text">
+                                        Seat utilization reached 94%. Recommend offering a 50-seat expansion pack before renewal.
+                                    </div>
+                                    <div class="ai-rec-actions">
+                                        <button class="btn-ai-action" onclick="showToast('Drafting Quote with 50 seats...')">Draft Expansion Quote</button>
+                                        <button class="btn-ai-dismiss" onclick="showToast('Recommendation dismissed')">Dismiss</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Bottom Row: Recent Orders Table & Activity Feed -->
+                        <div class="overview-grid-2col">
+                            
+                            <!-- Recent Orders Table -->
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <span class="card-title">
+                                        <i class="fa-solid fa-receipt"></i> Recent Orders &amp; Invoices
+                                    </span>
+                                    <span class="card-action-link" onclick="showToast('Navigating to full Orders grid...')">View All (4) &rarr;</span>
+                                </div>
+                                <table class="custom-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Order #</th>
+                                            <th>Date</th>
+                                            <th>Items Summary</th>
+                                            <th>Total Amount</th>
+                                            <th>Status</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr onclick="showToast('Opening Order ORD-2026-0891...')">
+                                            <td class="table-order-num">ORD-2026-0891</td>
+                                            <td>Aug 12, 2026</td>
+                                            <td>Enterprise Platform 100-Seat License</td>
+                                            <td class="table-amount">$28,000.00</td>
+                                            <td><span class="pill-badge pill-badge--green"><i class="fa-solid fa-circle-check"></i> Paid</span></td>
+                                            <td><i class="fa-solid fa-arrow-up-right-from-square" style="color: var(--mj-brand-primary);"></i></td>
+                                        </tr>
+                                        <tr onclick="showToast('Opening Order ORD-2026-0744...')">
+                                            <td class="table-order-num">ORD-2026-0744</td>
+                                            <td>Jul 02, 2026</td>
+                                            <td>AI Copilot Add-On (Annual Prepay)</td>
+                                            <td class="table-amount">$10,400.00</td>
+                                            <td><span class="pill-badge pill-badge--green"><i class="fa-solid fa-circle-check"></i> Paid</span></td>
+                                            <td><i class="fa-solid fa-arrow-up-right-from-square" style="color: var(--mj-brand-primary);"></i></td>
+                                        </tr>
+                                        <tr onclick="showToast('Opening Order ORD-2026-0512...')">
+                                            <td class="table-order-num">ORD-2026-0512</td>
+                                            <td>May 18, 2026</td>
+                                            <td>Executive Architecture Consulting Pack</td>
+                                            <td class="table-amount">$18,500.00</td>
+                                            <td><span class="pill-badge pill-badge--green"><i class="fa-solid fa-circle-check"></i> Fulfilled</span></td>
+                                            <td><i class="fa-solid fa-arrow-up-right-from-square" style="color: var(--mj-brand-primary);"></i></td>
+                                        </tr>
+                                        <tr onclick="showToast('Opening Order ORD-2026-0301...')">
+                                            <td class="table-order-num">ORD-2026-0301</td>
+                                            <td>Mar 24, 2026</td>
+                                            <td>Initial Platform Launch Package</td>
+                                            <td class="table-amount">$85,950.00</td>
+                                            <td><span class="pill-badge pill-badge--green"><i class="fa-solid fa-circle-check"></i> Completed</span></td>
+                                            <td><i class="fa-solid fa-arrow-up-right-from-square" style="color: var(--mj-brand-primary);"></i></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Live Activity & Relationship Touchpoints -->
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <span class="card-title">
+                                        <i class="fa-solid fa-bolt-lightning"></i> Recent Touchpoints
+                                    </span>
+                                    <span class="card-action-link" onclick="showToast('Opening Activity Stream...')">Full History &rarr;</span>
+                                </div>
+                                <div class="timeline-feed">
+                                    <div class="timeline-item">
+                                        <div class="timeline-icon"><i class="fa-solid fa-file-invoice"></i></div>
+                                        <div class="timeline-content">
+                                            <h5>Invoice INV-8821 Settled via ACH</h5>
+                                            <p>$28,000.00 reconciled successfully.</p>
+                                            <div class="timeline-time">Yesterday at 4:15 PM &bull; Automated</div>
+                                        </div>
+                                    </div>
+                                    <div class="timeline-item">
+                                        <div class="timeline-icon" style="color: var(--mj-status-success);"><i class="fa-solid fa-circle-check"></i></div>
+                                        <div class="timeline-content">
+                                            <h5>Order ORD-2026-0891 Confirmed</h5>
+                                            <p>100 Enterprise Seats provisioned instantly.</p>
+                                            <div class="timeline-time">Aug 12, 2026 &bull; Sarah Jenkins</div>
+                                        </div>
+                                    </div>
+                                    <div class="timeline-item">
+                                        <div class="timeline-icon" style="color: #818cf8;"><i class="fa-solid fa-comments"></i></div>
+                                        <div class="timeline-content">
+                                            <h5>Quarterly Strategic Check-in</h5>
+                                            <p>Discussed new Tasks &amp; Accounting integration.</p>
+                                            <div class="timeline-time">Aug 08, 2026 &bull; Amith Nagarajan</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                `;
+            } else if (currentOption === 'B') {
+                mount.innerHTML = `
+                    <div class="overview-panel-container">
+                        
+                        <!-- Bento 3-Column Top Grid -->
+                        <div class="overview-grid-3col">
+                            
+                            <!-- Card 1: Product Adoption -->
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <span class="card-title"><i class="fa-solid fa-cubes"></i> Module Adoption</span>
+                                    <span class="pill-badge pill-badge--green">4 Active</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 10px;">
+                                    <div>
+                                        <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                                            <span>Orders &amp; Billing</span>
+                                            <strong>100%</strong>
+                                        </div>
+                                        <div class="sub-progress-bar"><div class="sub-progress-fill" style="width: 100%;"></div></div>
+                                    </div>
+                                    <div>
+                                        <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                                            <span>Tasks &amp; Projects</span>
+                                            <strong>88%</strong>
+                                        </div>
+                                        <div class="sub-progress-bar"><div class="sub-progress-fill" style="width: 88%;"></div></div>
+                                    </div>
+                                    <div>
+                                        <div style="display: flex; justify-content: space-between; font-size: 12px;">
+                                            <span>AI Copilot &amp; Automations</span>
+                                            <strong>75%</strong>
+                                        </div>
+                                        <div class="sub-progress-bar"><div class="sub-progress-fill" style="width: 75%;"></div></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card 2: Health & Risk Radar -->
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <span class="card-title"><i class="fa-solid fa-shield-heart"></i> Relationship Signals</span>
+                                    <span class="pill-badge pill-badge--blue">Promoter</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+                                    <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--mj-border-subtle);">
+                                        <span>Executive Alignment</span>
+                                        <strong style="color: var(--mj-status-success);"><i class="fa-solid fa-check"></i> High (CEO Engaged)</strong>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--mj-border-subtle);">
+                                        <span>Payment Velocity</span>
+                                        <strong style="color: var(--mj-status-success);"><i class="fa-solid fa-bolt"></i> 0 Overdue Days</strong>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; padding: 6px 0;">
+                                        <span>Support Sentiment</span>
+                                        <strong style="color: var(--mj-status-success);">99.2% Positive</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Card 3: AI Growth Engine -->
+                            <div class="dashboard-card" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(56, 189, 248, 0.05) 100%);">
+                                <div class="card-header">
+                                    <span class="card-title"><i class="fa-solid fa-wand-magic-sparkles"></i> AI Next Best Action</span>
+                                </div>
+                                <p style="font-size: 12px; color: var(--mj-text-secondary); line-height: 1.45;">
+                                    Customer has 3 orders in last 90 days. High probability of converting to multi-year prepay with 15% discount.
+                                </p>
+                                <button class="btn-action-primary" style="width: 100%; justify-content: center; margin-top: 6px;" onclick="showToast('Generating 3-Year Enterprise Proposal...')">
+                                    Generate 3-Year Proposal
+                                </button>
+                            </div>
+
+                        </div>
+
+                        <!-- Orders & Licenses Grid -->
+                        <div class="overview-grid-2col">
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <span class="card-title"><i class="fa-solid fa-list-check"></i> Contract &amp; Entitlement Portfolio</span>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                    <div class="sub-card-item">
+                                        <div class="sub-info">
+                                            <h4>Platform Enterprise</h4>
+                                            <p>100 Seats &bull; Active</p>
+                                        </div>
+                                    </div>
+                                    <div class="sub-card-item">
+                                        <div class="sub-info">
+                                            <h4>Copilot AI Engine</h4>
+                                            <p>Enterprise Tier &bull; Active</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <span class="card-title"><i class="fa-solid fa-clock-rotate-left"></i> Transaction Velocity</span>
+                                </div>
+                                <div style="font-size: 12.5px; color: var(--mj-text-secondary);">
+                                    Total 4 orders completed with 100% on-time settlement. Average order processing time: <strong>1.2 minutes</strong>.
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                `;
+            } else if (currentOption === 'C') {
+                mount.innerHTML = `
+                    <div class="overview-panel-container">
+                        
+                        <!-- High Density Financial Waterfall -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <span class="card-title"><i class="fa-solid fa-money-bill-trend-up"></i> Accounts Receivable &amp; Cash Flow Waterfall</span>
+                                <div style="display: flex; gap: 8px;">
+                                    <span class="pill-badge pill-badge--green">0-30d: $0.00</span>
+                                    <span class="pill-badge pill-badge--blue">Current ARR: $380,000</span>
+                                    <span class="pill-badge pill-badge--purple">Credit Limit: $250k</span>
+                                </div>
+                            </div>
+                            <table class="custom-table">
+                                <thead>
+                                    <tr>
+                                        <th>Document Type</th>
+                                        <th>Reference #</th>
+                                        <th>Issue Date</th>
+                                        <th>Due Date</th>
+                                        <th>Amount (USD)</th>
+                                        <th>Payment Term</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr onclick="showToast('Opening Invoice INV-2026-0891...')">
+                                        <td><strong>Invoice</strong></td>
+                                        <td class="table-order-num">INV-2026-0891</td>
+                                        <td>2026-08-12</td>
+                                        <td>2026-09-11</td>
+                                        <td class="table-amount">$28,000.00</td>
+                                        <td>Net 30 ACH</td>
+                                        <td><span class="pill-badge pill-badge--green">Paid</span></td>
+                                    </tr>
+                                    <tr onclick="showToast('Opening Order ORD-2026-0744...')">
+                                        <td><strong>Order Header</strong></td>
+                                        <td class="table-order-num">ORD-2026-0744</td>
+                                        <td>2026-07-02</td>
+                                        <td>2026-08-01</td>
+                                        <td class="table-amount">$10,400.00</td>
+                                        <td>Credit Card</td>
+                                        <td><span class="pill-badge pill-badge--green">Settled</span></td>
+                                    </tr>
+                                    <tr onclick="showToast('Opening Invoice INV-2026-0512...')">
+                                        <td><strong>Invoice</strong></td>
+                                        <td class="table-order-num">INV-2026-0512</td>
+                                        <td>2026-05-18</td>
+                                        <td>2026-06-17</td>
+                                        <td class="table-amount">$18,500.00</td>
+                                        <td>Net 30 Wire</td>
+                                        <td><span class="pill-badge pill-badge--green">Paid</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Quick Order Express Pad -->
+                        <div class="overview-grid-2col">
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <span class="card-title"><i class="fa-solid fa-bolt"></i> Quick Order Express Entry</span>
+                                </div>
+                                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: center;">
+                                    <input type="text" placeholder="Select Product / Subscription Item..." style="background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); padding: 8px 12px; border-radius: 6px; color: var(--mj-text-primary); font-family: inherit; font-size: 12px;" value="Enterprise Seat Expansion (Pack of 10)">
+                                    <input type="number" value="1" style="background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); padding: 8px 12px; border-radius: 6px; color: var(--mj-text-primary); font-family: inherit; font-size: 12px;">
+                                    <span style="font-family: var(--mj-font-mono); font-weight: 700; font-size: 13px; text-align: right;">$2,800.00</span>
+                                    <button class="btn-action-primary" style="padding: 8px 14px; font-size: 12px;" onclick="showToast('Instant Order ORD-2026-0992 Created!')">+ Create</button>
+                                </div>
+                            </div>
+
+                            <div class="dashboard-card">
+                                <div class="card-header">
+                                    <span class="card-title"><i class="fa-solid fa-scale-balanced"></i> Financial Health Ledger</span>
+                                </div>
+                                <div style="font-size: 12px; color: var(--mj-text-secondary); line-height: 1.5;">
+                                    <strong>Tax Status:</strong> W-9 on File (California State Tax 8.25%)<br>
+                                    <strong>Currency:</strong> USD ($) &bull; <strong>DSO:</strong> 16.4 Days (Top Decile)
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize on load
+        updateShowcase();
+    </script>
+</body>
+</html>

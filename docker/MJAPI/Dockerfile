@@ -79,5 +79,16 @@ COPY docker/MJAPI/entrypoint.sh /entrypoint.sh
 # Make the entrypoint script executable
 RUN chmod +x /entrypoint.sh
 
+# MJAPI serves GraphQL + /healthcheck on this port (docker.config.cjs `graphqlPort`,
+# overridable via PORT/GRAPHQL_PORT).
+EXPOSE 4000
+
+# Container-level liveness: MJServer registers an unauthenticated /healthcheck before
+# the auth middleware. curl is removed from this image earlier in the build, so probe
+# with node's global fetch. start-period is generous because the entrypoint runs
+# `mj migrate` + `mj codegen` against the target DB before the API starts listening.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15m --retries=3 \
+  CMD node -e "fetch('http://localhost:'+(process.env.PORT||process.env.GRAPHQL_PORT||4000)+'/healthcheck').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 # Set the entrypoint for the container
 ENTRYPOINT ["/entrypoint.sh"]

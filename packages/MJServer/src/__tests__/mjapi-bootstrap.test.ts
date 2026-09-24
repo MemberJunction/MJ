@@ -15,12 +15,6 @@ vi.mock('@memberjunction/server-bootstrap/mj-class-registrations', () => ({}));
 vi.mock('../generated/class-registrations-manifest.js', () => ({}));
 
 describe('MJAPI', () => {
-  it('should have a valid package structure', () => {
-    // This test validates that the mock setup works correctly,
-    // confirming that the imports in index.ts reference real modules
-    expect(true).toBe(true);
-  });
-
   it('should use createMJServer for bootstrapping', async () => {
     const { createMJServer } = await import('@memberjunction/server-bootstrap');
     expect(createMJServer).toBeDefined();

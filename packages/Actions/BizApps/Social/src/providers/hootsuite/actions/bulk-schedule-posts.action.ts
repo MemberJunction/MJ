@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { HootSuiteBaseAction, HootSuitePost } from '../hootsuite-base.action';
+import { HootSuiteBaseAction, HootSuitePost, HootSuiteResponse } from '../hootsuite-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { MediaFile } from '../../../base/base-social.action';
@@ -128,8 +128,8 @@ export class HootSuiteBulkSchedulePostsAction extends HootSuiteBaseAction {
                         location: post.location
                     };
 
-                    const response = await this.axiosInstance.post('/messages', postData);
-                    const createdPost = response.data;
+                    const response = await this.httpClient.Post<HootSuitePost>('/messages', postData);
+                    const createdPost = response.Data;
 
                     results.push({
                         index: postIndex,

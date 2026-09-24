@@ -2,7 +2,7 @@ import { RecommendationProviderBase, RecommendationRequest, RecommendationResult
 import { EntityInfo, LogError, LogStatus, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { MJEntityRecordDocumentEntityType, MJListDetailEntity, MJListEntity, MJRecommendationEntity, MJRecommendationItemEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
-import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, isAxiosError } from "axios";
+import { HttpPost, HttpRequestConfig, HttpResponse, IsHttpError } from "@memberjunction/network-utils";
 import { GetRecommendationParams, RasaResponse, RasaTokenResponse, RecommendationResponse, RecommendContextData } from "./generic/models";
 import * as Config from "./config";
 
@@ -51,7 +51,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             const batch = recommendationList.slice(i, i + Config.REX_BATCH_SIZE);
             LogStatus(`Processing batch ${batchCount + 1} of ${Math.ceil(recommendationList.length / Config.REX_BATCH_SIZE)}`);
 
-            const recordDocuments: MJEntityRecordDocumentEntityType[] | null = await this.GetEntityRecordDocuments(batch, entityDocumentID, request.CurrentUser);
+            const recordDocuments: MJEntityRecordDocumentEntityType[] | null = await this.getEntityRecordDocuments(batch, entityDocumentID, request.CurrentUser);
             if(!recordDocuments){
                 LogError(`Error getting entity record documents for batch ${batchCount + 1}`);
                 result.AppendError(`Error getting entity record documents for batch ${batchCount + 1}`);
@@ -106,7 +106,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return result;
     }
 
-    private async GetEntityRecordDocuments(recommendations: MJRecommendationEntity[], entityDocumentID: string, currentUser?: UserInfo): Promise<MJEntityRecordDocumentEntityType[] | null> {
+    private async getEntityRecordDocuments(recommendations: MJRecommendationEntity[], entityDocumentID: string, currentUser?: UserInfo): Promise<MJEntityRecordDocumentEntityType[] | null> {
         const rv: RunView = new RunView();
 
         //assuming all recommendations have the same source entity ID
@@ -129,16 +129,16 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return rvVectorResult.Results;
     }
 
-    private async GetAccessToken(): Promise<string | null> {
+    private async GetAccessToken(): Promise<string | null> {  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
         try{
             LogStatus("Getting Rex access token");
 
-            const config: AxiosRequestConfig = {
-                auth: {
-                    username: Config.REX_USERNAME,
-                    password: Config.REX_PASSWORD
+            const config: Omit<HttpRequestConfig, 'Url' | 'Method' | 'Body'> = {
+                BasicAuth: {
+                    Username: Config.REX_USERNAME,
+                    Password: Config.REX_PASSWORD
                 },
-                headers: {
+                Headers: {
                     'Cache-Control': 'no-cache',
                     'Content-Type': 'application/json'
                 }
@@ -148,8 +148,8 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 key: Config.REX_API_KEY
             }
     
-            const response: AxiosResponse<RasaResponse<RasaTokenResponse>> = await axios.post<RasaResponse<RasaTokenResponse>>(`${Config.REX_API_HOST}/tokens`, body, config);
-            let data: RasaResponse<RasaTokenResponse> = response.data;
+            const response: HttpResponse<RasaResponse<RasaTokenResponse>> = await HttpPost<RasaResponse<RasaTokenResponse>>(`${Config.REX_API_HOST}/tokens`, body, config);
+            const data: RasaResponse<RasaTokenResponse> = response.Data;
             if(!response || data.results.length == 0){
                 LogError("No token returned from Rex API");
                 return null;
@@ -158,9 +158,8 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             return data.results[0]["rasa-token"];
         }
         catch(ex){
-            if(isAxiosError(ex)){
-                const axiosError: AxiosError = ex;
-                LogError("Error getting Rex access token:", undefined, axiosError);
+            if(IsHttpError(ex)){
+                LogError("Error getting Rex access token:", undefined, ex);
                 return null;
             }
             else{
@@ -172,8 +171,8 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
     protected async GetRecommendations(params: GetRecommendationParams): Promise<RecommendationResponse[] | null> {
         try{
-            const config: AxiosRequestConfig = {
-                headers: {
+            const config: Omit<HttpRequestConfig, 'Url' | 'Method' | 'Body'> = {
+                Headers: {
                     'Cache-Control': 'no-cache',
                     'Content-Type': 'application/json',
                     'rasa-token': params.AccessToken
@@ -187,22 +186,21 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 filters: params.Options.filters
             };
     
-            const response: AxiosResponse<RasaResponse<RecommendationResponse>> = await axios.post<RasaResponse<RecommendationResponse>>(`${Config.REX_RECOMMEND_HOST}/suggest?entity=0&id_response=0`, body, config);
+            const response: HttpResponse<RasaResponse<RecommendationResponse>> = await HttpPost<RasaResponse<RecommendationResponse>>(`${Config.REX_RECOMMEND_HOST}/suggest?entity=0&id_response=0`, body, config);
             if(!response){
                 return null;
             }
 
-            const data: RasaResponse<RecommendationResponse> = response.data;
+            const data: RasaResponse<RecommendationResponse> = response.Data;
             return data.results;
         }
         catch(ex){
-            if(isAxiosError(ex)){
-                const axiosError: AxiosError<RasaResponse> = ex;
-                const rasaError = axiosError.response.data;
+            if(IsHttpError(ex)){
+                const rasaError = ex.Data as RasaResponse | undefined;
                 LogError("Error getting Rex recommendation, rasaError:", undefined, rasaError);
                 if(params.ErrorListID){
                     const errorMessage: string = JSON.stringify(rasaError);
-                    await this.AddRecordToErrorsList(params.ErrorListID, params.VectorID, errorMessage, params.CurrentUser);
+                    await this.addRecordToErrorsList(params.ErrorListID, params.VectorID, errorMessage, params.CurrentUser);
                 }
             }
             else{
@@ -216,7 +214,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
         const entities: MJRecommendationItemEntity[] =  await Promise.all(recommendations.map(async (recommendation: RecommendationResponse) => {
             const entity: MJRecommendationItemEntity = await md.GetEntityObject<MJRecommendationItemEntity>("MJ: Recommendation Items", currentUser);
-            let data: Record<'entityID' | 'recordID', string> = this.GetEntityIDAndRecordID(recommendation, typeMap);
+            let data: Record<'entityID' | 'recordID', string> = this.getEntityIDAndRecordID(recommendation, typeMap);
 
             entity.NewRecord();
             entity.RecommendationID = recommendationEntity.ID;
@@ -230,7 +228,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return entities;
     }
 
-    private GetEntityIDAndRecordID(data: RecommendationResponse, typeMap: Record<string, string>): Record<'entityID' | 'recordID', string> {
+    private getEntityIDAndRecordID(data: RecommendationResponse, typeMap: Record<string, string>): Record<'entityID' | 'recordID', string> {
         let entityName: string = "";
         let entityID: string = "";
         let recordID: string = "";
@@ -301,7 +299,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         return probability;
     }
 
-    private async AddRecordToErrorsList(listID: string, recordID: string, errorMessage: string, currentUser?: UserInfo): Promise<void> {
+    private async addRecordToErrorsList(listID: string, recordID: string, errorMessage: string, currentUser?: UserInfo): Promise<void> {
         const md = this.Provider;
         const listDetail: MJListDetailEntity = await md.GetEntityObject<MJListDetailEntity>("MJ: List Details", currentUser);
         

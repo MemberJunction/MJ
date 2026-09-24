@@ -1,8 +1,19 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import axios from "axios";
+import { HttpPost, IsHttpError } from "@memberjunction/network-utils";
 import * as crypto from "crypto";
+
+/** Standard OAuth 2.0 token endpoint response (RFC 6749 §5.1) plus the common error fields. */
+interface OAuthTokenResponse {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    token_type?: string;
+    scope?: string;
+    error?: string;
+    error_description?: string;
+}
 
 /**
  * Action that handles OAuth 2.0 authentication flows
@@ -297,19 +308,18 @@ export class OAuthFlowAction extends BaseAction {
 
         // Make token request
         try {
-            const response = await axios.post(providerConfig.tokenEndpoint, tokenData, {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Accept': 'application/json'
-                },
-                transformRequest: [(data) => {
-                    return Object.entries(data)
-                        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value as string)}`)
-                        .join('&');
-                }]
-            });
+            const response = await HttpPost<OAuthTokenResponse>(
+                providerConfig.tokenEndpoint,
+                new URLSearchParams(tokenData),
+                {
+                    Headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    }
+                }
+            );
 
-            const tokens = response.data;
+            const tokens = response.Data;
 
             // Add output parameters
             params.Params.push({
@@ -362,10 +372,11 @@ export class OAuthFlowAction extends BaseAction {
                 }, null, 2)
             };
 
-        } catch (error: any) {
-            const errorMessage = error.response?.data?.error_description || 
-                               error.response?.data?.error || 
-                               error.message;
+        } catch (error: unknown) {
+            const errorBody = IsHttpError(error) ? (error.Data as OAuthTokenResponse | undefined) : undefined;
+            const errorMessage = errorBody?.error_description ||
+                               errorBody?.error ||
+                               (error instanceof Error ? error.message : String(error));
             return {
                 Success: false,
                 Message: `Token exchange failed: ${errorMessage}`,
@@ -412,19 +423,18 @@ export class OAuthFlowAction extends BaseAction {
 
         // Make refresh request
         try {
-            const response = await axios.post(providerConfig.tokenEndpoint, tokenData, {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Accept': 'application/json'
-                },
-                transformRequest: [(data) => {
-                    return Object.entries(data)
-                        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value as string)}`)
-                        .join('&');
-                }]
-            });
+            const response = await HttpPost<OAuthTokenResponse>(
+                providerConfig.tokenEndpoint,
+                new URLSearchParams(tokenData),
+                {
+                    Headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    }
+                }
+            );
 
-            const tokens = response.data;
+            const tokens = response.Data;
 
             // Add output parameters
             params.Params.push({
@@ -459,10 +469,11 @@ export class OAuthFlowAction extends BaseAction {
                 }, null, 2)
             };
 
-        } catch (error: any) {
-            const errorMessage = error.response?.data?.error_description || 
-                               error.response?.data?.error || 
-                               error.message;
+        } catch (error: unknown) {
+            const errorBody = IsHttpError(error) ? (error.Data as OAuthTokenResponse | undefined) : undefined;
+            const errorMessage = errorBody?.error_description ||
+                               errorBody?.error ||
+                               (error instanceof Error ? error.message : String(error));
             return {
                 Success: false,
                 Message: `Token refresh failed: ${errorMessage}`,
@@ -515,19 +526,18 @@ export class OAuthFlowAction extends BaseAction {
 
         // Make token request
         try {
-            const response = await axios.post(providerConfig.tokenEndpoint, tokenData, {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Accept': 'application/json'
-                },
-                transformRequest: [(data) => {
-                    return Object.entries(data)
-                        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value as string)}`)
-                        .join('&');
-                }]
-            });
+            const response = await HttpPost<OAuthTokenResponse>(
+                providerConfig.tokenEndpoint,
+                new URLSearchParams(tokenData),
+                {
+                    Headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Accept': 'application/json'
+                    }
+                }
+            );
 
-            const tokens = response.data;
+            const tokens = response.Data;
 
             // Add output parameters
             params.Params.push({
@@ -563,10 +573,11 @@ export class OAuthFlowAction extends BaseAction {
                 }, null, 2)
             };
 
-        } catch (error: any) {
-            const errorMessage = error.response?.data?.error_description || 
-                               error.response?.data?.error || 
-                               error.message;
+        } catch (error: unknown) {
+            const errorBody = IsHttpError(error) ? (error.Data as OAuthTokenResponse | undefined) : undefined;
+            const errorMessage = errorBody?.error_description ||
+                               errorBody?.error ||
+                               (error instanceof Error ? error.message : String(error));
             return {
                 Success: false,
                 Message: `Client credentials flow failed: ${errorMessage}`,

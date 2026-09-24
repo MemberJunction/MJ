@@ -21,6 +21,9 @@ import fs from 'fs';
 import path from 'path';
 import { writeFileSync } from 'fs';
 
+// PushAbortedError lives in a dependency-free module, so importing it does not load the engine.
+import { PushAbortedError } from '../lib/push-outcome';
+
 // Type-only imports are erased at runtime — they never load the engine.
 import type { PushResult } from '../services/PushService';
 import type { PullOptions } from '../services/PullService';
@@ -49,6 +52,30 @@ function flushAndExit(code: number): void {
   process.stdout.write('', () => process.exit(code));
 }
 
+/**
+ * The `data` block for a failed push. `PushAbortedError` carries the counts the push reached and
+ * the SQL log path; anything else failed before the push started and has nothing to report.
+ */
+function failureData(error: unknown, dryRun: boolean): Record<string, unknown> | undefined {
+  if (!(error instanceof PushAbortedError)) {
+    return undefined;
+  }
+  const { totals } = error;
+  return {
+    created: totals.created,
+    updated: totals.updated,
+    unchanged: totals.unchanged,
+    deleted: totals.deleted,
+    skipped: totals.skipped,
+    deferred: totals.deferred,
+    errorCount: totals.errors,
+    dryRun,
+    sqlLogPath: error.sqlLogPath,
+    rolledBack: error.rolledBack,
+    committedOutsideTransaction: error.committedWrites.length,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // mj sync push
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,12 +84,21 @@ function flushAndExit(code: number): void {
 export class SyncPushPlugin extends BaseCLIPlugin {
   static description = 'Push local file changes to the database';
 
-  static examples = [
+  static Examples = [
     `<%= config.bin %> <%= command.id %>`,
     `<%= config.bin %> <%= command.id %> --dry-run`,
     `<%= config.bin %> <%= command.id %> --dir="ai-prompts"`,
     `<%= config.bin %> <%= command.id %> --ci --format=json`,
   ];
+
+  /** @deprecated Use {@link Examples}. */
+  static get examples() {
+    return this.Examples;
+  }
+  /** @deprecated Use {@link Examples}. */
+  static set examples(value) {
+    this.Examples = value;
+  }
 
   static flags = {
     dir: Flags.string({ description: 'Specific entity directory to push' }),
@@ -73,9 +109,16 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       description: 'Delete database-only records that reference records being deleted (prevents FK errors)',
       default: false,
     }),
+    'isolated-transactions': Flags.boolean({
+      description:
+        'Give every JSON-root graph its own connection and transaction, so siblings are written in parallel and each ' +
+        'create/update commits as it is saved (a failure does not roll those back). Off by default: the whole push runs ' +
+        'in one transaction, one graph at a time. Overrides push.isolatedTransactions in every .mj-sync.json, in both ' +
+        'directions — use --no-isolated-transactions to force one run back to a single transaction',
+      allowNo: true,
+    }),
     'parallel-batch-size': Flags.integer({
-      description: 'Number of records to process in parallel (default: 10)',
-      default: 10,
+      description: 'JSON-root graphs to process in parallel in a directory using isolated transactions (default: 10)',
       min: 1,
       max: 50,
     }),
@@ -103,6 +146,8 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       { name: '--ci', type: 'boolean', description: 'No prompts; non-zero exit on error' },
       { name: '--no-validate', type: 'boolean', description: 'Skip pre-push validation' },
       { name: '--incremental', type: 'boolean', description: 'Skip unchanged files using stored checksums' },
+      { name: '--isolated-transactions', type: 'boolean', description: 'Per-graph connections; creates/updates commit as they go and are not rolled back' },
+      { name: '--parallel-batch-size', type: 'number', description: 'Graphs at once in an isolated directory (default 10)' },
       { name: '--format', type: 'text|json|md', description: 'Output format (json for machine-readable result)' },
     ],
     examples: ['mj sync push --dir=ai-agents', 'mj sync push --ci --format=json'],
@@ -158,7 +203,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
 
         if (!validationResult.isValid) {
           if (nonInteractive) {
-            return this.fail(startTime, [{ context: 'validation', message: 'Validation failed. Cannot proceed with push.' }]);
+            return this.fail(startTime, formatter.formatValidationResultAsCLIErrors(validationResult, 'push'));
           }
           const shouldContinue = await confirm({
             message: 'Validation failed with errors. Do you want to continue anyway?',
@@ -191,6 +236,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
         noValidate: flags['no-validate'],
         deleteDbOnly: flags['delete-db-only'],
         parallelBatchSize: flags['parallel-batch-size'],
+        isolatedTransactions: flags['isolated-transactions'],
         include: includeFilter,
         exclude: excludeFilter,
         incremental: flags.incremental,
@@ -226,18 +272,9 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     const endTime = Date.now();
     for (const w of result.warnings) if (!warnings.includes(w)) warnings.push(w);
 
-    // Recovery decision: with non-fatal errors, the original CLI asked whether to
-    // keep the successfully-committed changes. Preserve that for interactive text
-    // mode. CI / non-interactive keeps the failure (no prompt possible).
-    let success = result.errors === 0 && errors.length === 0;
-    if (!success && result.errors > 0 && !flags.ci && isText) {
-      const commit = await confirm({
-        message: 'Push completed with errors. Do you want to commit the successful changes?',
-        default: false,
-      });
-      if (commit) success = true;
-      else warnings.push('Push cancelled due to errors.');
-    }
+    // A push that fails rolls back and throws (see the catch below), so a result with
+    // errors only comes from a dry run. There is nothing to commit, so no prompt.
+    const success = result.errors === 0 && errors.length === 0;
 
     if (isText) {
       this.renderPushTextSummary(formatter, result, flags['change-detail'], startTime, endTime);
@@ -272,7 +309,10 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       const message = error instanceof Error ? error.message : String(error);
       this.Host.FailStep('Push failed', message);
       if (errors.length === 0) errors.push({ message });
-      return { success: false, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, errors, warnings };
+      // A failed push still reports what it did. Without this the JSON consumer loses the counts
+      // and the SQL log path on exactly the runs that need them.
+      const data = failureData(error, flags['dry-run'] === true);
+      return { success: false, command: 'sync:push', durationSeconds: (Date.now() - startTime) / 1000, data, errors, warnings };
     }
   }
 
@@ -364,11 +404,20 @@ export class SyncPushPlugin extends BaseCLIPlugin {
 export class SyncPullPlugin extends BaseCLIPlugin {
   static description = 'Pull metadata from database to local files';
 
-  static examples = [
+  static Examples = [
     `<%= config.bin %> <%= command.id %> --entity="MJ: AI Prompts"`,
     `<%= config.bin %> <%= command.id %> --entity="MJ: AI Agents" --merge-strategy=overwrite`,
     `<%= config.bin %> <%= command.id %> --entity="Templates" --dry-run --verbose`,
   ];
+
+  /** @deprecated Use {@link Examples}. */
+  static get examples() {
+    return this.Examples;
+  }
+  /** @deprecated Use {@link Examples}. */
+  static set examples(value) {
+    this.Examples = value;
+  }
 
   static flags = {
     entity: Flags.string({ description: 'Entity name to pull', required: true }),
@@ -463,7 +512,7 @@ export class SyncPullPlugin extends BaseCLIPlugin {
           if (isText) this.Host.Log('\n' + formatter.formatValidationResult(validationResult, this.Host.Verbose));
           if (!validationResult.isValid) {
             if (nonInteractive) {
-              return { success: false, command: 'sync:pull', durationSeconds: (Date.now() - startTime) / 1000, errors: [{ context: 'validation', message: 'Validation failed. Cannot proceed with pull.' }] };
+              return { success: false, command: 'sync:pull', durationSeconds: (Date.now() - startTime) / 1000, errors: formatter.formatValidationResultAsCLIErrors(validationResult, 'pull') };
             }
             const shouldContinue = await confirm({ message: 'Validation failed with errors. Continue anyway?', default: false });
             if (!shouldContinue) {
