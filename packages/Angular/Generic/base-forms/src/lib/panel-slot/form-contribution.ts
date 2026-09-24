@@ -108,7 +108,8 @@ export function RelatedEntitySectionKey(
 ): string {
     // Normalize the target once and stop at the second match. UUIDsEqual's `===` fast path
     // misses on every peer that points elsewhere, so a filter over UUIDsEqual lowercases both
-    // sides of every comparison. To key a whole peer set, use RelatedEntitySectionKeyer instead.
+    // sides of every comparison. To key many relationships against the same peers, use
+    // CreateRelatedEntitySectionKeyResolver instead.
     const target = NormalizeUUID(relationship.RelatedEntityID);
     let sameEntityCount = 0;
     for (const peer of displayInFormPeers) {
@@ -127,13 +128,17 @@ function relatedSectionKey(relationship: FormContributionRelationship, sharesRel
 }
 
 /**
- * {@link RelatedEntitySectionKey} for any relationship against one fixed peer set. Counting
- * each related entity once up front keeps a whole-set pass O(n); calling
+ * Builds a function that returns {@link RelatedEntitySectionKey}`(relationship, displayInFormPeers)`
+ * for any relationship, against the ONE peer set passed here. Build it once per peer set, then
+ * call it once per relationship. The relationship does not have to be in the peer set (the chrome
+ * resolver keys DisplayInForm=false rows against the full list).
+ *
+ * Building counts each related entity once, so keying all n peers is O(n). Calling
  * RelatedEntitySectionKey per peer is O(n²), which on an entity with ~150 DisplayInForm
  * relationships (MJ: Users), resolved on every change-detection pass, pegged a CPU core.
- * Use this whenever you key more than one relationship against the same peers.
+ * The returned function reflects the peers as they were when it was built.
  */
-export function RelatedEntitySectionKeyer(
+export function CreateRelatedEntitySectionKeyResolver(
     displayInFormPeers: readonly FormContributionRelationship[],
 ): (relationship: FormContributionRelationship) => string {
     const countByEntityID = new Map<string, number>();
@@ -272,7 +277,7 @@ export function ResolveFormContributions(input: ResolveFormContributionsInput): 
     const peers = visibleRelationships(input.RelatedEntities, input.IsaChildEntityIDs);
     const collapsed = collapseRegistrations(applicableRegistrations(input.EntityName, input.Registrations));
     const baked = new Set(input.BakedSectionKeys);
-    const sectionKeyOf = RelatedEntitySectionKeyer(peers);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(peers);
 
     const claimedKeys = new Set<string>();
     const registered: FormContributionWinner[] = [];
@@ -345,7 +350,7 @@ export function ContributionHiddenSectionKeys(
         ShowRelatedEntities: true,
     });
     const peers = visibleRelationships(relatedEntities, isaChildEntityIDs);
-    const sectionKeyOf = RelatedEntitySectionKeyer(peers);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(peers);
     const keys: string[] = [];
     for (const winner of resolved.Winners) {
         if (winner.Kind !== 'registered') continue;

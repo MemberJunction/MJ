@@ -15,7 +15,7 @@ import {
     type RelatedFormRoleResolution,
 } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { RelatedEntitySectionKeyer } from '../panel-slot/form-contribution';
+import { CreateRelatedEntitySectionKeyResolver } from '../panel-slot/form-contribution';
 import { BaseFormPolicy, type FormChromeContext } from './base-form-policy';
 import {
     DETAILS_SECTION_KEY,
@@ -214,7 +214,7 @@ export function ApplyFormChromeRuleTitles(
 
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
     const keysByRelatedId = new Map<string, string[]>();
-    const sectionKeyOf = RelatedEntitySectionKeyer(displayInForm);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const id = (rel.RelatedEntityID ?? '').trim().toLowerCase();
         if (!id) continue;
@@ -640,7 +640,7 @@ export function RebuildChromeSpecMembership(
 /** Prefer EntityRelationship.DisplayName on single-key related groups. */
 function applyRelatedDisplayNames(spec: FormChromeSpec, entity: EntityInfo): void {
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
-    const sectionKeyOf = RelatedEntitySectionKeyer(displayInForm);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const name = rel.DisplayName?.trim();
         if (!name) continue;
@@ -673,7 +673,7 @@ function mapRelatedRoles(
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
     const byId = new Map(assignments.map((a) => [a.RelationshipID.toLowerCase(), a]));
     const roles = new Map<string, FormRole>();
-    const sectionKeyOf = RelatedEntitySectionKeyer(displayInForm);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const assignment = byId.get((rel.ID ?? '').toLowerCase());
         if (!assignment) continue;
@@ -727,7 +727,7 @@ function sortFirstClassRelatedGroups(
     const explicitPrimary = new Set<string>();
     const contrib = new Set(contributionSectionKeys);
     const leadSet = new Set(leadKeys);
-    const sectionKeyOf = RelatedEntitySectionKeyer(displayInForm);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const assignment = byId.get((rel.ID ?? '').toLowerCase());
         if (!assignment) continue;
@@ -773,7 +773,7 @@ function mergeRelatedSortKeys(
     contributionSortKeyByKey: ReadonlyMap<string, number>,
 ): Map<string, number> {
     const merged = new Map(contributionSortKeyByKey);
-    const sectionKeyOf = RelatedEntitySectionKeyer(displayInForm);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const sort = ReadRelationshipSortKey(rel.Configuration);
         if (sort == null) continue;
@@ -801,7 +801,7 @@ function noneInclusionSectionKeys(
     const noneIds = new Set(
         assignments.filter((a) => a.Inclusion === 'None').map((a) => a.RelationshipID.toLowerCase()),
     );
-    const sectionKeyOf = RelatedEntitySectionKeyer(displayInForm);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     return displayInForm
         .filter((rel) => noneIds.has((rel.ID ?? '').toLowerCase()))
         .map((rel) => sectionKeyOf(rel));
@@ -809,7 +809,7 @@ function noneInclusionSectionKeys(
 
 function displayInFormFalseSectionKeys(entity: EntityInfo): string[] {
     const all = entity.RelatedEntities ?? [];
-    const sectionKeyOf = RelatedEntitySectionKeyer(all);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(all);
     return all
         .filter((rel) => !rel.DisplayInForm)
         .map((rel) => sectionKeyOf(rel));
@@ -823,7 +823,7 @@ function mergeRelatedGroupsByEntity(spec: FormChromeSpec, entity: EntityInfo): v
     const displayInForm = entity.RelatedEntities.filter((rel) => rel.DisplayInForm);
     const entityIdByKey = new Map<string, string>();
     const titleByEntityId = new Map<string, string>();
-    const sectionKeyOf = RelatedEntitySectionKeyer(displayInForm);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const key = sectionKeyOf(rel);
         const id = (rel.RelatedEntityID ?? '').toLowerCase();
@@ -893,7 +893,7 @@ function addMissingRelatedGroups(
         ...hiddenSectionKeys,
     ]);
 
-    const sectionKeyOf = RelatedEntitySectionKeyer(displayInForm);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(displayInForm);
     for (const rel of displayInForm) {
         const sectionKey = sectionKeyOf(rel);
         if (known.has(sectionKey) || hiddenSectionKeys.has(sectionKey)) continue;
