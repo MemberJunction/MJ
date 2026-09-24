@@ -154,6 +154,8 @@ export class FakeTransportDriver implements ITransportDriver {
     public readonly OpenedBindings: SubscriptionBinding[] = [];
     public readonly OpenedConsumers: InertConsumer[] = [];
     public OpenError: Error | null = null;
+    /** When set, OpenConsumer returns this instead of an InertConsumer (used by the RunOnce tests). */
+    public NextConsumer: ITransportConsumer | null = null;
 
     constructor(public readonly Name: string, public readonly Capabilities: TransportCapabilities) {}
 
@@ -166,6 +168,9 @@ export class FakeTransportDriver implements ITransportDriver {
             throw this.OpenError;
         }
         this.OpenedBindings.push(subscription);
+        if (this.NextConsumer) {
+            return this.NextConsumer as ITransportConsumer<TPayload>;
+        }
         const consumer = new InertConsumer<TPayload>();
         this.OpenedConsumers.push(consumer as unknown as InertConsumer);
         return consumer;
@@ -342,4 +347,69 @@ export class FakeRuntime implements HostRuntime {
     public get SubscriptionName(): string {
         return this.Args.Policy.SubscriptionName;
     }
+}
+
+/** A consumer the test drives: each Receive hands back the next queued batch, optionally after a delay. */
+export class ScriptedConsumer implements ITransportConsumer {
+    public readonly Batches: ReceivedDelivery[][] = [];
+    public readonly OfferedMax: number[] = [];
+    public readonly Completed: string[] = [];
+    public readonly Released: string[] = [];
+    /** Simulates transport latency: Receive resolves after this many ms (real async I/O, not a microtask). */
+    public ReceiveDelayMs = 0;
+    public Settled = 0;
+    public Closed = 0;
+
+    public async Receive(max: number): Promise<ReceivedDelivery[]> {
+        this.OfferedMax.push(max);
+        if (this.ReceiveDelayMs > 0) {
+            await new Promise(resolve => setTimeout(resolve, this.ReceiveDelayMs));
+        }
+        return this.Batches.shift() ?? [];
+    }
+
+    public async ExtendLease(): Promise<LeaseExtension> {
+        return 'Held';
+    }
+
+    public async Complete(delivery: ReceivedDelivery): Promise<SettleResult> {
+        this.Settled++;
+        this.Completed.push(delivery.DeliveryID);
+        return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Completed' };
+    }
+
+    public async Retry(delivery: ReceivedDelivery): Promise<SettleResult> {
+        this.Settled++;
+        return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Pending' };
+    }
+
+    public async DeadLetter(delivery: ReceivedDelivery): Promise<SettleResult> {
+        this.Settled++;
+        return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'DeadLettered' };
+    }
+
+    public async Release(delivery: ReceivedDelivery): Promise<SettleResult> {
+        this.Settled++;
+        this.Released.push(delivery.DeliveryID);
+        return { Kind: 'Settled', DeliveryID: delivery.DeliveryID, Status: 'Pending' };
+    }
+
+    public async AcknowledgeCancel(delivery: ReceivedDelivery): Promise<SettleResult> {
+        return { Kind: 'LeaseLost', DeliveryID: delivery.DeliveryID };
+    }
+
+    public async Close(): Promise<void> {
+        this.Closed++;
+    }
+}
+
+export function MakeReceivedDelivery(id: string): ReceivedDelivery {
+    return {
+        Message: MakeMessage({ MessageID: id }),
+        DeliveryID: id,
+        LeaseToken: `token-${id}`,
+        Attempt: 1,
+        IsReplay: false,
+        LeaseExpiresAt: new Date(Date.now() + 60000),
+    };
 }

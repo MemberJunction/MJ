@@ -1,8 +1,11 @@
 import type { UserInfo } from '@memberjunction/core';
 import { ShutdownRegistry } from '@memberjunction/global';
 import type { IShutdownable } from '@memberjunction/global';
-import { ConsumerRuntime } from '@memberjunction/work-queue-core';
-import type { ConsumerRuntimeOptions, ITransportConsumer, SubscriptionPolicy, WorkHandler, WorkLogger } from '@memberjunction/work-queue-core';
+import { ConsumerRuntime, WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
+import type {
+    ConsumerRuntimeOptions, ITransportConsumer, LeaseExtension, ReceivedDelivery, SettleResult, SubscriptionPolicy, WorkHandler,
+    WorkJson, WorkLogger, WorkProgress,
+} from '@memberjunction/work-queue-core';
 import { BoundWorkHandler } from '../handlers/BoundWorkHandler';
 import type { WorkHandlerResolver, WorkQueueProviderSource } from '../handlers/BoundWorkHandler';
 import { IsWorkHandlerRegistered, ResolveWorkHandler } from '../handlers/ResolveWorkHandler';
@@ -49,11 +52,145 @@ export interface WorkQueueHostDependencies {
     CreateRuntime?: (args: HostRuntimeArgs) => HostRuntime;
     CreateSweeper?: () => HostSweeper;
     ResolveHandler?: WorkHandlerResolver;
+    /** Poll interval of the RunOnce exit loop. Default 50 ms. */
+    RunOnceTickMs?: number;
 }
 
 export interface WorkQueueHostHealth {
     InstanceID: string;
     Subscriptions: { Name: string; State: HostedSubscriptionState; Reason: string | null; InFlight: number }[];
+}
+
+export interface RunOnceOptions {
+    /** Stop claiming once this many deliveries have been received. Default: unbounded. */
+    MaxDeliveries?: number;
+    /** Resolve when nothing is in flight, the transport has answered "empty" and nothing happened for this long. Default 5000. */
+    IdleExitMs?: number;
+    /** Wall-clock cap; in-flight work is still drained. Default: unbounded. */
+    MaxDurationMs?: number;
+}
+
+export type RunOnceReason = 'MaxDeliveries' | 'Idle' | 'MaxDuration' | 'Shutdown';
+
+export interface RunOnceResult {
+    Processed: number;
+    Reason: RunOnceReason;
+}
+
+const DEFAULT_IDLE_EXIT_MS = 5000;
+const DEFAULT_RUN_ONCE_TICK_MS = 50;
+
+/**
+ * Claim budget for one-shot mode. `received` counts deliveries the transport actually returned; `pending` counts
+ * reservations whose Receive has not returned yet. The budget is spent only when received reaches the maximum AND
+ * nothing is pending — a requested claim is not a delivery.
+ */
+class RunBudget {
+    private pending = 0;
+    private received = 0;
+    private lastActivityAt = Date.now();
+    private emptyReceiveSinceActivity = false;
+
+    constructor(private readonly max: number) {}
+
+    /** Reserve up to `want` claims; 0 when the budget (received + pending) has no room. */
+    public Reserve(want: number): number {
+        const take = Math.max(0, Math.min(want, this.max - this.received - this.pending));
+        this.pending += take;
+        return take;
+    }
+
+    /** A Receive that reserved `reserved` claims returned `receivedCount` deliveries (or failed: 0). */
+    public Resolve(reserved: number, receivedCount: number, answered: boolean): void {
+        this.pending -= reserved;
+        this.received += receivedCount;
+        if (receivedCount > 0) {
+            this.NoteActivity();
+        } else if (answered) {
+            this.emptyReceiveSinceActivity = true;
+        }
+    }
+
+    public NoteActivity(): void {
+        this.lastActivityAt = Date.now();
+        this.emptyReceiveSinceActivity = false;
+    }
+
+    public get Received(): number {
+        return this.received;
+    }
+
+    public get Pending(): number {
+        return this.pending;
+    }
+
+    public get IsReceived(): boolean {
+        return this.received >= this.max;
+    }
+
+    /** True once the transport has answered "nothing" since the last delivery was received or settled. */
+    public get SawEmptyReceive(): boolean {
+        return this.emptyReceiveSinceActivity;
+    }
+
+    public get IdleMs(): number {
+        return Date.now() - this.lastActivityAt;
+    }
+}
+
+/** Wraps a transport consumer so one-shot mode can cap claims and notice activity. */
+class BudgetedConsumer<TPayload extends WorkJson = WorkJson> implements ITransportConsumer<TPayload> {
+    constructor(private readonly inner: ITransportConsumer<TPayload>, private readonly budget: RunBudget) {}
+
+    public async Receive(max: number, waitSeconds: number, signal: AbortSignal): Promise<ReceivedDelivery<TPayload>[]> {
+        const reserved = this.budget.Reserve(max);
+        if (reserved === 0) {
+            return [];
+        }
+        let received: ReceivedDelivery<TPayload>[] = [];
+        let answered = false;
+        try {
+            received = await this.inner.Receive(reserved, waitSeconds, signal);
+            answered = true;
+            return received;
+        } finally {
+            this.budget.Resolve(reserved, received.length, answered);
+        }
+    }
+
+    public ExtendLease(delivery: ReceivedDelivery<TPayload>, leaseSeconds: number, progress?: WorkProgress): Promise<LeaseExtension> {
+        return this.inner.ExtendLease(delivery, leaseSeconds, progress);
+    }
+
+    public Complete(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
+        return this.settle(this.inner.Complete(delivery));
+    }
+
+    public Retry(delivery: ReceivedDelivery<TPayload>, delaySeconds: number, error: string): Promise<SettleResult> {
+        return this.settle(this.inner.Retry(delivery, delaySeconds, error));
+    }
+
+    public DeadLetter(delivery: ReceivedDelivery<TPayload>, reason: string, error: string | null): Promise<SettleResult> {
+        return this.settle(this.inner.DeadLetter(delivery, reason, error));
+    }
+
+    public Release(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
+        return this.settle(this.inner.Release(delivery));
+    }
+
+    public AcknowledgeCancel(delivery: ReceivedDelivery<TPayload>): Promise<SettleResult> {
+        return this.settle(this.inner.AcknowledgeCancel(delivery));
+    }
+
+    public Close(): Promise<void> {
+        return this.inner.Close();
+    }
+
+    private async settle(work: Promise<SettleResult>): Promise<SettleResult> {
+        const result = await work;
+        this.budget.NoteActivity();
+        return result;
+    }
 }
 
 interface HostedState {
@@ -95,6 +232,7 @@ export class WorkQueueHost implements IShutdownable {
     private sweeperTimer: IntervalHandle | null = null;
     private sweeper: HostSweeper | null = null;
     private unsubscribePublished: (() => void) | null = null;
+    private budget: RunBudget | null = null;
 
     constructor(
         private readonly config: WorkQueueHostConfig,
@@ -141,6 +279,32 @@ export class WorkQueueHost implements IShutdownable {
         this.startTimers();
         const runningCount = this.states.filter(s => s.State === 'Running').length;
         this.log.Info(`Host ${this.config.InstanceID} started`, { Running: runningCount, NotRunning: this.states.length - runningCount });
+    }
+
+    /**
+     * One-shot mode for container jobs (02 §4.4a): start, receive up to the budget, drain, resolve. The budget counts
+     * deliveries RECEIVED, never claims requested, and the run ends only when nothing is pending or in flight (03 §11).
+     */
+    public async RunOnce(options: RunOnceOptions = {}): Promise<RunOnceResult> {
+        if (this.started) {
+            throw new WorkQueueConfigurationError('RunOnce cannot be called on a started host; use Start() instead');
+        }
+        const max = options.MaxDeliveries ?? Number.MAX_SAFE_INTEGER;
+        if (!Number.isInteger(max) || max < 1) {
+            throw new WorkQueueConfigurationError('MaxDeliveries must be an integer >= 1');
+        }
+        const budget = new RunBudget(max);
+        this.budget = budget;
+        const startedAt = Date.now();
+        try {
+            await this.Start();
+            const reason = this.running.size === 0 ? 'Idle' : await this.waitForRunOnceExit(budget, startedAt, options);
+            this.log.Info(`Host ${this.config.InstanceID} finished a one-shot run`, { Processed: budget.Received, Reason: reason });
+            return { Processed: budget.Received, Reason: reason };
+        } finally {
+            this.budget = null;
+            await this.Shutdown();   // the shared promise: also waits for a drain another caller started
+        }
     }
 
     /** Re-plans and converges runtimes; concurrent calls share one pass. A planning failure keeps the current runtimes. */
@@ -279,9 +443,44 @@ export class WorkQueueHost implements IShutdownable {
         }
     }
 
-    /** Task 3b wraps this consumer in a delivery budget for RunOnce. */
-    protected openConsumer(plan: RunnableSubscriptionPlan): ITransportConsumer {
-        return plan.ConsumerDriver.OpenConsumer(plan.Binding);
+    /** In one-shot mode the consumer is wrapped in the run's delivery budget. */
+    private openConsumer(plan: RunnableSubscriptionPlan): ITransportConsumer {
+        const consumer = plan.ConsumerDriver.OpenConsumer(plan.Binding);
+        return this.budget ? new BudgetedConsumer(consumer, this.budget) : consumer;
+    }
+
+    /**
+     * `quiet` is safe to read between "received" and "running": ConsumerRuntime registers a batch's executions in the
+     * same continuation that receives it, and this loop only looks on a timer tick (a macrotask), so by then a
+     * received delivery is either in flight or already settled.
+     */
+    private async waitForRunOnceExit(budget: RunBudget, startedAt: number, options: RunOnceOptions): Promise<RunOnceReason> {
+        const idleExitMs = options.IdleExitMs ?? DEFAULT_IDLE_EXIT_MS;
+        const tickMs = this.dependencies.RunOnceTickMs ?? DEFAULT_RUN_ONCE_TICK_MS;
+        for (;;) {
+            if (!this.started || this.shutdownPromise) {
+                return 'Shutdown';
+            }
+            if (options.MaxDurationMs !== undefined && Date.now() - startedAt >= options.MaxDurationMs) {
+                return 'MaxDuration';
+            }
+            const quiet = this.inFlightCount() === 0;
+            if (quiet && budget.IsReceived && budget.Pending === 0) {
+                return 'MaxDeliveries';
+            }
+            if (quiet && budget.SawEmptyReceive && budget.IdleMs >= idleExitMs) {
+                return 'Idle';
+            }
+            await new Promise(resolve => setTimeout(resolve, tickMs));
+        }
+    }
+
+    private inFlightCount(): number {
+        let total = 0;
+        for (const entry of this.running.values()) {
+            total += entry.Runtime.InFlightCount;
+        }
+        return total;
     }
 
     private async stopEntry(entry: RunningSubscription): Promise<void> {
