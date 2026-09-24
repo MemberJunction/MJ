@@ -30,14 +30,28 @@ interface FailureFixture {
 const behaviour = vi.hoisted(() => ({
     result: null as FailureFixture | null,
     thrown: null as unknown,
+    /** Fed to `OnMigrationEnd` before Migrate() returns — what skyway reports pre-rollback. */
+    progress: null as FailureFixture['Details'][number] | null,
+    /** Simulate a skyway that predates `OnProgress`. */
+    noOnProgress: false,
 }));
 
 vi.mock('@memberjunction/skyway-core', () => ({
     Skyway: class {
+        private callbacks: { OnMigrationEnd?: (r: unknown) => void } = {};
         constructor(_config: unknown) {
-            /* no-op */
+            if (behaviour.noOnProgress) {
+                (this as { OnProgress?: unknown }).OnProgress = undefined;
+            }
+        }
+        OnProgress(callbacks: { OnMigrationEnd?: (r: unknown) => void }): this {
+            this.callbacks = callbacks;
+            return this;
         }
         async Migrate(): Promise<FailureFixture> {
+            if (behaviour.progress !== null) {
+                this.callbacks.OnMigrationEnd?.(behaviour.progress);
+            }
             if (behaviour.thrown !== null) {
                 throw behaviour.thrown;
             }
@@ -167,6 +181,8 @@ describe('RunAppMigrations — the described failure reaches the caller', () => 
     beforeEach(() => {
         behaviour.result = null;
         behaviour.thrown = null;
+        behaviour.progress = null;
+        behaviour.noOnProgress = false;
     });
 
     it('returns the located message when Skyway RETURNS a failure', async () => {
@@ -213,5 +229,114 @@ describe('RunAppMigrations — the described failure reaches the caller', () => 
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain("Migration failed for schema 'app_schema'");
+    });
+});
+
+/**
+ * The DEFAULT mode, verified live (SQL Server 2022, skyway-core 0.6.2, 2026-09-24).
+ *
+ * `mj app install` passes no TransactionMode and `mj migrate` defaults to it, so this is
+ * the path real operators hit. A batch fails; skyway reports the rich result through
+ * `OnMigrationEnd`; then its rollback of the already-doomed transaction THROWS
+ * `Transaction has been aborted.`, that throw escapes, and `Migrate()` returns
+ * `{ Details: [], ErrorMessage: 'Transaction has been aborted.' }`. Reading `Details`
+ * alone therefore reports exactly the original bug — observed live before this fix.
+ */
+describe('RunAppMigrations — per-migration mode, where skyway returns empty Details', () => {
+    beforeEach(() => {
+        behaviour.result = null;
+        behaviour.thrown = null;
+        behaviour.progress = null;
+        behaviour.noOnProgress = false;
+    });
+
+    /** Exactly what a live mssql Msg 1767 → 1750 failure looks like through skyway. */
+    function liveShapedFailure(): FailureFixture['Details'][number] {
+        const driverError = Object.assign(new Error('Could not create constraint or index. See previous errors.'), {
+            precedingErrors: [
+                new Error("Foreign key 'FK_WidgetLine_Product' references invalid table '__mj_NoSuchApp.Product'."),
+            ],
+        });
+        const executionError = Object.assign(
+            new Error('Failed at batch 1/1 (lines 1-8): Could not create constraint or index. See previous errors.'),
+            {
+                Script: 'V202601020000__Bad_FK.sql',
+                Version: '202601020000',
+                BatchInfo: { BatchNumber: 1, TotalBatches: 1, StartLine: 1, EndLine: 8, SucceededBatches: 0 },
+                cause: driverError,
+            },
+        );
+        return { Success: false, Migration: { Filename: 'V202601020000__Bad_FK.sql' }, Error: executionError };
+    }
+
+    async function runMasked() {
+        behaviour.progress = liveShapedFailure();
+        behaviour.result = { Success: false, MigrationsApplied: 0, ErrorMessage: 'Transaction has been aborted.', Details: [] };
+        return RunAppMigrations({ MigrationsDir: '/tmp/migrations', SchemaName: '__mj_ReproApp', DatabaseConfig: dbConfig });
+    }
+
+    it('names the file even though Details came back empty', async () => {
+        const result = await runMasked();
+        expect(result.ErrorMessage).toContain('V202601020000__Bad_FK.sql');
+        expect(result.ErrorMessage).not.toBe("Migration failed for schema '__mj_ReproApp': Transaction has been aborted.");
+    });
+
+    it("recovers mssql's FIRST error — the one that names the invalid table", async () => {
+        const result = await runMasked();
+        expect(result.ErrorMessage).toContain("Foreign key 'FK_WidgetLine_Product' references invalid table '__mj_NoSuchApp.Product'.");
+    });
+
+    it('reports each database message once, not once per wrapper', async () => {
+        const result = await runMasked();
+        const occurrences = result.ErrorMessage!.split('Could not create constraint or index. See previous errors.').length - 1;
+        expect(occurrences).toBe(1);
+    });
+
+    it('keeps the abort, labelled as how the run ended rather than as the cause', async () => {
+        const result = await runMasked();
+        expect(result.ErrorMessage).toMatch(/run ended with: Transaction has been aborted\./);
+    });
+
+    it('is multi-line: a one-line summary first, indented detail after', async () => {
+        const result = await runMasked();
+        const [first, ...rest] = result.ErrorMessage!.split('\n');
+        expect(first).toBe("Migration failed for schema '__mj_ReproApp' in V202601020000__Bad_FK.sql");
+        expect(rest.length).toBeGreaterThan(0);
+        expect(rest.every((line) => line.startsWith('  '))).toBe(true);
+    });
+
+    it('still reports what it can on a skyway that predates OnProgress', async () => {
+        behaviour.noOnProgress = true;
+        const result = await runMasked();
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('Transaction has been aborted.');
+    });
+});
+
+/**
+ * `per-run` mode, verified live: skyway's rollback error is swallowed there, so `Details` survives
+ * and the run-level `ErrorMessage` is just the failing migration's own wrapper message
+ * (`Failed at batch 1/1 (lines 1-8): …`). That must not be repeated as "how the run ended" — it
+ * adds nothing the location and error lines have not already said.
+ */
+describe('DescribeMigrationFailure — per-run shape', () => {
+    it('does not repeat the wrapper message as the way the run ended', () => {
+        const driverError = Object.assign(new Error('Could not create constraint or index. See previous errors.'), {
+            precedingErrors: [new Error("Foreign key 'FK_X' references invalid table 'nope.Product'.")],
+        });
+        const wrapper = 'Failed at batch 1/1 (lines 1-8): Could not create constraint or index. See previous errors.';
+        const executionError = Object.assign(new Error(wrapper), {
+            Script: 'V1__x.sql',
+            BatchInfo: { BatchNumber: 1, TotalBatches: 1, StartLine: 1, EndLine: 8, SucceededBatches: 0 },
+            cause: driverError,
+        });
+        const message = DescribeMigrationFailure('s', {
+            Success: false,
+            MigrationsApplied: 0,
+            ErrorMessage: wrapper,
+            Details: [{ Success: false, Migration: { Filename: 'V1__x.sql' }, Error: executionError }],
+        });
+        expect(message).not.toContain('run ended with');
+        expect(message).toContain("Foreign key 'FK_X' references invalid table 'nope.Product'.");
     });
 });

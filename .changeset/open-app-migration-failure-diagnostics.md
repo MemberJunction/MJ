@@ -4,35 +4,35 @@
 
 Report WHICH Open App migration failed and WHY, instead of a bare `Transaction has been aborted.`
 
-`RunAppMigrations` surfaced only Skyway's run-level `ErrorMessage`, so a real migration failure
-reached the caller as the whole of:
+`RunAppMigrations` reached the caller with the whole of:
 
 ```
 Migration failed for schema '__mj_BizAppsContracts': Transaction has been aborted.
 ```
 
-No filename, no SQL error, no object name. The actual cause had to be found by extracting the
-baseline and running it by hand — `Msg 1767: Foreign key 'FK_ContractLine_Product' references
-invalid table '__mj_BizAppsOrders.Product'.`
+No filename, no SQL error, no object name — the cause had to be found by extracting the baseline and
+running it by hand. Two separate losses produced that, and both are fixed:
 
-Every one of those facts was already present on the failing `Details[]` entry Skyway returns: it
-attaches the script name, the failed batch's number and line range, how many batches committed
-first, and the driver error as `cause`. This module's minimal structural typing of the Skyway
-result omitted the per-migration `Error` field entirely, so all of it was discarded. The same
-message is now built for a failure Skyway *throws* (a `MigrationExecutionError` carries the same
-detail) rather than flattening it to `error.message`.
+- **The per-migration `Error` was discarded.** Skyway puts the script, the failed batch and its line
+  range, and the driver error on each failing result; this module's hand-written copy of skyway's
+  types omitted that field. The hand-written copy is gone — the types now come from
+  `@memberjunction/skyway-core` via `import type`, which adds no runtime dependency and cannot drift.
+- **Skyway's own rollback threw the result away.** In `per-migration` mode — the default for both
+  `mj app install` and `mj migrate` — a batch-aborting error dooms the transaction, skyway's rollback
+  then throws `Transaction has been aborted.`, and `Migrate()` returns an empty `Details`. The failing
+  result is captured from skyway's `OnMigrationEnd` callback, which fires before the rollback.
 
-The message above now reads:
+`mssql` also reports only the LAST error of a chain (`See previous errors.`), so the first one — the
+one that names the invalid table — is recovered from `precedingErrors`. The message is now multi-line,
+with the schema and file on line one:
 
 ```
-Migration failed for schema '__mj_BizAppsContracts' in B202608040001__v0.1.x__Baseline.sql,
-at batch 2 of 253, lines 50-71, 1 batch(es) succeeded first: Migration execution failed
-— caused by: Foreign key 'FK_ContractLine_Product' references invalid table '__mj_BizAppsOrders.Product'.
+Migration failed for schema '__mj_ReproApp' in V202601020000__Bad_FK.sql
+  at batch 1 of 1, lines 1-8 (0 batch(es) succeeded first)
+  error: Could not create constraint or index. See previous errors.
+  first database error: Foreign key 'FK_WidgetLine_Product' references invalid table '__mj_NoSuchApp.Product'.
+  run ended with: Transaction has been aborted.
 ```
 
-Degrades in steps rather than all at once: no batch detail still names the script, no failing
-detail falls back to the run-level message, and neither says so explicitly instead of emitting
-`undefined`. The new `DescribeMigrationFailure` export is pure, so it is covered without a
-database.
-
-Addresses item 3 of #3975. Behaviour on success is unchanged; this touches the failure path only.
+Verified live against SQL Server + skyway-core 0.6.2 in both transaction modes. Failure path only;
+success behaviour is unchanged. Addresses item 3 of #3975.

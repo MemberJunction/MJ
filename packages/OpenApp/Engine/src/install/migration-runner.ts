@@ -6,88 +6,28 @@
  * flyway_schema_history table.
  *
  * The skyway packages (`@memberjunction/skyway-core` + the platform providers) are
- * declared as optionalDependencies of this package but loaded dynamically at runtime,
- * so this module compiles and loads even when they are not installed (e.g. in CI
- * builds that don't need them, or installs run with --no-optional).
+ * declared as optionalDependencies of this package and loaded dynamically at RUNTIME, so
+ * this module loads — and fails with actionable guidance only when migrations are actually
+ * run — even when they are not installed (an install run with --no-optional).
+ *
+ * Their TYPES are imported with `import type`, which TypeScript erases entirely: no runtime
+ * dependency is added. That replaced a hand-maintained structural copy of skyway's shapes,
+ * which could drift silently — a skyway change to its result shape would compile clean here
+ * and just stop reporting the fields that moved. It does mean building THIS package needs
+ * the optional packages present, which a normal workspace install always provides (no MJ CI
+ * job installs with --no-optional), and MJCLI already imports the same types this way.
  */
 import path from 'node:path';
 import type { DatabasePlatform } from '@memberjunction/core';
 import { GetDialect } from '@memberjunction/sql-dialect';
-
-/**
- * Minimal type definition for Skyway config so we don't need
- * `@memberjunction/skyway-core` at compile time.
- *
- * `Provider` is typed as `unknown` because it's constructed from a dynamically
- * imported provider package (e.g. `@memberjunction/skyway-sqlserver`). Skyway
- * 0.6.x requires a provider; the field is optional here purely because it's
- * filled in inside `RunAppMigrations` after the dynamic import resolves.
- */
-interface SkywayConfig {
-    Database: {
-        Server: string;
-        Port: number;
-        Database: string;
-        User: string;
-        Password: string;
-        Options?: { Encrypt?: boolean; TrustServerCertificate?: boolean; RequestTimeout?: number };
-    };
-    Migrations: {
-        Locations: string[];
-        DefaultSchema: string;
-        BaselineVersion: string;
-        BaselineOnMigrate: boolean;
-    };
-    Placeholders?: Record<string, string>;
-    TransactionMode?: 'per-run' | 'per-migration';
-    Provider?: unknown;
-}
-
-/**
- * Details about the SQL batch Skyway was executing when a migration failed
- * (`FailedBatchInfo` in `@memberjunction/skyway-core`). Structural, so this module
- * still compiles without the optional skyway packages installed.
- */
-interface SkywayFailedBatchInfo {
-    BatchNumber?: number;
-    TotalBatches?: number;
-    StartLine?: number;
-    EndLine?: number;
-    SucceededBatches?: number;
-}
-
-/**
- * The fields of skyway's `MigrationExecutionError` we surface. Skyway attaches the
- * script name, the failed batch's position, and the driver error as `cause` — none of
- * which are present on the run-level `ErrorMessage`.
- */
-interface SkywayMigrationExecutionError extends Error {
-    Script?: string;
-    Version?: string | null;
-    BatchInfo?: SkywayFailedBatchInfo;
-}
-
-/** One migration's execution result (`MigrationExecutionResult` in skyway-core). */
-interface SkywayMigrationDetail {
-    Success: boolean;
-    Migration: { Filename: string };
-    /** Populated only on failure; typically a `MigrationExecutionError`. */
-    Error?: unknown;
-}
-
-/** The run-level result of `Skyway.Migrate()`. */
-interface SkywayMigrateResult {
-    Success: boolean;
-    MigrationsApplied: number;
-    ErrorMessage?: string;
-    Details: SkywayMigrationDetail[];
-}
-
-/** Minimal interface for the Skyway instance returned at runtime. */
-interface SkywayInstance {
-    Migrate(): Promise<SkywayMigrateResult>;
-    Close(): Promise<void>;
-}
+import type {
+    DatabaseProvider,
+    MigrateResult,
+    MigrationExecutionError,
+    MigrationExecutionResult,
+    Skyway,
+    SkywayConfig,
+} from '@memberjunction/skyway-core';
 
 /**
  * Options for running migrations.
@@ -167,88 +107,144 @@ export interface SkywayDatabaseConfig {
 export type FlywayDatabaseConfig = SkywayDatabaseConfig;
 
 /**
- * Reads the `cause` chain off an error, innermost last.
- *
- * Skyway wraps the driver's error: a SQL Server failure arrives as a
- * `MigrationExecutionError` whose `cause` is the `mssql`/`tedious` error carrying the
- * actual `Msg NNNN` text. Reporting only the outer message is how a foreign-key
- * failure reaches the operator as `Transaction has been aborted.`
+ * True when skyway's per-migration error carries its script + batch detail. `import type`
+ * cannot be used with `instanceof`, so this checks for the field skyway always sets.
  */
-function CauseChainMessages(error: unknown): string[] {
-    const messages: string[] = [];
+function IsMigrationExecutionError(error: Error): error is MigrationExecutionError {
+    return 'Script' in error;
+}
+
+/**
+ * Reads the `cause` chain off an error, outermost first, keeping only messages that add
+ * information.
+ *
+ * Skyway wraps the driver's error: a SQL Server failure arrives as a `MigrationExecutionError`
+ * (`Failed at batch 1/1 (lines 1-8): <driver text>`) whose `cause` is the `mssql` error carrying
+ * the same driver text. Reporting both prints every database message twice, so a message that
+ * merely wraps the next one in the chain is dropped — the batch and line range it adds are
+ * reported on their own line.
+ */
+function DatabaseMessages(error: Error | undefined): string[] {
+    const chain: string[] = [];
     const seen = new Set<Error>();
     let current: unknown = error;
     while (current instanceof Error && !seen.has(current)) {
         seen.add(current);
         const message = current.message.trim();
-        if (message.length > 0 && !messages.includes(message)) {
-            messages.push(message);
+        if (message.length > 0 && !chain.includes(message)) {
+            chain.push(message);
         }
         current = current.cause;
     }
-    return messages;
+    return chain.filter((message, i) => i === chain.length - 1 || !message.includes(chain[i + 1]));
 }
 
 /**
- * Builds the operator-facing message for a failed migration run.
+ * Recovers the FIRST database error behind a driver error that reports only its last one.
  *
- * WHY THIS EXISTS. Skyway already knows everything useful about a failure — which
- * script, which batch of how many, the line range, how many batches committed first,
- * and the driver error underneath — and hands it over on the failing
- * `Details[]` entry. The run-level `ErrorMessage` carries none of that, and under
- * `per-run` transaction mode it is frequently just `Transaction has been aborted.`
- * Reporting only the run-level string is why an Open App migration failure could
- * arrive as one context-free sentence: no filename, no SQL error, no object name
- * (MJ#3975). Everything below is information Skyway supplied and this module used to
- * discard.
- *
- * Degrades in steps rather than all at once: with no failing detail it falls back to
- * the run-level message, and with neither it says so explicitly instead of emitting
- * `undefined`.
- *
- * Pure — no I/O, so it is unit-testable without a database.
- *
- * @param schemaName the app schema the run targeted, for the message prefix
- * @param result     the run-level result, whose `Details` locate the failure
- * @param thrown     an error thrown out of `Migrate()` instead of returned, if any
+ * A batch-aborting SQL Server failure raises a chain — `Msg 1767, Foreign key 'FK_…' references
+ * invalid table '…'` then `Msg 1750, Could not create constraint or index. See previous errors.` —
+ * and `mssql` rejects with the LAST, parking the earlier ones on `precedingErrors`. Reporting the
+ * rejection alone therefore says "see previous errors" without the previous errors: a pointer to
+ * output nobody was shown. This walks the cause chain for that array and returns its first entry,
+ * which is the error that names the actual problem. mssql-specific; other drivers have no such
+ * array and this returns undefined.
  */
-export function DescribeMigrationFailure(schemaName: string, result?: SkywayMigrateResult, thrown?: unknown): string {
+export function FirstDatabaseError(error: Error | undefined): string | undefined {
+    const seen = new Set<Error>();
+    let current: unknown = error;
+    while (current instanceof Error && !seen.has(current)) {
+        seen.add(current);
+        const preceding = (current as Error & { precedingErrors?: unknown }).precedingErrors;
+        if (Array.isArray(preceding) && preceding[0] instanceof Error && preceding[0].message.trim().length > 0) {
+            return preceding[0].message.trim();
+        }
+        current = current.cause;
+    }
+    return undefined;
+}
+
+/** `at batch 2 of 253, lines 50-71 (1 batch(es) succeeded first)`, or undefined without batch info. */
+function BatchLocation(error: Error | undefined): string | undefined {
+    const batch = error && IsMigrationExecutionError(error) ? error.BatchInfo : undefined;
+    if (batch?.BatchNumber === undefined) {
+        return undefined;
+    }
+    const ofTotal = batch.TotalBatches !== undefined ? ` of ${batch.TotalBatches}` : '';
+    const lines = batch.StartLine !== undefined && batch.EndLine !== undefined ? `, lines ${batch.StartLine}-${batch.EndLine}` : '';
+    // How many batches committed first is the difference between "nothing ran" and "the schema is
+    // half-built", which decides whether a retry is safe.
+    const succeeded = batch.SucceededBatches !== undefined ? ` (${batch.SucceededBatches} batch(es) succeeded first)` : '';
+    return `at batch ${batch.BatchNumber}${ofTotal}${lines}${succeeded}`;
+}
+
+/**
+ * Builds the operator-facing message for a failed migration run: a one-line summary naming the
+ * schema and the migration file, then indented detail lines.
+ *
+ * WHY THIS EXISTS (MJ#3975). A failed Open App migration used to reach the operator as the whole
+ * of `Migration failed for schema 'X': Transaction has been aborted.` — no file, no SQL error, no
+ * object name. Two separate losses produced that, and both are handled here:
+ *
+ *  1. **The per-migration `Error` was discarded.** Skyway puts the script, the failed batch and
+ *     the driver error on each failing result; this module used to read none of it.
+ *  2. **Skyway's own rollback can throw the result away.** In `per-migration` mode — the default
+ *     for both `mj app install` and `mj migrate` — a batch-aborting error dooms the transaction,
+ *     skyway's rollback then throws `Transaction has been aborted.`, that throw escapes, and
+ *     `Migrate()` returns `Details: []`. Verified live against skyway-core 0.6.2. The failing
+ *     result is still delivered to `OnMigrationEnd` BEFORE the rollback, which is what
+ *     `captured` carries; `Details` alone reports exactly the original bug.
+ *
+ * Multi-line because the located message is long, and every consumer — the MJCLI stderr line,
+ * the install result, the NVARCHAR(MAX) install-history column — already carries multi-line text
+ * (the upgrade path appends a paragraph to it). The summary is kept to line one so anything that
+ * greps or truncates to one line still gets the schema and the file.
+ *
+ * Degrades in steps: with no failing result it falls back to the run-level message on one line,
+ * and with nothing at all it says so instead of emitting `undefined`. Pure — no I/O.
+ *
+ * @param schemaName the app schema the run targeted
+ * @param result     the run-level result, when `Migrate()` returned
+ * @param thrown     an error thrown out of `Migrate()`, when it threw instead
+ * @param captured   the first failing result seen by `OnMigrationEnd`, which survives the rollback
+ */
+export function DescribeMigrationFailure(
+    schemaName: string,
+    result?: MigrateResult,
+    thrown?: unknown,
+    captured?: MigrationExecutionResult,
+): string {
     const prefix = `Migration failed for schema '${schemaName}'`;
-    const failed = result?.Details?.find((detail) => !detail.Success);
-    const detailError = (failed?.Error ?? thrown) as SkywayMigrationExecutionError | undefined;
+    const failed = captured ?? result?.Details?.find((detail) => !detail.Success);
+    const error = failed?.Error ?? (thrown instanceof Error ? thrown : undefined);
+    const runMessage = result?.ErrorMessage?.trim() || undefined;
 
-    // Prefer the script skyway names on the error, then the failing detail's filename:
-    // a migration can fail before it becomes a Details entry (resolution, checksum).
-    const script = detailError?.Script ?? failed?.Migration?.Filename;
-
-    const parts: string[] = [];
-    if (script) {
-        parts.push(`in ${script}`);
+    if (!failed && !error) {
+        return `${prefix}: ${runMessage ?? 'no error detail was reported by the migration engine'}`;
     }
 
-    const batch = detailError?.BatchInfo;
-    if (batch?.BatchNumber !== undefined) {
-        const ofTotal = batch.TotalBatches !== undefined ? ` of ${batch.TotalBatches}` : '';
-        const lines =
-            batch.StartLine !== undefined && batch.EndLine !== undefined
-                ? `, lines ${batch.StartLine}-${batch.EndLine}`
-                : '';
-        parts.push(`at batch ${batch.BatchNumber}${ofTotal}${lines}`);
+    const script = (error && IsMigrationExecutionError(error) ? error.Script : undefined) ?? failed?.Migration?.Filename;
+    const lines = [script ? `${prefix} in ${script}` : prefix];
+    const location = BatchLocation(error);
+    if (location) {
+        lines.push(`  ${location}`);
     }
+    const messages = DatabaseMessages(error);
+    const errorLines = messages.length > 0 ? messages : runMessage ? [runMessage] : ['no error detail was reported by the migration engine'];
+    lines.push(`  error: ${errorLines[0]}`, ...errorLines.slice(1).map((m) => `    caused by: ${m}`));
 
-    // The count of batches that committed before the failure is the difference between
-    // "nothing ran" and "the schema is half-built", which decides whether a retry is safe.
-    if (batch?.SucceededBatches !== undefined) {
-        parts.push(`${batch.SucceededBatches} batch(es) succeeded first`);
+    const first = FirstDatabaseError(error);
+    if (first && !errorLines.some((m) => m.includes(first))) {
+        lines.push(`  first database error: ${first}`);
     }
-
-    // The driver error last, so the innermost `Msg NNNN` is what the eye lands on. The
-    // run-level message is a fallback, not an addition — it is usually the vaguest of them.
-    const causes = CauseChainMessages(detailError);
-    const detailText = causes.length > 0 ? causes.join(' — caused by: ') : result?.ErrorMessage?.trim();
-
-    const located = parts.length > 0 ? ` ${parts.join(', ')}` : '';
-    return `${prefix}${located}: ${detailText && detailText.length > 0 ? detailText : 'no error detail was reported by the migration engine'}`;
+    // The run-level message usually describes how the run STOPPED (a rollback that could not
+    // complete), not why it failed — keep it, labelled as such, but only when it adds anything.
+    // In per-run mode it is just the failing migration's own wrapper message, already covered.
+    const reported = [...errorLines, error?.message?.trim()].filter((m): m is string => !!m);
+    if (runMessage && !reported.some((m) => m.includes(runMessage) || runMessage.includes(m))) {
+        lines.push(`  run ended with: ${runMessage}`);
+    }
+    return lines.join('\n');
 }
 
 /**
@@ -290,7 +286,10 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
     }
     const platform: DatabasePlatform = options.Platform ?? 'sqlserver';
 
-    let skyway: SkywayInstance | undefined;
+    let skyway: Skyway | undefined;
+    // The first failing result skyway reports, captured before its rollback can discard it.
+    // See DescribeMigrationFailure for why `Details` alone is not enough.
+    let capturedFailure: MigrationExecutionResult | undefined;
 
     try {
         // The skyway packages are declared as optionalDependencies of THIS package (and as
@@ -301,7 +300,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         // ImportSkywayClass) so this module compiles and loads even when the optional
         // packages are not installed — and a genuinely-missing package gets the actionable
         // optionalDependencies guidance instead of a raw resolver error.
-        const Skyway = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
+        const SkywayClass = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
         const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform, TransactionMode);
         // Skyway 0.6.x requires an explicit provider, selected by platform.
         config.Provider = await CreateSkywayProvider(platform, config.Database);
@@ -312,7 +311,18 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             console.log(`  Server: ${DatabaseConfig.Host}:${DatabaseConfig.Port}`);
         }
 
-        skyway = new Skyway(config) as SkywayInstance;
+        skyway = new SkywayClass(config) as Skyway;
+        // OnProgress exists from skyway 0.6; checked at runtime so an older skyway degrades to
+        // Details-only reporting instead of throwing.
+        if (typeof skyway.OnProgress === 'function') {
+            skyway.OnProgress({
+                OnMigrationEnd: (migration) => {
+                    if (!migration.Success && !capturedFailure) {
+                        capturedFailure = migration;
+                    }
+                },
+            });
+        }
         const result = await skyway.Migrate();
 
         const appliedFiles = result.Details
@@ -349,7 +359,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             Success: result.Success,
             MigrationsApplied: result.MigrationsApplied,
             AppliedFiles: appliedFiles,
-            ErrorMessage: result.Success ? undefined : DescribeMigrationFailure(SchemaName, result),
+            ErrorMessage: result.Success ? undefined : DescribeMigrationFailure(SchemaName, result, undefined, capturedFailure),
         };
     }
     catch (error: unknown) {
@@ -361,8 +371,8 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             MigrationsApplied: 0,
             AppliedFiles: [],
             ErrorMessage:
-                error instanceof Error
-                    ? DescribeMigrationFailure(SchemaName, undefined, error)
+                error instanceof Error || capturedFailure
+                    ? DescribeMigrationFailure(SchemaName, undefined, error, capturedFailure)
                     : `Migration failed for schema '${SchemaName}': ${String(error)}`,
         };
     }
@@ -378,13 +388,13 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
  * packages are optionalDependencies of this package — only the one matching the
  * target database needs to be installed. Mirrors MJCLI's `createSkywayProvider`.
  */
-async function CreateSkywayProvider(platform: DatabasePlatform, dbConfig: SkywayConfig['Database']): Promise<unknown> {
+async function CreateSkywayProvider(platform: DatabasePlatform, dbConfig: SkywayConfig['Database']): Promise<DatabaseProvider> {
     if (platform === 'postgresql') {
         const PostgresProvider = await ImportSkywayClass('@memberjunction/skyway-postgres', 'PostgresProvider', 'the PostgreSQL provider');
-        return new PostgresProvider(dbConfig);
+        return new PostgresProvider(dbConfig) as DatabaseProvider;
     }
     const SqlServerProvider = await ImportSkywayClass('@memberjunction/skyway-sqlserver', 'SqlServerProvider', 'the SQL Server provider');
-    return new SqlServerProvider(dbConfig);
+    return new SqlServerProvider(dbConfig) as DatabaseProvider;
 }
 
 /**
