@@ -157,6 +157,18 @@ export interface FormToolbarItemConfig {
   CssClass?: string;
 
   /**
+   * Label for the item in the toolbar's More menu. Defaults to `Text`, then `Description`.
+   */
+  MenuLabel?: string;
+
+  /**
+   * Whether the item takes part in per-user pinning: shown as a button only when the user pins
+   * it, otherwise listed in the More menu. Built-in items (except Edit) are pinnable. Custom
+   * items default to false and always render inline, so app-specific actions stay in view.
+   */
+  Pinnable?: boolean;
+
+  /**
    * Handler function invoked when the button is clicked.
    */
   OnClick?: (event: FormToolbarItemClickEventArgs) => Promise<void> | void;
@@ -181,5 +193,9 @@ export interface ResolvedToolbarItem {
   IsLoading: boolean;
   CssClass: string;
   IsStandard: boolean;
+  /** Label used in the More menu. */
+  MenuLabel: string;
+  /** Whether the item is pinned or listed in the More menu rather than always inline. */
+  Pinnable: boolean;
   Config: FormToolbarItemConfig;
 }
