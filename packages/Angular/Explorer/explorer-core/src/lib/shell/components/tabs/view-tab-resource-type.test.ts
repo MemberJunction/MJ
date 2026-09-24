@@ -87,14 +87,28 @@ function viewTab(resourceType: string, viewId = 'view-1', applicationId = 'app-1
   };
 }
 
-function createHarness(boundResourceType: string, boundViewId = 'view-1'): Harness {
+/** A dynamic-view tab as `NavigationService.OpenDynamicView` configures it. */
+function dynamicTab(entity: string, applicationId = 'app-1') {
+  return {
+    id: 'tab-1',
+    applicationId,
+    title: entity,
+    resourceRecordId: 'dynamic',
+    isPinned: false,
+    configuration: { resourceType: 'MJ: User Views', Entity: entity, recordId: 'dynamic' },
+  };
+}
+
+function createHarness(boundResourceType: string, boundViewId = 'view-1', boundEntity?: string): Harness {
   const cleanupTabComponent = vi.fn();
   const loadTabContent = vi.fn(() => Promise.resolve());
   const component = Object.create(TabContainerComponent.prototype) as TabContainerComponent;
   const internals = component as unknown as Record<string, unknown>;
 
+  const boundConfiguration: Record<string, unknown> = { applicationId: 'app-1' };
+  if (boundEntity !== undefined) boundConfiguration['Entity'] = boundEntity;
   internals['componentRefs'] = new Map([
-    ['tab-1', { instance: { Data: { ResourceType: boundResourceType, ResourceRecordID: boundViewId, Configuration: { applicationId: 'app-1' } } } }],
+    ['tab-1', { instance: { Data: { ResourceType: boundResourceType, ResourceRecordID: boundViewId, Configuration: boundConfiguration } } }],
   ]);
   internals['layoutInitialized'] = true;
   internals['layoutManager'] = {
@@ -118,7 +132,7 @@ function createHarness(boundResourceType: string, boundViewId = 'view-1'): Harne
   return { component, cleanupTabComponent, loadTabContent };
 }
 
-const sync = (h: Harness, tab: ReturnType<typeof viewTab>): void =>
+const sync = (h: Harness, tab: ReturnType<typeof viewTab> | ReturnType<typeof dynamicTab>): void =>
   (h.component as unknown as { syncTabsWithConfiguration(t: unknown[]): void }).syncTabsWithConfiguration([tab]);
 
 describe('TabContainerComponent.IsSameResourceType', () => {
@@ -164,5 +178,33 @@ describe('syncTabsWithConfiguration — saved-view tab', () => {
     const h = createHarness('Dashboards');
     sync(h, viewTab('MJ: User Views'));
     expect(h.cleanupTabComponent).toHaveBeenCalledWith('tab-1');
+  });
+});
+
+// Every dynamic view carries recordId 'dynamic', so the Entity is the only thing that tells two of
+// them apart. The cache side of this (the component cache keying 'dynamic' by entity, so the
+// reload is not handed back the component it just detached) is pinned in
+// component-cache-manager.test.ts; this harness mocks loadTabContent and cannot see the cache.
+describe('syncTabsWithConfiguration — dynamic-view tab', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reloads when the tab now points at a different entity', () => {
+    const h = createHarness('User Views', 'dynamic', 'Accounts');
+    sync(h, dynamicTab('Contacts'));
+    expect(h.cleanupTabComponent).toHaveBeenCalledWith('tab-1');
+    expect(h.loadTabContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the loaded view for the same entity, across repeated emissions', () => {
+    const h = createHarness('User Views', 'dynamic', 'Accounts');
+    for (let i = 0; i < 5; i++) sync(h, dynamicTab('Accounts'));
+    expect(h.cleanupTabComponent).not.toHaveBeenCalled();
+    expect(h.loadTabContent).not.toHaveBeenCalled();
+  });
+
+  it('does not start reloading saved views, whose configuration carries no Entity', () => {
+    const h = createHarness('User Views', 'view-1');
+    for (let i = 0; i < 5; i++) sync(h, viewTab('MJ: User Views'));
+    expect(h.cleanupTabComponent).not.toHaveBeenCalled();
   });
 });
