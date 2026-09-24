@@ -1261,6 +1261,23 @@ jobs:
             echo "::notice::Verified: @memberjunction/core@$NEW is live under '$PUBLISH_TAG'; latest unmoved at ${PREV_LATEST:-<unset>}"
           fi
 
+      # The build step regenerates tracked, version-stamped files from the bumped
+      # package.json — today that is packages/GraphQLDataProvider/src/version.generated.ts.
+      # Without this commit the release commit and tag point at a tree whose generated
+      # version is the previous release's: 6.1.1 and 6.1.3 both shipped with it still
+      # reading 6.1.0, and the Integration Tier's advisory CodeGen drift gate flagged both.
+      # The Edge path (ci/commit_push.mjs) and the candidate cut already do exactly this;
+      # this is the same commit, placed before the tag so the tag includes it. `git add -A`
+      # rather than a glob for the reason the cut job documents: a shell-expanded glob names
+      # ignored paths and git refuses them.
+      - name: Commit post-release generated files
+        run: |
+          set -euo pipefail
+          git add -A
+          if [ -n "$(git diff --cached --name-only)" ]; then
+            git commit -m "chore: post-release generated files [skip ci]"
+          fi
+
       # Tag and release steps tolerate a re-run of a partially completed publish
       # (publish succeeded, a later step failed): the publish step's "already
       # published" evidence passes, and these skip instead of dying on collisions.
