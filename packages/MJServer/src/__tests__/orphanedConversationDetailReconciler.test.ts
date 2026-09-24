@@ -130,6 +130,25 @@ describe('ReconcileOrphanedConversationDetails', () => {
         expect(writableStore.last?.Message).toBe('');
     });
 
+    it('marks a run that ended awaiting the user\'s reply as Complete', async () => {
+        // AwaitingFeedback is how a normal chat turn ends: the run succeeded and the agent's
+        // reply is the message. A process that dies before closing the detail leaves exactly
+        // this pair behind, and the stale-run sweep never touches it because it is not Running.
+        script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'AwaitingFeedback', CompletedAt: longAgo() }]);
+
+        expect(await ReconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(1);
+        expect(writableStore.last?.Status).toBe('Complete');
+        expect(writableStore.last?.Message).toBe('');
+    });
+
+    it('leaves a message alone while its run is parked on a workflow', async () => {
+        // Paused means a task graph is still executing on the run's behalf.
+        script([detail()], [{ ConversationDetailID: DETAIL_ID, Status: 'Paused', CompletedAt: null }]);
+
+        expect(await ReconcileOrphanedConversationDetails(PROVIDER, USER)).toBe(0);
+        expect(mockGetEntityObject).not.toHaveBeenCalled();
+    });
+
     it('leaves a message alone while its run is still executing', async () => {
         const d = detail();
         script([d], [{ ConversationDetailID: DETAIL_ID, Status: 'Running', CompletedAt: null }]);

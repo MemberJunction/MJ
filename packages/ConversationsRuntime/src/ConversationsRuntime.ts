@@ -253,16 +253,20 @@ export class ConversationsRuntime
      * Liveness supervisor — emits when client state may have fallen behind the server and a
      * reconciliation against durable state is needed. See {@link ConversationLiveness}.
      *
-     * Wired to {@link Streaming} on first access so a stream re-subscribe counts as a
-     * reconciliation trigger alongside the socket-level one. Hosts additionally feed it DOM
-     * events (`visibilitychange`, `online`), which this package cannot observe itself because
-     * it is documented as Node-consumable.
+     * Wired to {@link Streaming} so a stream re-subscribe counts as a reconciliation trigger
+     * alongside the socket-level one. Hosts additionally feed it DOM events (`visibilitychange`,
+     * `online`), which this package cannot observe itself because it is documented as
+     * Node-consumable.
+     *
+     * Initialized on every access, not only the first. An access that comes before the data
+     * provider exists cannot attach the socket signal, and a later access attaches it. Once
+     * attached, `Initialize` returns at once.
      */
     public get Liveness(): ConversationLiveness {
         if (!this._liveness) {
             this._liveness = new ConversationLiveness();
-            this._liveness.Initialize(this.Streaming.StreamReconnected$);
         }
+        this._liveness.Initialize(this.Streaming.StreamReconnected$);
         return this._liveness;
     }
 

@@ -817,6 +817,52 @@ describe('RedisLocalStorageProvider', () => {
             await p.Disconnect();
         });
 
+        it('delivers to every handler when two subscribe to a new channel at once', async () => {
+            // Both callers find no entry and both wait on the Redis subscribe. If each then
+            // publishes its own handler set, the second replaces the first and the first handler
+            // never receives another message, with nothing surfaced.
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            await p.SubscribeToChannel('warm-up', vi.fn());
+            const first = vi.fn();
+            const second = vi.fn();
+
+            await Promise.all([
+                p.SubscribeToChannel('push-status-updates', first),
+                p.SubscribeToChannel('push-status-updates', second),
+            ]);
+            (p as unknown as { dispatchChannelMessage: (c: string, m: string) => void })
+                .dispatchChannelMessage('mj:push-status-updates', 'payload');
+
+            expect(first).toHaveBeenCalledWith('payload');
+            expect(second).toHaveBeenCalledWith('payload');
+            await p.Disconnect();
+        });
+
+        it('shares one underlying subscribe between concurrent first subscribers', async () => {
+            const p = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                keyPrefix: 'mj',
+            });
+            await p.SubscribeToChannel('warm-up', vi.fn());
+
+            await Promise.all([
+                p.SubscribeToChannel('push-status-updates', vi.fn()),
+                p.SubscribeToChannel('push-status-updates', vi.fn()),
+            ]);
+
+            const subscriber = (p as unknown as { _subscriber: { subscribe: ReturnType<typeof vi.fn> } })._subscriber;
+            const namedCalls = subscriber.subscribe.mock.calls.filter(
+                (c: unknown[]) => c[0] === 'mj:push-status-updates'
+            );
+            expect(namedCalls).toHaveLength(1);
+            await p.Disconnect();
+        });
+
         it('does not leave a poisoned entry behind when the subscribe is rejected', async () => {
             // The handler map is what later callers consult to decide whether the channel is
             // already subscribed. An entry left behind by a failed subscribe makes every later

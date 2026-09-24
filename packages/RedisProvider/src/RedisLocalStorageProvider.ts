@@ -188,6 +188,8 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     private _subscriberConnected: boolean = false;
     /** Fully-qualified channel name -> handlers registered via {@link SubscribeToChannel}. */
     private _channelHandlers: Map<string, Set<(message: string) => void>> = new Map();
+    /** Fully-qualified channel name -> the subscribe still in flight, shared by concurrent callers. */
+    private _pendingChannelSubscribes: Map<string, Promise<Set<(message: string) => void>>> = new Map();
     private _config: RedisProviderConfig;
 
     /**
@@ -997,24 +999,53 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         await this.StartListening();
         const fullChannel = this.qualifyChannel(channel);
 
-        let handlers = this._channelHandlers.get(fullChannel);
-        if (!handlers) {
-            // Registered only once the subscribe has actually succeeded. A map entry published
-            // ahead of the await would survive a rejection, and every later caller reads that
-            // entry as proof the channel is subscribed — registering handlers against a channel
-            // Redis is not listening on, with nothing surfaced.
-            await this._subscriber?.subscribe(fullChannel);
-            handlers = new Set();
-            this._channelHandlers.set(fullChannel, handlers);
-            if (this._enableLogging) {
-                LogStatus(`Redis pub/sub: subscribed to channel "${fullChannel}"`);
-            }
-        }
+        const handlers = await this.channelHandlersFor(fullChannel);
         handlers.add(handler);
 
         return () => {
-            handlers?.delete(handler);
+            handlers.delete(handler);
         };
+    }
+
+    /**
+     * The handler set for a channel, subscribing first when no caller has yet.
+     *
+     * Callers that arrive while a subscribe is in flight wait on that same subscribe. Each one
+     * starting its own would publish its own handler set, and the last to finish would replace
+     * the others' sets, so their handlers would never receive a message.
+     */
+    private channelHandlersFor(fullChannel: string): Promise<Set<(message: string) => void>> {
+        const existing = this._channelHandlers.get(fullChannel);
+        if (existing) {
+            return Promise.resolve(existing);
+        }
+        const pending = this._pendingChannelSubscribes.get(fullChannel);
+        if (pending) {
+            return pending;
+        }
+        const subscribing = this.subscribeChannel(fullChannel).finally(() => {
+            this._pendingChannelSubscribes.delete(fullChannel);
+        });
+        this._pendingChannelSubscribes.set(fullChannel, subscribing);
+        return subscribing;
+    }
+
+    /**
+     * Subscribes to a channel and publishes its handler set.
+     *
+     * The set is registered only once the subscribe has succeeded. A map entry published ahead of
+     * the await would survive a rejection, and every later caller reads that entry as proof the
+     * channel is subscribed — registering handlers against a channel Redis is not listening on,
+     * with nothing surfaced.
+     */
+    private async subscribeChannel(fullChannel: string): Promise<Set<(message: string) => void>> {
+        await this._subscriber?.subscribe(fullChannel);
+        const handlers = new Set<(message: string) => void>();
+        this._channelHandlers.set(fullChannel, handlers);
+        if (this._enableLogging) {
+            LogStatus(`Redis pub/sub: subscribed to channel "${fullChannel}"`);
+        }
+        return handlers;
     }
 
     /** Routes an inbound message to the handlers registered for its channel. @internal */

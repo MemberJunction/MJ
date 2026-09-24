@@ -239,11 +239,30 @@ describe('ConversationChatAreaComponent.reconnectInProgressRuns tail usage', () 
     expect(h.completions).toEqual([MESSAGE.ID]);
   });
 
-  it('takes the local fast path without a tail call when the run is already terminal', async () => {
-    const h = listHarness(tailResult(), 'Completed');
+  it('consults the tail even when the run is already terminal', async () => {
+    const h = listHarness(tailResult({ RunID: 'RUN-1', IsInFlight: false, DetailStatus: 'Complete' }), 'Completed');
+    await run(h);
+    expect(h.tail).toHaveBeenCalledWith(MESSAGE.ID);
+  });
+
+  it('does not complete a message whose detail is still open beside a finished run', async () => {
+    // The orphan window seen from the run map: the run is over but its detail was never closed.
+    // Completing from the run alone reloads the whole conversation on every trigger and leaves
+    // the message spinning until the server-side reconciler closes the detail.
+    const h = listHarness(tailResult({
+      RunID: 'RUN-1',
+      RunStatus: 'Completed',
+      IsInFlight: false,
+      DetailStatus: 'In-Progress',
+    }), 'Completed');
+    await run(h);
+    expect(h.completions).toEqual([]);
+  });
+
+  it('completes a message with a finished run once its detail is closed', async () => {
+    const h = listHarness(tailResult({ RunID: 'RUN-1', IsInFlight: false, DetailStatus: 'Complete' }), 'Completed');
     await run(h);
     expect(h.completions).toEqual([MESSAGE.ID]);
-    expect(h.tail).not.toHaveBeenCalled();
   });
 
   it('still consults the tail when there is no run row at all', async () => {

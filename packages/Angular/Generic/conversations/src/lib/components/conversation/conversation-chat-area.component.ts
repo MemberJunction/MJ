@@ -6598,30 +6598,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     LogStatusEx({message: `🔄 Found ${inProgressMessages.length} in-progress messages, checking status...`, verboseOnly: true});
 
-    const completedStatuses = ['Completed', 'Failed', 'Error', 'Cancelled'];
-
     for (const message of inProgressMessages) {
       const agentRun = this.AgentRunsByDetailId.get(message.ID);
 
-      if (agentRun && completedStatuses.includes(agentRun.Status)) {
-        // Fast path: the run we just refreshed already proves the work is over.
-        LogStatusEx({message: `🔄 Agent run ${agentRun.ID} already completed (${agentRun.Status}) for message ${message.ID}, handling catch-up...`, verboseOnly: true});
-        await this.handleMessageCompletion(message, agentRun.ID, conversationId, loadToken);
-        ConversationsRuntime.Instance.Tail.Forget(message.ID);
-        continue;
-      }
-
-      // Otherwise ask durable state. Reached when there is no run row yet — fire-and-forget
-      // acknowledges before the INSERT — and ALSO when the run row still reads non-terminal,
-      // because the run is not the only thing that can finish a message: the tail reports the
-      // conversation detail's own status, which the run map does not carry at all. Consulting it
-      // here rather than only on a missing run is what keeps the cursor meaningful and stops a
-      // detail that was completed by anything other than its run from spinning forever.
+      // Ask durable state for every in-progress message, whatever the run map says. The run is not
+      // the only thing that decides a message: the tail reports the conversation detail's own
+      // status, which the run map does not carry at all. A finished run beside a detail that is
+      // still open is the orphan window, and completing from the run alone would reload the whole
+      // conversation on every trigger while the message kept spinning. The tail leaves that case
+      // to the server-side reconciler, and completes a detail that was closed by anything.
       const recovered = await this.tryRecoverFromTail(message, conversationId, loadToken);
       if (!recovered) {
         LogStatusEx({
           message: agentRun
-            ? `🔌 Agent run ${agentRun.ID} still ${agentRun.Status} for message ${message.ID}; durable state agrees it is running`
+            ? `🔌 Agent run ${agentRun.ID} (${agentRun.Status}) for message ${message.ID}; durable state does not show the message finished`
             : `⏳ No agent run found for in-progress message ${message.ID}, waiting for server...`,
           verboseOnly: true
         });

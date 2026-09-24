@@ -14,8 +14,17 @@ export const ORPHAN_DETAIL_GRACE_MS = 2 * 60 * 1000;
 /** Ceiling on details closed per pass, so a large backlog cannot stall startup. */
 const MAX_DETAILS_PER_PASS = 200;
 
-/** Agent-run statuses that mean execution is over, whatever the outcome. */
-const TERMINAL_RUN_STATUSES = ['Completed', 'Failed', 'Cancelled'];
+/**
+ * Agent-run statuses that mean the run succeeded. `AwaitingFeedback` is the normal end of a chat
+ * turn: the agent replied and the next move is the user's.
+ */
+const SUCCESSFUL_RUN_STATUSES: MJAIAgentRunEntity['Status'][] = ['Completed', 'AwaitingFeedback'];
+
+/**
+ * Agent-run statuses that mean execution is over, whatever the outcome. `Paused` is absent: the
+ * run is parked on a workflow that is still executing.
+ */
+const TERMINAL_RUN_STATUSES: MJAIAgentRunEntity['Status'][] = [...SUCCESSFUL_RUN_STATUSES, 'Failed', 'Cancelled'];
 
 /**
  * Close conversation details left `In-Progress` by a run that is already over (MJ #4222).
@@ -108,7 +117,7 @@ export async function ReconcileOrphanedConversationDetails(
             }
             // The failure marker belongs only to the error branch. A completed run has nothing to
             // report, so an empty message stays empty rather than contradicting its own status.
-            if (run.Status === 'Completed') {
+            if (SUCCESSFUL_RUN_STATUSES.includes(run.Status)) {
                 writable.Status = 'Complete';
             } else {
                 writable.Status = 'Error';
