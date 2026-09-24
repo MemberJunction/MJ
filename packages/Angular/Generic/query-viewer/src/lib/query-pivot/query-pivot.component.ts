@@ -36,7 +36,7 @@ import {
  *   [QueryName]="'AIUsageHourly'"
  *   [DimensionColumns]="['Agent']"
  *   [MeasureColumns]="[{ Key: 'TotalCost', Label: 'Cost', Format: 'currency' }]"
- *   (rowActivated)="onRowSelected($event)">
+ *   (RowActivated)="onRowSelected($event)">
  * </mj-query-pivot>
  * ```
  */
@@ -206,9 +206,8 @@ export class QueryPivotComponent extends BaseAngularComponent implements OnInit,
 
     /**
      * Emitted when a row is clicked or activated.
-     * Aliased to 'rowActivated' to satisfy both standard camelCase binding and PascalCase convention.
      */
-    @Output('rowActivated') RowActivated = new EventEmitter<Record<string, unknown>>();
+    @Output() RowActivated = new EventEmitter<Record<string, unknown>>();
 
     /** Fired when query execution starts */
     @Output() QueryStart = new EventEmitter<void>();

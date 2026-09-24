@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, Output, EventEmitter, ViewEncapsulation } from '@angular/core';
 import * as d3 from 'd3';
 import { TrendData } from '../../services/ai-instrumentation.service';
 
@@ -27,19 +27,21 @@ export interface DataPointClickEvent {
       @if (title) {
         <div class="chart-header">
           <h4 class="chart-title">{{ title }}</h4>
-          @if (showLegend) {
+          @if (ShowLegend) {
             <div class="chart-legend">
-              @for (metric of visibleMetrics; track metric) {
-                <div 
+              @for (metric of VisibleMetrics; track metric) {
+                <div
                   class="legend-item"
-                  (click)="toggleMetric(metric)"
-                  [class.legend-item--disabled]="!isMetricVisible(metric)"
+                  [mjClickable]="(IsMetricVisible(metric) ? 'Hide ' : 'Show ') + GetMetricLabel(metric)"
+                  [attr.aria-pressed]="IsMetricVisible(metric)"
+                  (click)="ToggleMetric(metric)"
+                  [class.legend-item--disabled]="!IsMetricVisible(metric)"
                 >
-                  <div 
+                  <div
                     class="legend-color"
-                    [style.background-color]="getMetricColor(metric)"
+                    [style.background-color]="GetMetricColor(metric)"
                   ></div>
-                  <span class="legend-label">{{ getMetricLabel(metric) }}</span>
+                  <span class="legend-label">{{ GetMetricLabel(metric) }}</span>
                 </div>
               }
             </div>
@@ -53,157 +55,186 @@ export interface DataPointClickEvent {
       </div>
     </div>
   `,
+  // ViewEncapsulation.None: the SVG nodes are created by D3 at runtime, so they never carry
+  // Angular's emulated-encapsulation attribute and component-scoped rules cannot reach them.
+  // Every selector below is therefore rooted at the host tag, which keeps them local without
+  // ::ng-deep.
+  encapsulation: ViewEncapsulation.None,
   styles: [`
-    .time-series-chart {
+    app-time-series-chart .time-series-chart {
       background: var(--mj-bg-surface);
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      padding: 12px;
+      border-radius: var(--mj-radius-md);
+      box-shadow: var(--mj-shadow-sm);
+      padding: var(--mj-space-3);
       height: 100%;
       display: flex;
       flex-direction: column;
       overflow: hidden; /* Ensure content doesn't overflow */
     }
 
-    .chart-header {
+    app-time-series-chart .chart-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
+      margin-bottom: var(--mj-space-2);
       flex-wrap: wrap;
-      gap: 12px;
+      gap: var(--mj-space-3);
       flex-shrink: 0; /* Prevent header from being squeezed */
     }
 
-    .chart-title {
+    app-time-series-chart .chart-title {
       margin: 0;
-      font-size: 14px;
-      font-weight: 600;
+      font-size: var(--mj-text-sm);
+      font-weight: var(--mj-font-semibold);
       color: var(--mj-text-primary);
     }
 
-    .chart-legend {
+    app-time-series-chart .chart-legend {
       display: flex;
-      gap: 16px;
+      gap: var(--mj-space-4);
       flex-wrap: wrap;
     }
 
-    .legend-item {
+    app-time-series-chart .legend-item {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: var(--mj-space-1);
       cursor: pointer;
       transition: opacity 0.2s ease;
-      font-size: 11px;
+      font-size: var(--mj-text-xs);
+      border-radius: var(--mj-radius-sm);
     }
 
-    .legend-item--disabled {
+    app-time-series-chart .legend-item:focus-visible {
+      outline: none;
+      box-shadow: var(--mj-focus-ring);
+    }
+
+    app-time-series-chart .legend-item--disabled {
       opacity: 0.4;
     }
 
-    .legend-color {
+    app-time-series-chart .legend-color {
       width: 12px;
       height: 12px;
       border-radius: 2px;
     }
 
-    .legend-label {
+    app-time-series-chart .legend-label {
       color: var(--mj-text-muted);
-      font-weight: 500;
+      font-weight: var(--mj-font-medium);
     }
 
-    .chart-container {
+    app-time-series-chart .chart-container {
       flex: 1;
       position: relative;
       overflow: hidden;
       min-height: 0; /* Important: allows flex child to shrink below content size */
     }
 
-    .chart-container svg {
+    app-time-series-chart .chart-container svg {
       width: 100%;
       height: 100%;
     }
 
-    .chart-tooltip {
+    /* An elevated surface with primary text: both flip together in dark mode. (A fixed
+       rgba(0,0,0,.8) background with --mj-text-inverse text went dark-on-black in dark mode.) */
+    app-time-series-chart .chart-tooltip {
       position: absolute;
-      background: rgba(0, 0, 0, 0.8);
-      color: var(--mj-text-inverse);
-      padding: 8px 12px;
-      border-radius: 4px;
-      font-size: 12px;
+      background: var(--mj-bg-surface-elevated);
+      color: var(--mj-text-primary);
+      border: 1px solid var(--mj-border-default);
+      box-shadow: var(--mj-shadow-md);
+      padding: var(--mj-space-2) var(--mj-space-3);
+      border-radius: var(--mj-radius-sm);
+      font-size: var(--mj-text-xs);
       pointer-events: none;
-      z-index: 1000;
-      max-width: 200px;
+      z-index: var(--mj-z-tooltip);
+      max-width: 220px;
     }
 
+    app-time-series-chart .chart-tooltip__hint {
+      margin-top: var(--mj-space-2);
+      padding-top: var(--mj-space-2);
+      border-top: 1px solid var(--mj-border-subtle);
+      color: var(--mj-text-muted);
+    }
 
-    /* Chart styles */
-    :host ::ng-deep .chart-line {
+    /* D3-rendered chart nodes */
+    app-time-series-chart .chart-line {
       fill: none;
       stroke-width: 2;
     }
 
-    :host ::ng-deep .chart-area {
+    app-time-series-chart .chart-area {
       fill-opacity: 0.1;
     }
 
-    :host ::ng-deep .chart-dot {
+    app-time-series-chart .chart-dot {
       transition: r 0.1s ease;
     }
 
-    :host ::ng-deep .chart-dot:hover {
+    app-time-series-chart .chart-dot:hover {
       filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.3));
     }
 
-    :host ::ng-deep .grid-line {
-      stroke: var(--mj-bg-surface-sunken);
+    app-time-series-chart .grid-line {
+      stroke: var(--mj-border-subtle);
       stroke-width: 1;
     }
 
-    :host ::ng-deep .axis {
+    app-time-series-chart .axis {
       font-size: 11px;
       color: var(--mj-text-muted);
     }
 
-    :host ::ng-deep .axis path {
+    app-time-series-chart .axis path {
       stroke: var(--mj-border-default);
     }
 
-    :host ::ng-deep .axis .tick line {
+    app-time-series-chart .axis .tick line {
       stroke: var(--mj-border-default);
     }
 
-    :host ::ng-deep .axis-y-left {
+    app-time-series-chart .axis-y-left {
       color: var(--mj-brand-primary);
     }
 
-    :host ::ng-deep .axis-y-right {
+    app-time-series-chart .axis-y-right {
       color: var(--mj-status-success);
     }
 
-    :host ::ng-deep .axis-label {
-      font-weight: 500;
+    app-time-series-chart .axis-label {
+      font-weight: var(--mj-font-medium);
     }
 
     @media (max-width: 768px) {
-      .chart-header {
+      app-time-series-chart .chart-header {
         flex-direction: column;
         align-items: flex-start;
       }
-      
-      .chart-legend {
+
+      app-time-series-chart .chart-legend {
         width: 100%;
         justify-content: flex-start;
-      }
-      
-      .chart-controls {
-        flex-wrap: wrap;
       }
     }
   `]
 })
-export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewInit, OnChanges {
-  @Input() Data: TrendData[] = [];
+export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewInit {
+  private _data: TrendData[] = [];
+  private _config: TimeSeriesConfig = {};
+  private viewReady = false;
+
+  @Input() set Data(value: TrendData[]) {
+    this._data = value ?? [];
+    if (this.viewReady) {
+      this.updateChart();
+    }
+  }
+  get Data(): TrendData[] {
+    return this._data;
+  }
 
   /** @deprecated Use {@link Data}. */
   @Input() set data(value: TrendData[]) {
@@ -214,7 +245,16 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     return this.Data;
   }
   @Input() title?: string;
-  @Input() config: TimeSeriesConfig = {};
+  @Input() set config(value: TimeSeriesConfig) {
+    this._config = value ?? {};
+    this.applyConfig();
+    if (this.viewReady) {
+      this.updateChart();
+    }
+  }
+  get config(): TimeSeriesConfig {
+    return this._config;
+  }
   @Input() ShowLegend = true;
 
   /** @deprecated Use {@link ShowLegend}. */
@@ -312,27 +352,18 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   private getDefaultColors(): string[] {
     const style = getComputedStyle(document.documentElement);
     return [
-      style.getPropertyValue('--mj-brand-primary').trim() || '#0076b6',
-      style.getPropertyValue('--mj-status-success').trim() || '#22c55e',
-      style.getPropertyValue('--mj-status-warning').trim() || '#f59e0b',
-      style.getPropertyValue('--mj-status-error').trim() || '#ef4444',
-      style.getPropertyValue('--mj-brand-primary').trim() || '#8b5cf6',
-    ];
+      '--mj-brand-primary',
+      '--mj-status-success',
+      '--mj-status-warning',
+      '--mj-status-error',
+      '--mj-viz-5',
+    ].map(token => style.getPropertyValue(token).trim());
   }
 
   ngAfterViewInit() {
     this.initChart();
+    this.viewReady = true;
     this.updateChart();
-  }
-
-  ngOnChanges(changes: SimpleChanges) {
-    if (changes['data'] && !changes['data'].firstChange) {
-      this.updateChart();
-    }
-    if (changes['config'] && !changes['config'].firstChange) {
-      this.applyConfig();
-      this.updateChart();
-    }
   }
 
   ngOnDestroy() {
@@ -665,7 +696,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         .attr('stroke', color)
         .attr('stroke-width', 2)
         .attr('fill', 'var(--mj-bg-surface)')
-        .style('cursor', 'pointer')
+        .style('cursor', this.IsDrillDownEnabled ? 'pointer' : 'default')
         .style('pointer-events', 'all') // Ensure clicks are captured
         .style('z-index', 1000) // Ensure dots are on top
         .attr('data-metric', metric) // Add data attribute for debugging
@@ -727,9 +758,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       <div>Tokens: ${data.tokens.toLocaleString()}</div>
       <div>Avg Time: ${(data.avgTime / 1000).toFixed(1)}s</div>
       <div>Errors: ${data.errors}</div>
-      <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--mj-bg-surface) 30%, transparent); font-size: 11px; color: color-mix(in srgb, var(--mj-bg-surface) 80%, transparent);">
-        Click data points to drill down
-      </div>
+      ${this.IsDrillDownEnabled ? '<div class="chart-tooltip__hint">Click a point to drill down</div>' : ''}
     `;
 
     tooltip
@@ -737,6 +766,14 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       .html(content)
       .style('left', (event.offsetX + 10) + 'px')
       .style('top', (event.offsetY - 10) + 'px');
+  }
+
+  /**
+   * True when a parent handles DataPointClick. The Executive Summary uses this chart without a
+   * handler, so it must not advertise a drill-down (or show a pointer) that does nothing.
+   */
+  get IsDrillDownEnabled(): boolean {
+    return this.DataPointClick.observed;
   }
 
   private hideTooltip() {

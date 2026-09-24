@@ -1,8 +1,9 @@
 <div class="usage-explorer-container">
     <div class="explorer-toolbar">
         <div class="control-group">
-            <span class="control-label">Measure</span>
+            <span class="control-label" id="ue-measure-label">Measure</span>
             <mj-dropdown
+                AriaLabelledBy="ue-measure-label"
                 [Data]="MeasureOptions"
                 TextField="text"
                 ValueField="value"
@@ -13,8 +14,9 @@
         </div>
 
         <div class="control-group">
-            <span class="control-label">Group By</span>
+            <span class="control-label" id="ue-groupby-label">Group By</span>
             <mj-dropdown
+                AriaLabelledBy="ue-groupby-label"
                 [Data]="DimensionOptions"
                 TextField="text"
                 ValueField="value"
@@ -25,8 +27,9 @@
         </div>
 
         <div class="control-group">
-            <span class="control-label">Secondary Split</span>
+            <span class="control-label" id="ue-split-label">Secondary Split</span>
             <mj-dropdown
+                AriaLabelledBy="ue-split-label"
                 [Data]="SecondarySplitOptions"
                 TextField="text"
                 ValueField="value"
@@ -37,8 +40,9 @@
         </div>
 
         <div class="control-group">
-            <span class="control-label">Grain</span>
+            <span class="control-label" id="ue-grain-label">Grain</span>
             <mj-dropdown
+                AriaLabelledBy="ue-grain-label"
                 [Data]="GrainOptions"
                 TextField="text"
                 ValueField="value"
@@ -72,7 +76,7 @@
             [ComparisonWindow]="ComparisonEnabled"
             [ComparisonPeriodColumn]="'_period'"
             [IsLoading]="IsLoading"
-            (rowActivated)="OnRowActivated($event)">
+            (RowActivated)="OnRowActivated($event)">
         </mj-query-pivot>
     </div>
 </div>

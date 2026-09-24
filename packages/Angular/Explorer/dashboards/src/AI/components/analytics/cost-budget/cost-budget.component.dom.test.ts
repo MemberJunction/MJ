@@ -81,7 +81,7 @@ describe('AnalyticsCostBudgetComponent (DOM)', () => {
     const fixture = await render();
     const emptyTitles = queryAll(fixture, '.stub-empty').map((e) => e.textContent?.trim());
     expect(emptyTitles).toEqual(expect.arrayContaining(['No cost data for selected period', 'No vendor cost data']));
-    expect(query(fixture, '.empty-row')?.textContent).toContain('No data available');
+    expect(query(fixture, '.empty-row')?.textContent).toContain('No cost data');
   });
 
   it('renders daily bars, treemap cells, and model rows once cost data loads', async () => {

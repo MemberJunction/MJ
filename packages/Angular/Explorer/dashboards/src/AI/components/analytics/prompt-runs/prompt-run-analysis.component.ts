@@ -17,6 +17,7 @@ import { CompareDateCells, DateCellIso } from '../../../../shared/date-cell';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
+import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 
 // ── Interfaces ──
 
@@ -136,16 +137,9 @@ const PAGE_SIZE = 25;
             <div class="chart-panel">
                 <div class="chart-header">
                     <h3 class="chart-title">Runs Over Time</h3>
-                    <div class="chart-toggles">
-                        @for (metric of ChartMetricOptions; track metric.key) {
-                            <button
-                                class="toggle-chip"
-                                [class.active]="ActiveChartMetric === metric.key"
-                                (click)="OnChartMetricChange(metric.key)">
-                                {{ metric.label }}
-                            </button>
-                        }
-                    </div>
+                    <mj-view-toggle class="chart-toggles" [Options]="ChartMetricToggleOptions"
+                                    [ActiveKey]="ActiveChartMetric"
+                                    (KeyChange)="OnChartMetricToggle($event)"></mj-view-toggle>
                 </div>
                 <div class="chart-area">
                     @if (ChartBuckets.length === 0) {
@@ -156,8 +150,7 @@ const PAGE_SIZE = 25;
                             @for (bucket of ChartBuckets; track bucket.label) {
                                 <div
                                     class="chart-bar-wrapper"
-                                    [title]="bucket.label + ': ' + bucket.value"
-                                    (click)="OnChartBucketClick(bucket)">
+                                    [title]="bucket.label + ': ' + bucket.value">
                                     <div class="chart-bar-value">{{ FormatChartValue(bucket.value) }}</div>
                                     <div class="chart-bar" [style.height.%]="bucket.heightPercent"></div>
                                     <div class="chart-bar-label">{{ bucket.label }}</div>
@@ -174,7 +167,7 @@ const PAGE_SIZE = 25;
                 <div class="breakdown-card">
                     <h4 class="breakdown-title">By Model</h4>
                     @for (item of ModelBreakdown; track item.id) {
-                        <div class="breakdown-row" (click)="ApplyModelFilter(item.id)">
+                        <div class="breakdown-row" [mjClickable]="'Filter by model ' + item.name" (click)="ApplyModelFilter(item.id)">
                             <span class="breakdown-name">{{ item.name }}</span>
                             <span class="breakdown-count">{{ item.count }}</span>
                             <div class="breakdown-bar-track">
@@ -191,7 +184,7 @@ const PAGE_SIZE = 25;
                 <div class="breakdown-card">
                     <h4 class="breakdown-title">By Prompt</h4>
                     @for (item of PromptBreakdown; track item.id) {
-                        <div class="breakdown-row" (click)="ApplyPromptFilter(item.id)">
+                        <div class="breakdown-row" [mjClickable]="'Filter by prompt ' + item.name" (click)="ApplyPromptFilter(item.id)">
                             <span class="breakdown-name">{{ item.name }}</span>
                             <span class="breakdown-count">{{ item.count }}</span>
                             <div class="breakdown-bar-track">
@@ -208,7 +201,7 @@ const PAGE_SIZE = 25;
                 <div class="breakdown-card">
                     <h4 class="breakdown-title">By Status</h4>
                     @for (item of StatusBreakdown; track item.name) {
-                        <div class="breakdown-row" (click)="ApplyStatusFilter(item.name)">
+                        <div class="breakdown-row" [mjClickable]="'Filter by status ' + item.name" (click)="ApplyStatusFilter(item.name)">
                             <span class="status-dot" [class]="item.cssClass"></span>
                             <span class="breakdown-name">{{ item.name }}</span>
                             <span class="breakdown-count">{{ item.count }} ({{ item.percentage | number:'1.1-1' }}%)</span>
@@ -257,7 +250,9 @@ const PAGE_SIZE = 25;
                             }
                             @if (PagedRuns.length === 0) {
                                 <tr>
-                                    <td colspan="7" class="empty-row">No prompt runs found for the selected filters.</td>
+                                    <td colspan="7" class="empty-cell">
+                                        <mj-empty-state Size="compact" Variant="no-results" Title="No prompt runs found for the selected filters." />
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -266,19 +261,13 @@ const PAGE_SIZE = 25;
 
                 @if (TotalPages > 1) {
                     <div class="pagination">
-                        <button
-                            mjButton
-                            variant="secondary"
-                            size="sm"
+                        <button mjButton variant="secondary" size="sm" AriaLabel="Previous page"
                             [disabled]="CurrentPage === 1"
                             (click)="OnPageChange(CurrentPage - 1)">
                             <i class="fa-solid fa-chevron-left"></i>
                         </button>
                         <span class="page-info">Page {{ CurrentPage }} of {{ TotalPages }}</span>
-                        <button
-                            mjButton
-                            variant="secondary"
-                            size="sm"
+                        <button mjButton variant="secondary" size="sm" AriaLabel="Next page"
                             [disabled]="CurrentPage === TotalPages"
                             (click)="OnPageChange(CurrentPage + 1)">
                             <i class="fa-solid fa-chevron-right"></i>
@@ -374,30 +363,6 @@ const PAGE_SIZE = 25;
             gap: 4px;
         }
 
-        .toggle-chip {
-            padding: 4px 12px;
-            border: 1px solid var(--mj-border-default);
-            border-radius: 16px;
-            background: var(--mj-bg-surface);
-            color: var(--mj-text-secondary);
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.15s, color 0.15s, border-color 0.15s;
-        }
-
-        .toggle-chip:hover {
-            background: var(--mj-bg-surface-hover);
-            color: var(--mj-text-primary);
-        }
-
-        .toggle-chip.active {
-            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
-            color: var(--mj-brand-primary);
-            border-color: var(--mj-brand-primary);
-            font-weight: 600;
-        }
-
         .chart-area {
             height: 220px;
             display: flex;
@@ -424,7 +389,6 @@ const PAGE_SIZE = 25;
             display: flex;
             flex-direction: column;
             align-items: center;
-            cursor: pointer;
             position: relative;
             height: 100%;
             justify-content: flex-end;
@@ -500,6 +464,11 @@ const PAGE_SIZE = 25;
 
         .breakdown-row:hover {
             background: var(--mj-bg-surface-hover);
+        }
+
+        .breakdown-row:focus-visible {
+            outline: none;
+            box-shadow: var(--mj-focus-ring);
         }
 
         .breakdown-name {
@@ -698,10 +667,8 @@ const PAGE_SIZE = 25;
             color: var(--mj-text-muted);
         }
 
-        .empty-row {
-            text-align: center;
-            color: var(--mj-text-muted);
-            padding: 24px 14px;
+        .runs-table td.empty-cell {
+            padding: 0;
         }
 
         /* ── Pagination ── */
@@ -820,6 +787,9 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         { key: 'cacheHit', label: 'By Cache Hit %' },
     ];
 
+    /** The same options in the shape `<mj-view-toggle>` renders (text-label mode). */
+    readonly ChartMetricToggleOptions: ViewToggleOption[] = this.ChartMetricOptions.map(o => ({ key: o.key, label: o.label }));
+
     readonly TableColumns: { field: SortField; label: string; sortable: boolean }[] = [
         { field: 'RunAt', label: 'Timestamp', sortable: true },
         { field: 'Prompt', label: 'Prompt', sortable: true },
@@ -888,6 +858,12 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.Filters = filters;
         this.FiltersChange.emit(filters);
+    }
+
+    /** `(KeyChange)` handler: the toggle emits a plain string, so accept only a known metric key. */
+    public OnChartMetricToggle(key: string): void {
+        const match = this.ChartMetricOptions.find(o => o.key === key);
+        if (match) this.OnChartMetricChange(match.key);
     }
 
     public OnChartMetricChange(metric: ChartMetric): void {

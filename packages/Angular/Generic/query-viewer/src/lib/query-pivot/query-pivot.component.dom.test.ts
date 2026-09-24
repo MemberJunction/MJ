@@ -249,7 +249,7 @@ describe('QueryPivotComponent (DOM)', () => {
         expect(fixture.componentInstance.PivotedData.length).toBe(4);
     });
 
-    it('emits rowActivated event when a row is clicked or double-clicked', () => {
+    it('emits RowActivated event when a row is clicked or double-clicked', () => {
         const fixture = render({
             data: TWELVE_ROW_FIXTURE,
             dimensionColumns: ['Agent'],

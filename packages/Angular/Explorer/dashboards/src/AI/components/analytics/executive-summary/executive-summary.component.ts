@@ -117,10 +117,8 @@ interface ErrorHotspot {
           @for (item of TopConsumers; track item.Name) {
             <div
               class="consumer-item"
+              [mjClickable]="'Open ' + item.Name"
               (click)="OnConsumerClick(item)"
-              role="button"
-              tabindex="0"
-              (keydown.enter)="OnConsumerClick(item)"
             >
               <div
                 class="consumer-rank"
@@ -336,6 +334,11 @@ interface ErrorHotspot {
       padding: 10px 18px;
       cursor: pointer;
       transition: background 0.15s ease;
+    }
+
+    .consumer-item:focus-visible {
+      outline: none;
+      box-shadow: var(--mj-focus-ring);
     }
     .consumer-item:hover {
       background: var(--mj-bg-surface-hover);

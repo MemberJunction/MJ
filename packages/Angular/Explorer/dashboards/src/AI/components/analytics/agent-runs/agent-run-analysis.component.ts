@@ -206,7 +206,7 @@ const COST_COLORS = [
                         </thead>
                         <tbody>
                             @if (RecentRuns.length === 0) {
-                                <tr><td [attr.colspan]="TableColumns.length" class="empty-row">No runs found</td></tr>
+                                <tr><td [attr.colspan]="TableColumns.length" class="empty-row"><mj-empty-state Variant="no-results" Size="compact" Title="No runs found" Message="No agent runs match this period and these filters."></mj-empty-state></td></tr>
                             }
                             @for (run of RecentRuns; track run.ID) {
                                 <tr>

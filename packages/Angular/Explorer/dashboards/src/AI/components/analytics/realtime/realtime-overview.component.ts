@@ -66,12 +66,14 @@ interface RecentSessionRow {
     Duration: string;
 }
 
+/** Channels are categorical series, so they take the categorical data-viz ramp (not status colours). */
 const DONUT_COLORS = [
-    'var(--mj-brand-primary)',
-    'var(--mj-status-success)',
-    'var(--mj-brand-accent)',
-    'var(--mj-status-warning)',
-    'var(--mj-text-disabled)'
+    'var(--mj-viz-1)',
+    'var(--mj-viz-2)',
+    'var(--mj-viz-3)',
+    'var(--mj-viz-4)',
+    'var(--mj-viz-5)',
+    'var(--mj-viz-6)'
 ];
 
 @Component({
@@ -197,7 +199,9 @@ const DONUT_COLORS = [
                         </thead>
                         <tbody>
                             @if (RecentSessions.length === 0) {
-                                <tr><td colspan="8" class="empty-row">No sessions in the selected period</td></tr>
+                                <tr><td colspan="8" class="empty-cell">
+                                    <mj-empty-state Size="compact" Variant="empty" Title="No sessions in the selected period" />
+                                </td></tr>
                             }
                             @for (row of RecentSessions; track row.ID) {
                                 <tr class="session-row" (click)="OpenSession(row.ID)">
@@ -225,7 +229,7 @@ const DONUT_COLORS = [
                                     <td class="cell-numeric mono">{{ row.Cost }}</td>
                                     <td class="cell-numeric mono">{{ row.Duration }}</td>
                                     <td class="cell-action">
-                                        <button mjButton variant="icon" size="sm" title="Open session record"
+                                        <button mjButton variant="icon" size="sm" AriaLabel="Open session record" title="Open session record"
                                                 (click)="OpenSession(row.ID); $event.stopPropagation()">
                                             <i class="fa-solid fa-arrow-up-right-from-square"></i>
                                         </button>
@@ -364,8 +368,8 @@ const DONUT_COLORS = [
             height: 140px;
             border-radius: 50%;
             flex-shrink: 0;
-            -webkit-mask: radial-gradient(circle at center, transparent 42px, #000 43px);
-            mask: radial-gradient(circle at center, transparent 42px, #000 43px);
+            -webkit-mask: radial-gradient(circle at center, transparent 42px, #000 43px); /* token-exempt: alpha mask, colour irrelevant */
+            mask: radial-gradient(circle at center, transparent 42px, #000 43px); /* token-exempt: alpha mask, colour irrelevant */
         }
 
         .legend {
@@ -495,14 +499,12 @@ const DONUT_COLORS = [
         .cell-action { text-align: right; white-space: nowrap; }
 
         .mono {
-            font-family: var(--mj-font-mono, monospace);
+            font-family: var(--mj-font-family-mono);
             font-size: 12px;
         }
 
-        .empty-row {
-            text-align: center;
-            color: var(--mj-text-disabled);
-            padding: 24px;
+        .data-table td.empty-cell {
+            padding: 0;
         }
 
         /* ── Status pills ── */

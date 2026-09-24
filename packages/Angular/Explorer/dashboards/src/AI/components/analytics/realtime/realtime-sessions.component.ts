@@ -76,41 +76,28 @@ const PAGE_SIZE = 25;
 
             <!-- Filter bar: search · status · target agent · user · host -->
             <div class="filterbar">
-                <div class="search-input">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                    <input type="text"
-                           placeholder="Search sessions, users, hosts…"
-                           [value]="SearchTerm"
-                           (input)="OnSearchChanged($event)" />
-                </div>
-                <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChanged($event)">
-                    <option value="">Status: All</option>
-                    <option value="Active">Active</option>
-                    <option value="Idle">Idle</option>
-                    <option value="Closed">Closed</option>
-                </select>
-                <select class="filter-select" [value]="TargetFilter" (change)="OnTargetFilterChanged($event)">
-                    <option value="">Target: All</option>
-                    @for (opt of TargetOptions; track opt.Value) {
-                        <option [value]="opt.Value">{{ opt.Label }}</option>
-                    }
-                </select>
-                <select class="filter-select" [value]="UserFilter" (change)="OnUserFilterChanged($event)">
-                    <option value="">User: All</option>
-                    @for (opt of UserOptions; track opt.Value) {
-                        <option [value]="opt.Value">{{ opt.Label }}</option>
-                    }
-                </select>
-                <select class="filter-select" [value]="HostFilter" (change)="OnHostFilterChanged($event)">
-                    <option value="">Host: All</option>
-                    @for (opt of HostOptions; track opt.Value) {
-                        <option [value]="opt.Value">{{ opt.Label }}</option>
-                    }
-                </select>
+                <mj-page-search class="filter-search"
+                                Placeholder="Search sessions, users, hosts…"
+                                [Value]="SearchTerm"
+                                (ValueChange)="OnSearchChanged($event)"></mj-page-search>
+                <mj-dropdown class="filter-dropdown" AriaLabel="Status" [Data]="StatusOptions"
+                             TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                             [ngModel]="StatusFilter" (ngModelChange)="OnStatusFilterChanged($event)"></mj-dropdown>
+                <mj-dropdown class="filter-dropdown" AriaLabel="Target agent" [Data]="TargetOptions"
+                             TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                             [Filterable]="TargetOptions.length > 10"
+                             [ngModel]="TargetFilter" (ngModelChange)="OnTargetFilterChanged($event)"></mj-dropdown>
+                <mj-dropdown class="filter-dropdown" AriaLabel="User" [Data]="UserOptions"
+                             TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                             [Filterable]="UserOptions.length > 10"
+                             [ngModel]="UserFilter" (ngModelChange)="OnUserFilterChanged($event)"></mj-dropdown>
+                <mj-dropdown class="filter-dropdown" AriaLabel="Host instance" [Data]="HostOptions"
+                             TextField="Label" ValueField="Value" [ValuePrimitive]="true"
+                             [Filterable]="HostOptions.length > 10"
+                             [ngModel]="HostFilter" (ngModelChange)="OnHostFilterChanged($event)"></mj-dropdown>
                 <span class="result-pill">{{ FilteredRows.length }} results · {{ LiveCount }} live</span>
-                <button mjButton variant="secondary" size="sm" title="Refresh" (click)="LoadData()">
-                    <i class="fa-solid fa-rotate"></i>
-                </button>
+                <mj-refresh-button [Loading]="IsLoading" [ShowLabel]="false" Title="Refresh sessions"
+                                   (Clicked)="LoadData()"></mj-refresh-button>
             </div>
 
             <!-- Sessions grid -->
@@ -134,7 +121,9 @@ const PAGE_SIZE = 25;
                         </thead>
                         <tbody>
                             @if (PagedRows.length === 0) {
-                                <tr><td colspan="11" class="empty-row">No sessions match the current filters</td></tr>
+                                <tr><td colspan="11" class="empty-cell">
+                                    <mj-empty-state Size="compact" Variant="no-results" Title="No sessions match the current filters" />
+                                </td></tr>
                             }
                             @for (row of PagedRows; track row.ID) {
                                 <tr class="session-row" (click)="OpenSession(row.ID)">
@@ -174,7 +163,7 @@ const PAGE_SIZE = 25;
                                     <td class="cell-numeric mono">{{ row.Duration }}</td>
                                     <td class="cell-host mono" [title]="row.Host">{{ row.Host }}</td>
                                     <td class="cell-action">
-                                        <button mjButton variant="icon" size="sm" title="Open session record"
+                                        <button mjButton variant="icon" size="sm" AriaLabel="Open session record" title="Open session record"
                                                 (click)="OpenSession(row.ID); $event.stopPropagation()">
                                             <i class="fa-solid fa-arrow-up-right-from-square"></i>
                                         </button>
@@ -194,11 +183,11 @@ const PAGE_SIZE = 25;
                 </span>
                 @if (PageCount > 1) {
                     <div class="pager">
-                        <button mjButton variant="secondary" size="sm" [disabled]="PageIndex === 0" (click)="PrevPage()">
+                        <button mjButton variant="secondary" size="sm" AriaLabel="Previous page" [disabled]="PageIndex === 0" (click)="PrevPage()">
                             <i class="fa-solid fa-chevron-left"></i>
                         </button>
                         <span class="pager-label">Page {{ PageIndex + 1 }} of {{ PageCount }}</span>
-                        <button mjButton variant="secondary" size="sm" [disabled]="PageIndex >= PageCount - 1" (click)="NextPage()">
+                        <button mjButton variant="secondary" size="sm" AriaLabel="Next page" [disabled]="PageIndex >= PageCount - 1" (click)="NextPage()">
                             <i class="fa-solid fa-chevron-right"></i>
                         </button>
                     </div>
@@ -237,43 +226,14 @@ const PAGE_SIZE = 25;
             margin-bottom: 16px;
         }
 
-        .search-input {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--mj-bg-surface-sunken);
-            border: 1px solid var(--mj-border-subtle);
-            border-radius: 8px;
-            padding: 6px 10px;
-            min-width: 240px;
+        .filter-search {
             flex: 1;
+            min-width: 240px;
             max-width: 360px;
         }
 
-        .search-input i {
-            color: var(--mj-text-muted);
-            font-size: 12px;
-        }
-
-        .search-input input {
-            border: none;
-            outline: none;
-            background: transparent;
-            color: var(--mj-text-primary);
-            font-size: 13px;
-            width: 100%;
-        }
-
-        .search-input input::placeholder { color: var(--mj-text-disabled); }
-
-        .filter-select {
-            background: var(--mj-bg-surface);
-            border: 1px solid var(--mj-border-default);
-            border-radius: 8px;
-            color: var(--mj-text-secondary);
-            font-size: 12.5px;
-            padding: 6px 8px;
-            max-width: 200px;
+        .filter-dropdown {
+            width: 170px;
         }
 
         .result-pill {
@@ -371,14 +331,12 @@ const PAGE_SIZE = 25;
         .cell-action { text-align: right; white-space: nowrap; }
 
         .mono {
-            font-family: var(--mj-font-mono, monospace);
+            font-family: var(--mj-font-family-mono);
             font-size: 12px;
         }
 
-        .empty-row {
-            text-align: center;
-            color: var(--mj-text-disabled);
-            padding: 24px;
+        .data-table td.empty-cell {
+            padding: 0;
         }
 
         /* ── Status pills ── */
@@ -494,9 +452,15 @@ export class AnalyticsRealtimeSessionsComponent extends BaseAngularComponent imp
     public KPICards: KPICardData[] = [];
     public FilteredRows: SessionGridRow[] = [];
     public PagedRows: SessionGridRow[] = [];
-    public TargetOptions: SelectOption[] = [];
-    public UserOptions: SelectOption[] = [];
-    public HostOptions: SelectOption[] = [];
+    public readonly StatusOptions: SelectOption[] = [
+        { Value: '', Label: 'Status: All' },
+        { Value: 'Active', Label: 'Active' },
+        { Value: 'Idle', Label: 'Idle' },
+        { Value: 'Closed', Label: 'Closed' }
+    ];
+    public TargetOptions: SelectOption[] = [{ Value: '', Label: 'Target: All' }];
+    public UserOptions: SelectOption[] = [{ Value: '', Label: 'User: All' }];
+    public HostOptions: SelectOption[] = [{ Value: '', Label: 'Host: All' }];
 
     public SearchTerm = '';
     public StatusFilter = '';
@@ -555,28 +519,28 @@ export class AnalyticsRealtimeSessionsComponent extends BaseAngularComponent imp
 
     // ── Filter handlers ──
 
-    public OnSearchChanged(event: Event): void {
-        this.SearchTerm = (event.target as HTMLInputElement).value;
+    public OnSearchChanged(value: string): void {
+        this.SearchTerm = value ?? '';
         this.applyFilters();
     }
 
-    public OnStatusFilterChanged(event: Event): void {
-        this.StatusFilter = (event.target as HTMLSelectElement).value;
+    public OnStatusFilterChanged(value: string | null): void {
+        this.StatusFilter = value ?? '';
         this.applyFilters();
     }
 
-    public OnTargetFilterChanged(event: Event): void {
-        this.TargetFilter = (event.target as HTMLSelectElement).value;
+    public OnTargetFilterChanged(value: string | null): void {
+        this.TargetFilter = value ?? '';
         this.applyFilters();
     }
 
-    public OnUserFilterChanged(event: Event): void {
-        this.UserFilter = (event.target as HTMLSelectElement).value;
+    public OnUserFilterChanged(value: string | null): void {
+        this.UserFilter = value ?? '';
         this.applyFilters();
     }
 
-    public OnHostFilterChanged(event: Event): void {
-        this.HostFilter = (event.target as HTMLSelectElement).value;
+    public OnHostFilterChanged(value: string | null): void {
+        this.HostFilter = value ?? '';
         this.applyFilters();
     }
 
@@ -707,11 +671,14 @@ export class AnalyticsRealtimeSessionsComponent extends BaseAngularComponent imp
             if (row.User) users.set(row.User, row.User);
             if (row.Host && row.Host !== '—') hosts.add(row.Host);
         }
-        const toOptions = (values: Iterable<string>) =>
-            Array.from(values).sort((a, b) => a.localeCompare(b)).map(v => ({ Value: v, Label: v }));
-        this.TargetOptions = toOptions(targets.keys());
-        this.UserOptions = toOptions(users.keys());
-        this.HostOptions = toOptions(hosts);
+        // Each list leads with an "All" entry (value '') so the dropdown can clear its own filter.
+        const toOptions = (allLabel: string, values: Iterable<string>): SelectOption[] => [
+            { Value: '', Label: allLabel },
+            ...Array.from(values).sort((a, b) => a.localeCompare(b)).map(v => ({ Value: v, Label: v }))
+        ];
+        this.TargetOptions = toOptions('Target: All', targets.keys());
+        this.UserOptions = toOptions('User: All', users.keys());
+        this.HostOptions = toOptions('Host: All', hosts);
     }
 
     private applyFilters(): void {

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { TimeSeriesChartComponent } from './time-series-chart.component';
 import type { TrendData } from '../../services/ai-instrumentation.service';
 
@@ -17,6 +18,7 @@ const trend = (over: Partial<TrendData> = {}): TrendData =>
 
 const render = (inputs: Record<string, unknown>) =>
   renderComponentFixture(TimeSeriesChartComponent, {
+    imports: [MJClickableDirective],
     declarations: [TimeSeriesChartComponent],
     inputs: { data: [trend()], showLegend: true, ...inputs },
   });

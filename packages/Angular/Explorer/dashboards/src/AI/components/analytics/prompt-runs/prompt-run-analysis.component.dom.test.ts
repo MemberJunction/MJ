@@ -3,16 +3,17 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
+import { MJClickableDirective, MJViewToggleComponent } from '@memberjunction/ng-ui-components';
 import { AnalyticsPromptRunsComponent } from './prompt-run-analysis.component';
 
 /**
  * DOM coverage for <app-analytics-prompt-runs> — the prompt-run explorer: an eight-tile stats bar, a
- * "Runs Over Time" chart with four metric-toggle chips, three breakdown cards (Model / Prompt /
+ * "Runs Over Time" chart with a four-option `mj-view-toggle`, three breakdown cards (Model / Prompt /
  * Status, each empty-state-gated), and a paginated Run Details table. It loads `MJ: AI Prompt Runs`
  * through `this.ProviderToUse`; all displayed slices are derived getters over the loaded set. A
  * `createFakeProvider` supplies rows via `[Provider]`. Empty → the chart + breakdown + table empty
- * states; a run set → chart bars, breakdown rows, and table rows. Clicking a metric chip calls
- * `OnChartMetricChange`, which flips `ActiveChartMetric` and marks the chip active. `mj-loading` /
+ * states; a run set → chart bars, breakdown rows, and table rows. Clicking a toggle option calls
+ * `OnChartMetricToggle`, which flips `ActiveChartMetric` and marks that option active. `mj-loading` /
  * `mj-empty-state` stubbed; explicit `detectChanges(false)` (LoadData toggles IsLoading).
  */
 
@@ -29,7 +30,10 @@ const RUNS: PromptRunFixture[] = [
 ];
 
 async function render(rows: unknown[]): Promise<ComponentFixture<AnalyticsPromptRunsComponent>> {
-  TestBed.configureTestingModule({ declarations: [AnalyticsPromptRunsComponent], imports: [StubLoadingComponent, StubEmptyStateComponent] });
+  TestBed.configureTestingModule({
+    declarations: [AnalyticsPromptRunsComponent],
+    imports: [StubLoadingComponent, StubEmptyStateComponent, MJViewToggleComponent, MJClickableDirective],
+  });
   const fixture = TestBed.createComponent(AnalyticsPromptRunsComponent);
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: (_p: RunViewParams) => rows }));
   fixture.detectChanges(false);
@@ -50,27 +54,26 @@ describe('AnalyticsPromptRunsComponent (DOM)', () => {
     expect(labels).toEqual(expect.arrayContaining(['Total Runs', 'Success Rate', 'Cache Hit Rate']));
   });
 
-  it('renders the four chart metric-toggle chips with the default active', async () => {
+  it('renders the four chart metric-toggle options with the default active', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render(RUNS);
-    const chips = queryAll(fixture, '.toggle-chip');
-    expect(chips.map((c) => c.textContent?.trim())).toEqual(['By Volume', 'By Cost', 'By Tokens', 'By Cache Hit %']);
-    expect((chips[0] as HTMLElement).classList.contains('active')).toBe(true);
+    const options = queryAll(fixture, '.chart-toggles .mj-view-toggle-btn');
+    expect(options.map((c) => c.textContent?.trim())).toEqual(['By Volume', 'By Cost', 'By Tokens', 'By Cache Hit %']);
+    expect(options[0].getAttribute('aria-pressed')).toBe('true');
   });
 
   it('shows the chart + breakdown + table empty states when there are no runs', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render([]);
     const emptyTitles = queryAll(fixture, '.stub-empty').map((e) => e.textContent?.trim());
-    expect(emptyTitles).toEqual(expect.arrayContaining(['No data for selected time range', 'No data']));
-    expect(query(fixture, '.empty-row')?.textContent).toContain('No prompt runs found');
+    expect(emptyTitles).toEqual(expect.arrayContaining(['No data for selected time range', 'No data', 'No prompt runs found for the selected filters.']));
   });
 
   it('renders chart bars and run-detail rows once data loads', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render(RUNS);
     expect(queryAll(fixture, '.chart-bar-wrapper').length).toBeGreaterThan(0);
-    expect(query(fixture, '.empty-row')).toBeNull();
+    expect(query(fixture, '.runs-table .empty-cell')).toBeNull();
     expect(queryAll(fixture, '.runs-table tbody tr').length).toBe(RUNS.length);
     // The 'Failed' run must render its status pill (text + pill-failed class) — the failed
     // render path the old impossible 'Error' value never exercised.
@@ -83,13 +86,31 @@ describe('AnalyticsPromptRunsComponent (DOM)', () => {
     );
   });
 
-  it('moves the active class when a different metric chip is clicked', async () => {
+  it('moves the active option when a different metric is chosen', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render(RUNS);
-    const costChip = queryAll(fixture, '.toggle-chip').find((c) => c.textContent?.includes('By Cost')) as HTMLElement;
-    costChip.click();
+    const costOption = queryAll(fixture, '.chart-toggles .mj-view-toggle-btn').find((c) => c.textContent?.includes('By Cost')) as HTMLElement;
+    costOption.click();
+    fixture.componentRef.changeDetectorRef.markForCheck();
     fixture.detectChanges(false);
     expect(fixture.componentInstance.ActiveChartMetric).toBe('cost');
-    expect(costChip.classList.contains('active')).toBe(true);
+    expect(costOption.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('makes each breakdown row keyboard-accessible and names it after the filter it applies', async () => {
+    installProvider({ runViewResults: [] });
+    const fixture = await render(RUNS);
+    const rows = queryAll(fixture, '.breakdown-row');
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.getAttribute('role') === 'button' && r.getAttribute('tabindex') === '0')).toBe(true);
+    expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual(expect.arrayContaining(['Filter by model GPT-4o', 'Filter by status Failed']));
+  });
+
+  it('does not present chart bars as interactive (there is no drill-down behind them)', async () => {
+    installProvider({ runViewResults: [] });
+    const fixture = await render(RUNS);
+    const bar = query(fixture, '.chart-bar-wrapper') as HTMLElement;
+    expect(bar.getAttribute('role')).toBeNull();
+    expect(bar.getAttribute('tabindex')).toBeNull();
   });
 });

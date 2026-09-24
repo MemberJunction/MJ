@@ -104,7 +104,7 @@ const FIELDS = [
                         </thead>
                         <tbody>
                             @if (Rows.length === 0) {
-                                <tr><td colspan="10" class="empty-row">No model data for selected period</td></tr>
+                                <tr><td colspan="10" class="empty-row"><mj-empty-state Variant="no-results" Size="compact" Title="No model data" Message="No model activity in the selected period."></mj-empty-state></td></tr>
                             }
                             @for (row of Rows; track row.ModelName) {
                                 <tr>

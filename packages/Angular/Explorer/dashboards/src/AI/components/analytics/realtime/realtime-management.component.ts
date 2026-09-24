@@ -27,6 +27,7 @@ import { CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedService } from '@memberjunction/ng-shared';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { TabConfig } from '@memberjunction/ng-ui-components';
 import {
     RealtimeManagementDataset, LoadRealtimeManagementDataset,
     BridgeProviderRollup, SessionBridgeRollup, BridgeAgentIdentityRecord,
@@ -94,6 +95,9 @@ export class RealtimeManagementComponent extends BaseAngularComponent implements
         { Key: 'metrics', Label: 'Metrics', Icon: 'fa-solid fa-chart-column' }
     ];
 
+    /** The same sub-tabs in the shape `<mj-tab-nav>` renders. */
+    public readonly SubTabConfigs: TabConfig[] = this.SubTabs.map(t => ({ key: t.Key, label: t.Label, icon: t.Icon }));
+
     // ── View models (rebuilt on load) ──
 
     public LiveBridges: SessionBridgeRollup[] = [];
@@ -122,6 +126,12 @@ export class RealtimeManagementComponent extends BaseAngularComponent implements
     }
 
     // ── Sub-tab navigation ──
+
+    /** `(TabChange)` handler: `mj-tab-nav` emits a plain string, so accept only a known sub-tab key. */
+    public OnSubTabChange(key: string): void {
+        const match = this.SubTabs.find(t => t.Key === key);
+        if (match) this.SelectSubTab(match.Key);
+    }
 
     public SelectSubTab(key: RealtimeSubTab): void {
         if (key === this.ActiveSubTab) return;

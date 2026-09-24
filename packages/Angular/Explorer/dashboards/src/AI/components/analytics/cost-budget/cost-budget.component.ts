@@ -231,7 +231,7 @@ function CostBudgetUTCDayKey(d: Date): string {
                         </thead>
                         <tbody>
                             @if (CostByModelRows.length === 0) {
-                                <tr><td colspan="11" class="empty-row">No data available</td></tr>
+                                <tr><td colspan="11" class="empty-row"><mj-empty-state Variant="no-results" Size="compact" Title="No cost data" Message="No AI usage was recorded in this period."></mj-empty-state></td></tr>
                             }
                             @for (row of CostByModelRows; track row.Model) {
                                 <tr>
@@ -520,7 +520,7 @@ function CostBudgetUTCDayKey(d: Date): string {
             min-width: 80px;
             min-height: 70px;
             flex-grow: 1;
-            color: var(--mj-text-inverse, white);
+            color: var(--mj-text-inverse);
             transition: opacity 0.2s;
         }
 

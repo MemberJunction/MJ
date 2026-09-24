@@ -13,24 +13,24 @@
     height: 100%;
     width: 100%;
     min-height: 0;
-    gap: var(--mj-spacing-md, 16px);
+    gap: var(--mj-space-4);
 }
 
 .explorer-toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: var(--mj-spacing-md, 16px);
-    padding: var(--mj-spacing-md, 16px);
+    gap: var(--mj-space-4);
+    padding: var(--mj-space-4);
     background: var(--mj-bg-surface);
     border: 1px solid var(--mj-border-subtle);
-    border-radius: var(--mj-radius-md, 6px);
+    border-radius: var(--mj-radius-md);
 }
 
 .control-group {
     display: flex;
     flex-direction: column;
-    gap: var(--mj-spacing-xs, 4px);
+    gap: var(--mj-space-1);
     min-width: 160px;
 }
 
@@ -41,8 +41,8 @@
 }
 
 .control-label {
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--mj-text-xs);
+    font-weight: var(--mj-font-medium);
     color: var(--mj-text-secondary);
 }
 
@@ -52,6 +52,6 @@
     height: 100%;
     background: var(--mj-bg-surface);
     border: 1px solid var(--mj-border-subtle);
-    border-radius: var(--mj-radius-md, 6px);
+    border-radius: var(--mj-radius-md);
     overflow: hidden;
 }
