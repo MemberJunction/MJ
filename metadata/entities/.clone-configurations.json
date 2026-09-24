@@ -111,7 +111,6 @@
             "MJ: Templates": { "Policy": "Skip", "Locked": true },
             "MJ: Queries": { "Policy": "Skip", "Locked": true },
             "MJ: Workspaces": { "Policy": "Skip", "Locked": true },
-            "MJ: Reports": { "Policy": "Skip", "Locked": true },
             "MJ: AI Agent Notes": { "Policy": "Skip", "Locked": true },
             "MJ: AI Agent Requests": { "Policy": "Skip", "Locked": true },
             "MJ: AI Agent Examples": { "Policy": "Skip", "Locked": true },
@@ -1728,10 +1727,10 @@
   },
   {
     "_comments": [
-      "Negative catalog: MJ: OAuth Tokens contains secrets — not cloneable."
+      "Negative catalog: MJ: O Auth Tokens contains secrets — not cloneable."
     ],
     "fields": {
-      "Name": "MJ: OAuth Tokens",
+      "Name": "MJ: O Auth Tokens",
       "Configuration": {
         "Clone": {
           "Enabled": false,
@@ -1741,7 +1740,7 @@
       }
     },
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: OAuth Tokens"
+      "ID": "@lookup:MJ: Entities.Name=MJ: O Auth Tokens"
     }
   },
   {
