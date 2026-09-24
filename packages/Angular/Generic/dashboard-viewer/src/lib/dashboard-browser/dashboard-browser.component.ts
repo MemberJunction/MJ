@@ -885,7 +885,8 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             try {
                 const dragData = JSON.parse(data);
                 if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
-                    const dashboards = this.dashboardsWithIds(dragData.ids);
+                    const draggedIds = new Set(dragData.ids.map((id: string) => NormalizeUUID(id)));
+                    const dashboards = this.Dashboards.filter(d => draggedIds.has(NormalizeUUID(d.ID)));
                     if (dashboards.length > 0) {
                         this.DashboardMove.emit({
                             Dashboards: dashboards,
@@ -1069,7 +1070,8 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             try {
                 const dragData = JSON.parse(data);
                 if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
-                    const dashboards = this.dashboardsWithIds(dragData.ids);
+                    const draggedIds = new Set(dragData.ids.map((id: string) => NormalizeUUID(id)));
+                    const dashboards = this.Dashboards.filter(d => draggedIds.has(NormalizeUUID(d.ID)));
                     if (dashboards.length > 0) {
                         this.DashboardMove.emit({
                             Dashboards: dashboards,
@@ -1091,19 +1093,11 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * The loaded dashboards whose IDs appear in `ids`, in `Dashboards` order. A normalized Set
-     * rather than a nested UUIDsEqual scan, which is dashboards x dragged IDs.
-     */
-    private dashboardsWithIds(ids: readonly string[]): MJDashboardEntity[] {
-        const wanted = new Set(ids.map(id => NormalizeUUID(id)));
-        return this.Dashboards.filter(d => wanted.has(NormalizeUUID(d.ID)));
-    }
-
-    /**
      * Handle drop from breadcrumb component
      */
     public OnBreadcrumbDrop(event: { TargetCategoryId: string | null; DashboardIds: string[] }): void {
-        const dashboards = this.dashboardsWithIds(event.DashboardIds);
+        const droppedIds = new Set(event.DashboardIds.map(id => NormalizeUUID(id)));
+        const dashboards = this.Dashboards.filter(d => droppedIds.has(NormalizeUUID(d.ID)));
         if (dashboards.length > 0) {
             this.DashboardMove.emit({
                 Dashboards: dashboards,
