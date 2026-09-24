@@ -99,10 +99,14 @@ function installStubs(): void {
             const field = typeof providerConfig?.['namespaceField'] === 'string' ? (providerConfig['namespaceField'] as string) : undefined;
             return field && sourceRecord?.[field] != null ? { namespace: String(sourceRecord[field]) } : {};
         },
-        // Declares no source-record dependencies — the namespace field lives on the item itself, so
-        // resolveDriverFieldPaths short-circuits and CV6 still exercises namespace routing through
-        // BuildProviderDirectives. Mirrors the unit-test double in AutotagBaseEngine.test.ts.
-        GetSourceRecordFieldPaths: () => [] as string[],
+        // Mirrors PineconeDatabase: a namespaceField naming a field on a RELATED record (the dotted
+        // `<FK>.<Field>` form) is declared as a source-record dependency, so the pipeline pre-resolves
+        // it through FieldPathResolver and injects it under the full path key. A plain field needs no
+        // declaration — it is already on the item — so CV6 keeps short-circuiting exactly as before.
+        GetSourceRecordFieldPaths: (providerConfig?: Record<string, unknown>) => {
+            const field = typeof providerConfig?.['namespaceField'] === 'string' ? (providerConfig['namespaceField'] as string) : undefined;
+            return field && field.includes('.') ? [field] : ([] as string[]);
+        },
         CreateRecords: async (records: CapturedRecord[], _indexName?: string, providerConfig?: Record<string, unknown>) => {
             S.Upserts.push({ providerConfig, records: records.map(r => ({ id: r.id, metadata: r.metadata, providerTemporaryDirectives: r.providerTemporaryDirectives })) });
             return { success: true, message: 'stubbed upsert (captured)' };
@@ -153,7 +157,7 @@ async function ensureBase(ctx: IntegrationCheckContext): Promise<void> {
 }
 
 /** Create a content source (+ its content type), optionally with a VectorMetadata Configuration. */
-async function makeSource(ctx: IntegrationCheckContext, label: string, configuration?: Record<string, unknown>): Promise<{ sourceID: string; contentTypeID: string }> {
+async function makeSource(ctx: IntegrationCheckContext, label: string, configuration?: Record<string, unknown>, vectorIndexID?: string): Promise<{ sourceID: string; contentTypeID: string }> {
     const ct = await ctx.Provider.GetEntityObject<MJContentTypeEntity>('MJ: Content Types', ctx.User);
     ct.NewRecord(); ct.Name = `${S.Prefix}-ct-${label} ${MARKER}`; ct.AIModelID = S.EmbeddingModelID; ct.MinTags = 1; ct.MaxTags = 5;
     Assert(await ct.Save(), `content-type save: ${ct.LatestResult?.CompleteMessage}`);
@@ -162,7 +166,7 @@ async function makeSource(ctx: IntegrationCheckContext, label: string, configura
     const src = await ctx.Provider.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources', ctx.User);
     src.NewRecord(); src.Name = `${S.Prefix}-src-${label} ${MARKER}`;
     src.ContentTypeID = ct.ID; src.ContentSourceTypeID = S.SourceTypeID; src.ContentFileTypeID = S.FileTypeID;
-    src.URL = 'https://example.com/it-cv'; src.EmbeddingModelID = S.EmbeddingModelID; src.VectorIndexID = S.VectorIndexID;
+    src.URL = 'https://example.com/it-cv'; src.EmbeddingModelID = S.EmbeddingModelID; src.VectorIndexID = vectorIndexID ?? S.VectorIndexID;
     if (configuration) src.Configuration = JSON.stringify(configuration);
     Assert(await src.Save(), `content-source save: ${src.LatestResult?.CompleteMessage}`);
     S.Created.push({ entity: 'MJ: Content Sources', id: src.ID });
@@ -428,6 +432,51 @@ export const ContentVectorizationChecks: NamedCheck[] = [
                 AssertEqual(meta['Entity'], 'MJ: Content Item Chunks', `${c.label}: Entity kept — ${c.why}`);
                 console.log(`      → CV8/${c.label}: Entity kept (${c.why})`);
             }
+        }
+    },
+    {
+        Id: 'content-vectorization.CV9',
+        Name: 'CV9: a dotted namespaceField resolves for a content source created AFTER the engine cache loaded',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CV9')) return;
+            await ensureBase(ctx);
+
+            // THE LANE CV6 DELIBERATELY DOES NOT COVER. CV6 routes on a PLAIN field, which lives on
+            // the item, so `resolveDriverFieldPaths` short-circuits and FieldPathResolver never runs.
+            // The single-hop form is the one production uses to reach a tenant id that lives on the
+            // SOURCE, and it had no integration coverage at all.
+            const vi = await ctx.Provider.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes', ctx.User);
+            vi.NewRecord(); vi.Name = `${S.Prefix}-index-hop ${MARKER}`;
+            vi.EmbeddingModelID = S.EmbeddingModelID; vi.VectorDatabaseID = S.VectorDatabaseID; vi.Dimensions = 1536;
+            vi.ProviderConfig = JSON.stringify({ namespaceField: 'ContentSourceID.Name' });
+            Assert(await vi.Save(), `vector-index save: ${vi.LatestResult?.CompleteMessage}`);
+            S.Created.push({ entity: 'MJ: Vector Indexes', id: vi.ID });
+
+            // PRIME THE CACHE WHILE THE SOURCE STILL DOES NOT EXIST — this ordering IS the check.
+            // KnowledgeHubMetadataEngine caches 'MJ: Content Sources' with no AutoRefresh, so a source
+            // created after this point is invisible to it for the life of the process. That is the
+            // production shape: the vectorization worker boots, a customer's source is created later,
+            // and every item on it must still resolve its namespace.
+            await refreshEngines(ctx);
+
+            const { sourceID, contentTypeID } = await makeSource(ctx, 'cv9', undefined, vi.ID);
+            const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv9-item', 'Single-hop namespace resolution.');
+            // NO refreshEngines() HERE, ON PURPOSE. Refreshing would hide the defect this check exists
+            // for: with a warm cache the old code resolved the hop correctly too.
+            resetCaptures();
+
+            await AutotagBaseEngine.Instance.VectorizeContentItems(await loadItems(ctx, [itemID]), ctx.User);
+
+            const expected = `${S.Prefix}-src-cv9 ${MARKER}`;
+            const up = S.Upserts[S.Upserts.length - 1];
+            const directives = up?.records[0]?.providerTemporaryDirectives as Record<string, unknown> | undefined;
+            // Before the FieldPathResolver fix this was `undefined`: the stale cache returned an empty
+            // subset, the resolver read that as "no such source", and a driver that requires a routing
+            // value is entitled to reject the record outright — a silent, total refusal to write.
+            Assert(directives?.['namespace'] === expected,
+                `single-hop namespace resolved off the uncached source row (expected "${expected}"): ${JSON.stringify(directives)}`);
+            console.log('      → CV9: ContentSourceID.Name resolved for a source created after the cache loaded');
         }
     }
 ];
