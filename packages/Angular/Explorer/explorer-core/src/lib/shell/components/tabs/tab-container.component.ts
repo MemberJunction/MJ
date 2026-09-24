@@ -2286,10 +2286,19 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   private static findResourceTypeTolerant(rows: MJResourceTypeEntity[], resourceType: string): MJResourceTypeEntity | null {
     const wanted = resourceType.trim().toLowerCase();
-    const normalize = (name: string) => name.trim().toLowerCase().replace(/^mj:\s*/, '');
     return rows.find(r => r.Name.trim().toLowerCase() === wanted)
-      ?? rows.find(r => normalize(r.Name) === normalize(wanted))
+      ?? rows.find(r => TabContainerComponent.IsSameResourceType(r.Name, resourceType))
       ?? null;
+  }
+
+  /**
+   * Whether two resource type names refer to the same type, ignoring case and the 'MJ: '
+   * prefix. A loaded component's ResourceType is the stored row name ('User Views'), while
+   * its tab's configuration keeps whatever the caller passed ('MJ: User Views').
+   */
+  public static IsSameResourceType(a: string | null | undefined, b: string | null | undefined): boolean {
+    const normalize = (name: string | null | undefined) => (name ?? '').trim().toLowerCase().replace(/^mj:\s*/, '');
+    return normalize(a) === normalize(b);
   }
 
   private async getResourceTypeId(resourceType: string): Promise<string> {
@@ -2515,7 +2524,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           const existingRecordId = existingResourceData?.ResourceRecordID || '';
           const newRecordId = tab.resourceRecordId || tab.configuration['recordId'] as string || '';
 
-          const needsReload = existingResourceData?.ResourceType !== tab.configuration['resourceType'] ||
+          const needsReload = !TabContainerComponent.IsSameResourceType(existingResourceData?.ResourceType, tab.configuration['resourceType'] as string | undefined) ||
                              existingResourceData?.Configuration?.applicationId !== tab.applicationId ||
                              existingRecordId !== newRecordId ||
                              (tab.configuration['resourceType'] === 'Custom' && existingDriverClass !== newDriverClass);
