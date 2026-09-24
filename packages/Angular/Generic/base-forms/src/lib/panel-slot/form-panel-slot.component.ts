@@ -10,6 +10,7 @@ import {
     Type,
     ViewChild,
     ViewContainerRef,
+    inject,
 } from '@angular/core';
 import { Subject, takeUntil } from 'rxjs';
 import { BaseEntity, LogError } from '@memberjunction/core';
@@ -18,6 +19,8 @@ import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import { BaseFormPanel, FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
 import { FormSlotCoordinator } from './form-slot-coordinator.service';
+import { CollapseFormPanelRegistrations } from './form-contribution';
+import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
  * `<mj-form-panel-slot>` — dynamic slot host that discovers and mounts every
@@ -79,6 +82,7 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     private mounted: ComponentRef<BaseFormPanel>[] = [];
     private readonly destroy$ = new Subject<void>();
     private registeredSlot: FormPanelSlot | null = null;
+    private readonly recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
     /** Tracks synchronous re-entry depth into remount() so a future refactor
      *  that reintroduces a remount loop surfaces loudly instead of freezing. */
     private remountDepth = 0;
@@ -96,6 +100,9 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
                 .pipe(takeUntil(this.destroy$))
                 .subscribe(() => this.remount());
         }
+        this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe((record) => {
+            this.notifyMountedPanels(record);
+        });
     }
 
     ngOnChanges(changes: SimpleChanges): void {
@@ -136,6 +143,12 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         this.unmountAll();
     }
 
+    private notifyMountedPanels(record: BaseEntity): void {
+        for (const ref of this.mounted) {
+            ref.instance.OnRecordRefreshed(record);
+        }
+    }
+
     private remount(): void {
         this.remountDepth++;
         if (this.remountDepth > 5) {
@@ -155,7 +168,13 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         //    to their literal slot.
         const orphans = this.findOrphans();
 
-        const all = [...direct, ...orphans];
+        const all = CollapseFormPanelRegistrations(
+            [...direct, ...orphans].map((reg) => ({
+                Priority: reg.Priority,
+                Metadata: (reg.Metadata ?? { entity: this.Entity, slot: this.Slot }) as FormPanelRegistrationMetadata,
+                Registration: reg,
+            })),
+        ).map((row) => row.Registration);
         if (all.length === 0) {
             this.remountDepth--;
             return;
@@ -176,6 +195,11 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
                 ref.instance.Record = this.Record;
                 ref.instance.FormComponent = this.FormComponent;
                 if (this.FormContext) ref.instance.FormContext = this.FormContext;
+                // Left-nav leftover height targets mj-collapsible-panel as a
+                // flex child of .mj-forms-all-panels. The slot is already
+                // display:contents; the mounted host must be too.
+                const host = ref.location.nativeElement as HTMLElement | null;
+                if (host) host.style.display = 'contents';
                 // No detectChanges() — Angular's normal CD pass picks the new
                 // component up. Calling detectChanges() synchronously inside
                 // an ongoing CD cycle (which is when ngOnChanges → remount
@@ -209,7 +233,14 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
 
     /** True when a registration's `entity` matches this slot's entity, or is the `'*'` wildcard. */
     private entityMatches(registeredEntity: string | undefined): boolean {
-        return registeredEntity === '*' || registeredEntity === this.Entity;
+        if (!registeredEntity || !this.Entity) return false;
+        if (registeredEntity === '*') return true;
+        const a = registeredEntity.trim().toLowerCase();
+        const b = this.Entity.trim().toLowerCase();
+        if (a === b) return true;
+        // Normalize schema prefixes like "MJ: " or "MJ_"
+        const strip = (s: string) => s.replace(/^mj[:_\s]+/i, '').replace(/[\s_]+/g, '').toLowerCase();
+        return strip(a) === strip(b);
     }
 
     /**

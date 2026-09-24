@@ -4,7 +4,9 @@
  *  - autoCreateNewUsers: true              — create the test user on first Auth0 login
  *  - newUserRoles: UI + Integration        — Integration grants CRUD on most entities
  *  - CreateUserApplicationRecords: true    — auto-pin apps when the user is created
- *  - contextUserForNewUserCreation: pinned to a known sentinel address
+ *  - contextUserForNewUserCreation: pinned to the seeded system user's NAME. It is matched against
+ *    User.Name first and User.Email second, so an email-shaped value resolves too — but naming the
+ *    user is what the setting actually means (see issue #4209).
  *
  * The combination ensures the test user gets full access without manual SQL.
  *
@@ -27,7 +29,7 @@ c = c.replace(
 );
 c = c.replace(
     /contextUserForNewUserCreation:.*?,/,
-    "contextUserForNewUserCreation: 'not.set@nowhere.com', CreateUserApplicationRecords: true,"
+    "contextUserForNewUserCreation: 'System', CreateUserApplicationRecords: true,"
 );
 
 fs.writeFileSync(CONFIG_PATH, c);

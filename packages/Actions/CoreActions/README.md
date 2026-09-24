@@ -96,13 +96,14 @@ Default cadence is **Saturday 2 AM UTC** (configured in `metadata/scheduled-jobs
 
 ### Configuration
 
-External API keys used by certain actions (Perplexity, Google Custom Search, Gamma) are loaded from `mj.config.cjs` or environment variables via the `config.ts` module:
+External API keys used by certain actions (Perplexity, Google Custom Search, Gamma, Tavily) are loaded from `mj.config.cjs` or environment variables via the `config.ts` module:
 
 ```javascript
 // mj.config.cjs
 module.exports = {
   perplexityApiKey: 'pk-...',          // or PERPLEXITY_API_KEY env var
   gammaApiKey: 'sk-gamma-...',         // or GAMMA_API_KEY env var
+  tavilyApiKey: 'tvly-...',            // or TAVILY_API_KEY env var
   google: {
     customSearch: {
       apiKey: 'AIza...',               // or GOOGLE_CUSTOM_SEARCH_API_KEY
@@ -111,6 +112,23 @@ module.exports = {
   }
 };
 ```
+
+#### Choosing a web-search provider
+
+Agents that do web research (Research Agent, Sage, the Web Research skill) are granted **both** the
+`Perplexity Search` and `Google Custom Search` actions, and are instructed to prefer Perplexity and
+fall back if one returns a missing-API-key error. Credential whichever you have:
+
+| | Credentials | Availability |
+|---|---|---|
+| **Perplexity Search** *(recommended)* | `perplexityApiKey` — one key, no engine ID | Open to new customers |
+| **Google Custom Search** | `google.customSearch.apiKey` **and** `.cx` | **Closed to new customers**; existing customers are served until **2027-01-01**, after which the Custom Search JSON API is discontinued |
+
+New deployments should configure `perplexityApiKey`. Google's stated successor, Vertex AI Search, is
+not a drop-in: it uses service-account auth against a data store over *your own* content and does not
+return public web results, so it produces neither of the two values this config expects and there is
+no MJ action for it. Deployments that already have Custom Search access can keep using it through
+2026 and add `perplexityApiKey` whenever convenient — configuring both is supported.
 
 ## Action Catalog
 
@@ -293,6 +311,8 @@ Search the web, extract page content, and validate URLs.
 | `__URLMetadataExtractor` | `URLMetadataExtractorAction` | Extract OpenGraph/meta tags from a URL |
 | `Perplexity Search` | `PerplexitySearchAction` | AI-powered search via Perplexity API |
 | `Google Custom Search` | `GoogleCustomSearchAction` | Search via Google Custom Search API |
+| `Tavily Search` | `TavilySearchAction` | Web search built for AI consumption — cleaned page content and an optional synthesised answer |
+| `Read RSS Feed` | `ReadRSSFeedAction` | Read one or more RSS/Atom feeds, filtered by age and keywords |
 
 ### Workflow Control (5 actions)
 

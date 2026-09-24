@@ -33,6 +33,8 @@
         [NodeTypes]="NodeTypes"
         [ReadOnly]="ReadOnly"
         [ShowToolbar]="ShowToolbar"
+        [ToolbarVisibility]="ToolbarVisibility"
+        [ToolbarAlign]="ToolbarAlign"
         [ShowPalette]="ShowPalette && !ReadOnly"
         [ShowMinimap]="ShowMinimap"
         [ShowLegend]="ShowLegend"
@@ -46,7 +48,9 @@
         (ConnectionCreated)="OnConnectionCreated($event)"
         (ConnectionRemoved)="OnConnectionRemoved($event)"
         (ConnectionSelected)="OnConnectionSelected($event)"
-        (LegendToggled)="OnLegendToggled($event)">
+        (LegendToggled)="OnLegendToggled($event)"
+        (BeforeContextMenu)="BeforeContextMenu.emit($event)"
+        (AfterContextMenuAction)="AfterContextMenuAction.emit($event)">
       </mj-flow-editor>
 
       <!-- The canvas draws structure; this supplies content. A step added from the palette arrives

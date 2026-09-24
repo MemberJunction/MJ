@@ -99,15 +99,17 @@ describe('MJGlobal', () => {
       expect(() => MJGlobal.Instance.RegisterComponent(component)).not.toThrow();
     });
 
-    it('should accumulate multiple registered components', () => {
+    it('should accumulate multiple registered components without error', () => {
       const mjg = MJGlobal.Instance;
       const comp1: IMJComponent = {};
       const comp2: IMJComponent = {};
-      mjg.RegisterComponent(comp1);
-      mjg.RegisterComponent(comp2);
-      // We cannot inspect _components directly, but we can verify
-      // the method does not throw after multiple registrations
-      expect(true).toBe(true);
+      expect(() => {
+        mjg.RegisterComponent(comp1);
+        mjg.RegisterComponent(comp2);
+        // Reset clears the accumulated registrations; it throwing (or the
+        // registrations breaking it) would surface here.
+        mjg.Reset();
+      }).not.toThrow();
     });
   });
 

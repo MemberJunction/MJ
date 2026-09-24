@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, TypeScriptTypeFromSQLTypeWithNullableOption, getGraphQLTypeNameBase } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, ReadableFieldsTransportKey, TypeScriptTypeFromSQLType, TypeScriptTypeFromSQLTypeWithNullableOption, getGraphQLTypeNameBase } from '@memberjunction/core';
 import {
     IsBinarySQLType,
     IsBooleanSQLType,
@@ -10,74 +10,156 @@ import {
 } from '@memberjunction/sql-dialect';
 import fs from 'fs';
 import path from 'path';
-import { logError } from './status_logging';
-import { getExternalEntitySchemas, mjCoreSchema, resolveEntityPackageName } from '../Config/config';
-import { makeDir, sortBySequenceAndCreatedAt, sortRelatedEntities } from './util';
+import { ordinalCompare } from '@memberjunction/global';
+import { logError, logStatus } from './status_logging';
+import { configInfo, mjCoreSchema, ResolveEntityPackageName } from '../Config/config';
+import { MakeDir, SortBySequenceAndCreatedAt } from './util';
+import { WriteFileIfChanged } from './file-write';
+import { EmitStats } from './emit-stats';
+import {
+  SchemaEmitOptions,
+  BuildSchemaBarrel,
+  GroupEntitiesBySchema,
+  EmitSchemaFile,
+  PruneOrphanedSchemaFiles,
+  ResolveSchemaEmitOptions,
+  SanitizeSchemaFileName,
+  SchemasToEmit,
+} from './schema-emit';
 
-/**
- * Describes which GraphQL ObjectTypes are actually resolvable in the file being generated, so the
- * generator can decide whether a reverse-relationship (child-array) member may reference a related
- * entity's type by name.
- *
- * A reverse-relationship member references the related entity's type by BARE class name, which only
- * compiles when that class is declared in the same file. This carries the ground truth for that
- * question — the exact set of entities handed to the generator for this file — instead of inferring
- * it from schema/package heuristics, which can only ever approximate the set.
- */
-export interface GeneratedTypeAvailability {
-  /**
-   * Lower-cased, trimmed names of every entity whose ObjectType is emitted inline into the file being
-   * generated. Membership is the compile condition for a bare-name reference.
-   */
-  generatedEntityNames: Set<string>;
-  /**
-   * True when generating the CORE entity file. The core file has NO
-   * `mj_core_schema_server_object_types` namespace import (it *is* that module), so core related
-   * entities must satisfy set membership like everything else. In a non-core file, core types resolve
-   * through that namespace import regardless of the set.
-   */
-  isInternal: boolean;
-}
 
 /**
  * This class is responsible for generating the GraphQL Server resolvers and types for the entities, you can sub-class this class to extend/modify the logic, make sure to use @memberjunction/global RegisterClass decorator
  * so that your class is used.
  */
 export class GraphQLServerGeneratorBase {
-  public generateGraphQLServerCode(
+  public GenerateGraphQLServerCode(
     entities: EntityInfo[],
     outputDirectory: string,
     generatedEntitiesImportLibrary: string,
-    excludeRelatedEntitiesExternalToSchema: boolean
+    excludeRelatedEntitiesExternalToSchema: boolean,
+    options?: SchemaEmitOptions,
   ): boolean {
-    const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase().startsWith('@memberjunction/');
-    // Every entity in THIS call gets its ObjectType emitted inline into the single generated.ts, so this
-    // set is exactly the set of types a reverse-relationship member may reference by bare name.
-    const availability: GeneratedTypeAvailability = {
-      generatedEntityNames: new Set(entities.map((e) => e.Name.trim().toLowerCase())),
-      isInternal,
-    };
-    let sRet: string = '';
     try {
-      sRet = this.generateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal);
+      const emit = this.resolveEmitOptions(options);
+      MakeDir(outputDirectory);
 
-      for (let i: number = 0; i < entities.length; ++i) {
-        sRet += this.generateServerEntityString(
-          entities[i],
-          false,
+      if (!emit.perSchema) {
+        const content = this.AssembleGraphQLServerFile(
+          entities,
           generatedEntitiesImportLibrary,
           excludeRelatedEntitiesExternalToSchema,
-          availability
+        );
+        this.emitFile(path.join(outputDirectory, 'generated.ts'), content, emit.writeIfChanged);
+        return true;
+      }
+
+      const grouped = GroupEntitiesBySchema(entities);
+      const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
+      const schemasDir = path.join(outputDirectory, 'graphql-schemas');
+      MakeDir(schemasDir);
+
+      const toEmit = SchemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
+        fs.existsSync(path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`)),
+      );
+      const emitSet = new Set(toEmit);
+      for (const schemaName of schemas) {
+        EmitStats.RecordSchemaEmit(emitSet.has(schemaName));
+      }
+
+      const assembleStarted = Date.now();
+      for (const schemaName of toEmit) {
+        const schemaEntities = grouped.get(schemaName) ?? [];
+        const content = this.AssembleGraphQLServerFile(
+          schemaEntities,
+          generatedEntitiesImportLibrary,
+          excludeRelatedEntitiesExternalToSchema,
+          true,
+        );
+        this.emitFile(
+          path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`),
+          content,
+          emit.writeIfChanged,
         );
       }
-      makeDir(outputDirectory);
-      fs.writeFileSync(path.join(outputDirectory, 'generated.ts'), sRet);
+      EmitStats.AddAssembleMs(Date.now() - assembleStarted);
 
+      // Before the barrel, so the directory and the barrel always agree.
+      const pruned = PruneOrphanedSchemaFiles(schemasDir, schemas);
+      if (pruned.length > 0) {
+        logStatus(`   Removed ${pruned.length} orphaned GraphQL schema file(s): ${pruned.join(', ')}`);
+      }
+
+      const barrel = BuildSchemaBarrel(
+        schemas,
+        'graphql-schemas',
+        `/********************************************************************************
+* GraphQL server barrel — AUTO GENERATED. Do not edit.
+* Re-exports one file per schema.
+*
+**********************************************************************************/
+`,
+      );
+      this.emitFile(path.join(outputDirectory, 'generated.ts'), barrel, emit.writeIfChanged);
       return true;
     } catch (err) {
       logError(err as string);
       return false;
     }
+  }
+
+  /** @deprecated Use {@link GenerateGraphQLServerCode}. */
+  public generateGraphQLServerCode(
+    entities: EntityInfo[],
+    outputDirectory: string,
+    generatedEntitiesImportLibrary: string,
+    excludeRelatedEntitiesExternalToSchema: boolean,
+    options?: SchemaEmitOptions,
+  ): boolean {
+    return this.GenerateGraphQLServerCode(entities, outputDirectory, generatedEntitiesImportLibrary, excludeRelatedEntitiesExternalToSchema, options);
+  }
+
+  /**
+   * Build one GraphQL server file — a single schema, or the legacy monolith when
+   * per-schema emit is turned off.
+   */
+  public AssembleGraphQLServerFile(
+    entities: EntityInfo[],
+    generatedEntitiesImportLibrary: string,
+    excludeRelatedEntitiesExternalToSchema: boolean,
+    fromSchemaSubdir: boolean = false,
+  ): string {
+    const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase().startsWith('@memberjunction/');
+    let sRet = this.GenerateAllEntitiesServerFileHeader(entities, generatedEntitiesImportLibrary, isInternal, fromSchemaSubdir);
+    for (const entity of entities) {
+      sRet += this.GenerateServerEntityString(
+        entity,
+        false,
+        generatedEntitiesImportLibrary,
+        excludeRelatedEntitiesExternalToSchema,
+      );
+    }
+    return sRet;
+  }
+
+  /** @deprecated Use {@link AssembleGraphQLServerFile}. */
+  public assembleGraphQLServerFile(
+    entities: EntityInfo[],
+    generatedEntitiesImportLibrary: string,
+    excludeRelatedEntitiesExternalToSchema: boolean,
+    fromSchemaSubdir: boolean = false,
+  ): string {
+    return this.AssembleGraphQLServerFile(entities, generatedEntitiesImportLibrary, excludeRelatedEntitiesExternalToSchema, fromSchemaSubdir);
+  }
+
+  /** Delegates so both generators share one set of defaults; override to change them. */
+  protected resolveEmitOptions(options?: SchemaEmitOptions): Required<SchemaEmitOptions> {
+    return ResolveSchemaEmitOptions(options, configInfo?.fileEmit);
+  }
+
+  /** Delegates so both generators write identically; override to change that. */
+  protected emitFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
+    EmitSchemaFile(filePath, content, useWriteIfChanged);
   }
 
   protected _graphQLTypeSuffix = '_';
@@ -100,50 +182,6 @@ export class GraphQLServerGeneratorBase {
   }
 
   /**
-   * True when the related entity's GraphQL ObjectType will NOT be declared in the file being
-   * generated, so emitting a `@Field`/`@FieldResolver` that names it would not compile (TS2304).
-   *
-   * When `availability` is supplied (every in-tree caller supplies it), the decision is made against
-   * the ACTUAL set of entities being generated into this file rather than inferred from schema or
-   * package heuristics. That set is ground truth: a bare-name reference compiles iff the class is
-   * emitted here, and the class is emitted here iff the entity was in the array handed to the
-   * generator. Heuristics can only approximate that set — `runCodeGen` narrows the generated entities
-   * by BOTH the `entityPackageName` schema→package map AND the `excludeSchemas`/inclusion filters, so
-   * a predicate that models only the package map still emits uncompilable references for anything
-   * dropped by the other filter (the linked-Open-App break: a base app generated alongside a
-   * dependent app that foreign-keys into it).
-   *
-   * The one exception is a CORE (`__mj`) related entity in a NON-core file: it is absent from the
-   * generated set but resolves through the `mj_core_schema_server_object_types` namespace import, so
-   * it is always in scope. In the core file itself there is no such import (that file *is* the
-   * module), so core related entities must satisfy set membership like everything else.
-   *
-   * `excludeRelatedEntitiesExternalToSchema` is honored first and unchanged: it asks for a
-   * schema-scoped file, which is a narrower request than type availability.
-   *
-   * @param availability the types resolvable in this file; when omitted, falls back to the legacy
-   *                     `entityPackageName` schema→package heuristic so that existing subclasses and
-   *                     callers using the pre-availability signature keep their previous behavior.
-   */
-  protected isRelatedTypeOutOfScope(
-    entity: EntityInfo,
-    relatedEntity: EntityInfo,
-    excludeRelatedEntitiesExternalToSchema: boolean,
-    availability?: GeneratedTypeAvailability
-  ): boolean {
-    if (excludeRelatedEntitiesExternalToSchema && relatedEntity.SchemaName !== entity.SchemaName) return true;
-    if (availability) {
-      // Core types in a non-core file come from the namespace import, not a local declaration.
-      if (relatedEntity.SchemaName === mjCoreSchema && !availability.isInternal) return false;
-      return !availability.generatedEntityNames.has(relatedEntity.Name.trim().toLowerCase());
-    }
-    // Legacy path (no availability supplied): approximate the generated set from the package map.
-    if (relatedEntity.SchemaName === mjCoreSchema) return false;
-    const schema = relatedEntity.SchemaName.toLowerCase();
-    return getExternalEntitySchemas().some((s) => s.toLowerCase() === schema);
-  }
-
-  /**
    * Generates the full server GraphQL type name for an entity (with suffix).
    * @param entity - The entity to generate the type name for
    * @returns The full GraphQL type name (with suffix)
@@ -152,30 +190,23 @@ export class GraphQLServerGeneratorBase {
     return this.getServerGraphQLTypeNameBase(entity) + this.GraphQLTypeSuffix;
   }
 
-  public generateServerEntityString(
+  public GenerateServerEntityString(
     entity: EntityInfo,
     includeFileHeader: boolean,
     generatedEntitiesImportLibrary: string,
-    excludeRelatedEntitiesExternalToSchema: boolean,
-    availability?: GeneratedTypeAvailability
+    _excludeRelatedEntitiesExternalToSchema: boolean
   ): string {
     const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase() === '@memberjunction/core-entities';
     let sEntityOutput: string = '';
     try {
-      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-      const fields: EntityFieldInfo[] = sortBySequenceAndCreatedAt(entity.Fields);
+      const fields: EntityFieldInfo[] = SortBySequenceAndCreatedAt(entity.Fields);
       const serverGraphQLTypeName: string = this.getServerGraphQLTypeName(entity);
 
       if (includeFileHeader) {
         const resolvedLib = isInternal
           ? generatedEntitiesImportLibrary
-          : resolveEntityPackageName(entity.SchemaName);
-        sEntityOutput = this.generateEntitySpecificServerFileHeader(
-          entity,
-          resolvedLib,
-          excludeRelatedEntitiesExternalToSchema,
-          availability
-        );
+          : ResolveEntityPackageName(entity.SchemaName);
+        sEntityOutput = this.GenerateEntitySpecificServerFileHeader(entity, resolvedLib);
       }
 
       sEntityOutput += this.generateServerEntityHeader(entity, serverGraphQLTypeName);
@@ -185,38 +216,15 @@ export class GraphQLServerGeneratorBase {
         sEntityOutput += this.generateServerField(fields[j]);
       }
 
-      // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedRelatedEntities = sortRelatedEntities(entity.RelatedEntities);
-
-      for (let j: number = 0; j < sortedRelatedEntities.length; ++j) {
-        const r = sortedRelatedEntities[j];
-        const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
-        // only include the relationship if we are IncludeInAPI for the related entity
-        if (re.IncludeInAPI) {
-          if (re.ExternalDataSourceID) {
-            // Related entity is external (no MJ base view) — its resolver is skipped (see
-            // generateServerGraphQLResolver), so skip the paired field declaration too for consistency.
-            sEntityOutput += `// Relationship field to ${r.RelatedEntity} not generated: related entity is external (no local base view).\n`;
-          } else if (this.isRelatedTypeOutOfScope(entity, re, excludeRelatedEntitiesExternalToSchema, availability)) {
-            sEntityOutput += `// Relationship field to ${r.RelatedEntity} not generated: its GraphQL type is not declared in this file.\n`;
-          } else {
-            sEntityOutput += this.generateServerRelationship(md, sortedRelatedEntities[j], isInternal);
-          }
-        } else {
-          sEntityOutput += `// Relationship to ${r.RelatedEntity} is not included in the API because it is not marked as IncludeInAPI\n`;
-        }
-      }
+      // Child-array GraphQL fields (`Foo_BarIDArray`) are deliberately not emitted.
+      // They resolved with per-parent `SELECT *` (N+1). Load children via RunView
+      // or DeclareRelatedRecords; mutation responses that already have the graph
+      // should put children on a hand-written result type.
 
       // finally, close it up with the footer
       sEntityOutput += this.generateServerEntityFooter(entity);
 
-      sEntityOutput += this.generateServerGraphQLResolver(
-        entity,
-        serverGraphQLTypeName,
-        excludeRelatedEntitiesExternalToSchema,
-        isInternal,
-        availability
-      );
+      sEntityOutput += this.generateServerGraphQLResolver(entity, serverGraphQLTypeName);
     } catch (err) {
       logError(err as string);
     } finally {
@@ -224,7 +232,17 @@ export class GraphQLServerGeneratorBase {
     }
   }
 
-  public generateAllEntitiesServerFileHeader(entities: EntityInfo[], importLibrary: string, isInternal: boolean): string {
+  /** @deprecated Use {@link GenerateServerEntityString}. */
+  public generateServerEntityString(
+    entity: EntityInfo,
+    includeFileHeader: boolean,
+    generatedEntitiesImportLibrary: string,
+    _excludeRelatedEntitiesExternalToSchema: boolean
+  ): string {
+    return this.GenerateServerEntityString(entity, includeFileHeader, generatedEntitiesImportLibrary, _excludeRelatedEntitiesExternalToSchema);
+  }
+
+  public GenerateAllEntitiesServerFileHeader(entities: EntityInfo[], importLibrary: string, isInternal: boolean, fromSchemaSubdir: boolean = false): string {
     let sRet: string = `/********************************************************************************
 * ALL ENTITIES - TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 * Generated Entities and Resolvers for Server
@@ -234,7 +252,7 @@ export class GraphQLServerGeneratorBase {
 *   >>> THE NEXT TIME THIS FILE IS GENERATED
 *
 **********************************************************************************/
-import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
+import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
             GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput } from '@memberjunction/server';
@@ -243,7 +261,7 @@ import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberj
 import { MaxLength } from 'class-validator';
 ${
   isInternal
-    ? `import { mj_core_schema } from '../config.js';\n`
+    ? `import { mj_core_schema } from '${fromSchemaSubdir ? '../../config.js' : '../config.js'}';\n`
     : `import * as mj_core_schema_server_object_types from '@memberjunction/server'`
 }
 
@@ -251,6 +269,11 @@ ${
 ${this.generateEntityImports(entities, importLibrary, isInternal)}
     `;
     return sRet;
+  }
+
+  /** @deprecated Use {@link GenerateAllEntitiesServerFileHeader}. */
+  public generateAllEntitiesServerFileHeader(entities: EntityInfo[], importLibrary: string, isInternal: boolean, fromSchemaSubdir: boolean = false): string {
+    return this.GenerateAllEntitiesServerFileHeader(entities, importLibrary, isInternal, fromSchemaSubdir);
   }
 
   /**
@@ -268,7 +291,7 @@ ${this.generateEntityImports(entities, importLibrary, isInternal)}
     // Group entities by their resolved package
     const packageGroups = new Map<string, string[]>();
     for (const entity of entities) {
-      const pkg = resolveEntityPackageName(entity.SchemaName);
+      const pkg = ResolveEntityPackageName(entity.SchemaName);
       const existing = packageGroups.get(pkg) ?? [];
       existing.push(`${entity.ClassName}Entity`);
       packageGroups.set(pkg, existing);
@@ -282,13 +305,10 @@ ${this.generateEntityImports(entities, importLibrary, isInternal)}
     return imports.join('\n');
   }
 
-  public generateEntitySpecificServerFileHeader(
+  public GenerateEntitySpecificServerFileHeader(
     entity: EntityInfo,
-    importLibrary: string,
-    excludeRelatedEntitiesExternalToSchema: boolean,
-    availability?: GeneratedTypeAvailability
+    importLibrary: string
   ): string {
-    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     let sRet: string = `/********************************************************************************
 * ${entity.Name} TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 *
@@ -303,26 +323,18 @@ import { MaxLength } from 'class-validator';
 import { Field, ${entity._floatCount > 0 ? 'Float, ' : ''}Int, ObjectType, GetReadOnlyProvider, GetReadWriteProvider } from '@memberjunction/server';
 import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
     `;
-    // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
-    const sortedRelatedEntities = sortRelatedEntities(entity.RelatedEntities);
-
-    for (let i: number = 0; i < sortedRelatedEntities.length; ++i) {
-      const r = sortedRelatedEntities[i];
-      const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
-      // This per-entity file imports each related type from a RELATIVE SIBLING file, so the rule here is
-      // narrower than the field gate: a sibling file exists only for an entity generated in this run.
-      // Core types are deliberately NOT sibling-imported — in a non-core file they resolve through the
-      // `mj_core_schema_server_object_types` namespace import, so emitting `./MJUser` would break the
-      // build. Hence set membership directly rather than isRelatedTypeOutOfScope.
-      const emitSiblingImport = availability
-        ? availability.generatedEntityNames.has(re.Name.trim().toLowerCase())
-        : !this.isRelatedTypeOutOfScope(entity, re, excludeRelatedEntitiesExternalToSchema);
-      if (emitSiblingImport) {
-        const tableName = sortedRelatedEntities[i].RelatedEntityBaseTableCodeName;
-        sRet += `\nimport ${tableName} from './${tableName}';`;
-      }
-    }
+    // Sibling imports for related GraphQL types used to exist so reverse-relationship
+    // `@Field(() => [Related_])` members could resolve. Those members are no longer
+    // emitted, so the imports would be unused.
     return sRet;
+  }
+
+  /** @deprecated Use {@link GenerateEntitySpecificServerFileHeader}. */
+  public generateEntitySpecificServerFileHeader(
+    entity: EntityInfo,
+    importLibrary: string
+  ): string {
+    return this.GenerateEntitySpecificServerFileHeader(entity, importLibrary);
   }
 
   protected generateServerEntityHeader(entity: EntityInfo, serverGraphQLTypeName: string): string {
@@ -341,21 +353,74 @@ export class ${serverGraphQLTypeName} {`;
   protected generateServerEntityFooter(entity: EntityInfo): string {
     if (!entity) logError('entity parameter must be passed in to generateServerEntityFooter()');
 
-    return `\n}`;
+    return `${this.generateReadableFieldsTransportField()}\n}`;
+  }
+
+  /**
+   * Emits the field-security transport field onto every generated object type.
+   *
+   * Present on ALL entities, not just those with `EnableFieldLevelSecurity` — the schema is a
+   * build artifact and that flag is runtime metadata an administrator can toggle in Explorer, so
+   * a schema whose SHAPE depended on it would be silently wrong the moment someone flipped it
+   * without re-running CodeGen. It is nullable and the server leaves it null for unrestricted
+   * callers, so it costs nothing on the overwhelming majority of requests.
+   *
+   * See {@link ReadableFieldsTransportKey} for what it carries and why it names readable rather
+   * than denied fields.
+   */
+  protected generateReadableFieldsTransportField(): string {
+    return `
+    @Field(() => [String], { nullable: true, description: \`Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.\` })
+    ${ReadableFieldsTransportKey}?: string[];
+        `;
+  }
+
+  /**
+   * Whether an OUTPUT-type field may be marked non-nullable in the generated GraphQL schema.
+   *
+   * The rule is deliberately NOT `AllowsNull`. A column's NOT NULL constraint and a GraphQL
+   * field's `!` say different things:
+   *
+   *   - NOT NULL  — no ROW stores an empty value in this column.
+   *   - `String!` — every RESPONSE, to every caller, carries a value for this field.
+   *
+   * The second does not follow from the first. It only coincided while every caller saw every
+   * column of every row they could read. Field-level security ends that: a denied field is
+   * OMITTED from the response (`ResolverBase.MapFieldNamesToCodeNames`), and GraphQL treats an
+   * absent value on a non-nullable field as an error that propagates up to the nearest nullable
+   * parent — nulling the whole record on a single-record load, the whole query on a typed list,
+   * and failing the mutation RESPONSE after the write already landed.
+   *
+   * So presence is promised only where FLS is structurally incapable of stripping the field:
+   * primary keys (hard and soft) and `__mj_` system columns — exactly
+   * {@link EntityFieldInfo.IsUnrestrictableField}, the same predicate the runtime aggregation and
+   * the save-time guard use. Anything else can legitimately be absent for SOME caller, so the
+   * schema must not promise otherwise.
+   * And critically, a column in the database MUST also be NOT NULL (`!fieldInfo.AllowsNull`).
+   * If a column allows NULL in the database (such as spatial coordinates like `__mj_Latitude`
+   * or nullable system/embedded columns), rows can legitimately store NULL, and GraphQL will
+   * fail with "Cannot return null for non-nullable field" if declared non-nullable.
+   *
+   * INPUT types are unaffected and keep deriving from `AllowsNull` — they carry the WRITE
+   * contract, which the database constraint does still govern.
+   */
+  protected isNonNullableServerField(fieldInfo: EntityFieldInfo): boolean {
+    return !fieldInfo.AllowsNull && fieldInfo.IsUnrestrictableField;
   }
 
   protected generateServerField(fieldInfo: EntityFieldInfo): string {
     const fieldString: string = this.getTypeGraphQLFieldString(fieldInfo);
     // use a special codename for graphql because if we start with __mj we will replace with _mj_ as we can't start with __ it has meaning in graphql
     const codeName: string = fieldInfo.CodeName.startsWith('__mj') ? '_mj_' + fieldInfo.CodeName.substring(4) : fieldInfo.CodeName;
+    const nullable: boolean = !this.isNonNullableServerField(fieldInfo);
     let fieldOptions: string = '';
-    if (fieldInfo.AllowsNull) fieldOptions += 'nullable: true';
+    if (nullable) fieldOptions += 'nullable: true';
     if (fieldInfo.Description !== null && fieldInfo.Description.trim().length > 0)
       fieldOptions += (fieldOptions.length > 0 ? ', ' : '') + `description: \`${fieldInfo.Description.replace(/`/g, "\\`")}\``;
 
     return `
     @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ? '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.MaxLength > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.MaxLength + ')' : ''}
-    ${codeName}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
+    ${codeName}${nullable ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
         `;
   }
 
@@ -391,49 +456,16 @@ export class ${serverGraphQLTypeName} {`;
     return '() => Int';
   }
 
-  protected generateServerRelationship(md: Metadata, r: EntityRelationshipInfo, isInternal: boolean): string {
-    const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
-    const classPackagePrefix: string = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
-    const relatedTypeName = this.getServerGraphQLTypeName(re);
-    const relatedClassName = classPackagePrefix + relatedTypeName;
-
-    // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
-    // and replace all special characters with an underscore
-    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
-
-    if (r.Type.toLowerCase().trim() == 'one to many') {
-      return `
-    @Field(() => [${relatedClassName}])
-    ${uniqueCodeName}Array: ${relatedClassName}[]; // Link to ${r.RelatedEntityCodeName}
-    `;
-    } else {
-      // many to many
-      return `
-    @Field(() => [${relatedClassName}])
-    ${uniqueCodeName}Array: ${relatedClassName}[]; // Link to ${r.RelatedEntity}
-    `;
-    }
-  }
-
   protected generateServerGraphQLResolver(
     entity: EntityInfo,
-    serverGraphQLTypeName: string,
-    excludeRelatedEntitiesExternalToSchema: boolean,
-    isInternal: boolean,
-    availability?: GeneratedTypeAvailability
+    serverGraphQLTypeName: string
   ): string {
-    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     let sRet = '';
 
     // we only generate resolvers for entities that have a primary key field
     if (entity.PrimaryKeys.length > 0) {
       // first add in the base resolver query to lookup by ID for all entities
-      const auditAccessCode: string = entity.AuditRecordAccess
-        ? `
-        this.createRecordAccessAuditLogRecord(provider, userPayload, '${entity.Name}', ${entity.FirstPrimaryKey.Name})`
-        : '';
-
       sRet = `
 //****************************************************************************
 // RESOLVER for ${entity.Name}
@@ -508,6 +540,17 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
       // (spaces, leading digit, reserved word). The bound value still comes from the CodeName arg variable.
       const pkCompositeKeyPairs = entity.PrimaryKeys.map((pk) => `{ FieldName: '${pk.Name}', Value: ${pk.CodeName} }`).join(', ');
 
+      // Record-access audit: the RecordID written to the audit log. A single-column key passes the
+      // bare argument variable (declared above under pk.CodeName); a composite key serializes every
+      // column with ToConcatenatedString(), the same round-trippable form Record Changes use.
+      const auditRecordIdExpression = entity.PrimaryKeys.length === 1
+        ? entity.FirstPrimaryKey.CodeName // first-pk-ok: guarded by PrimaryKeys.length === 1
+        : `new CompositeKey([${pkCompositeKeyPairs}]).ToConcatenatedString()`;
+      const auditAccessCode: string = entity.AuditRecordAccess
+        ? `
+        this.createRecordAccessAuditLogRecord(provider, userPayload, '${entity.Name}', ${auditRecordIdExpression})`
+        : '';
+
       if (entity.ExternalDataSourceID) {
         // External-data-source entities have no MJ base view to query — proxy the single-record
         // load through a BaseEntity object, which the provider dispatches to the external read
@@ -557,32 +600,11 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         }
       }
 
-      // now, generate the FieldResolvers for each of the one-to-many relationships
-      // Sort related entities by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedRelatedEntities = sortRelatedEntities(entity.RelatedEntities);
-
-      for (let i = 0; i < sortedRelatedEntities.length; i++) {
-        const r = sortedRelatedEntities[i];
-        const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
-
-        // only include the relationship if we are IncludeInAPI for the related entity
-        if (re.IncludeInAPI) {
-          if (re.ExternalDataSourceID) {
-            // The related entity is external-data-source-backed: its field resolver would query
-            // `SELECT * FROM <re.BaseView>`, but external entities have no MJ base view. Skip it rather
-            // than emit a resolver that fails at runtime (external rows are reachable via that entity's
-            // own RunView with a filter on the join column).
-            sRet += `// Relationship to ${r.RelatedEntity} not generated: related entity is external (no local base view to query).\n`;
-          } else if (this.isRelatedTypeOutOfScope(entity, re, excludeRelatedEntitiesExternalToSchema, availability)) {
-            sRet += `// Relationship to ${r.RelatedEntity} not generated: its GraphQL type is not declared in this file.\n`;
-          } else {
-            if (r.Type.toLowerCase().trim() == 'many to many') sRet += this.generateManyToManyFieldResolver(entity, r);
-            else sRet += this.generateOneToManyFieldResolver(entity, r, isInternal);
-          }
-        } else {
-          sRet += `// Relationship to ${r.RelatedEntity} is not included in the API because it is not marked as IncludeInAPI\n`;
-        }
-      }
+      // Reverse-relationship FieldResolvers (`Foo_BarIDArray`) are not generated.
+      // They issued a per-parent `SELECT *` with no DataLoader and were unused in-tree.
+      // Load children via RunView or a DeclareRelatedRecords collection; for a
+      // mutation that already has the graph in memory, put the children on a
+      // hand-written result type (see QueryMutationResultType).
       // now do the mutations
       const sInputType: string = this.generateServerGraphQLInputType(entity);
       if (sInputType !== '') {
@@ -635,7 +657,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
     });
 
     // sort the fields by sequence and created date for consistent ordering
-    const sortedFieldsToInclude = sortBySequenceAndCreatedAt(fieldsToInclude);
+    const sortedFieldsToInclude = SortBySequenceAndCreatedAt(fieldsToInclude);
 
     // now iterate through the filtered fields
     for (const f of sortedFieldsToInclude) {
@@ -750,104 +772,5 @@ export class ${classPrefix}${typeNameBase}Input {`;
     `;
     }
     return sRet;
-  }
-
-  protected generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo, isInternal: boolean): string {
-    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-    const re = md.EntityByName(r.RelatedEntity);
-    const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
-    const instanceName = typeNameBase.toLowerCase() + this.GraphQLTypeSuffix;
-
-    let filterFieldName: string = '';
-    if (!r.EntityKeyField) {
-      filterFieldName = entity.FirstPrimaryKey.CodeName;
-    } else {
-      const field: EntityFieldInfo = entity.Fields.find((f) => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase())!;
-      if (field) {
-        filterFieldName = field.CodeName;
-      } else {
-        logError(
-          `GenerateOneToManyFieldResolver: EntityRelationshipInfo Field ${r.EntityKeyField} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`
-        );
-        return '';
-      }
-    }
-
-    const filterField = entity.Fields.find((f) => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
-    if (!filterField) {
-      logError(
-        `GenerateOneToManyFieldResolver: Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`
-      );
-      return '';
-    }
-
-    const serverPackagePrefix = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
-    const relatedTypeName = this.getServerGraphQLTypeName(re);
-    const serverClassName = serverPackagePrefix + relatedTypeName;
-
-    // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
-    // and replace all special characters with an underscore
-    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.RelatedEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
-
-    return `
-    @FieldResolver(() => [${serverClassName}])
-    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${r.RelatedEntityJoinField}')}=\${provider.BuildParameterPlaceholder(0)} \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [${instanceName}.${filterFieldName}], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        `;
-  }
-
-  protected generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo): string {
-    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
-    const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
-    const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
-    const instanceName = typeNameBase.toLowerCase() + this.GraphQLTypeSuffix;
-    let filterFieldName: string = '';
-    if (!r.EntityKeyField) {
-      filterFieldName = entity.FirstPrimaryKey.CodeName;
-    } else {
-      const field: EntityFieldInfo = entity.Fields.find((f) => f.Name.trim().toLowerCase() === r.EntityKeyField.trim().toLowerCase())!;
-      if (field) {
-        filterFieldName = field.CodeName;
-      } else {
-        logError(
-          `GenerateManyToManyFieldResolver: EntityRelationshipInfo Field ${r.EntityKeyField} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`
-        );
-        return '';
-      }
-    }
-
-    const filterField = entity.Fields.find((f) => f.CodeName.toLowerCase() === filterFieldName.toLowerCase());
-    if (!filterField) {
-      logError(
-        `GenerateManyToManyFieldResolver: Field ${filterFieldName} not found in entity ${entity.Name} - check the relationship ${r.ID} and the EntityKeyField property`
-      );
-      return '';
-    }
-
-    const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
-    const relatedTypeName = this.getServerGraphQLTypeName(re);
-    const serverClassName = serverPackagePrefix + relatedTypeName;
-
-    // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
-    // and replace all special characters with an underscore
-    const uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/ /g, '')}`.replace(/[^a-zA-Z0-9]/g, '_');
-
-    return `
-    @FieldResolver(() => [${serverClassName}])
-    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${re.FirstPrimaryKey.Name}')} IN (SELECT \${provider.QuoteIdentifier('${r.JoinEntityInverseJoinField}')} FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.JoinView}')} WHERE \${provider.QuoteIdentifier('${r.JoinEntityJoinField}')}=\${provider.BuildParameterPlaceholder(0)}) \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, [${instanceName}.${filterFieldName}], undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        `;
   }
 }

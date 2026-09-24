@@ -20,7 +20,12 @@ import {
     GetEffectiveModeratorConfig,
     GetEffectiveTurnMode,
     GetModelCatalogSessionSettings,
-    REALTIME_MODERATOR_DEFAULTS
+    REALTIME_MODERATOR_DEFAULTS,
+    FindIgnoredRealtimeConfigKeys,
+    REALTIME_CONFIG_SECTION_KEYS,
+    RealtimeConfigSection,
+    GetDirectActionsConfig,
+    IsActionAllowedForDirectInvocation
 } from '../realtime/realtime-coagent-config';
 
 describe('DeepMergeConfigs', () => {
@@ -664,6 +669,18 @@ describe('GetModelCatalogSessionSettings — the model-catalog BASE layer', () =
         });
     });
 
+    it('projects Realtime.Reasoning and Realtime.Tooling onto driver bag keys', () => {
+        expect(GetModelCatalogSessionSettings({
+            Realtime: {
+                Reasoning: { Level: 'medium', IncludeThoughtSummaries: true },
+                Tooling: { SupportsBlockingExecution: false, SupportsScheduling: false },
+            }
+        })).toEqual({
+            reasoning: { Level: 'medium', IncludeThoughtSummaries: true },
+            tooling: { SupportsBlockingExecution: false, SupportsScheduling: false },
+        });
+    });
+
     it('returns null when the catalog contributes nothing', () => {
         expect(GetModelCatalogSessionSettings(null)).toBeNull();
         expect(GetModelCatalogSessionSettings(undefined)).toBeNull();
@@ -685,5 +702,220 @@ describe('GetModelCatalogSessionSettings — the model-catalog BASE layer', () =
         expect(DeepMergeConfigs(catalog, tuning)).toEqual({
             turnDetection: { Mode: 'semanticVad', Threshold: 0.4 },
         });
+    });
+});
+
+describe('FindIgnoredRealtimeConfigKeys', () => {
+    it('reports a foreign top-level section as unknown-section (MJ #3854, the reported case)', () => {
+        const payload = JSON.stringify({
+            realtime: { modelPreference: 'GPT Realtime' },
+            caliber: { instructions: 'Interview the applicant about their work history.' },
+        });
+        expect(FindIgnoredRealtimeConfigKeys(payload)).toEqual([{ path: 'caliber', reason: 'unknown-section' }]);
+        // ...and the reported section is, in fact, gone from the effective config.
+        expect(ResolveEffectiveRealtimeConfig(null, null, payload)).toEqual({ realtime: { modelPreference: 'GPT Realtime' } });
+    });
+
+    it('reports every foreign top-level section, in payload order', () => {
+        expect(FindIgnoredRealtimeConfigKeys('{"caliber":{},"realtime":{},"other":1}')).toEqual([
+            { path: 'caliber', reason: 'unknown-section' },
+            { path: 'other', reason: 'unknown-section' },
+        ]);
+    });
+
+    it('reports an unrecognized key inside realtime as unknown-key', () => {
+        expect(FindIgnoredRealtimeConfigKeys('{"realtime":{"modelPref":"GPT Realtime","instructions":"hi"}}')).toEqual([
+            { path: 'realtime.modelPref', reason: 'unknown-key' },
+            { path: 'realtime.instructions', reason: 'unknown-key' },
+        ]);
+    });
+
+    it('reports modelPreference given as an ORDERED ARRAY as wrong-type (the issue\'s smaller item)', () => {
+        expect(FindIgnoredRealtimeConfigKeys('{"realtime":{"modelPreference":["GPT Realtime","Gemini Live"]}}')).toEqual([
+            { path: 'realtime.modelPreference', reason: 'wrong-type' },
+        ]);
+    });
+
+    it('mirrors the normalizer on every scalar guard it enforces', () => {
+        const payload = JSON.stringify({
+            realtime: {
+                modelPreference: '   ',
+                allowUserModelOverride: 'yes',
+                disclosure: 'whisper',
+                allowedAgents: { agentId: 'not-an-array' },
+                voice: 'warm',
+                narration: 5000,
+                video: true,
+                turnTaking: 'proactive',
+                session: [],
+            },
+        });
+        expect(FindIgnoredRealtimeConfigKeys(payload)).toEqual([
+            { path: 'realtime.modelPreference', reason: 'wrong-type' },
+            { path: 'realtime.allowUserModelOverride', reason: 'wrong-type' },
+            { path: 'realtime.disclosure', reason: 'wrong-type' },
+            { path: 'realtime.allowedAgents', reason: 'wrong-type' },
+            { path: 'realtime.voice', reason: 'wrong-type' },
+            { path: 'realtime.narration', reason: 'wrong-type' },
+            { path: 'realtime.video', reason: 'wrong-type' },
+            { path: 'realtime.turnTaking', reason: 'wrong-type' },
+            { path: 'realtime.session', reason: 'wrong-type' },
+        ]);
+        // Everything above really is discarded — the report and the cascade agree.
+        expect(ResolveEffectiveRealtimeConfig(null, null, payload)).toEqual({ realtime: {} });
+    });
+
+    it('reports a non-object realtime section once, without descending', () => {
+        expect(FindIgnoredRealtimeConfigKeys('{"realtime":"GPT Realtime","caliber":{}}')).toEqual([
+            { path: 'caliber', reason: 'unknown-section' },
+            { path: 'realtime', reason: 'wrong-type' },
+        ]);
+    });
+
+    it('reports nothing for a fully valid payload', () => {
+        const payload = JSON.stringify({
+            realtime: {
+                modelPreference: 'GPT Realtime',
+                allowUserModelOverride: false,
+                disclosure: 'silent',
+                voice: { default: { tone: 'warm' }, providers: { openai: { voice: 'alloy' } } },
+                narration: { paceMs: 5000 },
+                session: { effortLevel: 'high' },
+            },
+        });
+        expect(FindIgnoredRealtimeConfigKeys(payload)).toEqual([]);
+    });
+
+    it('reports nothing (never throws) for absent, malformed, or non-object payloads', () => {
+        expect(FindIgnoredRealtimeConfigKeys(null)).toEqual([]);
+        expect(FindIgnoredRealtimeConfigKeys(undefined)).toEqual([]);
+        expect(FindIgnoredRealtimeConfigKeys('')).toEqual([]);
+        expect(FindIgnoredRealtimeConfigKeys('   ')).toEqual([]);
+        expect(FindIgnoredRealtimeConfigKeys('{not json')).toEqual([]);
+        expect(FindIgnoredRealtimeConfigKeys('"caliber"')).toEqual([]);
+        expect(FindIgnoredRealtimeConfigKeys('42')).toEqual([]);
+        expect(FindIgnoredRealtimeConfigKeys('null')).toEqual([]);
+        expect(FindIgnoredRealtimeConfigKeys('[{"realtime":{}}]')).toEqual([]);
+    });
+
+    it('reports an empty realtime section as nothing (an empty object drops no keys)', () => {
+        expect(FindIgnoredRealtimeConfigKeys('{"realtime":{}}')).toEqual([]);
+        expect(FindIgnoredRealtimeConfigKeys('{}')).toEqual([]);
+    });
+
+    /**
+     * DRIFT GUARD: every key this module calls "known" must actually survive the cascade. If a new
+     * RealtimeConfigSection field is added, the source-side Required<> table fails the build until
+     * it is listed here-adjacent; this test then fails until a valid sample proves it round-trips.
+     */
+    it('every key it considers known is genuinely accepted by ResolveEffectiveRealtimeConfig', () => {
+        const VALID_SAMPLE: { [K in keyof Required<RealtimeConfigSection>]: unknown } = {
+            modelPreference: 'GPT Realtime',
+            voice: { default: { tone: 'warm' } },
+            video: { enabled: true },
+            allowUserModelOverride: false,
+            narration: { paceMs: 5000 },
+            turnTaking: { mode: 'proactive' },
+            disclosure: 'silent',
+            allowedAgents: [{ agentId: 'AGENT-1', label: 'Skip' }],
+            session: { effortLevel: 'high' },
+            directActions: { enabled: true, actionNames: ['Action1'], timeoutMs: 5000 },
+            allowDirectActionInvocation: true,
+            directActionNames: ['Action1', 'Action2'],
+            directActionTimeoutMs: 8000,
+        };
+
+        expect(REALTIME_CONFIG_SECTION_KEYS.length).toBe(Object.keys(VALID_SAMPLE).length);
+        for (const key of REALTIME_CONFIG_SECTION_KEYS) {
+            const sample = VALID_SAMPLE[key];
+            expect(sample, `no valid sample for known key '${key}'`).toBeDefined();
+
+            const payload = JSON.stringify({ realtime: { [key]: sample } });
+            expect(FindIgnoredRealtimeConfigKeys(payload), `'${key}' should be reported as known+valid`).toEqual([]);
+
+            const effective = ResolveEffectiveRealtimeConfig(null, null, payload);
+            expect(effective.realtime?.[key], `'${key}' did not survive the cascade`).toBeDefined();
+        }
+    });
+});
+
+describe('Direct actions config & allowlist evaluation', () => {
+    it('defaults to closed: unconfigured, disabled, or empty actionNames gives enabled=false and allows nothing', () => {
+        expect(GetDirectActionsConfig()).toEqual({ enabled: false, actionNames: [], timeoutMs: 10_000 });
+        expect(GetDirectActionsConfig({})).toEqual({ enabled: false, actionNames: [], timeoutMs: 10_000 });
+        expect(GetDirectActionsConfig({ realtime: {} })).toEqual({ enabled: false, actionNames: [], timeoutMs: 10_000 });
+
+        expect(IsActionAllowedForDirectInvocation('GetRecord', undefined)).toBe(false);
+        expect(IsActionAllowedForDirectInvocation('GetRecord', {})).toBe(false);
+        expect(IsActionAllowedForDirectInvocation('GetRecord', { realtime: {} })).toBe(false);
+        expect(IsActionAllowedForDirectInvocation('GetRecord', { realtime: { directActions: { enabled: false, actionNames: ['GetRecord'] } } })).toBe(false);
+        expect(IsActionAllowedForDirectInvocation('GetRecord', { realtime: { directActions: { enabled: true, actionNames: [] } } })).toBe(false);
+    });
+
+    it('resolves structured directActions configuration', () => {
+        const config: RealtimeCoAgentConfig = {
+            realtime: {
+                directActions: {
+                    enabled: true,
+                    actionNames: ['GetCustomer', 'LookupOrder'],
+                    timeoutMs: 15_000,
+                },
+            },
+        };
+        const resolved = GetDirectActionsConfig(config);
+        expect(resolved).toEqual({
+            enabled: true,
+            actionNames: ['GetCustomer', 'LookupOrder'],
+            timeoutMs: 15_000,
+        });
+
+        expect(IsActionAllowedForDirectInvocation('GetCustomer', config)).toBe(true);
+        expect(IsActionAllowedForDirectInvocation('getcustomer', config)).toBe(true); // case-insensitive
+        expect(IsActionAllowedForDirectInvocation('LookupOrder', config)).toBe(true);
+        expect(IsActionAllowedForDirectInvocation('DeleteRecord', config)).toBe(false);
+    });
+
+    it('resolves flat direct action shorthand properties', () => {
+        const config: RealtimeCoAgentConfig = {
+            realtime: {
+                allowDirectActionInvocation: true,
+                directActionNames: ['SearchItems'],
+                directActionTimeoutMs: 7_500,
+            },
+        };
+        const resolved = GetDirectActionsConfig(config);
+        expect(resolved).toEqual({
+            enabled: true,
+            actionNames: ['SearchItems'],
+            timeoutMs: 7_500,
+        });
+
+        expect(IsActionAllowedForDirectInvocation('SearchItems', config)).toBe(true);
+        expect(IsActionAllowedForDirectInvocation('OtherAction', config)).toBe(false);
+    });
+
+    it('wildcard "*" allows all actions when enabled', () => {
+        const config: RealtimeCoAgentConfig = {
+            realtime: {
+                directActions: {
+                    enabled: true,
+                    actionNames: ['*'],
+                },
+            },
+        };
+        expect(IsActionAllowedForDirectInvocation('AnyAction', config)).toBe(true);
+        expect(IsActionAllowedForDirectInvocation('AnotherAction', config)).toBe(true);
+    });
+
+    it('does not allow actions if enabled is false even when wildcard is set', () => {
+        const config: RealtimeCoAgentConfig = {
+            realtime: {
+                directActions: {
+                    enabled: false,
+                    actionNames: ['*'],
+                },
+            },
+        };
+        expect(IsActionAllowedForDirectInvocation('AnyAction', config)).toBe(false);
     });
 });

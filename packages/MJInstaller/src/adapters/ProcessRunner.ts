@@ -149,7 +149,7 @@ export class ProcessRunner {
       if (options?.TimeoutMs) {
         timeoutHandle = setTimeout(() => {
           timedOut = true;
-          this.killTree(child.pid);
+          this.KillTree(child.pid);
         }, options.TimeoutMs);
       }
 
@@ -258,7 +258,7 @@ export class ProcessRunner {
    *
    * @param pid - Process ID of the root process to kill. No-op if `undefined`.
    */
-  killTree(pid: number | undefined): void {
+  KillTree(pid: number | undefined): void {
     if (!pid) return;
     try {
       if (process.platform === 'win32') {
@@ -272,6 +272,11 @@ export class ProcessRunner {
     } catch {
       // Process may have already exited
     }
+  }
+
+  /** @deprecated Use {@link KillTree}. */
+  killTree(pid: number | undefined): void {
+    return this.KillTree(pid);
   }
 
   /**
@@ -288,7 +293,7 @@ export class ProcessRunner {
    *
    * @param port - TCP port number to scan for listening processes.
    */
-  killByPort(port: number): void {
+  KillByPort(port: number): void {
     try {
       if (process.platform === 'win32') {
         // Find PIDs listening on this port and kill their process trees
@@ -315,5 +320,10 @@ export class ProcessRunner {
     } catch {
       // No process on this port, or already killed
     }
+  }
+
+  /** @deprecated Use {@link KillByPort}. */
+  killByPort(port: number): void {
+    return this.KillByPort(port);
   }
 }

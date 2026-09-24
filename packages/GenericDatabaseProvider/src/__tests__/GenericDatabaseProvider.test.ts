@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { GenericDatabaseProvider, DoomedTransactionError } from '../GenericDatabaseProvider';
 import { SqlLoggingSessionImpl } from '../SqlLogger';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 
@@ -39,7 +39,11 @@ import {
     QueryCategoryInfo,
     Metadata,
 } from '@memberjunction/core';
-import type { QueryExecutionSpec } from '@memberjunction/core';
+import type { PostCommitToken, QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
+import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
+import { EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
+import { AIEngine } from '@memberjunction/aiengine';
+import { TransactionFrameTracker } from '../TransactionFrameTracker';
 import type { ExecuteSQLBatchOptions } from '../GenericDatabaseProvider';
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
 
@@ -67,9 +71,19 @@ class TestGenericProvider extends GenericDatabaseProvider {
         return `LIMIT ${maxRows} OFFSET ${startRow}`;
     }
 
-    async BeginTransaction(): Promise<void> {}
-    async CommitTransaction(): Promise<void> {}
-    async RollbackTransaction(): Promise<void> {}
+    protected override get HasPhysicalTransaction(): boolean {
+        return this.physicalOpen;
+    }
+    protected physicalOpen = false;
+    protected override async BeginPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = true;
+    }
+    protected override async CommitPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = false;
+    }
+    protected override async RollbackPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = false;
+    }
 
     // Expose protected virtual methods for testing
     public testBuildTopClause(maxRows: number): string { return this.BuildTopClause(maxRows); }
@@ -78,6 +92,9 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public testTransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string { return this.TransformExternalSQLClause(clause, entityInfo); }
     public testBuildTotalRowCountSQL(entityInfo: EntityInfo, usingPagination: boolean, maxRowsForQuery: number): string | null {
         return this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
+    }
+    public testGetEffectiveBaseView(entityInfo: EntityInfo, params: { DataSource?: 'Live' | 'Materialized' }): string {
+        return this.GetEffectiveBaseView(entityInfo, params as unknown as RunViewParams);
     }
 
     // Expose protected methods for testing
@@ -143,7 +160,10 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public executeSQLResults: Array<Record<string, unknown>[]> = [];
     private executeSQLCallIndex = 0;
 
-    override async ExecuteSQL<T>(sql?: string, params?: unknown[]): Promise<Array<T>> {
+    override async ExecuteSQL<T>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> {
+        if (!options?.connectionSource) {
+            this.AssertAmbientTransactionUsable();
+        }
         this.executeSQLCalls.push({ sql: sql ?? '', params });
         const result = this.executeSQLResults[this.executeSQLCallIndex] ?? [];
         this.executeSQLCallIndex++;
@@ -172,6 +192,15 @@ class TestGenericProvider extends GenericDatabaseProvider {
     }
     protected WrapSaveCallWithRecordChange(): SaveSQLFragment {
         throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
+
+    public AllocateSaveCallSuffixForPk(
+        group: object | null,
+        schemaName: string,
+        baseTable: string,
+        pkValues: unknown[],
+    ): string {
+        return this.allocateSaveCallSuffixForPk(group, schemaName, baseTable, pkValues);
     }
 }
 
@@ -306,6 +335,25 @@ describe('GenericDatabaseProvider', () => {
             // raw unquoted `AS TotalRowCount` that caused the PG bug.
             expect(sql).toContain('AS "TotalRowCount"');
             expect(sql).not.toMatch(/AS\s+TotalRowCount\s/);
+        });
+    });
+
+    describe('GetEffectiveBaseView (DataSource routing)', () => {
+        const baseViewEntity = { SchemaName: '__mj', BaseView: 'vwCustomers', CodeName: 'Customers' } as unknown as EntityInfo;
+        // A query materialization's minted entity: its BaseView ALREADY is the materialized wrapper view.
+        const queryMatEntity = { SchemaName: '__mj', BaseView: 'materialized_vwE2E_Sales_By_Region', CodeName: 'MJE2ESalesByRegion' } as unknown as EntityInfo;
+
+        it('default (Live) returns the entity base view', () => {
+            expect(provider.testGetEffectiveBaseView(baseViewEntity, {})).toBe('vwCustomers');
+            expect(provider.testGetEffectiveBaseView(baseViewEntity, { DataSource: 'Live' })).toBe('vwCustomers');
+        });
+        it('base-view materialization: Materialized swaps the live view for materialized_vw<CodeName>', () => {
+            expect(provider.testGetEffectiveBaseView(baseViewEntity, { DataSource: 'Materialized' })).toBe('materialized_vwCustomers');
+        });
+        it('query materialization: Materialized is a no-op (entity base view IS already the materialized view)', () => {
+            // Regression: previously derived materialized_vw<CodeName> (= materialized_vwMJE2ESalesByRegion),
+            // which does not exist — the minted CodeName differs from the query-derived view name.
+            expect(provider.testGetEffectiveBaseView(queryMatEntity, { DataSource: 'Materialized' })).toBe('materialized_vwE2E_Sales_By_Region');
         });
     });
 
@@ -735,6 +783,12 @@ describe('GenericDatabaseProvider', () => {
             IsVirtual?: boolean;
             NeedsQuotes?: boolean;
             SQLFullType?: string;
+            /** BASE type + SYSTEM (byte) length — what `sys.columns` reports and the code maps from. */
+            Type?: string;
+            Length?: number;
+            Precision?: number;
+            Scale?: number;
+            MaxLength?: number;
             Value?: unknown;
         }
 
@@ -753,6 +807,16 @@ describe('GenericDatabaseProvider', () => {
                 IsVirtual: f.IsVirtual ?? false,
                 NeedsQuotes: f.NeedsQuotes ?? true,
                 SQLFullType: f.SQLFullType,
+                Type: f.Type,
+                Length: f.Length ?? 0,
+                Precision: f.Precision ?? 0,
+                Scale: f.Scale ?? 0,
+                // Mirrors EntityFieldInfo.MaxLength: the n-types halve the byte length.
+                MaxLength: f.MaxLength ?? (
+                    ['nvarchar', 'nchar', 'ntext'].includes((f.Type ?? '').toLowerCase())
+                        ? ((f.Length ?? 0) > 0 ? (f.Length ?? 0) / 2 : 0)
+                        : ((f.Length ?? 0) > 0 ? (f.Length ?? 0) : 0)
+                ),
             }));
             const entityInfo = {
                 Name: 'TestEntity',
@@ -905,15 +969,53 @@ describe('GenericDatabaseProvider', () => {
         });
 
         describe('BuildRLSSyntheticRowProjections', () => {
-            it('includeNulls=true emits a typed CAST(NULL AS <SQLFullType>) for null fields', () => {
+            it('includeNulls=true emits a typed CAST(NULL AS <type>) for null fields', () => {
+                // No dialect on this test provider (`getDialect()` returns null), so the code takes
+                // its documented fallback and emits `SQLFullType` verbatim — the exact string it
+                // emitted before dialect mapping existed.
                 const { entity, entityInfo } = MakeRLSEntity({
                     rlsClause: '',
-                    fields: [{ Name: 'Notes', NeedsQuotes: true, SQLFullType: 'nvarchar(100)', Value: null }],
+                    fields: [{ Name: 'Notes', NeedsQuotes: true, Type: 'nvarchar', Length: 200, SQLFullType: 'nvarchar(100)', Value: null }],
                 });
 
                 const projections = RLS().BuildRLSSyntheticRowProjections(entity, entityInfo, true);
 
                 expect(projections).toBe('CAST(NULL AS nvarchar(100)) AS "Notes"');
+            });
+
+            it('maps the type through the dialect, in CHARACTERS not bytes', () => {
+                // `Length` is the system (byte) length; `MapDataTypeToString` takes a character
+                // count. Passing bytes doubles every n-type — and SQL Server caps NVARCHAR at 4000,
+                // so a stock 8000-byte column becomes an ILLEGAL cast and the RLS post-image gate
+                // throws on the primary platform. The widest shipped case is pinned here.
+                for (const [dialect, expected] of [
+                    [new SQLServerDialect(), 'CAST(NULL AS NVARCHAR(4000)) AS "FileName"'],
+                    [new PostgreSQLDialect(), 'CAST(NULL AS VARCHAR(4000)) AS "FileName"'],
+                ] as const) {
+                    const { entity, entityInfo } = MakeRLSEntity({
+                        rlsClause: '',
+                        fields: [{ Name: 'FileName', NeedsQuotes: true, Type: 'nvarchar', Length: 8000, SQLFullType: 'nvarchar(4000)', Value: null }],
+                    });
+                    const provider = RLS();
+                    (provider as unknown as { getDialect(): unknown }).getDialect = () => dialect;
+
+                    expect(
+                        provider.BuildRLSSyntheticRowProjections(entity, entityInfo, true),
+                        `${dialect.constructor.name}: byte length must be halved to characters`,
+                    ).toBe(expected);
+                }
+            });
+
+            it('preserves the MAX sentinel rather than flattening it to 0', () => {
+                const { entity, entityInfo } = MakeRLSEntity({
+                    rlsClause: '',
+                    fields: [{ Name: 'Body', NeedsQuotes: true, Type: 'nvarchar', Length: -1, SQLFullType: 'nvarchar(MAX)', Value: null }],
+                });
+                const provider = RLS();
+                (provider as unknown as { getDialect(): unknown }).getDialect = () => new SQLServerDialect();
+
+                expect(provider.BuildRLSSyntheticRowProjections(entity, entityInfo, true))
+                    .toBe('CAST(NULL AS NVARCHAR(MAX)) AS "Body"');
             });
 
             it('includeNulls=true throws for a null field with no resolvable SQLFullType', () => {
@@ -1728,5 +1830,848 @@ ORDER BY Cnt DESC`,
         expect(result.ErrorMessage).toBeTruthy();
         // RenderedSQL is undefined because the rendering step itself failed
         expect(result.RenderedSQL).toBeUndefined();
+    });
+});
+
+class RecordingProvider extends TestGenericProvider {
+    public beginCount = 0;
+
+    protected override async BeginPhysicalTransaction(): Promise<void> {
+        this.beginCount++;
+        this.physicalOpen = true;
+    }
+}
+
+describe('GenericDatabaseProvider nested transactions', () => {
+    it('outermost begin starts a physical transaction and issues no savepoint SQL', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('nested begin with a live physical TX issues a dialect savepoint', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
+    });
+
+    it('nested begin with leaked depth and no physical TX is corruption, not a new TX', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        p.physicalOpen = false;
+        await expect(p.BeginTransaction()).rejects.toThrow(/Transaction state corrupted/);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('ENOTBEGUN on a published handle is a doomed TX, not a recovery-begin', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        p.beginCount = 0;
+        p.ExecuteSQL = async () => {
+            throw Object.assign(new Error('Transaction has not begun. Call begin() first.'), { code: 'ENOTBEGUN' });
+        };
+        await expect(p.BeginTransaction()).rejects.toThrow(/rolled back by the server/);
+        expect(p.beginCount).toBe(0);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.physicalOpen).toBe(false);
+        await p.CommitTransaction();
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('ResetTransactionState drops a leaked handle so the next begin is outermost', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        p.physicalOpen = false;
+        await p.ResetTransactionState();
+        expect(p.TransactionDepth).toBe(0);
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.beginCount).toBe(2);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('exposes deprecated camelCase savepointStack alias for one release', () => {
+        const p = new RecordingProvider();
+        expect(p.savepointStack).toEqual(p.SavepointStack);
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('nested commit is a no-op SQL on SQL Server (no RELEASE) and decrements depth', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        await p.CommitTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.executeSQLCalls).toEqual([]);
+        expect(p.physicalOpen).toBe(true);
+        await p.CommitTransaction();
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('two concurrent BeginTransactions serialize to one physical begin and one savepoint', async () => {
+        const p = new RecordingProvider();
+        await Promise.all([p.BeginTransaction(), p.BeginTransaction()]);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
+    });
+
+    it('nested rollback issues ROLLBACK TO the savepoint and keeps the outer TX', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(true);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['ROLLBACK TRANSACTION SavePoint_1']);
+    });
+
+    it('AfterPhysicalCommit runs after the lock is released so it can begin again', async () => {
+        class AfterCommitProvider extends RecordingProvider {
+            public afterCalls = 0;
+            protected override async AfterPhysicalCommit(): Promise<void> {
+                this.afterCalls++;
+                if (this.afterCalls > 1) return;
+                await this.BeginTransaction();
+                await this.CommitTransaction();
+            }
+        }
+        const p = new AfterCommitProvider();
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(p.afterCalls).toBe(2);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('begin failing at depth 1 restores depth 0 so the next begin is outermost (A1)', async () => {
+        class FailingBegin extends RecordingProvider {
+            public onBeginFailed = 0;
+            public failNext = true;
+            protected override async BeginPhysicalTransaction(): Promise<void> {
+                if (this.failNext) {
+                    this.failNext = false;
+                    throw new Error('pool exhausted');
+                }
+                this.beginCount++;
+                this.physicalOpen = true;
+            }
+            protected override async OnBeginFailedAtDepthZero(): Promise<void> {
+                this.onBeginFailed++;
+                this.physicalOpen = false;
+            }
+        }
+        const p = new FailingBegin();
+        await expect(p.BeginTransaction()).rejects.toThrow(/pool exhausted/);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.onBeginFailed).toBe(1);
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(true);
+    });
+
+    it('nested rollback that fails the savepoint handler keeps the outer frame doomed (A8/H5)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.ExecuteSQL = async () => {
+            p.physicalOpen = false;
+            throw new Error('savepoint missing');
+        };
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(false);
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('outermost commit failure still ends at depth 0 even if rollback also fails (A10)', async () => {
+        class FailBoth extends RecordingProvider {
+            protected override async CommitPhysicalTransaction(): Promise<void> {
+                throw new Error('commit rejected');
+            }
+            protected override async RollbackPhysicalTransaction(): Promise<void> {
+                this.physicalOpen = false;
+                throw new Error('rollback rejected');
+            }
+        }
+        const p = new FailBoth();
+        await p.BeginTransaction();
+        await expect(p.CommitTransaction()).rejects.toThrow(/commit rejected/);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('three concurrent BeginTransactions serialize to one physical begin and two savepoints (A12)', async () => {
+        const p = new RecordingProvider();
+        await Promise.all([p.BeginTransaction(), p.BeginTransaction(), p.BeginTransaction()]);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(3);
+        expect(p.SavepointStack).toEqual(['SavePoint_1', 'SavePoint_2']);
+    });
+
+    it('DoomedTransactionError is thrown when ENOTBEGUN hits a published handle', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.ExecuteSQL = async () => {
+            throw Object.assign(new Error('wrapped'), { code: 'ENOTBEGUN' });
+        };
+        await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.physicalOpen).toBe(false);
+        await p.CommitTransaction();
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('queued nested begin after doom cannot open a second physical TX (H5)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        let firstSave = true;
+        const orig = p.ExecuteSQL.bind(p);
+        p.ExecuteSQL = async (sql?: string, params?: unknown[]) => {
+            if (typeof sql === 'string' && sql.includes('SAVE TRANSACTION') && firstSave) {
+                firstSave = false;
+                throw Object.assign(new Error('Transaction has not begun'), { code: 'ENOTBEGUN' });
+            }
+            return orig(sql, params);
+        };
+        const results = await Promise.allSettled([p.BeginTransaction(), p.BeginTransaction()]);
+        expect(results.every((r) => r.status === 'rejected')).toBe(true);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(1);
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('ExecuteSQL without connectionSource throws while doomed (H6)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        let firstSave = true;
+        const orig = p.ExecuteSQL.bind(p);
+        p.ExecuteSQL = async (sql?: string, params?: unknown[], options?: { connectionSource?: unknown }) => {
+            if (typeof sql === 'string' && sql.includes('SAVE TRANSACTION') && firstSave) {
+                firstSave = false;
+                throw Object.assign(new Error('Transaction has not begun'), { code: 'ENOTBEGUN' });
+            }
+            return orig(sql, params, options);
+        };
+        await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        p.resetExecuteSQLState();
+        await expect(p.ExecuteSQL('UPDATE Orders SET Status=Confirmed')).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.executeSQLCalls.map((c) => c.sql)).not.toContain('UPDATE Orders SET Status=Confirmed');
+        await p.ExecuteSQL('SELECT 1', undefined, { connectionSource: {} });
+        expect(p.executeSQLCalls.map((c) => c.sql)).toContain('SELECT 1');
+    });
+});
+
+describe('GenericDatabaseProvider save-call variable suffix (loom #12 WP3)', () => {
+    const HEX12 = /^_[0-9a-f]{12}$/;
+
+    it('hashes schema.table|pk deterministically to 12 lowercase hex', () => {
+        expect(GenericDatabaseProvider.SaveCallVariableHashLength).toBe(12);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001'])).toBe('6679d1fd77d5');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001'])).toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']),
+        );
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['a'])).not.toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['b']),
+        );
+        // These pairs collided on the first 8 hex (031e1622 / 37ccdac1); 12 hex tells them apart.
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-42236'])).toBe('031e16225f91');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-64356'])).toBe('031e16223663');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-101514'])).toBe('37ccdac16ab3');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-104669'])).toBe('37ccdac1057e');
+    });
+
+    it('normalizes key values before hashing: UUID case, Date, null/undefined', () => {
+        const lower = GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Entity', ['a1000000-0000-0000-0000-000000000001']);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Entity', ['A1000000-0000-0000-0000-000000000001'])).toBe(lower);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Entity', [' A1000000-0000-0000-0000-000000000001 '])).toBe(lower);
+        expect(lower).toBe('774f612ccbb5');
+        // A non-UUID string keeps its case: it is the record's actual key text.
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['ABC'])).not.toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['abc']),
+        );
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'T', [new Date('2026-01-01T00:00:00Z')])).toBe('892c6aa6d2c3');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'T', [new Date('2026-01-01T00:00:00Z')])).toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'T', ['2026-01-01T00:00:00.000Z']),
+        );
+        const empty = GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', [null]);
+        expect(empty).toBe('b7d71d1c9508');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', [undefined])).toBe(empty);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', [])).toBe(empty);
+    });
+
+    it('same PK twice in one group → _hash then _hash_2; no ordinal outside a group', () => {
+        const p = new TestGenericProvider();
+        const group = {};
+        const a = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', ['w-0001']);
+        const b = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', ['w-0001']);
+        expect(a).toMatch(HEX12);
+        expect(b).toBe(`${a}_2`);
+        expect(p.AllocateSaveCallSuffixForPk(null, 'dbo', 'Widget', ['w-0001'])).toBe(a);
+        expect(p.AllocateSaveCallSuffixForPk(null, 'dbo', 'Widget', ['w-0001'])).toBe(a);
+    });
+
+    it('PK-less inserts in one group share the per-table hash and are told apart by the ordinal', () => {
+        const p = new TestGenericProvider();
+        const group = {};
+        const first = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [null]);
+        expect(first).toBe('_b7d71d1c9508');
+        expect(p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [undefined])).toBe('_b7d71d1c9508_2');
+        expect(p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [])).toBe('_b7d71d1c9508_3');
+        // A different group starts counting again.
+        expect(p.AllocateSaveCallSuffixForPk({}, 'dbo', 'Widget', [null])).toBe('_b7d71d1c9508');
+    });
+
+    it('120_000 unique PKs in one group: 120_000 distinct bare suffixes, no sha1[:12] collisions', () => {
+        const p = new TestGenericProvider();
+        const group = {};
+        const suffixes: string[] = [];
+        for (let i = 0; i < 120_000; i++) {
+            suffixes.push(p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [`id-${i}`]));
+        }
+        expect(new Set(suffixes).size).toBe(120_000);
+        expect(suffixes.every((s) => HEX12.test(s))).toBe(true);
+    });
+});
+
+describe('GenericDatabaseProvider RunAfterCommit (post-commit queue)', () => {
+    /** Records each task's label when it runs. */
+    function recorder(): { ran: string[]; task: (label: string) => () => Promise<void> } {
+        const ran: string[] = [];
+        return { ran, task: (label: string) => async () => { ran.push(label); } };
+    }
+
+    class FailingCommitProvider extends RecordingProvider {
+        protected override async CommitPhysicalTransaction(): Promise<void> {
+            throw new Error('commit failed');
+        }
+    }
+
+    it('starts the task immediately when there is no ambient transaction', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        p.RunAfterCommit(r.task('now'), 'now');
+        await Promise.resolve();
+        expect(r.ran).toEqual(['now']);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+    });
+
+    it('queues inside a transaction and runs each task exactly once, in order, after the outermost commit', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('a'), 'a');
+        p.RunAfterCommit(r.task('b'), 'b');
+        expect(r.ran).toEqual([]);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['a', 'b']);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['a', 'b']);
+    });
+
+    it('a savepoint release neither drains nor clears; the outer commit runs the task', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('inner'), 'inner');
+        await p.CommitTransaction();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingPostCommitTaskCount).toBe(1);
+        // A later savepoint at the same depth that rolls back must not take the released task with it.
+        await p.BeginTransaction();
+        await p.RollbackTransaction();
+        expect(p.PendingPostCommitTaskCount).toBe(1);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['inner']);
+    });
+
+    it('a savepoint rollback keeps outer tasks and drops only the tasks registered inside it', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('outer'), 'outer');
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('rolled-back'), 'rolled-back');
+        await p.RollbackTransaction();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingPostCommitTaskCount).toBe(1);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['outer']);
+    });
+
+    it('never runs a task after an outermost rollback', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('x'), 'x');
+        await p.CommitTransaction();
+        await p.RollbackTransaction();
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('never runs a task after a failed commit', async () => {
+        const p = new FailingCommitProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('x'), 'x');
+        await expect(p.CommitTransaction()).rejects.toThrow('commit failed');
+        await p.RollbackTransaction();
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        expect(r.ran).toEqual([]);
+    });
+
+    it('never runs a task queued on a doomed transaction', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('before-doom'), 'before-doom');
+        p.ExecuteSQL = async () => {
+            throw Object.assign(new Error('Transaction has not begun.'), { code: 'ENOTBEGUN' });
+        };
+        await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        // Still inside the doomed frame: a new registration queues and is discarded on settle.
+        p.RunAfterCommit(r.task('while-doomed'), 'while-doomed');
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        expect(r.ran).toEqual([]);
+    });
+
+    it('never runs a task after ResetTransactionState', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('x'), 'x');
+        await p.ResetTransactionState();
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('a failing task is logged and neither stops later tasks nor rejects the commit', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new RecordingProvider();
+            const r = recorder();
+            await p.BeginTransaction();
+            p.RunAfterCommit(async () => { throw new Error('task exploded'); }, 'bad task');
+            p.RunAfterCommit(r.task('after'), 'after');
+            await expect(p.CommitTransaction()).resolves.toBeUndefined();
+            expect(r.ran).toEqual(['after']);
+            const logged = errorSpy.mock.calls.map((c) => String(c[0]));
+            expect(logged.some((m) => m.includes("'bad task'") && m.includes('task exploded'))).toBe(true);
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('an immediate task that fails is logged, not thrown into the caller', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new RecordingProvider();
+            expect(() => p.RunAfterCommit(async () => { throw new Error('boom now'); }, 'immediate')).not.toThrow();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            expect(errorSpy.mock.calls.some((c) => String(c[0]).includes('boom now'))).toBe(true);
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('a task can open and commit its own transaction, and its own queued work runs on that commit', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        p.RunAfterCommit(async () => {
+            r.ran.push('outer-task');
+            await p.BeginTransaction();
+            p.RunAfterCommit(r.task('queued-by-task'), 'queued-by-task');
+            await p.CommitTransaction();
+        }, 'outer-task');
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['outer-task', 'queued-by-task']);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.beginCount).toBe(2);
+    });
+});
+
+describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late registration)', () => {
+    function recorder(): { ran: string[]; task: (label: string) => () => Promise<void> } {
+        const ran: string[] = [];
+        return { ran, task: (label: string) => async () => { ran.push(label); } };
+    }
+    const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+    it('returns a null-epoch token outside a transaction and one naming every open frame inside', async () => {
+        const p = new RecordingProvider();
+        // Not `undefined`: "no transaction was open" is information the late registration needs.
+        expect(p.CapturePostCommitToken()).toEqual({ Epoch: null, FrameIds: [] });
+        await p.BeginTransaction();
+        const outer = p.CapturePostCommitToken();
+        await p.BeginTransaction();
+        const inner = p.CapturePostCommitToken();
+        expect(outer?.FrameIds).toHaveLength(1);
+        expect(inner?.Epoch).toBe(outer?.Epoch);
+        expect(inner?.FrameIds.slice(0, 1)).toEqual(outer?.FrameIds);
+        expect(inner?.FrameIds).toHaveLength(2);
+        await p.CommitTransaction();
+        await p.CommitTransaction();
+        expect(p.CapturePostCommitToken()).toEqual({ Epoch: null, FrameIds: [] });
+    });
+
+    it('registered after the outermost ROLLBACK: never runs', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.RollbackTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+    });
+
+    it('registered after the outermost COMMIT: runs once, immediately', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual(['late']);
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('captured in a savepoint that was then released: queued, runs after the outermost commit', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        expect(p.PendingPostCommitTaskCount).toBe(1);
+        // A later savepoint rolling back at the depth the token was captured at must not drop it.
+        await p.BeginTransaction();
+        await p.RollbackTransaction();
+        await settle();
+        expect(r.ran).toEqual([]);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('captured in a savepoint that rolled back, registered AFTER the outer commit: still dropped', async () => {
+        // The outer transaction committing says nothing about a savepoint that was rolled back
+        // inside it. Registration lands after both, which is the common fire-and-forget shape.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();          // outer
+        await p.BeginTransaction();          // savepoint
+        const token = p.CapturePostCommitToken();
+        await p.RollbackTransaction();       // savepoint rolled back — its work is gone
+        await p.CommitTransaction();         // outer commits
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('captured in a savepoint that was RELEASED, registered after the outer commit: runs', async () => {
+        // The control for the case above: same shape, released instead of rolled back.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        await p.CommitTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('captured with NO transaction open: runs even if an unrelated transaction is open by then', async () => {
+        // Work caused outside a transaction is already durable; it must not be attached to — and
+        // lost with — a transaction that merely happens to be open when it registers.
+        const p = new RecordingProvider();
+        const r = recorder();
+        const token = p.CapturePostCommitToken();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('unrelated-open'), 'unrelated-open', token);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.RollbackTransaction();
+        await settle();
+        expect(r.ran).toEqual(['unrelated-open']);
+    });
+
+    it('a task whose own transaction committed waits for an unrelated open one, then runs', async () => {
+        // Running it inside the unrelated transaction would enlist its writes in that transaction.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+
+        await p.BeginTransaction();                       // an unrelated transaction opens
+        p.RunAfterCommit(r.task('late'), 'late', token);  // ...and only now does the task register
+        await settle();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingIdlePostCommitTaskCount).toBe(1);
+
+        await p.RollbackTransaction();                    // it ends — either way the task is owed
+        expect(r.ran).toEqual(['late']);
+        expect(p.PendingIdlePostCommitTaskCount).toBe(0);
+    });
+
+    it('the same, when the unrelated transaction commits', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('captured in a savepoint that was then rolled back: dropped even though the outer commits', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.RollbackTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.CommitTransaction();
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('captured in a savepoint whose PARENT savepoint later rolls back: dropped', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        await p.RollbackTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await p.CommitTransaction();
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('follows the token epoch, not a NEW transaction: old epoch committed -> owed, and run once idle', async () => {
+        // The task is owed because ITS transaction committed. It is not run inside the unrelated
+        // one, whose rollback would take the task's own writes with it.
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.CommitTransaction();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        await settle();
+        expect(r.ran).toEqual([]);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.RollbackTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('follows the token epoch, not a NEW transaction: old epoch rolled back -> dropped even if the new one commits', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.RollbackTransaction();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        expect(p.PendingPostCommitTaskCount).toBe(0);
+        await p.CommitTransaction();
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('registered while its own transaction is still open: queued at its frame, like an untokened task', async () => {
+        const p = new RecordingProvider();
+        const r = recorder();
+        await p.BeginTransaction();
+        const token = p.CapturePostCommitToken();
+        await p.BeginTransaction();
+        p.RunAfterCommit(r.task('late'), 'late', token);
+        // Queued at depth 1 (the token's frame), so rolling back the unrelated savepoint keeps it.
+        await p.RollbackTransaction();
+        expect(p.PendingPostCommitTaskCount).toBe(1);
+        await p.CommitTransaction();
+        expect(r.ran).toEqual(['late']);
+    });
+
+    it('drops a token from a failed commit, a doomed transaction, or ResetTransactionState', async () => {
+        const r = recorder();
+        const failing = new (class extends RecordingProvider {
+            protected override async CommitPhysicalTransaction(): Promise<void> { throw new Error('commit failed'); }
+        })();
+        await failing.BeginTransaction();
+        const failedToken = failing.CapturePostCommitToken();
+        await expect(failing.CommitTransaction()).rejects.toThrow('commit failed');
+        failing.RunAfterCommit(r.task('failed'), 'failed', failedToken);
+
+        const reset = new RecordingProvider();
+        await reset.BeginTransaction();
+        const resetToken = reset.CapturePostCommitToken();
+        await reset.ResetTransactionState();
+        reset.RunAfterCommit(r.task('reset'), 'reset', resetToken);
+
+        const doomed = new RecordingProvider();
+        await doomed.BeginTransaction();
+        const doomedToken = doomed.CapturePostCommitToken();
+        doomed.ExecuteSQL = async () => {
+            throw Object.assign(new Error('Transaction has not begun.'), { code: 'ENOTBEGUN' });
+        };
+        await expect(doomed.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        doomed.RunAfterCommit(r.task('doomed-open'), 'doomed-open', doomedToken);
+        expect(doomed.PendingPostCommitTaskCount).toBe(0);
+        await expect(doomed.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        doomed.RunAfterCommit(r.task('doomed-settled'), 'doomed-settled', doomedToken);
+
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+
+    it('drops a token this provider does not know (another instance, or never issued)', async () => {
+        const a = new RecordingProvider();
+        const b = new RecordingProvider();
+        const r = recorder();
+        await a.BeginTransaction();
+        const tokenFromA = a.CapturePostCommitToken();
+        await a.CommitTransaction();
+        await b.BeginTransaction();
+        b.RunAfterCommit(r.task('foreign'), 'foreign', tokenFromA);
+        b.RunAfterCommit(r.task('future'), 'future', { Epoch: Number.MAX_SAFE_INTEGER, FrameIds: [1] });
+        await b.CommitTransaction();
+        await settle();
+        expect(r.ran).toEqual([]);
+    });
+});
+
+describe('GenericDatabaseProvider after-save dispatch captures the token before its first await', () => {
+    const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+    const afterCreate = { ID: 'it-after-create', Name: 'AfterCreate' };
+    const entity = {
+        IsSaved: false,
+        Fields: [],
+        EntityInfo: { ID: 'ent-1', Name: 'Widgets' },
+        PrimaryKey: { ToString: () => 'ID=1' },
+    } as unknown as BaseEntity;
+
+    class DispatchProvider extends RecordingProvider {
+        public aiTokens: Array<PostCommitToken | undefined> = [];
+        public DispatchAfterSave(): Promise<unknown> {
+            return this.HandleEntityActions(entity, 'save', false, {} as UserInfo);
+        }
+        public DispatchAfterSaveAI(): Promise<void> {
+            return this.HandleEntityAIActions(entity, 'save', false, {} as UserInfo);
+        }
+        protected override GetEntityAIActions(): MJEntityAIActionEntity[] {
+            return [{ ID: 'ai-1', TriggerEvent: 'after save', AIActionID: 'a', AIModelID: 'm' } as unknown as MJEntityAIActionEntity];
+        }
+        protected override EnqueueAfterSaveAIAction(_p: unknown, _u: UserInfo, token?: PostCommitToken): void {
+            this.aiTokens.push(token);
+        }
+    }
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('entity actions: the token reaches RunEntityAction even when the transaction rolled back first', async () => {
+        const engine = EntityActionEngineServer.Instance;
+        let releaseConfig!: () => void;
+        vi.spyOn(engine, 'Config').mockImplementation(() => new Promise<void>((resolve) => { releaseConfig = resolve; }));
+        vi.spyOn(engine, 'InvocationTypes', 'get').mockReturnValue([afterCreate] as never);
+        vi.spyOn(engine, 'GetActionsByEntityNameAndInvocationType').mockReturnValue([{ ID: 'ea-1' }] as never);
+        vi.spyOn(EntityActionDispatchGuard.Instance, 'Dispatch').mockImplementation(async (_key, run) => {
+            await run();
+            return 'Ran';
+        });
+        const p = new DispatchProvider();
+        const r: string[] = [];
+        const run = vi.spyOn(engine, 'RunEntityAction').mockImplementation(async (params) => {
+            p.RunAfterCommit(async () => { r.push('ran'); }, 'durable', params.PostCommitToken);
+            return null;
+        });
+
+        await p.BeginTransaction();
+        const expected = p.CapturePostCommitToken();
+        const dispatched = p.DispatchAfterSave();
+        await p.RollbackTransaction();
+        releaseConfig();
+        await dispatched;
+        await settle();
+
+        expect(run).toHaveBeenCalledTimes(1);
+        expect(run.mock.calls[0][0].PostCommitToken).toEqual(expected);
+        expect(r).toEqual([]);
+    });
+
+    it('AI actions: the token captured at dispatch reaches EnqueueAfterSaveAIAction', async () => {
+        let releaseConfig!: () => void;
+        vi.spyOn(AIEngine.Instance, 'Config').mockImplementation(() => new Promise<void>((resolve) => { releaseConfig = resolve; }));
+        const p = new DispatchProvider();
+        await p.BeginTransaction();
+        const expected = p.CapturePostCommitToken();
+        const dispatched = p.DispatchAfterSaveAI();
+        await p.CommitTransaction();
+        releaseConfig();
+        await dispatched;
+        expect(p.aiTokens).toEqual([expected]);
+    });
+});
+
+describe('TransactionFrameTracker', () => {
+    it(`remembers only the last ${TransactionFrameTracker.SettledEpochLimit} settled epochs`, () => {
+        const t = new TransactionFrameTracker();
+        t.PushFrame();
+        const first = t.Capture()!;
+        t.EndEpoch('committed');
+        expect(t.Resolve(first, false)).toEqual({ Kind: 'run' });
+        for (let i = 0; i < TransactionFrameTracker.SettledEpochLimit; i++) {
+            t.PushFrame();
+            t.EndEpoch('committed');
+        }
+        expect(t.Resolve(first, false).Kind).toBe('drop');
     });
 });

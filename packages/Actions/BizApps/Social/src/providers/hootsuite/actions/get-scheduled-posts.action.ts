@@ -134,8 +134,8 @@ export class HootSuiteGetScheduledPostsAction extends HootSuiteBaseAction {
      */
     private async getPostAnalytics(postId: string): Promise<any> {
         try {
-            const response = await this.axiosInstance.get(`/analytics/posts/${postId}`);
-            return response.data;
+            const response = await this.httpClient.Get<any>(`/analytics/posts/${postId}`);
+            return response.Data;
         } catch (error) {
             // Analytics might not be available for all posts
             return null;

@@ -1,0 +1,28 @@
+{
+  "id": "sage-weather-first-step-01",
+  "agent": "Sage",
+  "tags": [
+    "first-step-action",
+    "disambiguation"
+  ],
+  "description": "A plainly weather-shaped question with 26 actions on offer. The basic accuracy number: can the model find the one obvious tool in a large catalog?",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "What's the weather in Chicago right now?"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Get Weather",
+        "params": {}
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

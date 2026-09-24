@@ -511,16 +511,25 @@
 }
 .wfr-chip-x:hover { color: var(--mj-text-primary); }
 
-.wfr-break-toggle {
-  display: flex;
+.wfr-bp {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 10px;
-  font-size: var(--mj-font-size-sm);
-  color: var(--mj-text-primary);
+  justify-content: center;
+  margin: 0 0 8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mj-text-muted);
   cursor: pointer;
 }
-.wfr-break-toggle i { font-size: 8px; color: var(--mj-status-error); }
+.wfr-bp:hover { color: var(--mj-status-error); }
+.wfr-bp-on,
+.wfr-bp-on:hover { color: var(--mj-status-error); }
+.wfr-bp i { font-size: 10px; }
+.wfr-bp:disabled { opacity: 0.45; cursor: default; }
 
 .wfr-editor-card {
   display: flex;

@@ -114,6 +114,41 @@ This is why a page reload, a server restart, or the submitting run ending no lon
 and it is also why **cost cannot be totalled during the run** (see [Cost and
 tokens](#cost-and-tokens-the-seam)).
 
+### When a Flow agent runs in-process instead
+
+Dispatch is the default for a **top-level** Flow agent run. It is wrong for a caller that needs
+the workflow's result as part of its own work, because a dispatched run returns before any step has
+run. Those runs walk the flow in-process and return the final payload, as Flow agents did in 5.x:
+
+| The run | Where it executes | Why |
+|---|---|---|
+| Top-level, no option set | Dispatcher | Survives reloads and restarts; nobody is waiting on the payload |
+| Has a `parentRun` (a sub-agent step, including a Sub-Agent task inside a dispatched graph) | In-process | The calling run consumes the result |
+| `agentTypeParams.executionMode: 'inRun'` | In-process | The caller, such as an API handler, must answer with the payload |
+| Has a `parentRun` **and** `executionMode: 'dispatch'` | Refused | The parent would continue before any work had happened |
+
+```typescript
+const params: ExecuteAgentParams<MyContext, MyPayload, FlowAgentExecuteParams> = {
+    agent: flowAgent,
+    conversationMessages,
+    contextUser,
+    agentTypeParams: { executionMode: 'inRun' },
+};
+const result = await new AgentRunner().RunAgent(params);   // result.payload is the flow's final payload
+```
+
+The choice is recorded on the run as a completed `Decision` step named **"Workflow runs in this
+run"** or **"Workflow runs on the task-graph dispatcher"**, with the reason in its output data.
+
+What in-process execution gives up is exactly what dispatch adds: the steps live only as long as
+the run, they appear as ordinary `AIAgentRunStep` rows rather than `Task` rows, and a `Human` step
+is not supported. `startAtStep` works in-process and is refused under dispatch.
+
+Both modes choose outgoing paths with the same function (`SelectOutgoingEdges`), so a flow takes the
+same branches either way. One consequence differs from 5.x in both modes: a path whose destination
+step is not `Active` is not followed, so a flow whose only satisfied path leads to a disabled step
+now finishes with **Success** where 5.x reported *"No active steps found"*.
+
 ---
 
 ## The seven node kinds
@@ -232,9 +267,13 @@ graph LR
 
 ### The mapping dialect
 
-Both the in-run walker and the dispatcher call **one shared implementation**
+The dispatcher and BaseAgent's loop helpers call **one shared implementation**
 (`@memberjunction/ai-core-plus` → `payload-mapping.ts`). Two implementations would diverge exactly
 where the compile is supposed to be lossless.
+
+The in-run walker's Action step mappings are still the 5.x code in `FlowAgentType`
+(`PreProcessActionStep`, `applyActionOutputMapping`). They accept the same forms below, but they are
+a separate implementation, so a mapping bug fixed in one is not automatically fixed in the other.
 
 **Input values** — a literal unless prefixed (prefix matching is case-insensitive):
 
@@ -504,7 +543,13 @@ that shifted each poll would be unusable.
 
 ## Debugging a run
 
-The Run Console on **Workflows → Runs** is the debugger. Breakpoints, edge overrides, force-complete and edit-input are wired there. See the **[Workflow Debugger Guide](WORKFLOW_DEBUGGER_GUIDE.md)** for the walkthrough, the visual vocabulary (a forced path must never look like a real verdict), and the verb gates.
+**Agent form → Run → Debug** starts the graph paused (`$.debug.paused` on the parent row at Submit) so the first step cannot be claimed before you arrive. **Workflows → Runs** is the same chrome on a graph that is already going or already finished — you cannot re-run a Flow agent from there.
+
+Both surfaces embed `<mj-task-graph-debugger>` (a drop-in in `@memberjunction/ng-task-graph-editor`). The wrap owns frames and every `TaskGraph.*` Remote Operation; hosts pass a parent task id.
+
+Continue from a breakpoint stamps `skipBreakpointTaskID` so the stopped step is claimed instead of immediately re-hitting the same Pending breakpoint. `ForEach` is one task row — one Continue runs the whole loop. Submit kicks every running dispatcher so the first claim is immediate, not one poll interval later.
+
+See the **[Workflow Debugger Guide](WORKFLOW_DEBUGGER_GUIDE.md)** for the walkthrough, the visual vocabulary (queued / running / waiting-on-you; a forced path must never look like a real verdict; conditionals stay dashed until the dest actually starts), and the verb gates.
 
 ---
 
@@ -530,12 +575,26 @@ An `OutputPayload` of `{}` on the step *before* the fork is the tell.
 | A `Human` task `Pending` | waiting on a person | it is working as drawn |
 | Tasks neither running nor skipped | **held** — a condition in an exclusive group could not be evaluated | fix the expression |
 | `Blocked` dependents | an upstream step failed under `failureSemantics: 'block'` | fix the step, or draw a recovery path with `onError: continue` |
-| Everything `Pending`, nothing claimed | no dispatcher on any host, or claims expired | check that MJAPI started `TaskGraphDispatcher` |
+| Everything `Pending`, nothing claimed | no dispatcher on any host, claims expired, or the worker is only waiting on its poll timer | check that MJAPI started `TaskGraphDispatcher`. Submit calls `KickTaskGraphDispatchers()` so the first pass is immediate; a multi-second sit on "Next — waiting for the engine" after Debug usually means no dispatcher registered a kick |
 
 ### The workflow refused to start
 
 Read the message — it names the step. Common cases: a `Prompt` or `External` step (no runner yet), a
 loop with nothing to repeat, a step referencing an agent or action that no longer exists, or a cycle.
+
+### Nothing is ever claimed — every task sits Pending
+
+The dispatcher is running, the graph is `Pending`, and the log says nothing interesting. Look for
+`[TaskGraphDispatcher] Cannot claim tasks` or `[TaskGraph] guarded write … FAILED`.
+
+The claim protocol runs through `spTaskGraph*` stored procedures, which are granted to
+`cdp_Developer` and `cdp_Integration`. A database principal in neither role cannot execute any of
+them, so no task is ever claimed. Grant one of those roles to the principal the server connects as
+and restart; the dispatcher also checks this at startup and names the missing grant.
+
+Before #4575 these were raw statements against the `Task` table, which no runtime role may write —
+so on a least-privilege install nothing was ever claimed, and the refusal was reported as though
+another instance had won the race.
 
 ### A submission reported no dispatcher
 
@@ -570,7 +629,10 @@ The type system makes most of this a compile error rather than a runtime surpris
 - [`packages/AI/Agents/README.md`](../packages/AI/Agents/README.md) — the agent framework, agent
   types, and where `FlowAgentType` fits
 - [`packages/TaskGraph/README.md`](../packages/TaskGraph/README.md) — the durable execution package:
-  dispatcher, claim protocol, runners
+  dispatcher, claim protocol, kick, runners
+- [Workflow Debugger Guide](WORKFLOW_DEBUGGER_GUIDE.md) — step a live graph; drop-in wrap
+- [`@memberjunction/ng-task-graph-editor`](../packages/Angular/Generic/task-graph-editor/README.md) —
+  canvas, run view, `<mj-task-graph-debugger>`
 - [Record Set Processing Guide](RECORD_SET_PROCESSING_GUIDE.md) — for "do X to many records", which
   is a different problem
 - [`packages/Actions/CLAUDE.md`](../packages/Actions/CLAUDE.md) — Actions are boundaries; when to

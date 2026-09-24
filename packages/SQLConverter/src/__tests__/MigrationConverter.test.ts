@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { convertMigration, extractKeptTSQL, type TSQLToPGTranspiler } from '../MigrationConverter.js';
+import { ConvertMigration, ExtractKeptTSQL, type TSQLToPGTranspiler } from '../MigrationConverter.js';
 
 const codegenItem = (title: string, body: string) =>
   [
@@ -27,15 +27,22 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     // catch it as belt-and-suspenders — never a clean result over content that disappeared.
     const vanishing: TSQLToPGTranspiler = { transpile: async () => ({ sql: [], unhandled: [] }) };
     const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
-    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: vanishing });
+    const r = await ConvertMigration(sql, 'V_Widget.sql', { transpiler: vanishing });
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
     // …and it is surfaced as a gap so the CLI fails the run rather than shipping an empty file.
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+    // Promoted for the same reason a fully-gapped file is: an empty body must never be written as
+    // a discoverable .pg.sql. Pinned because the two promotions are computed separately — the
+    // hollow check reads `transpiled.unhandled`, which does NOT contain the synthetic row added
+    // just above, so this case cannot ride on that one by accident.
+    expect(r.status).toBe('needs-hand-authoring');
+    // And it is NOT described as a gapped conversion — nothing became a gap here.
+    expect(r.notes.some((n) => n.includes('every translatable statement became a conversion gap'))).toBe(false);
   });
 
   it('does NOT flag a normal conversion; reports source/emitted counts', async () => {
     const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
-    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'V_Widget.sql', { transpiler: passthrough });
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
     expect(r.reconciliation.sourceStatements).toBeGreaterThan(0);
     expect(r.reconciliation.emittedStatements).toBeGreaterThan(0);
@@ -49,10 +56,65 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
       "DECLARE @Name_da319a9d NVARCHAR(100) = N'X';",
       "INSERT INTO [__mj].[AIModel] ([ID],[Name]) VALUES ('aaaa', @Name_da319a9d);",
     ].join('\n');
-    const r = await convertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
     expect(r.status).toBe('reseed-or-regen-only');
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
     expect(r.reconciliation.emittedStatements).toBe(0);
+  });
+
+  it('promotes a FULLY GAPPED conversion to needs-hand-authoring (issue #3840)', async () => {
+    // The real case: bizapps-common's Layered_Base_Views_People_Organizations wraps its entire
+    // body in `IF NOT OBJECT_ID(...)` blocks the dialect cannot emit, so every statement becomes a
+    // gap and the body is a header + banner over nothing. Left as `converted`, the CLI writes a
+    // discoverable .pg.sql that satisfies filename parity, passes a T-SQL scan, applies cleanly,
+    // and does nothing.
+    const allGapped: TSQLToPGTranspiler = {
+      transpile: async () => ({
+        sql: [],
+        unhandled: [
+          { kind: 'IF-BLOCK', snippet: "IF NOT OBJECT_ID('[s].[vwPeople]', 'V') IS NULL BEGIN" },
+          { kind: 'IF-BLOCK', snippet: "IF NOT OBJECT_ID('[s].[vwOrganizations]', 'V') IS NULL BEGIN" },
+        ],
+      }),
+    };
+    // Hand-authored DDL, so the classifier keeps it and it reaches the transpiler. (A `vw*`-named
+    // object would classify as a CodeGen object and take the marker path instead, which is guarded
+    // separately by the empty-marker promotion above.)
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await ConvertMigration(sql, 'V_Layered.sql', { transpiler: allGapped });
+    expect(r.status).toBe('needs-hand-authoring');
+    expect(r.reconciliation.emittedStatements).toBe(0);
+    // It is a DIFFERENT finding from the vanish guard: content was reported, not lost.
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
+    expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(false);
+    expect(r.notes.some((n) => n.includes('every translatable statement became a conversion gap'))).toBe(true);
+  });
+
+  it('does NOT promote when SOME statements survived alongside a gap', async () => {
+    // A partially-gapped migration is the ordinary case `--allow-gaps` exists for: real DDL was
+    // emitted, and the gap is recorded in the banner. Promoting it would route every imperfect
+    // conversion to .needs-hand and make the flag meaningless.
+    const partial: TSQLToPGTranspiler = {
+      transpile: async (tsql) => ({
+        sql: [tsql],
+        unhandled: [{ kind: 'IF-BLOCK', snippet: 'IF EXISTS (...) BEGIN' }],
+      }),
+    };
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await ConvertMigration(sql, 'V_Widget.sql', { transpiler: partial });
+    expect(r.status).toBe('converted');
+    expect(r.reconciliation.emittedStatements).toBeGreaterThan(0);
+  });
+
+  it('does NOT promote an all-DROPPED file (empty, but nothing was gapped)', async () => {
+    // Guards the third `emittedStatements === 0` case: the dialect accounted the content as
+    // dropped rather than gapped, which is legitimate and must stay `converted`.
+    const allDropped: TSQLToPGTranspiler = {
+      transpile: async () => ({ sql: [], unhandled: [], dropped: [{ kind: 'ALTER-ACTIONLESS', snippet: 'ALTER TABLE x' }] }),
+    };
+    const sql = 'ALTER TABLE [__mj].[Widget] ADD CONSTRAINT CK CHECK (ISJSON([X]) = 1);';
+    const r = await ConvertMigration(sql, 'V_Widget.sql', { transpiler: allDropped });
+    expect(r.status).not.toBe('needs-hand-authoring');
   });
 
   it('does NOT flag suspiciousEmptyOutput when the dialect intentionally DROPPED the content', async () => {
@@ -63,7 +125,7 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
       transpile: async () => ({ sql: [], unhandled: [], dropped: [{ kind: 'ALTER-ACTIONLESS', snippet: 'ALTER TABLE x' }] }),
     };
     const sql = 'ALTER TABLE [__mj].[Widget] ADD CONSTRAINT CK CHECK (ISJSON([X]) = 1);';
-    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: allDropped });
+    const r = await ConvertMigration(sql, 'V_Widget.sql', { transpiler: allDropped });
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(false);
   });
@@ -74,9 +136,47 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     // reseed/regen marker there is exactly the RC1 silent-drop class — the marker path must
     // reconcile source statements against what was kept/reported before trusting the emptiness.
     const sql = 'CREATE VIEW [__mj].[CustomerSummary] AS SELECT [ID], [Total] FROM [__mj].[Orders];';
-    const r = await convertMigration(sql, 'V_CustomerSummary.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'V_CustomerSummary.sql', { transpiler: passthrough });
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+  });
+
+  it('substitutes ${mjSchema} independently of ${flyway:defaultSchema} (issue #3838)', async () => {
+    // An Open App migration names its OWN schema with ${flyway:defaultSchema} and MJ CORE with
+    // ${mjSchema}; for every app those are different values. Only the first was substituted, so
+    // `${mjSchema}` survived into the emitted file AND into the SQL --bake-codegen executes,
+    // failing with: relation "${mjSchema}.Entity" does not exist.
+    const sql = [
+      'CREATE TABLE [${flyway:defaultSchema}].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );',
+      'GO',
+      "UPDATE [${mjSchema}].[Entity] SET [Name] = 'W' WHERE [ID] = '1';",
+    ].join('\n');
+    const r = await ConvertMigration(sql, 'V_Widget.sql', {
+      transpiler: passthrough,
+      schema: '__mj_bizappscommon',
+      coreSchema: '__mj',
+    });
+    expect(r.pgSQL).not.toContain('${mjSchema}');
+    expect(r.pgSQL).not.toContain('${flyway:defaultSchema}');
+    // The app's own object resolves to the app schema…
+    expect(r.pgSQL).toContain('__mj_bizappscommon');
+    // …and core resolves to core, NOT to the app schema.
+    expect(r.pgSQL).not.toContain('__mj_bizappscommon"."Entity"');
+    expect(r.pgSQL).toMatch(/__mj["\].]*\.?\[?"?Entity/);
+  });
+
+  it('defaults ${mjSchema} to __mj when no coreSchema is supplied', async () => {
+    const sql = "UPDATE [${mjSchema}].[Entity] SET [Name] = 'W' WHERE [ID] = '1';\nGO\nCREATE TABLE [x].[Y] ( [ID] INT );";
+    const r = await ConvertMigration(sql, 'V_Widget.sql', { transpiler: passthrough, schema: '__mj_app' });
+    expect(r.pgSQL).not.toContain('${mjSchema}');
+    // The app schema is deliberately '__mj_app', which CONTAINS '__mj' as a substring — so
+    // `toContain('__mj')` cannot tell the default apart from the bug this PR fixes, where the
+    // core placeholder falls back to the app schema. pgHeader() emits
+    // `CREATE SCHEMA IF NOT EXISTS __mj;` besides, which satisfies that assertion on its own
+    // whether or not the token was substituted at all. Assert on the qualified reference:
+    // negative on the wrong schema, positive on the right one.
+    expect(r.pgSQL).not.toContain('[__mj_app].[Entity]');
+    expect(r.pgSQL).toContain('[__mj].[Entity]');
   });
 
   it('reflects a dialect ACCOUNTING-LEAK in reconciliation', async () => {
@@ -84,8 +184,139 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
       transpile: async (t) => ({ sql: [t], unhandled: [{ kind: 'ACCOUNTING-LEAK', snippet: 'parsed=3 but …' }] }),
     };
     const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
-    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: leaky });
+    const r = await ConvertMigration(sql, 'V_Widget.sql', { transpiler: leaky });
     expect(r.reconciliation.accountingLeak).toBe(true);
+  });
+});
+
+describe('convertMigration — BIT literals in surviving entity-registration INSERTs', () => {
+  // CodeGen registers a new entity by INSERTing into Entity / EntityField / EntityPermission —
+  // long-lived core-metadata tables that no migration re-creates. The AST dialect therefore never
+  // sees a CREATE TABLE for them, has no column types to infer, and emits a SQL Server BIT literal
+  // as the integer it looks like. PostgreSQL then rejects the INSERT at APPLY time with
+  // `column "IncludeInAPI" is of type boolean but expression is of type integer` — which the
+  // converter's own "0 gaps" summary cannot catch, so every migration registering a new entity
+  // produced a file that failed on its first apply.
+  //
+  // The transpiler stub emits PG-shaped SQL that still carries the Flyway schema macro, because
+  // that is what the real MJPostgresTranspiler hands back — substitution happens in assemblePgSQL.
+  const emitting = (out: string): TSQLToPGTranspiler => ({
+    transpile: async () => ({ sql: [out], unhandled: [] }),
+  });
+
+  const entityInsert = [
+    'INSERT INTO ${flyway:defaultSchema}."Entity" (',
+    '  "ID",',
+    '  "Name",',
+    '  "IncludeInAPI",',
+    '  "AllowCreateAPI",',
+    '  "AuditViewRuns",',
+    '  "UserViewMaxRows"',
+    ')',
+    'VALUES',
+    "  ('0dca1987-4d89-4c8f-81b3-b47a8019af97', 'MJ: AI Usage Types', 1, 1, 0, 1000);",
+  ].join('\n');
+
+  const convert = (emitted: string) =>
+    ConvertMigration('CREATE TABLE [__mj].[AIUsageType] ( [ID] UNIQUEIDENTIFIER NOT NULL );', 'V_AIUsageType.sql', {
+      transpiler: emitting(emitted),
+    });
+
+  it('rewrites BIT 0/1 to TRUE/FALSE for known-boolean core-metadata columns', async () => {
+    const r = await convert(entityInsert);
+    // IncludeInAPI and AllowCreateAPI were 1; AuditViewRuns was 0.
+    expect(r.pgSQL).toContain('TRUE');
+    expect(r.pgSQL).toContain('FALSE');
+    const values = r.pgSQL.slice(r.pgSQL.indexOf("'MJ: AI Usage Types'"));
+    expect(values).toMatch(/TRUE\s*,\s*TRUE\s*,\s*FALSE/);
+  });
+
+  it('leaves a non-boolean integer column alone', async () => {
+    const r = await convert(entityInsert);
+    // UserViewMaxRows is an integer column that happens to sit in the same tuple. Rewriting by
+    // ordinal position — not by "looks like a bit" — is what keeps it intact.
+    expect(r.pgSQL).toContain('1000');
+    expect(r.pgSQL).not.toMatch(/1000\s*::\s*boolean/i);
+  });
+
+  it('runs AFTER schema substitution, not before', async () => {
+    // The ordering is load-bearing and was wrong in the first cut of this fix. The INSERT matcher
+    // keys on a `schema.Table` reference whose schema is word characters; while the table is still
+    // `${flyway:defaultSchema}."Entity"` that pattern matches nothing, so an earlier call silently
+    // returns the body unchanged and the coercion appears to do nothing at all. Asserting on a
+    // macro-carrying input is what pins the order — a regression would leave the 1s as integers.
+    const r = await convert(entityInsert);
+    expect(r.pgSQL).not.toContain('${flyway:defaultSchema}');
+    expect(r.pgSQL).toContain('__mj."Entity"');
+    expect(r.pgSQL).not.toMatch(/'MJ: AI Usage Types',\s*1,/);
+  });
+
+  it('rewrites BIT literals in UPDATE ... SET and WHERE, not just INSERT ... VALUES', async () => {
+    // The INSERT case and the UPDATE/WHERE case are different syntactic sites and need different
+    // rewriters: INSERT is positional (by ordinal in the column list), UPDATE/WHERE is by column
+    // name. The rule-based path applies both; this path applied only the first, so a CodeGen
+    // UPDATE against a core-metadata table still reached PostgreSQL as
+    // `operator does not exist: boolean = integer` and failed on apply — invisible to the
+    // converter's own "0 gaps" summary, exactly like the INSERT case before it.
+    const updates = [
+      'UPDATE ${flyway:defaultSchema}."EntityField" SET "DefaultInView" = 1',
+      'WHERE',
+      '  "ID" = \'4BEB776E-3A02-488D-979E-8A3E4FAC8DFF\' AND "AutoUpdateDefaultInView" = 1;',
+      'UPDATE ${flyway:defaultSchema}."Entity" SET "AllowUserSearchAPI" = 0',
+      'WHERE "AutoUpdateAllowUserSearchAPI" = 1;',
+    ].join('\n');
+    const r = await convert(updates);
+    expect(r.pgSQL).toContain('"DefaultInView" = TRUE');
+    expect(r.pgSQL).toContain('"AutoUpdateDefaultInView" = TRUE');
+    expect(r.pgSQL).toContain('"AllowUserSearchAPI" = FALSE');
+    expect(r.pgSQL).not.toMatch(/"DefaultInView" = 1/);
+    expect(r.pgSQL).not.toMatch(/"AllowUserSearchAPI" = 0/);
+  });
+
+  it('leaves a non-boolean column\'s numeric comparison alone', async () => {
+    // Rewriting by column name means a non-boolean column that happens to be compared to 0 or 1
+    // must be untouched — otherwise `"Sequence" = 1` would silently become `= TRUE`.
+    const r = await convert('UPDATE ${flyway:defaultSchema}."EntityField" SET "Sequence" = 1 WHERE "Length" = 0;');
+    expect(r.pgSQL).toContain('"Sequence" = 1');
+    expect(r.pgSQL).toContain('"Length" = 0');
+  });
+
+  it('does not shift ordinals when a CodeGen comment between values contains a comma', async () => {
+    // Positional rewriting is only correct if the split yields exactly one entry per column.
+    // CodeGen interleaves explanatory comments between values and one of them contains a comma
+    // ("Apply-time sequence, not the literal CodeGen emitted"). Counting that comma as a separator
+    // inserts a phantom value and shifts every later column by one — observed live as PostgreSQL
+    // rejecting `column "Scale" is of type integer but expression is of type boolean`, because the
+    // flag meant for "AllowsNull" was written one position early. "Scale" must stay numeric.
+    const insert = [
+      'INSERT INTO ${flyway:defaultSchema}."EntityField" (',
+      '  "ID", "Sequence", "Name", "Length", "Precision", "Scale", "AllowsNull", "IsVirtual"',
+      ')',
+      'VALUES',
+      "  ('97c1b392-082d-4f06-864a-e4ddb5411ccf',",
+      '   (SELECT COALESCE(MAX("Sequence"), 0) + 1 FROM __mj."EntityField")',
+      '   /* Apply-time sequence, not the literal CodeGen emitted (MJ#4202): it would collide. */,',
+      "   'ExposeToModel', 1, 1, 0, 0, 1);",
+    ].join('\n');
+    const r = await convert(insert);
+    // Scale is the 6th column and NOT boolean — it must remain 0, not become FALSE.
+    expect(r.pgSQL).toMatch(/'ExposeToModel',\s*1,\s*1,\s*0,\s*FALSE,\s*TRUE/);
+    expect(r.pgSQL).toContain('Apply-time sequence, not the literal CodeGen emitted');
+  });
+
+  it('does not touch a table outside the core-metadata catalog', async () => {
+    // The catalog is an allow-list of tables whose column types are known. An app table with a
+    // column that merely SHARES a name must not be rewritten on that basis.
+    const appInsert = [
+      'INSERT INTO ${flyway:defaultSchema}."WidgetSetting" (',
+      '  "ID",',
+      '  "IncludeInAPI"',
+      ')',
+      'VALUES',
+      "  ('11111111-1111-4111-8111-111111111111', 1);",
+    ].join('\n');
+    const r = await convert(appInsert);
+    expect(r.pgSQL).toMatch(/'11111111-1111-4111-8111-111111111111',\s*1/);
   });
 });
 
@@ -96,7 +327,7 @@ describe('convertMigration', () => {
       codegenItem('spCreate SQL for Widget', 'CREATE PROCEDURE [__mj].[spCreateWidget] AS BEGIN SELECT 1 END'),
     ].join('\n');
 
-    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'V_Widget.sql', { transpiler: passthrough });
     expect(r.status).toBe('converted');
     // CodeGen sproc must not appear in the PG output — it is regenerated, not translated.
     expect(r.pgSQL).not.toContain('spCreateWidget');
@@ -108,7 +339,7 @@ describe('convertMigration', () => {
 
   it('throws when kept T-SQL exists but no transpiler was provided (content is never dropped)', async () => {
     const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
-    await expect(convertMigration(sql, 'V_Widget.sql')).rejects.toThrow(/transpiler/);
+    await expect(ConvertMigration(sql, 'V_Widget.sql')).rejects.toThrow(/transpiler/);
   });
 
   it('emits transpiled DDL AND flags the file when hand-written procedural SQL is present', async () => {
@@ -119,7 +350,7 @@ describe('convertMigration', () => {
       'GO',
       'CREATE OR ALTER PROCEDURE __mj.spClaimJob AS BEGIN UPDATE __mj.Job SET X=1; END;',
     ].join('\n');
-    const r = await convertMigration(sql, 'Scheduling_Engine_Atomic_Sprocs.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'Scheduling_Engine_Atomic_Sprocs.sql', { transpiler: passthrough });
     expect(r.status).toBe('needs-hand-authoring');
     expect(r.pgSQL).toContain('NEEDS HAND-AUTHORING');
     expect(r.handProcedural.length).toBeGreaterThan(0);
@@ -135,7 +366,7 @@ describe('convertMigration', () => {
       "SET @Name_da319a9d = 'GPT';",
       'EXEC __mj.spCreateAIModel @Name = @Name_da319a9d;',
     ].join('\n');
-    const r = await convertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'V_Metadata_Sync.sql', { transpiler: passthrough });
     expect(r.status).toBe('reseed-or-regen-only');
     expect(r.pgSQL).toContain('mj sync push');
     // No spCreate call carried into the PG output — it is re-seeded, not transpiled.
@@ -153,7 +384,7 @@ describe('convertMigration', () => {
       'UPDATE __mj.AIModel SET Name = @Name_da319a9d WHERE ID = 1;',
       'EXEC __mj.spCreateAIModel @Name = @Name_da319a9d;',
     ].join('\n');
-    const r = await convertMigration(sql, 'V202604271430__Metadata_Sync.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'V202604271430__Metadata_Sync.sql', { transpiler: passthrough });
     expect(r.status).toBe('reseed-or-regen-only');
     expect(r.pgSQL).not.toContain('spCreateAIModel');
   });
@@ -171,14 +402,14 @@ describe('convertMigration', () => {
       "End of template';",
       'EXEC __mj.spUpdateAIPrompt @Description = @Description_da319a9d;',
     ].join('\n');
-    const r = await convertMigration(sql, 'V202605021448__Metadata_Sync.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'V202605021448__Metadata_Sync.sql', { transpiler: passthrough });
     expect(r.status).toBe('reseed-or-regen-only');
     expect(r.pgSQL).not.toContain('spUpdateAIPrompt');
   });
 
   it('transpiles a Backfill_* data migration (data DML, no mj-sync fingerprints)', async () => {
     const sql = "UPDATE __mj.UserView SET ViewTypeID = 'x' WHERE ViewTypeID IS NULL;";
-    const r = await convertMigration(sql, 'V_Backfill_UserView_ViewTypeID.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'V_Backfill_UserView_ViewTypeID.sql', { transpiler: passthrough });
     expect(r.status).toBe('converted');
   });
 
@@ -187,7 +418,7 @@ describe('convertMigration', () => {
       '-- regen only',
       codegenItem('spDelete SQL for Foo', 'CREATE PROCEDURE __mj.spDeleteFoo AS BEGIN DELETE FROM __mj.Foo END'),
     ].join('\n');
-    const r = await convertMigration(sql, 'spDelete_Force_Regen.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'spDelete_Force_Regen.sql', { transpiler: passthrough });
     expect(r.status).toBe('reseed-or-regen-only');
     expect(r.pgSQL).not.toContain('spDeleteFoo');
     expect(r.pgSQL).toContain('mj codegen');
@@ -204,14 +435,14 @@ describe('convertMigration', () => {
       '/* SQL generated to create new entity MJ: Widgets */',
       "INSERT INTO [${flyway:defaultSchema}].[Entity] ([ID],[Name]) VALUES ('aaaa', 'MJ: Widgets');",
     ].join('\n');
-    const r = await convertMigration(sql, 'V_Widgets_Feature.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'V_Widgets_Feature.sql', { transpiler: passthrough });
     expect(r.status).toBe('converted');
     expect(r.pgSQL).toContain("'MJ: Widgets'");
   });
 
   it('substitutes the flyway schema macro in the final output', async () => {
     const sql = 'CREATE TABLE [${flyway:defaultSchema}].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
-    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough });
+    const r = await ConvertMigration(sql, 'V_Widget.sql', { transpiler: passthrough });
     expect(r.pgSQL).not.toContain('${flyway:defaultSchema}');
     expect(r.pgSQL).toContain('__mj');
   });
@@ -224,7 +455,7 @@ describe('convertMigration', () => {
       }),
     };
     const sql = 'CREATE TABLE [__mj].[T] ([ID] UNIQUEIDENTIFIER NOT NULL);\nGO\nEXEC sp_rename ...;';
-    const r = await convertMigration(sql, 'V_Rename.sql', { transpiler: reporting });
+    const r = await ConvertMigration(sql, 'V_Rename.sql', { transpiler: reporting });
     expect(r.unhandled).toHaveLength(1);
     expect(r.pgSQL).toContain('UNHANDLED BY THE AST TRANSPILER');
     expect(r.pgSQL).toContain('sp_rename');
@@ -240,7 +471,7 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];', // codegen-object → triggers statement mode
       "EXEC sp_rename '__mj.T.Old', 'New', 'COLUMN';", // unknown
     );
-    const kept = extractKeptTSQL(sql, 'B_Baseline.sql');
+    const kept = ExtractKeptTSQL(sql, 'B_Baseline.sql');
     expect(kept.tsql).toContain('sp_rename');
     expect(kept.tsql).not.toContain('vwTs');
     expect(kept.droppedObjects.some((o) => o.includes('vwTs'))).toBe(true);
@@ -252,7 +483,7 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
       "DECLARE @ID UNIQUEIDENTIFIER = 'aaaa'; INSERT INTO [__mj].[CustomThing] ([ID]) VALUES (@ID);",
     );
-    const kept = extractKeptTSQL(sql, 'B_Baseline.sql');
+    const kept = ExtractKeptTSQL(sql, 'B_Baseline.sql');
     expect(kept.tsql).toContain('CustomThing');
   });
 
@@ -262,7 +493,7 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
       'CREATE VIEW [__mj].[vwEntitiesWithExternalChangeTracking] AS SELECT 1 AS X;',
     );
-    const kept = extractKeptTSQL(sql, 'B_Baseline.sql');
+    const kept = ExtractKeptTSQL(sql, 'B_Baseline.sql');
     expect(kept.tsql).toContain('vwEntitiesWithExternalChangeTracking');
     expect(kept.tsql).not.toContain('[vwTs]');
   });
@@ -273,7 +504,7 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
       'CREATE PROCEDURE [__mj].[GetWeirdStuff] AS BEGIN SELECT 1 END;',
     );
-    const kept = extractKeptTSQL(sql, 'B_Baseline.sql');
+    const kept = ExtractKeptTSQL(sql, 'B_Baseline.sql');
     expect(kept.status).toBe('needs-hand-authoring');
     expect(kept.handProcedural.some((h) => h.includes('GetWeirdStuff'))).toBe(true);
     expect(kept.tsql).toContain('GetWeirdStuff');
@@ -285,7 +516,7 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
       "INSERT INTO [__mj].[Entity] ([ID],[Name]) VALUES ('aaaa','T');",
     );
-    const kept = extractKeptTSQL(sql, 'V_Old_Unbannered_Snapshot.sql');
+    const kept = ExtractKeptTSQL(sql, 'V_Old_Unbannered_Snapshot.sql');
     expect(kept.notes[0]).toMatch(/1 metadata DML/);
     expect(kept.tsql).not.toContain('INSERT INTO [__mj].[Entity]');
   });
@@ -298,7 +529,7 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
       'CREATE VIEW [__mj].[vwTs] AS SELECT * FROM [__mj].[T];',
       "INSERT INTO [__mj].[Entity] ([ID],[Name]) VALUES ('aaaa','T');",
     );
-    const kept = extractKeptTSQL(sql, 'B202605291452__v5.38.x__Baseline.sql');
+    const kept = ExtractKeptTSQL(sql, 'B202605291452__v5.38.x__Baseline.sql');
     expect(kept.tsql).toContain('INSERT INTO [__mj].[Entity]');
     expect(kept.tsql).not.toContain('vwTs');
   });
@@ -312,7 +543,7 @@ describe('extractKeptTSQL — statement mode (unbannered snapshots)', () => {
       'CREATE INDEX [IDX_AUTO_MJ_FKEY_CommunicationProviderMessageType_CommunicationBaseMessageTypeID] ON [__mj].[CommunicationProviderMessageType] ([CommunicationBaseMessageTypeID]);',
       'CREATE INDEX [IDX_Custom_HandAuthored] ON [__mj].[T] ([ID]);', // hand-authored → kept
     );
-    const kept = extractKeptTSQL(sql, 'B202605291452__v5.38.x__Baseline.sql');
+    const kept = ExtractKeptTSQL(sql, 'B202605291452__v5.38.x__Baseline.sql');
     expect(kept.tsql).not.toContain('IDX_AUTO_MJ_FKEY_');
     expect(kept.tsql).toContain('IDX_Custom_HandAuthored');
     expect(kept.droppedObjects.some((o) => o.includes('auto FK'))).toBe(true);
@@ -337,7 +568,7 @@ describe('extractKeptTSQL — hand-written trigger not misclassified (issue #325
   ].join('\n');
 
   it('routes a hand trigger to needs-hand-authoring, never silently dropped', () => {
-    const kept = extractKeptTSQL(handTrigger, 'V202607202110__v5.49.x__Fix_ConversationDetail_Sequence_Deadlock.sql');
+    const kept = ExtractKeptTSQL(handTrigger, 'V202607202110__v5.49.x__Fix_ConversationDetail_Sequence_Deadlock.sql');
     expect(kept.status).toBe('needs-hand-authoring');
     // The file is flagged as carrying a hand-written routine (banner-mode evidence is the
     // matched CREATE … TRIGGER keyword), and the trigger body survives into the kept T-SQL
@@ -355,7 +586,7 @@ describe('extractKeptTSQL — hand-written trigger not misclassified (issue #325
       'CREATE VIEW [__mj].[vwT] AS SELECT * FROM [__mj].[T];',
       'CREATE TRIGGER [__mj].[trgUpdateT] ON [__mj].[T] AFTER UPDATE AS BEGIN SET NOCOUNT ON; END;',
     ].join('\nGO\n');
-    const kept = extractKeptTSQL(snapshot, 'B202605291452__v5.38.x__Baseline.sql');
+    const kept = ExtractKeptTSQL(snapshot, 'B202605291452__v5.38.x__Baseline.sql');
     expect(kept.droppedObjects.some((o) => o.includes('trgUpdateT'))).toBe(true);
     expect(kept.tsql).not.toContain('trgUpdateT');
   });
@@ -370,7 +601,7 @@ describe('extractKeptTSQL — hand-written trigger not misclassified (issue #325
       'ALTER TABLE [__mj].[Foo] ADD [Bar] INT NULL;',
       'CREATE TRIGGER [__mj].[trgUpdateFoo] ON [__mj].[Foo] AFTER UPDATE AS BEGIN SET NOCOUNT ON; END;',
     ].join('\nGO\n');
-    const kept = extractKeptTSQL(sql, 'V_Some_Hand_File.sql');
+    const kept = ExtractKeptTSQL(sql, 'V_Some_Hand_File.sql');
     expect(kept.status).toBe('needs-hand-authoring');
     expect(kept.tsql).toContain('[Bar]'); // the hand ALTER survives, not dropped by a bad flip
   });
@@ -406,7 +637,7 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
   ].join('\n');
 
   it('recovers Entity / ApplicationEntity / EntityField registration rows', () => {
-    const kept = extractKeptTSQL(bannered, 'V_Widgets_Feature.sql');
+    const kept = ExtractKeptTSQL(bannered, 'V_Widgets_Feature.sql');
     expect(kept.status).toBe('converted');
     expect(kept.tsql).toContain("'MJ: Widgets'");
     expect(kept.tsql).toContain('[ApplicationEntity]');
@@ -414,7 +645,7 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
   });
 
   it('does NOT recover base-table seed rows, generated views, or grants', () => {
-    const kept = extractKeptTSQL(bannered, 'V_Widgets_Feature.sql');
+    const kept = ExtractKeptTSQL(bannered, 'V_Widgets_Feature.sql');
     // The base-table seed INSERT (INSERT INTO Widget (...)) must not be recovered.
     expect(kept.tsql).not.toMatch(/INSERT\s+INTO\s+\[\$\{flyway:defaultSchema\}\]\.\[Widget\]\s*\(/i);
     expect(kept.tsql).not.toContain('CREATE VIEW');
@@ -437,7 +668,7 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
       'GO',
       'CREATE VIEW [${flyway:defaultSchema}].[vwWidgets] AS SELECT * FROM [${flyway:defaultSchema}].[Widget];',
     ].join('\n');
-    const kept = extractKeptTSQL(sql, 'V_Widgets_Feature.sql');
+    const kept = ExtractKeptTSQL(sql, 'V_Widgets_Feature.sql');
     expect(kept.tsql).toContain("Category = 'System Metadata'");
     expect(kept.tsql).toContain('[EntitySetting]');
     expect(kept.tsql).not.toContain('CREATE VIEW');
@@ -461,7 +692,7 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
       '/* generated view — must stay dropped */',
       'CREATE VIEW [${flyway:defaultSchema}].[vwWidgets] AS SELECT * FROM [${flyway:defaultSchema}].[Widget];',
     ].join('\n');
-    const kept = extractKeptTSQL(sql, 'V_Widgets_Feature.sql');
+    const kept = ExtractKeptTSQL(sql, 'V_Widgets_Feature.sql');
     expect(kept.tsql).toContain('[__mj_UpdatedAt] DATETIMEOFFSET');
     expect(kept.tsql).toContain('DF___mj_Widget___mj_UpdatedAt');
     expect(kept.tsql).not.toContain('CREATE VIEW');
@@ -478,7 +709,7 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
       "IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cccc') BEGIN " +
         "INSERT INTO [${flyway:defaultSchema}].[EntityField] ([ID],[Name]) VALUES ('cccc','IsComputed'); END",
     ].join('\n');
-    const kept = extractKeptTSQL(sql, 'V_Add_IsComputed.sql');
+    const kept = ExtractKeptTSQL(sql, 'V_Add_IsComputed.sql');
     expect(kept.status).toBe('needs-hand-authoring');
     expect(kept.tsql).toContain('IsComputed');
   });
@@ -503,7 +734,7 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
       'GO',
       'CREATE VIEW [${flyway:defaultSchema}].[vwThings] AS SELECT * FROM [${flyway:defaultSchema}].[Thing];',
     ].join('\n');
-    const kept = extractKeptTSQL(sql, 'V_Things_Feature.sql');
+    const kept = ExtractKeptTSQL(sql, 'V_Things_Feature.sql');
     expect(kept.tsql).toContain('[EntityField]');
     expect(kept.tsql).not.toMatch(/DROP\s+VIEW/i);
     expect(kept.tsql).not.toMatch(/CREATE\s+VIEW/i);
@@ -518,7 +749,7 @@ describe('extractKeptTSQL — entity-registration recovery from the CodeGen bloc
       'GO',
       "INSERT INTO [${flyway:defaultSchema}].[Entity] ([ID],[Name]) VALUES ('eeee','MJ: Gadgets');",
     ].join('\n');
-    const kept = extractKeptTSQL(noBanner, 'V_Gadgets_Feature.sql');
+    const kept = ExtractKeptTSQL(noBanner, 'V_Gadgets_Feature.sql');
     expect(kept.tsql).toContain("'MJ: Gadgets'");
   });
 });

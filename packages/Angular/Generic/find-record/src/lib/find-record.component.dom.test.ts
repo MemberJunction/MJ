@@ -1,12 +1,31 @@
 import { describe, it, expect } from 'vitest';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { AgGridModule } from 'ag-grid-angular';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { query, text, queryAll, capture, click, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FindRecordComponent } from './find-record.component';
 import { BaseEntity } from '@memberjunction/core';
+
+/**
+ * Analog + precompiled AgGridAngular crash with `firstCreatePass` of null in
+ * this workspace. The spec only needs the host element to exist.
+ */
+@Component({
+  selector: 'ag-grid-angular',
+  standalone: true,
+  template: '',
+})
+class AgGridAngularStub {
+  @Input() theme: unknown;
+  @Input() rowData: unknown;
+  @Input() columnDefs: unknown;
+  @Input() defaultColDef: unknown;
+  @Input() rowSelection: unknown;
+  @Output() selectionChanged = new EventEmitter<unknown>();
+  @Output() gridReady = new EventEmitter<unknown>();
+}
 
 /**
  * DOM-level spec for <mj-find-record> — a module-declared (standalone:false) component.
@@ -23,7 +42,7 @@ import { BaseEntity } from '@memberjunction/core';
 describe('FindRecordComponent (DOM)', () => {
   function render(setup?: (c: FindRecordComponent) => void): ComponentFixture<FindRecordComponent> {
     TestBed.configureTestingModule({
-      imports: [CommonModule, FormsModule, AgGridModule, MJButtonDirective],
+      imports: [CommonModule, FormsModule, AgGridAngularStub, MJButtonDirective],
       declarations: [FindRecordComponent],
     });
     const fixture = TestBed.createComponent(FindRecordComponent);

@@ -30,7 +30,12 @@
  *                               "elevenlabs": { "voice": "<voice id>" },
  *                               "assemblyai": { "voice": "…" } } },
  *     "allowUserModelOverride": true,
- *     "narration": { "paceMs": 8000 } } }
+ *     "narration": { "paceMs": 8000 },
+ *     "directActions": {
+ *         "enabled": true,
+ *         "actionNames": ["LookupOrder", "CheckInventory"],
+ *         "timeoutMs": 10000
+ *     } } }
  * ```
  *
  * @module @memberjunction/ai-agents
@@ -244,6 +249,36 @@ export interface RealtimeAllowedAgent {
     disclosure?: RealtimeDisclosurePolicy;
 }
 
+/**
+ * Direct action invocation configuration for a Realtime co-agent.
+ *
+ * Direct actions allow the realtime model to directly invoke select actions belonging to the target agent,
+ * bypassing full multi-turn agent delegation for low-latency voice responses.
+ *
+ * Security & defaults:
+ * - Default is strictly closed: absent or `enabled !== true` ⇒ 0 direct actions exposed.
+ * - Allowed actions must be explicitly enumerated in `actionNames`, or specified as `['*']` to allow all.
+ * - `'*'` is never defaulted; it must be explicitly authored.
+ */
+export interface RealtimeDirectActionsConfig {
+    /**
+     * Whether direct action invocation is enabled for this agent.
+     * Default: false.
+     */
+    enabled: boolean;
+
+    /**
+     * Allowed action names. Can be specific action names or `['*']` to allow all actions assigned to the agent.
+     */
+    actionNames?: string[];
+
+    /**
+     * Timeout for direct action execution in milliseconds.
+     * Defaults to 10,000 ms (10 seconds) if omitted.
+     */
+    timeoutMs?: number;
+}
+
 /** The `realtime` section of a co-agent's effective configuration. */
 export interface RealtimeConfigSection {
     /** Preferred realtime model — an `MJ: AI Models` Name OR ID. Degrades gracefully when unsatisfiable. */
@@ -281,6 +316,17 @@ export interface RealtimeConfigSection {
      * scrub it otherwise, so a shared co-agent config is safe on every provider.
      */
     session?: RealtimeSessionTuningConfig;
+    /**
+     * Direct action invocation configuration: allows the realtime model to directly invoke select
+     * actions belonging to the target agent without paying multi-turn agent delegation overhead.
+     */
+    directActions?: RealtimeDirectActionsConfig;
+    /** Shorthand / flat alias: whether direct action invocation is enabled. */
+    allowDirectActionInvocation?: boolean;
+    /** Shorthand / flat alias: allowed action names or `['*']`. */
+    directActionNames?: string[];
+    /** Shorthand / flat alias: timeout for direct action execution in milliseconds. */
+    directActionTimeoutMs?: number;
 }
 
 /**
@@ -364,11 +410,20 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
  * @returns The flat bag layer, or `null` when the catalog contributes nothing.
  */
 export function GetModelCatalogSessionSettings(config: AIModelConfiguration | null | undefined): JSONObjectLike | null {
+    const bag: JSONObjectLike = {};
     const turnDetection = config?.Realtime?.TurnDetection;
-    if (!isPlainObject(turnDetection)) {
-        return null;
+    if (isPlainObject(turnDetection)) {
+        bag['turnDetection'] = { ...turnDetection } as JSONObjectLike;
     }
-    return { turnDetection: { ...turnDetection } as JSONObjectLike };
+    const reasoning = config?.Realtime?.Reasoning;
+    if (isPlainObject(reasoning)) {
+        bag['reasoning'] = { ...reasoning } as JSONObjectLike;
+    }
+    const tooling = config?.Realtime?.Tooling;
+    if (isPlainObject(tooling)) {
+        bag['tooling'] = { ...tooling } as JSONObjectLike;
+    }
+    return Object.keys(bag).length > 0 ? bag : null;
 }
 
 /** The fully-normalized effective configuration for a Realtime co-agent. */
@@ -478,8 +533,13 @@ export function ParseRealtimeTypeConfiguration(json: string | null | undefined):
     }
     try {
         const parsed: unknown = JSON.parse(json);
-        return isPlainObject(parsed) ? parsed : null;
-    } catch {
+        if (isPlainObject(parsed)) {
+            return parsed;
+        }
+        console.warn('[ParseRealtimeTypeConfiguration] Realtime configuration JSON is not a plain object; skipping layer.');
+        return null;
+    } catch (err) {
+        console.warn('[ParseRealtimeTypeConfiguration] Failed to parse realtime configuration JSON; skipping malformed layer:', err);
         return null;
     }
 }
@@ -533,7 +593,7 @@ export function ResolveEffectiveRealtimeConfig(
 
     // allowedAgents: union-accumulate across all layers (+ dynamic), since DeepMergeConfigs
     // array-replaces. Later layers win per-entry fields; deduped by agentId.
-    const allowed = accumulateAllowedAgents(
+    const allowed = AccumulateAllowedAgents(
         [typeLayer, agentLayer, targetLayer, appLayer, overrideLayer],
         dynamicAllowedAgents
     );
@@ -543,6 +603,124 @@ export function ResolveEffectiveRealtimeConfig(
     }
 
     return config;
+}
+
+/** Why something in an override payload will not survive {@link ResolveEffectiveRealtimeConfig}. */
+export type IgnoredRealtimeConfigReason =
+    /** A top-level key other than `realtime` — the normalizer reads no other section. */
+    | 'unknown-section'
+    /** A key inside `realtime` that is not a member of {@link RealtimeConfigSection}. */
+    | 'unknown-key'
+    /** A recognized key whose value is of a type the normalizer's guard rejects. */
+    | 'wrong-type';
+
+/** One thing in an override payload that the effective-config layer will discard. */
+export interface IgnoredRealtimeConfigKey {
+    /** Dotted path as the caller wrote it, e.g. `caliber` or `realtime.modelPreference`. */
+    readonly path: string;
+    /** Why it will not survive. */
+    readonly reason: IgnoredRealtimeConfigReason;
+}
+
+/**
+ * What each {@link RealtimeConfigSection} key ACCEPTS — the single source of truth behind
+ * {@link FindIgnoredRealtimeConfigKeys} for both "is this key known?" and "will this value
+ * survive?".
+ *
+ * Typed as a `Required<>` mapped type deliberately: adding a field to
+ * {@link RealtimeConfigSection} without teaching this table about it FAILS THE BUILD, so the
+ * known-key list can never silently drift from the interface it reports against — which is the
+ * whole point, since a drifted list would resume the exact silent-drop the reporter hit.
+ *
+ * Each predicate MIRRORS the corresponding guard in {@link normalizeConfig} (and, for
+ * `allowedAgents`, {@link accumulateAllowedAgents}, which ingests arrays only). A predicate
+ * returning false means the value is dropped downstream.
+ */
+const REALTIME_SECTION_KEY_ACCEPTS: { readonly [K in keyof Required<RealtimeConfigSection>]: (value: unknown) => boolean } = {
+    modelPreference: (v) => typeof v === 'string' && v.trim().length > 0,
+    voice: isPlainObject,
+    video: isPlainObject,
+    allowUserModelOverride: (v) => typeof v === 'boolean',
+    narration: isPlainObject,
+    turnTaking: isPlainObject,
+    disclosure: (v) => v === 'silent' || v === 'mention' || v === 'hand-voice',
+    allowedAgents: (v) => Array.isArray(v),
+    session: isPlainObject,
+    directActions: isPlainObject,
+    allowDirectActionInvocation: (v) => typeof v === 'boolean',
+    directActionNames: (v) => Array.isArray(v),
+    directActionTimeoutMs: (v) => typeof v === 'number' && Number.isFinite(v) && v > 0,
+};
+
+/**
+ * Every key of {@link RealtimeConfigSection} the cascade recognizes, derived from
+ * {@link REALTIME_SECTION_KEY_ACCEPTS} so there is exactly one list to maintain. Exported so a
+ * caller (or a regression test) can assert the recognized set against what
+ * {@link ResolveEffectiveRealtimeConfig} actually keeps.
+ */
+export const REALTIME_CONFIG_SECTION_KEYS: readonly (keyof RealtimeConfigSection)[] =
+    Object.keys(REALTIME_SECTION_KEY_ACCEPTS) as (keyof RealtimeConfigSection)[];
+
+/** The accept-predicate for a raw key, or `undefined` when the key is not part of the section. */
+function acceptsForSectionKey(key: string): ((value: unknown) => boolean) | undefined {
+    if (!Object.prototype.hasOwnProperty.call(REALTIME_SECTION_KEY_ACCEPTS, key)) {
+        return undefined;
+    }
+    return REALTIME_SECTION_KEY_ACCEPTS[key as keyof RealtimeConfigSection];
+}
+
+/**
+ * Everything in `overridesJson` that {@link ResolveEffectiveRealtimeConfig} will SILENTLY DISCARD:
+ * top-level sections other than `realtime`, keys inside `realtime` that the section does not
+ * declare, and declared keys whose value fails the normalizer's type guard.
+ *
+ * This exists because the discard is otherwise unobservable from either side of the wire — a
+ * caller that sends `{"realtime":{…},"myapp":{…}}` gets a successful session running on the
+ * agent's default configuration, with nothing anywhere saying the second section went nowhere
+ * (MJ issue #3854, where that cost a downstream app months). The module stays PURE, so this
+ * reports the drops as DATA; hosts (e.g. the MJServer realtime resolver) do the logging.
+ *
+ * Depth is deliberately ONE level below `realtime`: it reports keys that fail to survive AT ALL,
+ * not sub-object contents that partially normalize away (`voice.default.tone: 7` is a drop this
+ * does not report). Reporting only what it can mirror EXACTLY from the normalizer keeps false
+ * positives at zero, which is what makes the output safe to log verbatim.
+ *
+ * Absent, blank, malformed, and non-object payloads report NOTHING — they are the layer being
+ * absent, which {@link ParseRealtimeTypeConfiguration} already documents as a tolerated no-op.
+ *
+ * @param overridesJson The runtime-overrides JSON string, or `null`/`undefined`.
+ * @returns The ignored paths with reasons, in payload key order; empty when everything survives.
+ */
+export function FindIgnoredRealtimeConfigKeys(overridesJson: string | null | undefined): readonly IgnoredRealtimeConfigKey[] {
+    const layer = ParseRealtimeTypeConfiguration(overridesJson);
+    if (!layer) {
+        return [];
+    }
+    const ignored: IgnoredRealtimeConfigKey[] = [];
+    for (const key of Object.keys(layer)) {
+        if (key !== 'realtime') {
+            ignored.push({ path: key, reason: 'unknown-section' });
+        }
+    }
+
+    const section = layer['realtime'];
+    if (section === undefined) {
+        return ignored;
+    }
+    if (!isPlainObject(section)) {
+        // A non-object `realtime` loses the WHOLE section, so there is nothing finer to report.
+        ignored.push({ path: 'realtime', reason: 'wrong-type' });
+        return ignored;
+    }
+    for (const key of Object.keys(section)) {
+        const accepts = acceptsForSectionKey(key);
+        if (!accepts) {
+            ignored.push({ path: `realtime.${key}`, reason: 'unknown-key' });
+        } else if (!accepts(section[key])) {
+            ignored.push({ path: `realtime.${key}`, reason: 'wrong-type' });
+        }
+    }
+    return ignored;
 }
 
 /**
@@ -580,7 +758,7 @@ function normalizeAllowedAgent(raw: unknown): RealtimeAllowedAgent | null {
  * @param dynamic Optional runtime/channel-registered targets, accumulated last (highest precedence).
  * @returns The deduped, accumulated allowed-agent list (empty when none configured).
  */
-export function accumulateAllowedAgents(
+export function AccumulateAllowedAgents(
     layers: Array<JSONObjectLike | null | undefined>,
     dynamic?: RealtimeAllowedAgent[]
 ): RealtimeAllowedAgent[] {
@@ -609,6 +787,14 @@ export function accumulateAllowedAgents(
     }
     ingest(dynamic);
     return Array.from(map.values());
+}
+
+/** @deprecated Use {@link AccumulateAllowedAgents}. */
+export function accumulateAllowedAgents(
+    layers: Array<JSONObjectLike | null | undefined>,
+    dynamic?: RealtimeAllowedAgent[]
+): RealtimeAllowedAgent[] {
+    return AccumulateAllowedAgents(layers, dynamic);
 }
 
 /**
@@ -731,7 +917,44 @@ function normalizeConfig(merged: JSONObjectLike): RealtimeCoAgentConfig {
         section.session = sessionTuning;
     }
 
+    const directActions = normalizeDirectActions(rawRealtime['directActions']);
+    if (directActions) {
+        section.directActions = directActions;
+    }
+    if (typeof rawRealtime['allowDirectActionInvocation'] === 'boolean') {
+        section.allowDirectActionInvocation = rawRealtime['allowDirectActionInvocation'];
+    }
+    if (Array.isArray(rawRealtime['directActionNames'])) {
+        section.directActionNames = rawRealtime['directActionNames'].filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+    }
+    if (typeof rawRealtime['directActionTimeoutMs'] === 'number' && Number.isFinite(rawRealtime['directActionTimeoutMs']) && rawRealtime['directActionTimeoutMs'] > 0) {
+        section.directActionTimeoutMs = rawRealtime['directActionTimeoutMs'];
+    }
+
     return Object.keys(section).length > 0 ? { realtime: section } : { realtime: {} };
+}
+
+/**
+ * Normalizes the `realtime.directActions` sub-object from a merged config layer.
+ */
+function normalizeDirectActions(raw: unknown): RealtimeDirectActionsConfig | undefined {
+    if (!isPlainObject(raw)) {
+        return undefined;
+    }
+    const enabled = raw['enabled'] === true;
+    let actionNames: string[] | undefined = undefined;
+    if (Array.isArray(raw['actionNames'])) {
+        actionNames = raw['actionNames'].filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+    }
+    let timeoutMs: number | undefined = undefined;
+    if (typeof raw['timeoutMs'] === 'number' && Number.isFinite(raw['timeoutMs']) && raw['timeoutMs'] > 0) {
+        timeoutMs = raw['timeoutMs'];
+    }
+    return {
+        enabled,
+        ...(actionNames ? { actionNames } : {}),
+        ...(timeoutMs ? { timeoutMs } : {}),
+    };
 }
 
 /**
@@ -1279,4 +1502,60 @@ export function EvaluateRuntimeOverrideAuthorization(
     }
 
     return { Allowed: true };
+}
+
+/**
+ * Resolves the effective direct actions configuration from a co-agent's configuration.
+ *
+ * Checks both `realtime.directActions` (the structured object) and flat fields
+ * (`allowDirectActionInvocation`, `directActionNames`, `directActionTimeoutMs`).
+ *
+ * Default is strictly closed: returns `{ enabled: false, actionNames: [] }` when unconfigured or disabled.
+ */
+export function GetDirectActionsConfig(config?: RealtimeCoAgentConfig): RealtimeDirectActionsConfig {
+    const realtime = config?.realtime;
+    if (!realtime) {
+        return { enabled: false, actionNames: [], timeoutMs: 10_000 };
+    }
+
+    const struct = realtime.directActions;
+    const enabled = struct?.enabled ?? realtime.allowDirectActionInvocation ?? false;
+    const rawNames = struct?.actionNames ?? realtime.directActionNames;
+    const actionNames = Array.isArray(rawNames)
+        ? rawNames.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        : [];
+    const timeoutMs = struct?.timeoutMs ?? realtime.directActionTimeoutMs ?? 10_000;
+
+    return {
+        enabled,
+        actionNames,
+        timeoutMs: timeoutMs > 0 ? timeoutMs : 10_000,
+    };
+}
+
+/**
+ * Checks whether a specific action name is allowed for direct invocation by the realtime co-agent.
+ *
+ * @param actionName The action name to check.
+ * @param config The resolved direct actions config or full co-agent config.
+ * @returns `true` if direct invocation is enabled and the action is in `actionNames` (or `actionNames` contains `'*'`).
+ */
+export function IsActionAllowedForDirectInvocation(
+    actionName: string,
+    config?: RealtimeCoAgentConfig | RealtimeDirectActionsConfig
+): boolean {
+    if (!actionName || !config) {
+        return false;
+    }
+    const directActions = 'enabled' in config && typeof config.enabled === 'boolean'
+        ? (config as RealtimeDirectActionsConfig)
+        : GetDirectActionsConfig(config as RealtimeCoAgentConfig);
+
+    if (!directActions.enabled || !directActions.actionNames || directActions.actionNames.length === 0) {
+        return false;
+    }
+    if (directActions.actionNames.includes('*')) {
+        return true;
+    }
+    return directActions.actionNames.some((name) => name.trim().toLowerCase() === actionName.trim().toLowerCase());
 }

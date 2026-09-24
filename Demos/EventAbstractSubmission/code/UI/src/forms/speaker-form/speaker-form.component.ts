@@ -1,33 +1,24 @@
-import { Component, ChangeDetectorRef, ElementRef, OnInit } from '@angular/core';
-import { SpeakerEntity, ContactEntity } from 'mj_generatedentities';
+import { Component, ChangeDetectorRef, ElementRef, OnInit, inject } from '@angular/core';
+import { EventsSpeakerEntity, CRMContactEntity } from 'mj_generatedentities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { SharedService } from '@memberjunction/ng-shared';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 
 @Component({
+  standalone: false,
   selector: 'mj-speaker-form',
   templateUrl: './speaker-form.component.html',
   styleUrls: ['../shared/form-styles.css', './speaker-form.component.css']
 })
 @RegisterClass(BaseFormComponent, 'Speakers')
 export class SpeakerFormComponent extends BaseFormComponent implements OnInit {
-  public record!: SpeakerEntity;
+  public record!: EventsSpeakerEntity;
 
   // Form data
-  public contacts: ContactEntity[] = [];
+  public contacts: CRMContactEntity[] = [];
   public loadingContacts = false;
 
-  constructor(
-    elementRef: ElementRef,
-    sharedService: SharedService,
-    router: Router,
-    route: ActivatedRoute,
-    cdr: ChangeDetectorRef
-  ) {
-    super(elementRef, sharedService, router, route, cdr);
-  }
 
   override async ngOnInit() {
     await super.ngOnInit();
@@ -39,7 +30,7 @@ export class SpeakerFormComponent extends BaseFormComponent implements OnInit {
     try {
       const rv = new RunView();
       const md = new Metadata();
-      const result = await rv.RunView<ContactEntity>({
+      const result = await rv.RunView<CRMContactEntity>({
         EntityName: 'Contacts',
         OrderBy: 'LastName, FirstName',
         ResultType: 'entity_object'
@@ -50,7 +41,7 @@ export class SpeakerFormComponent extends BaseFormComponent implements OnInit {
       }
     } catch (error) {
       console.error('Error loading contacts:', error);
-      this.sharedService.CreateSimpleNotification('Error loading contacts', 'error', 3000);
+      this.Notification.emit({ Message: 'Error loading contacts', Type: 'error', Duration: 3000 });
     } finally {
       this.loadingContacts = false;
       this.cdr.detectChanges();
@@ -104,7 +95,7 @@ export class SpeakerFormComponent extends BaseFormComponent implements OnInit {
 
   public openContactRecord(): void {
     if (this.record.ContactID) {
-      this.sharedService.OpenEntityRecord('Contacts', CompositeKey.FromID(this.record.ContactID));
+      this.Navigate.emit({ Kind: 'record', EntityName: 'Contacts', PrimaryKey: CompositeKey.FromID(this.record.ContactID) });
     }
   }
 }

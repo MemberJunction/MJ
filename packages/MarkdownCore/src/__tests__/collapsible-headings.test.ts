@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { Marked } from 'marked';
-import { createCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension.js';
+import { CreateCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension.js';
 
-function render(markdown: string, opts?: Parameters<typeof createCollapsibleHeadingsExtension>[0]): string {
+function render(markdown: string, opts?: Parameters<typeof CreateCollapsibleHeadingsExtension>[0]): string {
   const marked = new Marked();
-  marked.use(createCollapsibleHeadingsExtension(opts));
+  marked.use(CreateCollapsibleHeadingsExtension(opts));
   return marked.parse(markdown) as string;
 }
 

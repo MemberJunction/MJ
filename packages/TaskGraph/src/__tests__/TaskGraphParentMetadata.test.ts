@@ -14,12 +14,14 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+    BuildTaskGraphParentInputPayload,
     ClampReinvokeDepth,
     ParseTaskGraphParentMetadata,
     IsReinvokeCapReached,
     MAX_REINVOKE_DEPTH,
     type TaskGraphParentMetadata,
 } from '../TaskGraphService';
+import { ParseTaskGraphDebugState } from '../debug-state';
 
 describe('ParseTaskGraphParentMetadata', () => {
     it('round-trips what the service writes', () => {
@@ -189,5 +191,39 @@ describe('ClampReinvokeDepth — the remote seam cannot buy hops (review finding
         expect(ClampReinvokeDepth('7')).toBeUndefined();
         expect(ClampReinvokeDepth(Number.NaN)).toBeUndefined();
         expect(ClampReinvokeDepth(Number.POSITIVE_INFINITY)).toBeUndefined();
+    });
+});
+
+describe('BuildTaskGraphParentInputPayload — start-paused is written with the row', () => {
+    const base = {
+        continuation: 'message' as const,
+        reinvokeDepth: 0,
+        failureSemantics: 'block' as const,
+        submittedByAgentRunID: 'run-1',
+        submittedByUserID: 'user-9',
+    };
+
+    it('omits $.debug unless startPaused is true — a normal run is not a paused run', () => {
+        const bag = BuildTaskGraphParentInputPayload(base);
+        expect(bag.debug).toBeUndefined();
+        expect(ParseTaskGraphDebugState(JSON.stringify(bag)).paused).toBeUndefined();
+    });
+
+    it('seeds paused + pausedReason + pausedBy when Debug.paused is set at Submit', () => {
+        const bag = BuildTaskGraphParentInputPayload({ ...base, startPaused: true });
+        expect(bag.debug).toEqual({
+            paused: true,
+            pausedReason: 'user',
+            pausedBy: 'user-9',
+        });
+        const debug = ParseTaskGraphDebugState(JSON.stringify(bag));
+        expect(debug.paused).toBe(true);
+        expect(debug.pausedReason).toBe('user');
+        expect(debug.pausedBy).toBe('user-9');
+    });
+
+    it('does not write an empty invocation key when none was supplied', () => {
+        const bag = BuildTaskGraphParentInputPayload(base);
+        expect(bag.invocation).toBeUndefined();
     });
 });

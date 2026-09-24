@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { SurveyMonkeyBaseAction } from '../surveymonkey-base.action';
+import { SurveyMonkeyBaseAction, SurveyMonkeySurveyDetails } from '../surveymonkey-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 
@@ -54,8 +54,8 @@ export class GetSurveyMonkeyDetailsAction extends SurveyMonkeyBaseAction {
             const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
             // Fetch complete survey details from SurveyMonkey API
-            const response = await this.getAxiosInstance(accessToken).get(`/surveys/${surveyId}/details`);
-            const survey = response.data;
+            const response = await this.getHttpClient(accessToken).Get<SurveyMonkeySurveyDetails>(`/surveys/${surveyId}/details`);
+            const survey = response.Data;
 
             // Extract comprehensive survey information
             const questionCount = survey.question_count || 0;

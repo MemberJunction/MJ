@@ -1,10 +1,9 @@
 import { RegisterClass } from '@memberjunction/global';
-import { FacebookBaseAction, FacebookAlbum } from '../facebook-base.action';
+import { FacebookAlbum, FacebookBaseAction, FacebookIdResponse } from '../facebook-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { MediaFile, SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
-import axios from 'axios';
-import FormData from 'form-data';
+import { HttpGet, HttpPost } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -162,17 +161,17 @@ export class FacebookCreateAlbumAction extends FacebookBaseAction {
                 albumData.location = location;
             }
 
-            const albumResponse = await axios.post(
+            const albumResponse = await HttpPost<FacebookIdResponse>(
                 `${this.apiBaseUrl}/${pageId}/albums`,
                 albumData,
                 {
-                    params: {
+                    Query: {
                         access_token: pageToken
                     }
                 }
             );
 
-            const albumId = albumResponse.data.id;
+            const albumId = albumResponse.Data.id;
             LogStatus(`Album created with ID: ${albumId}`);
 
             // Upload photos if provided
@@ -266,10 +265,7 @@ export class FacebookCreateAlbumAction extends FacebookBaseAction {
             : photo.data;
 
         const formData = new FormData();
-        formData.append('source', fileData, {
-            filename: photo.filename,
-            contentType: photo.mimeType
-        });
+        formData.append('source', new Blob([new Uint8Array(fileData)], { type: photo.mimeType }), photo.filename);
 
         if (caption) {
             formData.append('message', caption);
@@ -279,31 +275,30 @@ export class FacebookCreateAlbumAction extends FacebookBaseAction {
             formData.append('published', 'false');
         }
 
-        const response = await axios.post(
+        const response = await HttpPost<FacebookIdResponse>(
             `${this.apiBaseUrl}/${albumId}/photos`,
             formData,
             {
-                headers: formData.getHeaders(),
-                params: {
+                Query: {
                     access_token: pageToken
                 }
             }
         );
 
-        return response.data.id;
+        return response.Data.id;
     }
 
     /**
      * Set the cover photo for an album
      */
     private async setAlbumCoverPhoto(albumId: string, photoId: string, pageToken: string): Promise<void> {
-        await axios.post(
+        await HttpPost(
             `${this.apiBaseUrl}/${albumId}`,
             {
                 cover_photo: photoId
             },
             {
-                params: {
+                Query: {
                     access_token: pageToken
                 }
             }
@@ -315,17 +310,17 @@ export class FacebookCreateAlbumAction extends FacebookBaseAction {
      */
     private async getAlbumDetails(albumId: string, pageToken: string): Promise<FacebookAlbum | null> {
         try {
-            const response = await axios.get(
+            const response = await HttpGet<FacebookAlbum>(
                 `${this.apiBaseUrl}/${albumId}`,
                 {
-                    params: {
+                    Query: {
                         access_token: pageToken,
                         fields: 'id,name,description,link,cover_photo,count,created_time,photos.limit(1){id,images}'
                     }
                 }
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError(`Failed to get album details: ${error}`);
             return null;

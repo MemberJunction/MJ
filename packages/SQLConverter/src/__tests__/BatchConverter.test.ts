@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { convertFile } from '../rules/BatchConverter.js';
-import { getTSQLToPostgresRules } from '../rules/TSQLToPostgresRules.js';
+import { ConvertFile } from '../rules/BatchConverter.js';
+import { GetTSQLToPostgresRules } from '../rules/TSQLToPostgresRules.js';
 import type { BatchConverterConfig } from '../rules/BatchConverter.js';
 
-const rules = getTSQLToPostgresRules();
+const rules = GetTSQLToPostgresRules();
 
 /** Helper to build a minimal BatchConverterConfig from raw SQL */
 function makeConfig(sql: string, overrides?: Partial<BatchConverterConfig>): BatchConverterConfig {
@@ -22,7 +22,7 @@ describe('convertFile (BatchConverter)', () => {
   // 1. Empty input → empty output with no section headers
   // ============================================================
   it('should handle empty input and suppress empty section headers', () => {
-    const result = convertFile(makeConfig(''));
+    const result = ConvertFile(makeConfig(''));
     expect(result.Stats.TotalBatches).toBe(0);
     expect(result.Stats.Converted).toBe(0);
     expect(result.Stats.Errors).toBe(0);
@@ -43,7 +43,7 @@ describe('convertFile (BatchConverter)', () => {
       '  CONSTRAINT [PK_TestTable] PRIMARY KEY ([ID])',
       ');',
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.TablesCreated).toBe(1);
     expect(result.Stats.Converted).toBeGreaterThanOrEqual(1);
     expect(result.OutputSQL).toContain('CREATE TABLE');
@@ -56,7 +56,7 @@ describe('convertFile (BatchConverter)', () => {
   // ============================================================
   it('should convert a single INSERT batch', () => {
     const sql = "INSERT INTO [__mj].[TestTable] ([ID], [Name]) VALUES (NEWID(), N'Hello');";
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.InsertsConverted).toBe(1);
     expect(result.OutputSQL).toContain('gen_random_uuid()');
     // N prefix should be removed
@@ -68,7 +68,7 @@ describe('convertFile (BatchConverter)', () => {
   // ============================================================
   it('should skip SET NOCOUNT ON', () => {
     const sql = 'SET NOCOUNT ON;\nGO\nSELECT 1;';
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.Skipped).toBeGreaterThanOrEqual(1);
     // SET NOCOUNT ON should not appear in meaningful output
     expect(result.OutputSQL).not.toMatch(/SET\s+NOCOUNT\s+ON/i);
@@ -79,7 +79,7 @@ describe('convertFile (BatchConverter)', () => {
   // ============================================================
   it('should skip IF @@ERROR batches', () => {
     const sql = 'IF @@ERROR <> 0 SET NOEXEC ON';
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.Skipped).toBeGreaterThanOrEqual(1);
   });
 
@@ -94,7 +94,7 @@ describe('convertFile (BatchConverter)', () => {
       'GO',
       "INSERT INTO [__mj].[T1] ([ID]) VALUES ('00000000-0000-0000-0000-000000000002');",
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.TotalBatches).toBeGreaterThanOrEqual(3);
     expect(result.Stats.TablesCreated).toBe(1);
     expect(result.Stats.InsertsConverted).toBe(2);
@@ -111,7 +111,7 @@ describe('convertFile (BatchConverter)', () => {
       'GO',
       'CREATE VIEW [__mj].[vwT1] AS SELECT [ID] FROM [__mj].[T1];',
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     const output = result.OutputSQL;
     const tablesSectionIdx = output.indexOf('DDL: Tables');
     const viewsSectionIdx = output.indexOf('Views');
@@ -132,7 +132,7 @@ describe('convertFile (BatchConverter)', () => {
       'GO',
       'CREATE TABLE [__mj].[T3] ([ID] [uniqueidentifier] NOT NULL);',
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.TablesCreated).toBe(3);
   });
 
@@ -149,7 +149,7 @@ describe('convertFile (BatchConverter)', () => {
       'GO',
       "INSERT INTO [__mj].[T1] ([ID]) VALUES ('d');",
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.InsertsConverted).toBe(4);
   });
 
@@ -158,7 +158,7 @@ describe('convertFile (BatchConverter)', () => {
   // ============================================================
   it('should pass through comment-only batches', () => {
     const sql = '-- This is a comment block\n-- with multiple lines';
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     // Comment-only batches are classified as COMMENT_ONLY and skipped (passed through)
     expect(result.Stats.Skipped).toBeGreaterThanOrEqual(1);
     expect(result.OutputSQL).toContain('This is a comment block');
@@ -174,7 +174,7 @@ describe('convertFile (BatchConverter)', () => {
       "  @level0type=N'SCHEMA', @level0name=N'__mj',",
       "  @level1type=N'TABLE', @level1name=N'Users';",
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.CommentsConverted).toBe(1);
     expect(result.OutputSQL).toContain('COMMENT ON TABLE');
     expect(result.OutputSQL).toContain('"Users"');
@@ -190,7 +190,7 @@ describe('convertFile (BatchConverter)', () => {
       '  ADD CONSTRAINT [FK_Orders_Users] FOREIGN KEY ([UserID])',
       '  REFERENCES [__mj].[Users] ([ID]);',
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.FKConstraints).toBe(1);
     expect(result.OutputSQL).toContain('DEFERRABLE INITIALLY DEFERRED');
     expect(result.OutputSQL).toContain('FOREIGN KEY');
@@ -206,7 +206,7 @@ describe('convertFile (BatchConverter)', () => {
       '  WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF)',
       '  ON [PRIMARY];',
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.IndexesCreated).toBe(1);
     expect(result.OutputSQL).toContain('CREATE');
     expect(result.OutputSQL).toContain('INDEX');
@@ -220,7 +220,7 @@ describe('convertFile (BatchConverter)', () => {
   // ============================================================
   it('should convert GRANT statements', () => {
     const sql = 'GRANT SELECT ON [__mj].[Users] TO [cdp_UI];';
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.GrantsConverted).toBe(1);
     expect(result.OutputSQL).toContain('GRANT');
     expect(result.OutputSQL).toContain('SELECT');
@@ -243,7 +243,7 @@ describe('convertFile (BatchConverter)', () => {
       },
     };
     const sql = "INSERT INTO [__mj].[T1] ([ID]) VALUES ('x');";
-    const result = convertFile({
+    const result = ConvertFile({
       Source: sql,
       SourceIsFile: false,
       Rules: [brokenRule],
@@ -260,7 +260,7 @@ describe('convertFile (BatchConverter)', () => {
   // ============================================================
   it('should replace ${flyway:defaultSchema} with __mj', () => {
     const sql = 'CREATE TABLE ${flyway:defaultSchema}.[TestTable] ([ID] [uniqueidentifier] NOT NULL);';
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.TablesCreated).toBe(1);
     expect(result.OutputSQL).not.toContain('${flyway:defaultSchema}');
     expect(result.OutputSQL).toContain('__mj');
@@ -272,7 +272,7 @@ describe('convertFile (BatchConverter)', () => {
   it('should call OnProgress with status messages', () => {
     const messages: string[] = [];
     const sql = 'CREATE TABLE [__mj].[T1] ([ID] [uniqueidentifier] NOT NULL);';
-    convertFile(makeConfig(sql, {
+    ConvertFile(makeConfig(sql, {
       OnProgress: (msg: string) => messages.push(msg),
     }));
     expect(messages.length).toBeGreaterThan(0);
@@ -286,7 +286,7 @@ describe('convertFile (BatchConverter)', () => {
   // ============================================================
   it('should include PG header when IncludeHeader is true', () => {
     const sql = 'SELECT 1;';
-    const result = convertFile(makeConfig(sql, { IncludeHeader: true }));
+    const result = ConvertFile(makeConfig(sql, { IncludeHeader: true }));
     expect(result.OutputSQL).toContain('MemberJunction PostgreSQL Migration');
     expect(result.OutputSQL).toContain('CREATE EXTENSION IF NOT EXISTS');
     expect(result.OutputSQL).toContain('pgcrypto');
@@ -294,7 +294,7 @@ describe('convertFile (BatchConverter)', () => {
 
   it('should omit PG header when IncludeHeader is false', () => {
     const sql = 'SELECT 1;';
-    const result = convertFile(makeConfig(sql, { IncludeHeader: false }));
+    const result = ConvertFile(makeConfig(sql, { IncludeHeader: false }));
     expect(result.OutputSQL).not.toContain('MemberJunction v5.0 PostgreSQL Baseline');
   });
 
@@ -304,8 +304,8 @@ describe('convertFile (BatchConverter)', () => {
   it('should skip post-processing when EnablePostProcess is false', () => {
     // Use a value that post-processing would normally change
     const sql = "INSERT INTO [__mj].[T1] ([Name]) VALUES (N'test');";
-    const withPost = convertFile(makeConfig(sql, { EnablePostProcess: true }));
-    const withoutPost = convertFile(makeConfig(sql, { EnablePostProcess: false }));
+    const withPost = ConvertFile(makeConfig(sql, { EnablePostProcess: true }));
+    const withoutPost = ConvertFile(makeConfig(sql, { EnablePostProcess: false }));
     // Both should produce output, but they may differ due to post-processing
     expect(withPost.OutputSQL.length).toBeGreaterThan(0);
     expect(withoutPost.OutputSQL.length).toBeGreaterThan(0);
@@ -322,7 +322,7 @@ describe('convertFile (BatchConverter)', () => {
       'GO',
       'SET ANSI_PADDING ON;',
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.Skipped).toBe(3);
     expect(result.Stats.Converted).toBe(0);
   });
@@ -336,7 +336,7 @@ describe('convertFile (BatchConverter)', () => {
       "INSERT INTO [__mj].[T1] ([ID]) VALUES ('a');",
       "INSERT INTO [__mj].[T1] ([ID]) VALUES ('b');",
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     // The batch should be sub-split: PRINT + INSERT + INSERT = 3 batches
     expect(result.Stats.TotalBatches).toBe(3);
     // PRINT should be skipped, two INSERTs should be converted
@@ -348,7 +348,7 @@ describe('convertFile (BatchConverter)', () => {
   // ============================================================
   it('should skip SQL Server-specific patterns like SERVERPROPERTY', () => {
     const sql = "IF SERVERPROPERTY('ProductVersion') >= '14.0' BEGIN\n  PRINT 'SQL Server 2017+'\nEND";
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.Skipped).toBeGreaterThanOrEqual(1);
   });
 
@@ -362,7 +362,7 @@ describe('convertFile (BatchConverter)', () => {
       '  NewName NVARCHAR(255) NOT NULL',
       ');',
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.OutputSQL).toContain('CREATE TEMP TABLE');
     expect(result.OutputSQL).not.toContain('#TempMapping');
   });
@@ -375,7 +375,7 @@ describe('convertFile (BatchConverter)', () => {
       "GO",
       "INSERT INTO #TempMapping (OldName) VALUES ('test');",
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.OutputSQL).not.toContain('#TempMapping');
     expect(result.OutputSQL).toContain('"TempMapping"');
   });
@@ -422,7 +422,7 @@ describe('convertFile (BatchConverter)', () => {
       "GO",
     ].join('\n');
 
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
 
     // Should contain the injected DO block
     expect(result.OutputSQL).toContain('DO $$');
@@ -444,7 +444,7 @@ describe('convertFile (BatchConverter)', () => {
     // mj-sync emits record deletions with inline params and no DECLARE block.
     // v5.45's spDeleteComponentRegistry was silently dropped for this shape.
     const sql = `EXEC [__mj].[spDeleteComponentRegistry] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';`;
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.Errors).toBe(0);
     expect(result.OutputSQL).toContain('DO $mj$');
     expect(result.OutputSQL).toContain(
@@ -469,7 +469,7 @@ describe('convertFile (BatchConverter)', () => {
       "EXEC [__mj].[spDeleteComponentRegistry] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';",
       'GO',
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.Errors).toBe(0);
     expect(result.OutputSQL).toContain('PERFORM __mj."spCreateAPIScope"');
     expect(result.OutputSQL).toContain(
@@ -494,7 +494,7 @@ describe('convertFile (BatchConverter)', () => {
       '-- Delete MJ: Component Registries (core SP call only)',
       "EXEC [__mj].[spDeleteComponentRegistry] @ID = 'B2F8C247-D22E-4991-9A69-0F73954A68D6';",
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.Stats.Errors).toBe(0);
     expect(result.OutputSQL).toContain('PERFORM __mj."spCreateAPIScope"');
     expect(result.OutputSQL).toContain(
@@ -515,7 +515,7 @@ describe('convertFile (BatchConverter)', () => {
       "  @ID_a = '411AA5E8-7F8E-4092-B6B1-9566847E2A3A'",
       "EXEC [__mj].[spCreateAPIScope] @ID = '411AA5E8-7F8E-4092-B6B1-9566847E2A3A', @Name = N'search';",
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.OutputSQL).toContain('SKIPPED');
     expect(result.OutputSQL).not.toMatch(/^\s*p_\w+ :=/m);
   });
@@ -536,7 +536,7 @@ describe('convertFile (BatchConverter)', () => {
       "  @B_aa = N'hello'",
       'EXEC [__mj].[spCreateThing] @ID = @A_aa, @Name = @B_aa;',
     ].join('\n');
-    const result = convertFile(makeConfig(sql));
+    const result = ConvertFile(makeConfig(sql));
     expect(result.OutputSQL).toContain('SKIPPED');
     expect(result.OutputSQL).not.toMatch(/^\s*p_B_aa :=/m);
   });

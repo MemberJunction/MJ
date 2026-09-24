@@ -11,8 +11,8 @@
  * has already written, and over-refusing would break saving workflows that work.
  */
 import { describe, it, expect } from 'vitest';
-import { SafeExpressionEvaluator } from '@memberjunction/global';
-import { RESOLVABLE_GLOBALS, UnknownConditionRoots } from '../task-graph/condition-roots';
+import { SafeExpressionEvaluator, SAFE_EXPRESSION_GLOBALS, SAFE_GLOBAL_NAMESPACE_METHODS } from '@memberjunction/global';
+import { UnknownConditionRoots } from '../task-graph/condition-roots';
 import { ValidateTaskGraphSpec } from '../task-graph/task-graph-validator';
 import type { TaskGraphSpec } from '../task-graph/task-graph-spec';
 
@@ -102,22 +102,71 @@ describe('UnknownConditionRoots — the door now answers what it can answer (R2-
         expect(UnknownConditionRoots(expression)).toEqual([]);
     });
 
-    it('every allowed global is one the evaluator actually resolves', () => {
+    // One CALL per allowed global. Reading a name proves nothing about invoking it — that gap is
+    // how the list and the evaluator disagreed while this suite reported 660 green: every entry was
+    // checked with `Math !== undefined`, an identifier read, so a policy screen that refused
+    // `Math.abs(x)` never showed up here. Each expression below is the shape an authored spec
+    // actually writes.
+    const CALL_PER_GLOBAL: ReadonlyMap<string, string> = new Map([
+        ['Math', 'Math.abs(output.delta) < 5'],
+        ['Number', 'Number(payload.count) > 3'],
+        ['String', 'String(payload.id).length > 0'],
+        ['Boolean', 'Boolean(payload.flag) === true'],
+        ['Array', 'Array.isArray(payload.tags)'],
+        ['Object', 'Object.keys(payload).length > 0'],
+        ['JSON', 'JSON.stringify(payload) !== \'\''],
+        ['Date', 'Date.now() > 0'],
+        ['parseInt', 'parseInt(payload.raw) > 0'],
+        ['parseFloat', 'parseFloat(payload.raw) > 0'],
+        ['isNaN', 'isNaN(payload.count) === false'],
+        ['isFinite', 'isFinite(payload.count) === true'],
+    ]);
+
+    it('names a call for every allowed global, so the pinning below cannot be outgrown', () => {
+        // Adding a name to the shared list without adding its call here fails RIGHT HERE rather
+        // than leaving the new entry silently unpinned.
+        expect([...CALL_PER_GLOBAL.keys()].sort()).toEqual([...SAFE_EXPRESSION_GLOBALS].sort());
+    });
+
+    it.each([...CALL_PER_GLOBAL])('CALLS %s through the real evaluator', (_name, expression) => {
         // Pins the allowlist to runtime behaviour the same way the envelope is pinned to
-        // CONDITION_ROOTS. A curated list can drift from the runtime in both directions; this
-        // catches the direction where the door blesses a name that would fail anyway.
+        // CONDITION_ROOTS, in the direction that matters: the door must never bless a name the
+        // evaluator's policy screen would refuse. `1efc248ac5` added this invariant in prose —
+        // "the list cannot claim something the runtime would reject" — and it is enforced here.
         const evaluator = new SafeExpressionEvaluator();
-        for (const name of RESOLVABLE_GLOBALS) {
-            const verdict = evaluator.evaluate(`${name} !== undefined`, {});
-            expect(verdict.success, `${name} does not resolve at run time`).toBe(true);
-            expect(verdict.value, `${name} resolved to undefined`).toBe(true);
+        const context = { payload: { count: 4, raw: '7', id: 42, flag: true, tags: ['a'] }, output: { delta: 1 } };
+
+        expect(UnknownConditionRoots(expression), `the door refuses ${expression}`).toEqual([]);
+
+        const syntax = evaluator.validateSyntax(expression);
+        expect(syntax.Valid, `${expression} is refused by the policy screen: ${syntax.Error}`).toBe(true);
+
+        const verdict = evaluator.evaluate(expression, context);
+        expect(verdict.success, `${expression} failed at run time: ${verdict.error}`).toBe(true);
+        expect(verdict.value, `${expression} did not evaluate true`).toBe(true);
+    });
+
+    it('CALLS every method the shared namespace list claims', () => {
+        // The per-name pinning above exercises one method per namespace. This catches the rest:
+        // a method on the list that the policy screen refuses, or that is not a function at all.
+        const evaluator = new SafeExpressionEvaluator();
+        for (const [namespace, methods] of SAFE_GLOBAL_NAMESPACE_METHODS) {
+            for (const method of methods) {
+                const expression = `typeof ${namespace}.${method} === 'function'`;
+                const verdict = evaluator.evaluate(expression, {});
+                expect(verdict.success, `${namespace}.${method} is refused: ${verdict.error}`).toBe(true);
+                expect(verdict.value, `${namespace}.${method} is not a function`).toBe(true);
+
+                const call = evaluator.validateSyntax(`${namespace}.${method}(payload.x)`);
+                expect(call.Valid, `${namespace}.${method}() is refused: ${call.Error}`).toBe(true);
+            }
         }
     });
 
     it('does not bless the reflective globals a runtime scan would have', () => {
         // `name in globalThis` would have allowed all of these. The list is a decision, not a scan.
         for (const name of ['globalThis', 'Reflect', 'process', 'Proxy', 'Symbol']) {
-            expect(RESOLVABLE_GLOBALS.has(name)).toBe(false);
+            expect(SAFE_EXPRESSION_GLOBALS.has(name)).toBe(false);
         }
     });
 

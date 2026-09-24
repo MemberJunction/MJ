@@ -81,18 +81,22 @@ vi.mock('@memberjunction/ai-vectordb', () => ({
     BaseResponse: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    MJGlobal: {
-        Instance: {
-            ClassFactory: { CreateInstance: mockCreateInstanceFn },
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        MJGlobal: {
+            Instance: {
+                ClassFactory: { CreateInstance: mockCreateInstanceFn },
+            },
         },
-    },
-    UUIDsEqual: vi.fn((a: string, b: string) => a === b),
-    NormalizeUUID: vi.fn((s: string) => String(s).toLowerCase()),
-    // No-op decorator stub — the Compare Remote Operation (transitively loaded via
-    // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
-    RegisterClass: () => () => { /* no-op */ },
-}));
+        UUIDsEqual: vi.fn((a: string, b: string) => a === b),
+        NormalizeUUID: vi.fn((s: string) => String(s).toLowerCase()),
+        // No-op decorator stub — the Compare Remote Operation (transitively loaded via
+        // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
+        RegisterClass: () => () => { /* no-op */ },
+    };
+});
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJDuplicateRunDetailEntity: vi.fn(),

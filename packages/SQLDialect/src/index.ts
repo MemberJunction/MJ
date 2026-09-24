@@ -15,6 +15,15 @@ export type { SchemaFieldType } from './sqlDialect.js';
 export { SQLServerDialect } from './sqlServerDialect.js';
 export { PostgreSQLDialect } from './postgresqlDialect.js';
 export { GetDialect } from './dialectFactory.js';
+export { FindReferencedIdentifiers } from './identifierReferences.js';
+export {
+    RestarLayeredOuterView, restarLayeredOuterView,
+    BuildCreateOrReplaceLayeredOuterViewSQL, buildCreateOrReplaceLayeredOuterViewSQL,
+    LayeredOuterRestarError,
+    FindTopLevelKeyword, findTopLevelKeyword,
+    SplitTopLevelCommaList, splitTopLevelCommaList,
+} from './postgresqlRestarLayeredOuter.js';
+export type { RestarLayeredOuterViewArgs } from './postgresqlRestarLayeredOuter.js';
 export {
     AutoQuotePostgreSQLIdentifiers,
     PostgreSQLQuotingKeywords,

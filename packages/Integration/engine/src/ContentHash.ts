@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { Canonicalize } from '@memberjunction/global';
 
 /**
  * Name of the per-record content-hash mirror column. Written on every integration
@@ -33,9 +34,14 @@ export const CONTENT_HASH_COLUMN = '__mj_integration_ContentHash';
  * record's IDENTITY (ExternalID / PK), never its position — an insert changes only its own
  * row; every other row's hash, and therefore its skip-write, is unaffected.
  */
-export function computeContentHash(fields: Record<string, unknown>): string {
-    const canonical = canonicalize(fields);
+export function ComputeContentHash(fields: Record<string, unknown>): string {
+    const canonical = Canonicalize(fields);
     return createHash('sha256').update(canonical).digest('hex');
+}
+
+/** @deprecated Use {@link ComputeContentHash}. */
+export function computeContentHash(fields: Record<string, unknown>): string {
+    return ComputeContentHash(fields);
 }
 
 /**
@@ -60,7 +66,7 @@ const OVERFLOW_HASH_KEY = '__mj_integration_overflow';
  * against the mapped-only basis, rewrite, and converge — a one-time bounded rewrite wave for
  * overflow-carrying rows only (customs-free rows are byte-identical under both bases).
  */
-export function contentHashBasis(
+export function ContentHashBasis(
     mappedFields: Record<string, unknown>,
     unmappedFields?: Record<string, unknown> | null,
 ): Record<string, unknown> {
@@ -70,33 +76,32 @@ export function contentHashBasis(
     return { ...mappedFields, [OVERFLOW_HASH_KEY]: unmappedFields };
 }
 
+/** @deprecated Use {@link ContentHashBasis}. */
+export function contentHashBasis(
+    mappedFields: Record<string, unknown>,
+    unmappedFields?: Record<string, unknown> | null,
+): Record<string, unknown> {
+    return ContentHashBasis(mappedFields, unmappedFields);
+}
+
 /**
  * LEGACY hash over MAPPED fields PLUS captured (overflow) fields. No longer used by the
  * engine's change detection — see {@link contentHashBasis} for the change-detection policy and the
  * one-time migration behavior. Kept exported for back-compat.
  */
+export function ComputeContentHashWithOverflow(
+    mappedFields: Record<string, unknown>,
+    unmappedFields?: Record<string, unknown> | null,
+): string {
+    return ComputeContentHash(ContentHashBasis(mappedFields, unmappedFields));
+}
+
+/** @deprecated Use {@link ComputeContentHashWithOverflow}. */
 export function computeContentHashWithOverflow(
     mappedFields: Record<string, unknown>,
     unmappedFields?: Record<string, unknown> | null,
 ): string {
-    return computeContentHash(contentHashBasis(mappedFields, unmappedFields));
+    return ComputeContentHashWithOverflow(mappedFields, unmappedFields);
 }
 
-/**
- * Stable JSON serialization: object keys sorted recursively, arrays kept in order
- * (array order is semantically meaningful), `undefined` entries omitted. Dates and
- * other non-plain values fall back to their JSON form.
- */
-function canonicalize(value: unknown): string {
-    if (value === null) return 'null';
-    if (value === undefined) return 'null'; // top-level undefined — shouldn't happen, but stay total
-    if (typeof value !== 'object') return JSON.stringify(value);
-    if (Array.isArray(value)) {
-        return `[${value.map(v => (v === undefined ? 'null' : canonicalize(v))).join(',')}]`;
-    }
-    if (value instanceof Date) return JSON.stringify(value.toISOString());
-    const obj = value as Record<string, unknown>;
-    const keys = Object.keys(obj).filter(k => obj[k] !== undefined).sort();
-    const body = keys.map(k => `${JSON.stringify(k)}:${canonicalize(obj[k])}`).join(',');
-    return `{${body}}`;
-}
+

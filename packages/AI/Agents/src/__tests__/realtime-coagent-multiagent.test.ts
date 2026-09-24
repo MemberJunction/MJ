@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     ResolveEffectiveRealtimeConfig,
-    accumulateAllowedAgents,
+    AccumulateAllowedAgents,
     GetEffectiveDisclosure,
     GetDisclosureForTarget,
     BuildAppRealtimeOverridesJson,
@@ -20,7 +20,7 @@ const layer = (allowedAgents: unknown, extra: Record<string, unknown> = {}): Rec
 
 describe('accumulateAllowedAgents', () => {
     it('unions across layers and dedupes by agentId (case-insensitive)', () => {
-        const result = accumulateAllowedAgents([
+        const result = AccumulateAllowedAgents([
             layer([{ agentId: 'A1', label: 'Sage' }]),
             layer([{ agentId: 'a1' }, { agentId: 'A2', label: 'Skip' }]),
         ]);
@@ -28,7 +28,7 @@ describe('accumulateAllowedAgents', () => {
     });
 
     it('merges per-entry fields, later layer wins on set keys but keeps earlier ones', () => {
-        const result = accumulateAllowedAgents([
+        const result = AccumulateAllowedAgents([
             layer([{ agentId: 'A1', label: 'Sage' }]),
             layer([{ agentId: 'A1', disclosure: 'silent' }]),
         ]);
@@ -39,12 +39,12 @@ describe('accumulateAllowedAgents', () => {
 
     it('accumulates dynamic entries last (highest precedence)', () => {
         const dynamic: RealtimeAllowedAgent[] = [{ agentId: 'A1', disclosure: 'mention' }];
-        const result = accumulateAllowedAgents([layer([{ agentId: 'A1', disclosure: 'silent' }])], dynamic);
+        const result = AccumulateAllowedAgents([layer([{ agentId: 'A1', disclosure: 'silent' }])], dynamic);
         expect(result[0].disclosure).toBe('mention');
     });
 
     it('ignores invalid entries and non-array allowedAgents', () => {
-        const result = accumulateAllowedAgents([
+        const result = AccumulateAllowedAgents([
             layer('not-an-array'),
             layer([{ label: 'no-id' }, { agentId: '' }, 42, { agentId: 'Good' }]),
         ]);
@@ -52,7 +52,7 @@ describe('accumulateAllowedAgents', () => {
     });
 
     it('returns empty when no layers carry allowedAgents', () => {
-        expect(accumulateAllowedAgents([{ realtime: {} }, null, undefined])).toEqual([]);
+        expect(AccumulateAllowedAgents([{ realtime: {} }, null, undefined])).toEqual([]);
     });
 });
 
@@ -192,5 +192,21 @@ describe('BuildRealtimeAgentFraming / BuildColleaguesClause', () => {
     it('renders hand-voice guidance', () => {
         expect(BuildColleaguesClause([{ name: 'Skip', disclosure: 'hand-voice' }]))
             .toContain('hand the conversation over to them');
+    });
+
+    it('asserts framing for a no-direct-tools session contains strict delegation wording and does not mention directly-available tools', () => {
+        const framingNoTools = BuildRealtimeAgentFraming('Sage', '', [], false);
+        expect(framingNoTools).toContain("When actual work is required, call the 'invoke-target-agent' tool and narrate progress while it runs — do not attempt to do the work yourself.");
+        expect(framingNoTools).not.toContain('directly-available tools');
+
+        // Default hasDirectTools is false
+        const framingDefault = BuildRealtimeAgentFraming('Sage');
+        expect(framingDefault).toBe(framingNoTools);
+    });
+
+    it('asserts framing for a session with direct tools mentions directly-available tools and omits strict do-not-attempt wording', () => {
+        const framingWithTools = BuildRealtimeAgentFraming('Sage', '', [], true);
+        expect(framingWithTools).toContain("When work is required that matches one of your directly-available tools, invoke it directly for fast execution. For complex, multi-step, or background work, call the 'invoke-target-agent' tool and narrate progress while it runs.");
+        expect(framingWithTools).not.toContain('do not attempt to do the work yourself');
     });
 });

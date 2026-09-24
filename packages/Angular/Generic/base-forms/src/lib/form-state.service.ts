@@ -46,8 +46,13 @@ export class FormStateService {
      * @param entityName The entity name
      * @returns Observable of the form state
      */
-    getState$(entityName: string): Observable<FormState> {
+    GetState$(entityName: string): Observable<FormState> {
         return this.getOrCreateSubject(entityName).asObservable();
+    }
+
+    /** @deprecated Use {@link GetState$}. */
+    getState$(entityName: string): Observable<FormState> {
+        return this.GetState$(entityName);
     }
 
     /**
@@ -55,8 +60,13 @@ export class FormStateService {
      * @param entityName The entity name
      * @returns Current form state
      */
-    getCurrentState(entityName: string): FormState {
+    GetCurrentState(entityName: string): FormState {
         return this.getOrCreateSubject(entityName).value;
+    }
+
+    /** @deprecated Use {@link GetCurrentState}. */
+    getCurrentState(entityName: string): FormState {
+        return this.GetCurrentState(entityName);
     }
 
     /**
@@ -64,17 +74,17 @@ export class FormStateService {
      * Call this when a form component initializes.
      * @param entityName The entity name
      */
-    async initializeState(entityName: string): Promise<FormState> {
+    async InitializeState(entityName: string): Promise<FormState> {
         // If already loaded, return current state
         if (this.loadedEntities.has(entityName)) {
-            return this.getCurrentState(entityName);
+            return this.GetCurrentState(entityName);
         }
 
         // If currently loading, wait for that promise
         const existingPromise = this.loadingPromises.get(entityName);
         if (existingPromise) {
             await existingPromise;
-            return this.getCurrentState(entityName);
+            return this.GetCurrentState(entityName);
         }
 
         // Start loading
@@ -84,10 +94,15 @@ export class FormStateService {
         try {
             await loadPromise;
             this.loadedEntities.add(entityName);
-            return this.getCurrentState(entityName);
+            return this.GetCurrentState(entityName);
         } finally {
             this.loadingPromises.delete(entityName);
         }
+    }
+
+    /** @deprecated Use {@link InitializeState}. */
+    async initializeState(entityName: string): Promise<FormState> {
+        return this.InitializeState(entityName);
     }
 
     /**
@@ -96,9 +111,14 @@ export class FormStateService {
      * @param sectionKey The section key
      * @returns Section state with defaults applied
      */
-    getSectionState(entityName: string, sectionKey: string): FormSectionState {
-        const state = this.getCurrentState(entityName);
+    GetSectionState(entityName: string, sectionKey: string): FormSectionState {
+        const state = this.GetCurrentState(entityName);
         return state.sections[sectionKey] || { ...DEFAULT_SECTION_STATE };
+    }
+
+    /** @deprecated Use {@link GetSectionState}. */
+    getSectionState(entityName: string, sectionKey: string): FormSectionState {
+        return this.GetSectionState(entityName, sectionKey);
     }
 
     /**
@@ -108,8 +128,8 @@ export class FormStateService {
      * @param defaultExpanded Optional default value to use when no persisted state exists (defaults to DEFAULT_SECTION_STATE.isExpanded)
      * @returns True if expanded
      */
-    isSectionExpanded(entityName: string, sectionKey: string, defaultExpanded?: boolean): boolean {
-        const state = this.getCurrentState(entityName);
+    IsSectionExpanded(entityName: string, sectionKey: string, defaultExpanded?: boolean): boolean {
+        const state = this.GetCurrentState(entityName);
         const sectionState = state.sections[sectionKey];
         // Only honor a persisted expansion when it was EXPLICITLY set. A section entry that
         // exists solely to hold a panelHeight has isExpanded === undefined and must fall through
@@ -121,14 +141,24 @@ export class FormStateService {
         return defaultExpanded !== undefined ? defaultExpanded : (DEFAULT_SECTION_STATE.isExpanded ?? true);
     }
 
+    /** @deprecated Use {@link IsSectionExpanded}. */
+    isSectionExpanded(entityName: string, sectionKey: string, defaultExpanded?: boolean): boolean {
+        return this.IsSectionExpanded(entityName, sectionKey, defaultExpanded);
+    }
+
     /**
      * Set section expanded state.
      * @param entityName The entity name
      * @param sectionKey The section key
      * @param isExpanded Whether the section is expanded
      */
-    setSectionExpanded(entityName: string, sectionKey: string, isExpanded: boolean): void {
+    SetSectionExpanded(entityName: string, sectionKey: string, isExpanded: boolean): void {
         this.updateSectionState(entityName, sectionKey, { isExpanded });
+    }
+
+    /** @deprecated Use {@link SetSectionExpanded}. */
+    setSectionExpanded(entityName: string, sectionKey: string, isExpanded: boolean): void {
+        return this.SetSectionExpanded(entityName, sectionKey, isExpanded);
     }
 
     /**
@@ -137,9 +167,14 @@ export class FormStateService {
      * @param sectionKey The section key
      * @returns Panel height in pixels, or undefined if no custom height is set
      */
-    getSectionPanelHeight(entityName: string, sectionKey: string): number | undefined {
-        const state = this.getCurrentState(entityName);
+    GetSectionPanelHeight(entityName: string, sectionKey: string): number | undefined {
+        const state = this.GetCurrentState(entityName);
         return state.sections[sectionKey]?.panelHeight;
+    }
+
+    /** @deprecated Use {@link GetSectionPanelHeight}. */
+    getSectionPanelHeight(entityName: string, sectionKey: string): number | undefined {
+        return this.GetSectionPanelHeight(entityName, sectionKey);
     }
 
     /**
@@ -148,8 +183,13 @@ export class FormStateService {
      * @param sectionKey The section key
      * @param height Panel height in pixels
      */
-    setSectionPanelHeight(entityName: string, sectionKey: string, height: number): void {
+    SetSectionPanelHeight(entityName: string, sectionKey: string, height: number): void {
         this.updateSectionState(entityName, sectionKey, { panelHeight: height });
+    }
+
+    /** @deprecated Use {@link SetSectionPanelHeight}. */
+    setSectionPanelHeight(entityName: string, sectionKey: string, height: number): void {
+        return this.SetSectionPanelHeight(entityName, sectionKey, height);
     }
 
     /**
@@ -157,9 +197,14 @@ export class FormStateService {
      * @param entityName The entity name
      * @param sectionKey The section key
      */
+    ToggleSection(entityName: string, sectionKey: string): void {
+        const current = this.IsSectionExpanded(entityName, sectionKey);
+        this.SetSectionExpanded(entityName, sectionKey, !current);
+    }
+
+    /** @deprecated Use {@link ToggleSection}. */
     toggleSection(entityName: string, sectionKey: string): void {
-        const current = this.isSectionExpanded(entityName, sectionKey);
-        this.setSectionExpanded(entityName, sectionKey, !current);
+        return this.ToggleSection(entityName, sectionKey);
     }
 
     /**
@@ -167,8 +212,13 @@ export class FormStateService {
      * @param entityName The entity name
      * @returns Width mode ('centered' or 'full-width')
      */
+    GetWidthMode(entityName: string): 'centered' | 'full-width' {
+        return this.GetCurrentState(entityName).widthMode;
+    }
+
+    /** @deprecated Use {@link GetWidthMode}. */
     getWidthMode(entityName: string): 'centered' | 'full-width' {
-        return this.getCurrentState(entityName).widthMode;
+        return this.GetWidthMode(entityName);
     }
 
     /**
@@ -177,15 +227,20 @@ export class FormStateService {
      * defaults). Returns false for pre-existing persisted blobs that had a
      * default `widthMode` serialized as a side effect of other state saves.
      */
+    HasExplicitWidthMode(entityName: string): boolean {
+        return this.GetCurrentState(entityName).widthModeExplicit === true;
+    }
+
+    /** @deprecated Use {@link HasExplicitWidthMode}. */
     hasExplicitWidthMode(entityName: string): boolean {
-        return this.getCurrentState(entityName).widthModeExplicit === true;
+        return this.HasExplicitWidthMode(entityName);
     }
 
     /**
      * Set form width mode. Marks the preference as explicit so it wins over
      * any component-level default in `BaseFormComponent.getFormWidthMode`.
      */
-    setWidthMode(entityName: string, widthMode: 'centered' | 'full-width'): void {
+    SetWidthMode(entityName: string, widthMode: 'centered' | 'full-width'): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
         const newState: FormState = {
@@ -197,13 +252,23 @@ export class FormStateService {
         this.queueSave(entityName);
     }
 
+    /** @deprecated Use {@link SetWidthMode}. */
+    setWidthMode(entityName: string, widthMode: 'centered' | 'full-width'): void {
+        return this.SetWidthMode(entityName, widthMode);
+    }
+
     /**
      * Toggle form width mode between centered and full-width.
      * @param entityName The entity name
      */
+    ToggleWidthMode(entityName: string): void {
+        const current = this.GetWidthMode(entityName);
+        this.SetWidthMode(entityName, current === 'centered' ? 'full-width' : 'centered');
+    }
+
+    /** @deprecated Use {@link ToggleWidthMode}. */
     toggleWidthMode(entityName: string): void {
-        const current = this.getWidthMode(entityName);
-        this.setWidthMode(entityName, current === 'centered' ? 'full-width' : 'centered');
+        return this.ToggleWidthMode(entityName);
     }
 
     /**
@@ -211,8 +276,13 @@ export class FormStateService {
      * @param entityName The entity name
      * @returns Whether to show empty fields
      */
+    GetShowEmptyFields(entityName: string): boolean {
+        return this.GetCurrentState(entityName).showEmptyFields;
+    }
+
+    /** @deprecated Use {@link GetShowEmptyFields}. */
     getShowEmptyFields(entityName: string): boolean {
-        return this.getCurrentState(entityName).showEmptyFields;
+        return this.GetShowEmptyFields(entityName);
     }
 
     /**
@@ -220,7 +290,7 @@ export class FormStateService {
      * @param entityName The entity name
      * @param show Whether to show empty fields
      */
-    setShowEmptyFields(entityName: string, show: boolean): void {
+    SetShowEmptyFields(entityName: string, show: boolean): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
         const newState: FormState = {
@@ -231,12 +301,17 @@ export class FormStateService {
         this.queueSave(entityName);
     }
 
+    /** @deprecated Use {@link SetShowEmptyFields}. */
+    setShowEmptyFields(entityName: string, show: boolean): void {
+        return this.SetShowEmptyFields(entityName, show);
+    }
+
     /**
      * Expand all sections for an entity.
      * @param entityName The entity name
      * @param sectionKeys Array of all section keys to expand
      */
-    expandAllSections(entityName: string, sectionKeys: string[]): void {
+    ExpandAllSections(entityName: string, sectionKeys: string[]): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
         const newSections = { ...currentState.sections };
@@ -253,12 +328,17 @@ export class FormStateService {
         this.queueSave(entityName);
     }
 
+    /** @deprecated Use {@link ExpandAllSections}. */
+    expandAllSections(entityName: string, sectionKeys: string[]): void {
+        return this.ExpandAllSections(entityName, sectionKeys);
+    }
+
     /**
      * Collapse all sections for an entity.
      * @param entityName The entity name
      * @param sectionKeys Array of all section keys to collapse
      */
-    collapseAllSections(entityName: string, sectionKeys: string[]): void {
+    CollapseAllSections(entityName: string, sectionKeys: string[]): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
         const newSections = { ...currentState.sections };
@@ -275,14 +355,24 @@ export class FormStateService {
         this.queueSave(entityName);
     }
 
+    /** @deprecated Use {@link CollapseAllSections}. */
+    collapseAllSections(entityName: string, sectionKeys: string[]): void {
+        return this.CollapseAllSections(entityName, sectionKeys);
+    }
+
     /**
      * Reset state to defaults for an entity.
      * @param entityName The entity name
      */
-    resetToDefaults(entityName: string): void {
+    ResetToDefaults(entityName: string): void {
         const subject = this.getOrCreateSubject(entityName);
         subject.next({ ...DEFAULT_FORM_STATE });
         this.queueSave(entityName);
+    }
+
+    /** @deprecated Use {@link ResetToDefaults}. */
+    resetToDefaults(entityName: string): void {
+        return this.ResetToDefaults(entityName);
     }
 
     /**
@@ -290,8 +380,13 @@ export class FormStateService {
      * @param entityName The entity name
      * @returns Array of section keys in user's preferred order, or undefined if using default order
      */
+    GetSectionOrder(entityName: string): string[] | undefined {
+        return this.GetCurrentState(entityName).sectionOrder;
+    }
+
+    /** @deprecated Use {@link GetSectionOrder}. */
     getSectionOrder(entityName: string): string[] | undefined {
-        return this.getCurrentState(entityName).sectionOrder;
+        return this.GetSectionOrder(entityName);
     }
 
     /**
@@ -299,7 +394,7 @@ export class FormStateService {
      * @param entityName The entity name
      * @param sectionOrder Array of section keys in the desired order
      */
-    setSectionOrder(entityName: string, sectionOrder: string[]): void {
+    SetSectionOrder(entityName: string, sectionOrder: string[]): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
         const newState: FormState = {
@@ -310,16 +405,90 @@ export class FormStateService {
         this.queueSave(entityName);
     }
 
+    /** @deprecated Use {@link SetSectionOrder}. */
+    setSectionOrder(entityName: string, sectionOrder: string[]): void {
+        return this.SetSectionOrder(entityName, sectionOrder);
+    }
+
     /**
      * Reset the section order to default (removes custom ordering).
      * @param entityName The entity name
      */
-    resetSectionOrder(entityName: string): void {
+    ResetSectionOrder(entityName: string): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
-        const { sectionOrder: _, ...stateWithoutOrder } = currentState;
-        subject.next(stateWithoutOrder as FormState);
+        const {
+            sectionOrder: _order,
+            moreSectionKeys: _more,
+            firstClassSectionKeys: _first,
+            ...stateWithoutChrome
+        } = currentState;
+        subject.next(stateWithoutChrome as FormState);
         this.queueSave(entityName);
+    }
+
+    /** @deprecated Use {@link ResetSectionOrder}. */
+    resetSectionOrder(entityName: string): void {
+        return this.ResetSectionOrder(entityName);
+    }
+
+    GetMoreSectionKeys(entityName: string): string[] | undefined {
+        return this.GetCurrentState(entityName).moreSectionKeys;
+    }
+
+    /** @deprecated Use {@link GetMoreSectionKeys}. */
+    getMoreSectionKeys(entityName: string): string[] | undefined {
+        return this.GetMoreSectionKeys(entityName);
+    }
+
+    SetMoreSectionKeys(entityName: string, moreSectionKeys: string[]): void {
+        const subject = this.getOrCreateSubject(entityName);
+        subject.next({ ...subject.value, moreSectionKeys });
+        this.queueSave(entityName);
+    }
+
+    /** @deprecated Use {@link SetMoreSectionKeys}. */
+    setMoreSectionKeys(entityName: string, moreSectionKeys: string[]): void {
+        return this.SetMoreSectionKeys(entityName, moreSectionKeys);
+    }
+
+    GetFirstClassSectionKeys(entityName: string): string[] | undefined {
+        return this.GetCurrentState(entityName).firstClassSectionKeys;
+    }
+
+    /** @deprecated Use {@link GetFirstClassSectionKeys}. */
+    getFirstClassSectionKeys(entityName: string): string[] | undefined {
+        return this.GetFirstClassSectionKeys(entityName);
+    }
+
+    SetFirstClassSectionKeys(entityName: string, firstClassSectionKeys: string[]): void {
+        const subject = this.getOrCreateSubject(entityName);
+        subject.next({ ...subject.value, firstClassSectionKeys });
+        this.queueSave(entityName);
+    }
+
+    /** @deprecated Use {@link SetFirstClassSectionKeys}. */
+    setFirstClassSectionKeys(entityName: string, firstClassSectionKeys: string[]): void {
+        return this.SetFirstClassSectionKeys(entityName, firstClassSectionKeys);
+    }
+
+    SetChromeMembership(
+        entityName: string,
+        moreSectionKeys: string[],
+        firstClassSectionKeys: string[],
+    ): void {
+        const subject = this.getOrCreateSubject(entityName);
+        subject.next({ ...subject.value, moreSectionKeys, firstClassSectionKeys });
+        this.queueSave(entityName);
+    }
+
+    /** @deprecated Use {@link SetChromeMembership}. */
+    setChromeMembership(
+        entityName: string,
+        moreSectionKeys: string[],
+        firstClassSectionKeys: string[],
+    ): void {
+        return this.SetChromeMembership(entityName, moreSectionKeys, firstClassSectionKeys);
     }
 
     /**
@@ -327,9 +496,14 @@ export class FormStateService {
      * @param entityName The entity name
      * @returns True if custom order exists
      */
-    hasCustomSectionOrder(entityName: string): boolean {
-        const order = this.getSectionOrder(entityName);
+    HasCustomSectionOrder(entityName: string): boolean {
+        const order = this.GetSectionOrder(entityName);
         return order !== undefined && order.length > 0;
+    }
+
+    /** @deprecated Use {@link HasCustomSectionOrder}. */
+    hasCustomSectionOrder(entityName: string): boolean {
+        return this.HasCustomSectionOrder(entityName);
     }
 
     /**
@@ -340,7 +514,7 @@ export class FormStateService {
      * @param entityName The entity name
      * @param editing Whether the form is entering (true) or exiting (false) edit mode
      */
-    setEditMode(entityName: string, editing: boolean): void {
+    SetEditMode(entityName: string, editing: boolean): void {
         if (editing) {
             this.editingEntities.add(entityName);
         } else {
@@ -350,20 +524,30 @@ export class FormStateService {
         }
     }
 
+    /** @deprecated Use {@link SetEditMode}. */
+    setEditMode(entityName: string, editing: boolean): void {
+        return this.SetEditMode(entityName, editing);
+    }
+
     /**
      * Get the count of expanded sections.
      * @param entityName The entity name
      * @param sectionKeys Array of section keys to check
      * @returns Number of expanded sections
      */
-    getExpandedCount(entityName: string, sectionKeys: string[]): number {
-        const state = this.getCurrentState(entityName);
+    GetExpandedCount(entityName: string, sectionKeys: string[]): number {
+        const state = this.GetCurrentState(entityName);
         return sectionKeys.filter(key => {
             const section = state.sections[key];
             // No entry → seeded global default; entry with explicit value → that value;
             // entry with only a panelHeight (isExpanded undefined) → treat as collapsed.
             return section ? (section.isExpanded ?? false) : DEFAULT_SECTION_STATE.isExpanded;
         }).length;
+    }
+
+    /** @deprecated Use {@link GetExpandedCount}. */
+    getExpandedCount(entityName: string, sectionKeys: string[]): number {
+        return this.GetExpandedCount(entityName, sectionKeys);
     }
 
     // -------------------- Private Methods --------------------
@@ -463,7 +647,7 @@ export class FormStateService {
         }
 
         const settingKey = this.getSettingKey(entityName);
-        const state = this.getCurrentState(entityName);
+        const state = this.GetCurrentState(entityName);
         UserInfoEngine.Instance.SetSettingDebounced(settingKey, JSON.stringify(state));
     }
 }

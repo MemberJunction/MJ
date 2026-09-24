@@ -1,0 +1,44 @@
+{
+  "id": "webresearch-recover-dead-url-01",
+  "agent": "Web Research Agent",
+  "tags": [
+    "error-recovery",
+    "disambiguation"
+  ],
+  "description": "A source 404'd. The recovery is to find another source, not to re-fetch the dead URL.",
+  "input": {
+    "payload": {
+      "sources": []
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Get details on the 2025 quantum computing roadmap from nature.com."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Web Page Content FAILED: 404 Not Found for https://www.nature.com/articles/quantum-2025."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Web Search"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        }
+      }
+    ]
+  }
+}

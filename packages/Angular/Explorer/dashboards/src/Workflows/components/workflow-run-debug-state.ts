@@ -5,34 +5,32 @@
  * surface is a widgets/surface host. The shape matches `TaskGraphDebugState` / the invocation
  * envelope on the parent `InputPayload`. Unparseable input is "not being debugged", never a throw.
  */
-import { UUIDsEqual } from '@memberjunction/global';
-
 export type WorkflowRunDebugState = {
-    paused: boolean;
-    pausedReason: 'user' | 'breakpoint' | null;
-    pausedAtTaskID: string | null;
-    breakpoints: string[];
-    edgeOverrides: Record<string, 'true' | 'false'>;
+    paused: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    pausedReason: 'user' | 'breakpoint' | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    pausedAtTaskID: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    breakpoints: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    edgeOverrides: Record<string, 'true' | 'false'>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 };
 
 export type WorkflowRunInvocation = {
-    data?: unknown;
-    context?: unknown;
+    data?: unknown;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    context?: unknown;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 };
 
 export type WorkflowRunParentBag = {
-    debug: WorkflowRunDebugState;
-    invocation: WorkflowRunInvocation;
+    Debug: WorkflowRunDebugState;
+    Invocation: WorkflowRunInvocation;
 };
 
 export type WorkflowStall = {
-    kind: 'held' | 'worker-lost' | 'step-refused' | 'control-error';
-    message: string;
-    taskName?: string;
-    taskID?: string;
-    edgeID?: string;
-    conditionText?: string;
-    reason?: string;
+    kind: 'held' | 'worker-lost' | 'step-refused' | 'control-error';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    message: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    taskName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    taskID?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    edgeID?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    conditionText?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    reason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 };
 
 const EMPTY_DEBUG: WorkflowRunDebugState = {
@@ -50,28 +48,18 @@ export function EmptyDebugState(): WorkflowRunDebugState {
 }
 
 export function ParseWorkflowRunParentBag(raw: string | null | undefined): WorkflowRunParentBag {
-    const empty: WorkflowRunParentBag = { debug: EmptyDebugState(), invocation: {} };
+    const empty: WorkflowRunParentBag = { Debug: EmptyDebugState(), Invocation: {} };
     if (!raw) return empty;
     try {
         const parsed = JSON.parse(raw) as Record<string, unknown>;
         if (!parsed || typeof parsed !== 'object') return empty;
         return {
-            debug: readDebug(parsed['debug']),
-            invocation: readInvocation(parsed['invocation']),
+            Debug: readDebug(parsed['debug']),
+            Invocation: readInvocation(parsed['invocation']),
         };
     } catch {
         return empty;
     }
-}
-
-export function ComposeBreakpointSet(
-    current: readonly string[],
-    taskID: string,
-    enabled: boolean,
-): string[] {
-    const has = current.some((id) => UUIDsEqual(id, taskID));
-    if (enabled) return has ? [...current] : [...current, taskID];
-    return current.filter((id) => !UUIDsEqual(id, taskID));
 }
 
 export function TryParseJsonObject(text: string): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {

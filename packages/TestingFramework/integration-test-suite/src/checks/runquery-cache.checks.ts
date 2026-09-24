@@ -15,7 +15,7 @@
  * imports replace the original in-function `await import(...)` (MJ rule: no dynamic import).
  */
 import { RunView, RunQuery, Metadata, UserInfo } from '@memberjunction/core';
-import type { IRunQueryProvider, RunQueryResult } from '@memberjunction/core';
+import type { IRunQueryProvider, RunQueryResult, DatabaseProviderBase } from '@memberjunction/core';
 import { QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryCategoryEntity, MJQueryEntity, MJQueryEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -97,7 +97,7 @@ async function createSetting(user: UserInfo, tag: string): Promise<MJUserSetting
  * Create the self-contained Query/Category fixtures (lifted from the original
  * bootstrap). Forces QueryEngine to refresh so resolveQuery sees them.
  */
-export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Promise<RunQueryFixtures> {
+export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Promise<RunQueryFixtures> {
     const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
     const schema = ctx.Schema ?? '__mj';
     const user = ctx.User;
@@ -133,8 +133,21 @@ export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     validatedQuery.CategoryID = category.ID;
     validatedQuery.SQL = countSQL;
     validatedQuery.Status = 'Approved';
+    // Column aliases quoted through the dialect, not with T-SQL brackets. `CacheValidationSQL` is
+    // executed verbatim against whichever backend is running, so `AS [MaxUpdatedAt]` fails on
+    // PostgreSQL with `syntax error at or near "["` — and because that SQL is the cache VALIDATOR,
+    // the failure is reported as `cacheStatus: error` rather than as a broken fixture, which reads
+    // like the cache logic is wrong when it is the fixture that never ran.
+    //
+    // `__mj_UpdatedAt` is quoted for a second, separate reason: the PostgreSQL auto-quoting
+    // tokenizer deliberately leaves `__mj_`-prefixed words alone, so an unquoted reference folds to
+    // `__mj_updatedat` — and the shipped PG baseline creates that column case-preserved. Spelling
+    // it out here does not depend on that rule either way.
+    const q = (ctx.Provider as unknown as DatabaseProviderBase).Dialect;
     validatedQuery.CacheValidationSQL =
-        `SELECT MAX(__mj_UpdatedAt) AS [MaxUpdatedAt], COUNT(*) AS [RowCount] FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
+        `SELECT MAX(${q.QuoteIdentifier('__mj_UpdatedAt')}) AS ${q.QuoteIdentifier('MaxUpdatedAt')}, ` +
+        `COUNT(*) AS ${q.QuoteIdentifier('RowCount')} ` +
+        `FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
     if (!await validatedQuery.Save()) {
         throw new Error(`Validated fixture query save failed: ${validatedQuery.LatestResult?.CompleteMessage}`);
     }
@@ -146,12 +159,17 @@ export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     return fixtures;
 }
 
+/** @deprecated Use {@link CreateRunQueryFixtures}. */
+export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Promise<RunQueryFixtures> {
+    return CreateRunQueryFixtures(ctx);
+}
+
 /**
  * Best-effort teardown — sweep leftover settings, then delete whatever queries/category were
  * created in FK-safe order. Partial-safe (R4): a mid-Setup crash may have created only some of
  * the fixture records, so each is guarded before delete.
  */
-export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fixtures: RunQueryFixtures): Promise<void> {
+export async function TeardownRunQueryFixtures(ctx: IntegrationCheckContext, fixtures: RunQueryFixtures): Promise<void> {
     try {
         const rv = new RunView();
         const leftovers = await rv.RunView<MJUserSettingEntity>({
@@ -175,6 +193,11 @@ export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fix
     } catch (e) {
         console.error(`Teardown warning: ${e instanceof Error ? e.message : String(e)}`);
     }
+}
+
+/** @deprecated Use {@link TeardownRunQueryFixtures}. */
+export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fixtures: RunQueryFixtures): Promise<void> {
+    return TeardownRunQueryFixtures(ctx, fixtures);
 }
 
 /** The ordered runquery-cache bundle. The whole bundle mutates the DB by design. */
@@ -546,10 +569,10 @@ for (const check of RunQueryCacheChecks) {
 // The bundle's shared Query/Category fixtures, run through the generic bundle-lifecycle hook so the
 // driver and the dispatcher script create/tear them down identically (was a hardcoded driver special-case).
 IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-cache', {
-    Setup: async ctx => { ctx.Fixtures = await createRunQueryFixtures(ctx); },
+    Setup: async ctx => { ctx.Fixtures = await CreateRunQueryFixtures(ctx); },
     Teardown: async ctx => {
         if (ctx.Fixtures) {
-            await teardownRunQueryFixtures(ctx, ctx.Fixtures);
+            await TeardownRunQueryFixtures(ctx, ctx.Fixtures);
             ctx.Fixtures = undefined;
         }
     }

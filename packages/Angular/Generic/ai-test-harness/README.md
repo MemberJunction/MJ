@@ -157,6 +157,17 @@ Display JSON data in a formatted, scrollable window:
 | `theme` | `'light' \| 'dark'` | `'light'` | Visual theme |
 | `maxHistoryItems` | `number` | `10` | Max history items to display |
 
+### Flow agent Debug
+
+For a Flow agent, **Debug** (not Run workflow) embeds
+[`<mj-task-graph-debugger>`](../task-graph-editor/README.md). The harness passes the parent task
+id and nothing else — the wrap owns frames and every `TaskGraph.*` verb. See the
+[Workflow Debugger Guide](../../../../guides/WORKFLOW_DEBUGGER_GUIDE.md).
+
+**Starting Payload** is a collapsed disclosure (default closed). It is hidden while a run or
+debug session is live. Openness is persisted as `AITestHarnessPrefs.StartingPayloadOpen` under
+`mj.aiTestHarness.prefs.v1` via `UserInfoEngine`.
+
 ## Advanced Features
 
 ### Streaming Responses
@@ -204,6 +215,7 @@ The `TestHarnessWindowManagerService` coordinates multiple floating test windows
 | `@memberjunction/ng-notifications` | Notification system |
 | `@memberjunction/ng-shared` | Shared Angular utilities |
 | `@memberjunction/ng-shared-generic` | Shared generic components |
+| `@memberjunction/ng-task-graph-editor` | Drop-in `<mj-task-graph-debugger>` for Flow agent Debug |
 | `@progress/kendo-angular-*` | Kendo UI components |
 
 ### Peer Dependencies
@@ -222,4 +234,4 @@ npm run build
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

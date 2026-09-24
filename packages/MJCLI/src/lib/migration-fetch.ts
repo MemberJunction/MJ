@@ -21,19 +21,19 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { SimpleGit } from 'simple-git';
-import { parseMigrationFilename } from '../baseline/util';
+import { ParseMigrationFilename } from '../baseline/util';
 
 export type MigrationDialect = 'sqlserver' | 'postgresql';
 
 export interface MigrationFetchResult {
   /** Temp clone root to hand to Skyway as the migration location. */
-  dir: string;
+  Dir: string;
   /** Repo-relative migration paths checked out (empty when the full-history fallback was used). */
-  selected: string[];
+  Selected: string[];
   /** True when partial clone was unavailable and the full `migrations/` dir was fetched instead. */
-  usedFallback: boolean;
+  UsedFallback: boolean;
   /** Removes the temp clone. Callers MUST invoke this in a finally on every exit path. */
-  cleanup: () => Promise<void>;
+  Cleanup: () => Promise<void>;
 }
 
 /** Matches Flyway/Skyway repeatable migrations (`R__<desc>.sql`), which always run. */
@@ -44,10 +44,15 @@ const REPEATABLE_PATTERN = /^R__.+\.sql$/i;
  * A semantic version (`2.123.0` / `v2.123.0`) maps to the `vX.Y.Z` release tag;
  * anything else (e.g. `main`) is treated as a branch name unchanged.
  */
-export function resolveGitRef(tagOrBranch: string): string {
+export function ResolveGitRef(tagOrBranch: string): string {
   const isSemver = /^v?\d+\.\d+\.\d+$/.test(tagOrBranch);
   if (!isSemver) return tagOrBranch;
   return tagOrBranch.startsWith('v') ? tagOrBranch : `v${tagOrBranch}`;
+}
+
+/** @deprecated Use {@link ResolveGitRef}. */
+export function resolveGitRef(tagOrBranch: string): string {
+  return ResolveGitRef(tagOrBranch);
 }
 
 /**
@@ -68,7 +73,7 @@ export function resolveGitRef(tagOrBranch: string): string {
  *
  * With no baseline present (e.g. legacy v2) the fresh path returns the full versioned history.
  */
-export function selectMigrationSlice(paths: readonly string[], currentVersion?: string | null): string[] {
+export function SelectMigrationSlice(paths: readonly string[], currentVersion?: string | null): string[] {
   const sqlPaths = paths.filter((p) => p.toLowerCase().endsWith('.sql'));
   const repeatables = sqlPaths.filter((p) => REPEATABLE_PATTERN.test(path.basename(p)));
 
@@ -84,30 +89,35 @@ export function selectMigrationSlice(paths: readonly string[], currentVersion?: 
   return Array.from(new Set([...versioned, ...repeatables]));
 }
 
+/** @deprecated Use {@link SelectMigrationSlice}. */
+export function selectMigrationSlice(paths: readonly string[], currentVersion?: string | null): string[] {
+  return SelectMigrationSlice(paths, currentVersion);
+}
+
 /** True if `filePath` is a versioned (`V`) migration whose timestamp is strictly after `currentVersion`. */
 function isVersionedAfter(filePath: string, currentVersion: string): boolean {
-  const parsed = parseMigrationFilename(path.basename(filePath));
-  return parsed?.kind === 'V' && parsed.timestamp > currentVersion;
+  const parsed = ParseMigrationFilename(path.basename(filePath));
+  return parsed?.Kind === 'V' && parsed.Timestamp > currentVersion;
 }
 
 /** Returns the timestamp of the latest `B` baseline among the paths, or null if none. */
 function highestBaselineTimestamp(sqlPaths: readonly string[]): string | null {
   let floor: string | null = null;
   for (const p of sqlPaths) {
-    const parsed = parseMigrationFilename(path.basename(p));
-    if (!parsed || parsed.kind !== 'B') continue;
-    if (floor === null || parsed.timestamp > floor) floor = parsed.timestamp;
+    const parsed = ParseMigrationFilename(path.basename(p));
+    if (!parsed || parsed.Kind !== 'B') continue;
+    if (floor === null || parsed.Timestamp > floor) floor = parsed.Timestamp;
   }
   return floor;
 }
 
 /** True if a versioned/baseline path belongs in the slice given the baseline floor. */
 function isInVersionedSlice(filePath: string, floorTimestamp: string | null): boolean {
-  const parsed = parseMigrationFilename(path.basename(filePath));
+  const parsed = ParseMigrationFilename(path.basename(filePath));
   if (!parsed) return false; // repeatables and non-migration files handled elsewhere
-  if (floorTimestamp === null) return parsed.kind === 'V'; // no baseline → all versioned
-  if (parsed.kind === 'B') return parsed.timestamp === floorTimestamp; // only the floor baseline
-  return parsed.timestamp > floorTimestamp; // versioned migrations strictly after the baseline
+  if (floorTimestamp === null) return parsed.Kind === 'V'; // no baseline → all versioned
+  if (parsed.Kind === 'B') return parsed.Timestamp === floorTimestamp; // only the floor baseline
+  return parsed.Timestamp > floorTimestamp; // versioned migrations strictly after the baseline
 }
 
 /**
@@ -115,7 +125,7 @@ function isInVersionedSlice(filePath: string, floorTimestamp: string | null): bo
  * only the selected migration slice. Returns the temp dir plus a `cleanup` the caller
  * MUST run in a finally. On any internal failure the temp dir is removed before throwing.
  */
-export async function fetchMigrationSlice(opts: {
+export async function FetchMigrationSlice(opts: {
   repoUrl: string;
   ref: string;
   dialect: MigrationDialect;
@@ -136,18 +146,29 @@ export async function fetchMigrationSlice(opts: {
     const partialOk = await tryPartialClone(git, opts.repoUrl, opts.ref, dir);
     if (!partialOk) {
       await fullSparseClone(git, opts.repoUrl, opts.ref, dir, migrationsRoot);
-      return { dir, selected: [], usedFallback: true, cleanup };
+      return { Dir: dir, Selected: [], UsedFallback: true, Cleanup: cleanup };
     }
     const allPaths = await listTreePaths(git, migrationsRoot);
-    const selected = selectMigrationSlice(allPaths, opts.currentVersion);
+    const selected = SelectMigrationSlice(allPaths, opts.currentVersion);
     const checkoutTargets = selected.length > 0 ? selected : [migrationsRoot];
     await git.raw(['sparse-checkout', 'set', '--no-cone', ...checkoutTargets]);
     await git.raw(['checkout']);
-    return { dir, selected, usedFallback: false, cleanup };
+    return { Dir: dir, Selected: selected, UsedFallback: false, Cleanup: cleanup };
   } catch (err) {
     await cleanup();
     throw err;
   }
+}
+
+/** @deprecated Use {@link FetchMigrationSlice}. */
+export async function fetchMigrationSlice(opts: {
+  repoUrl: string;
+  ref: string;
+  dialect: MigrationDialect;
+  /** Highest version already applied to the target DB; `null`/omitted = fresh install (baseline + tail). */
+  currentVersion?: string | null;
+}): Promise<MigrationFetchResult> {
+  return FetchMigrationSlice(opts);
 }
 
 /** Attempts a blobless, no-checkout shallow clone. Returns false if the server/git rejects the filter. */

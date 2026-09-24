@@ -15,11 +15,11 @@
 /** One capability shown on the empty catalog so a first-time user learns what PS is for. */
 export interface PSCapabilityCard {
   /** Font Awesome icon class. */
-  icon: string;
+  icon: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Short capability title. */
-  title: string;
+  title: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** One-line plain-language description. */
-  blurb: string;
+  blurb: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** The four things PS lets you do — shown as cards on the empty catalog to introduce the product. */
@@ -53,11 +53,11 @@ export const PS_CAPABILITY_CARDS: readonly PSCapabilityCard[] = [
 /** Context for {@link buildImprovePrompt} — a blocked prediction the user wants to improve. */
 export interface ImprovePromptInput {
   /** The prediction's display name. */
-  name: string;
+  Name: string;
   /** Its trust grade (Poor/Fair/…), when known. */
-  trustGrade?: string | null;
+  TrustGrade?: string | null;
   /** The plain-language reason it's blocked (trust gate / leakage), when known. */
-  reason?: string | null;
+  Reason?: string | null;
 }
 
 const trim = (v: string | null | undefined): string => (typeof v === 'string' ? v.trim() : '');
@@ -72,14 +72,19 @@ function ensureSentence(text: string): string {
  * dead-end into a next step. Names the prediction + why it's held so the agent can propose concrete
  * improvements (more/better data, different target framing, algorithm, more history). Pure + deterministic.
  */
-export function buildImprovePrompt(input: ImprovePromptInput): string {
-  const name = trim(input.name) || 'this prediction';
-  const grade = trim(input.trustGrade);
-  const reason = trim(input.reason);
+export function BuildImprovePrompt(input: ImprovePromptInput): string {
+  const name = trim(input.Name) || 'this prediction';
+  const grade = trim(input.TrustGrade);
+  const reason = trim(input.Reason);
   const why = reason ? ` It's being held back because: ${ensureSentence(reason)}` : '';
   const gradePart = grade ? ` (current trust: ${grade})` : '';
   return (
     `The "${name}" prediction${gradePart} isn't trustworthy enough to use yet.${why} ` +
     'Help me improve it — what would make it reliable? Consider more or cleaner training data, more history, a clearer outcome definition, or a different algorithm, then rebuild it if that helps.'
   );
+}
+
+/** @deprecated Use {@link BuildImprovePrompt}. */
+export function buildImprovePrompt(input: ImprovePromptInput): string {
+  return BuildImprovePrompt(input);
 }

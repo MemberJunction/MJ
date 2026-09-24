@@ -36,6 +36,7 @@ const META_DIR = path.join(ROOT, 'metadata-optional/integration-test/tests/integ
 const SUITE_FILE = path.join(ROOT, 'metadata-optional/integration-test/test-suites/.integration-suite.json');
 
 const DETERMINISTIC_SUITE = 'Integration Tests — Deterministic';
+const LIVE_MODEL_SUITE = 'Integration Tests — Live Model';
 
 type Transport = 'server' | 'client';
 
@@ -61,15 +62,15 @@ function transportByTestName(): Map<string, Transport | null> {
     return map;
 }
 
-/** The deterministic suite's membership, joined to each test's transport. */
-function deterministicMembers(): SuiteMember[] {
+/** One suite's membership, joined to each test's transport. */
+function suiteMembers(suiteName: string): SuiteMember[] {
     const parsed: unknown = JSON.parse(fs.readFileSync(SUITE_FILE, 'utf-8'));
     const suites = (Array.isArray(parsed) ? parsed : [parsed]) as Array<{
         fields?: { Name?: string };
         relatedEntities?: { 'MJ: Test Suite Tests'?: Array<{ fields?: { TestID?: string; Sequence?: number } }> };
     }>;
-    const suite = suites.find((s) => s.fields?.Name === DETERMINISTIC_SUITE);
-    if (!suite) throw new Error(`suite "${DETERMINISTIC_SUITE}" not found in ${SUITE_FILE}`);
+    const suite = suites.find((s) => s.fields?.Name === suiteName);
+    if (!suite) throw new Error(`suite "${suiteName}" not found in ${SUITE_FILE}`);
 
     const transports = transportByTestName();
     return (suite.relatedEntities?.['MJ: Test Suite Tests'] ?? []).map((m) => {
@@ -80,11 +81,22 @@ function deterministicMembers(): SuiteMember[] {
     });
 }
 
-describe('deterministic suite sequencing (#3251)', () => {
-    const members = deterministicMembers();
+/**
+ * The #3251 ordering invariant, asserted per suite.
+ *
+ * Applied to the LIVE MODEL suite as well as the deterministic one, because the invariant is a
+ * property of the process — a client bundle rebinds the process-global provider, so any server
+ * bundle after it resolves a 'Network' provider and cannot bootstrap — and that is true whichever
+ * suite is running. Guarding only the deterministic suite let a real violation ship: IT85
+ * (server) sat at Sequence 69 in the live suite, behind IT63 (client), and failed with
+ * "transport 'server' resolved a 'Network' provider" on the first release run that executed it.
+ */
+function describeSuiteSequencing(label: string, suiteName: string, minMembers: number): void {
+describe(`${label} suite sequencing (#3251)`, () => {
+    const members = suiteMembers(suiteName);
 
     it('has members at all — a passing ordering check over an empty set proves nothing', () => {
-        expect(members.length).toBeGreaterThan(20);
+        expect(members.length).toBeGreaterThan(minMembers);
     });
 
     it('declares a transport for every member', () => {
@@ -111,5 +123,53 @@ describe('deterministic suite sequencing (#3251)', () => {
         // the front and run a bundle before everything, which is never what was meant.
         const unsequenced = members.filter((m) => m.Sequence < 0).map((m) => m.Name);
         expect(unsequenced, `members missing Sequence: ${unsequenced.join(', ') || 'none'}`).toEqual([]);
+    });
+});
+}
+
+describeSuiteSequencing('deterministic', DETERMINISTIC_SUITE, 20);
+describeSuiteSequencing('live-model', LIVE_MODEL_SUITE, 10);
+
+/** Every integration-test bundle file, with the IT number parsed from its filename and its Name. */
+function bundleFiles(): Array<{ file: string; num: string; name: string | null }> {
+    return fs
+        .readdirSync(META_DIR)
+        .filter((f) => /^\.IT\d+/.test(f) && f.endsWith('.json'))
+        .map((file) => {
+            const num = (file.match(/^\.(IT\d+)/) as RegExpMatchArray)[1];
+            const parsed: unknown = JSON.parse(fs.readFileSync(path.join(META_DIR, file), 'utf-8'));
+            const rec = (Array.isArray(parsed) ? parsed[0] : parsed) as { fields?: { Name?: string } };
+            return { file, num, name: rec.fields?.Name ?? null };
+        });
+}
+
+describe('integration-test bundle numbering', () => {
+    const bundles = bundleFiles();
+
+    it('finds the bundle files at all — an empty scan would make every check below vacuous', () => {
+        expect(bundles.length).toBeGreaterThan(50);
+    });
+
+    it('assigns every IT number to exactly one bundle', () => {
+        // A new bundle numbered against a stale view of `next` collides with one already merged
+        // (IT73/IT74/IT75 did exactly this). A shared number makes "IT74 failed" ambiguous and bakes
+        // the collision into every seeded environment — the next free number is the only safe choice.
+        const byNum = new Map<string, string[]>();
+        for (const b of bundles) {
+            byNum.set(b.num, [...(byNum.get(b.num) ?? []), b.file]);
+        }
+        const dupes = [...byNum.entries()]
+            .filter(([, files]) => files.length > 1)
+            .map(([num, files]) => `${num}: ${files.join(', ')}`);
+        expect(dupes, `duplicate IT numbers:\n  ${dupes.join('\n  ')}`).toEqual([]);
+    });
+
+    it('names each bundle with the IT number from its filename', () => {
+        // The Name's `ITnn` prefix is what suite membership @lookup targets and what shows in test
+        // output; a filename/Name mismatch is a rename left half-done.
+        const mismatched = bundles
+            .filter((b) => b.name !== null && !b.name.startsWith(`${b.num} `))
+            .map((b) => `${b.file} → Name "${b.name ?? ''}"`);
+        expect(mismatched, `filename/Name IT-number mismatch:\n  ${mismatched.join('\n  ')}`).toEqual([]);
     });
 });

@@ -25,7 +25,9 @@ import { Client } from 'pg';
 import { PostgreSQLDataProvider } from '../../PostgreSQLDataProvider.js';
 
 const PG_URL = process.env.MJ_TEST_PG_URL;
-const describeIfPG = PG_URL ? describe : describe.skip;
+// Env-gated: runs only against a live PostgreSQL (MJ_TEST_PG_URL); skipIf keeps ordinary
+// `pnpm test` database-free without reading as a disabled test.
+const describeIfPG = describe.skipIf(!PG_URL);
 
 const SCHEMA = 'mj_quotetest_runtime';
 const TABLE = 'QuoteTrap';

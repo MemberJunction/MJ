@@ -240,17 +240,116 @@ describe('SpecToConnections', () => {
 });
 
 describe('SpecToNodes — debug badges', () => {
-    it('emits a breakpoint badge and a distinct paused-here badge', () => {
+    it('emits a breakpoint badge and a distinct waiting-here badge', () => {
         const nodes = SpecToNodes(spec(), undefined, undefined, {
             breakpoints: ['a'],
             pausedAtTaskID: 'a',
         });
         const badges = nodes.find((n) => n.ID === 'a')?.Badges ?? [];
-        expect(badges.map((b) => b.Value)).toEqual(['paused', 'break']);
+        expect(badges.map((b) => b.Value)).toEqual(['Waiting here', 'break']);
+        expect(nodes.find((n) => n.ID === 'a')?.Data?.['AwaitingUser']).toBe(true);
+    });
+
+    it('marks the entry node as waiting when the graph is start-paused with no step yet', () => {
+        const nodes = SpecToNodes(spec(), undefined, undefined, { paused: true });
+        expect(nodes.find((n) => n.ID === 'a')?.Data?.['AwaitingUser']).toBe(true);
+        expect(nodes.find((n) => n.ID === 'b')?.Data?.['AwaitingUser']).toBe(false);
+    });
+
+    it('does not paint paused-here on a step that has already finished', () => {
+        const nodes = SpecToNodes(spec(), { a: 'Complete' }, undefined, {
+            breakpoints: ['a'],
+            pausedAtTaskID: 'a',
+        });
+        const badges = nodes.find((n) => n.ID === 'a')?.Badges ?? [];
+        expect(badges.map((b) => b.Value)).toEqual(['break']);
+        expect(nodes.find((n) => n.ID === 'a')?.Status).not.toBe('running');
     });
 
     it('emits no badges when the overlay is empty', () => {
         expect(SpecToNodes(spec())[0].Badges).toBeUndefined();
+    });
+
+    it('paints a flowing edge animated when the origin is complete and the target is in progress', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ tempId: 'a' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, { a: 'Complete', b: 'In Progress' })[0];
+        expect(conn.Animated).toBe(true);
+        expect(conn.Color).toBe('var(--mj-brand-primary)');
+        expect(conn.StrokeWidth).toBe(4.5);
+    });
+
+    it('paints a traveled edge a distinct color after the path has been taken', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ tempId: 'a' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, { a: 'Complete', b: 'Complete' })[0];
+        expect(conn.Animated).toBe(false);
+        expect(conn.Color).toBe('var(--mj-status-success)');
+        expect(conn.StrokeWidth).toBe(3);
+    });
+
+    it('paints a traveled conditional edge solid — the if stays on the label, not the stroke', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'b', dependsOn: [{ tempId: 'a', condition: 'payload.stockPrice <= 500' }] }),
+            ],
+        });
+        const conn = SpecToConnections(s, { a: 'Complete', b: 'Complete' }, { showConditions: true })[0];
+        expect(conn.Style).toBe('solid');
+        expect(conn.Color).toBe('var(--mj-status-success)');
+        expect(conn.Label).toBe('payload.stockPrice <= 500');
+        expect(conn.Condition).toBe('payload.stockPrice <= 500');
+    });
+
+    it('marks an entry as next-to-run until the engine claims it', () => {
+        const nodes = SpecToNodes(spec(), { a: 'Pending', b: 'Pending' });
+        expect(nodes.find((n) => n.ID === 'a')?.Data?.['NextToRun']).toBe(true);
+        expect(nodes.find((n) => n.ID === 'b')?.Data?.['NextToRun']).toBe(false);
+    });
+
+    it('marks a dest as next-to-run only after its origin is complete', () => {
+        const after = SpecToNodes(spec(), { a: 'Complete', b: 'Pending' });
+        expect(after.find((n) => n.ID === 'b')?.Data?.['NextToRun']).toBe(true);
+        const during = SpecToNodes(spec(), { a: 'In Progress', b: 'Pending' });
+        expect(during.find((n) => n.ID === 'b')?.Data?.['NextToRun']).toBe(false);
+    });
+
+    it('does not mark the breakpoint-stopped step as next-to-run', () => {
+        const nodes = SpecToNodes(spec(), { a: 'Complete', b: 'Pending' }, undefined, {
+            paused: true,
+            pausedAtTaskID: 'b',
+        });
+        expect(nodes.find((n) => n.ID === 'b')?.Data?.['AwaitingUser']).toBe(true);
+        expect(nodes.find((n) => n.ID === 'b')?.Data?.['NextToRun']).toBe(false);
+    });
+
+    it('animates the incoming edge of a queued dest', () => {
+        const conn = SpecToConnections(spec(), { a: 'Complete', b: 'Pending' })[0];
+        expect(conn.Animated).toBe(true);
+        expect(conn.Color).toBe('var(--mj-brand-primary)');
+    });
+
+    it('keeps both conditionals dashed while dests are still pending — the gate has not fired', () => {
+        const s = spec({
+            tasks: [
+                task({ tempId: 'a' }),
+                task({ tempId: 'yes', dependsOn: [{ tempId: 'a', condition: 'payload.stockPrice <= 500' }] }),
+                task({ tempId: 'no', dependsOn: [{ tempId: 'a', condition: 'payload.stockPrice > 500' }] }),
+            ],
+        });
+        const conns = SpecToConnections(s, { a: 'Complete', yes: 'Pending', no: 'Pending' }, { showConditions: true });
+        expect(conns).toHaveLength(2);
+        expect(conns.every((c) => c.Style === 'dashed')).toBe(true);
+        expect(conns.every((c) => c.Animated === true)).toBe(true);
     });
 });
 

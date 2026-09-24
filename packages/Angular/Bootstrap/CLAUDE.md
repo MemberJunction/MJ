@@ -27,13 +27,18 @@ So one transitive edge into a server package cascades: the walk pulls it in, rec
 
 ## Before you commit a dependency change here
 
-1. **Regenerate** the manifest: `npm run mj:manifest:ng-bootstrap` (from repo root).
+1. **Regenerate** the manifest: `pnpm run mj:manifest:ng-bootstrap` (from repo root).
 2. **Check for server leakage** in the regenerated `src/generated/mj-class-registrations.ts`:
    ```bash
-   grep -nE "from '@memberjunction/(aiengine|ai-provider-bundle|ai-vectors-pinecone|storage|templates|ai-(openai|anthropic|gemini|azure|bedrock|groq|mistral|ollama|cohere|vertex|xai|zhipu|fireworks|cerebras|elevenlabs|heygen|inception|llamacpp|lmstudio|local-embeddings|minimax|openrouter|betty-bot|blackforestlabs|recommendations-rex))'" \
-     packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts
+   pnpm run check:browser-manifest
    ```
-   **Any hit = stop.** A server package leaked in.
+   **Any hit = stop.** A server package leaked in. This is the same command CI runs
+   (`.github/workflows/test.yml`, before and after the build), so green here means green there.
+   It replaces the hand-rolled `grep` that used to live in this step — that grep had drifted
+   from the rule below it, omitting `server`, `ai-agents`, `ai-prompts`, `communication-engine`
+   and `content-autotagging`. The denylist now lives in
+   [`.github/scripts/check-browser-manifest-leakage.mjs`](../../../.github/scripts/check-browser-manifest-leakage.mjs);
+   extend it there when this document's forbidden list grows.
 3. **If reconciliation added server packages to this `package.json`** (watch for `[class-manifest] Added N missing dependencies`), that's the red flag — a dependency you added (or its transitive tree) reaches a server package. Don't "fix" it by leaving them; find and cut the offending edge.
 4. **Find the offending edge** — BFS this package's deps to the server package, e.g. walk each direct dep's transitive `package.json`s until you hit `aiengine`/`storage`/`templates`/etc. (That's how the June 2026 incident was traced: `ng-bootstrap → templates → aiengine`.)
 5. **Cold-build sanity**: a fresh `ng serve` for MJExplorer must print `Local: http://localhost:4201/` and bind. Warm HMR can hide a broken cold build.

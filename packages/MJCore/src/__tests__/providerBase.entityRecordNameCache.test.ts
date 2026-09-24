@@ -36,13 +36,11 @@ class TestableProvider extends ProviderBase {
     }
 
     public get CacheSize(): number {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (this as any)._entityRecordNameCache.Size;
+        return (this as unknown as { _entityRecordNameCache: { Size: number } })._entityRecordNameCache.Size;
     }
 
     public get CacheMaxSize(): number {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (this as any)._entityRecordNameCache.MaxSize;
+        return (this as unknown as { _entityRecordNameCache: { MaxSize: number } })._entityRecordNameCache.MaxSize;
     }
 
     // Required abstract implementations (unused in these tests)
@@ -83,6 +81,21 @@ describe('ProviderBase entity record name cache', () => {
         const cached = await provider.GetCachedRecordName('Accounts', keyFor('1'));
         expect(cached).toBe('Acme Corp');
     });
+
+    it('HasCachedRecordName returns false when not cached and true after being cached', () => {
+        expect(provider.HasCachedRecordName('Accounts', keyFor('1'))).toBe(false);
+        provider.SetCachedRecordName('Accounts', keyFor('1'), 'Acme Corp');
+        expect(provider.HasCachedRecordName('Accounts', keyFor('1'))).toBe(true);
+    });
+
+    it('GetCachedRecordNameOnlyIfCached returns cached name or undefined without triggering lookup', () => {
+        expect(provider.GetCachedRecordNameOnlyIfCached('Accounts', keyFor('1'))).toBeUndefined();
+        expect(provider.lookupCallCount).toBe(0);
+        provider.SetCachedRecordName('Accounts', keyFor('1'), 'Acme Corp');
+        expect(provider.GetCachedRecordNameOnlyIfCached('Accounts', keyFor('1'))).toBe('Acme Corp');
+        expect(provider.lookupCallCount).toBe(0);
+    });
+
 
     it('GetCachedRecordName returns undefined when not cached and loadIfNeeded is false', async () => {
         const cached = await provider.GetCachedRecordName('Accounts', keyFor('missing'));

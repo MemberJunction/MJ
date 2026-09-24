@@ -2,11 +2,29 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseFormBuilderAction, FormResponse, FormAnswer } from '../../base/base-form-builder.action';
 import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { BaseAction, OAuth2Manager } from '@memberjunction/actions';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { HttpClient, HttpError, IsHttpError } from '@memberjunction/network-utils';
 
 /**
  * Typeform API response structures
  */
+/** The Typeform form definition returned by `/forms` and `/forms/{id}`. */
+export interface TypeformForm {
+    id: string;
+    title?: string;
+    fields?: Array<Record<string, unknown>>;
+    logic?: Array<Record<string, unknown>>;
+    hidden?: string[];
+    settings?: Record<string, unknown>;
+    welcome_screens?: Array<Record<string, unknown>>;
+    thankyou_screens?: Array<Record<string, unknown>>;
+    _links?: { display?: string };
+    created_at?: string;
+    last_updated_at?: string;
+    theme_id?: string;
+    theme?: { href?: string; name?: string };
+    workspace?: { href?: string; name?: string };
+}
+
 export interface TypeformResponseItem {
     landing_id: string;
     token: string;
@@ -78,7 +96,7 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
         return 'https://api.typeform.com';
     }
 
-    private axiosInstance: AxiosInstance | null = null;
+    private httpClientInstance: HttpClient | null = null;
     private currentAPIToken: string | null = null;
     private oauth2Manager: OAuth2Manager | null = null;
 
@@ -118,38 +136,32 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
     }
 
     /**
-     * Get axios instance with Typeform authentication
+     * Get the HTTP client configured with Typeform authentication
      */
-    protected getAxiosInstance(apiToken: string): AxiosInstance {
-        if (!this.axiosInstance || this.currentAPIToken !== apiToken) {
+    protected getHttpClient(apiToken: string): HttpClient {
+        if (!this.httpClientInstance || this.currentAPIToken !== apiToken) {
             this.currentAPIToken = apiToken;
-            this.axiosInstance = axios.create({
-                baseURL: this.apiBaseUrl,
-                timeout: 60000,
-                headers: {
+            this.httpClientInstance = new HttpClient({
+                BaseURL: this.apiBaseUrl,
+                Timeout: 60000,
+                Headers: {
                     'Accept': 'application/json',
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${apiToken}`
-                }
-            });
-
-            this.axiosInstance.interceptors.response.use(
-                (response) => {
-                    return response;
                 },
-                async (error: AxiosError) => {
-                    if (error.response?.status === 429) {
-                        const retryAfter = error.response.headers['retry-after'];
+                OnRetry: async (error) => {
+                    if (error.Status === 429) {
+                        const retryAfter = error.Headers['retry-after'];
                         const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 60000;
                         LogStatus(`Typeform rate limit hit. Waiting ${waitTime}ms before retry...`);
                         await this.sleep(waitTime);
-                        return this.axiosInstance!.request(error.config!);
+                        return true;
                     }
-                    return Promise.reject(error);
+                    return false;
                 }
-            );
+            });
         }
-        return this.axiosInstance;
+        return this.httpClientInstance;
     }
 
     /**
@@ -188,12 +200,12 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
                 params.fields = options.fields.join(',');
             }
 
-            const response = await this.getAxiosInstance(apiToken).get(
+            const response = await this.getHttpClient(apiToken).Get<TypeformResponsesResult>(
                 `/forms/${formId}/responses`,
-                { params }
+                { Query: params }
             );
 
-            return response.data;
+            return response.Data;
         } catch (error) {
             LogError('Failed to get Typeform responses:', error);
             throw this.handleTypeformError(error);
@@ -290,8 +302,8 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
      */
     protected async getFormDetails(formId: string, apiToken: string): Promise<any> {
         try {
-            const response = await this.getAxiosInstance(apiToken).get(`/forms/${formId}`);
-            return response.data;
+            const response = await this.getHttpClient(apiToken).Get<any>(`/forms/${formId}`);
+            return response.Data;
         } catch (error) {
             LogError('Failed to get Typeform form details:', error);
             throw this.handleTypeformError(error);
@@ -410,10 +422,10 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
      * Handle Typeform-specific errors
      */
     protected handleTypeformError(error: any): Error {
-        if (axios.isAxiosError(error)) {
-            const axiosError = error as AxiosError;
-            const status = axiosError.response?.status;
-            const data = axiosError.response?.data as any;
+        if (IsHttpError(error)) {
+            const httpError = error as HttpError;
+            const status = httpError.Status;
+            const data = httpError.Data as any;
 
             if (status === 401) {
                 return new Error('Invalid Typeform API token. Please check your authentication.');

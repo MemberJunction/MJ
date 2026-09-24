@@ -1,5 +1,6 @@
 {
     "name": "fixture-dep-fail-pkg",
+    "license": "BUSL-1.1",
     "private": true,
     "type": "module",
     "main": "built/index.js"

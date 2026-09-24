@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -35,7 +35,7 @@ export class UnsafeArrayOperationsRule extends BaseLintRule {
     // Track which parameters are from props (likely from queries/RunView)
     const propsParams = new Set<string>();
 
-    traverse(ast, {
+    Traverse(ast, {
       // Find the main component function to identify props
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         if (path.node.id?.name === componentName) {
@@ -178,6 +178,8 @@ export class UnsafeArrayOperationsRule extends BaseLintRule {
                 severity: 'low',
                 line: path.node.loc?.start.line || 0,
                 column: path.node.loc?.start.column || 0,
+                // safe-replace: the replacement is the static literal '?.[' — no runtime
+                // data reaches it, so there is nothing for `$` expansion to corrupt.
                 message: `Direct array access "${code}" may be undefined. Consider using optional chaining: ${code.replace('[', '?.[')} or check array bounds first.`,
                 code: code.substring(0, 50),
               });

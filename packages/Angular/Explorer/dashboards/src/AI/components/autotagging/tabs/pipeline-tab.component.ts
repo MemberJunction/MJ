@@ -82,7 +82,12 @@ export class ClassifyPipelineTabComponent extends BaseAngularComponent {
     public FeedSortOrder: 'newest' | 'oldest' = 'newest';
 
     /** Template-facing formatter for token-count config values. */
-    public readonly formatTokenCount = formatTokenCount;
+    public readonly FormatTokenCount = formatTokenCount;
+
+    /** @deprecated Use {@link FormatTokenCount}. */
+    public get formatTokenCount() {
+        return this.FormatTokenCount;
+    }
 
     // ── User intents (events UP to the host) ──
 
@@ -108,8 +113,13 @@ export class ClassifyPipelineTabComponent extends BaseAngularComponent {
         return this.TotalItemCount > this.FeedItems.length;
     }
 
-    public onLoadMoreItems(): void {
+    public OnLoadMoreItems(): void {
         this.LoadMoreItemsRequested.emit();
+    }
+
+    /** @deprecated Use {@link OnLoadMoreItems}. */
+    public onLoadMoreItems(): void {
+        return this.OnLoadMoreItems();
     }
 
     // ════════════════════════════════════════════
@@ -182,31 +192,61 @@ export class ClassifyPipelineTabComponent extends BaseAngularComponent {
 
     // ── Intent emitters ──
 
-    public onRefresh(): void {
+    public OnRefresh(): void {
         this.RefreshRequested.emit();
     }
 
-    public onPause(): void {
+    /** @deprecated Use {@link OnRefresh}. */
+    public onRefresh(): void {
+        return this.OnRefresh();
+    }
+
+    public OnPause(): void {
         this.PauseRequested.emit();
     }
 
-    public onResume(): void {
+    /** @deprecated Use {@link OnPause}. */
+    public onPause(): void {
+        return this.OnPause();
+    }
+
+    public OnResume(): void {
         this.ResumeRequested.emit();
+    }
+
+    /** @deprecated Use {@link OnResume}. */
+    public onResume(): void {
+        return this.OnResume();
     }
 
     public onCancel(): void {
         this.CancelRequested.emit();
     }
 
-    public onLoadLiveRunDetails(): void {
+    public OnLoadLiveRunDetails(): void {
         this.LoadLiveRunDetailsRequested.emit();
     }
 
-    public onFeedItemClick(originalIndex: number): void {
+    /** @deprecated Use {@link OnLoadLiveRunDetails}. */
+    public onLoadLiveRunDetails(): void {
+        return this.OnLoadLiveRunDetails();
+    }
+
+    public OnFeedItemClick(originalIndex: number): void {
         this.FeedItemClicked.emit(originalIndex);
     }
 
-    public onToggleConfig(): void {
+    /** @deprecated Use {@link OnFeedItemClick}. */
+    public onFeedItemClick(originalIndex: number): void {
+        return this.OnFeedItemClick(originalIndex);
+    }
+
+    public OnToggleConfig(): void {
         this.ConfigToggled.emit();
+    }
+
+    /** @deprecated Use {@link OnToggleConfig}. */
+    public onToggleConfig(): void {
+        return this.OnToggleConfig();
     }
 }

@@ -34,12 +34,12 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { WordCloudItem } from '@memberjunction/ng-word-cloud';
 import {
-    buildTagsAgentContext,
-    isValidTagsTab,
-    resolveTaxNode,
+    BuildTagsAgentContext,
+    IsValidTagsTab,
+    ResolveTaxNode,
     TaxNodeCandidate,
 } from './tags-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 // ── Tab type ──
 
@@ -670,7 +670,16 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     // Raw taxonomy data cache
     /** Public so the template's Health tab can read tag count for the runbar. */
-    public tagsRaw: Record<string, unknown>[] = [];
+    public TagsRaw: Record<string, unknown>[] = [];
+
+    /** @deprecated Use {@link TagsRaw}. */
+    public get tagsRaw(): Record<string, unknown>[] {
+        return this.TagsRaw;
+    }
+    /** @deprecated Use {@link TagsRaw}. */
+    public set tagsRaw(value: Record<string, unknown>[]) {
+        this.TagsRaw = value;
+    }
     private taggedItemsRaw: Record<string, unknown>[] = [];
     private tagAuditLogsRaw: Record<string, unknown>[] = [];
     /** Cached per-tag aggregates from server-side SQL (weights + counts) */
@@ -1142,7 +1151,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     /** Report current Tags dashboard state to the agent (deep, bounded). */
     private emitAgentContext(): void {
         const selected = this.TaxSelectedNode;
-        this.navigationService.SetAgentContext(this, buildTagsAgentContext({
+        this.navigationService.SetAgentContext(this, BuildTagsAgentContext({
             ActiveTab: this.ActiveTab,
             SourceCount: this.contentSourcesRaw.length,
             ContentItemCount: this.contentItemsRaw.length,
@@ -1196,7 +1205,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 },
                 Handler: async (params: Record<string, unknown>) => {
                     const tab = params['tab'];
-                    if (!isValidTagsTab(tab)) {
+                    if (!IsValidTagsTab(tab)) {
                         return { Success: false, ErrorMessage: `Invalid tab "${String(tab)}". Expected one of: pipeline, sources, types, tags, taxonomy, history, suggestions, health.` };
                     }
                     await this.SwitchTab(tab as TabName);
@@ -1229,7 +1238,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                     required: ['query'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['query'], 'query');
+                    const v = ValidateStringParam(params['query'], 'query');
                     if (!v.ok) return v.result;
                     this.TagSearchQuery = v.value;
                     this.FilterTags();
@@ -1245,13 +1254,13 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                     required: ['tag'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['tag'], 'tag');
+                    const v = ValidateStringParam(params['tag'], 'tag');
                     if (!v.ok) return v.result;
                     if (this.ActiveTab !== 'taxonomy') {
                         await this.SwitchTab('taxonomy');
                         this.cdr.detectChanges();
                     }
-                    const resolved = resolveTaxNode(v.value, this.getTaxNodeCandidates());
+                    const resolved = ResolveTaxNode(v.value, this.getTaxNodeCandidates());
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
                     const node = this.TaxFlatNodes.find(n => UUIDsEqual(n.ID, resolved.value.ID));
                     if (!node) return { Success: false, ErrorMessage: 'Resolved tag is no longer loaded.' };
@@ -1269,9 +1278,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                     required: ['tag'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['tag'], 'tag');
+                    const v = ValidateStringParam(params['tag'], 'tag');
                     if (!v.ok) return v.result;
-                    const resolved = resolveTaxNode(v.value, this.getTaxNodeCandidates());
+                    const resolved = ResolveTaxNode(v.value, this.getTaxNodeCandidates());
                     if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
                     this.navigationService.OpenEntityRecord(
                         'MJ: Tags',
@@ -1315,7 +1324,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     // ── Tab switching ──
 
     /** Wraps `NavItems` for `<mj-left-nav>`. */
-    public get navSections(): MJLeftNavSection[] {
+    public get NavSections(): MJLeftNavSection[] {
         return [{
             items: this.NavItems.map(n => ({
                 id: n.Tab,
@@ -1326,8 +1335,13 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         }];
     }
 
+    /** @deprecated Use {@link NavSections}. */
+    public get navSections(): MJLeftNavSection[] {
+        return this.NavSections;
+    }
+
     /** Title rendered in the per-section `<mj-page-header-interior>`. */
-    public get currentTabTitle(): string {
+    public get CurrentTabTitle(): string {
         switch (this.ActiveTab) {
             case 'tags':        return 'Overview';
             case 'taxonomy':    return 'Taxonomy Governance';
@@ -1337,8 +1351,13 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         return '';
     }
 
+    /** @deprecated Use {@link CurrentTabTitle}. */
+    public get currentTabTitle(): string {
+        return this.CurrentTabTitle;
+    }
+
     /** Subtitle rendered in the per-section `<mj-page-header-interior>`. */
-    public get currentTabSubtitle(): string {
+    public get CurrentTabSubtitle(): string {
         switch (this.ActiveTab) {
             case 'tags':        return `${this.TagRows.length} unique tags across all content sources`;
             case 'taxonomy':    return 'Manage tag hierarchy, resolve duplicates, and monitor taxonomy health';
@@ -1348,9 +1367,19 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         return '';
     }
 
+    /** @deprecated Use {@link CurrentTabSubtitle}. */
+    public get currentTabSubtitle(): string {
+        return this.CurrentTabSubtitle;
+    }
+
     /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
-    public onNavItemClicked(item: MJLeftNavItem): void {
+    public OnNavItemClicked(item: MJLeftNavItem): void {
         void this.SwitchTab(item.id as TabName);
+    }
+
+    /** @deprecated Use {@link OnNavItemClicked}. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        return this.OnNavItemClicked(item);
     }
 
     public async SwitchTab(tab: TabName): Promise<void> {
@@ -1384,17 +1413,17 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             case 'taxonomy':
                 await this.loadTaxonomyData();
                 // Pull pending suggestions so the Duplicates / Orphans sub-tabs are populated.
-                await this.loadSuggestions();
+                await this.LoadSuggestions();
                 break;
             case 'history':
                 await this.loadRunHistoryData();
                 break;
             case 'suggestions':
-                await this.loadSuggestions();
+                await this.LoadSuggestions();
                 break;
             case 'health':
                 // Health tab uses already-loaded suggestion totals + threshold defaults.
-                if (this.SuggestionRows.length === 0) await this.loadSuggestions();
+                if (this.SuggestionRows.length === 0) await this.LoadSuggestions();
                 break;
         }
     }
@@ -1446,7 +1475,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         // types / history surfaces live in the Classify dashboard instead.
         this.NavItems = [
             { Tab: 'tags', Icon: 'fa-solid fa-chart-simple', Label: 'Overview', BadgeText: String(this.totalContentTagCount), BadgeClass: '' },
-            { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: String(this.tagsRaw.length || ''), BadgeClass: '' },
+            { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: String(this.TagsRaw.length || ''), BadgeClass: '' },
             { Tab: 'suggestions', Icon: 'fa-solid fa-inbox', Label: 'Suggestions', BadgeText: String(this.PendingSuggestionCount || ''), BadgeClass: '' },
             { Tab: 'health', Icon: 'fa-solid fa-heart-pulse', Label: 'Health', BadgeText: '', BadgeClass: '' },
         ];
@@ -1487,7 +1516,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 Name: (item['Name'] as string) ?? 'Unnamed Item',
                 SourceName: (item['ContentSource'] as string) ?? 'Unknown',
                 Tags: itemTags,
-                TimeAgo: this.formatRelativeTime(item['__mj_UpdatedAt'] as string),
+                TimeAgo: this.FormatRelativeTime(item['__mj_UpdatedAt'] as string),
                 Status: this.inferItemStatus(tagsByItem.get(normalizedId) ?? 0)
             };
         });
@@ -1506,7 +1535,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 ID: id,
                 Name: (source['Name'] as string) ?? 'Unnamed',
                 Icon: this.GetSourceTypeIcon(typeName),
-                Meta: `${this.formatNumber(itemCount)} items`,
+                Meta: `${this.FormatNumber(itemCount)} items`,
                 StatusClass: 'active' as const
             };
         });
@@ -1599,7 +1628,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 ItemCount: itemCount,
                 TagCount: tagCount,
                 AvgTags: avgTags,
-                LastRunAgo: lastRun ? this.formatRelativeTime(lastRun['StartTime'] as string) : 'Never',
+                LastRunAgo: lastRun ? this.FormatRelativeTime(lastRun['StartTime'] as string) : 'Never',
                 ContentSourceTypeID: source['ContentSourceTypeID'] as string,
                 ContentTypeID: source['ContentTypeID'] as string,
                 ContentFileTypeID: source['ContentFileTypeID'] as string,
@@ -1763,7 +1792,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     /** Convert a string ID to a CompositeKey for tree-dropdown binding */
     public ToCompositeKey(id: string | null | undefined): CompositeKey | null {
         if (!id) return null;
-        return new CompositeKey([{ FieldName: 'ID', Value: id }]);
+        return CompositeKey.FromID(id); // first-pk-ok: tree-dropdown binding over the AI Models / AI Vendors trees — core entities keyed by ID
     }
 
     /** Extract the ID string from a CompositeKey (from tree-dropdown ValueChange) */
@@ -1869,9 +1898,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 SourceName: (run['Source'] as string) ?? 'Unknown',
                 StartedDisplay: startTime ? this.formatDate(startTime) : '\u2014',
                 Duration: duration,
-                Items: processedItems != null ? this.formatNumber(processedItems) : '\u2014',
+                Items: processedItems != null ? this.FormatNumber(processedItems) : '\u2014',
                 Tags: '\u2014',
-                Errors: hasErrors ? this.formatNumber(errorCount!) : (isFailed ? status : '0'),
+                Errors: hasErrors ? this.FormatNumber(errorCount!) : (isFailed ? status : '0'),
                 ErrorClass: isFailed || hasErrors ? 'run-error-text' : ''
             };
         });
@@ -2088,7 +2117,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
 
             if (this.FormMode === 'edit-source' && this.EditingSourceID) {
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingSourceID }]));
+                await entity.InnerLoad(CompositeKey.FromID(this.EditingSourceID));
             } else {
                 entity.NewRecord();
             }
@@ -2177,7 +2206,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         try {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Content Sources');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: card.ID }]));
+            await entity.InnerLoad(CompositeKey.FromID(card.ID));
             const deleted = await entity.Delete();
             if (deleted) {
                 MJNotificationService.Instance.CreateSimpleNotification('Source deleted', 'success', 2500);
@@ -2388,7 +2417,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     private async linkScheduleToSource(sourceID: string, scheduledJobID: string | null): Promise<void> {
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
-        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceID }]));
+        await entity.InnerLoad(CompositeKey.FromID(sourceID));
         entity.ScheduledJobID = scheduledJobID;
         const saved = await entity.Save();
         if (!saved) {
@@ -2431,7 +2460,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Content Types');
 
             if (this.FormMode === 'edit-type' && this.EditingTypeID) {
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.EditingTypeID }]));
+                await entity.InnerLoad(CompositeKey.FromID(this.EditingTypeID));
             } else {
                 entity.NewRecord();
             }
@@ -2883,7 +2912,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     // HELPER — Formatting
     // ════════════════════════════════════════════
 
-    public formatRelativeTime(dateStr: string | null | undefined): string {
+    public FormatRelativeTime(dateStr: string | null | undefined): string {
         if (!dateStr) return 'Never';
         const now = new Date();
         const then = new Date(dateStr);
@@ -2898,8 +2927,18 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         return `${diffDays}d ago`;
     }
 
-    public formatNumber(n: number): string {
+    /** @deprecated Use {@link FormatRelativeTime}. */
+    public formatRelativeTime(dateStr: string | null | undefined): string {
+        return this.FormatRelativeTime(dateStr);
+    }
+
+    public FormatNumber(n: number): string {
         return n.toLocaleString();
+    }
+
+    /** @deprecated Use {@link FormatNumber}. */
+    public formatNumber(n: number): string {
+        return this.FormatNumber(n);
     }
 
     /** Returns font size in rem for a tag based on its weight (0.0-1.0). Range: 0.7rem to 1.0rem */
@@ -3181,21 +3220,14 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     public OpenRecordFromItem(item: ContentItemDetail): void {
         const md = this.ProviderToUse;
-        const pkey = new CompositeKey();
 
         // For entity sources: navigate to the actual entity record, not the ContentItem
         if (item.EntityName && item.EntityRecordID) {
-            const entityInfo = md.Entities.find(e => e.Name === item.EntityName);
-            if (entityInfo) {
-                pkey.LoadFromURLSegment(entityInfo, item.EntityRecordID);
-            } else {
-                pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.EntityRecordID }];
-            }
+            const pkey = CompositeKey.FromURLSegment(md.EntityByName(item.EntityName), item.EntityRecordID);
             this.navigationService.OpenEntityRecord(item.EntityName, pkey);
         } else {
             // For non-entity sources: open the ContentItem record
-            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.ID }];
-            this.navigationService.OpenEntityRecord('MJ: Content Items', pkey);
+            this.navigationService.OpenEntityRecord('MJ: Content Items', CompositeKey.FromID(item.ID));
         }
     }
 
@@ -3334,9 +3366,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     }
 
     public OpenRecordFromSource(source: SourceDetailInfo): void {
-        const pkey = new CompositeKey();
-        pkey.KeyValuePairs = [{ FieldName: 'ID', Value: source.ID }];
-        this.navigationService.OpenEntityRecord('MJ: Content Sources', pkey);
+        this.navigationService.OpenEntityRecord('MJ: Content Sources', CompositeKey.FromID(source.ID));
     }
 
     public OpenEditSourceFromDetail(): void {
@@ -3438,9 +3468,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 SourceName: (run['Source'] as string) ?? 'Unknown',
                 StartedDisplay: startTime ? this.formatDate(startTime) : '\u2014',
                 Duration: duration,
-                Items: processedItems != null ? this.formatNumber(processedItems) : '\u2014',
+                Items: processedItems != null ? this.FormatNumber(processedItems) : '\u2014',
                 Tags: '\u2014',
-                Errors: hasErrors ? this.formatNumber(errorCount!) : (isFailed ? status : '0'),
+                Errors: hasErrors ? this.FormatNumber(errorCount!) : (isFailed ? status : '0'),
                 ErrorClass: isFailed || hasErrors ? 'run-error-text' : ''
             };
         });
@@ -3466,7 +3496,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     /** Taxonomy sub-tabs as `TabConfig[]` for `<mj-tab-nav>`. Counts on
      *  Duplicates and Orphans surface as warning/error-variant badges. */
-    public get taxSubTabsConfig(): TabConfig[] {
+    public get TaxSubTabsConfig(): TabConfig[] {
         return [
             { key: 'tree',       label: 'Tree View',  icon: 'fa-solid fa-sitemap' },
             { key: 'duplicates', label: 'Duplicates', icon: 'fa-solid fa-link',
@@ -3480,11 +3510,21 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         ];
     }
 
+    /** @deprecated Use {@link TaxSubTabsConfig}. */
+    public get taxSubTabsConfig(): TabConfig[] {
+        return this.TaxSubTabsConfig;
+    }
+
     /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
-    public onTaxSubTabChange(key: string): void {
+    public OnTaxSubTabChange(key: string): void {
         if (key === 'tree' || key === 'duplicates' || key === 'orphans' || key === 'treemap' || key === 'audit') {
             this.SwitchTaxSubTab(key);
         }
+    }
+
+    /** @deprecated Use {@link OnTaxSubTabChange}. */
+    public onTaxSubTabChange(key: string): void {
+        return this.OnTaxSubTabChange(key);
     }
 
     public SwitchTaxSubTab(sub: TaxonomySubTab): void {
@@ -3509,7 +3549,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 { EntityName: 'MJ: Tag Audit Logs', OrderBy: '__mj_CreatedAt DESC', MaxRows: 200, ResultType: 'simple' }
             ]);
 
-            this.tagsRaw = TagEngineBase.Instance.Tags
+            this.TagsRaw = TagEngineBase.Instance.Tags
                 .map(t => t.GetAll())
                 .sort((a, b) => String(a['Name'] ?? '').localeCompare(String(b['Name'] ?? '')));
             this.taggedItemsRaw = taggedItemsResult.Success ? taggedItemsResult.Results : [];
@@ -3576,7 +3616,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     private populateOrphansFromSuggestions(): void {
         const lows = this.SuggestionRows.filter(s => s.Reason === 'LowUsage' && s.BestMatchTagID);
         this.TaxOrphans = lows.map(s => {
-            const tag = this.tagsRaw.find(t => UUIDsEqual(t['ID'] as string, s.BestMatchTagID!));
+            const tag = this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, s.BestMatchTagID!));
             return {
                 ID: s.BestMatchTagID!,
                 Name: tag ? (tag['Name'] as string) : s.ProposedName,
@@ -3601,7 +3641,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         const tagAvgWeights = this.tagAggregateWeights;
 
         // Create flat node list from raw tags (exclude merged/soft-deleted tags)
-        const activeTags = this.tagsRaw.filter(t => (t['Status'] as string)?.toLowerCase() !== 'merged');
+        const activeTags = this.TagsRaw.filter(t => (t['Status'] as string)?.toLowerCase() !== 'merged');
         for (const tag of activeTags) {
             const id = tag['ID'] as string;
             const normalizedId = NormalizeUUID(id);
@@ -3798,7 +3838,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         // avoid an extra DB round-trip per click. The fields we read on the
         // template (IsGlobal, AllowAutoGrow, etc.) are all present in the
         // raw row from the `vwTags` view.
-        const raw = this.tagsRaw.find(t => UUIDsEqual(t['ID'] as string, node.ID));
+        const raw = this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, node.ID));
         if (!raw) {
             this.SelectedTagFull = null;
             this.SelectedTagSynonyms = [];
@@ -3889,7 +3929,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const ok = await fresh.Save();
             if (!ok) throw new Error(fresh.LatestResult?.CompleteMessage ?? 'Save failed');
             // Mirror back into the cached tagsRaw row so the toggles reflect immediately.
-            const raw = this.tagsRaw.find(t => UUIDsEqual(t['ID'] as string, tagID));
+            const raw = this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, tagID));
             if (raw) (raw as Record<string, unknown>)[field as string] = value;
             if (this.SelectedTagFull) {
                 (this.SelectedTagFull as unknown as Record<string, unknown>)[field as string] = value;
@@ -4035,7 +4075,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     public GetTaxBreadcrumb(node: TaxTreeNode): { ID: string; Name: string }[] {
         const breadcrumb: { ID: string; Name: string }[] = [];
         const tagMap = new Map<string, Record<string, unknown>>();
-        for (const t of this.tagsRaw) {
+        for (const t of this.TagsRaw) {
             tagMap.set(t['ID'] as string, t);
         }
 
@@ -4092,7 +4132,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         try {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.TaxSelectedNode.ID }]));
+            await entity.InnerLoad(CompositeKey.FromID(this.TaxSelectedNode.ID));
             entity.Set('Name', this.TaxEditName);
             entity.Set('Description', this.TaxEditDescription);
             const saved = await entity.Save();
@@ -4117,7 +4157,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         try {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
+            await entity.InnerLoad(CompositeKey.FromID(node.ID));
             entity.Set('ParentID', newParentId);
             const saved = await entity.Save();
             if (saved) {
@@ -4139,7 +4179,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 try {
                     const md = this.ProviderToUse;
                     const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                    await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
+                    await entity.InnerLoad(CompositeKey.FromID(node.ID));
                     const deleted = await entity.Delete();
                     if (deleted) {
                         this.addTaxAuditEntry('deleted', node.Name);
@@ -4293,7 +4333,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         for (const tagID of validIDs) {
             try {
                 const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: tagID }]));
+                await entity.InnerLoad(CompositeKey.FromID(tagID));
                 entity.Set('ParentID', targetNode.ID);
                 const saved = await entity.Save();
                 if (saved) movedCount++;
@@ -4333,7 +4373,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         for (const tagID of dragIDs) {
             try {
                 const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: tagID }]));
+                await entity.InnerLoad(CompositeKey.FromID(tagID));
                 if (entity.Get('ParentID') != null) {
                     entity.Set('ParentID', null);
                     const saved = await entity.Save();
@@ -4368,16 +4408,16 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const md = this.ProviderToUse;
             for (const ti of itemsToMove) {
                 const entity = await md.GetEntityObject<BaseEntity>('MJ: Tagged Items');
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: ti['ID'] as string }]));
+                await entity.InnerLoad(CompositeKey.FromID(ti['ID'] as string));
                 entity.Set('TagID', targetTagId);
                 await entity.Save();
             }
 
             // Re-parent children of source under target
-            const childTags = this.tagsRaw.filter(t => (t['ParentID'] as string) === sourceTagId);
+            const childTags = this.TagsRaw.filter(t => (t['ParentID'] as string) === sourceTagId);
             for (const child of childTags) {
                 const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: child['ID'] as string }]));
+                await entity.InnerLoad(CompositeKey.FromID(child['ID'] as string));
                 entity.Set('ParentID', targetTagId);
                 await entity.Save();
             }
@@ -4387,7 +4427,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
             // Delete source tag (original behavior — hard delete)
             const sourceEntity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await sourceEntity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceTagId }]));
+            await sourceEntity.InnerLoad(CompositeKey.FromID(sourceTagId));
             await sourceEntity.Delete();
 
             this.addTaxAuditEntry('merged', `${sourceName} into ${targetName}`);
@@ -4406,7 +4446,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         try {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: childTagId }]));
+            await entity.InnerLoad(CompositeKey.FromID(childTagId));
             entity.Set('ParentID', parentTagId);
             const saved = await entity.Save();
             if (saved) {
@@ -4429,7 +4469,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     // ── Duplicates ──
 
     private buildTaxDuplicates(): void {
-        const tags = this.tagsRaw
+        const tags = this.TagsRaw
             .filter(t => (t['Status'] as string)?.toLowerCase() !== 'merged')
             .map(t => ({
                 ID: t['ID'] as string,
@@ -4607,12 +4647,12 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         const tagItemCounts = this.tagAggregateCounts;
         const tagAvgWeights = this.tagAggregateWeights;
         const hasChildren = new Set<string>();
-        for (const t of this.tagsRaw) {
+        for (const t of this.TagsRaw) {
             const pid = t['ParentID'] as string;
             if (pid) hasChildren.add(NormalizeUUID(pid));
         }
 
-        this.TaxOrphans = this.tagsRaw
+        this.TaxOrphans = this.TagsRaw
             .filter(t => {
                 const normalizedId = NormalizeUUID(t['ID'] as string);
                 const parentId = t['ParentID'] as string | null;
@@ -4681,7 +4721,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                     await this.cleanupTagReferences(orphan.ID);
                     const md = this.ProviderToUse;
                     const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                    await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                    await entity.InnerLoad(CompositeKey.FromID(orphan.ID));
                     const deleted = await entity.Delete();
                     if (deleted) {
                         this.addTaxAuditEntry('deleted', orphan.Name);
@@ -4712,7 +4752,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                     try {
                         await this.cleanupTagReferences(orphan.ID);
                         const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                        await entity.InnerLoad(CompositeKey.FromID(orphan.ID));
                         if (await entity.Delete()) {
                             deletedCount++;
                             this.addTaxAuditEntry('deleted', orphan.Name);
@@ -4743,7 +4783,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 for (const orphan of this.TaxOrphans) {
                     try {
                         const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
-                        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                        await entity.InnerLoad(CompositeKey.FromID(orphan.ID));
                         if (await entity.Delete()) {
                             deletedCount++;
                             this.addTaxAuditEntry('deleted', orphan.Name);
@@ -4803,7 +4843,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         this.TaxTreemapCells = cells;
 
         // KPIs
-        const totalTags = this.tagsRaw.length;
+        const totalTags = this.TagsRaw.length;
         const maxDepth = this.TaxFlatNodes.length > 0
             ? Math.max(...this.TaxFlatNodes.map(n => n.Depth))
             : 0;
@@ -4874,7 +4914,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
      */
     private synthesizeAuditEventsFromTags(): TaxAuditEvent[] {
         const events: TaxAuditEvent[] = [];
-        for (const tag of this.tagsRaw) {
+        for (const tag of this.TagsRaw) {
             const name = (tag['Name'] as string) ?? 'Unnamed';
             const createdAt = tag['__mj_CreatedAt'] as string;
             if (createdAt) {
@@ -4997,7 +5037,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     // ── Health Stats ──
 
     private buildTaxHealth(): void {
-        const total = this.tagsRaw.length;
+        const total = this.TagsRaw.length;
         const orphaned = this.TaxOrphans.length;
         const duplicates = this.TaxDuplicates.length;
         const needAttention = this.TaxFlatNodes.filter(n => n.HealthColor === 'yellow').length;
@@ -5361,7 +5401,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     // ========================================================================
 
     /** Load all pending suggestions and refresh the filtered view + nav badge. */
-    public async loadSuggestions(): Promise<void> {
+    public async LoadSuggestions(): Promise<void> {
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const sugsResult = await rv.RunView<Record<string, unknown>>({
@@ -5377,7 +5417,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             } else {
                 this.SuggestionRows = sugsResult.Results.map(r => {
                     const matchID = (r['BestMatchTagID'] as string) ?? null;
-                    const matchTag = matchID ? this.tagsRaw.find(t => UUIDsEqual(t['ID'] as string, matchID)) : null;
+                    const matchTag = matchID ? this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, matchID)) : null;
                     const matchName = matchTag ? (matchTag['Name'] as string) : null;
                     return {
                         ID: r['ID'] as string,
@@ -5398,7 +5438,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 });
             }
             this.PendingSuggestionCount = this.SuggestionRows.length;
-            this.applySuggestionFilters();
+            this.ApplySuggestionFilters();
             // Refresh nav badge
             this.buildNavItems();
             this.cdr.detectChanges();
@@ -5408,6 +5448,11 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         }
     }
 
+    /** @deprecated Use {@link LoadSuggestions}. */
+    public async loadSuggestions(): Promise<void> {
+        return this.LoadSuggestions();
+    }
+
     /** Walk the parent chain to build a › -separated breadcrumb for a tag. */
     private computeTagPath(tag: Record<string, unknown>): string {
         const parts: string[] = [tag['Name'] as string];
@@ -5415,7 +5460,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         const guard = new Set<string>();
         while (cursorID && !guard.has(cursorID) && parts.length < 8) {
             guard.add(cursorID);
-            const next = this.tagsRaw.find(t => UUIDsEqual(t['ID'] as string, cursorID!));
+            const next = this.TagsRaw.find(t => UUIDsEqual(t['ID'] as string, cursorID!));
             if (!next) break;
             parts.unshift(next['Name'] as string);
             cursorID = (next['ParentID'] as string) ?? null;
@@ -5435,10 +5480,10 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const n = typeof value === 'number' ? value : Number(value);
             this.SuggestionFilterMinScore = Number.isFinite(n) ? n : null;
         }
-        this.applySuggestionFilters();
+        this.ApplySuggestionFilters();
     }
 
-    public applySuggestionFilters(): void {
+    public ApplySuggestionFilters(): void {
         const reason = this.SuggestionFilterReason;
         const minScore = this.SuggestionFilterMinScore;
         const search = this.SuggestionSearch.trim().toLowerCase();
@@ -5452,6 +5497,11 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             return true;
         });
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link ApplySuggestionFilters}. */
+    public applySuggestionFilters(): void {
+        return this.ApplySuggestionFilters();
     }
 
     public ToggleSuggestionSelected(row: SuggestionRow, ev: Event): void {
@@ -5507,7 +5557,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             }
             this.SuggestionRows = this.SuggestionRows.filter(r => !UUIDsEqual(r.ID, row.ID));
             this.PendingSuggestionCount = this.SuggestionRows.length;
-            this.applySuggestionFilters();
+            this.ApplySuggestionFilters();
             this.buildNavItems();
             if (this.SuggestionSelected && UUIDsEqual(this.SuggestionSelected.ID, row.ID)) this.SuggestionSelected = null;
         } catch (error) {
@@ -5589,7 +5639,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 runAt: new Date(),
             };
             this.HealthRunHistory = [
-                { When: new Date(), Trigger: 'Manual · UI', TagsScanned: this.tagsRaw.length, Merge: r.MergeCount, LowUsage: r.LowUsageCount, WideNode: r.WideNodeCount, DurationMs: r.DurationMs },
+                { When: new Date(), Trigger: 'Manual · UI', TagsScanned: this.TagsRaw.length, Merge: r.MergeCount, LowUsage: r.LowUsageCount, WideNode: r.WideNodeCount, DurationMs: r.DurationMs },
                 ...this.HealthRunHistory,
             ].slice(0, 12);
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -5597,7 +5647,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 'info', 4000
             );
             // Pull in the new pending suggestions so Duplicates / Orphans / Suggestions all reflect
-            await this.loadSuggestions();
+            await this.LoadSuggestions();
             healthOk = true;
             this.activityService.Complete(activityID, 'success',
                 `${r.MergeCount} merge · ${r.LowUsageCount} low-usage · ${r.WideNodeCount} wide-node`);

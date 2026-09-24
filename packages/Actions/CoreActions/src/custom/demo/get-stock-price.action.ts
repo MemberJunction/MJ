@@ -1,7 +1,47 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios from "axios";
+import { HttpGet, IsHttpError } from "@memberjunction/network-utils";
+
+/** The slice of Yahoo Finance's `/v8/finance/chart` payload this action reads. */
+interface YahooChartResponse {
+    chart?: {
+        result?: Array<{
+            meta: {
+                regularMarketPrice?: number;
+                previousClose?: number;
+                chartPreviousClose?: number;
+                currency?: string;
+                exchangeName?: string;
+                regularMarketTime?: number;
+                longName?: string;
+                shortName?: string;
+                marketState?: string;
+                regularMarketDayHigh?: number;
+                regularMarketDayLow?: number;
+                regularMarketVolume?: number;
+                marketCap?: number;
+                timezone?: string;
+                exchangeTimezoneName?: string;
+                preMarketPrice?: number;
+                postMarketPrice?: number;
+                fiftyTwoWeekHigh?: number;
+                fiftyTwoWeekLow?: number;
+                fiftyDayAverage?: number;
+                twoHundredDayAverage?: number;
+            };
+            indicators: {
+                quote: Array<{
+                    open?: (number | null)[];
+                    high?: (number | null)[];
+                    low?: (number | null)[];
+                    close?: (number | null)[];
+                    volume?: (number | null)[];
+                }>;
+            };
+        }>;
+    };
+}
 
 /**
  * Action that retrieves current stock price and related information for a specified ticker symbol
@@ -60,13 +100,13 @@ export class GetStockPriceAction extends BaseAction {
             // This endpoint provides real-time stock data without requiring authentication
             const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`;
             
-            const response = await axios.get(url, {
-                headers: {
+            const response = await HttpGet<YahooChartResponse>(url, {
+                Headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
                 }
             });
 
-            if (!response.data.chart || !response.data.chart.result || response.data.chart.result.length === 0) {
+            if (!response.Data.chart || !response.Data.chart.result || response.Data.chart.result.length === 0) {
                 return {
                     Success: false,
                     Message: `Invalid ticker symbol: ${ticker}`,
@@ -74,7 +114,7 @@ export class GetStockPriceAction extends BaseAction {
                 };
             }
 
-            const result = response.data.chart.result[0];
+            const result = response.Data.chart.result[0];
             const quote = result.indicators.quote[0];
             const meta = result.meta;
 
@@ -136,7 +176,7 @@ export class GetStockPriceAction extends BaseAction {
             };
 
         } catch (error) {
-            if (axios.isAxiosError(error) && error.response?.status === 404) {
+            if (IsHttpError(error) && error.Status === 404) {
                 return {
                     Success: false,
                     Message: `Invalid ticker symbol: ${params.Params.find(p => p.Name === 'Ticker')?.Value}`,

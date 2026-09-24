@@ -92,6 +92,21 @@ export interface MessagingAdapterSettings {
     ExplorerBaseURL?: string;
 
     /**
+     * Disable automatic agent-to-agent delegation for this extension instance.
+     *
+     * Delegation is detected three ways (see `detectDelegation`), the third of which SCANS THE
+     * REPLY TEXT for delegation phrases plus any known agent name. That makes an orchestrator
+     * agent's own self-description ("I can route you to ... Betty") trigger a real handoff, so
+     * the user gets a different agent's answer under this bot's identity — with no attribution.
+     *
+     * Set this on a bot that is pinned to one agent (the one-app-per-agent deployment, where each
+     * platform app has its own `DefaultAgentName`): the pinned agent's reply is always what posts.
+     *
+     * @default false
+     */
+    DisableDelegation?: boolean;
+
+    /**
      * Slash command to agent name mapping for Slack.
      * Keys are command names (e.g., `/research`), values are MJ Agent names.
      *

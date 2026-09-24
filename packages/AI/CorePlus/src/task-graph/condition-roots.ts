@@ -9,6 +9,19 @@
  *
  * @module @memberjunction/ai-core-plus
  */
+// The ambient globals a condition may use are IMPORTED, not restated here.
+//
+// `Number(payload.count) > 3` and `Math.abs(output.delta) < 5` are exactly the shapes authored specs
+// use, so a door that refused them would be rejecting specs that run correctly — the one thing this
+// check promised not to do. Getting that right requires the door's list and the evaluator's policy
+// screen to agree, and a curated copy here, pinned only by a test, is precisely how they came apart:
+// the screen narrowed to an AST allowlist while this file went on blessing twelve names it had begun
+// refusing, and the pinning test READ each name without CALLING it, so a green suite reported an
+// agreement that did not exist. The list now lives beside the screen that enforces it, so the two
+// halves cannot drift by construction rather than by vigilance. It is still a curated decision, not
+// a `name in globalThis` scan — which would bless `globalThis`, `Reflect` and `process` along with
+// everything else the host happens to expose.
+import { SAFE_EXPRESSION_GLOBALS } from '@memberjunction/global';
 
 /**
  * The complete set of root names a condition may reference.
@@ -28,28 +41,6 @@ export const CONDITION_ROOTS: ReadonlySet<string> = new Set([
 const LANGUAGE_NAMES: ReadonlySet<string> = new Set([
     'true', 'false', 'null', 'undefined', 'NaN', 'Infinity',
     'typeof', 'instanceof', 'in', 'new', 'void',
-]);
-
-/**
- * Ambient globals a condition may use, because the evaluator already resolves them.
- *
- * `SafeExpressionEvaluator` compiles through a plain strict-mode `new Function(...roots, body)`, so
- * anything on the global object is in scope at run time and none of these are on its policy screen.
- * `Number(payload.count) > 3` and `Math.abs(output.delta) < 5` are exactly the shapes authored specs
- * use, and they work — so a door that refused them would be rejecting specs that run correctly,
- * which is the one thing this check promised not to do.
- *
- * **Curated, not `name in globalThis`.** Reflecting over the global object would bless `globalThis`,
- * `Reflect`, `process` and everything else the host happens to expose — an allowlist that grows
- * silently with the runtime. This list is a decision; a test pins it to what the evaluator actually
- * resolves, so it cannot claim something the runtime would reject either.
- *
- * Adding a name here grants no new capability: it was already reachable. It only stops the door
- * predicting a failure that will not happen.
- */
-export const RESOLVABLE_GLOBALS: ReadonlySet<string> = new Set([
-    'Math', 'Number', 'String', 'Boolean', 'Array', 'Object', 'JSON', 'Date',
-    'parseInt', 'parseFloat', 'isNaN', 'isFinite',
 ]);
 
 /**
@@ -77,7 +68,7 @@ export function UnknownConditionRoots(expression: string): string[] {
     // Lookbehind excludes both property access (`.includes`) and identifier tails, including the
     // exponent in a numeric literal (`2e5`), which is otherwise indistinguishable from a name.
     for (const [name] of code.matchAll(/(?<![A-Za-z0-9_$.])[A-Za-z_$][A-Za-z0-9_$]*/g)) {
-        if (LANGUAGE_NAMES.has(name) || RESOLVABLE_GLOBALS.has(name) || CONDITION_ROOTS.has(name)) continue;
+        if (LANGUAGE_NAMES.has(name) || SAFE_EXPRESSION_GLOBALS.has(name) || CONDITION_ROOTS.has(name)) continue;
         unknown.add(name);
     }
     return [...unknown];

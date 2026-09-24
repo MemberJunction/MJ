@@ -581,7 +581,7 @@ Goal: bulk-import a synonym mapping from a CSV or spreadsheet.
    ```
 
 2. Add a `.mj-sync.json` for the directory pointing at `MJ: Tag Synonyms`.
-3. `npx mj sync push --dir=metadata --include="tag-synonyms"`.
+3. `pnpm mj sync push --dir=metadata --include="tag-synonyms"`.
 4. Restart MJAPI so `TagEngineBase.Config()` reloads the synonym map.
 
 ---

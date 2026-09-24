@@ -15,6 +15,7 @@ export * from './condition-gate';
 export * from './task-predicates';
 export * from './DispatcherConditionEvaluator';
 export * from './TaskGraphDispatcher';
+export * from './task-graph-kick';
 export * from './TaskGraphSubmitterImpl';
 export * from './WorkflowSpecSync';
 export * from './operations/TaskGraphOperations';

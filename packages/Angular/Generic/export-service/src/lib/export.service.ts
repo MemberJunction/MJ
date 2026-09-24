@@ -60,22 +60,37 @@ export class ExportService {
    * @param options Export options
    * @returns Export result with buffer and metadata
    */
-  async export(data: ExportData, options: Partial<ExportOptions> = {}): Promise<ExportResult> {
+  async Export(data: ExportData, options: Partial<ExportOptions> = {}): Promise<ExportResult> {
     return ExportEngine.export(data, options);
+  }
+
+  /** @deprecated Use {@link Export}. */
+  async export(data: ExportData, options: Partial<ExportOptions> = {}): Promise<ExportResult> {
+    return this.Export(data, options);
   }
 
   /**
    * Export to Excel format
    */
-  async toExcel(data: ExportData, options: Omit<Partial<ExportOptions>, 'format'> = {}): Promise<ExportResult> {
+  async ToExcel(data: ExportData, options: Omit<Partial<ExportOptions>, 'format'> = {}): Promise<ExportResult> {
     return ExportEngine.toExcel(data, options);
+  }
+
+  /** @deprecated Use {@link ToExcel}. */
+  async toExcel(data: ExportData, options: Omit<Partial<ExportOptions>, 'format'> = {}): Promise<ExportResult> {
+    return this.ToExcel(data, options);
   }
 
   /**
    * Export to CSV format
    */
-  async toCSV(data: ExportData, options: Omit<Partial<ExportOptions>, 'format'> = {}): Promise<ExportResult> {
+  async ToCSV(data: ExportData, options: Omit<Partial<ExportOptions>, 'format'> = {}): Promise<ExportResult> {
     return ExportEngine.toCSV(data, options);
+  }
+
+  /** @deprecated Use {@link ToCSV}. */
+  async toCSV(data: ExportData, options: Omit<Partial<ExportOptions>, 'format'> = {}): Promise<ExportResult> {
+    return this.ToCSV(data, options);
   }
 
   /**
@@ -88,15 +103,20 @@ export class ExportService {
   /**
    * Get supported export formats
    */
-  getSupportedFormats(): ExportFormat[] {
+  GetSupportedFormats(): ExportFormat[] {
     return ExportEngine.getSupportedFormats();
+  }
+
+  /** @deprecated Use {@link GetSupportedFormats}. */
+  getSupportedFormats(): ExportFormat[] {
+    return this.GetSupportedFormats();
   }
 
   /**
    * Download the export result as a file
    * @param result Export result containing the data
    */
-  downloadResult(result: ExportResult): void {
+  DownloadResult(result: ExportResult): void {
     if (!result.success || !result.data) {
       throw new Error(result.error || 'Export failed - no data to download');
     }
@@ -114,23 +134,33 @@ export class ExportService {
     URL.revokeObjectURL(url);
   }
 
+  /** @deprecated Use {@link DownloadResult}. */
+  downloadResult(result: ExportResult): void {
+    return this.DownloadResult(result);
+  }
+
   /**
    * Export and immediately download
    * @param data Data to export
    * @param options Export options
    */
-  async exportAndDownload(data: ExportData, options: Partial<ExportOptions> = {}): Promise<ExportResult> {
-    const result = await this.export(data, options);
+  async ExportAndDownload(data: ExportData, options: Partial<ExportOptions> = {}): Promise<ExportResult> {
+    const result = await this.Export(data, options);
     if (result.success) {
-      this.downloadResult(result);
+      this.DownloadResult(result);
     }
     return result;
+  }
+
+  /** @deprecated Use {@link ExportAndDownload}. */
+  async exportAndDownload(data: ExportData, options: Partial<ExportOptions> = {}): Promise<ExportResult> {
+    return this.ExportAndDownload(data, options);
   }
 
   /**
    * Get available sampling modes with display labels
    */
-  getSamplingModes(): { mode: SamplingMode; label: string; description: string }[] {
+  GetSamplingModes(): { mode: SamplingMode; label: string; description: string }[] {
     return [
       { mode: 'all', label: 'All Rows', description: 'Export all data rows' },
       { mode: 'top', label: 'Top N', description: 'Export the first N rows' },
@@ -140,10 +170,15 @@ export class ExportService {
     ];
   }
 
+  /** @deprecated Use {@link GetSamplingModes}. */
+  getSamplingModes(): { mode: SamplingMode; label: string; description: string }[] {
+    return this.GetSamplingModes();
+  }
+
   /**
    * Get format display info
    */
-  getFormatInfo(format: ExportFormat): { label: string; icon: string; description: string } {
+  GetFormatInfo(format: ExportFormat): { label: string; icon: string; description: string } {
     switch (format) {
       case 'excel':
         return {
@@ -166,10 +201,15 @@ export class ExportService {
     }
   }
 
+  /** @deprecated Use {@link GetFormatInfo}. */
+  getFormatInfo(format: ExportFormat): { label: string; icon: string; description: string } {
+    return this.GetFormatInfo(format);
+  }
+
   /**
    * Build sampling options from user selections
    */
-  buildSamplingOptions(mode: SamplingMode, count?: number, interval?: number): SamplingOptions {
+  BuildSamplingOptions(mode: SamplingMode, count?: number, interval?: number): SamplingOptions {
     const options: SamplingOptions = { mode };
 
     if (mode === 'top' || mode === 'bottom' || mode === 'random') {
@@ -179,5 +219,10 @@ export class ExportService {
     }
 
     return options;
+  }
+
+  /** @deprecated Use {@link BuildSamplingOptions}. */
+  buildSamplingOptions(mode: SamplingMode, count?: number, interval?: number): SamplingOptions {
+    return this.BuildSamplingOptions(mode, count, interval);
   }
 }

@@ -1,10 +1,10 @@
 import { RegisterClass } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig, JSONObject, JSONValue } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientState } from '../generic/baseRealtimeClient';
-import { base64ToArrayBuffer } from '../audio/pcmUtils';
+import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
-import { createPcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
+import { CreatePcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
 
 // ── Audio constants (ElevenLabs Agents wire formats) ───────────────────────────
 
@@ -420,7 +420,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
         sampleRate: number,
         onPcmChunk: (base64Pcm16: string) => void
     ): Promise<IPcmMicCapture> {
-        return createPcmMicCapture(micStream, sampleRate, onPcmChunk);
+        return CreatePcmMicCapture(micStream, sampleRate, onPcmChunk);
     }
 
     /**
@@ -557,7 +557,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
             return;
         }
         this.markGenerationStarted();
-        this.playback?.Enqueue(base64ToArrayBuffer(audioBase64));
+        this.playback?.Enqueue(Base64ToArrayBuffer(audioBase64));
     }
 
     /** User transcript: whole-utterance FINAL (this provider emits no interim deltas). */
@@ -724,7 +724,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
     }
 
     /** How long to wait for real model output after a tool result before nudging. */
-    private static readonly ToolResultNudgeMs = 1600;
+    private static readonly toolResultNudgeMs = 1600;
 
     /** Arms the absorbed-tool-result nudge (see {@link toolResultNudgeTimer}). */
     private armToolResultNudge(): void {
@@ -741,7 +741,7 @@ export class ElevenLabsRealtimeClient extends BaseRealtimeClient {
                 'normal',
                 false
             );
-        }, ElevenLabsRealtimeClient.ToolResultNudgeMs);
+        }, ElevenLabsRealtimeClient.toolResultNudgeMs);
     }
 
     /** Cancels the nudge — real model output arrived (or the session is resetting). */

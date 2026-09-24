@@ -108,4 +108,54 @@ describe('MJCLIRuntimeHost', () => {
       expect(stderr.join('')).toBe('');
     });
   });
+
+  describe('TTY-aware rendering', () => {
+    it('emits a compact single line when stdout is piped', () => {
+      const host = new MJCLIRuntimeHost('json', false, false, { stdoutIsTTY: false });
+      host.Emit(sampleResult);
+      const out = stdout.join('').trimEnd();
+      expect(out).not.toContain('\n');
+      expect(JSON.parse(out).command).toBe('sync:push');
+    });
+
+    it('pretty-prints when stdout is a real terminal', () => {
+      const host = new MJCLIRuntimeHost('json', false, false, { stdoutIsTTY: true });
+      host.Emit(sampleResult);
+      const out = stdout.join('');
+      expect(out).toContain('  "command": "sync:push"');
+    });
+
+    it('still logs on stdout in piped text mode instead of going silent', () => {
+      const host = new MJCLIRuntimeHost('text', false, false, { stdoutIsTTY: false });
+      host.Log('a note');
+      host.SucceedStep('loaded', '3 files');
+      expect(stdout.join('')).toContain('a note');
+      expect(stdout.join('')).toContain('loaded 3 files');
+    });
+
+    it('routes piped-text failures to stderr so a pipeline sees them', () => {
+      const host = new MJCLIRuntimeHost('text', false, false, { stdoutIsTTY: false });
+      host.Log('bad news', 'error');
+      host.FailStep('push failed', 'timeout');
+      expect(stderr.join('')).toContain('bad news');
+      expect(stderr.join('')).toContain('push failed timeout');
+      expect(stdout.join('')).toBe('');
+    });
+
+    it('still announces runtime in piped text mode — an agent needs the timeout budget', () => {
+      const host = new MJCLIRuntimeHost('text', false, false, { stdoutIsTTY: false });
+      host.AnnounceRuntime(slowUsage);
+      expect(stderr.join('')).toContain('typically ~45s');
+    });
+  });
+
+  describe('Interactive', () => {
+    it('defaults to non-interactive when the plugin did not resolve it', () => {
+      expect(new MJCLIRuntimeHost('text').Interactive).toBe(false);
+    });
+
+    it('reports interactive when the plugin detected a terminal', () => {
+      expect(new MJCLIRuntimeHost('text', false, false, { interactive: true }).Interactive).toBe(true);
+    });
+  });
 });

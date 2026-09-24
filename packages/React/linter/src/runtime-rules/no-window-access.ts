@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -39,7 +39,7 @@ export class NoWindowAccessRule extends BaseLintRule {
       }
     }
 
-    traverse(ast, {
+    Traverse(ast, {
       MemberExpression(path: NodePath<t.MemberExpression>) {
         // Check if accessing window object
         if (t.isIdentifier(path.node.object) && path.node.object.name === 'window') {

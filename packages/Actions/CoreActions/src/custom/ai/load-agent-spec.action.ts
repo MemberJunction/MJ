@@ -96,20 +96,25 @@ export class LoadAgentSpecAction extends BaseAction {
                 agentSpec.TechnicalDesign = null;
             }
 
-            // Create truncated version for both output param and Message
-            const truncatedSpec = this.truncatePromptTexts(agentSpec);
-
-            // Add truncated AgentSpec as output parameter
+            // The AgentSpec OUTPUT PARAM must be the COMPLETE spec. Callers (e.g. Agent
+            // Manager) merge this object into the payload and Builder persists it, so a
+            // truncated value here would round-trip 100-char prompt prefixes back into the
+            // sub-agents' TemplateText on save (AgentSpecSync.savePrompts writes PromptText
+            // unconditionally), silently destroying their prompt templates. A loader must
+            // never emit a lossy value under the same key the writer reads.
             params.Params.push({
                 Name: 'AgentSpec',
                 Type: 'Output',
-                Value: truncatedSpec
+                Value: agentSpec
             });
 
+            // Only the human-readable Message is truncated — it's a display surface where the
+            // size concern (very long sub-agent prompts) is real and nothing persists from it.
+            const displaySpec = this.truncatePromptTexts(agentSpec);
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: JSON.stringify(truncatedSpec, null, 2)
+                Message: JSON.stringify(displaySpec, null, 2)
             };
 
         } catch (error) {

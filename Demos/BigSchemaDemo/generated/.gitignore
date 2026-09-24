@@ -1,0 +1,4 @@
+# Regenerated SQL for standard/large profiles is large and deterministic.
+# Smoke SQL is committed under sql/smoke/ so the demo runs without Node.
+*
+!.gitignore

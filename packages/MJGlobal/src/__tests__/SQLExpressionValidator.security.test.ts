@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SQLExpressionValidator } from '../SQLExpressionValidator';
+import { SQLExpressionValidator, StripSQLStringLiterals } from '../SQLExpressionValidator';
 
 /**
  * Adversarial security tests for SQLExpressionValidator.
@@ -258,6 +258,78 @@ describe('SQLExpressionValidator - Security', () => {
       expect(r.valid).toBe(false);
       // DROP is detected before semicolon in the keyword scan
       expect(r.trigger).toBe('DROP');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Literal-stripper / parser agreement
+  // ---------------------------------------------------------------
+  /**
+   * 🚨 The stripper runs BEFORE every other check (keyword denylist, function allowlist,
+   * system-object denylist), so anything it wrongly treats as "inside a literal" is invisible to
+   * all of them — while the database, which does not agree, still executes it.
+   *
+   * SQL Server and PostgreSQL (standard_conforming_strings=on) do NOT treat `\` as an escape
+   * character. A stripper that honors `\'` swallows an entire stacked statement as one "literal".
+   * These tests pin that behavior; see StripSQLStringLiterals.
+   */
+  describe('literal stripper must match database parsing (backslash is NOT an escape)', () => {
+    it('strips a doubled-quote literal exactly, leaving injected code visible', () => {
+      expect(StripSQLStringLiterals(`Name = 'O''Brien'`)).toBe('Name = ');
+      expect(StripSQLStringLiterals(`x = 'a\\') ; DROP TABLE Users; --'`)).toContain('DROP TABLE Users');
+    });
+
+    it('leaves an UNTERMINATED literal in place rather than swallowing the rest', () => {
+      expect(StripSQLStringLiterals(`Name = 'abc; DROP TABLE t`)).toContain('DROP TABLE t');
+    });
+
+    it('does not over-strip across a double-quoted identifier', () => {
+      // The match must end at the closing quote of "Name", NOT run to the final quote.
+      expect(StripSQLStringLiterals(`"Name") ; DROP TABLE Users; --"`)).toContain('DROP TABLE Users');
+    });
+
+    it('blocks a backslash-hidden DROP in an aggregate expression', () => {
+      const r = validator.validate(`SUM(A)+'\\'; DROP TABLE Users; --'`, {
+        context: 'aggregate',
+        entityFields: ['A'],
+      });
+      expect(r.valid).toBe(false);
+    });
+
+    it('blocks a backslash-hidden DROP with no trailing comment', () => {
+      const r = validator.validate(`SUM(A)+'\\'; DROP TABLE Users; SELECT 1+'`, {
+        context: 'aggregate',
+        entityFields: ['A'],
+      });
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('DROP');
+    });
+
+    it('blocks a backslash-hidden WAITFOR in an aggregate expression', () => {
+      const r = validator.validate(`SUM(A)+'\\'; WAITFOR DELAY '0:0:5'; SELECT 1+'`, {
+        context: 'aggregate',
+        entityFields: ['A'],
+      });
+      expect(r.valid).toBe(false);
+    });
+
+    it('blocks a backslash-hidden stacked statement in a full query', () => {
+      const r = validator.validateFullQuery(`SELECT 'a'+'\\'; DROP TABLE Users; --' FROM T`);
+      expect(r.valid).toBe(false);
+    });
+
+    it('blocks backslash-hidden system-catalog exfiltration in a full query', () => {
+      // Read-only connections still make this a credential-disclosure primitive, which is
+      // exactly what the system-object denylist exists to stop.
+      const r = validator.validateFullQuery(
+        `SELECT 'a'+'\\'; SELECT name, password_hash FROM sys.sql_logins; --' FROM T`
+      );
+      expect(r.valid).toBe(false);
+    });
+
+    it('still allows legitimate literals containing backslashes', () => {
+      const r = validator.validateFullQuery(`SELECT * FROM __mj.vwFiles WHERE Path = 'C:\\temp\\'`);
+      expect(r.valid).toBe(true);
     });
   });
 

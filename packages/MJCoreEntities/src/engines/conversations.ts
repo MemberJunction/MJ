@@ -1,6 +1,6 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
-import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
+import { NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
     MJConversationEntity,
@@ -10,6 +10,9 @@ import {
     MJAIAgentRunEntityType,
     MJConversationDetailRatingEntityType,
     MJConversationDetailArtifactEntityType,
+    MJArtifactVersionEntityType,
+    MJArtifactEntityType,
+    MJUserEntityType,
     MJProjectEntity
 } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
@@ -189,7 +192,7 @@ export interface ConversationDetailParsed extends MJConversationDetailEntityType
 /**
  * Helper: parse a raw ConversationDetailComplete row into typed arrays.
  */
-export function parseConversationDetailComplete(
+export function ParseConversationDetailComplete(
     queryResult: ConversationDetailComplete
 ): ConversationDetailParsed {
     return {
@@ -204,6 +207,13 @@ export function parseConversationDetailComplete(
             ? JSON.parse(queryResult.RatingsJSON) as RatingJSON[]
             : []
     };
+}
+
+/** @deprecated Use {@link ParseConversationDetailComplete}. */
+export function parseConversationDetailComplete(
+    queryResult: ConversationDetailComplete
+): ConversationDetailParsed {
+    return ParseConversationDetailComplete(queryResult);
 }
 
 /** User avatar info extracted from the query */
@@ -237,6 +247,226 @@ export interface ConversationDetailCache {
      * for junction entities whose joined fields can't be reconstructed from events alone.
      */
     PeripheralDataStale: boolean;
+}
+ 
+
+/**
+ * Timeline items the UI asks for per page. Mirrors `DEFAULT_TRANSCRIPT_PAGE_SIZE` in
+ * `@memberjunction/ng-conversations` — duplicated rather than imported because the
+ * dependency runs Angular → core-entities and must never run the other way.
+ */
+const DEFAULT_WINDOW_PAGE_SIZE = 10;
+
+/**
+ * Raw rows read per window fetch, as a multiple of the page size. A page of exactly
+ * `PageSize` rows can collapse to a single session card, so the fetch over-reads.
+ */
+const DETAIL_WINDOW_OVERREAD_FACTOR = 3;
+
+/**
+ * Ceiling on the session-completion read. A pathological realtime session must not be
+ * able to drag the whole conversation into a single window.
+ */
+const MAX_SESSION_EXPANSION_ROWS = 200;
+
+/**
+ * Inputs to {@link ConversationEngine.LoadDetailWindow}.
+ */
+export interface LoadDetailWindowParams {
+    ConversationID: string;
+    /**
+     * Exclusive: return rows with `Sequence` below this. Omit for the latest window.
+     *
+     * `Sequence` is the cursor, NOT the primary key — `MJ: Conversation Details.ID` is a
+     * uniqueidentifier, and `RunViewParams.AfterKey` is a PK seek that rejects any non-PK
+     * `OrderBy`, so it cannot express chat order.
+     */
+    BeforeSequence?: number;
+    /** Timeline items the caller is trying to fill. Default {@link DEFAULT_WINDOW_PAGE_SIZE}. */
+    PageSize?: number;
+    /** Raw rows to pull per attempt. Default `PageSize * 3`. */
+    RawOverread?: number;
+}
+
+/**
+ * One page of a conversation's transcript plus the peripheral data its rows need.
+ *
+ * Deliberately NOT a {@link ConversationDetailCache} — that type is the FULL-history
+ * contract and is what `GetAgentContextWindow` consumes. Keeping the shapes distinct is
+ * what stops a window from being written into `_detailCache` by accident.
+ */
+export interface DetailWindowLoadResult {
+    /** The window's rows, chronological by `Sequence`. */
+    Details: MJConversationDetailEntity[];
+    /** Agent runs keyed by conversation detail ID. */
+    AgentRunsByDetailId: Map<string, MJAIAgentRunEntity>;
+    /** User avatars keyed by UserID. */
+    UserAvatars: Map<string, UserAvatarInfo>;
+    /** Ratings keyed by conversation detail ID. */
+    RatingsByDetailId: Map<string, RatingJSON[]>;
+    /** Parsed artifacts keyed by conversation detail ID. */
+    ArtifactsByDetailId: Map<string, ArtifactJSON[]>;
+    /** True when at least one row exists below {@link OldestSequence}. */
+    HasMoreAbove: boolean;
+    /** `Sequence` of the oldest loaded row — the next older fetch's exclusive bound. */
+    OldestSequence: number | null;
+    /** `Sequence` of the newest loaded row. Used to detect live appends. */
+    NewestSequence: number | null;
+    /**
+     * True when a read underlying this window FAILED, as opposed to returning nothing.
+     *
+     * Without this the two are indistinguishable, and the difference matters more than it
+     * looks: `HasMoreAbove: false` from a failed read means "you have reached the start of
+     * the conversation", so a consumer folds a transport blip into its cursor and stops
+     * offering to page. Nothing later restores it. A failed read must leave the caller's
+     * paging state alone, which it can only do if it can tell the two apart.
+     *
+     * Set when the row read failed, when the older-rows probe failed, or when a widening
+     * retry failed. Peripheral failures do NOT set it — those already degrade to empty maps
+     * and the transcript still renders.
+     */
+    Failed: boolean;
+}
+
+/** The peripheral maps of a window, loaded separately from its rows. */
+type WindowPeripherals = Pick<
+    DetailWindowLoadResult,
+    'AgentRunsByDetailId' | 'UserAvatars' | 'RatingsByDetailId' | 'ArtifactsByDetailId'
+>;
+
+/** Empty peripherals — the "no rows" and "peripheral load failed" shape. */
+function emptyWindowPeripherals(): WindowPeripherals {
+    return {
+        AgentRunsByDetailId: new Map<string, MJAIAgentRunEntity>(),
+        UserAvatars: new Map<string, UserAvatarInfo>(),
+        RatingsByDetailId: new Map<string, RatingJSON[]>(),
+        ArtifactsByDetailId: new Map<string, ArtifactJSON[]>()
+    };
+}
+
+/**
+ * A window with no rows. Used for BOTH "this conversation has nothing here" and "the read
+ * failed" — `failed` is what tells them apart downstream, and getting it wrong silently
+ * disables the caller's paging. See {@link DetailWindowLoadResult.Failed}.
+ */
+function emptyDetailWindowResult(failed: boolean): DetailWindowLoadResult {
+    return {
+        Details: [],
+        ...emptyWindowPeripherals(),
+        HasMoreAbove: false,
+        OldestSequence: null,
+        NewestSequence: null,
+        Failed: failed
+    };
+}
+
+/** Quotes a UUID list for an `IN (...)` predicate. */
+function quoteIdList(ids: string[]): string {
+    return ids.map(id => `'${id}'`).join(',');
+}
+
+/** `ConversationDetailID IN (...)` over the window's rows. */
+function detailIdInFilter(detailIds: string[]): string {
+    return `ConversationDetailID IN (${quoteIdList(detailIds)})`;
+}
+
+/** `ID IN (...)` for a follow-up lookup keyed by primary key. */
+function idInFilter(ids: string[]): string {
+    return `ID IN (${quoteIdList(ids)})`;
+}
+
+/** Keys agent runs by the detail they belong to. */
+function groupAgentRunsByDetailId(runs: MJAIAgentRunEntity[]): Map<string, MJAIAgentRunEntity> {
+    const byDetailId = new Map<string, MJAIAgentRunEntity>();
+    for (const run of runs) {
+        if (run.ConversationDetailID) {
+            byDetailId.set(run.ConversationDetailID, run);
+        }
+    }
+    return byDetailId;
+}
+
+/**
+ * Keys ratings by detail, denormalizing the rater's name onto each row the way
+ * GetConversationComplete's `UserName` join does.
+ */
+function groupRatingsByDetailId(
+    ratings: MJConversationDetailRatingEntityType[],
+    usersById: Map<string, MJUserEntityType>
+): Map<string, RatingJSON[]> {
+    const byDetailId = new Map<string, RatingJSON[]>();
+    for (const rating of ratings) {
+        const withUserName: RatingJSON = {
+            ...rating,
+            UserName: usersById.get(rating.UserID)?.Name ?? ''
+        };
+        const list = byDetailId.get(rating.ConversationDetailID) ?? [];
+        list.push(withUserName);
+        byDetailId.set(rating.ConversationDetailID, list);
+    }
+    return byDetailId;
+}
+
+/** Distinct UserIDs referenced by a window — message authors plus raters. */
+function collectWindowUserIds(
+    details: MJConversationDetailEntity[],
+    ratings: MJConversationDetailRatingEntityType[]
+): string[] {
+    const ids = new Set<string>();
+    for (const detail of details) {
+        if (detail.Role?.toLowerCase() === 'user' && detail.UserID) {
+            ids.add(detail.UserID);
+        }
+    }
+    for (const rating of ratings) {
+        if (rating.UserID) {
+            ids.add(rating.UserID);
+        }
+    }
+    return [...ids];
+}
+
+/** Avatar lookup for the window's message authors. */
+function buildUserAvatarMap(
+    details: MJConversationDetailEntity[],
+    usersById: Map<string, MJUserEntityType>
+): Map<string, UserAvatarInfo> {
+    const avatars = new Map<string, UserAvatarInfo>();
+    for (const detail of details) {
+        if (detail.Role?.toLowerCase() !== 'user' || !detail.UserID || avatars.has(detail.UserID)) {
+            continue;
+        }
+        const user = usersById.get(detail.UserID);
+        avatars.set(detail.UserID, {
+            ImageURL: user?.UserImageURL ?? null,
+            IconClass: user?.UserImageIconClass ?? null
+        });
+    }
+    return avatars;
+}
+
+/**
+ * Rebuilds one {@link ArtifactJSON} from the three rows GetConversationComplete joins:
+ * the detail↔version junction, the version, and the artifact.
+ */
+function mergeArtifactJSON(
+    junction: MJConversationDetailArtifactEntityType,
+    version: MJArtifactVersionEntityType,
+    artifact: MJArtifactEntityType
+): ArtifactJSON {
+    return {
+        ...junction,
+        ArtifactVersionID: version.ID,
+        VersionNumber: version.VersionNumber,
+        VersionName: version.Name,
+        VersionDescription: version.Description,
+        VersionCreatedAt: version.__mj_CreatedAt,
+        ArtifactID: artifact.ID,
+        ArtifactName: artifact.Name,
+        ArtifactType: artifact.Type,
+        ArtifactDescription: artifact.Description,
+        Visibility: artifact.Visibility
+    };
 }
 
 /**
@@ -331,6 +561,18 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     private _lastProjectsEnvironmentId: string | null = null;
 
     /**
+     * Monotonic ticket for conversation loads, to keep the newest ANSWER rather than the
+     * newest REQUEST.
+     *
+     * Bypassing dedup is what makes this necessary: two forced loads in quick succession used
+     * to collapse into one request, and now each fires. Without a guard, an out-of-order
+     * response leaves the sidebar showing the previous scope — a stale-cache failure traded
+     * for an ordering one. Rarer, since it needs two flips inside one response window, but
+     * this is the toggle case the bypass exists for, so it is exactly the caller that does it.
+     */
+    private _conversationsLoadGeneration = 0;
+
+    /**
      * For conversations the current user *received* via sharing, this map goes
      * from `conversationId` to the grantor's display info. Populated by
      * {@link LoadConversations} using the `SharedByUserID` column on the
@@ -405,6 +647,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         this._lastEnvironmentId = environmentId;
 
+        // Claim a ticket for this load. Anything published below is gated on still holding
+        // the newest one — see _conversationsLoadGeneration.
+        const generation = ++this._conversationsLoadGeneration;
+
         // Include conversations the user has been granted access to via
         // `MJ: Resource Permissions`. ResourcePermissionEngine caches the full
         // permission table; GetUserAvailableResources filters it to approved
@@ -436,10 +682,24 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 ExtraFilter: filter,
                 OrderBy: 'IsPinned DESC, __mj_UpdatedAt DESC',
                 MaxRows: 1000,
-                ResultType: 'entity_object'
+                ResultType: 'entity_object',
+                // A FORCED reload must reach the server. Without this, an identical
+                // RunView within the provider's dedup-linger window returns the
+                // previous result — so a caller forcing a reload because the
+                // server-side answer changed (a request header or session state
+                // the query text does not carry) gets the stale list back and no
+                // request goes out.
+                BypassCache: forceRefresh
             },
             contextUser
         );
+
+        // A response that has been overtaken must not publish. Checked here rather than at
+        // the top, because what matters is whether a NEWER load started while this one was
+        // in flight — and the peripheral work below is skipped for the same reason.
+        if (generation !== this._conversationsLoadGeneration) {
+            return;
+        }
 
         if (result.Success) {
             this._conversations$.next(result.Results || []);
@@ -555,7 +815,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 ExtraFilter: `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`,
                 OrderBy: 'Name ASC',
                 MaxRows: 1000,
-                ResultType: 'entity_object'
+                ResultType: 'entity_object',
+                // Same reason as LoadConversations, and the same call: LoadConversations
+                // ends by calling this with its own forceRefresh. Without it, the toggle
+                // that forces a reload got fresh conversations and the STALE folders they
+                // are grouped under, from an identical RunView inside the same linger
+                // window. Half a refresh is its own bug, and a confusing one.
+                BypassCache: forceRefresh
             },
             contextUser
         );
@@ -1144,6 +1410,209 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         return cacheEntry;
     }
 
+
+   
+    /**
+     * Loads ONE page of a conversation's transcript — the chat area's windowed history read.
+     *
+     * Additive counterpart to {@link LoadConversationDetails}, which stays the FULL-history
+     * API. Opening a long conversation must not transfer and hydrate every row, so this
+     * reads the newest `RawOverread` rows below an optional `Sequence` bound, completes any
+     * realtime session the page landed inside, probes whether older rows remain, and loads
+     * peripherals for just those rows.
+     *
+     * The result is deliberately NOT written to `_detailCache`. That cache is keyed by
+     * conversation id alone, and {@link GetAgentContextWindow} reads it as complete history —
+     * a partial entry there would silently starve the agent of everything before the summary
+     * boundary, with no error. Use a separate partial cache if incremental caching is needed.
+     *
+     * Does not throw for a read that FAILS — a failed load returns an empty window flagged
+     * {@link DetailWindowLoadResult.Failed} so the caller can leave its paging state intact
+     * rather than mistaking the failure for the start of the conversation.
+     *
+     * It is not, however, exception-proof: there is no `try/catch` here, so a provider that
+     * REJECTS rather than returning `Success: false` propagates out to the caller. That path
+     * is left deliberately — it degrades better than the handled one, because an exception
+     * skips the cursor write entirely and the caller's paging state survives untouched.
+     *
+     * ### Round-trip profile — the counterweight to the payload win
+     *
+     * This trades ONE fat query for several thin ones. Per page:
+     *
+     *   1. {@link fetchDetailRowsBySequence} — always
+     *   2. {@link expandOldestSession} — only when the oldest row is session-stamped
+     *   3. {@link hasOlderDetails} — always, in parallel with (4)
+     *   4. {@link buildWindowPeripherals} — one batched `RunViews` of 3
+     *   5. {@link loadWindowUsers} — whenever the window references any user
+     *   6-7. {@link buildWindowArtifactMap} — up to two SEQUENTIAL reads, and it cannot batch
+     *        them: the version ids come from the junction rows and the artifact ids from the
+     *        versions.
+     *
+     * That is 3-6 round trips / 5-9 queries per page, against the single
+     * `GetConversationComplete` call that previously covered the ENTIRE conversation.
+     *
+     * For first paint this is unambiguously the right trade — the old call scaled with total
+     * conversation length, this one does not. For a reader paging back it inverts: past
+     * roughly ten pages the cumulative round trips exceed the old single load.
+     *
+     * The lever for that is `PageSize`, NOT this method. The per-page cost above is fixed
+     * regardless of how many rows come back, so a larger page for OLDER pages amortizes it
+     * over more content — and unlike first paint, a reader who has scrolled up has already
+     * committed to reading back. If paging up ever feels slow, that is the number to raise.
+     *
+     * @param params - Conversation, optional `Sequence` bound, and page sizing
+     * @param contextUser - The requesting user (entity RLS applies)
+     */
+    public async LoadDetailWindow(
+        params: LoadDetailWindowParams,
+        contextUser: UserInfo
+    ): Promise<DetailWindowLoadResult> {
+        const pageSize = params.PageSize ?? DEFAULT_WINDOW_PAGE_SIZE;
+        const overread = params.RawOverread ?? pageSize * DETAIL_WINDOW_OVERREAD_FACTOR;
+
+        const page = await this.fetchDetailRowsBySequence(
+            params.ConversationID, params.BeforeSequence, overread, contextUser
+        );
+        // Deliberately two branches, not one. `null` is a FAILED read; an empty array is a
+        // range that genuinely holds no rows. Collapsing them is what lets a transport blip
+        // read downstream as "you have reached the start of the conversation".
+        if (page === null) {
+            return emptyDetailWindowResult(true);
+        }
+        if (page.length === 0) {
+            return emptyDetailWindowResult(false);
+        }
+
+        const details = await this.expandOldestSession(params.ConversationID, page, contextUser);
+        const oldestSequence = details[0].Sequence;
+        const newestSequence = details[details.length - 1].Sequence;
+
+        // Concurrent, not sequential: the probe needs only `oldestSequence` and the peripherals
+        // need only `details`, both of which are settled above. Neither rejects — each degrades
+        // to an empty/false result on a failed read — so `Promise.all` cannot introduce a
+        // rejection path this method did not already have.
+        const [olderProbe, peripherals] = await Promise.all([
+            this.hasOlderDetails(params.ConversationID, oldestSequence, contextUser),
+            this.buildWindowPeripherals(details, contextUser)
+        ]);
+
+        return {
+            Details: details,
+            ...peripherals,
+            // A failed probe answers `false`, which is indistinguishable from a real "nothing
+            // older" — so the rows are still returned, but the window is marked Failed and the
+            // caller keeps whatever it already believed about what lies above.
+            HasMoreAbove: olderProbe.HasOlder,
+            OldestSequence: oldestSequence,
+            NewestSequence: newestSequence,
+            Failed: olderProbe.Failed
+        };
+    }
+
+    /**
+     * Reads the newest `maxRows` detail rows below an optional `Sequence` bound and returns
+     * them in CHRONOLOGICAL order.
+     *
+     * The query is `Sequence DESC` because the interesting end of a transcript is the tail;
+     * the reversal happens here so every caller downstream sees oldest-to-newest.
+     *
+     * @returns The page in ascending `Sequence` order, or null when the read failed.
+     */
+    private async fetchDetailRowsBySequence(
+        conversationId: string,
+        beforeSequence: number | undefined,
+        maxRows: number,
+        contextUser: UserInfo
+    ): Promise<MJConversationDetailEntity[] | null> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const filter = beforeSequence == null
+            ? `ConversationID='${conversationId}'`
+            : `ConversationID='${conversationId}' AND Sequence < ${beforeSequence}`;
+
+        const result = await rv.RunView<MJConversationDetailEntity>({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: filter,
+            OrderBy: 'Sequence DESC',
+            MaxRows: maxRows,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!result.Success) {
+            console.error('[ConversationEngine] Failed to load detail window:', result.ErrorMessage);
+            return null;
+        }
+        return [...(result.Results || [])].reverse();
+    }
+
+    /**
+     * Completes a realtime session the page landed part-way through.
+     *
+     * Rows stamped with an `AgentSessionID` collapse into ONE session card in the UI. When
+     * the oldest row of a page is stamped, the rest of that session sits below the page
+     * boundary — without this read the card renders from a partial row set AND the same
+     * session reappears on the next older page.
+     *
+     * @returns The page with any missing session rows prepended, still chronological.
+     */
+    private async expandOldestSession(
+        conversationId: string,
+        details: MJConversationDetailEntity[],
+        contextUser: UserInfo
+    ): Promise<MJConversationDetailEntity[]> {
+        const sessionId = details[0].AgentSessionID?.trim();
+        if (!sessionId) {
+            return details;
+        }
+
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJConversationDetailEntity>({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ConversationID='${conversationId}' AND AgentSessionID='${sessionId}' `
+                + `AND Sequence < ${details[0].Sequence}`,
+            OrderBy: 'Sequence DESC',
+            MaxRows: MAX_SESSION_EXPANSION_ROWS,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!result.Success || !result.Results?.length) {
+            return details;
+        }
+        return [...[...result.Results].reverse(), ...details];
+    }
+
+    /**
+     * Probes whether any row exists below the window's oldest `Sequence` — i.e. whether the
+     * UI should show its "earlier messages" sentinel.
+     *
+     * A one-row probe rather than `page.length === MaxRows`: session expansion changes the
+     * row count, so a full page can look short and a short page can look full.
+     *
+     * Returns a TRI-STATE rather than a boolean. "No older rows" and "could not find out"
+     * are both `HasOlder: false`, and only the second must leave the caller's cursor alone.
+     */
+    private async hasOlderDetails(
+        conversationId: string,
+        oldestSequence: number,
+        contextUser: UserInfo
+    ): Promise<{ HasOlder: boolean; Failed: boolean }> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const probe = await rv.RunView<Pick<MJConversationDetailEntityType, 'ID'>>({
+            EntityName: 'MJ: Conversation Details',
+            ExtraFilter: `ConversationID='${conversationId}' AND Sequence < ${oldestSequence}`,
+            OrderBy: 'Sequence DESC',
+            MaxRows: 1,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (!probe.Success) {
+            console.error('[ConversationEngine] Failed to probe for older details:', probe.ErrorMessage);
+            return { HasOlder: false, Failed: true };
+        }
+        return { HasOlder: (probe.Results?.length ?? 0) > 0, Failed: false };
+    }
+
+
     /**
      * Builds a full ConversationDetailCache from raw GetConversationComplete query results.
      * Hydrates entity objects and parses peripheral JSON data in one pass.
@@ -1169,7 +1638,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         for (const row of rawData) {
             if (!row.ID) continue;
 
-            const parsed = parseConversationDetailComplete(row);
+            const parsed = ParseConversationDetailComplete(row);
 
             // Agent runs
             if (parsed.agentRuns.length > 0) {
@@ -1219,6 +1688,141 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             LoadedAt: new Date(),
             PeripheralDataStale: false
         };
+    }
+
+
+
+    /**
+     * Loads peripheral data for ONE window's rows.
+     *
+     * Sibling of {@link buildDetailCacheFromRawData}, which cannot be reused here: that
+     * method parses the `AgentRunsJSON` / `ArtifactsJSON` / `RatingsJSON` columns that only
+     * the GetConversationComplete stored query produces. A windowed RunView returns none of
+     * them, so each peripheral is a real query.
+     *
+     * A failing peripheral degrades to an empty map — the transcript still renders.
+     */
+    private async buildWindowPeripherals(
+        details: MJConversationDetailEntity[],
+        contextUser: UserInfo
+    ): Promise<WindowPeripherals> {
+        const detailIds = details.map(d => d.ID).filter(id => !!id);
+        if (detailIds.length === 0) {
+            return emptyWindowPeripherals();
+        }
+
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const byDetail = detailIdInFilter(detailIds);
+        const [runsResult, ratingsResult, junctionsResult] = await rv.RunViews<
+            MJAIAgentRunEntity | MJConversationDetailRatingEntityType | MJConversationDetailArtifactEntityType
+        >([
+            { EntityName: 'MJ: AI Agent Runs', ExtraFilter: byDetail, ResultType: 'entity_object' },
+            { EntityName: 'MJ: Conversation Detail Ratings', ExtraFilter: byDetail, ResultType: 'simple' },
+            // Direction='Output' mirrors GetConversationComplete — input artifacts aren't shown.
+            {
+                EntityName: 'MJ: Conversation Detail Artifacts',
+                ExtraFilter: `${byDetail} AND Direction='Output'`,
+                ResultType: 'simple'
+            }
+        ], contextUser);
+
+        const runs = (runsResult?.Success ? runsResult.Results : []) as MJAIAgentRunEntity[];
+        const ratings = (ratingsResult?.Success ? ratingsResult.Results : []) as MJConversationDetailRatingEntityType[];
+        const junctions = (junctionsResult?.Success ? junctionsResult.Results : []) as MJConversationDetailArtifactEntityType[];
+
+        const usersById = await this.loadWindowUsers(collectWindowUserIds(details, ratings), contextUser);
+
+        return {
+            AgentRunsByDetailId: groupAgentRunsByDetailId(runs),
+            UserAvatars: buildUserAvatarMap(details, usersById),
+            RatingsByDetailId: groupRatingsByDetailId(ratings, usersById),
+            ArtifactsByDetailId: await this.buildWindowArtifactMap(junctions, contextUser)
+        };
+    }
+
+    /**
+     * Loads the users a window references — message authors (for avatars) and raters (for
+     * the denormalized `UserName` on each rating).
+     */
+    private async loadWindowUsers(
+        userIds: string[],
+        contextUser: UserInfo
+    ): Promise<Map<string, MJUserEntityType>> {
+        if (userIds.length === 0) {
+            return new Map<string, MJUserEntityType>();
+        }
+
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJUserEntityType>({
+            EntityName: 'MJ: Users',
+            ExtraFilter: idInFilter(userIds),
+            Fields: ['ID', 'Name', 'UserImageURL', 'UserImageIconClass'],
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (!result.Success) {
+            console.error('[ConversationEngine] Failed to load window users:', result.ErrorMessage);
+            return new Map<string, MJUserEntityType>();
+        }
+        return new Map((result.Results || []).map(user => [user.ID, user]));
+    }
+
+    /**
+     * Rebuilds the window's artifact cards from the three tables GetConversationComplete
+     * joins: the detail↔version junction, the version, then the artifact.
+     *
+     * This cannot be one batched call — the version ids come from the junction rows, and
+     * the artifact ids from the versions — so it is two sequential follow-up reads. Rows
+     * whose version or artifact is missing are dropped, matching the stored query's INNER
+     * JOIN semantics.
+     */
+    private async buildWindowArtifactMap(
+        junctions: MJConversationDetailArtifactEntityType[],
+        contextUser: UserInfo
+    ): Promise<Map<string, ArtifactJSON[]>> {
+        const byDetailId = new Map<string, ArtifactJSON[]>();
+        if (junctions.length === 0) {
+            return byDetailId;
+        }
+
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const versionResult = await rv.RunView<MJArtifactVersionEntityType>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: idInFilter([...new Set(junctions.map(j => j.ArtifactVersionID))]),
+            ResultType: 'simple'
+        }, contextUser);
+        const versions = versionResult.Success ? (versionResult.Results || []) : [];
+        const versionById = new Map(versions.map(v => [v.ID, v]));
+
+        const artifactIds = [...new Set(versions.map(v => v.ArtifactID))];
+        const artifacts = artifactIds.length === 0 ? [] : await this.loadArtifactsByIds(artifactIds, contextUser);
+        const artifactById = new Map(artifacts.map(a => [a.ID, a]));
+
+        for (const junction of junctions) {
+            const version = versionById.get(junction.ArtifactVersionID);
+            const artifact = version ? artifactById.get(version.ArtifactID) : undefined;
+            if (!version || !artifact) {
+                continue;
+            }
+            const list = byDetailId.get(junction.ConversationDetailID) ?? [];
+            list.push(mergeArtifactJSON(junction, version, artifact));
+            byDetailId.set(junction.ConversationDetailID, list);
+        }
+        return byDetailId;
+    }
+
+    /** Reads the artifact rows behind a window's artifact versions. */
+    private async loadArtifactsByIds(
+        artifactIds: string[],
+        contextUser: UserInfo
+    ): Promise<MJArtifactEntityType[]> {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJArtifactEntityType>({
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: idInFilter(artifactIds),
+            ResultType: 'simple'
+        }, contextUser);
+        return result.Success ? (result.Results || []) : [];
     }
 
     /**
@@ -1289,7 +1893,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 existing.Details.push(newDetail);
             }
 
-            const parsed = parseConversationDetailComplete(row);
+            const parsed = ParseConversationDetailComplete(row);
 
             // Merge agent runs: update in-place or add.
             //
@@ -1812,24 +2416,43 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             ? (event.payload as { action?: string })?.action || 'save'
             : event.type;
 
-        if (normalizedName === 'mj: conversations') {
-            return this.handleConversationEntityEvent(event, effectiveType);
-        }
+        const handled =
+            normalizedName === 'mj: conversations' ||
+            normalizedName === 'mj: conversation details' ||
+            normalizedName === 'mj: projects' ||
+            normalizedName === 'mj: ai agent runs' ||
+            normalizedName === 'mj: conversation detail artifacts' ||
+            normalizedName === 'mj: conversation detail ratings';
 
-        if (normalizedName === 'mj: conversation details') {
-            return this.handleConversationDetailEntityEvent(event, effectiveType);
-        }
+        if (handled) {
+            // Hydrate ONCE, here, because this is the only async frame on the path. A remote event
+            // carries the row only for entities on the server's broadcast allowlist (see
+            // `cacheSettings.recordDataBroadcastEntities`); otherwise this re-reads the single
+            // record through the provider, as this user, so access control decides what comes
+            // back. Handlers below stay synchronous and simply receive the row — passing it down
+            // rather than letting each fetch its own keeps this to one read per event and avoids
+            // turning five handlers async for a value the dispatcher can obtain once.
+            // ...and only when something below will actually use it — see eventNeedsRow. On a
+            // remote event without `recordData`, hydrating means a read through the provider, and
+            // this dispatcher runs in EVERY connected browser for every save of these entities
+            // anywhere in the system, whether or not this session has any claim to the record.
+            const row = this.eventNeedsRow(event, normalizedName, effectiveType)
+                ? await ResolveEntityEventRow(event, this.ProviderToUse, this.ContextUser)
+                : null;
 
-        if (normalizedName === 'mj: projects') {
-            return this.handleProjectEntityEvent(event, effectiveType);
-        }
-
-        if (normalizedName === 'mj: ai agent runs') {
-            return this.handleAgentRunEntityEvent(event, effectiveType);
-        }
-
-        if (normalizedName === 'mj: conversation detail artifacts' || normalizedName === 'mj: conversation detail ratings') {
-            return this.handlePeripheralJunctionEntityEvent(event);
+            if (normalizedName === 'mj: conversations') {
+                return this.handleConversationEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: conversation details') {
+                return this.handleConversationDetailEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: projects') {
+                return this.handleProjectEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: ai agent runs') {
+                return this.handleAgentRunEntityEvent(event, effectiveType, row);
+            }
+            return this.handlePeripheralJunctionEntityEvent(event, row);
         }
 
         // Not a conversation entity — let BaseEngine handle it
@@ -1837,28 +2460,96 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Extracts record data from a BaseEntityEvent.
-     * For local events: uses baseEntity directly.
-     * For remote-invalidate events: parses recordData JSON from the payload.
-     * Returns null if no data is available.
+     * Will anything below actually use the row, or does the primary key suffice?
+     *
+     * Asked BEFORE hydrating, because for a remote event whose entity is not on the server's
+     * broadcast allowlist, hydrating costs a read through the provider. This dispatcher runs in
+     * every connected browser, for every save of these entities anywhere in the system — and
+     * conversation details are the hottest write path in the product, so an unconditional read
+     * here is one round trip per connected client per message, nearly all of them refused for a
+     * session with no claim to the record.
+     *
+     * Every `false` below is a case where the handler already returns early without touching the
+     * row, so skipping the read changes nothing a caller can observe.
      */
-    private extractRecordData(event: BaseEntityEvent): Record<string, unknown> | null {
-        // Local event — entity is available directly
-        if (event.baseEntity) {
-            return event.baseEntity.GetAll();
+    private eventNeedsRow(event: BaseEntityEvent, normalizedName: string, effectiveType: string): boolean {
+        // A row that costs nothing is never worth skipping. Free for a local event (the row IS the
+        // live entity) and for a remote event whose payload already carries `recordData`, because
+        // the entity is on the server's broadcast allowlist.
+        //
+        // This has to come first, and the per-entity reasoning below has to be read as being about
+        // THE READ. Applying it to a free row is what dropped a remote project save: the save
+        // branch uses EnvironmentID and IsArchived off the row, and with the row nulled it read
+        // them as undefined/false, concluded the project was outside the loaded environment, and
+        // filtered it out of the list — for exactly the sessions displaying it.
+        if (EntityEventRowIsFree(event)) {
+            return true;
         }
 
-        // Remote event — parse from payload
-        const payload = event.payload as { recordData?: string } | undefined;
-        if (payload?.recordData) {
-            try {
-                return JSON.parse(payload.recordData);
-            } catch {
-                return null;
+        // Projects: a DELETE needs only the id. A SAVE genuinely uses the row — `EnvironmentID` and
+        // `IsArchived` are what decide whether the project stays in the list — so it has to be
+        // hydrated whenever we hold the project.
+        //
+        // The earlier reasoning here ("a save that got this far has nothing to merge regardless")
+        // was true of the MERGE and false of the branch beside it: without the row, `EnvironmentID`
+        // reads as absent, `inLoadedEnvironment` comes out false for any session that has loaded an
+        // environment, and the save REMOVES the project instead. That is precisely the cross-client
+        // case this change exists to serve, so it is gated like conversations are: when we do not
+        // hold the project the remote path does nothing anyway (the append branch below requires
+        // `event.baseEntity`), and the row would be fetched only to be discarded.
+        if (normalizedName === 'mj: projects') {
+            if (effectiveType !== 'save') {
+                return false;
             }
+            const id = this.eventRecordID(event, null);
+            return !!id && this._projects$.value.some(p => UUIDsEqual(p.ID, id));
         }
 
-        return null;
+        if (normalizedName === 'mj: conversations') {
+            // A delete needs only the id. A save merges fields onto a conversation we already
+            // hold — and when we do not hold it, the remote branch of the handler does nothing,
+            // so the row would be fetched only to be discarded.
+            if (effectiveType !== 'save') {
+                return false;
+            }
+            const id = this.eventRecordID(event, null);
+            return !!id && !!this.GetConversation(id);
+        }
+
+        // Details, agent runs and the junction entities all resolve through the detail cache and
+        // return early when the conversation they name is not in it.
+        //
+        // A remote DELETE can never be served: the record is gone, so the re-read comes back null
+        // and every one of those handlers early-returns on the missing foreign key. The round trip
+        // could not change an outcome, so it is not made. (That these handlers cannot act on a
+        // remote delete at all is a pre-existing gap — deletes never carried `recordData` at either
+        // publish site — and is not what this method is for.) Local deletes are unaffected: the
+        // free-row check above already returned true for them.
+        if (effectiveType === 'delete') {
+            return false;
+        }
+
+        // With the cache empty — any session that has not opened a conversation — none of them can
+        // do anything, whatever the row says. (A non-empty cache still needs the read:
+        // ConversationID is a foreign key, so the primary key cannot tell us whether this detail
+        // belongs to a conversation we hold.)
+        return this._detailCache.size > 0;
+    }
+
+    /**
+     * This record's id, from the primary key the event always carries.
+     *
+     * Prefers the key over the row: the key is broadcast unconditionally, whereas the row is only
+     * present for allowlisted entities or after a re-read. Falls back to the row's `ID` so a
+     * single-column entity still resolves if the key is ever absent.
+     */
+    private eventRecordID(event: BaseEntityEvent, data: Record<string, unknown> | null): string | undefined {
+        const key = ResolveEntityEventKey(event);
+        const fromKey = key?.KeyValuePairs?.find(kv => kv.FieldName?.toLowerCase() === 'id')?.Value;
+        if (fromKey != null && String(fromKey).length > 0) {
+            return String(fromKey);
+        }
+        return data?.['ID'] as string | undefined;
     }
 
     /**
@@ -1878,12 +2569,20 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Handles save/delete events on Conversation entities from local or remote code.
      */
-    private handleConversationEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleConversationEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        // Identity comes from the primary key, which is broadcast unconditionally — a delete needs
+        // nothing else, so it no longer depends on the row being available.
+        const id = this.eventRecordID(event, data);
         if (!id) return true;
 
         if (action === 'save') {
+            // Same reasoning as handleProjectEntityEvent: the row can be null even when
+            // `eventNeedsRow` said yes, because the re-read can be refused, find the record gone,
+            // or simply fail — all of which `ResolveEntityEventRow` reports as null rather than
+            // throwing. `mergeDataOntoRecord` would hand that null to `BaseEntity.SetMany`, which
+            // throws, and nothing above this frame catches it. A conversation we cannot re-read
+            // stays as it was; the next `LoadConversations` corrects it.
+            if (!data) return true;
             const existing = this.GetConversation(id);
             if (existing) {
                 this.mergeDataOntoRecord(existing, data);
@@ -1918,10 +2617,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Handles save/delete events on ConversationDetail entities from local or remote code.
      */
-    private handleConversationDetailEntityEvent(event: BaseEntityEvent, action: string): boolean {
+    private handleConversationDetailEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
         const entity = event.baseEntity as MJConversationDetailEntity | null;
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+        const id = this.eventRecordID(event, data);
+        // ConversationID is a foreign key, so the primary key cannot supply it — this is the field
+        // the dispatcher's re-read exists to obtain.
         const conversationId = data?.['ConversationID'] as string;
         if (!id || !conversationId) return true;
 
@@ -1961,9 +2661,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * deleted via the project form modal. Only tracks projects in the currently-loaded
      * environment; archived projects are dropped from the active list.
      */
-    private handleProjectEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleProjectEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        const id = this.eventRecordID(event, data);
         if (!id) return true;
 
         const current = this._projects$.value;
@@ -1976,9 +2675,33 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return true;
         }
 
-        // save — only track projects in the loaded environment; drop archived ones
-        const environmentId = data?.['EnvironmentID'] as string | undefined;
-        const isArchived = data?.['IsArchived'] === true;
+        // WITHOUT THE ROW WE KNOW NOTHING, and must not guess. Every field below would read as
+        // absent: `IsArchived` becomes false, which is harmless, but `EnvironmentID` becomes
+        // undefined — and "no environment" is indistinguishable from "moved to another one", so the
+        // branch that DROPS the project is the one that runs. Leaving it untouched is the only
+        // honest response to a row we do not have.
+        //
+        // `eventNeedsRow` is supposed to guarantee this never happens for a project we hold, but
+        // that contract is enforced by a comment and `strictNullChecks` is off in this package, so
+        // the guarantee is restated here where the damage would be done. Hydration can also simply
+        // fail: `ResolveEntityEventRow` returns null rather than throwing.
+        //
+        // KEEPING IT IS DELIBERATE EVEN WHEN THE ROW WAS WITHHELD ON PURPOSE. A null can mean the
+        // re-read was refused — the viewer may no longer read this project — or that it failed.
+        // The two are indistinguishable here, and they want opposite responses, so this takes the
+        // one whose wrong case is recoverable: a stale row in a sidebar is corrected by the next
+        // `LoadProjects`, whereas a project deleted from the UI on a transient read failure is
+        // gone until the user reloads and cannot be told why.
+        if (!data) {
+            return true;
+        }
+
+        // save — only track projects in the loaded environment; drop archived ones.
+        // No `?.` past the guard above: `data` is non-null here, and optional chaining would say
+        // otherwise. It is also what let `mergeDataOntoRecord(…, data)` accept a nullable argument
+        // without complaint, since `strictNullChecks` is off in this package.
+        const environmentId = data['EnvironmentID'] as string | undefined;
+        const isArchived = data['IsArchived'] === true;
         const inLoadedEnvironment =
             !this._lastProjectsEnvironmentId ||
             (environmentId != null && UUIDsEqual(environmentId, this._lastProjectsEnvironmentId));
@@ -2002,9 +2725,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * Handles save/delete events on AI Agent Run entities from local or remote code.
      * Updates the AgentRunsByDetailId map so timers and status reflect reality.
      */
-    private handleAgentRunEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleAgentRunEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        const id = this.eventRecordID(event, data);
+        // Foreign key, not part of this row's primary key — supplied by the dispatcher's re-read.
         const detailId = data?.['ConversationDetailID'] as string;
         if (!id || !detailId) return true;
 
@@ -2041,8 +2764,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * reconstructed from the entity event alone, so we flag the cache as stale.
      * The UI component checks PeripheralDataStale and force-refreshes when needed.
      */
-    private handlePeripheralJunctionEntityEvent(event: BaseEntityEvent): boolean {
-        const data = this.extractRecordData(event);
+    private handlePeripheralJunctionEntityEvent(event: BaseEntityEvent, data: Record<string, unknown> | null): boolean {
+        // The junction's own primary key is not useful here; what matters is which detail it hangs
+        // off, which is a foreign key and therefore only available from the row.
         const detailId = data?.['ConversationDetailID'] as string;
         if (!detailId) return true;
 
@@ -2124,8 +2848,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             if (a.IsPinned && !b.IsPinned) return -1;
             if (!a.IsPinned && b.IsPinned) return 1;
             // Then by updated date descending
-            const aTime = a.__mj_UpdatedAt?.getTime() ?? 0;
-            const bTime = b.__mj_UpdatedAt?.getTime() ?? 0;
+            const aTime = ToEpochMs(a.__mj_UpdatedAt);
+            const bTime = ToEpochMs(b.__mj_UpdatedAt);
             return bTime - aTime;
         });
     }

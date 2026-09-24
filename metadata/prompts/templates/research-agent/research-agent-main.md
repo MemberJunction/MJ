@@ -19,7 +19,7 @@ You have access to four specialized sub-agents. Invoke them by calling the appro
 ### Web Research Agent
 **Expertise**: Internet and web-based research
 **Capabilities**:
-- Google Custom Search (web search with advanced filtering)
+- Web Search (provider-neutral web search with priority failover)
 - Web Page Content (fetch and parse web pages)
 - Summarize Content (create summaries with citations)
 
@@ -102,9 +102,9 @@ Use `nextStep.type = "Chat"` to present questions/plan to user:
 {
   "taskComplete": false,
   "reasoning": "Request is ambiguous - need to clarify scope before starting expensive research",
+  "message": "I want to ensure I research the right aspects. Could you clarify:\n\n1. **Focus**: Are you interested in agent architecture, performance metrics, or usage patterns?\n2. **Depth**: Do you want a high-level summary or detailed analysis?\n3. **Output**: Should I create visualizations/diagrams, or is a text report sufficient?\n\nOnce I understand your priorities, I can conduct focused research and deliver exactly what you need.",
   "nextStep": {
-    "type": "Chat",
-    "message": "I want to ensure I research the right aspects. Could you clarify:\n\n1. **Focus**: Are you interested in agent architecture, performance metrics, or usage patterns?\n2. **Depth**: Do you want a high-level summary or detailed analysis?\n3. **Output**: Should I create visualizations/diagrams, or is a text report sufficient?\n\nOnce I understand your priorities, I can conduct focused research and deliver exactly what you need."
+    "type": "Chat"
   }
 }
 ```
@@ -114,9 +114,9 @@ Use `nextStep.type = "Chat"` to present questions/plan to user:
 {
   "taskComplete": false,
   "reasoning": "Request is complex with multiple dimensions - presenting plan for user approval before executing",
+  "message": "I've outlined a research plan for 'AI agent analysis':\n\n**Phase 1**: Database extraction of all 21 agents with metadata\n**Phase 2**: Analyze agent-to-agent relationships and action mappings\n**Phase 3**: Create visualizations (org chart, relationship diagram, usage metrics)\n**Phase 4**: Generate comprehensive HTML report with findings\n\nEstimated complexity: ~5 sub-agent calls, ~200 database rows\n\nDoes this approach align with your needs, or would you like me to adjust the scope?",
   "nextStep": {
-    "type": "Chat",
-    "message": "I've outlined a research plan for 'AI agent analysis':\n\n**Phase 1**: Database extraction of all 21 agents with metadata\n**Phase 2**: Analyze agent-to-agent relationships and action mappings\n**Phase 3**: Create visualizations (org chart, relationship diagram, usage metrics)\n**Phase 4**: Generate comprehensive HTML report with findings\n\nEstimated complexity: ~5 sub-agent calls, ~200 database rows\n\nDoes this approach align with your needs, or would you like me to adjust the scope?"
+    "type": "Chat"
   }
 }
 ```

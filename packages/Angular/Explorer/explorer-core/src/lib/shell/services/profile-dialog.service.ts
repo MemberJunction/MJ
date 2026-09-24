@@ -17,7 +17,7 @@ export class ProfileDialogService {
 
     constructor(private dialogService: MJDialogService) {}
 
-    public open(containerRef: ViewContainerRef, options: ProfileDialogOpenOptions = {}): void {
+    public Open(containerRef: ViewContainerRef, options: ProfileDialogOpenOptions = {}): void {
         if (this.dialogRef) return;
 
         this.dialogRef = this.dialogService.open({
@@ -30,7 +30,7 @@ export class ProfileDialogService {
         if (instance) {
             instance.AvatarUrl = options.avatarUrl ?? null;
             instance.AvatarIconClass = options.avatarIconClass ?? null;
-            instance.CloseRequested.subscribe(() => this.close());
+            instance.CloseRequested.subscribe(() => this.Close());
         }
 
         this.dialogRef.Result.subscribe(() => {
@@ -38,14 +38,29 @@ export class ProfileDialogService {
         });
     }
 
-    public close(): void {
+    /** @deprecated Use {@link Open}. */
+    public open(containerRef: ViewContainerRef, options: ProfileDialogOpenOptions = {}): void {
+        return this.Open(containerRef, options);
+    }
+
+    public Close(): void {
         if (this.dialogRef) {
             this.dialogRef.Close();
             this.dialogRef = null;
         }
     }
 
-    public get isOpen(): boolean {
+    /** @deprecated Use {@link Close}. */
+    public close(): void {
+        return this.Close();
+    }
+
+    public get IsOpen(): boolean {
         return this.dialogRef !== null;
+    }
+
+    /** @deprecated Use {@link IsOpen}. */
+    public get isOpen(): boolean {
+        return this.IsOpen;
     }
 }

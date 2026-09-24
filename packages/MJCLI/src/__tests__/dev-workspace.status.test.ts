@@ -18,17 +18,27 @@ afterEach(() => {
   parent = null;
 });
 
+/** Minimal workspace-yaml member with the default packages glob. */
+function member(name: string, globs: string[] = ['packages/*']): { Name: string; WorkspaceGlobs: string[] } {
+  return { Name: name, WorkspaceGlobs: globs };
+}
+
 describe('ParseWorkspaceMembers', () => {
   it('round-trips the members out of a generated pnpm-workspace.yaml', () => {
-    const yaml = BuildWorkspaceYaml(['bizapps-tasks', 'bizapps-common', 'MJ-repo']);
+    const yaml = BuildWorkspaceYaml([member('bizapps-tasks'), member('bizapps-common'), member('MJ-repo')]);
     expect(ParseWorkspaceMembers(yaml)).toEqual(['MJ-repo', 'bizapps-common', 'bizapps-tasks']);
   });
 
   it('ignores the packages globs and the build-scripts allowlist entries', () => {
-    const yaml = BuildWorkspaceYaml(['bizapps-x']);
+    const yaml = BuildWorkspaceYaml([member('bizapps-x')]);
     const members = ParseWorkspaceMembers(yaml);
     expect(members).toEqual(['bizapps-x']);
     expect(members).not.toContain('esbuild'); // allowlist entry, different yaml key
+  });
+
+  it('still yields only member names when a member contributes nested globs (#3795)', () => {
+    const yaml = BuildWorkspaceYaml([member('MJ', ['packages/*', 'packages/AI/*', 'packages/Angular/Explorer/*'])]);
+    expect(ParseWorkspaceMembers(yaml)).toEqual(['MJ']);
   });
 
   it('returns [] for empty input', () => {
@@ -68,7 +78,7 @@ describe('CollectWorkspaceStatus', () => {
       'bizapps-x': { RootPackageJson: { name: 'x' }, MjAppJson: true },
       'bizapps-y': { RootPackageJson: { name: 'y' }, MjAppJson: true },
     });
-    writeFileSync(path.join(parent, 'pnpm-workspace.yaml'), BuildWorkspaceYaml(['bizapps-x', 'ghost-repo']), 'utf8');
+    writeFileSync(path.join(parent, 'pnpm-workspace.yaml'), BuildWorkspaceYaml([member('bizapps-x'), member('ghost-repo')]), 'utf8');
     writeFileSync(path.join(parent, 'package.json'), JSON.stringify({ packageManager: 'pnpm@10.33.0' }), 'utf8');
     mkdirSync(path.join(parent, 'node_modules'));
 
@@ -86,6 +96,29 @@ describe('CollectWorkspaceStatus', () => {
   it('rejects a relative parent path', () => {
     expect(() => CollectWorkspaceStatus('relative/dir', null, 'default')).toThrow(/absolute/);
   });
+
+  it('flags a member-root .pnpm store as a standalone install, but not parent-linked node_modules', () => {
+    parent = CreateFixtureParent({
+      'bizapps-forked': { RootPackageJson: { name: 'forked' }, MjAppJson: true },
+      'bizapps-linked': { RootPackageJson: { name: 'linked' }, MjAppJson: true },
+      'bizapps-npm': { RootPackageJson: { name: 'npmish' }, MjAppJson: true },
+    });
+    writeFileSync(
+      path.join(parent, 'pnpm-workspace.yaml'),
+      BuildWorkspaceYaml([member('bizapps-forked'), member('bizapps-linked'), member('bizapps-npm')]),
+      'utf8'
+    );
+    // forked: pnpm standalone install → member-root local store
+    mkdirSync(path.join(parent, 'bizapps-forked', 'node_modules', '.pnpm'), { recursive: true });
+    // linked: what a healthy parent install leaves inside a member — node_modules WITHOUT a local store
+    mkdirSync(path.join(parent, 'bizapps-linked', 'node_modules'), { recursive: true });
+    // npm: npm standalone install → tree marker
+    mkdirSync(path.join(parent, 'bizapps-npm', 'node_modules'), { recursive: true });
+    writeFileSync(path.join(parent, 'bizapps-npm', 'node_modules', '.package-lock.json'), '{}', 'utf8');
+
+    const status = CollectWorkspaceStatus(parent, null, 'flag');
+    expect(status.MembersWithStandaloneInstalls).toEqual(['bizapps-forked', 'bizapps-npm']);
+  });
 });
 
 /** A fully-populated status literal the render tests mutate per-case. */
@@ -94,6 +127,7 @@ function baseStatus(): WorkspaceStatus {
     ParentDir: '/the/parent',
     DirSource: 'flag',
     ParentIsGitRepo: false,
+    MembersWithStandaloneInstalls: [],
     Files: [
       { Name: 'pnpm-workspace.yaml', Exists: true },
       { Name: '.npmrc', Exists: true },
@@ -138,6 +172,13 @@ describe('RenderStatus', () => {
   it('warns loudly when the parent is itself a git repo root', () => {
     const status = { ...baseStatus(), ParentIsGitRepo: true };
     expect(RenderStatus(status)).toContain('git repo root');
+  });
+
+  it('warns per member with a standalone install, naming the fix', () => {
+    const status = { ...baseStatus(), MembersWithStandaloneInstalls: ['bizapps-forked'] };
+    const out = RenderStatus(status);
+    expect(out).toContain('STANDALONE INSTALL: bizapps-forked');
+    expect(out).toContain('--clean-members');
   });
 
   it('reports missing member dirs', () => {

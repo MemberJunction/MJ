@@ -132,13 +132,14 @@ describe('composition tokens', () => {
             expect(RenderPipeline.HasCompositionTokens(`-- {{query:"x/y"}}\nSELECT 1`)).toBe(false);
         });
 
-        // HasCompositionTokens recognizes tokens inside string literals and bracket
-        // identifiers, even though full resolution correctly skips them. Wasted work
-        // only; not a correctness issue.
+        // KNOWN LIMITATION: HasCompositionTokens recognizes tokens inside string literals
+        // and bracket identifiers, even though full resolution correctly skips them.
+        // Wasted work only; not a correctness issue.
         it.skip('returns false when the only token is inside a string literal', () => {
             expect(RenderPipeline.HasCompositionTokens(`SELECT 'literal {{query:"x/y"}} text' FROM t`)).toBe(false);
         });
 
+        // KNOWN LIMITATION: same string-literal/bracket-identifier blind spot as above.
         it.skip('returns false when the only token is inside a bracket identifier', () => {
             expect(RenderPipeline.HasCompositionTokens(`SELECT [{{query:"x/y"}}] FROM t`)).toBe(false);
         });
@@ -1385,13 +1386,14 @@ describe('dialect parity', () => {
         expect(pgResult.FinalSQL).toMatch(/LIMIT\s+10\b/i);
     });
 
-    // PostgreSQL dollar-quoted strings (`$$ … $$`, `$tag$ … $tag$`) are not
-    // currently recognized by StripComments. Skip until a PG caller exercises this.
+    // KNOWN LIMITATION: PostgreSQL dollar-quoted strings (`$$ … $$`, `$tag$ … $tag$`) are
+    // not currently recognized by StripComments. Skip until a PG caller exercises this.
     it.skip('PG `$$ … $$` dollar-quoted strings are not eaten by comment stripping', () => {
         const out = SQLParser.StripComments(`SELECT $$it -- has dashes$$ AS s`, pg);
         expect(out).toContain('$$it -- has dashes$$');
     });
 
+    // KNOWN LIMITATION: same dollar-quoting blind spot as above.
     it.skip('PG tagged dollar-quoted strings are not eaten by comment stripping', () => {
         const out = SQLParser.StripComments(`SELECT $body$function_body -- $/* */$body$ AS s`, pg);
         expect(out).toContain('$body$function_body -- $/* */$body$');
@@ -2017,6 +2019,89 @@ INNER JOIN (SELECT id, chapter_name FROM chapters WHERE active = true) c ON m.ch
         const result = RenderPipeline.Run(sql, { Platform: 'postgresql', MaxRows: CAP });
         expect(result.FinalSQL).toMatch(/LIMIT\s+100\b/i);
         expect(result.FinalSQL).not.toMatch(/500000/);
+    });
+});
+
+/**
+ * Applying a row cap must not rewrite the caller's SQL.
+ *
+ * `SetOuterCap` + `ToSQL()` re-emits the whole statement from the AST, and node-sql-parser
+ * normalizes while generating — keywords come back upper-cased, identifiers re-quoted. On
+ * PostgreSQL that is a correctness bug rather than a cosmetic one: the provider's identifier
+ * auto-quoter runs afterwards, and quotes any upper-cased keyword its allowlist is missing.
+ *
+ * Found in production. A generated query ordered `ASC nulls last` was re-emitted as
+ * `ASC NULLS LAST`, quoted to `ASC "NULLS" "LAST"`, and rejected with
+ * `syntax error at or near ""NULLS""` — SQL the caller never wrote. The keyword allowlist was
+ * one half of that defect; this is the other, and it is the half that affects every caller
+ * whose SQL has to survive a cap, not only the ones using a keyword we happened to miss.
+ */
+describe('MaxRows row cap — preserves the caller\'s SQL text (PostgreSQL)', () => {
+
+    /** The exact ORDER BY shape from the production failure. */
+    const ORDERED = `SELECT cp."recordKey", cp."positionRank"\n`
+        + `FROM acgi."vwCommitteePositions" cp\n`
+        + `ORDER BY cp."committeeDescr" ASC, nullif(cp."positionRank", '')::integer ASC nulls last`;
+
+    it('appends the cap without upper-casing keywords', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run(ORDERED, { Platform: 'postgresql', MaxRows: CAP });
+        expect(result.FinalSQL).toContain('nulls last');
+        expect(result.FinalSQL).not.toMatch(/\bNULLS\s+LAST\b/);
+        expect(result.FinalSQL).toMatch(/LIMIT\s+100\b/i);
+    });
+
+    it('appends the cap without re-quoting identifiers or casts', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run(ORDERED, { Platform: 'postgresql', MaxRows: CAP });
+        // The AST round-trip used to emit `"cp"."recordKey"` and `::INTEGER`.
+        expect(result.FinalSQL).toContain('cp."recordKey"');
+        expect(result.FinalSQL).not.toContain('"cp".');
+        expect(result.FinalSQL).toContain('::integer');
+        expect(result.FinalSQL).not.toContain('::INTEGER');
+    });
+
+    it('leaves the original statement byte-identical, adding only the cap', () => {
+        stubMetadata();
+        const result = RenderPipeline.Run(ORDERED, { Platform: 'postgresql', MaxRows: CAP });
+        expect(result.FinalSQL.startsWith(ORDERED)).toBe(true);
+        expect(result.FinalSQL.slice(ORDERED.length).trim()).toMatch(/^LIMIT\s+100$/i);
+    });
+
+    it('still takes the inline path, not the derived-table wrapper', () => {
+        // Ordering semantics depend on this. An outer wrapper would apply LIMIT above a
+        // subquery's ORDER BY, where PostgreSQL does not guarantee the inner ordering survives —
+        // so a "top 100 by rank" query could return an arbitrary 100.
+        stubMetadata();
+        const result = RenderPipeline.Run(ORDERED, { Platform: 'postgresql', MaxRows: CAP });
+        assertPathTaken(ORDERED, result.FinalSQL, CAP, 'ast');
+    });
+
+    it('abstains when a clause that must follow LIMIT is present', () => {
+        // `SELECT ... FOR UPDATE` cannot take a bare appended LIMIT; falling through to the AST
+        // path is correct, and is what shipped before.
+        stubMetadata();
+        const sql = `SELECT id FROM members ORDER BY id FOR UPDATE`;
+        const result = RenderPipeline.Run(sql, { Platform: 'postgresql', MaxRows: CAP });
+        assertCapEnforcedOrSafelyUntouched(sql, result.FinalSQL, CAP);
+    });
+
+    it('still reduces an existing looser cap, where the text must change', () => {
+        // The append only covers "no existing cap". Replacing a looser one still needs the AST,
+        // and that behaviour is unchanged.
+        stubMetadata();
+        const sql = `SELECT * FROM members ORDER BY id LIMIT 500000`;
+        const result = RenderPipeline.Run(sql, { Platform: 'postgresql', MaxRows: CAP });
+        expect(result.FinalSQL).toMatch(/LIMIT\s+100\b/i);
+        expect(result.FinalSQL).not.toMatch(/500000/);
+    });
+
+    it('leaves an already-tighter cap untouched', () => {
+        stubMetadata();
+        const sql = `SELECT * FROM members ORDER BY id ASC nulls last LIMIT 10`;
+        const result = RenderPipeline.Run(sql, { Platform: 'postgresql', MaxRows: CAP });
+        expect(result.FinalSQL).toContain('nulls last');
+        expect(result.FinalSQL).toMatch(/LIMIT\s+10\b/);
     });
 });
 

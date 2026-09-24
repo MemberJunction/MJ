@@ -223,25 +223,115 @@ interface PermissionDisplay extends CollectionPermission {
     styleUrls: ['./collection-share-modal.component.css']
 })
 export class CollectionShareModalComponent implements OnInit, OnChanges {
-    @Input() isOpen: boolean = false;
-    @Input() collection: MJCollectionEntity | null = null;
-    @Input() currentUser!: UserInfo;
-    @Input() currentUserPermissions: CollectionPermission | null = null;
+    @Input() IsOpen: boolean = false;
 
-    @Output() saved = new EventEmitter<void>();
+    /** @deprecated Use {@link IsOpen}. */
+    @Input() set isOpen(value: boolean) {
+        this.IsOpen = value;
+    }
+    /** @deprecated Use {@link IsOpen}. */
+    get isOpen(): boolean {
+        return this.IsOpen;
+    }
+    @Input() Collection: MJCollectionEntity | null = null;
+
+    /** @deprecated Use {@link Collection}. */
+    @Input() set collection(value: MJCollectionEntity | null) {
+        this.Collection = value;
+    }
+    /** @deprecated Use {@link Collection}. */
+    get collection(): MJCollectionEntity | null {
+        return this.Collection;
+    }
+    @Input() CurrentUser!: UserInfo;
+
+    /** @deprecated Use {@link CurrentUser}. */
+    @Input() set currentUser(value: UserInfo) {
+        this.CurrentUser = value;
+    }
+    /** @deprecated Use {@link CurrentUser}. */
+    get currentUser(): UserInfo {
+        return this.CurrentUser;
+    }
+    @Input() CurrentUserPermissions: CollectionPermission | null = null;
+
+    /** @deprecated Use {@link CurrentUserPermissions}. */
+    @Input() set currentUserPermissions(value: CollectionPermission | null) {
+        this.CurrentUserPermissions = value;
+    }
+    /** @deprecated Use {@link CurrentUserPermissions}. */
+    get currentUserPermissions(): CollectionPermission | null {
+        return this.CurrentUserPermissions;
+    }
+
+    @Output() Saved = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link Saved}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (saved) keeps working. Must stay AFTER Saved: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() saved = this.Saved;
     @Output() cancelled = new EventEmitter<void>();
 
-    permissions: PermissionDisplay[] = [];
-    selectedUser: UserSearchResult | null = null;
-    availablePermissions: string[] = [];
-    canModifyPermissions: boolean = false;
+    Permissions: PermissionDisplay[] = [];
 
-    newPermissions: PermissionSet = {
+    /** @deprecated Use {@link Permissions}. */
+    get permissions(): PermissionDisplay[] {
+        return this.Permissions;
+    }
+    /** @deprecated Use {@link Permissions}. */
+    set permissions(value: PermissionDisplay[]) {
+        this.Permissions = value;
+    }
+    SelectedUser: UserSearchResult | null = null;
+
+    /** @deprecated Use {@link SelectedUser}. */
+    get selectedUser(): UserSearchResult | null {
+        return this.SelectedUser;
+    }
+    /** @deprecated Use {@link SelectedUser}. */
+    set selectedUser(value: UserSearchResult | null) {
+        this.SelectedUser = value;
+    }
+    AvailablePermissions: string[] = [];
+
+    /** @deprecated Use {@link AvailablePermissions}. */
+    get availablePermissions(): string[] {
+        return this.AvailablePermissions;
+    }
+    /** @deprecated Use {@link AvailablePermissions}. */
+    set availablePermissions(value: string[]) {
+        this.AvailablePermissions = value;
+    }
+    CanModifyPermissions: boolean = false;
+
+    /** @deprecated Use {@link CanModifyPermissions}. */
+    get canModifyPermissions(): boolean {
+        return this.CanModifyPermissions;
+    }
+    /** @deprecated Use {@link CanModifyPermissions}. */
+    set canModifyPermissions(value: boolean) {
+        this.CanModifyPermissions = value;
+    }
+
+    NewPermissions: PermissionSet = {
         canRead: true,
         canShare: false,
         canEdit: false,
         canDelete: false
     };
+
+    /** @deprecated Use {@link NewPermissions}. */
+    get newPermissions(): PermissionSet {
+        return this.NewPermissions;
+    }
+    /** @deprecated Use {@link NewPermissions}. */
+    set newPermissions(value: PermissionSet) {
+        this.NewPermissions = value;
+    }
 
     constructor(
         private permissionService: CollectionPermissionService,
@@ -250,7 +340,7 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
     ) {}
 
     async ngOnInit(): Promise<void> {
-        if (this.collection) {
+        if (this.Collection) {
             await this.loadPermissions();
             this.updateAvailablePermissions();
             this.cdr.detectChanges(); // zone.js 0.15: sync changes after async don't trigger CD
@@ -263,7 +353,7 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
         const collectionChanged = changes['collection'] && !changes['collection'].isFirstChange();
         const permissionsChanged = changes['currentUserPermissions'] && !changes['currentUserPermissions'].isFirstChange();
 
-        if ((modalOpened || collectionChanged || permissionsChanged) && this.collection) {
+        if ((modalOpened || collectionChanged || permissionsChanged) && this.Collection) {
             await this.loadPermissions();
             this.updateAvailablePermissions();
             this.cdr.detectChanges(); // zone.js 0.15: sync changes after async don't trigger CD
@@ -271,10 +361,10 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
     }
 
     private async loadPermissions(): Promise<void> {
-        if (!this.collection) return;
+        if (!this.Collection) return;
 
-        const perms = await this.permissionService.loadPermissions(this.collection.ID, this.currentUser);
-        this.permissions = perms.map(p => ({
+        const perms = await this.permissionService.loadPermissions(this.Collection.ID, this.CurrentUser);
+        this.Permissions = perms.map(p => ({
             ...p,
             isEditing: false,
             editingPermissions: {
@@ -291,45 +381,55 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
         // User is owner if:
         // 1. OwnerID is null/undefined (backwards compatibility with old collections)
         // 2. OwnerID matches current user ID
-        const isOwner = !this.collection?.OwnerID || UUIDsEqual(this.collection.OwnerID, this.currentUser.ID);
+        const isOwner = !this.Collection?.OwnerID || UUIDsEqual(this.Collection.OwnerID, this.CurrentUser.ID);
 
         // Allow modification if user is owner OR has Share permission
-        this.canModifyPermissions = isOwner || (this.currentUserPermissions?.canShare || false);
+        this.CanModifyPermissions = isOwner || (this.CurrentUserPermissions?.canShare || false);
 
-        const userPerms = this.currentUserPermissions || {
+        const userPerms = this.CurrentUserPermissions || {
             canRead: true,
             canShare: false,
             canEdit: false,
             canDelete: false
         };
 
-        this.availablePermissions = this.permissionService.getAvailablePermissions(userPerms, isOwner);
+        this.AvailablePermissions = this.permissionService.getAvailablePermissions(userPerms, isOwner);
         console.log('Share modal permissions:', {
-            collectionId: this.collection?.ID,
-            ownerId: this.collection?.OwnerID,
-            currentUserId: this.currentUser.ID,
+            collectionId: this.Collection?.ID,
+            ownerId: this.Collection?.OwnerID,
+            currentUserId: this.CurrentUser.ID,
             isOwner,
-            availablePermissions: this.availablePermissions
+            availablePermissions: this.AvailablePermissions
         });
     }
 
-    getExcludedUserIds(): string[] {
-        const ids = this.permissions.map(p => p.userId);
-        ids.push(this.currentUser.ID); // Can't share with yourself
-        if (this.collection?.OwnerID) {
-            ids.push(this.collection.OwnerID); // Owner already has all permissions
+    GetExcludedUserIds(): string[] {
+        const ids = this.Permissions.map(p => p.userId);
+        ids.push(this.CurrentUser.ID); // Can't share with yourself
+        if (this.Collection?.OwnerID) {
+            ids.push(this.Collection.OwnerID); // Owner already has all permissions
         }
         return ids;
     }
 
-    onUserSelected(user: UserSearchResult): void {
-        this.selectedUser = user;
+    /** @deprecated Use {@link GetExcludedUserIds}. */
+    getExcludedUserIds(): string[] {
+        return this.GetExcludedUserIds();
+    }
+
+    OnUserSelected(user: UserSearchResult): void {
+        this.SelectedUser = user;
         this.cdr.detectChanges();
     }
 
-    onClearSelection(): void {
-        this.selectedUser = null;
-        this.newPermissions = {
+    /** @deprecated Use {@link OnUserSelected}. */
+    onUserSelected(user: UserSearchResult): void {
+        return this.OnUserSelected(user);
+    }
+
+    OnClearSelection(): void {
+        this.SelectedUser = null;
+        this.NewPermissions = {
             canRead: true,
             canShare: false,
             canEdit: false,
@@ -338,13 +438,18 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
         this.cdr.detectChanges();
     }
 
-    async onAddUser(): Promise<void> {
-        if (!this.selectedUser || !this.collection) return;
+    /** @deprecated Use {@link OnClearSelection}. */
+    onClearSelection(): void {
+        return this.OnClearSelection();
+    }
+
+    async OnAddUser(): Promise<void> {
+        if (!this.SelectedUser || !this.Collection) return;
 
         try {
             // User is owner if OwnerID is null (old collections) or matches current user
-            const isOwner = !this.collection.OwnerID || UUIDsEqual(this.collection.OwnerID, this.currentUser.ID);
-            const userPerms = this.currentUserPermissions || {
+            const isOwner = !this.Collection.OwnerID || UUIDsEqual(this.Collection.OwnerID, this.CurrentUser.ID);
+            const userPerms = this.CurrentUserPermissions || {
                 canRead: true,
                 canShare: false,
                 canEdit: false,
@@ -352,35 +457,45 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
             };
 
             // Validate permissions
-            if (!this.permissionService.validatePermissions(this.newPermissions, userPerms, isOwner)) {
+            if (!this.permissionService.validatePermissions(this.NewPermissions, userPerms, isOwner)) {
                 MJNotificationService.Instance.CreateSimpleNotification('You cannot grant permissions you do not have', 'warning', 4000);
                 return;
             }
 
             // Use cascade grant to apply permissions to all child collections
             await this.permissionService.grantPermissionCascade(
-                this.collection.ID,
-                this.selectedUser.id,
-                this.newPermissions,
-                this.currentUser.ID,
-                this.currentUser
+                this.Collection.ID,
+                this.SelectedUser.id,
+                this.NewPermissions,
+                this.CurrentUser.ID,
+                this.CurrentUser
             );
 
             await this.loadPermissions();
-            this.onClearSelection();
-            this.saved.emit();
+            this.OnClearSelection();
+            this.Saved.emit();
         } catch (error) {
             console.error('Error adding user:', error);
             MJNotificationService.Instance.CreateSimpleNotification('Failed to add user. Please try again.', 'error', 5000);
         }
     }
 
-    onEditPermission(permission: PermissionDisplay): void {
+    /** @deprecated Use {@link OnAddUser}. */
+    async onAddUser(): Promise<void> {
+        return this.OnAddUser();
+    }
+
+    OnEditPermission(permission: PermissionDisplay): void {
         permission.isEditing = true;
         this.cdr.detectChanges();
     }
 
-    onCancelEdit(permission: PermissionDisplay): void {
+    /** @deprecated Use {@link OnEditPermission}. */
+    onEditPermission(permission: PermissionDisplay): void {
+        return this.OnEditPermission(permission);
+    }
+
+    OnCancelEdit(permission: PermissionDisplay): void {
         permission.isEditing = false;
         permission.editingPermissions = {
             canRead: permission.canRead,
@@ -391,11 +506,16 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
         this.cdr.detectChanges();
     }
 
-    async onSavePermission(permission: PermissionDisplay): Promise<void> {
+    /** @deprecated Use {@link OnCancelEdit}. */
+    onCancelEdit(permission: PermissionDisplay): void {
+        return this.OnCancelEdit(permission);
+    }
+
+    async OnSavePermission(permission: PermissionDisplay): Promise<void> {
         try {
             // User is owner if OwnerID is null (old collections) or matches current user
-            const isOwner = !this.collection?.OwnerID || UUIDsEqual(this.collection?.OwnerID, this.currentUser.ID);
-            const userPerms = this.currentUserPermissions || {
+            const isOwner = !this.Collection?.OwnerID || UUIDsEqual(this.Collection?.OwnerID, this.CurrentUser.ID);
+            const userPerms = this.CurrentUserPermissions || {
                 canRead: true,
                 canShare: false,
                 canEdit: false,
@@ -410,21 +530,26 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
 
             // Use cascade update to apply changes to all child collections
             await this.permissionService.updatePermissionCascade(
-                this.collection!.ID,
+                this.Collection!.ID,
                 permission.userId,
                 permission.editingPermissions,
-                this.currentUser
+                this.CurrentUser
             );
 
             await this.loadPermissions();
-            this.saved.emit();
+            this.Saved.emit();
         } catch (error) {
             console.error('Error updating permission:', error);
             MJNotificationService.Instance.CreateSimpleNotification('Failed to update permissions. Please try again.', 'error', 5000);
         }
     }
 
-    async onRevokePermission(permission: PermissionDisplay): Promise<void> {
+    /** @deprecated Use {@link OnSavePermission}. */
+    async onSavePermission(permission: PermissionDisplay): Promise<void> {
+        return this.OnSavePermission(permission);
+    }
+
+    async OnRevokePermission(permission: PermissionDisplay): Promise<void> {
         if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Access', message: `Remove ${permission.userName}'s access to this collection and all its child collections?`, confirmText: 'Remove' }))) {
             return;
         }
@@ -432,16 +557,21 @@ export class CollectionShareModalComponent implements OnInit, OnChanges {
         try {
             // Use cascade revoke to remove access from all child collections
             await this.permissionService.revokePermissionCascade(
-                this.collection!.ID,
+                this.Collection!.ID,
                 permission.userId,
-                this.currentUser
+                this.CurrentUser
             );
             await this.loadPermissions();
-            this.saved.emit();
+            this.Saved.emit();
         } catch (error) {
             console.error('Error revoking permission:', error);
             MJNotificationService.Instance.CreateSimpleNotification('Failed to revoke permission. Please try again.', 'error', 5000);
         }
+    }
+
+    /** @deprecated Use {@link OnRevokePermission}. */
+    async onRevokePermission(permission: PermissionDisplay): Promise<void> {
+        return this.OnRevokePermission(permission);
     }
 
     onCancel(): void {

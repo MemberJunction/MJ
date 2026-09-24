@@ -5,22 +5,23 @@ import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
-import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload } from './auth/index.js';
+import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, ExtractUserInfoFromPayload } from './auth/index.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
-import { authCache } from './cache.js';
+import { AuthCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
-import { buildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
+import { BuildBoundaryLogPayload } from './logging/boundaryLogPayload.js';
 import { StartupLogger } from './logging/StartupLogger.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
+import { IdentityClaimEngineServer } from '@memberjunction/core-entities-server';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -109,7 +110,7 @@ async function writeSessionAudit(args: {
     // as them silently fails the permission check (this is exactly why the built-in
     // CreateAuditLogRecord, which saves as `user`, drops guest session rows). We record
     // the real session user in UserID but write the row as the system user.
-    const writer = await getSystemUser();
+    const writer = await GetSystemUser();
     const auditType = provider.AuditLogTypes?.find(
       (t) => t?.Name?.trim().toLowerCase() === args.auditTypeName.trim().toLowerCase(),
     );
@@ -169,7 +170,7 @@ async function auditLoginFailure(
       return; // already logged this failing identity/token — don't let a retry loop spam
     }
     // No-arg: getSystemUser pulls from the process-global UserCache (no ConnectionPool needed here).
-    const systemUser = await getSystemUser();
+    const systemUser = await GetSystemUser();
     if (!systemUser) {
       return;
     }
@@ -315,7 +316,7 @@ function extractWidgetGuestContext(payload: jwt.JwtPayload): WidgetGuestContext 
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
-    const options = getValidationOptions(issuer);
+    const options = GetValidationOptions(issuer);
     
     if (!options) {
       reject(new Error(`No validation options found for issuer ${issuer}`));
@@ -335,14 +336,14 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       verifyOptions.audience = options.audience;
     }
 
-    jwt.verify(token, getSigningKeys(issuer), verifyOptions, (err, jwt) => {
+    jwt.verify(token, GetSigningKeys(issuer), verifyOptions, (err, jwt) => {
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
 
         // Per-request token confirmation — debug-only (one of the worst
         // "constantly on" offenders on an authenticated server).
         if (isDebugLogLevel()) {
-          const userInfo = extractUserInfoFromPayload(payload);
+          const userInfo = ExtractUserInfoFromPayload(payload);
           console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
         }
         resolve(payload);
@@ -358,18 +359,18 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
  */
 export interface RequestContext {
   /** The API endpoint path (e.g., '/graphql', '/mcp') */
-  endpoint: string;
+  endpoint: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** HTTP method (e.g., 'POST', 'GET') */
-  method: string;
+  method: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** GraphQL operation name if available */
-  operationName?: string;
+  operationName?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** Client IP address */
-  ipAddress?: string;
+  ipAddress?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** User-Agent header */
-  userAgent?: string;
+  userAgent?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
-export const getUserPayload = async (
+export const GetUserPayload = async (
   bearerToken: string,
   sessionId = 'default',
   dataSources: DataSourceInfo[],
@@ -387,7 +388,7 @@ export const getUserPayload = async (
     // This authenticates as the specific user who owns the API key
     if (userApiKey && userApiKey !== String(undefined)) {
       // Use system user as context for validation operations
-      const systemUser = await getSystemUser(readOnlyDataSource);
+      const systemUser = await GetSystemUser(readOnlyDataSource);
       const apiKeyEngine = GetAPIKeyEngine();
       const validationResult = await apiKeyEngine.ValidateAPIKey(
         {
@@ -462,7 +463,7 @@ export const getUserPayload = async (
       const systemKeyDigest = createHash('sha256').update(String(systemApiKey)).digest();
       const providedKeyDigest = createHash('sha256').update(String(apiKey)).digest();
       if (timingSafeEqual(systemKeyDigest, providedKeyDigest)) {
-        const systemUser = await getSystemUser(readOnlyDataSource);
+        const systemUser = await GetSystemUser(readOnlyDataSource);
         return {
           userRecord: systemUser,
           email: systemUser.Email,
@@ -496,7 +497,7 @@ export const getUserPayload = async (
       throw new TokenExpiredError(expiryDate);
     }
 
-    if (!authCache.has(token)) {
+    if (!AuthCache.has(token)) {
       const issuer = payload.iss;
       if (!issuer) {
         console.warn('No issuer claim on token');
@@ -511,14 +512,14 @@ export const getUserPayload = async (
       }
 
       await verifyAsync(issuer, token);
-      authCache.set(token, true);
+      AuthCache.set(token, true);
     }
 
     // Use provider to extract user information
-    const userInfo = extractUserInfoFromPayload(payload);
+    const userInfo = ExtractUserInfoFromPayload(payload);
     const email = userInfo.email ? ((userEmailMap ?? {})[userInfo.email] ?? userInfo.email) : userInfo.preferredUsername;
     
-    const userRecord = await verifyUserRecord(
+    const userRecord = await VerifyUserRecord(
       email, 
       userInfo.firstName, 
       userInfo.lastName, 
@@ -554,7 +555,30 @@ export const getUserPayload = async (
       });
     }
 
-    return { userRecord: sessionUser, email: sessionUser.Email, sessionId };
+    // The IdP's OIDC email_verified assertion, read off the JWKS-verified payload. Standard
+    // claim name across Auth0/Okta/Cognito/WorkOS; MSAL and others simply omit it (undefined).
+    const emailVerified = typeof payload.email_verified === 'boolean' ? payload.email_verified : undefined;
+
+    // Automatic claim-on-login — once per issued token (deduped, own prefix so it can't eat the
+    // audit's first-seen slot), fire-and-forget so it never adds latency. Discovers pending
+    // MJ: Identity Claims addressed to this user's email and redeems each through the FULL
+    // RedeemClaim gate (email/verification rules, atomic CAS, driver error handling), passing
+    // the IdP's email_verified assertion so an unverified email can never auto-claim.
+    // Anonymous magic-link guests are skipped: their principal is synthetic and per-session.
+    if (sessionUser.Email && !sessionUser.IsMagicLinkAnonymous && markSessionAuditSeen(sessionAuditKey('claims', payload))) {
+      // Pre-context auth path: per-request providers do not exist yet here, so the global is the
+      // only provider available — same posture as every other pre-context call on this path.
+      // The allowlist marker has to sit on the reference line itself; MultiProviderCompliance
+      // matches per-line, so a marker on its own line above is invisible to the scanner.
+      const claimProvider = Metadata.Provider as unknown as IMetadataProvider; // global-provider-ok: pre-context auth path
+      if (claimProvider) {
+        void IdentityClaimEngineServer.Instance.AutoClaimForUser(sessionUser, claimProvider, { EmailVerified: emailVerified }).catch(
+          (err) => console.warn(`Auto-claim on login failed for ${sessionUser.Email}: ${err instanceof Error ? err.message : err}`),
+        );
+      }
+    }
+
+    return { userRecord: sessionUser, email: sessionUser.Email, sessionId, emailVerified };
   } catch (error) {
     // An anonymous request presenting no credentials at all (a health check, a CORS
     // preflight-adjacent probe, a client mid-handshake) is routine, same as an expired
@@ -577,6 +601,9 @@ export const getUserPayload = async (
     throw new AuthenticationError('Unable to authenticate user');
   }
 };
+
+/** @deprecated Use {@link GetUserPayload}. */
+export const getUserPayload = GetUserPayload;
 
 /**
  * Extracts auth headers and builds a RequestContext from an Express request.
@@ -641,7 +668,7 @@ function extractAuthInputs(req: IncomingMessage): {
  *
  * Register OAuth callback routes BEFORE this middleware so they remain unauthenticated.
  */
-export function createUnifiedAuthMiddleware(
+export function CreateUnifiedAuthMiddleware(
   dataSources: DataSourceInfo[]
 ): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -656,7 +683,7 @@ export function createUnifiedAuthMiddleware(
       const { bearerToken, sessionId, requestDomain, systemApiKey, userApiKey, requestContext } =
         extractAuthInputs(req);
 
-      const userPayload = await getUserPayload(
+      const userPayload = await GetUserPayload(
         bearerToken,
         sessionId,
         dataSources,
@@ -706,13 +733,20 @@ export function createUnifiedAuthMiddleware(
   };
 }
 
+/** @deprecated Use {@link CreateUnifiedAuthMiddleware}. */
+export function createUnifiedAuthMiddleware(
+  dataSources: DataSourceInfo[]
+): RequestHandler {
+  return CreateUnifiedAuthMiddleware(dataSources);
+}
+
 /**
  * Creates the GraphQL context from an already-authenticated request.
  *
  * The unified auth middleware has already resolved `req.userPayload` before this runs.
  * This function reads the payload and creates per-request database providers.
  */
-export const contextFunction =
+export const ContextFunction =
   ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: sql.ConnectionPool, dataSources: DataSourceInfo[] }) =>
   async ({ req }: { req: IncomingMessage }) => {
     await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
@@ -724,7 +758,7 @@ export const contextFunction =
     // Per-request GraphQL boundary line — debug-only. Kept (not deleted) so the
     // data is available when an operator opts into debug, but off by default.
     if (operationName !== 'IntrospectionQuery' && isDebugLogLevel()) {
-      console.dir(buildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
+      console.dir(BuildBoundaryLogPayload(operationName), { depth: null, breakLength: 200 });
     }
 
     // Auth already happened in the unified auth middleware — just read the result
@@ -748,6 +782,9 @@ export const contextFunction =
       providers,
     };
   };
+
+/** @deprecated Use {@link ContextFunction}. */
+export const contextFunction = ContextFunction;
 
 /**
  * Creates per-request DatabaseProviderBase instances for the GraphQL context.

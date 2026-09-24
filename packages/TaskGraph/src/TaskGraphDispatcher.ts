@@ -45,7 +45,7 @@ import {
     WalkAgentRunTree,
     type AgentRunTreeNode,
 } from '@memberjunction/ai-core-plus';
-import { IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
@@ -74,6 +74,7 @@ import {
     type TaskGraphDebugState,
 } from './debug-state';
 import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
+import { RegisterTaskGraphKick } from './task-graph-kick';
 import { NotificationEngine } from '@memberjunction/notifications';
 
 /** Metadata-seeded notification type for human tasks (metadata/notifications/.task-assignment-type.json). */
@@ -402,6 +403,7 @@ export class TaskGraphDispatcher implements IShutdownable {
     private running = false;
     private pollTimer: ReturnType<typeof setInterval> | null = null;
     private reconcileTimer: ReturnType<typeof setInterval> | null = null;
+    private unregisterKick: (() => void) | null = null;
     /** Tasks this instance is currently executing — bounds concurrency and drives heartbeats. */
     private readonly inFlight = new Set<string>();
     /** Guards against a slow poll overlapping the next tick. */
@@ -662,6 +664,56 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Says, once per episode, that this dispatcher cannot claim anything.
+     *
+     * Once per episode rather than once per task: the failure repeats on every task of every poll,
+     * and a line per attempt buries the one fact an operator needs. `TaskClaimStore` resets its
+     * counter on the first write that actually runs, so a later episode announces itself again.
+     */
+    private reportClaimsUnavailable(): void {
+        if (this.claims.ConsecutiveWriteFailures !== 1) return;
+        LogError(
+            `[TaskGraphDispatcher] Cannot claim tasks — the guarded write was refused, not lost to ` +
+            `another instance. Nothing in any graph will execute on this instance until it succeeds. ` +
+            `If this is a permission error, the database principal needs EXECUTE on the task-graph ` +
+            `procedures (the cdp_Developer or cdp_Integration role grants them). ` +
+            `${this.claims.LastWriteError ?? ''}`,
+        );
+    }
+
+    /**
+     * Warns at boot when this process cannot execute the claim procedure.
+     *
+     * The same check the scheduling engine runs for its lock sproc, and for the same reason: the
+     * alternative is discovering it one refused claim at a time, in a log line that reads like a lost
+     * race. Never throws — a dispatcher that cannot probe should still start and try.
+     */
+    private async probeClaimPermission(): Promise<void> {
+        try {
+            const db = (await this.providerFactory.CreateProvider()) as unknown as DatabaseProviderBase;
+            // sys.fn_my_permissions is SQL Server-only; on other platforms a real problem still
+            // surfaces at the first claim rather than as an error-shaped line at boot.
+            if (db.PlatformKey !== 'sqlserver') return;
+            const rows = await db.ExecuteSQL<{ permission_name: string }>(
+                `SELECT permission_name FROM sys.fn_my_permissions(` +
+                `'${db.MJCoreSchemaName}.spTaskGraphClaimTask', 'OBJECT') WHERE permission_name = 'EXECUTE'`,
+                [],
+                { isMutation: false, description: 'TaskGraph claim permission probe' },
+                this.contextUser,
+            );
+            if (!rows || rows.length === 0) {
+                LogError(
+                    `[TaskGraphDispatcher] The database principal lacks EXECUTE on ` +
+                    `${db.MJCoreSchemaName}.spTaskGraphClaimTask, so NO task will ever be claimed. ` +
+                    `Grant the cdp_Developer or cdp_Integration role to the principal and restart.`,
+                );
+            }
+        } catch {
+            // A probe that cannot run is not itself a fault; the claim path reports the real thing.
+        }
+    }
+
+    /**
      * Begins dispatching.
      *
      * Runs reconciliation FIRST, before accepting any new work. On a restart this instance may be
@@ -678,6 +730,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         ShutdownRegistry.Instance.Register(this);
 
         LogStatus(`[TaskGraphDispatcher] Starting as instance '${this.config.InstanceID}'.`);
+        await this.probeClaimPermission();
         await this.Reconcile();
         // One wide pass over graphs that reached terminal without settling, mirroring what claim
         // reconciliation above already does for tasks. The realistic producer of a >24h-stale
@@ -712,6 +765,9 @@ export class TaskGraphDispatcher implements IShutdownable {
         }
 
         this.pollTimer = setInterval(() => { void this.pollOnce(); }, this.config.PollIntervalSeconds * 1000);
+        this.unregisterKick = RegisterTaskGraphKick(() => { this.Kick(); });
+        // Do not wait a full interval for work that already exists (or is about to be submitted).
+        this.Kick();
         this.reconcileTimer = setInterval(
             // Guarded HERE rather than inside `Reconcile` (R3-4). The defect is a stopped
             // instance's TIMER executing `ReleaseExpiredClaims` — a real UPDATE — forever; the
@@ -752,6 +808,8 @@ export class TaskGraphDispatcher implements IShutdownable {
      */
     public async Stop(): Promise<void> {
         this.running = false;
+        this.unregisterKick?.();
+        this.unregisterKick = null;
         if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
         if (this.reconcileTimer) { clearInterval(this.reconcileTimer); this.reconcileTimer = null; }
 
@@ -868,6 +926,16 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * Run a pass now instead of waiting for the next poll tick.
+     *
+     * Submit calls this (via {@link KickTaskGraphDispatchers}) so a just-written graph is claimed
+     * in milliseconds rather than up to {@link TaskGraphDispatcherConfig.PollIntervalSeconds}.
+     */
+    public Kick(): void {
+        void this.pollOnce();
+    }
+
+    /**
      * One dispatch pass: find claimable work, claim what fits under the concurrency cap, execute.
      *
      * Overlap-guarded — a pass that runs long simply skips the next tick rather than stacking, which
@@ -924,6 +992,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                 if (!this.running) break;
                 if (this.inFlight.size >= this.config.MaxConcurrentTasks) break;
                 if (!(await this.claims.TryClaim(provider, task.ID, this.contextUser))) {
+                    // A write that was REFUSED is not a lost race (#4575). Both return false, and
+                    // reading the first as the second is what let a dispatcher skip every task in
+                    // the table, forever, while logging nothing but "normal". Stop the wave: if this
+                    // process cannot write claims, the next task will not go better either.
+                    if (this.claims.LastWriteFailed) {
+                        this.reportClaimsUnavailable();
+                        break;
+                    }
                     // Another instance won the race, or the task is no longer Pending. Normal.
                     continue;
                 }
@@ -2286,8 +2362,29 @@ export class TaskGraphDispatcher implements IShutdownable {
                 claimable.push(entity);
                 if (claimable.length >= limit) break;
             }
+
+            if (debug.skipBreakpointTaskID) {
+                const skip = debug.skipBreakpointTaskID;
+                const claimedThisPass = claimable.some((t) => UUIDsEqual(t.ID, skip));
+                const stillEligible = eligible.some((n) => UUIDsEqual(n.id, skip));
+                if (claimedThisPass || !stillEligible) {
+                    await this.clearSkipBreakpoint(provider, parentID);
+                }
+            }
         }
         return { tasks: claimable, stats };
+    }
+
+    private async clearSkipBreakpoint(provider: IMetadataProvider, parentTaskID: string): Promise<void> {
+        const typeID = await this.workflowTaskTypeID(provider);
+        if (!typeID) return;
+        await this.claims.TryWriteDebugFields(
+            provider,
+            parentTaskID,
+            [TaskClaimStore.DebugField('$.debug.skipBreakpointTaskID', { Kind: 'null' })],
+            typeID,
+            this.contextUser,
+        );
     }
 
     /**

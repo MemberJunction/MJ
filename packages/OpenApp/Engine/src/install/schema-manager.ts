@@ -9,17 +9,100 @@
  * consistent logging, connection pooling, and provider abstraction.
  */
 import { DatabaseProviderBase } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 
 /**
- * Reserved schema names that apps cannot claim.
+ * Schemas the DATABASE PLATFORM owns. MJ did not create these and cannot recreate what they
+ * carry, which is precisely why an Open App may never claim one — with or without the
+ * double-underscore override.
+ *
+ * Stored lowercase and matched lowercase: SQL Server compares identifiers case-insensitively
+ * and PostgreSQL folds unquoted DDL to lowercase, so `DBO` and `INFORMATION_SCHEMA` name the
+ * same physical schemas as their canonical spellings.
+ *
+ * **What makes this list load-bearing rather than tidy.** Every name here already exists in a
+ * stock database, so an app declaring one is never *created* — `HandleSchemaCreation` finds it
+ * present and ADOPTS it on the default path, no flag involved. `mj app remove` then hands the
+ * adopted name to `DropAppSchema`, which drops it for real. So the danger is not "MJ refuses a
+ * name it should allow", it is "MJ silently takes ownership of a schema it must never delete".
+ *
+ * The three groups, and why each exists in every database of its platform:
+ * - `dbo` / `public` are the platforms' default schemas, and the direct analogue of each other.
+ *   MJ's own generated PG migrations target `public` (`SET search_path TO __mj, public`) and the
+ *   extensions they rely on (`pgcrypto`, `uuid-ossp`) install into it, so dropping it takes
+ *   unqualified `gen_random_uuid()` with it.
+ * - `sys` / `information_schema` are the catalogs.
+ * - `db_owner` … `db_denydatawriter` are SQL Server's nine FIXED DATABASE ROLES. SQL Server
+ *   creates one schema per fixed role in every database. They accept tables and they DROP
+ *   cleanly (verified on SQL Server 2022), which is the whole hazard. The repo already treats
+ *   them as system schemas: `MJCLI/src/baseline/introspector-mssql.ts` excludes this exact list.
+ *
+ * PostgreSQL's `pg_*` schemas are covered by {@link PG_RESERVED_PREFIX} instead of being listed,
+ * because `pg_temp_N` / `pg_toast_temp_N` are created per session and cannot be enumerated ahead
+ * of time.
  */
-const RESERVED_SCHEMAS = new Set([
+const PLATFORM_SCHEMAS = new Set([
+  // SQL Server — default, catalogs, guest
   'dbo',
   'sys',
   'guest',
-  'INFORMATION_SCHEMA',
-  '__mj'
+  // SQL Server — one schema per fixed database role, present in every database
+  'db_owner',
+  'db_accessadmin',
+  'db_securityadmin',
+  'db_ddladmin',
+  'db_backupoperator',
+  'db_datareader',
+  'db_datawriter',
+  'db_denydatareader',
+  'db_denydatawriter',
+  // PostgreSQL — default schema
+  'public',
+  // ANSI — present on both
+  'information_schema'
 ]);
+
+/**
+ * PostgreSQL reserves the entire `pg_` prefix for system use, and creates `pg_temp_N` /
+ * `pg_toast_temp_N` per backend session. A prefix rule covers the per-session names that an
+ * enumerated list structurally cannot, and subsumes `pg_catalog` / `pg_toast`.
+ */
+const PG_RESERVED_PREFIX = 'pg_';
+
+/**
+ * Schemas MEMBERJUNCTION owns. Blocked by exact match regardless of the override.
+ *
+ * `__mj_udt` is here because MJ core creates it (migrations/v5/V202604292210) as the sandbox for
+ * user-defined tables. It sits inside the `__mj_` app namespace opened up below, so without this
+ * entry an app could adopt it and `mj app remove` would CASCADE-drop every user-defined table in
+ * the database.
+ */
+const MJ_SCHEMAS = new Set([
+  '__mj',
+  '__mj_udt'
+]);
+
+/**
+ * Who owns `normalized`, or `undefined` if it is claimable. One decision in one place, so the
+ * error message can name the real owner instead of asserting MJ owns `dbo`.
+ */
+function ReservedOwnerOf(normalized: string): 'the database platform' | 'MemberJunction' | undefined {
+  if (PLATFORM_SCHEMAS.has(normalized) || normalized.startsWith(PG_RESERVED_PREFIX)) {
+    return 'the database platform';
+  }
+  if (MJ_SCHEMAS.has(normalized)) {
+    return 'MemberJunction';
+  }
+  return undefined;
+}
+
+/**
+ * The namespace MJ Open Apps live in: `__mj_<AppName>` (`__mj_BizAppsCommon`,
+ * `__mj_BizAppsForms`, …). It is the convention every first-party app ships and the manifest
+ * schema already permits it (see `schemaNameRegex` in manifest-schema.ts, "May start with up
+ * to two underscores"). Everything else under `__` stays reserved for MJ internals.
+ */
+export const MJ_APP_SCHEMA_PREFIX = '__mj_';
 
 /**
  * Result of a schema operation.
@@ -36,34 +119,95 @@ export interface SchemaOperationResult {
  */
 export interface ValidateSchemaNameOptions {
   /**
-   * Allow schema names starting with `__`. Exact-match reserved names (e.g. `__mj`, `dbo`)
+   * Allow a `__`-prefixed schema name that is outside the `__mj_<AppName>` app namespace
+   * (which needs no override). Exact-match reserved names (`__mj`, `__mj_UDT`, `dbo`, …)
    * remain blocked regardless of this flag. Dangerous; MJ-internal apps only.
    */
-  allowDoubleUnderscore?: boolean;
+  allowDoubleUnderscore?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
- * Validates that a schema name is allowed (not reserved, no double underscores).
+ * Which of {@link ValidateSchemaName}'s rules refused a name. `Malformed` covers both the
+ * empty/whitespace-only and the leading/trailing-whitespace branches — neither is a naming
+ * *policy* decision, so MJ claims no ownership of the name: a caller must not describe it as
+ * one MJ is protecting, only as one nothing can be addressed by.
+ */
+export type SchemaNameRule = 'Malformed' | 'ReservedByPlatform' | 'ReservedByMJ' | 'MJNamespace';
+
+/**
+ * Result of {@link ValidateSchemaName}. Carries which rule refused the name, and whether a
+ * caller option would have permitted it, so a caller can name a remedy instead of just quoting
+ * `ErrorMessage` back at the operator.
+ */
+export interface SchemaNameValidation extends SchemaOperationResult {
+  /** Which rule refused the name. Absent when Success. */
+  Rule?: SchemaNameRule;
+  /**
+   * The caller option that would have permitted this name, when one exists — it is offered by the
+   * install, upgrade AND remove options alike. Absent means nothing unblocks it. Callers branch on
+   * `OverriddenBy` first, then on `Rule` for the classes `OverriddenBy` cannot distinguish (see
+   * `BuildSchemaDropRefusalMessage` in install-orchestrator.ts).
+   */
+  OverriddenBy?: 'AllowDoubleUnderscoreSchema';
+}
+
+/**
+ * Validates that a schema name is one an Open App is allowed to claim.
+ *
+ * The rule, in one place: MemberJunction owns the `__` namespace. Names MJ itself uses are
+ * reserved by exact match and are never available. `__mj_<AppName>` is the documented home
+ * for MJ Open Apps. Any other `__` name is rejected unless the caller passes
+ * `allowDoubleUnderscore`.
  *
  * @param schemaName - The schema name to validate
  * @param options - Optional overrides; see {@link ValidateSchemaNameOptions}
- * @returns Validation result
+ * @returns Validation result, classified by {@link SchemaNameRule} on rejection
  */
 export function ValidateSchemaName(
   schemaName: string,
   options: ValidateSchemaNameOptions = {}
-): SchemaOperationResult {
-  if (RESERVED_SCHEMAS.has(schemaName)) {
+): SchemaNameValidation {
+  if (!schemaName || schemaName.trim().length === 0) {
     return {
       Success: false,
-      ErrorMessage: `Schema name '${schemaName}' is reserved and cannot be used by an Open App`
+      ErrorMessage: 'Schema name is required and cannot be empty',
+      Rule: 'Malformed'
     };
   }
 
-  if (!options.allowDoubleUnderscore && schemaName.startsWith('__')) {
+  // Callers act on the raw `schemaName` — CreateAppSchema/DropAppSchema hand it straight to
+  // Dialect.CanonicalSchemaName, which does not trim. Accepting a name that needs trimming would
+  // validate one identifier and create a different one, so reject it instead of normalizing it.
+  if (schemaName !== schemaName.trim()) {
     return {
       Success: false,
-      ErrorMessage: `Schema names starting with '__' are reserved for MJ internals`
+      ErrorMessage: `Schema name '${schemaName}' has leading or trailing whitespace`,
+      Rule: 'Malformed'
+    };
+  }
+
+  const normalized = schemaName.toLowerCase();
+
+  const owner = ReservedOwnerOf(normalized);
+  if (owner) {
+    return {
+      Success: false,
+      ErrorMessage: `Schema name '${schemaName}' is reserved by ${owner} and cannot be used by an Open App`,
+      Rule: owner === 'the database platform' ? 'ReservedByPlatform' : 'ReservedByMJ'
+    };
+  }
+
+  const isMJAppNamespace =
+    normalized.startsWith(MJ_APP_SCHEMA_PREFIX) && normalized.length > MJ_APP_SCHEMA_PREFIX.length;
+
+  if (!options.allowDoubleUnderscore && normalized.startsWith('__') && !isMJAppNamespace) {
+    return {
+      Success: false,
+      ErrorMessage:
+        `Schema name '${schemaName}' is not available: names starting with '__' are reserved for MemberJunction. ` +
+        `MJ Open Apps use the '${MJ_APP_SCHEMA_PREFIX}<AppName>' convention; any other app should choose a name that does not start with '__'.`,
+      Rule: 'MJNamespace',
+      OverriddenBy: 'AllowDoubleUnderscoreSchema'
     };
   }
 
@@ -85,7 +229,7 @@ export async function SchemaExists(
   // and PostgreSQL, so schema existence needs no dialect branch (sys.schemas is
   // SQL-Server-only and errors on PG).
   const results = await provider.ExecuteSQL<Record<string, unknown>>(
-    `SELECT 1 AS Exists_ FROM information_schema.schemata WHERE schema_name = '${EscapeSqlString(schemaName)}'`
+    `SELECT 1 AS Exists_ FROM information_schema.schemata WHERE schema_name = '${EscapeSQLString(schemaName)}'`
   );
   return results.length > 0;
 }
@@ -166,7 +310,7 @@ export async function DropAppSchema(
       // schema (the legacy-split fragments). It will NOT touch an unrelated app's schema unless two
       // apps adopted names differing only by case — which canonicalization now prevents at install.
       const matches = await provider.ExecuteSQL<{ schema_name: string }>(
-        `SELECT schema_name FROM information_schema.schemata WHERE lower(schema_name) = lower('${EscapeSqlString(schemaName)}')`
+        `SELECT schema_name FROM information_schema.schemata WHERE lower(schema_name) = lower('${EscapeSQLString(schemaName)}')`
       );
       for (const m of matches) {
         await provider.ExecuteSQL(`DROP SCHEMA ${provider.Dialect.QuoteIdentifier(m.schema_name)} CASCADE`);
@@ -210,7 +354,7 @@ async function DropAllSchemaObjects(
   schemaName: string,
   provider: DatabaseProviderBase
 ): Promise<void> {
-  const escaped = EscapeSqlString(schemaName);
+  const escaped = EscapeSQLString(schemaName);
 
   // Drop foreign keys first to avoid dependency issues
   await provider.ExecuteSQL(`
@@ -272,7 +416,9 @@ async function DropAllSchemaObjects(
 
 /**
  * Escapes a string for use in SQL string literals (prevents SQL injection).
+ *
+ * @deprecated Import `EscapeSQLString` from `@memberjunction/global` instead — it is the one
+ * canonical escaper. This alias remains only so external callers do not break; it will be
+ * removed in the next major.
  */
-export function EscapeSqlString(value: string): string {
-  return value.replace(/'/g, "''");
-}
+export const EscapeSqlString = (value: string | null | undefined): string => EscapeSQLString(value);

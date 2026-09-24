@@ -26,9 +26,9 @@ import { ClassifySetupWizardComponent } from './dialogs/classify-setup-wizard.co
 
 // ── Shared types (extracted to ./shared/classify.types.ts) ──
 import { TabName, NavItem, KPIMetric, PipelineStageInfo, FeedItem, SourceMini, SourceCard, ContentTypeCard, TagCloudItem, ContentDuplicateRow, RunDetailRow, WeightedTag, ItemPipelineStatus, ContentItemDetail } from './shared/classify.types';
-import { formatNumber, formatDate, getSourceTypeIcon, mapRunDetailRecords, deriveDisplayName } from './shared/classify.format';
-import { buildAutotagAgentContext, isValidAutotagTab } from './autotagging-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { FormatNumber, FormatDate, GetSourceTypeIcon, MapRunDetailRecords, DeriveDisplayName } from './shared/classify.format';
+import { BuildAutotagAgentContext, IsValidAutotagTab } from './autotagging-agent-context';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 @RegisterClass(BaseResourceComponent, 'AutotaggingPipelineResource')
 @Component({
@@ -446,7 +446,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     /** Report current classify dashboard state to the agent (deep, bounded). */
     private emitAgentContext(): void {
-        this.navigationService.SetAgentContext(this, buildAutotagAgentContext({
+        this.navigationService.SetAgentContext(this, BuildAutotagAgentContext({
             ActiveTab: this.ActiveTab,
             SourceCount: this.contentSourcesRaw.length,
             ContentItemCount: this.contentItemsRaw.length,
@@ -512,7 +512,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 },
                 Handler: async (params: Record<string, unknown>) => {
                     const tab = params['tab'];
-                    if (!isValidAutotagTab(tab)) {
+                    if (!IsValidAutotagTab(tab)) {
                         return { Success: false, ErrorMessage: `Invalid tab "${String(tab)}". Expected one of: pipeline, sources, types, tags, taxonomy, inbox, health, history.` };
                     }
                     await this.SwitchTab(tab as TabName);
@@ -545,7 +545,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                     required: ['query'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const v = validateStringParam(params['query'], 'query');
+                    const v = ValidateStringParam(params['query'], 'query');
                     if (!v.ok) return v.result;
                     // Ensure the Tag Library tab is active + rendered so its
                     // ViewChild resolves, then delegate the search to it.
@@ -604,13 +604,18 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * tab switching (badge counts / IsRunning resolving mid-CD-cycle). A stable
      * reference until inputs change eliminates that.
      */
-    public get navSections(): MJLeftNavSection[] {
+    public get NavSections(): MJLeftNavSection[] {
         const signature = this.computeNavSectionsSignature();
         if (signature !== this._navSectionsSignature) {
             this._navSectionsSignature = signature;
             this._navSections = this.buildNavSections();
         }
         return this._navSections;
+    }
+
+    /** @deprecated Use {@link NavSections}. */
+    public get navSections(): MJLeftNavSection[] {
+        return this.NavSections;
     }
 
     /** Cheap stable fingerprint of every value that feeds {@link buildNavSections}. */
@@ -663,10 +668,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Fired by the Inbox tab after a suggestion is approved/merged/rejected.
      * Refreshes the nav badge count.
      */
-    public async onInboxResolved(): Promise<void> {
+    public async OnInboxResolved(): Promise<void> {
         await this.loadInboxPendingCount();
         this.emitAgentContext();
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnInboxResolved}. */
+    public async onInboxResolved(): Promise<void> {
+        return this.OnInboxResolved();
     }
 
     /**
@@ -689,10 +699,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Fired by the Health tab after a merge/deprecate/dismiss. Refreshes the
      * Health nav badge count.
      */
-    public async onHealthResolved(): Promise<void> {
+    public async OnHealthResolved(): Promise<void> {
         await this.loadHealthPendingCount();
         this.emitAgentContext();
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnHealthResolved}. */
+    public async onHealthResolved(): Promise<void> {
+        return this.OnHealthResolved();
     }
 
     /**
@@ -700,13 +715,23 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Taxonomy tab has no public select-tag input today, so this simply switches
      * to it; selecting the specific node is a future enhancement.
      */
-    public onOpenInTaxonomyRequested(_tagID: string): void {
+    public OnOpenInTaxonomyRequested(_tagID: string): void {
         void this.SwitchTab('taxonomy');
     }
 
+    /** @deprecated Use {@link OnOpenInTaxonomyRequested}. */
+    public onOpenInTaxonomyRequested(_tagID: string): void {
+        return this.OnOpenInTaxonomyRequested(_tagID);
+    }
+
     /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
-    public onNavItemClicked(item: MJLeftNavItem): void {
+    public OnNavItemClicked(item: MJLeftNavItem): void {
         void this.SwitchTab(item.id as TabName);
+    }
+
+    /** @deprecated Use {@link OnNavItemClicked}. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        return this.OnNavItemClicked(item);
     }
 
     public async SwitchTab(tab: TabName): Promise<void> {
@@ -871,10 +896,10 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const normalizedId = NormalizeUUID(itemId);
             const itemTags = this.getTopTagsForItem(itemId, 3);
             return {
-                Name: deriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
+                Name: DeriveDisplayName({ Name: item['Name'] as string | null, Description: item['Description'] as string | null }),
                 SourceName: (item['ContentSource'] as string) ?? 'Unknown',
                 Tags: itemTags,
-                TimeAgo: this.formatRelativeTime(item['__mj_UpdatedAt'] as string),
+                TimeAgo: this.FormatRelativeTime(item['__mj_UpdatedAt'] as string),
                 Status: this.inferItemStatus(tagsByItem.get(normalizedId) ?? 0)
             };
         });
@@ -892,8 +917,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             return {
                 ID: id,
                 Name: (source['Name'] as string) ?? 'Unnamed',
-                Icon: getSourceTypeIcon(typeName),
-                Meta: `${formatNumber(itemCount)} items`,
+                Icon: GetSourceTypeIcon(typeName),
+                Meta: `${FormatNumber(itemCount)} items`,
                 StatusClass: 'active' as const
             };
         });
@@ -1070,7 +1095,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             ResultType: 'simple',
         });
         if (result.Success) {
-            this.LiveRunDetailRows = mapRunDetailRecords(result.Results);
+            this.LiveRunDetailRows = MapRunDetailRecords(result.Results);
         }
 
         this.IsLoadingLiveDetails = false;
@@ -1145,8 +1170,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     /** After the wizard creates a source, reload the shared source list. */
-    public async onWizardCreated(_event: { SourceID: string }): Promise<void> {
+    public async OnWizardCreated(_event: { SourceID: string }): Promise<void> {
         await this.refreshSourcesTab();
+    }
+
+    /** @deprecated Use {@link OnWizardCreated}. */
+    public async onWizardCreated(_event: { SourceID: string }): Promise<void> {
+        return this.OnWizardCreated(_event);
     }
 
     public OpenEditSourceForm(card: SourceCard): void {
@@ -1166,7 +1196,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Reload the relevant shared data after the slide-in form saves. The form
      * dialog closes itself; the host only re-pulls the cards' source data.
      */
-    public async onFormSaved(event: { kind: 'source' | 'type' }): Promise<void> {
+    public async OnFormSaved(event: { kind: 'source' | 'type' }): Promise<void> {
         if (event.kind === 'source') {
             await this.refreshSourcesTab();
         } else {
@@ -1174,12 +1204,22 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         }
     }
 
+    /** @deprecated Use {@link OnFormSaved}. */
+    public async onFormSaved(event: { kind: 'source' | 'type' }): Promise<void> {
+        return this.OnFormSaved(event);
+    }
+
     /**
      * The form dialog's "Open advanced settings" link bubbles up here so the host
      * (which owns NavigationService) can open the full entity form.
      */
-    public async onFormNavigateToRecord(event: { entityName: string; key: CompositeKey }): Promise<void> {
+    public async OnFormNavigateToRecord(event: { entityName: string; key: CompositeKey }): Promise<void> {
         await this.navigationService.OpenEntityRecord(event.entityName, event.key);
+    }
+
+    /** @deprecated Use {@link OnFormNavigateToRecord}. */
+    public async onFormNavigateToRecord(event: { entityName: string; key: CompositeKey }): Promise<void> {
+        return this.OnFormNavigateToRecord(event);
     }
 
     // DeleteSource(), the quick-schedule dialog (Open/Close/Save/Remove + cron
@@ -1576,7 +1616,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // HELPER — Formatting
     // ════════════════════════════════════════════
 
-    public formatRelativeTime(dateStr: string | null | undefined): string {
+    public FormatRelativeTime(dateStr: string | null | undefined): string {
         if (!dateStr) return 'Never';
         const now = new Date();
         const then = new Date(dateStr);
@@ -1589,6 +1629,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (diffHours < 24) return `${diffHours}h ago`;
         const diffDays = Math.floor(diffHours / 24);
         return `${diffDays}d ago`;
+    }
+
+    /** @deprecated Use {@link FormatRelativeTime}. */
+    public formatRelativeTime(dateStr: string | null | undefined): string {
+        return this.FormatRelativeTime(dateStr);
     }
 
     // formatNumber / formatDate / getSourceTypeIcon / mapRunDetailRecords are now
@@ -1682,8 +1727,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             TextContent: (rawItem['Text'] as string) ?? '',
             Checksum: (rawItem['Checksum'] as string) ?? '',
             Tags: allTags,
-            CreatedAt: formatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
-            UpdatedAt: formatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
+            CreatedAt: FormatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
+            UpdatedAt: FormatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
             ContentSourceID: (rawItem['ContentSourceID'] as string) ?? '',
             ContentSourceTypeID: contentSourceTypeID,
             StatusDot: feed.Status,
@@ -1736,7 +1781,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const statuses2 = this.inferPipelineStatuses(rawItem, allTags.length);
         this.SelectedFeedItem = {
             ID: itemId,
-            Name: deriveDisplayName({ Name: rawItem['Name'] as string | null, Description: rawItem['Description'] as string | null }),
+            Name: DeriveDisplayName({ Name: rawItem['Name'] as string | null, Description: rawItem['Description'] as string | null }),
             SourceName: (rawItem['ContentSource'] as string) ?? 'Unknown',
             SourceTypeName: (rawItem['ContentSourceType'] as string) ?? 'Unknown',
             ContentTypeName: (rawItem['ContentType'] as string) ?? 'Unknown',
@@ -1745,8 +1790,8 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             TextContent: (rawItem['Text'] as string) ?? '',
             Checksum: (rawItem['Checksum'] as string) ?? '',
             Tags: allTags,
-            CreatedAt: formatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
-            UpdatedAt: formatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
+            CreatedAt: FormatDate((rawItem['__mj_CreatedAt'] as string) ?? ''),
+            UpdatedAt: FormatDate((rawItem['__mj_UpdatedAt'] as string) ?? ''),
             ContentSourceID: (rawItem['ContentSourceID'] as string) ?? '',
             ContentSourceTypeID: contentSourceTypeID,
             StatusDot: allTags.length > 0 ? 'complete' : 'processing',
@@ -1787,28 +1832,21 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * source, prompt run, entity record document). The host owns NavigationService.
      */
     public OpenDrilldownRecord(event: { entityName: string; recordID: string }): void {
-        const pkey = new CompositeKey();
-        pkey.KeyValuePairs = [{ FieldName: 'ID', Value: event.recordID }];
+        // The drilldown can name any entity — resolve its key column(s) from metadata.
+        const pkey = CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.entityName), event.recordID);
         this.navigationService.OpenEntityRecord(event.entityName, pkey);
     }
 
     public OpenRecordFromItem(item: ContentItemDetail): void {
         const md = this.ProviderToUse;
-        const pkey = new CompositeKey();
 
         // For entity sources: navigate to the actual entity record, not the ContentItem
         if (item.EntityName && item.EntityRecordID) {
-            const entityInfo = md.Entities.find(e => e.Name === item.EntityName);
-            if (entityInfo) {
-                pkey.LoadFromURLSegment(entityInfo, item.EntityRecordID);
-            } else {
-                pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.EntityRecordID }];
-            }
+            const pkey = CompositeKey.FromURLSegment(md.EntityByName(item.EntityName), item.EntityRecordID);
             this.navigationService.OpenEntityRecord(item.EntityName, pkey);
         } else {
             // For non-entity sources: open the ContentItem record
-            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.ID }];
-            this.navigationService.OpenEntityRecord('MJ: Content Items', pkey);
+            this.navigationService.OpenEntityRecord('MJ: Content Items', CompositeKey.FromID(item.ID));
         }
     }
 

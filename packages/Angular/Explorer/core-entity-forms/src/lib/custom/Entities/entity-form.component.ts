@@ -16,7 +16,10 @@ import {
     EntityPermissionInfo,
     Metadata,
     CompositeKey,
-    RunView
+    RunView,
+    type IEntityConfiguration,
+    type IEntityFormConfiguration,
+    type RelatedFormRoleCandidate,
 } from '@memberjunction/core';
 import { MJEntityEntity } from '@memberjunction/core-entities';
 import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
@@ -38,29 +41,29 @@ export type ExplorerSection =
     | 'settings';
 
 export interface NavItem {
-    id: ExplorerSection;
-    icon: string;
-    label: string;
-    badge?: number;
+    id: ExplorerSection;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    icon: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    label: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    badge?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface EntityStats {
-    fieldCount: number;
-    relationshipCount: number;
-    permissionCount: number;
-    rowCount: number | null;
-    primaryKeyCount: number;
-    foreignKeyCount: number;
-    encryptedFieldCount: number;
-    valueListFieldCount: number;
+    fieldCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    relationshipCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    permissionCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    rowCount: number | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    primaryKeyCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    foreignKeyCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    encryptedFieldCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    valueListFieldCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface FieldGroup {
-    id: string;
-    label: string;
-    icon: string;
-    fields: EntityFieldInfo[];
-    expanded: boolean;
+    id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    label: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    icon: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    fields: EntityFieldInfo[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    expanded: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -96,10 +99,10 @@ export interface ChildEntityCount {
  */
 export interface GroupedOutgoingRelationship {
     /** The entity being referenced */
-    entityId: string;
-    entityName: string;
+    entityId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** All fields on THIS entity that reference the target entity */
-    fields: EntityFieldInfo[];
+    fields: EntityFieldInfo[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -107,9 +110,9 @@ export interface GroupedOutgoingRelationship {
  */
 export interface GroupedIncomingRelationship {
     /** The entity that references this entity */
-    entityName: string;
+    entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** All fields on the OTHER entity that reference THIS entity */
-    fields: { fieldName: string; type: string; bundleInAPI: boolean }[];
+    fields: { fieldName: string; type: string; bundleInAPI: boolean }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -162,22 +165,67 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     public entity: EntityInfo | null = null;
 
     /** All entities for relationship lookups */
-    public allEntities: EntityInfo[] = [];
+    public AllEntities: EntityInfo[] = [];
+
+    /** @deprecated Use {@link AllEntities}. */
+    public get allEntities(): EntityInfo[] {
+      return this.AllEntities;
+    }
+    /** @deprecated Use {@link AllEntities}. */
+    public set allEntities(value: EntityInfo[]) {
+      this.AllEntities = value;
+    }
 
     /** All entity fields (flattened from all entities) for ERD details panel */
-    public allEntityFields: EntityFieldInfo[] = [];
+    public AllEntityFields: EntityFieldInfo[] = [];
+
+    /** @deprecated Use {@link AllEntityFields}. */
+    public get allEntityFields(): EntityFieldInfo[] {
+      return this.AllEntityFields;
+    }
+    /** @deprecated Use {@link AllEntityFields}. */
+    public set allEntityFields(value: EntityFieldInfo[]) {
+      this.AllEntityFields = value;
+    }
 
     /** Loading state */
-    public isExplorerLoading = true;
+    public IsExplorerLoading = true;
+
+    /** @deprecated Use {@link IsExplorerLoading}. */
+    public get isExplorerLoading() {
+      return this.IsExplorerLoading;
+    }
+    /** @deprecated Use {@link IsExplorerLoading}. */
+    public set isExplorerLoading(value) {
+      this.IsExplorerLoading = value;
+    }
 
     /** Error message if loading fails */
-    public explorerError: string | null = null;
+    public ExplorerError: string | null = null;
+
+    /** @deprecated Use {@link ExplorerError}. */
+    public get explorerError(): string | null {
+      return this.ExplorerError;
+    }
+    /** @deprecated Use {@link ExplorerError}. */
+    public set explorerError(value: string | null) {
+      this.ExplorerError = value;
+    }
 
     /** Current active section in the explorer */
-    public activeSection: ExplorerSection = 'overview';
+    public ActiveSection: ExplorerSection = 'overview';
+
+    /** @deprecated Use {@link ActiveSection}. */
+    public get activeSection(): ExplorerSection {
+      return this.ActiveSection;
+    }
+    /** @deprecated Use {@link ActiveSection}. */
+    public set activeSection(value: ExplorerSection) {
+      this.ActiveSection = value;
+    }
 
     /** Navigation items for the rail - world-class minimalist icons */
-    public navItems: NavItem[] = [
+    public NavItems: NavItem[] = [
         { id: 'overview', icon: 'fa-solid fa-house', label: 'Overview' },
         { id: 'fields', icon: 'fa-solid fa-table-cells', label: 'Fields' },
         { id: 'relationships', icon: 'fa-solid fa-diagram-project', label: 'Relations' },
@@ -189,8 +237,17 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         { id: 'settings', icon: 'fa-solid fa-sliders', label: 'Settings' }
     ];
 
+    /** @deprecated Use {@link NavItems}. */
+    public get navItems(): NavItem[] {
+      return this.NavItems;
+    }
+    /** @deprecated Use {@link NavItems}. */
+    public set navItems(value: NavItem[]) {
+      this.NavItems = value;
+    }
+
     /** Computed statistics for the entity */
-    public stats: EntityStats = {
+    public Stats: EntityStats = {
         fieldCount: 0,
         relationshipCount: 0,
         permissionCount: 0,
@@ -201,66 +258,264 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         valueListFieldCount: 0
     };
 
+    /** @deprecated Use {@link Stats}. */
+    public get stats(): EntityStats {
+      return this.Stats;
+    }
+    /** @deprecated Use {@link Stats}. */
+    public set stats(value: EntityStats) {
+      this.Stats = value;
+    }
+
     /** Semantically grouped fields */
-    public fieldGroups: FieldGroup[] = [];
+    public FieldGroups: FieldGroup[] = [];
+
+    /** @deprecated Use {@link FieldGroups}. */
+    public get fieldGroups(): FieldGroup[] {
+      return this.FieldGroups;
+    }
+    /** @deprecated Use {@link FieldGroups}. */
+    public set fieldGroups(value: FieldGroup[]) {
+      this.FieldGroups = value;
+    }
 
     /** Field search term for filtering */
-    public fieldSearchTerm = '';
+    public FieldSearchTerm = '';
+
+    /** @deprecated Use {@link FieldSearchTerm}. */
+    public get fieldSearchTerm() {
+      return this.FieldSearchTerm;
+    }
+    /** @deprecated Use {@link FieldSearchTerm}. */
+    public set fieldSearchTerm(value) {
+      this.FieldSearchTerm = value;
+    }
 
     /** Set of expanded field group IDs */
-    public expandedFieldGroups = new Set<string>();
+    public ExpandedFieldGroups = new Set<string>();
+
+    /** @deprecated Use {@link ExpandedFieldGroups}. */
+    public get expandedFieldGroups() {
+      return this.ExpandedFieldGroups;
+    }
+    /** @deprecated Use {@link ExpandedFieldGroups}. */
+    public set expandedFieldGroups(value) {
+      this.ExpandedFieldGroups = value;
+    }
 
     /** Field view mode: grouped by category or flat list */
-    public fieldViewMode: 'grouped' | 'list' = 'grouped';
+    public FieldViewMode: 'grouped' | 'list' = 'grouped';
+
+    /** @deprecated Use {@link FieldViewMode}. */
+    public get fieldViewMode(): 'grouped' | 'list' {
+      return this.FieldViewMode;
+    }
+    /** @deprecated Use {@link FieldViewMode}. */
+    public set fieldViewMode(value: 'grouped' | 'list') {
+      this.FieldViewMode = value;
+    }
 
     /** IS-A field groups organized by source entity */
-    public isaFieldGroups: ISAFieldGroup[] = [];
+    public IsaFieldGroups: ISAFieldGroup[] = [];
+
+    /** @deprecated Use {@link IsaFieldGroups}. */
+    public get isaFieldGroups(): ISAFieldGroup[] {
+      return this.IsaFieldGroups;
+    }
+    /** @deprecated Use {@link IsaFieldGroups}. */
+    public set isaFieldGroups(value: ISAFieldGroup[]) {
+      this.IsaFieldGroups = value;
+    }
 
     /** Child entity record counts for the IS-A parent type summary */
-    public childEntityCounts: ChildEntityCount[] = [];
+    public ChildEntityCounts: ChildEntityCount[] = [];
+
+    /** @deprecated Use {@link ChildEntityCounts}. */
+    public get childEntityCounts(): ChildEntityCount[] {
+      return this.ChildEntityCounts;
+    }
+    /** @deprecated Use {@link ChildEntityCounts}. */
+    public set childEntityCounts(value: ChildEntityCount[]) {
+      this.ChildEntityCounts = value;
+    }
 
     /** Whether the IS-A field inspector panel is expanded */
-    public isaFieldInspectorExpanded = true;
+    public IsaFieldInspectorExpanded = true;
+
+    /** @deprecated Use {@link IsaFieldInspectorExpanded}. */
+    public get isaFieldInspectorExpanded() {
+      return this.IsaFieldInspectorExpanded;
+    }
+    /** @deprecated Use {@link IsaFieldInspectorExpanded}. */
+    public set isaFieldInspectorExpanded(value) {
+      this.IsaFieldInspectorExpanded = value;
+    }
 
     /** Field list sort configuration */
-    public fieldListSortColumn: string = 'Sequence';
-    public fieldListSortDirection: 'asc' | 'desc' = 'asc';
+    public FieldListSortColumn: string = 'Sequence';
+
+    /** @deprecated Use {@link FieldListSortColumn}. */
+    public get fieldListSortColumn(): string {
+      return this.FieldListSortColumn;
+    }
+    /** @deprecated Use {@link FieldListSortColumn}. */
+    public set fieldListSortColumn(value: string) {
+      this.FieldListSortColumn = value;
+    }
+    public FieldListSortDirection: 'asc' | 'desc' = 'asc';
+
+    /** @deprecated Use {@link FieldListSortDirection}. */
+    public get fieldListSortDirection(): 'asc' | 'desc' {
+      return this.FieldListSortDirection;
+    }
+    /** @deprecated Use {@link FieldListSortDirection}. */
+    public set fieldListSortDirection(value: 'asc' | 'desc') {
+      this.FieldListSortDirection = value;
+    }
 
     /** Relationship view mode toggle */
-    public relationshipViewMode: 'diagram' | 'list' = 'diagram';
+    public RelationshipViewMode: 'diagram' | 'list' = 'diagram';
+
+    /** @deprecated Use {@link RelationshipViewMode}. */
+    public get relationshipViewMode(): 'diagram' | 'list' {
+      return this.RelationshipViewMode;
+    }
+    /** @deprecated Use {@link RelationshipViewMode}. */
+    public set relationshipViewMode(value: 'diagram' | 'list') {
+      this.RelationshipViewMode = value;
+    }
 
     /** ERD depth level (1-5) */
-    public erdDepth: number = 1;
+    public ErdDepth: number = 1;
+
+    /** @deprecated Use {@link ErdDepth}. */
+    public get erdDepth(): number {
+      return this.ErdDepth;
+    }
+    /** @deprecated Use {@link ErdDepth}. */
+    public set erdDepth(value: number) {
+      this.ErdDepth = value;
+    }
 
     /** Whether the row count is loading */
-    public isRowCountLoading = false;
+    public IsRowCountLoading = false;
+
+    /** @deprecated Use {@link IsRowCountLoading}. */
+    public get isRowCountLoading() {
+      return this.IsRowCountLoading;
+    }
+    /** @deprecated Use {@link IsRowCountLoading}. */
+    public set isRowCountLoading(value) {
+      this.IsRowCountLoading = value;
+    }
 
     /** Outgoing relationships (this entity references others) */
-    public outgoingRelationships: EntityRelationshipInfo[] = [];
+    public OutgoingRelationships: EntityRelationshipInfo[] = [];
+
+    /** @deprecated Use {@link OutgoingRelationships}. */
+    public get outgoingRelationships(): EntityRelationshipInfo[] {
+      return this.OutgoingRelationships;
+    }
+    /** @deprecated Use {@link OutgoingRelationships}. */
+    public set outgoingRelationships(value: EntityRelationshipInfo[]) {
+      this.OutgoingRelationships = value;
+    }
 
     /** Incoming relationships (other entities reference this one) */
-    public incomingRelationships: EntityRelationshipInfo[] = [];
+    public IncomingRelationships: EntityRelationshipInfo[] = [];
+
+    /** @deprecated Use {@link IncomingRelationships}. */
+    public get incomingRelationships(): EntityRelationshipInfo[] {
+      return this.IncomingRelationships;
+    }
+    /** @deprecated Use {@link IncomingRelationships}. */
+    public set incomingRelationships(value: EntityRelationshipInfo[]) {
+      this.IncomingRelationships = value;
+    }
 
     /** Grouped outgoing relationships by target entity */
-    public groupedOutgoingRelationships: GroupedOutgoingRelationship[] = [];
+    public GroupedOutgoingRelationships: GroupedOutgoingRelationship[] = [];
+
+    /** @deprecated Use {@link GroupedOutgoingRelationships}. */
+    public get groupedOutgoingRelationships(): GroupedOutgoingRelationship[] {
+      return this.GroupedOutgoingRelationships;
+    }
+    /** @deprecated Use {@link GroupedOutgoingRelationships}. */
+    public set groupedOutgoingRelationships(value: GroupedOutgoingRelationship[]) {
+      this.GroupedOutgoingRelationships = value;
+    }
 
     /** Grouped incoming relationships by source entity */
-    public groupedIncomingRelationships: GroupedIncomingRelationship[] = [];
+    public GroupedIncomingRelationships: GroupedIncomingRelationship[] = [];
+
+    /** @deprecated Use {@link GroupedIncomingRelationships}. */
+    public get groupedIncomingRelationships(): GroupedIncomingRelationship[] {
+      return this.GroupedIncomingRelationships;
+    }
+    /** @deprecated Use {@link GroupedIncomingRelationships}. */
+    public set groupedIncomingRelationships(value: GroupedIncomingRelationship[]) {
+      this.GroupedIncomingRelationships = value;
+    }
 
     /** Outgoing organic keys (defined on THIS entity) */
-    public organicKeysOutgoing: OrganicKeyOutgoing[] = [];
+    public OrganicKeysOutgoing: OrganicKeyOutgoing[] = [];
+
+    /** @deprecated Use {@link OrganicKeysOutgoing}. */
+    public get organicKeysOutgoing(): OrganicKeyOutgoing[] {
+      return this.OrganicKeysOutgoing;
+    }
+    /** @deprecated Use {@link OrganicKeysOutgoing}. */
+    public set organicKeysOutgoing(value: OrganicKeyOutgoing[]) {
+      this.OrganicKeysOutgoing = value;
+    }
 
     /** Incoming organic keys (other entities targeting THIS entity) */
-    public organicKeysIncoming: OrganicKeyIncoming[] = [];
+    public OrganicKeysIncoming: OrganicKeyIncoming[] = [];
+
+    /** @deprecated Use {@link OrganicKeysIncoming}. */
+    public get organicKeysIncoming(): OrganicKeyIncoming[] {
+      return this.OrganicKeysIncoming;
+    }
+    /** @deprecated Use {@link OrganicKeysIncoming}. */
+    public set organicKeysIncoming(value: OrganicKeyIncoming[]) {
+      this.OrganicKeysIncoming = value;
+    }
 
     /** Whether detail panel is open */
-    public detailPanelOpen = false;
+    public DetailPanelOpen = false;
+
+    /** @deprecated Use {@link DetailPanelOpen}. */
+    public get detailPanelOpen() {
+      return this.DetailPanelOpen;
+    }
+    /** @deprecated Use {@link DetailPanelOpen}. */
+    public set detailPanelOpen(value) {
+      this.DetailPanelOpen = value;
+    }
 
     /** Currently selected field for detail panel */
-    public selectedField: EntityFieldInfo | null = null;
+    public SelectedField: EntityFieldInfo | null = null;
+
+    /** @deprecated Use {@link SelectedField}. */
+    public get selectedField(): EntityFieldInfo | null {
+      return this.SelectedField;
+    }
+    /** @deprecated Use {@link SelectedField}. */
+    public set selectedField(value: EntityFieldInfo | null) {
+      this.SelectedField = value;
+    }
 
     /** Currently selected relationship for detail panel */
-    public selectedRelationship: EntityRelationshipInfo | null = null;
+    public SelectedRelationship: EntityRelationshipInfo | null = null;
+
+    /** @deprecated Use {@link SelectedRelationship}. */
+    public get selectedRelationship(): EntityRelationshipInfo | null {
+      return this.SelectedRelationship;
+    }
+    /** @deprecated Use {@link SelectedRelationship}. */
+    public set selectedRelationship(value: EntityRelationshipInfo | null) {
+      this.SelectedRelationship = value;
+    }
 
     private destroy$ = new Subject<void>();
     private stateChange$ = new Subject<void>();
@@ -286,19 +541,19 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     }
 
     private loadExplorerData(): void {
-        this.isExplorerLoading = true;
-        this.explorerError = null;
+        this.IsExplorerLoading = true;
+        this.ExplorerError = null;
         this.cdr.markForCheck();
 
         try {
-            this.allEntities = this._metadata.Entities;
+            this.AllEntities = this._metadata.Entities;
 
             // Flatten all entity fields for ERD details panel
-            this.allEntityFields = this.allEntities.flatMap(e => e.Fields);
+            this.AllEntityFields = this.AllEntities.flatMap(e => e.Fields);
 
             // Find the EntityInfo by the record's ID
             if (this.record?.ID) {
-                this.entity = this.allEntities.find(e => UUIDsEqual(e.ID, this.record.ID)) || null;
+                this.entity = this.AllEntities.find(e => UUIDsEqual(e.ID, this.record.ID)) || null;
             }
 
             if (this.entity) {
@@ -318,13 +573,13 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                     this.loadChildEntityCounts();
                 }
             } else {
-                this.explorerError = `Entity metadata not found for: ${this.record?.Name || 'Unknown'}`;
+                this.ExplorerError = `Entity metadata not found for: ${this.record?.Name || 'Unknown'}`;
             }
         } catch (err) {
-            this.explorerError = err instanceof Error ? err.message : 'Failed to load entity metadata';
+            this.ExplorerError = err instanceof Error ? err.message : 'Failed to load entity metadata';
             console.error('Error loading entity explorer data:', err);
         } finally {
-            this.isExplorerLoading = false;
+            this.IsExplorerLoading = false;
             this.cdr.markForCheck();
         }
     }
@@ -336,7 +591,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     private async loadRowCountAsync(): Promise<void> {
         if (!this.entity) return;
 
-        this.isRowCountLoading = true;
+        this.IsRowCountLoading = true;
         this.cdr.markForCheck();
 
         try {
@@ -347,8 +602,8 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             });
 
             if (result.Success) {
-                this.stats = {
-                    ...this.stats,
+                this.Stats = {
+                    ...this.Stats,
                     rowCount: result.TotalRowCount
                 };
             }
@@ -356,7 +611,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             console.warn('Failed to load row count:', err);
             // Keep the default N/A - don't show error for this
         } finally {
-            this.isRowCountLoading = false;
+            this.IsRowCountLoading = false;
             this.cdr.markForCheck();
         }
     }
@@ -370,7 +625,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         // Count unique incoming relationships (RelatedEntities, grouped by source entity)
         const incomingEntityNames = new Set(this.entity.RelatedEntities.map(r => r.RelatedEntity));
 
-        this.stats = {
+        this.Stats = {
             fieldCount: fields.length,
             relationshipCount: outgoingEntityIds.size + incomingEntityNames.size,
             permissionCount: this.entity.Permissions.length,
@@ -490,12 +745,12 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             });
         }
 
-        this.fieldGroups = groups;
+        this.FieldGroups = groups;
 
         // Initialize expanded state
         for (const group of groups) {
             if (group.expanded) {
-                this.expandedFieldGroups.add(group.id);
+                this.ExpandedFieldGroups.add(group.id);
             }
         }
     }
@@ -544,7 +799,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
             }
         }
 
-        this.isaFieldGroups = groups;
+        this.IsaFieldGroups = groups;
     }
 
     /**
@@ -554,7 +809,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         if (!this.entity || !this.IsParentType) return;
 
         // Initialize with loading state
-        this.childEntityCounts = this.ChildEntities.map(child => ({
+        this.ChildEntityCounts = this.ChildEntities.map(child => ({
             EntityName: child.Name,
             EntityInfo: child,
             RecordCount: null,
@@ -571,9 +826,9 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                 ResultType: 'count_only'
             });
 
-            if (this.childEntityCounts[index]) {
-                this.childEntityCounts[index].RecordCount = result?.TotalRowCount ?? 0;
-                this.childEntityCounts[index].IsLoading = false;
+            if (this.ChildEntityCounts[index]) {
+                this.ChildEntityCounts[index].RecordCount = result?.TotalRowCount ?? 0;
+                this.ChildEntityCounts[index].IsLoading = false;
             }
         });
 
@@ -585,10 +840,10 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         if (!this.entity) return;
 
         // Incoming: Relationships defined on this entity (other entities that reference this one)
-        this.incomingRelationships = this.entity.RelatedEntities;
+        this.IncomingRelationships = this.entity.RelatedEntities;
 
         // Outgoing relationships could be computed from fields with RelatedEntityID
-        this.outgoingRelationships = [];
+        this.OutgoingRelationships = [];
 
         // Build grouped outgoing relationships (fields on THIS entity that reference OTHER entities)
         const outgoingMap = new Map<string, GroupedOutgoingRelationship>();
@@ -598,7 +853,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                 if (existing) {
                     existing.fields.push(field);
                 } else {
-                    const relatedEntity = this.allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
+                    const relatedEntity = this.AllEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
                     outgoingMap.set(field.RelatedEntityID, {
                         entityId: field.RelatedEntityID,
                         entityName: relatedEntity?.Name || field.RelatedEntity || 'Unknown',
@@ -607,7 +862,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                 }
             }
         }
-        this.groupedOutgoingRelationships = Array.from(outgoingMap.values())
+        this.GroupedOutgoingRelationships = Array.from(outgoingMap.values())
             .sort((a, b) => a.entityName.localeCompare(b.entityName));
 
         // Build grouped incoming relationships (fields on OTHER entities that reference THIS entity)
@@ -637,7 +892,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
                 });
             }
         }
-        this.groupedIncomingRelationships = Array.from(incomingMap.values())
+        this.GroupedIncomingRelationships = Array.from(incomingMap.values())
             .sort((a, b) => a.entityName.localeCompare(b.entityName));
     }
 
@@ -645,10 +900,10 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         if (!this.entity) return;
 
         // Outgoing: organic keys defined ON this entity
-        this.organicKeysOutgoing = this.entity.OrganicKeys.map(ok => ({
+        this.OrganicKeysOutgoing = this.entity.OrganicKeys.map(ok => ({
             OrganicKey: ok,
             RelatedEntities: ok.RelatedEntities.map(re => {
-                const relEntity = this.allEntities.find(e => UUIDsEqual(e.ID, re.RelatedEntityID));
+                const relEntity = this.AllEntities.find(e => UUIDsEqual(e.ID, re.RelatedEntityID));
                 return {
                     Info: re,
                     EntityName: re.RelatedEntity || relEntity?.Name || 'Unknown',
@@ -658,13 +913,13 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         }));
 
         // Incoming: organic keys on OTHER entities that reference THIS entity
-        this.organicKeysIncoming = [];
-        for (const otherEntity of this.allEntities) {
+        this.OrganicKeysIncoming = [];
+        for (const otherEntity of this.AllEntities) {
             if (UUIDsEqual(otherEntity.ID, this.entity.ID)) continue;
             for (const ok of otherEntity.OrganicKeys) {
                 for (const re of ok.RelatedEntities) {
                     if (UUIDsEqual(re.RelatedEntityID, this.entity.ID)) {
-                        this.organicKeysIncoming.push({
+                        this.OrganicKeysIncoming.push({
                             SourceEntityID: otherEntity.ID,
                             SourceEntityName: otherEntity.Name,
                             SourceEntityIcon: otherEntity.Icon || 'fa-solid fa-table',
@@ -682,29 +937,28 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
      * Navigate to the Entity admin form for a given entity ID.
      */
     public NavigateToEntityByID(entityID: string): void {
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityID }]);
-        this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
+        this.sharedService.OpenEntityRecord('MJ: Entities', CompositeKey.FromID(entityID));
     }
 
     /** Total organic key connection count (outgoing targets + incoming sources) */
     get OrganicKeyTotalCount(): number {
-        const outCount = this.organicKeysOutgoing.reduce((sum, ok) => sum + ok.RelatedEntities.length, 0);
-        return outCount + this.organicKeysIncoming.length;
+        const outCount = this.OrganicKeysOutgoing.reduce((sum, ok) => sum + ok.RelatedEntities.length, 0);
+        return outCount + this.OrganicKeysIncoming.length;
     }
 
     private updateNavBadges(): void {
         if (!this.entity) return;
 
-        this.navItems = this.navItems.map(item => {
+        this.NavItems = this.NavItems.map(item => {
             switch (item.id) {
                 case 'fields':
-                    return { ...item, badge: this.stats.fieldCount };
+                    return { ...item, badge: this.Stats.fieldCount };
                 case 'relationships':
-                    return { ...item, badge: this.stats.relationshipCount };
+                    return { ...item, badge: this.Stats.relationshipCount };
                 case 'organicKeys':
                     return { ...item, badge: this.OrganicKeyTotalCount > 0 ? this.OrganicKeyTotalCount : undefined };
                 case 'permissions':
-                    return { ...item, badge: this.stats.permissionCount };
+                    return { ...item, badge: this.Stats.permissionCount };
                 default:
                     return item;
             }
@@ -713,9 +967,47 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
     // === Public Methods ===
 
+    public SetActiveSection(section: ExplorerSection): void {
+        this.ActiveSection = section;
+        this.CloseDetailPanel();
+        this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link SetActiveSection}. */
     public setActiveSection(section: ExplorerSection): void {
-        this.activeSection = section;
-        this.closeDetailPanel();
+      return this.SetActiveSection(section);
+    }
+
+    public get FormChromeConfig(): IEntityFormConfiguration | null {
+        return this.record?.ConfigurationObject?.UI?.Form ?? null;
+    }
+
+    public get FormChromeCandidates(): RelatedFormRoleCandidate[] {
+        if (!this.entity) return [];
+        return this.entity.RelatedEntities.map((rel) => ({
+            ID: rel.ID,
+            RelatedEntity: rel.RelatedEntity,
+            RelatedEntityID: rel.RelatedEntityID,
+            RelatedEntityJoinField: rel.RelatedEntityJoinField,
+            RelatedEntitySchemaName: this.AllEntities.find((e) => UUIDsEqual(e.ID, rel.RelatedEntityID))?.SchemaName ?? '',
+            DisplayInForm: rel.DisplayInForm,
+            DisplayLocation: rel.DisplayLocation,
+            DisplayComponentID: rel.DisplayComponentID,
+            RelatedRecordCollection: rel.RelatedRecordCollection,
+            JoinView: rel.JoinView,
+            Type: rel.Type,
+            Sequence: rel.Sequence,
+            Configuration: rel.Configuration,
+        }));
+    }
+
+    public OnFormChromeConfigChange(form: IEntityFormConfiguration): void {
+        if (!this.record) return;
+        const current: IEntityConfiguration = this.record.ConfigurationObject ?? {};
+        this.record.ConfigurationObject = {
+            ...current,
+            UI: { ...(current.UI ?? {}), Form: form },
+        };
         this.cdr.markForCheck();
     }
 
@@ -745,13 +1037,18 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         }
     }
 
-    public toggleFieldGroup(groupId: string): void {
-        if (this.expandedFieldGroups.has(groupId)) {
-            this.expandedFieldGroups.delete(groupId);
+    public ToggleFieldGroup(groupId: string): void {
+        if (this.ExpandedFieldGroups.has(groupId)) {
+            this.ExpandedFieldGroups.delete(groupId);
         } else {
-            this.expandedFieldGroups.add(groupId);
+            this.ExpandedFieldGroups.add(groupId);
         }
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link ToggleFieldGroup}. */
+    public toggleFieldGroup(groupId: string): void {
+      return this.ToggleFieldGroup(groupId);
     }
 
     /**
@@ -759,50 +1056,80 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
      * field group. Sets (not flips) the value so it stays in sync with the panel,
      * and marks for check (OnPush change detection).
      */
-    public onFieldGroupExpandedChange(groupId: string, expanded: boolean): void {
+    public OnFieldGroupExpandedChange(groupId: string, expanded: boolean): void {
         if (expanded) {
-            this.expandedFieldGroups.add(groupId);
+            this.ExpandedFieldGroups.add(groupId);
         } else {
-            this.expandedFieldGroups.delete(groupId);
+            this.ExpandedFieldGroups.delete(groupId);
         }
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link OnFieldGroupExpandedChange}. */
+    public onFieldGroupExpandedChange(groupId: string, expanded: boolean): void {
+      return this.OnFieldGroupExpandedChange(groupId, expanded);
+    }
+
+    public IsFieldGroupExpanded(groupId: string): boolean {
+        return this.ExpandedFieldGroups.has(groupId);
+    }
+
+    /** @deprecated Use {@link IsFieldGroupExpanded}. */
     public isFieldGroupExpanded(groupId: string): boolean {
-        return this.expandedFieldGroups.has(groupId);
+      return this.IsFieldGroupExpanded(groupId);
     }
 
-    public expandAllFieldGroups(): void {
-        for (const group of this.fieldGroups) {
-            this.expandedFieldGroups.add(group.id);
+    public ExpandAllFieldGroups(): void {
+        for (const group of this.FieldGroups) {
+            this.ExpandedFieldGroups.add(group.id);
         }
         this.cdr.markForCheck();
     }
 
-    public collapseAllFieldGroups(): void {
-        this.expandedFieldGroups.clear();
+    /** @deprecated Use {@link ExpandAllFieldGroups}. */
+    public expandAllFieldGroups(): void {
+      return this.ExpandAllFieldGroups();
+    }
+
+    public CollapseAllFieldGroups(): void {
+        this.ExpandedFieldGroups.clear();
         this.cdr.markForCheck();
     }
 
-    public get allFieldGroupsExpanded(): boolean {
-        return this.fieldGroups.length > 0 &&
-               this.fieldGroups.every(g => this.expandedFieldGroups.has(g.id));
+    /** @deprecated Use {@link CollapseAllFieldGroups}. */
+    public collapseAllFieldGroups(): void {
+      return this.CollapseAllFieldGroups();
     }
 
+    public get AllFieldGroupsExpanded(): boolean {
+        return this.FieldGroups.length > 0 &&
+               this.FieldGroups.every(g => this.ExpandedFieldGroups.has(g.id));
+    }
+
+    /** @deprecated Use {@link AllFieldGroupsExpanded}. */
+    public get allFieldGroupsExpanded(): boolean {
+      return this.AllFieldGroupsExpanded;
+    }
+
+    public get AllFieldGroupsCollapsed(): boolean {
+        return this.ExpandedFieldGroups.size === 0;
+    }
+
+    /** @deprecated Use {@link AllFieldGroupsCollapsed}. */
     public get allFieldGroupsCollapsed(): boolean {
-        return this.expandedFieldGroups.size === 0;
+      return this.AllFieldGroupsCollapsed;
     }
 
     /**
      * Get all fields for the list view with sorting and filtering applied.
      */
-    public getFilteredFieldsList(): EntityFieldInfo[] {
+    public GetFilteredFieldsList(): EntityFieldInfo[] {
         if (!this.entity) return [];
         let fields = [...this.entity.Fields];
 
         // Apply search filter
-        if (this.fieldSearchTerm) {
-            const term = this.fieldSearchTerm.toLowerCase();
+        if (this.FieldSearchTerm) {
+            const term = this.FieldSearchTerm.toLowerCase();
             fields = fields.filter(f =>
                 f.Name.toLowerCase().includes(term) ||
                 (f.DisplayName && f.DisplayName.toLowerCase().includes(term)) ||
@@ -813,8 +1140,8 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
         // Apply sorting
         fields.sort((a, b) => {
-            const col = this.fieldListSortColumn;
-            const dir = this.fieldListSortDirection === 'asc' ? 1 : -1;
+            const col = this.FieldListSortColumn;
+            const dir = this.FieldListSortDirection === 'asc' ? 1 : -1;
 
             let aVal = this.getFieldSortValue(a, col);
             let bVal = this.getFieldSortValue(b, col);
@@ -835,6 +1162,11 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         return fields;
     }
 
+    /** @deprecated Use {@link GetFilteredFieldsList}. */
+    public getFilteredFieldsList(): EntityFieldInfo[] {
+      return this.GetFilteredFieldsList();
+    }
+
     private getFieldSortValue(field: EntityFieldInfo, column: string): string | number | boolean | null {
         switch (column) {
             case 'Sequence': return field.Sequence;
@@ -848,89 +1180,140 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         }
     }
 
-    public sortFieldList(column: string): void {
-        if (this.fieldListSortColumn === column) {
-            this.fieldListSortDirection = this.fieldListSortDirection === 'asc' ? 'desc' : 'asc';
+    public SortFieldList(column: string): void {
+        if (this.FieldListSortColumn === column) {
+            this.FieldListSortDirection = this.FieldListSortDirection === 'asc' ? 'desc' : 'asc';
         } else {
-            this.fieldListSortColumn = column;
-            this.fieldListSortDirection = 'asc';
+            this.FieldListSortColumn = column;
+            this.FieldListSortDirection = 'asc';
         }
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link SortFieldList}. */
+    public sortFieldList(column: string): void {
+      return this.SortFieldList(column);
+    }
+
+    public SelectField(field: EntityFieldInfo): void {
+        this.SelectedField = field;
+        this.SelectedRelationship = null;
+        this.DetailPanelOpen = true;
+        this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link SelectField}. */
     public selectField(field: EntityFieldInfo): void {
-        this.selectedField = field;
-        this.selectedRelationship = null;
-        this.detailPanelOpen = true;
+      return this.SelectField(field);
+    }
+
+    public SelectRelationship(relationship: EntityRelationshipInfo): void {
+        this.SelectedRelationship = relationship;
+        this.SelectedField = null;
+        this.DetailPanelOpen = true;
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link SelectRelationship}. */
     public selectRelationship(relationship: EntityRelationshipInfo): void {
-        this.selectedRelationship = relationship;
-        this.selectedField = null;
-        this.detailPanelOpen = true;
+      return this.SelectRelationship(relationship);
+    }
+
+    public CloseDetailPanel(): void {
+        this.DetailPanelOpen = false;
+        this.SelectedField = null;
+        this.SelectedRelationship = null;
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link CloseDetailPanel}. */
     public closeDetailPanel(): void {
-        this.detailPanelOpen = false;
-        this.selectedField = null;
-        this.selectedRelationship = null;
+      return this.CloseDetailPanel();
+    }
+
+    public ToggleRelationshipView(): void {
+        this.RelationshipViewMode = this.RelationshipViewMode === 'diagram' ? 'list' : 'diagram';
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link ToggleRelationshipView}. */
     public toggleRelationshipView(): void {
-        this.relationshipViewMode = this.relationshipViewMode === 'diagram' ? 'list' : 'diagram';
-        this.cdr.markForCheck();
+      return this.ToggleRelationshipView();
     }
 
     /**
      * Change the ERD depth level.
      */
-    public setErdDepth(depth: number): void {
+    public SetErdDepth(depth: number): void {
         if (depth >= 1 && depth <= 5) {
-            this.erdDepth = depth;
+            this.ErdDepth = depth;
             this.cdr.markForCheck();
         }
+    }
+
+    /** @deprecated Use {@link SetErdDepth}. */
+    public setErdDepth(depth: number): void {
+      return this.SetErdDepth(depth);
     }
 
     /**
      * Handle open record from the ERD composite component.
      * Navigates to the selected entity's form using SharedService.
      */
-    public onERDOpenRecord(event: { EntityName: string; RecordID: string }): void {
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: event.RecordID }]);
+    public OnERDOpenRecord(event: { EntityName: string; RecordID: string }): void {
+        // The ERD can open any entity — resolve its key column(s) from metadata, not a hardcoded ID.
+        const pkey = CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.EntityName), event.RecordID);
         this.sharedService.OpenEntityRecord(event.EntityName, pkey);
+    }
+
+    /** @deprecated Use {@link OnERDOpenRecord}. */
+    public onERDOpenRecord(event: { EntityName: string; RecordID: string }): void {
+      return this.OnERDOpenRecord(event);
     }
 
     /**
      * Handle ERD composite state changes (for future persistence if needed).
      */
-    public onERDStateChange(_state: ERDCompositeState): void {
+    public OnERDStateChange(_state: ERDCompositeState): void {
         // ERD composite now handles all internal state management
         // This handler is kept for potential future state persistence needs
     }
 
-    public onFieldSearch(term: string): void {
-        this.fieldSearchTerm = term.toLowerCase();
+    /** @deprecated Use {@link OnERDStateChange}. */
+    public onERDStateChange(_state: ERDCompositeState): void {
+      return this.OnERDStateChange(_state);
+    }
+
+    public OnFieldSearch(term: string): void {
+        this.FieldSearchTerm = term.toLowerCase();
         this.cdr.markForCheck();
     }
 
-    public getFilteredFieldGroups(): FieldGroup[] {
-        if (!this.fieldSearchTerm) {
-            return this.fieldGroups;
+    /** @deprecated Use {@link OnFieldSearch}. */
+    public onFieldSearch(term: string): void {
+      return this.OnFieldSearch(term);
+    }
+
+    public GetFilteredFieldGroups(): FieldGroup[] {
+        if (!this.FieldSearchTerm) {
+            return this.FieldGroups;
         }
 
-        return this.fieldGroups
+        return this.FieldGroups
             .map(group => ({
                 ...group,
                 fields: group.fields.filter(f =>
-                    f.Name.toLowerCase().includes(this.fieldSearchTerm) ||
-                    (f.DisplayName && f.DisplayName.toLowerCase().includes(this.fieldSearchTerm)) ||
-                    (f.Description && f.Description.toLowerCase().includes(this.fieldSearchTerm))
+                    f.Name.toLowerCase().includes(this.FieldSearchTerm) ||
+                    (f.DisplayName && f.DisplayName.toLowerCase().includes(this.FieldSearchTerm)) ||
+                    (f.Description && f.Description.toLowerCase().includes(this.FieldSearchTerm))
                 )
             }))
             .filter(group => group.fields.length > 0);
+    }
+
+    /** @deprecated Use {@link GetFilteredFieldGroups}. */
+    public getFilteredFieldGroups(): FieldGroup[] {
+      return this.GetFilteredFieldGroups();
     }
 
     // === Computed Getters ===
@@ -986,8 +1369,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
     /** Navigate to an entity record in the Entity Explorer */
     public NavigateToEntity(entityInfo: EntityInfo): void {
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityInfo.ID }]);
-        this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
+        this.sharedService.OpenEntityRecord('MJ: Entities', CompositeKey.FromID(entityInfo.ID));
     }
 
     /**
@@ -1069,7 +1451,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         }
     }
 
-    public get statusClass(): string {
+    public get StatusClass(): string {
         if (!this.entity) return '';
         switch (this.entity.Status) {
             case 'Active': return 'status-active';
@@ -1079,21 +1461,41 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         }
     }
 
-    public get entityIcon(): string {
+    /** @deprecated Use {@link StatusClass}. */
+    public get statusClass(): string {
+      return this.StatusClass;
+    }
+
+    public get EntityIcon(): string {
         return this.entity?.Icon || 'fa-solid fa-database';
     }
 
-    public get entityDisplayName(): string {
+    /** @deprecated Use {@link EntityIcon}. */
+    public get entityIcon(): string {
+      return this.EntityIcon;
+    }
+
+    public get EntityDisplayName(): string {
         if (!this.entity) return '';
         return this.entity.DisplayName || this.entity.Name;
     }
 
-    public get formattedRowCount(): string {
-        if (this.stats.rowCount === null) return 'N/A';
-        return this.stats.rowCount.toLocaleString();
+    /** @deprecated Use {@link EntityDisplayName}. */
+    public get entityDisplayName(): string {
+      return this.EntityDisplayName;
     }
 
-    public get capabilitySummary(): string[] {
+    public get FormattedRowCount(): string {
+        if (this.Stats.rowCount === null) return 'N/A';
+        return this.Stats.rowCount.toLocaleString();
+    }
+
+    /** @deprecated Use {@link FormattedRowCount}. */
+    public get formattedRowCount(): string {
+      return this.FormattedRowCount;
+    }
+
+    public get CapabilitySummary(): string[] {
         if (!this.entity) return [];
         const caps: string[] = [];
         if (this.entity.IncludeInAPI) caps.push('API');
@@ -1105,7 +1507,12 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         return caps;
     }
 
-    public getFieldTypeIcon(field: EntityFieldInfo): string {
+    /** @deprecated Use {@link CapabilitySummary}. */
+    public get capabilitySummary(): string[] {
+      return this.CapabilitySummary;
+    }
+
+    public GetFieldTypeIcon(field: EntityFieldInfo): string {
         if (field.IsPrimaryKey) return 'fa-solid fa-key';
         if (field.RelatedEntityID) return 'fa-solid fa-link';
         if (field.Encrypt) return 'fa-solid fa-lock';
@@ -1121,36 +1528,59 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         }
     }
 
-    public getRelatedEntityName(field: EntityFieldInfo): string | null {
+    /** @deprecated Use {@link GetFieldTypeIcon}. */
+    public getFieldTypeIcon(field: EntityFieldInfo): string {
+      return this.GetFieldTypeIcon(field);
+    }
+
+    public GetRelatedEntityName(field: EntityFieldInfo): string | null {
         if (!field.RelatedEntityID) return null;
-        const related = this.allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
+        const related = this.AllEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
         return related?.Name || null;
     }
 
-    public getRelatedEntity(field: EntityFieldInfo): EntityInfo | null {
-        if (!field.RelatedEntityID) return null;
-        return this.allEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID)) || null;
+    /** @deprecated Use {@link GetRelatedEntityName}. */
+    public getRelatedEntityName(field: EntityFieldInfo): string | null {
+      return this.GetRelatedEntityName(field);
     }
 
-    public navigateToRelatedEntity(field: EntityFieldInfo): void {
-        const related = this.getRelatedEntity(field);
+    public GetRelatedEntity(field: EntityFieldInfo): EntityInfo | null {
+        if (!field.RelatedEntityID) return null;
+        return this.AllEntities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID)) || null;
+    }
+
+    /** @deprecated Use {@link GetRelatedEntity}. */
+    public getRelatedEntity(field: EntityFieldInfo): EntityInfo | null {
+      return this.GetRelatedEntity(field);
+    }
+
+    public NavigateToRelatedEntity(field: EntityFieldInfo): void {
+        const related = this.GetRelatedEntity(field);
         if (related) {
-            const pkey = new CompositeKey([{ FieldName: 'ID', Value: related.ID }]);
-            this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
+            this.sharedService.OpenEntityRecord('MJ: Entities', CompositeKey.FromID(related.ID));
         }
+    }
+
+    /** @deprecated Use {@link NavigateToRelatedEntity}. */
+    public navigateToRelatedEntity(field: EntityFieldInfo): void {
+      return this.NavigateToRelatedEntity(field);
     }
 
     /**
      * Open an entity record from the field detail panel.
      */
-    public openRelatedEntityFromField(entityId: string): void {
+    public OpenRelatedEntityFromField(entityId: string): void {
         if (entityId) {
-            const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityId }]);
-            this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
+            this.sharedService.OpenEntityRecord('MJ: Entities', CompositeKey.FromID(entityId));
         }
     }
 
-    public formatFieldType(field: EntityFieldInfo): string {
+    /** @deprecated Use {@link OpenRelatedEntityFromField}. */
+    public openRelatedEntityFromField(entityId: string): void {
+      return this.OpenRelatedEntityFromField(entityId);
+    }
+
+    public FormatFieldType(field: EntityFieldInfo): string {
         let type = field.Type;
         if (field.Length && field.Length > 0) {
             type += `(${field.Length})`;
@@ -1160,22 +1590,32 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         return type;
     }
 
+    /** @deprecated Use {@link FormatFieldType}. */
+    public formatFieldType(field: EntityFieldInfo): string {
+      return this.FormatFieldType(field);
+    }
+
     /**
      * Get the role name for a permission entry.
      * The EntityPermissionInfo.Role property is not populated because the database view
      * returns 'RoleName' but the class expects 'Role'. This helper looks up the role
      * from the Metadata.Roles collection using the RoleID.
      */
-    public getRoleName(perm: EntityPermissionInfo): string {
+    public GetRoleName(perm: EntityPermissionInfo): string {
         if (!perm.RoleID) return 'Unknown';
         const role = this._metadata.Roles.find(r => UUIDsEqual(r.ID, perm.RoleID));
         return role?.Name || 'Unknown';
     }
 
+    /** @deprecated Use {@link GetRoleName}. */
+    public getRoleName(perm: EntityPermissionInfo): string {
+      return this.GetRoleName(perm);
+    }
+
     /**
      * Checks if a string value is valid JSON (object or array).
      */
-    public isJsonValue(value: string): boolean {
+    public IsJsonValue(value: string): boolean {
         if (!value || typeof value !== 'string') return false;
         const trimmed = value.trim();
         if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
@@ -1187,15 +1627,20 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         }
     }
 
+    /** @deprecated Use {@link IsJsonValue}. */
+    public isJsonValue(value: string): boolean {
+      return this.IsJsonValue(value);
+    }
+
     /**
      * Formats a JSON string for display with proper indentation.
      */
     /** Case-insensitive UUID check whether an entity field is the currently selected field. */
     public IsFieldSelected(field: EntityFieldInfo): boolean {
-        return UUIDsEqual(this.selectedField?.ID, field.ID);
+        return UUIDsEqual(this.SelectedField?.ID, field.ID);
     }
 
-    public formatJsonValue(value: string): string {
+    public FormatJsonValue(value: string): string {
         if (!value) return '';
         try {
             const parsed = JSON.parse(value.trim());
@@ -1203,5 +1648,10 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         } catch {
             return value;
         }
+    }
+
+    /** @deprecated Use {@link FormatJsonValue}. */
+    public formatJsonValue(value: string): string {
+      return this.FormatJsonValue(value);
     }
 }

@@ -111,31 +111,6 @@
                 <span class="wfr-row-status" [attr.data-status]="selected.Status">{{ selected.Status }}</span>
               </div>
               <div class="wfr-detail-actions">
-                @if (selected.Status === 'In Progress' || selected.Status === 'Running' || selected.Status === 'Pending') {
-                  <!-- The runner controls. Pause/Step are durable claim-gating state — nothing new
-                       starts while paused; in-flight steps finish and their completions land. -->
-                  @if (DebugPaused) {
-                    <button mjButton variant="primary" size="sm" [disabled]="ControlBusy" (click)="OnResumeRun()">
-                      <i class="fa-solid fa-play" aria-hidden="true"></i> Resume
-                    </button>
-                    <button mjButton variant="secondary" size="sm" [disabled]="ControlBusy" (click)="OnStepRun('one')"
-                            title="Run the next eligible step, then pause again">
-                      <i class="fa-solid fa-forward-step" aria-hidden="true"></i> Step
-                    </button>
-                    <button mjButton variant="secondary" size="sm" [disabled]="ControlBusy" (click)="OnStepRun('wave')"
-                            title="Run everything currently ready, then pause again">
-                      <i class="fa-solid fa-forward" aria-hidden="true"></i> Step wave
-                    </button>
-                  } @else {
-                    <button mjButton variant="secondary" size="sm" [disabled]="ControlBusy" (click)="OnPauseRun()"
-                            title="Nothing new starts; running steps finish">
-                      <i class="fa-solid fa-pause" aria-hidden="true"></i> Pause
-                    </button>
-                  }
-                  <button mjButton variant="danger" size="sm" [disabled]="ControlBusy" (click)="OnCancelRun()">
-                    <i class="fa-solid fa-ban" aria-hidden="true"></i> Cancel
-                  </button>
-                }
                 @if (selected.AgentRunID) {
                   <button mjButton variant="flat" size="sm" (click)="OnOpenAgentRun(selected)">
                     <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
@@ -207,25 +182,22 @@
                         [gutterSize]="8" (dragEnd)="OnStepSplitDragEnd($event.sizes)">
                 <as-split-area [size]="Layout.StepPanelOpen ? Layout.StepSplitSizes[0] : 100" [minSize]="25">
                   <div class="wfr-graph-pane">
-                    <mj-task-graph-run-view
+                    <mj-task-graph-debugger
+                      #GraphDebug
                       [Provider]="ProviderToUse"
                       [ParentTaskID]="selected.ID"
                       [WorkflowName]="selected.Name"
                       [LiveUpdates]="selected.Status === 'Running' || selected.Status === 'In Progress'"
-                      [LiveFrame]="LatestFrame"
                       [ReplayAt]="ReplayAt"
                       [ShowLegend]="Layout.ShowLegend"
-                      [Breakpoints]="DebugState.breakpoints"
-                      [PausedAtTaskID]="DebugState.pausedAtTaskID"
-                      [EdgeOverrides]="DebugState.edgeOverrides"
-                      [AllowBreakpointEditing]="true"
-                      [ShowDebugLegend]="true"
                       Height="100%"
                       (NodeSelected)="OnGraphNodeSelected($event)"
                       (ConnectionSelected)="OnGraphConnectionSelected($event)"
-                      (BreakpointToggled)="OnBreakpointToggled($event)"
-                      (LegendToggled)="OnLegendToggled($event)">
-                    </mj-task-graph-run-view>
+                      (LegendToggled)="OnLegendToggled($event)"
+                      (Settled)="OnCanvasSettled()"
+                      (Frame)="OnFrame($event)"
+                      (PausedChange)="DebugPaused = $event">
+                    </mj-task-graph-debugger>
 
                     @if (CanReplay) {
                       <!-- Replay: scrub through the settled run on the same canvas, reconstructed
@@ -242,15 +214,15 @@
                       </div>
                     }
 
-                    @if (DebugState.breakpoints.length > 0 || DebugState.pausedAtTaskID) {
+                    @if (GraphDebug.Breakpoints.length > 0 || GraphDebug.PausedAtTaskID) {
                       <div class="wfr-bp-bar" aria-label="Armed breakpoints">
-                        @if (DebugState.pausedAtTaskID) {
+                        @if (GraphDebug.PausedAtTaskID) {
                           <span class="wfr-chip wfr-chip-paused">
                             <i class="fa-solid fa-pause" aria-hidden="true"></i>
-                            Paused at {{ StepName(DebugState.pausedAtTaskID) }}
+                            Paused at {{ StepName(GraphDebug.PausedAtTaskID) }}
                           </span>
                         }
-                        @for (id of DebugState.breakpoints; track id) {
+                        @for (id of GraphDebug.Breakpoints; track id) {
                           <button type="button" class="wfr-chip wfr-chip-break" (click)="OnSelectBreakpoint(id)">
                             <i class="fa-solid fa-circle" aria-hidden="true"></i>
                             {{ StepName(id) }}
@@ -271,7 +243,7 @@
                             · held {{ tick.heldCount ?? 0 }} · took {{ tick.claimedCount ?? 0 }}
                           </span>
                         }
-                        @if (DebugPaused) {
+                        @if (GraphDebug.Paused) {
                           <span class="wfr-tick wfr-tick-paused">⏸ paused — nothing new starts</span>
                         }
                       </div>
@@ -296,19 +268,6 @@
                           </button>
                         }
                       </div>
-
-                      @if (HasInvocation) {
-                        <div class="wfr-insp-card wfr-insp-invocation">
-                          <span class="wfr-insp-label">Invocation roots</span>
-                          <span class="wfr-insp-hint">data / context — what conditions evaluate against</span>
-                          <mj-code-editor
-                            [ngModel]="InvocationJson"
-                            [language]="'json'"
-                            [readonly]="true"
-                            style="width: 100%; height: 140px;">
-                          </mj-code-editor>
-                        </div>
-                      }
 
                       @if (InspectorMode === 'edge' && SelectedEdge; as edge) {
                         <div class="wfr-step-json">
@@ -348,14 +307,17 @@
                             <span class="wfr-row-status" [attr.data-status]="step.Status">{{ step.Status }}</span>
                           </div>
 
-                          <label class="wfr-break-toggle">
-                            <input type="checkbox"
-                                   [checked]="HasBreakpoint(step.ID)"
-                                   [disabled]="ControlBusy"
-                                   (change)="OnBreakpointCheckbox(step, $event)" />
-                            <i class="fa-solid fa-circle" aria-hidden="true"></i>
-                            Break before this step
-                          </label>
+                          <button type="button" class="wfr-bp"
+                                  [class.wfr-bp-on]="HasBreakpoint(step.ID)"
+                                  [disabled]="ControlBusy"
+                                  (click)="OnBreakpointToggled({ TaskID: step.ID, Enabled: !HasBreakpoint(step.ID) })"
+                                  [attr.aria-pressed]="HasBreakpoint(step.ID)"
+                                  [title]="HasBreakpoint(step.ID) ? 'Remove breakpoint' : 'Break before this step'">
+                            <i class="fa-circle"
+                               [class.fa-solid]="HasBreakpoint(step.ID)"
+                               [class.fa-regular]="!HasBreakpoint(step.ID)"
+                               aria-hidden="true"></i>
+                          </button>
 
                           <!-- The inspector: live engine facts about this step, from the frame
                                stream — claim, path verdicts, runner progress, what-if. -->
@@ -469,12 +431,11 @@
                             </div>
                           }
 
-                          <mj-code-editor
-                            [ngModel]="SelectedStepJson"
-                            [language]="'json'"
-                            [readonly]="true"
-                            style="width: 100%;">
-                          </mj-code-editor>
+                          <mj-task-graph-variables
+                            [InputPayload]="StepPayload(step, 'InputPayload')"
+                            [OutputPayload]="StepPayload(step, 'OutputPayload')"
+                            [Invocation]="Invocation">
+                          </mj-task-graph-variables>
                         </div>
                       } @else {
                         <mj-empty-state

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DDLGenerator, ValidateIdentifier, EscapeSqlString } from '../DDLGenerator.js';
+import { DDLGenerator, ValidateIdentifier } from '../DDLGenerator.js';
 import type { TableDefinition } from '../interfaces.js';
 
 const makeTable = (overrides: Partial<TableDefinition> = {}): TableDefinition => ({
@@ -243,18 +243,6 @@ describe('DDLGenerator', () => {
 
     it('rejects SQL injection attempts', () => {
       expect(() => ValidateIdentifier("'; DROP TABLE", 'table')).toThrow();
-    });
-  });
-
-  // ─── EscapeSqlString ─────────────────────────────────────────────
-
-  describe('EscapeSqlString', () => {
-    it('doubles single quotes', () => {
-      expect(EscapeSqlString("it's a test")).toBe("it''s a test");
-    });
-
-    it('leaves strings without quotes unchanged', () => {
-      expect(EscapeSqlString('hello world')).toBe('hello world');
     });
   });
 });

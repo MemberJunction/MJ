@@ -1,6 +1,6 @@
 # @memberjunction/ai-realtime-client
 
-Framework-agnostic **browser-side** abstraction for provider-direct realtime (voice) sessions: the `BaseRealtimeClient` contract plus the four shipped provider drivers (`OpenAIRealtimeClient`, `GeminiRealtimeClient`, `ElevenLabsRealtimeClient`, `AssemblyAIRealtimeClient`) and the shared PCM audio plane (`src/audio/`) the websocket drivers build on.
+Framework-agnostic **browser-side** abstraction for provider-direct realtime (voice) sessions: the `BaseRealtimeClient` contract plus the provider drivers (`OpenAIRealtimeClient`, `OpenAILiveClient`, `GeminiRealtimeClient`, `ElevenLabsRealtimeClient`, `AssemblyAIRealtimeClient`, `xAIRealtimeClient`, `HuggingFaceRealtimeClient`) and the shared PCM audio plane (`src/audio/`) the websocket drivers build on.
 
 This package is the **client-side mirror** of the server's `BaseRealtimeModel` pattern (`@memberjunction/ai`). In the **client-direct topology**, the MJ server mints an ephemeral credential + provider-native session config (`ClientRealtimeSessionConfig`) through its server driver, and the browser resolves the matching *client* driver through the MemberJunction `ClassFactory` using the config's `Provider` string as the registration key. The browser owns the provider socket (lowest audio latency — frames never transit the MJ server), while **prompt and tool authority stay server-side**: the client applies the server-built `SessionConfig` verbatim.
 
@@ -25,7 +25,7 @@ BaseRealtimeModel driver                   BaseRealtimeClient driver
         │  ClientRealtimeSessionConfig             │ ClassFactory.CreateInstance(
         │  { Provider, Model,                      │   BaseRealtimeClient,
         │    EphemeralToken, ExpiresAt,  ────────► │   config.Provider)
-        │    SessionConfig (opaque) }              │   // 'openai' | 'gemini' | 'elevenlabs' | 'assemblyai'
+        │    SessionConfig (opaque) }              │   // 'openai' | 'openAILive' | 'gemini' | 'elevenlabs' | 'assemblyai'
 ```
 
 **Division of responsibility** (from the `BaseRealtimeClient` doc header):
@@ -52,7 +52,7 @@ BaseRealtimeModel driver                   BaseRealtimeClient driver
 
 States (`RealtimeClientState`): `connecting → connected → listening ⇄ speaking → closed | error`. There is deliberately **no `thinking` state** — "the host is executing a tool" is host policy, not wire state.
 
-Transcripts (`RealtimeClientTranscript`) carry `Role`, `Text` (interim events are incremental **deltas**, finals are the complete turn), `IsFinal`, and `Kind: 'normal' | 'narration'` — narration transcripts are ephemeral by product decision (never captions, never persisted).
+Transcripts (`RealtimeClientTranscript`): carry `Role`, `Text` (interim events are incremental **deltas**, finals are the complete turn), `IsFinal`, and `Kind: 'normal' | 'narration'` — narration transcripts are ephemeral by product decision (never captions, never persisted).
 
 Errors (`RealtimeClientError`): `Fatal: true` means the session is unusable (transport failure, credential expiry) and is also followed by an `'error'` state; `Fatal: false` is a recoverable provider error frame.
 
@@ -65,6 +65,17 @@ Errors (`RealtimeClientError`): `Fatal: true` means the session is unusable (tra
 - **Response state machine**: `responseActive` set on `response.created`, cleared on `response.done`; tool-result `response.create` triggers are queued while a response is in flight and flushed on `response.done` so the model **always** voices delegated results (obligation #5).
 - **Narration tagging**: `RequestSpokenUpdate` marks the next response so its transcripts emit with `Kind: 'narration'`.
 - **Playback tracking**: `IsAudioPlaying` from the WebRTC `output_audio_buffer` started/stopped events.
+
+### `OpenAILiveClient` — `@RegisterClass(BaseRealtimeClient, 'openAILive')`
+
+- **Model**: `gpt-live-1` (OpenAI Live API).
+- **Transport**: WebRTC via `/v1/realtime/calls` data channel.
+- **Wire protocol specifics**:
+  - **Tool Outputs**: Emits `response.item.create` (item type: `function_call_output`) followed by `response.create` per batch (coordinated via `RealtimeToolBatchBarrier`). `conversation.item.create` is not supported by OpenAI Live and is explicitly rejected.
+  - **Floor Control**: No wire `response.cancel` event exists in OpenAI Live WebRTC; `CancelActiveResponse()` performs local audio playback draining and state reset.
+  - **Tool Call Deduplication**: Tool calls arriving via `output_item.done` or `response.function_call_arguments.done` are deduplicated by `CallID` via an `emittedToolCallIds` Set. The deduplication Set deliberately survives local cancellations so late-arriving frames within an in-flight turn cannot double-emit an already-handled tool call.
+  - **Context & Commentary**: `SendContextNote` appends to model thinking via `session.thinking.append` (with `delegation_id: null`). Spoken interim updates use `session.commentary.append`.
+  - **Outbound Queuing**: Frames sent while the WebRTC data channel is connecting are buffered in a bounded FIFO queue (`MAX_OUTBOUND_QUEUE_SIZE = 100`, drop-oldest with warnings).
 
 ### `GeminiRealtimeClient` — `@RegisterClass(BaseRealtimeClient, 'gemini')`
 
@@ -107,13 +118,14 @@ Drivers expose these through overridable `protected` creation seams (`createMicC
 import { MJGlobal } from '@memberjunction/global';
 import {
     BaseRealtimeClient,
-    LoadOpenAIRealtimeClient, LoadGeminiRealtimeClient,
+    LoadOpenAIRealtimeClient, LoadOpenAILiveClient, LoadGeminiRealtimeClient,
     LoadElevenLabsRealtimeClient, LoadAssemblyAIRealtimeClient
 } from '@memberjunction/ai-realtime-client';
 
 // Tree-shaking prevention — drivers are resolved dynamically, so a static call path
 // must keep their @RegisterClass side effects alive:
 LoadOpenAIRealtimeClient();
+LoadOpenAILiveClient();
 LoadGeminiRealtimeClient();
 LoadElevenLabsRealtimeClient();
 LoadAssemblyAIRealtimeClient();
