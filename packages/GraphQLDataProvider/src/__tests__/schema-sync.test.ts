@@ -626,10 +626,14 @@ describe('GraphQL Schema Synchronization', () => {
             expect(types[0].name).toBe('DeleteOptionsInput');
             expect(types[0].fields.length).toBeGreaterThanOrEqual(4);
 
-            // All DeleteOptionsInput fields should be required
-            types[0].fields.forEach(field => {
-                expect(field.required).toBe(true);
-            });
+            // Every field a 5.51.x client already sends stays required. `SkipRecordChanges`
+            // arrived in 6.1.0 and is optional on the wire, so a 5.51-shaped `options___` that
+            // omits it still validates; the server forces it to false regardless.
+            const byName = new Map(types[0].fields.map(f => [f.name, f]));
+            for (const name of ['SkipEntityAIActions', 'SkipEntityActions', 'ReplayOnly', 'IsParentEntityDelete']) {
+                expect(byName.get(name)?.required, name).toBe(true);
+            }
+            expect(byName.get('SkipRecordChanges')?.required).toBe(false);
         });
 
         it('honors decorator nullability over TypeScript optionality and survives nested parens in descriptions', () => {

@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, ChangeDetectorRef, OnDestroy, inject } from '@angular/core';
 import { EntityInfo, RunViewParams, LogError, CompositeKey, RunView, RecordMergeRequest } from '@memberjunction/core';
+import { ExportColumn } from '@memberjunction/export-engine';
 import {
   RecordComparisonService,
   type FieldComparison,
@@ -394,6 +395,11 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     }
     const result = await this.grid.Export(format ? { format } : undefined, true);
     return !!result?.success;
+  }
+
+  /** The hosted grid's on-screen columns ({@link IViewRenderer.GetExportColumns}); empty before it mounts. */
+  GetExportColumns(): ExportColumn[] {
+    return this.grid?.GetExportColumns() ?? [];
   }
 
   // ================================================================

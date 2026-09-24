@@ -3,6 +3,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, RunView, LogError } from '@memberjunction/core';
+import { ExportColumn } from '@memberjunction/export-engine';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
 import { BuildCompositeKey, BuildPkString } from '../utils/record.util';
@@ -1559,6 +1560,18 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       return false;
     }
     return renderer.exportRecords(format);
+  }
+
+  /**
+   * The active renderer's on-screen columns ({@link IViewRenderer.GetExportColumns}), or an empty
+   * array when no renderer is mounted or the active view type has no column layout.
+   */
+  public GetExportColumns(): ExportColumn[] {
+    const renderer = this.dynamicRendererRef?.instance;
+    if (!renderer || typeof renderer.GetExportColumns !== 'function') {
+      return [];
+    }
+    return renderer.GetExportColumns();
   }
 
   /**
