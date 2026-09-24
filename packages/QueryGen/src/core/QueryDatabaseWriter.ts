@@ -13,7 +13,7 @@ import {
   QueryEngine
 } from '@memberjunction/core-entities';
 import { ValidatedQuery, WriteResult } from '../data/schema';
-import { extractErrorMessage } from '../utils/error-handlers';
+import { ExtractErrorMessage } from '../utils/error-handlers';
 
 /**
  * QueryDatabaseWriter class
@@ -40,7 +40,7 @@ export class QueryDatabaseWriter {
    * @param contextUser - User context for entity operations
    * @returns Write result with success status and per-query results
    */
-  async writeQueriesToDatabase(
+  async WriteQueriesToDatabase(
     validatedQueries: ValidatedQuery[],
     contextUser: UserInfo
   ): Promise<WriteResult> {
@@ -79,12 +79,20 @@ export class QueryDatabaseWriter {
       return { success: true, results };
     } catch (error: unknown) {
       await provider.RollbackTransaction();
-      const message = extractErrorMessage(error, 'Database Write');
+      const message = ExtractErrorMessage(error, 'Database Write');
       return {
         success: false,
         results: [`✗ Batch rolled back: ${message}`, ...results.map(r => r.replace('✓', '~'))]
       };
     }
+  }
+
+  /** @deprecated Use {@link WriteQueriesToDatabase}. */
+  async writeQueriesToDatabase(
+    validatedQueries: ValidatedQuery[],
+    contextUser: UserInfo
+  ): Promise<WriteResult> {
+    return this.WriteQueriesToDatabase(validatedQueries, contextUser);
   }
 
   /**

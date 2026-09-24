@@ -78,7 +78,7 @@ export default function ArtifactsDockScreen() {
                         />
                     ))}
                     {CATEGORY_ORDER.map((category) => {
-                        const count = list.filter((a) => a.category === category).length;
+                        const count = list.filter((a) => a.Category === category).length;
                         if (count === 0) return null;
                         return (
                             <FilterChip
@@ -112,9 +112,9 @@ export default function ArtifactsDockScreen() {
 
 /** A single artifact row with agent avatar, category icon, title, and preview. */
 function ArtifactCard({ artifact }: { artifact: ArtifactSummary }) {
-    const agent = AdaptAgentRef(artifact.agentId, artifact.agentName);
-    const accent = categoryColor(artifact.category);
-    const CategoryIcon = categoryIcon(artifact.category);
+    const agent = AdaptAgentRef(artifact.AgentId, artifact.AgentName);
+    const accent = categoryColor(artifact.Category);
+    const CategoryIcon = categoryIcon(artifact.Category);
     return (
         <Pressable
             style={styles.row}
@@ -126,13 +126,13 @@ function ArtifactCard({ artifact }: { artifact: ArtifactSummary }) {
             <View style={styles.rowBody}>
                 <Text style={styles.rowTitle} numberOfLines={1}>{artifact.name}</Text>
                 <Text style={styles.rowMeta} numberOfLines={1}>
-                    {categoryLabel(artifact.category)} · {artifact.typeName}
+                    {categoryLabel(artifact.Category)} · {artifact.TypeName}
                 </Text>
-                {artifact.preview ? (
-                    <Text style={styles.rowPreview} numberOfLines={1}>{artifact.preview}</Text>
+                {artifact.Preview ? (
+                    <Text style={styles.rowPreview} numberOfLines={1}>{artifact.Preview}</Text>
                 ) : null}
             </View>
-            {artifact.agentId ? <AgentAvatarStack agents={[agent]} size={26} borderColor={Colors.surface} /> : null}
+            {artifact.AgentId ? <AgentAvatarStack agents={[agent]} size={26} borderColor={Colors.surface} /> : null}
             <Icons.ChevronRight size={16} color={Colors.ink3} strokeWidth={2} />
         </Pressable>
     );
@@ -160,12 +160,12 @@ type AgentChip = { id: string; name: string; color: string; count: number };
 function distinctAgents(artifacts: ArtifactSummary[]): AgentChip[] {
     const byId = new Map<string, AgentChip>();
     for (const a of artifacts) {
-        if (!a.agentId) continue;
-        const existing = byId.get(a.agentId);
+        if (!a.AgentId) continue;
+        const existing = byId.get(a.AgentId);
         if (existing) {
             existing.count += 1;
         } else {
-            byId.set(a.agentId, { id: a.agentId, name: a.agentName ?? 'Agent', color: ColorForAgent(a.agentName), count: 1 });
+            byId.set(a.AgentId, { id: a.AgentId, name: a.AgentName ?? 'Agent', color: ColorForAgent(a.AgentName), count: 1 });
         }
     }
     return Array.from(byId.values());
@@ -175,9 +175,9 @@ function distinctAgents(artifacts: ArtifactSummary[]): AgentChip[] {
 function applyFilter(artifacts: ArtifactSummary[], filter: ActiveFilter): ArtifactSummary[] {
     switch (filter.type) {
         case 'agent':
-            return artifacts.filter((a) => a.agentId === filter.id);
+            return artifacts.filter((a) => a.AgentId === filter.id);
         case 'category':
-            return artifacts.filter((a) => a.category === filter.category);
+            return artifacts.filter((a) => a.Category === filter.category);
         case 'all':
         default:
             return artifacts;

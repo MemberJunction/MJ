@@ -15,12 +15,17 @@
  * @example deriveSidecarPath('realtime-recordings/sess-1/recording.wav') === 'realtime-recordings/sess-1/peaks.json'
  * @example deriveSidecarPath('recording.wav') === 'peaks.json'
  */
-export function deriveSidecarPath(providerKey: string | null | undefined): string | null {
+export function DeriveSidecarPath(providerKey: string | null | undefined): string | null {
     if (!providerKey) {
         return null;
     }
     const lastSlash = providerKey.lastIndexOf('/');
     return lastSlash >= 0 ? `${providerKey.slice(0, lastSlash)}/peaks.json` : 'peaks.json';
+}
+
+/** @deprecated Use {@link DeriveSidecarPath}. */
+export function deriveSidecarPath(providerKey: string | null | undefined): string | null {
+    return DeriveSidecarPath(providerKey);
 }
 
 /** Generous ceiling on the number of peaks returned — matches the capture-side cap. */
@@ -35,7 +40,7 @@ export const MAX_PEAKS = 4096;
  * @param bytes The raw sidecar bytes (e.g. from a storage `GetObject`).
  * @returns Sanitized `0..1` peaks, or `undefined`.
  */
-export function parsePeaksSidecar(bytes: Buffer): number[] | undefined {
+export function ParsePeaksSidecar(bytes: Buffer): number[] | undefined {
     try {
         const parsed: unknown = JSON.parse(bytes.toString('utf8'));
         if (!Array.isArray(parsed) || parsed.length === 0) {
@@ -49,4 +54,9 @@ export function parsePeaksSidecar(bytes: Buffer): number[] | undefined {
     } catch {
         return undefined;
     }
+}
+
+/** @deprecated Use {@link ParsePeaksSidecar}. */
+export function parsePeaksSidecar(bytes: Buffer): number[] | undefined {
+    return ParsePeaksSidecar(bytes);
 }

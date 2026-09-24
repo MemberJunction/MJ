@@ -52,18 +52,50 @@ import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '../bootstrap.types';
 export class MJAuthShellComponent implements OnInit {
   public HasError = false;
   public ErrorMessage: any = '';
-  public showValidationOnly = false;
-  public subHeaderText: string = "Welcome back! Please log in to your account.";
+  public ShowValidationOnly = false;
+
+  /** @deprecated Use {@link ShowValidationOnly}. */
+  public get showValidationOnly() {
+    return this.ShowValidationOnly;
+  }
+  /** @deprecated Use {@link ShowValidationOnly}. */
+  public set showValidationOnly(value) {
+    this.ShowValidationOnly = value;
+  }
+  public SubHeaderText: string = "Welcome back! Please log in to your account.";
+
+  /** @deprecated Use {@link SubHeaderText}. */
+  public get subHeaderText(): string {
+    return this.SubHeaderText;
+  }
+  /** @deprecated Use {@link SubHeaderText}. */
+  public set subHeaderText(value: string) {
+    this.SubHeaderText = value;
+  }
 
   private initialPath = '/';
 
   constructor(
     private router: Router,
-    @Inject(DOCUMENT) public document: Document,
-    public authBase: MJAuthBase,
+    @Inject(DOCUMENT) public Document: Document,
+    public AuthBase: MJAuthBase,
     private initService: MJInitializationService,
     @Inject(MJ_ENVIRONMENT) private environment: MJEnvironmentConfig
   ) {}
+
+  /** @deprecated Use {@link Document} instead. */
+  get document(): Document {
+    return this.Document;
+  }
+
+  /** @deprecated Use {@link AuthBase}. */
+  public get authBase(): MJAuthBase {
+    return this.AuthBase;
+  }
+  /** @deprecated Use {@link AuthBase}. */
+  public set authBase(value: MJAuthBase) {
+    this.AuthBase = value;
+  }
 
   async ngOnInit() {
     console.log('🚀 MemberJunction - Auth Shell Initializing');
@@ -71,13 +103,13 @@ export class MJAuthShellComponent implements OnInit {
     SetProductionStatus(this.environment.production);
     this.initialPath = window.location.pathname + (window.location.search ? window.location.search : '');
 
-    await this.setupAuth();
+    await this.SetupAuth();
   }
 
   /**
    * Handle successful login and initialize the application
    */
-  async handleLogin(token: string, userInfo: StandardUserInfo): Promise<void> {
+  async HandleLogin(token: string, userInfo: StandardUserInfo): Promise<void> {
     if (!token) return;
 
     try {
@@ -97,12 +129,12 @@ export class MJAuthShellComponent implements OnInit {
       this.initService.runValidationChecks();
 
       // Navigate to initial route
-      this.initService.navigateToInitialRoute(this.initialPath, this.document);
+      this.initService.navigateToInitialRoute(this.initialPath, this.Document);
 
     } catch (err: any) {
       // Check for no roles error
       if (this.initService.isNoUserRolesError(err)) {
-        this.showValidationOnly = true;
+        this.ShowValidationOnly = true;
         this.HasError = true;
         const result = this.initService.handleNoRolesError();
         return; // Don't throw, allow UI to show validation banner
@@ -122,22 +154,27 @@ export class MJAuthShellComponent implements OnInit {
     }
   }
 
+  /** @deprecated Use {@link HandleLogin}. */
+  async handleLogin(token: string, userInfo: StandardUserInfo): Promise<void> {
+    return this.HandleLogin(token, userInfo);
+  }
+
   /**
    * Setup authentication and handle auth state changes
    */
-  async setupAuth(): Promise<void> {
+  async SetupAuth(): Promise<void> {
     // Auth provider already initialized by APP_INITIALIZER
 
     // Listen for user info changes
-    this.authBase.getUserInfo()
+    this.AuthBase.getUserInfo()
       .pipe(take(1))
       .subscribe({
         next: async (userInfo) => {
           if (userInfo) {
-            const token = await this.authBase.getIdToken();
+            const token = await this.AuthBase.getIdToken();
 
             if (token) {
-              await this.handleLogin(token, userInfo);
+              await this.HandleLogin(token, userInfo);
             } else {
               console.error('User info available but no token found');
             }
@@ -145,12 +182,12 @@ export class MJAuthShellComponent implements OnInit {
         },
         error: (err: unknown) => {
           LogError('Error Logging In: ' + err);
-          this.subHeaderText = this.initService.getAuthErrorMessage(err);
+          this.SubHeaderText = this.initService.getAuthErrorMessage(err);
         }
       });
 
     // Check if user is authenticated
-    this.authBase.isAuthenticated()
+    this.AuthBase.isAuthenticated()
       .pipe(take(1))
       .subscribe((loggedIn: boolean) => {
         if (!loggedIn) {
@@ -158,5 +195,10 @@ export class MJAuthShellComponent implements OnInit {
           console.log('User not authenticated, showing login screen');
         }
       });
+  }
+
+  /** @deprecated Use {@link SetupAuth}. */
+  async setupAuth(): Promise<void> {
+    return this.SetupAuth();
   }
 }

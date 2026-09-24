@@ -26,36 +26,243 @@ interface CategoryTreeNode {
 })
 export class MJQueryFormComponentExtended extends MJQueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
     public record!: MJQueryEntityExtended;
-    public queryParameters: MJQueryParameterEntity[] = [];
-    public queryFields: MJQueryFieldEntity[] = [];
-    public queryEntities: MJQueryEntityEntity[] = [];
-    public queryPermissions: MJQueryPermissionEntity[] = [];
-    public isLoadingParameters = false;
-    public isLoadingFields = false;
-    public isLoadingEntities = false;
-    public isLoadingPermissions = false;
-    public hasUnsavedChanges = false;
-    public showFiltersHelp = false;
-    public showRunDialog = false;
-    public categoryPathDisplay = '';
+    public QueryParameters: MJQueryParameterEntity[] = [];
+
+    /** @deprecated Use {@link QueryParameters}. */
+    public get queryParameters(): MJQueryParameterEntity[] {
+      return this.QueryParameters;
+    }
+    /** @deprecated Use {@link QueryParameters}. */
+    public set queryParameters(value: MJQueryParameterEntity[]) {
+      this.QueryParameters = value;
+    }
+    public QueryFields: MJQueryFieldEntity[] = [];
+
+    /** @deprecated Use {@link QueryFields}. */
+    public get queryFields(): MJQueryFieldEntity[] {
+      return this.QueryFields;
+    }
+    /** @deprecated Use {@link QueryFields}. */
+    public set queryFields(value: MJQueryFieldEntity[]) {
+      this.QueryFields = value;
+    }
+    public QueryEntities: MJQueryEntityEntity[] = [];
+
+    /** @deprecated Use {@link QueryEntities}. */
+    public get queryEntities(): MJQueryEntityEntity[] {
+      return this.QueryEntities;
+    }
+    /** @deprecated Use {@link QueryEntities}. */
+    public set queryEntities(value: MJQueryEntityEntity[]) {
+      this.QueryEntities = value;
+    }
+    public QueryPermissions: MJQueryPermissionEntity[] = [];
+
+    /** @deprecated Use {@link QueryPermissions}. */
+    public get queryPermissions(): MJQueryPermissionEntity[] {
+      return this.QueryPermissions;
+    }
+    /** @deprecated Use {@link QueryPermissions}. */
+    public set queryPermissions(value: MJQueryPermissionEntity[]) {
+      this.QueryPermissions = value;
+    }
+    public IsLoadingParameters = false;
+
+    /** @deprecated Use {@link IsLoadingParameters}. */
+    public get isLoadingParameters() {
+      return this.IsLoadingParameters;
+    }
+    /** @deprecated Use {@link IsLoadingParameters}. */
+    public set isLoadingParameters(value) {
+      this.IsLoadingParameters = value;
+    }
+    public IsLoadingFields = false;
+
+    /** @deprecated Use {@link IsLoadingFields}. */
+    public get isLoadingFields() {
+      return this.IsLoadingFields;
+    }
+    /** @deprecated Use {@link IsLoadingFields}. */
+    public set isLoadingFields(value) {
+      this.IsLoadingFields = value;
+    }
+    public IsLoadingEntities = false;
+
+    /** @deprecated Use {@link IsLoadingEntities}. */
+    public get isLoadingEntities() {
+      return this.IsLoadingEntities;
+    }
+    /** @deprecated Use {@link IsLoadingEntities}. */
+    public set isLoadingEntities(value) {
+      this.IsLoadingEntities = value;
+    }
+    public IsLoadingPermissions = false;
+
+    /** @deprecated Use {@link IsLoadingPermissions}. */
+    public get isLoadingPermissions() {
+      return this.IsLoadingPermissions;
+    }
+    /** @deprecated Use {@link IsLoadingPermissions}. */
+    public set isLoadingPermissions(value) {
+      this.IsLoadingPermissions = value;
+    }
+    public HasUnsavedChanges = false;
+
+    /** @deprecated Use {@link HasUnsavedChanges}. */
+    public get hasUnsavedChanges() {
+      return this.HasUnsavedChanges;
+    }
+    /** @deprecated Use {@link HasUnsavedChanges}. */
+    public set hasUnsavedChanges(value) {
+      this.HasUnsavedChanges = value;
+    }
+    public ShowFiltersHelp = false;
+
+    /** @deprecated Use {@link ShowFiltersHelp}. */
+    public get showFiltersHelp() {
+      return this.ShowFiltersHelp;
+    }
+    /** @deprecated Use {@link ShowFiltersHelp}. */
+    public set showFiltersHelp(value) {
+      this.ShowFiltersHelp = value;
+    }
+    public ShowRunDialog = false;
+
+    /** @deprecated Use {@link ShowRunDialog}. */
+    public get showRunDialog() {
+      return this.ShowRunDialog;
+    }
+    /** @deprecated Use {@link ShowRunDialog}. */
+    public set showRunDialog(value) {
+      this.ShowRunDialog = value;
+    }
+    public CategoryPathDisplay = '';
+
+    /** @deprecated Use {@link CategoryPathDisplay}. */
+    public get categoryPathDisplay() {
+      return this.CategoryPathDisplay;
+    }
+    /** @deprecated Use {@link CategoryPathDisplay}. */
+    public set categoryPathDisplay(value) {
+      this.CategoryPathDisplay = value;
+    }
     public IsSaving = false;
 
     // Expansion panel states
-    public sqlPanelExpanded = true;
-    public parametersPanelExpanded = false;
-    public fieldsPanelExpanded = false;
-    public entitiesPanelExpanded = false;
-    public technicalDescriptionPanelExpanded = false;
-    public detailsPanelExpanded = false;
-    public permissionsPanelExpanded = false;
-    public dependentsPanelExpanded = false;
+    public SqlPanelExpanded = true;
+
+    /** @deprecated Use {@link SqlPanelExpanded}. */
+    public get sqlPanelExpanded() {
+      return this.SqlPanelExpanded;
+    }
+    /** @deprecated Use {@link SqlPanelExpanded}. */
+    public set sqlPanelExpanded(value) {
+      this.SqlPanelExpanded = value;
+    }
+    public ParametersPanelExpanded = false;
+
+    /** @deprecated Use {@link ParametersPanelExpanded}. */
+    public get parametersPanelExpanded() {
+      return this.ParametersPanelExpanded;
+    }
+    /** @deprecated Use {@link ParametersPanelExpanded}. */
+    public set parametersPanelExpanded(value) {
+      this.ParametersPanelExpanded = value;
+    }
+    public FieldsPanelExpanded = false;
+
+    /** @deprecated Use {@link FieldsPanelExpanded}. */
+    public get fieldsPanelExpanded() {
+      return this.FieldsPanelExpanded;
+    }
+    /** @deprecated Use {@link FieldsPanelExpanded}. */
+    public set fieldsPanelExpanded(value) {
+      this.FieldsPanelExpanded = value;
+    }
+    public EntitiesPanelExpanded = false;
+
+    /** @deprecated Use {@link EntitiesPanelExpanded}. */
+    public get entitiesPanelExpanded() {
+      return this.EntitiesPanelExpanded;
+    }
+    /** @deprecated Use {@link EntitiesPanelExpanded}. */
+    public set entitiesPanelExpanded(value) {
+      this.EntitiesPanelExpanded = value;
+    }
+    public TechnicalDescriptionPanelExpanded = false;
+
+    /** @deprecated Use {@link TechnicalDescriptionPanelExpanded}. */
+    public get technicalDescriptionPanelExpanded() {
+      return this.TechnicalDescriptionPanelExpanded;
+    }
+    /** @deprecated Use {@link TechnicalDescriptionPanelExpanded}. */
+    public set technicalDescriptionPanelExpanded(value) {
+      this.TechnicalDescriptionPanelExpanded = value;
+    }
+    public DetailsPanelExpanded = false;
+
+    /** @deprecated Use {@link DetailsPanelExpanded}. */
+    public get detailsPanelExpanded() {
+      return this.DetailsPanelExpanded;
+    }
+    /** @deprecated Use {@link DetailsPanelExpanded}. */
+    public set detailsPanelExpanded(value) {
+      this.DetailsPanelExpanded = value;
+    }
+    public PermissionsPanelExpanded = false;
+
+    /** @deprecated Use {@link PermissionsPanelExpanded}. */
+    public get permissionsPanelExpanded() {
+      return this.PermissionsPanelExpanded;
+    }
+    /** @deprecated Use {@link PermissionsPanelExpanded}. */
+    public set permissionsPanelExpanded(value) {
+      this.PermissionsPanelExpanded = value;
+    }
+    public DependentsPanelExpanded = false;
+
+    /** @deprecated Use {@link DependentsPanelExpanded}. */
+    public get dependentsPanelExpanded() {
+      return this.DependentsPanelExpanded;
+    }
+    /** @deprecated Use {@link DependentsPanelExpanded}. */
+    public set dependentsPanelExpanded(value) {
+      this.DependentsPanelExpanded = value;
+    }
     
     // Category data
-    public categoryOptions: Array<{text: string, value: string}> = [
+    public CategoryOptions: Array<{text: string, value: string}> = [
         { text: 'Select Category...', value: '' }
     ];
-    public categories: MJQueryCategoryEntity[] = [];
-    public categoryTreeData: CategoryTreeNode[] = [];
+
+    /** @deprecated Use {@link CategoryOptions}. */
+    public get categoryOptions(): Array<{text: string, value: string}> {
+      return this.CategoryOptions;
+    }
+    /** @deprecated Use {@link CategoryOptions}. */
+    public set categoryOptions(value: Array<{text: string, value: string}>) {
+      this.CategoryOptions = value;
+    }
+    public Categories: MJQueryCategoryEntity[] = [];
+
+    /** @deprecated Use {@link Categories}. */
+    public get categories(): MJQueryCategoryEntity[] {
+      return this.Categories;
+    }
+    /** @deprecated Use {@link Categories}. */
+    public set categories(value: MJQueryCategoryEntity[]) {
+      this.Categories = value;
+    }
+    public CategoryTreeData: CategoryTreeNode[] = [];
+
+    /** @deprecated Use {@link CategoryTreeData}. */
+    public get categoryTreeData(): CategoryTreeNode[] {
+      return this.CategoryTreeData;
+    }
+    /** @deprecated Use {@link CategoryTreeData}. */
+    public set categoryTreeData(value: CategoryTreeNode[]) {
+      this.CategoryTreeData = value;
+    }
 
     /** Tree dropdown config for Query Categories */
     public CategoryBranchConfig: TreeBranchConfig = {
@@ -85,12 +292,21 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     // Status options — matches MJQueryEntity.Status type from database CHECK constraint
-    public statusOptions = [
+    public StatusOptions = [
         { text: 'Pending', value: 'Pending' },
         { text: 'Approved', value: 'Approved' },
         { text: 'Rejected', value: 'Rejected' },
         { text: 'Expired', value: 'Expired' }
     ];
+
+    /** @deprecated Use {@link StatusOptions}. */
+    public get statusOptions() {
+      return this.StatusOptions;
+    }
+    /** @deprecated Use {@link StatusOptions}. */
+    public set statusOptions(value) {
+      this.StatusOptions = value;
+    }
 
     // Toolbar config: custom layout — hides the right-hand section-controls
     // group, keeps all left-side action buttons (delete/favorite/history/list)
@@ -100,10 +316,28 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     /** Custom-layout Query form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
 
-    @ViewChild('sqlEditor') sqlEditor: CodeEditorComponent | null = null;
+    @ViewChild('sqlEditor') SqlEditor: CodeEditorComponent | null = null;
+
+    /** @deprecated Use {@link SqlEditor}. */
+    get sqlEditor(): CodeEditorComponent | null {
+      return this.SqlEditor;
+    }
+    /** @deprecated Use {@link SqlEditor}. */
+    set sqlEditor(value: CodeEditorComponent | null) {
+      this.SqlEditor = value;
+    }
     
     // SQL Filters for help display
-    public sqlFilters = RUN_QUERY_SQL_FILTERS;
+    public SqlFilters = RUN_QUERY_SQL_FILTERS;
+
+    /** @deprecated Use {@link SqlFilters}. */
+    public get sqlFilters() {
+      return this.SqlFilters;
+    }
+    /** @deprecated Use {@link SqlFilters}. */
+    public set sqlFilters(value) {
+      this.SqlFilters = value;
+    }
     
     private navigationService = inject(NavigationService);
     private formPresenter = inject(MJFormPresenterService);
@@ -127,11 +361,11 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         this.isInitialLoad = true;
 
         // Load all data synchronously from QueryEngine cache
-        this.loadCategories();
-        this.loadQueryParameters();
-        this.loadQueryFields();
-        this.loadQueryEntities();
-        this.loadQueryPermissions();
+        this.LoadCategories();
+        this.LoadQueryParameters();
+        this.LoadQueryFields();
+        this.LoadQueryEntities();
+        this.LoadQueryPermissions();
 
         this.isInitialLoad = false;
         this.cdr.detectChanges();
@@ -145,7 +379,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     ngAfterViewInit() {
         super.ngAfterViewInit();
 
-        this.sqlEditor?.setEditable(this.EditMode);
+        this.SqlEditor?.setEditable(this.EditMode);
 
         // Set initial SQL value in the editor
         this.updateEditorValue();
@@ -153,12 +387,12 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
  
     override EndEditMode(): void {
         super.EndEditMode();
-        this.sqlEditor?.setEditable(false);
+        this.SqlEditor?.setEditable(false);
     }
 
     override StartEditMode(): void {
         super.StartEditMode();
-        this.sqlEditor?.setEditable(true);
+        this.SqlEditor?.setEditable(true);
         
         // Force change detection after a brief delay to ensure form controls are initialized
         setTimeout(() => {
@@ -169,18 +403,18 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     override CancelEdit(): void {
         super.CancelEdit();
         this.updateEditorValue(); // Reset editor value to record SQL
-        this.sqlEditor?.setEditable(false);
+        this.SqlEditor?.setEditable(false);
         this.updateUnsavedChangesFlag(); // Reset unsaved changes flag
     }
 
     private updateEditorValue() {
-        if (!this.sqlEditor || this.isUpdatingEditorValue) {
+        if (!this.SqlEditor || this.isUpdatingEditorValue) {
             return;
         }
         
         // Use setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
         setTimeout(() => {
-            if (!this.sqlEditor) {
+            if (!this.SqlEditor) {
                 return;
             }
             
@@ -188,63 +422,93 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
             const sqlValue = this.record?.SQL || '';
             
             // Use the setValue method from mj-code-editor component
-            this.sqlEditor.setValue(sqlValue);
+            this.SqlEditor.setValue(sqlValue);
             this.isUpdatingEditorValue = false;
         }, 0);
     }
 
-    public isFormReadOnly(): boolean {
+    public IsFormReadOnly(): boolean {
         return !this.EditMode;
     }
 
+    /** @deprecated Use {@link IsFormReadOnly}. */
+    public isFormReadOnly(): boolean {
+      return this.IsFormReadOnly();
+    }
+
+    LoadQueryParameters() {
+        if (this.record && this.record.ID) {
+            this.QueryParameters = this.record.QueryParameters;
+            if (!this.isInitialLoad) this.cdr.detectChanges();
+        }
+    }
+
+    /** @deprecated Use {@link LoadQueryParameters}. */
     loadQueryParameters() {
+      return this.LoadQueryParameters();
+    }
+
+    LoadQueryFields() {
         if (this.record && this.record.ID) {
-            this.queryParameters = this.record.QueryParameters;
+            this.QueryFields = this.record.QueryFields;
             if (!this.isInitialLoad) this.cdr.detectChanges();
         }
     }
 
+    /** @deprecated Use {@link LoadQueryFields}. */
     loadQueryFields() {
+      return this.LoadQueryFields();
+    }
+
+    LoadQueryEntities() {
         if (this.record && this.record.ID) {
-            this.queryFields = this.record.QueryFields;
+            this.QueryEntities = this.record.QueryEntities;
             if (!this.isInitialLoad) this.cdr.detectChanges();
         }
     }
 
+    /** @deprecated Use {@link LoadQueryEntities}. */
     loadQueryEntities() {
+      return this.LoadQueryEntities();
+    }
+
+    LoadQueryPermissions() {
         if (this.record && this.record.ID) {
-            this.queryEntities = this.record.QueryEntities;
+            this.QueryPermissions = this.record.QueryPermissions;
             if (!this.isInitialLoad) this.cdr.detectChanges();
         }
     }
 
+    /** @deprecated Use {@link LoadQueryPermissions}. */
     loadQueryPermissions() {
-        if (this.record && this.record.ID) {
-            this.queryPermissions = this.record.QueryPermissions;
-            if (!this.isInitialLoad) this.cdr.detectChanges();
-        }
+      return this.LoadQueryPermissions();
     }
 
-    loadCategories() {
-        this.categories = QueryEngine.Instance.Categories;
+    LoadCategories() {
+        this.Categories = QueryEngine.Instance.Categories;
 
         // Build flat options for legacy compatibility
-        this.categoryOptions = [
+        this.CategoryOptions = [
             { text: 'Select Category...', value: '' },
-            ...this.categories.map(cat => ({
+            ...this.Categories.map(cat => ({
                 text: cat.Name,
                 value: cat.ID
             }))
         ];
 
         // Build tree data after options are set
-        this.categoryTreeData = this.buildCategoryTree(this.categories);
+        this.CategoryTreeData = this.buildCategoryTree(this.Categories);
 
         // Update cached category path display
         this.updateCategoryPathDisplay();
 
         // Trigger change detection to update the view (skip during init)
         if (!this.isInitialLoad) this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link LoadCategories}. */
+    loadCategories() {
+      return this.LoadCategories();
     }
     
     private buildCategoryTree(categories: MJQueryCategoryEntity[]): CategoryTreeNode[] {
@@ -286,11 +550,11 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         return rootCategories;
     }
     
-    getCategoryPath(): string {
+    GetCategoryPath(): string {
         if (!this.record?.CategoryID) return '';
 
         const findPath = (categoryId: string): string[] => {
-            const category = this.categories.find(c => UUIDsEqual(c.ID, categoryId));
+            const category = this.Categories.find(c => UUIDsEqual(c.ID, categoryId));
             if (!category) return [];
 
             if (category.ParentID) {
@@ -302,16 +566,21 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         return findPath(this.record.CategoryID).join(' / ');
     }
 
-    private updateCategoryPathDisplay(): void {
-        this.categoryPathDisplay = this.getCategoryPath();
+    /** @deprecated Use {@link GetCategoryPath}. */
+    getCategoryPath(): string {
+      return this.GetCategoryPath();
     }
 
-    async onCategoryChange(value: string) {
+    private updateCategoryPathDisplay(): void {
+        this.CategoryPathDisplay = this.GetCategoryPath();
+    }
+
+    async OnCategoryChange(value: string) {
         // If it's a new category (string but not in existing options)
-        if (value && !this.categoryOptions.find(opt => opt.value === value)) {
+        if (value && !this.CategoryOptions.find(opt => opt.value === value)) {
             // Check for duplicate category names (case-insensitive, trimmed)
             if (this.isDuplicateCategory(value)) {
-                const existingCategory = this.categoryOptions.find(option => 
+                const existingCategory = this.CategoryOptions.find(option => 
                     option.text && option.text.trim().toLowerCase() === value.trim().toLowerCase()
                 );
                 if (existingCategory) {
@@ -335,7 +604,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 
                 if (saved) {
                     // Add to options and set the ID
-                    this.categoryOptions.push({
+                    this.CategoryOptions.push({
                         text: newCategory.Name,
                         value: newCategory.ID
                     });
@@ -363,9 +632,14 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
     }
 
+    /** @deprecated Use {@link OnCategoryChange}. */
+    async onCategoryChange(value: string) {
+      return this.OnCategoryChange(value);
+    }
+
     private isDuplicateCategory(categoryName: string): boolean {
         const normalizedName = categoryName?.trim().toLowerCase();
-        return this.categoryOptions.some(option => 
+        return this.CategoryOptions.some(option => 
             option.text && option.text.trim().toLowerCase() === normalizedName
         );
     }
@@ -374,18 +648,23 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Updates the hasUnsavedChanges flag based on entity dirty states
      */
     private updateUnsavedChangesFlag() {
-        this.hasUnsavedChanges = this.queryParameters.some(param => param.Dirty) || 
+        this.HasUnsavedChanges = this.QueryParameters.some(param => param.Dirty) || 
                                 this.record?.Dirty || false;
     }
 
+    ToggleFiltersHelp() {
+        this.ShowFiltersHelp = !this.ShowFiltersHelp;
+    }
+
+    /** @deprecated Use {@link ToggleFiltersHelp}. */
     toggleFiltersHelp() {
-        this.showFiltersHelp = !this.showFiltersHelp;
+      return this.ToggleFiltersHelp();
     }
 
     /**
      * Run the query with parameter dialog
      */
-    async runQuery() {
+    async RunQuery() {
         if (!this.record?.IsSaved) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'Please save the query before running it.', 
@@ -396,7 +675,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
 
         // Save any unsaved changes first
-        if (this.hasUnsavedChanges) {
+        if (this.HasUnsavedChanges) {
             const saveResult = await this.SaveRecord(false); // Don't exit edit mode
             if (!saveResult) {
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -414,35 +693,45 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
 
         // Reload parameters in case they were updated
-        this.loadQueryParameters();
+        this.LoadQueryParameters();
 
         // Show the run dialog — set before detectChanges to avoid NG0100
-        this.showRunDialog = true;
+        this.ShowRunDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link RunQuery}. */
+    async runQuery() {
+      return this.RunQuery();
     }
 
     /**
      * Handle run dialog close
      */
+    OnRunDialogClose() {
+        this.ShowRunDialog = false;
+    }
+
+    /** @deprecated Use {@link OnRunDialogClose}. */
     onRunDialogClose() {
-        this.showRunDialog = false;
+      return this.OnRunDialogClose();
     }
     
     /**
      * Add a new parameter
      */
-    async addParameter() {
+    async AddParameter() {
         try {
             const md = this.ProviderToUse;
             const newParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters');
             newParam.QueryID = this.record.ID;
-            newParam.Name = `param${this.queryParameters.length + 1}`;
+            newParam.Name = `param${this.QueryParameters.length + 1}`;
             newParam.Type = 'string';
             newParam.IsRequired = false;
             
             const saved = await newParam.Save();
             if (saved) {
-                this.queryParameters.push(newParam);
+                this.QueryParameters.push(newParam);
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Parameter added successfully',
@@ -465,19 +754,29 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
             );
         }
     }
+
+    /** @deprecated Use {@link AddParameter}. */
+    async addParameter() {
+      return this.AddParameter();
+    }
     
     /**
      * Edit a parameter
      */
-    async editParameter(param: MJQueryParameterEntity) {
+    async EditParameter(param: MJQueryParameterEntity) {
         // TODO: Show parameter edit dialog
         console.log('Edit parameter:', param);
+    }
+
+    /** @deprecated Use {@link EditParameter}. */
+    async editParameter(param: MJQueryParameterEntity) {
+      return this.EditParameter(param);
     }
     
     /**
      * Delete a parameter
      */
-    async deleteParameter(param: MJQueryParameterEntity) {
+    async DeleteParameter(param: MJQueryParameterEntity) {
         if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Parameter', message: `Delete parameter "${param.Name}"?` }))) {
             return;
         }
@@ -526,10 +825,15 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
     }
 
+    /** @deprecated Use {@link DeleteParameter}. */
+    async deleteParameter(param: MJQueryParameterEntity) {
+      return this.DeleteParameter(param);
+    }
+
     private removeParameterFromList(param: MJQueryParameterEntity): void {
-        const index = this.queryParameters.indexOf(param);
+        const index = this.QueryParameters.indexOf(param);
         if (index > -1) {
-            this.queryParameters.splice(index, 1);
+            this.QueryParameters.splice(index, 1);
         }
         this.cdr.detectChanges();
     }
@@ -539,7 +843,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * MJFormPresenterService. A new record opens in edit mode automatically.
      * On save, refresh the category tree and select the new category.
      */
-    async createCategory(): Promise<void> {
+    async CreateCategory(): Promise<void> {
         const ref = this.formPresenter.Open({
             EntityName: 'MJ: Query Categories',
             Presentation: 'slide-in',
@@ -550,8 +854,13 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         });
         const saved = await ref.AfterSaved();
         if (saved) {
-            this.onCategoryCreated(saved);
+            this.OnCategoryCreated(saved);
         }
+    }
+
+    /** @deprecated Use {@link CreateCategory}. */
+    async createCategory(): Promise<void> {
+      return this.CreateCategory();
     }
 
     /**
@@ -559,7 +868,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * MJFormPresenterService. `StartInEditMode` opens the existing record
      * editable. On save, refresh the category tree.
      */
-    async editSelectedCategory(): Promise<void> {
+    async EditSelectedCategory(): Promise<void> {
         if (!this.record.CategoryID) return;
         const ref = this.formPresenter.Open({
             EntityName: 'MJ: Query Categories',
@@ -572,20 +881,30 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         });
         const saved = await ref.AfterSaved();
         if (saved) {
-            this.loadCategories();
+            this.LoadCategories();
             this.cdr.detectChanges();
         }
     }
 
-    onCategoryCreated(newCategory: BaseEntity) {
+    /** @deprecated Use {@link EditSelectedCategory}. */
+    async editSelectedCategory(): Promise<void> {
+      return this.EditSelectedCategory();
+    }
+
+    OnCategoryCreated(newCategory: BaseEntity) {
         // Reload categories to include the new one
-        this.loadCategories();
+        this.LoadCategories();
 
         // Set the new category as selected
         this.record.CategoryID = (newCategory as MJQueryCategoryEntity).ID;
 
         // Trigger change detection
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnCategoryCreated}. */
+    onCategoryCreated(newCategory: BaseEntity) {
+      return this.OnCategoryCreated(newCategory);
     }
     
     /**
@@ -611,9 +930,9 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
     private async internalSaveRecord(StopEditModeAfterSave: boolean): Promise<boolean> {
         // Handle category creation before saving query
-        if (this.record.CategoryID && !this.categoryOptions.find(opt => opt.value === this.record.CategoryID)) {
+        if (this.record.CategoryID && !this.CategoryOptions.find(opt => opt.value === this.record.CategoryID)) {
             if (this.isDuplicateCategory(this.record.CategoryID)) {
-                const existingCategory = this.categoryOptions.find(option => 
+                const existingCategory = this.CategoryOptions.find(option => 
                     option.text && option.text.trim().toLowerCase() === this.record.CategoryID?.trim().toLowerCase()
                 );
                 if (existingCategory) {
@@ -632,7 +951,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                     const saved = await newCategory.Save();
                     
                     if (saved) {
-                        this.categoryOptions.push({
+                        this.CategoryOptions.push({
                             text: newCategory.Name,
                             value: newCategory.ID
                         });
@@ -658,7 +977,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
         // Save any unsaved query entities first
         if (this.EditMode) {
-            for (const entity of this.queryEntities) {
+            for (const entity of this.QueryEntities) {
                 if (!entity.IsSaved && entity.EntityID) {
                     try {
                         await entity.Save();
@@ -677,9 +996,9 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
             // Reload related data after successful save as server-side processes may have updated them
             if (this.record && this.record.ID) {
-                this.loadQueryParameters();
-                this.loadQueryFields();
-                this.loadQueryEntities();
+                this.LoadQueryParameters();
+                this.LoadQueryFields();
+                this.LoadQueryEntities();
                 this.updateCategoryPathDisplay();
                 this.cdr.detectChanges();
             }
@@ -688,7 +1007,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         return result;
     }
 
-    getStatusBadgeColor(): string {
+    GetStatusBadgeColor(): string {
         switch (this.record?.Status) {
             case 'Approved':  return '#28a745';
             case 'Pending':   return '#f59e0b';
@@ -698,7 +1017,12 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
     }
 
-    getStatusBannerIcon(): string {
+    /** @deprecated Use {@link GetStatusBadgeColor}. */
+    getStatusBadgeColor(): string {
+      return this.GetStatusBadgeColor();
+    }
+
+    GetStatusBannerIcon(): string {
         switch (this.record?.Status) {
             case 'Pending':   return 'fa-clock';
             case 'Rejected':  return 'fa-times-circle';
@@ -707,7 +1031,12 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
     }
 
-    getStatusBannerMessage(): string {
+    /** @deprecated Use {@link GetStatusBannerIcon}. */
+    getStatusBannerIcon(): string {
+      return this.GetStatusBannerIcon();
+    }
+
+    GetStatusBannerMessage(): string {
         switch (this.record?.Status) {
             case 'Pending':   return 'It can be executed for testing but has not yet been approved.';
             case 'Rejected':  return 'It was rejected and may need revision before approval.';
@@ -716,10 +1045,15 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
     }
 
+    /** @deprecated Use {@link GetStatusBannerMessage}. */
+    getStatusBannerMessage(): string {
+      return this.GetStatusBannerMessage();
+    }
+
     /**
      * Handle composition token click — navigate to the referenced query
      */
-    onCompositionTokenClick(event: CompositionTokenClickEvent): void {
+    OnCompositionTokenClick(event: CompositionTokenClickEvent): void {
         const allQueries = QueryEngine.Instance.Queries;
         const segments = event.FullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
         if (segments.length === 0) return;
@@ -751,17 +1085,27 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
     }
 
+    /** @deprecated Use {@link OnCompositionTokenClick}. */
+    onCompositionTokenClick(event: CompositionTokenClickEvent): void {
+      return this.OnCompositionTokenClick(event);
+    }
+
     /**
      * Navigate to a dependent query's record
      */
-    onDependentQueryClick(dep: MJQueryDependencyEntity): void {
+    OnDependentQueryClick(dep: MJQueryDependencyEntity): void {
         this.navigationService.OpenEntityRecord('MJ: Queries', CompositeKey.FromID(dep.QueryID));
+    }
+
+    /** @deprecated Use {@link OnDependentQueryClick}. */
+    onDependentQueryClick(dep: MJQueryDependencyEntity): void {
+      return this.OnDependentQueryClick(dep);
     }
 
     /**
      * Handle SQL value changes from the code editor
      */
-    onSQLChange(value: string) {
+    OnSQLChange(value: string) {
         if (this.isUpdatingEditorValue || !this.record) {
             return;
         }
@@ -771,24 +1115,29 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         this.updateUnsavedChangesFlag();
     }
 
+    /** @deprecated Use {@link OnSQLChange}. */
+    onSQLChange(value: string) {
+      return this.OnSQLChange(value);
+    }
+
     /**
      * Add a new field
      */
-    async addField() {
+    async AddField() {
         try {
             const md = this.ProviderToUse;
             const newField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields');
             newField.QueryID = this.record.ID;
-            newField.Name = `field${this.queryFields.length + 1}`;
+            newField.Name = `field${this.QueryFields.length + 1}`;
             newField.Description = '';
-            newField.Sequence = (this.queryFields.length + 1) * 10;
+            newField.Sequence = (this.QueryFields.length + 1) * 10;
             newField.SQLBaseType = 'nvarchar';
             newField.SQLFullType = 'nvarchar(255)';
             
             const saved = await newField.Save();
             if (saved) {
-                this.queryFields.push(newField);
-                this.queryFields.sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0));
+                this.QueryFields.push(newField);
+                this.QueryFields.sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0));
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Field added successfully',
@@ -806,10 +1155,15 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
     }
 
+    /** @deprecated Use {@link AddField}. */
+    async addField() {
+      return this.AddField();
+    }
+
     /**
      * Delete a field
      */
-    async deleteField(field: MJQueryFieldEntity) {
+    async DeleteField(field: MJQueryFieldEntity) {
         if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Field', message: `Delete field "${field.Name}"?` }))) {
             return;
         }
@@ -819,14 +1173,14 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
             const freshField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields');
             const loaded = await freshField.Load(field.ID);
             if (!loaded) {
-                this.queryFields = this.queryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
+                this.QueryFields = this.QueryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
                 this.cdr.detectChanges();
                 return;
             }
 
             const deleted = await freshField.Delete();
             if (deleted) {
-                this.queryFields = this.queryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
+                this.QueryFields = this.QueryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Field deleted successfully',
@@ -852,17 +1206,22 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
     }
 
+    /** @deprecated Use {@link DeleteField}. */
+    async deleteField(field: MJQueryFieldEntity) {
+      return this.DeleteField(field);
+    }
+
     /**
      * Add a new entity
      */
-    async addEntity() {
+    async AddEntity() {
         try {
             const md = this.ProviderToUse;
             const newEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities');
             newEntity.QueryID = this.record.ID;
             
             // Add to the list immediately for UI responsiveness
-            this.queryEntities.push(newEntity);
+            this.QueryEntities.push(newEntity);
             this.updateUnsavedChangesFlag();
         } catch (error) {
             console.error('Error adding entity:', error);
@@ -874,10 +1233,15 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
     }
 
+    /** @deprecated Use {@link AddEntity}. */
+    async addEntity() {
+      return this.AddEntity();
+    }
+
     /**
      * Delete an entity
      */
-    async deleteEntity(entity: MJQueryEntityEntity) {
+    async DeleteEntity(entity: MJQueryEntityEntity) {
         if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Entity', message: `Delete entity "${entity.Entity}"?` }))) {
             return;
         }
@@ -887,14 +1251,14 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
             const freshEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities');
             const loaded = await freshEntity.Load(entity.ID);
             if (!loaded) {
-                this.queryEntities = this.queryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
+                this.QueryEntities = this.QueryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
                 this.cdr.detectChanges();
                 return;
             }
 
             const deleted = await freshEntity.Delete();
             if (deleted) {
-                this.queryEntities = this.queryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
+                this.QueryEntities = this.QueryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Entity deleted successfully',
@@ -920,14 +1284,24 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
     }
 
+    /** @deprecated Use {@link DeleteEntity}. */
+    async deleteEntity(entity: MJQueryEntityEntity) {
+      return this.DeleteEntity(entity);
+    }
+
     /**
      * Get entity options for dropdown
      */
-    getEntityOptions(): Array<{text: string, id: string}> {
+    GetEntityOptions(): Array<{text: string, id: string}> {
         return this.ProviderToUse.Entities.map(e => ({
             text: e.Name,
             id: e.ID
         })).sort((a, b) => a.text.localeCompare(b.text));
+    }
+
+    /** @deprecated Use {@link GetEntityOptions}. */
+    getEntityOptions(): Array<{text: string, id: string}> {
+      return this.GetEntityOptions();
     }
 
     /**

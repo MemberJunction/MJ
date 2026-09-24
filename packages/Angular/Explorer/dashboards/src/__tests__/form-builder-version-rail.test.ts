@@ -9,8 +9,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    joinVersionsWithOverrides,
-    pickActiveVersionID,
+    JoinVersionsWithOverrides,
+    PickActiveVersionID,
     type ComponentRailRow,
     type OverrideRailRow,
 } from '../FormBuilder/form-builder-version-rail.helpers';
@@ -30,18 +30,18 @@ function comp(id: string, version: string, sequence: number, extra: Partial<Comp
 describe('joinVersionsWithOverrides', () => {
 
     it('returns empty when there are no components', () => {
-        expect(joinVersionsWithOverrides([], [])).toEqual([]);
+        expect(JoinVersionsWithOverrides([], [])).toEqual([]);
     });
 
     it('flags neither Active nor Pending when no override matches', () => {
-        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1)], []);
+        const rows = JoinVersionsWithOverrides([comp('C1', '1.0.0', 1)], []);
         expect(rows).toHaveLength(1);
         expect(rows[0].IsActive).toBe(false);
         expect(rows[0].IsPending).toBe(false);
     });
 
     it('flags IsActive=true when an Active override points at the component', () => {
-        const rows = joinVersionsWithOverrides(
+        const rows = JoinVersionsWithOverrides(
             [comp('C1', '1.0.0', 1)],
             [{ ComponentID: 'C1', Status: 'Active' }],
         );
@@ -50,7 +50,7 @@ describe('joinVersionsWithOverrides', () => {
     });
 
     it('flags IsPending=true when a Pending override points at the component', () => {
-        const rows = joinVersionsWithOverrides(
+        const rows = JoinVersionsWithOverrides(
             [comp('C2', '1.1.0', 2)],
             [{ ComponentID: 'C2', Status: 'Pending' }],
         );
@@ -61,7 +61,7 @@ describe('joinVersionsWithOverrides', () => {
     it('flags Inactive overrides as neither Active nor Pending', () => {
         // The rail listing shows Inactive rows (so the user can roll back),
         // but they're not "current" — both flags off.
-        const rows = joinVersionsWithOverrides(
+        const rows = JoinVersionsWithOverrides(
             [comp('C-OLD', '0.9.0', 1)],
             [{ ComponentID: 'C-OLD', Status: 'Inactive' }],
         );
@@ -80,7 +80,7 @@ describe('joinVersionsWithOverrides', () => {
             { ComponentID: 'C-NEW', Status: 'Pending' },
             // C-ANCIENT has no override row.
         ];
-        const rows = joinVersionsWithOverrides(components, overrides);
+        const rows = JoinVersionsWithOverrides(components, overrides);
         expect(rows).toHaveLength(3);
         expect(rows.find(r => r.ID === 'C-OLD')?.IsActive).toBe(true);
         expect(rows.find(r => r.ID === 'C-NEW')?.IsPending).toBe(true);
@@ -89,13 +89,13 @@ describe('joinVersionsWithOverrides', () => {
     });
 
     it('parses the timestamp into a Date object', () => {
-        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1, { __mj_UpdatedAt: '2026-05-23T12:34:56Z' })], []);
+        const rows = JoinVersionsWithOverrides([comp('C1', '1.0.0', 1, { __mj_UpdatedAt: '2026-05-23T12:34:56Z' })], []);
         expect(rows[0].UpdatedAt).toBeInstanceOf(Date);
         expect(rows[0].UpdatedAt?.toISOString()).toBe('2026-05-23T12:34:56.000Z');
     });
 
     it('leaves UpdatedAt as null when no timestamp present', () => {
-        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1, { __mj_UpdatedAt: null })], []);
+        const rows = JoinVersionsWithOverrides([comp('C1', '1.0.0', 1, { __mj_UpdatedAt: null })], []);
         expect(rows[0].UpdatedAt).toBeNull();
     });
 
@@ -106,7 +106,7 @@ describe('joinVersionsWithOverrides', () => {
             comp('C2', '1.1.0', 2),
             comp('C1', '1.0.0', 1),
         ];
-        const rows = joinVersionsWithOverrides(components, []);
+        const rows = JoinVersionsWithOverrides(components, []);
         expect(rows.map(r => r.ID)).toEqual(['C3', 'C2', 'C1']);
     });
 
@@ -119,7 +119,7 @@ describe('joinVersionsWithOverrides', () => {
             { ComponentID: 'C1', Status: 'Active' },
             { ComponentID: 'C1', Status: 'Inactive' },
         ];
-        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
+        const rows = JoinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
         expect(rows[0].IsActive).toBe(true);
     });
 
@@ -130,7 +130,7 @@ describe('joinVersionsWithOverrides', () => {
             { ComponentID: 'C1', Status: 'Inactive' },
             { ComponentID: 'C1', Status: 'Active' },
         ];
-        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
+        const rows = JoinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
         expect(rows[0].IsActive).toBe(true);
     });
 
@@ -139,7 +139,7 @@ describe('joinVersionsWithOverrides', () => {
             { ComponentID: 'C1', Status: 'Inactive' },
             { ComponentID: 'C1', Status: 'Pending' },
         ];
-        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
+        const rows = JoinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
         expect(rows[0].IsPending).toBe(true);
         expect(rows[0].IsActive).toBe(false);
     });
@@ -149,7 +149,7 @@ describe('joinVersionsWithOverrides', () => {
             { ComponentID: 'C1', Status: 'Pending' },
             { ComponentID: 'C1', Status: 'Active' },
         ];
-        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
+        const rows = JoinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
         expect(rows[0].IsActive).toBe(true);
         expect(rows[0].IsPending).toBe(false);
     });
@@ -158,23 +158,23 @@ describe('joinVersionsWithOverrides', () => {
 describe('pickActiveVersionID', () => {
 
     it('returns null for empty input', () => {
-        expect(pickActiveVersionID([])).toBeNull();
+        expect(PickActiveVersionID([])).toBeNull();
     });
 
     it('returns the ID of the Active row when present', () => {
-        const rows = joinVersionsWithOverrides(
+        const rows = JoinVersionsWithOverrides(
             [comp('C-NEW', '1.1.0', 2), comp('C-OLD', '1.0.0', 1)],
             [{ ComponentID: 'C-OLD', Status: 'Active' }],
         );
-        expect(pickActiveVersionID(rows)).toBe('C-OLD');
+        expect(PickActiveVersionID(rows)).toBe('C-OLD');
     });
 
     it('falls back to the first row (highest VersionSequence DESC) when no Active', () => {
-        const rows = joinVersionsWithOverrides(
+        const rows = JoinVersionsWithOverrides(
             [comp('C-NEW', '1.1.0', 2), comp('C-OLD', '1.0.0', 1)],
             [{ ComponentID: 'C-NEW', Status: 'Pending' }],
         );
         // No Active row; fallback is the first (highest sequence) by input order.
-        expect(pickActiveVersionID(rows)).toBe('C-NEW');
+        expect(PickActiveVersionID(rows)).toBe('C-NEW');
     });
 });

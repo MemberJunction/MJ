@@ -13,7 +13,7 @@ import { IntegrationEngine } from '../IntegrationEngine.js';
 import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
 
 type Host = {
-    ReadWriteSideEffects: (ci: MJCompanyIntegrationEntity) => string;
+    readWriteSideEffects: (ci: MJCompanyIntegrationEntity) => string;
     syncSaveOptions: { SkipRecordChanges?: boolean; SkipGeoCoding?: boolean } | undefined;
     syncDeleteOptions: { SkipRecordChanges?: boolean } | undefined;
 };
@@ -37,17 +37,17 @@ function inRunContext<T>(suppress: boolean | undefined, fn: () => T): T {
 describe('ReadWriteSideEffects — the ask fails closed', () => {
     it("returns 'suppressed' only for the exact string ask", () => {
         const host = makeHost();
-        expect(host.ReadWriteSideEffects(ci(JSON.stringify({ writeSideEffects: 'suppressed' })))).toBe('suppressed');
+        expect(host.readWriteSideEffects(ci(JSON.stringify({ writeSideEffects: 'suppressed' })))).toBe('suppressed');
     });
 
     it('every malformed shape keeps the side effects on', () => {
         const host = makeHost();
-        expect(host.ReadWriteSideEffects(ci(null))).toBe('');
-        expect(host.ReadWriteSideEffects(ci(''))).toBe('');
-        expect(host.ReadWriteSideEffects(ci('not json at all'))).toBe('');
-        expect(host.ReadWriteSideEffects(ci(JSON.stringify({})))).toBe('');
-        expect(host.ReadWriteSideEffects(ci(JSON.stringify({ writeSideEffects: true })))).toBe('');
-        expect(host.ReadWriteSideEffects(ci(JSON.stringify({ writeSideEffects: 1 })))).toBe('');
+        expect(host.readWriteSideEffects(ci(null))).toBe('');
+        expect(host.readWriteSideEffects(ci(''))).toBe('');
+        expect(host.readWriteSideEffects(ci('not json at all'))).toBe('');
+        expect(host.readWriteSideEffects(ci(JSON.stringify({})))).toBe('');
+        expect(host.readWriteSideEffects(ci(JSON.stringify({ writeSideEffects: true })))).toBe('');
+        expect(host.readWriteSideEffects(ci(JSON.stringify({ writeSideEffects: 1 })))).toBe('');
     });
 });
 

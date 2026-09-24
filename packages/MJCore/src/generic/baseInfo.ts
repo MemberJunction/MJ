@@ -12,6 +12,27 @@ export abstract class BaseInfo {
     ID: any = null
 
     /**
+     * Whether `key` resolves to a settable accessor somewhere on the prototype chain.
+     *
+     * A `@deprecated` alias for a renamed field is a get/set pair on the prototype, not an own
+     * property, so `hasOwnProperty` does not see it. Without this the incoming value is silently
+     * dropped: the DB column `spCreate` stops reaching `SpCreate`, and the entity loads with its
+     * custom routine name missing rather than failing loudly.
+     *
+     * Only accessors that can be WRITTEN qualify. A read-only getter has nothing to assign to, and
+     * requiring a setter keeps inherited methods out of the copy.
+     */
+    private settableAccessor(key: string): boolean {
+        let target = Object.getPrototypeOf(this);
+        while (target && target !== Object.prototype) {
+            const descriptor = Object.getOwnPropertyDescriptor(target, key);
+            if (descriptor) return typeof descriptor.set === 'function';
+            target = Object.getPrototypeOf(target);
+        }
+        return false;
+    }
+
+    /**
      * Copies initialization data from a plain object to the class instance.
      * Only copies properties that already exist on the class to prevent creating new fields.
      * Special handling for DefaultValue fields to extract actual values from SQL Server syntax.
@@ -24,7 +45,7 @@ export abstract class BaseInfo {
             for (let j = 0; j < keys.length; j++) {
                 const key = keys[j];
                 // make sure it is one of our keys, we don't want to create NEW fields
-                if (Object.prototype.hasOwnProperty.call(this, key)) {
+                if (Object.prototype.hasOwnProperty.call(this, key) || this.settableAccessor(key)) {
                     // fast path for exact match first, fallback to length check + lowercasing
                     if ((key === 'DefaultValue' || (key.length === 12 && key.toLowerCase() === 'defaultvalue')) && initData[key]) {
                         // strip parens from default value from the DB, if they exist, for example defaults might be ((1)) or (getdate())   

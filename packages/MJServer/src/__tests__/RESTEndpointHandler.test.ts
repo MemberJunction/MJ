@@ -188,26 +188,26 @@ describe('RESTEndpointHandler.isEntityAllowed', () => {
     });
 
     it('blocks entities in excluded schemas (case-insensitive), with schema exclusion taking top precedence', () => {
-        const schemaOnly = makeHandler({ excludeSchemas: ['VAULT'] });
+        const schemaOnly = makeHandler({ ExcludeSchemas: ['VAULT'] });
         expect(schemaOnly.isEntityAllowed('Secrets')).toBe(false);
         expect(schemaOnly.isEntityAllowed('Users')).toBe(true); // other schemas unaffected
 
         // Even an explicit entity include cannot override a schema exclusion
-        const withInclude = makeHandler({ excludeSchemas: ['vault'], includeEntities: ['secrets'] });
+        const withInclude = makeHandler({ ExcludeSchemas: ['vault'], IncludeEntities: ['secrets'] });
         expect(withInclude.isEntityAllowed('Secrets')).toBe(false);
     });
 
     it('restricts to included schemas when includeSchemas is set', () => {
-        const handler = makeHandler({ includeSchemas: ['crm'] });
+        const handler = makeHandler({ IncludeSchemas: ['crm'] });
         expect(handler.isEntityAllowed('Users')).toBe(true);
         expect(handler.isEntityAllowed('Secrets')).toBe(false);
     });
 
     it('blocks lowercase exact-name exclusions and wildcard exclusions of any case', () => {
-        const lowercase = makeHandler({ excludeEntities: ['secrets'] });
+        const lowercase = makeHandler({ ExcludeEntities: ['secrets'] });
         expect(lowercase.isEntityAllowed('Secrets')).toBe(false);
 
-        const wildcard = makeHandler({ excludeEntities: ['Secret*'] });
+        const wildcard = makeHandler({ ExcludeEntities: ['Secret*'] });
         expect(wildcard.isEntityAllowed('Secrets')).toBe(false);
         expect(wildcard.isEntityAllowed('Users')).toBe(true);
     });
@@ -217,25 +217,25 @@ describe('RESTEndpointHandler.isEntityAllowed', () => {
         // the RAW configured pattern (only the wildcard branch lowercases patterns).
         // An operator writing excludeEntities: ['Secrets'] — the natural casing —
         // gets NO exclusion. Pinned so a normalization fix flips this test.
-        const handler = makeHandler({ excludeEntities: ['Secrets'] });
+        const handler = makeHandler({ ExcludeEntities: ['Secrets'] });
         expect(handler.isEntityAllowed('Secrets')).toBe(true); // exclusion ineffective!
     });
 
     it('exclusions override inclusions for the same entity', () => {
-        const handler = makeHandler({ includeEntities: ['user*'], excludeEntities: ['userroles'] });
+        const handler = makeHandler({ IncludeEntities: ['user*'], ExcludeEntities: ['userroles'] });
         expect(handler.isEntityAllowed('Users')).toBe(true);
         expect(handler.isEntityAllowed('UserRoles')).toBe(false);
     });
 
     it('an include list denies everything not on it, with wildcard support', () => {
-        const handler = makeHandler({ includeEntities: ['user*'] });
+        const handler = makeHandler({ IncludeEntities: ['user*'] });
         expect(handler.isEntityAllowed('Users')).toBe(true);
         expect(handler.isEntityAllowed('UserRoles')).toBe(true);
         expect(handler.isEntityAllowed('Secrets')).toBe(false);
     });
 
     it('SECURITY GAP: a mixed-case exact inclusion fails to include (same raw-pattern comparison)', () => {
-        const handler = makeHandler({ includeEntities: ['Users'] });
+        const handler = makeHandler({ IncludeEntities: ['Users'] });
         expect(handler.isEntityAllowed('Users')).toBe(false); // include list active, but never matches
     });
 });
@@ -271,7 +271,7 @@ describe('RESTEndpointHandler middleware', () => {
 
     describe('checkEntityAccess', () => {
         it('rejects blocked entities with 403 before any handler runs', () => {
-            const handler = makeHandler({ excludeEntities: ['secrets'] });
+            const handler = makeHandler({ ExcludeEntities: ['secrets'] });
             const req = makeReq({ params: { entityName: 'Secrets' } });
             const { res, statusCode, jsonBody } = makeRes();
             const next = vi.fn();
@@ -286,7 +286,7 @@ describe('RESTEndpointHandler middleware', () => {
         });
 
         it('passes allowed entities through', () => {
-            const handler = makeHandler({ excludeEntities: ['secrets'] });
+            const handler = makeHandler({ ExcludeEntities: ['secrets'] });
             const next = vi.fn();
 
             handler.checkEntityAccess(makeReq({ params: { entityName: 'Users' } }), makeRes().res, next);
@@ -295,7 +295,7 @@ describe('RESTEndpointHandler middleware', () => {
         });
 
         it('passes through when no entityName param is present', () => {
-            const handler = makeHandler({ includeEntities: ['nothing'] });
+            const handler = makeHandler({ IncludeEntities: ['nothing'] });
             const next = vi.fn();
 
             handler.checkEntityAccess(makeReq({ params: {} }), makeRes().res, next);
@@ -565,7 +565,7 @@ describe('RESTEndpointHandler view routes', () => {
         });
 
         it('returns 403 WITHOUT invoking the view layer when every requested entity is blocked', async () => {
-            const handler = makeHandler({ includeEntities: ['users'] });
+            const handler = makeHandler({ IncludeEntities: ['users'] });
             const { res, statusCode } = makeRes();
 
             await handler.runViews(
@@ -579,7 +579,7 @@ describe('RESTEndpointHandler view routes', () => {
 
         it('silently drops blocked entities and executes only the allowed remainder', async () => {
             mockOpsRunViews.mockResolvedValue({ success: true, results: [{ Success: true, Results: [] }] });
-            const handler = makeHandler({ excludeEntities: ['secrets'] });
+            const handler = makeHandler({ ExcludeEntities: ['secrets'] });
             const req = makeReq({ body: { params: [{ EntityName: 'Users' }, { EntityName: 'Secrets' }] } });
             const { res, jsonBody } = makeRes();
 

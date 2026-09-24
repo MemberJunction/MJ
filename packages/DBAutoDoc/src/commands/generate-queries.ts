@@ -137,31 +137,31 @@ export default class GenerateQueries extends Command {
 
       await db.close();
 
-      if (result.success) {
+      if (result.Success) {
         spinner.succeed('Sample queries generated!');
         this.log(chalk.green('\n✓ Query generation complete!'));
-        this.log(`  Total queries: ${result.summary.totalQueriesGenerated}`);
-        this.log(`  Validated: ${result.summary.queriesValidated}`);
-        this.log(`  Failed validation: ${result.summary.queriesFailed}`);
-        this.log(`  Tokens used: ${result.summary.tokensUsed.toLocaleString()}`);
-        this.log(`  Estimated cost: $${result.summary.estimatedCost.toFixed(2)}`);
-        this.log(`  Average confidence: ${(result.summary.averageConfidence * 100).toFixed(1)}%`);
-        this.log(`  Execution time: ${(result.summary.totalExecutionTime / 1000).toFixed(1)}s`);
+        this.log(`  Total queries: ${result.Summary.totalQueriesGenerated}`);
+        this.log(`  Validated: ${result.Summary.queriesValidated}`);
+        this.log(`  Failed validation: ${result.Summary.queriesFailed}`);
+        this.log(`  Tokens used: ${result.Summary.tokensUsed.toLocaleString()}`);
+        this.log(`  Estimated cost: $${result.Summary.estimatedCost.toFixed(2)}`);
+        this.log(`  Average confidence: ${(result.Summary.averageConfidence * 100).toFixed(1)}%`);
+        this.log(`  Execution time: ${(result.Summary.totalExecutionTime / 1000).toFixed(1)}s`);
         this.log(`\n  Queries saved to:`);
         this.log(`    - ${flags['from-state']} (state.sampleQueries)`);
 
         this.log(chalk.blue('\n  Query breakdown:'));
         this.log(`    By type:`);
-        Object.entries(result.summary.queriesByType).forEach(([type, count]) => {
+        Object.entries(result.Summary.queriesByType).forEach(([type, count]) => {
           this.log(`      ${type}: ${count}`);
         });
         this.log(`    By complexity:`);
-        Object.entries(result.summary.queriesByComplexity).forEach(([complexity, count]) => {
+        Object.entries(result.Summary.queriesByComplexity).forEach(([complexity, count]) => {
           this.log(`      ${complexity}: ${count}`);
         });
       } else {
         spinner.fail('Query generation failed');
-        this.error(result.errorMessage || 'Unknown error');
+        this.error(result.ErrorMessage || 'Unknown error');
       }
 
     } catch (error) {

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   TOOLBAR_BUTTONS,
-  createCopyButton,
-  createCopyOnlyToolbar
+  CreateCopyButton,
+  CreateCopyOnlyToolbar
 } from '../lib/toolbar-config';
 import type { ToolbarButton, ToolbarConfig } from '../lib/toolbar-config';
 
@@ -60,14 +60,14 @@ describe('TOOLBAR_BUTTONS', () => {
 
 describe('createCopyButton', () => {
   it('should create a copy button based on COPY preset', () => {
-    const btn = createCopyButton();
+    const btn = CreateCopyButton();
     expect(btn.id).toBe('copy');
     expect(btn.icon).toBe('fa-regular fa-copy');
     expect(btn.label).toBeUndefined();
   });
 
   it('should accept custom label', () => {
-    const btn = createCopyButton('Copy Code');
+    const btn = CreateCopyButton('Copy Code');
     expect(btn.label).toBe('Copy Code');
     expect(btn.id).toBe('copy');
   });
@@ -75,7 +75,7 @@ describe('createCopyButton', () => {
 
 describe('createCopyOnlyToolbar', () => {
   it('should create enabled toolbar with single copy button', () => {
-    const config = createCopyOnlyToolbar();
+    const config = CreateCopyOnlyToolbar();
     expect(config.enabled).toBe(true);
     expect(config.buttons).toHaveLength(1);
     expect(config.buttons![0].id).toBe('copy');

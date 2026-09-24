@@ -30,12 +30,22 @@ export class EmbeddedTestCategoryEntity extends MJActionCategoryEntity {
         OnClear: 'orphan',
     });
 
-    public get ParentID_Object(): MJActionCategoryEntity | null {
+    public get ParentIDObject(): MJActionCategoryEntity | null {
         return this.ParentEmb.Value as MJActionCategoryEntity | null;
     }
 
-    public ParentID_EnsureObject(): MJActionCategoryEntity {
+    /** @deprecated Use {@link ParentIDObject}. */
+    public get ParentID_Object(): MJActionCategoryEntity | null {
+        return this.ParentIDObject;
+    }
+
+    public ParentIDEnsureObject(): MJActionCategoryEntity {
         return this.ParentEmb.Ensure() as MJActionCategoryEntity;
+    }
+
+    /** @deprecated Use {@link ParentIDEnsureObject}. */
+    public ParentID_EnsureObject(): MJActionCategoryEntity {
+        return this.ParentIDEnsureObject();
     }
 }
 

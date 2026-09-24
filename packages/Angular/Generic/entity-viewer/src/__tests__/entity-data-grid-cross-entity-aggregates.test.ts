@@ -56,7 +56,7 @@ type Internals = {
     _gridState: unknown;
     _aggregatesConfig: unknown;
     _columns: unknown[];
-    EffectiveAggregatesConfig: { expressions?: unknown[] } | null | undefined;
+    effectiveAggregatesConfig: { expressions?: unknown[] } | null | undefined;
     buildCurrentGridState(): { aggregates?: { expressions?: unknown[] } };
     gridApi: unknown;
 };
@@ -93,7 +93,7 @@ describe('EntityDataGridComponent — aggregates from a foreign grid state', () 
     it('are refused when the state names no field of the current entity', () => {
         const grid = withState(makeGrid(CARE_LOGS), ORDERS_COLUMNS, ORDERS_AGGREGATES);
 
-        const effective = internalsOf(grid).EffectiveAggregatesConfig;
+        const effective = internalsOf(grid).effectiveAggregatesConfig;
 
         expect(effective?.expressions ?? []).toEqual([]);
     });
@@ -116,7 +116,7 @@ describe('EntityDataGridComponent — aggregates from a foreign grid state', () 
         };
         const grid = withState(makeGrid(CARE_LOGS), ['CareDate', 'CareType'], own);
 
-        expect(internalsOf(grid).EffectiveAggregatesConfig?.expressions).toHaveLength(1);
+        expect(internalsOf(grid).effectiveAggregatesConfig?.expressions).toHaveLength(1);
     });
 
     it('ARE honoured when the state carries aggregates but no columnSettings', () => {
@@ -126,7 +126,7 @@ describe('EntityDataGridComponent — aggregates from a foreign grid state', () 
         const grid = makeGrid(CARE_LOGS);
         internalsOf(grid)._gridState = { aggregates: ORDERS_AGGREGATES };
 
-        expect(internalsOf(grid).EffectiveAggregatesConfig?.expressions).toHaveLength(2);
+        expect(internalsOf(grid).effectiveAggregatesConfig?.expressions).toHaveLength(2);
     });
 
     it('an EXPLICIT [Aggregates] config always wins over the grid state', () => {
@@ -137,6 +137,6 @@ describe('EntityDataGridComponent — aggregates from a foreign grid state', () 
         const grid = withState(makeGrid(CARE_LOGS), ORDERS_COLUMNS, ORDERS_AGGREGATES);
         internalsOf(grid)._aggregatesConfig = explicit;
 
-        expect(internalsOf(grid).EffectiveAggregatesConfig?.expressions).toHaveLength(1);
+        expect(internalsOf(grid).effectiveAggregatesConfig?.expressions).toHaveLength(1);
     });
 });

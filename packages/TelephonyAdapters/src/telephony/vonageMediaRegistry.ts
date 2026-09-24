@@ -13,11 +13,11 @@ import type { VonageControlEvent, IVonageMediaPump } from '@memberjunction/ai-br
  */
 export interface ITelephonyMediaSocket {
     /** Sends one outbound BINARY audio frame (raw L16 PCM) on the call's socket. */
-    sendBinary(data: Uint8Array): void;
+    sendBinary(data: Uint8Array): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Sends one outbound TEXT control frame (JSON command, e.g. `{"action":"clear"}`) on the call's socket. */
-    sendText(data: string): void;
+    sendText(data: string): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Closes the socket (best-effort; called on call end). */
-    close(): void;
+    close(): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

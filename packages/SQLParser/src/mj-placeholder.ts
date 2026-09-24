@@ -35,6 +35,8 @@ export class MJPlaceholderSubstitution {
     private inListCounter = 0;
     private compositionCounter = 0;
     private booleanCounter = 0;
+    /** Lexical position at the end of the clean SQL built so far — see {@link advanceLexicalMode}. */
+    private lexicalMode: 'code' | 'string' | 'lineComment' | 'blockComment' = 'code';
 
     /**
      * Tokenize the SQL and replace all MJ tokens with SQL-safe placeholders.
@@ -53,19 +55,28 @@ export class MJPlaceholderSubstitution {
         const positionMap = new Map<string, PlaceholderEntry>();
         const strippedTokens: MJToken[] = [];
 
-        // Build the clean SQL by processing tokens in order
+        // Build the clean SQL by processing tokens in order. Everything appended goes through
+        // `append` so the lexical mode always describes the end of `cleanSQL`.
         let cleanSQL = '';
+        const append = (text: string): void => {
+            cleanSQL += text;
+            this.advanceLexicalMode(text);
+        };
 
         for (const token of tokens) {
             switch (token.type) {
                 case 'SQL_TEXT':
-                    cleanSQL += token.raw;
+                    append(token.raw);
                     break;
 
                 case 'MJ_TEMPLATE_EXPR': {
-                    const { placeholder, context } = this.createExpressionPlaceholder(token);
+                    // Inside an author-written literal (`'{{ X }}'`, `'%{{ X }}%'`) the quotes are
+                    // already there — a quoted placeholder would close the literal and break the parse.
+                    const { placeholder, context } = this.lexicalMode === 'string'
+                        ? { placeholder: this.nextBareStringPlaceholder(), context: 'string' as PlaceholderContext }
+                        : this.createExpressionPlaceholder(token);
                     positionMap.set(placeholder, { placeholder, originalToken: token, context });
-                    cleanSQL += placeholder;
+                    append(placeholder);
                     break;
                 }
 
@@ -75,7 +86,7 @@ export class MJPlaceholderSubstitution {
                     const placeholder = this.nextCompositionPlaceholder();
                     positionMap.set(placeholder, { placeholder, originalToken: token, context: 'string' });
                     // Replace with a simple SELECT to make it a valid subquery
-                    cleanSQL += `(SELECT 1 AS ${placeholder})`;
+                    append(`(SELECT 1 AS ${placeholder})`);
                     break;
                 }
 
@@ -97,11 +108,40 @@ export class MJPlaceholderSubstitution {
                     break;
 
                 default:
-                    cleanSQL += token.raw;
+                    append(token.raw);
             }
         }
 
         return { cleanSQL, positionMap, strippedTokens };
+    }
+
+    /**
+     * Advances {@link lexicalMode} over `text`, so a template expression knows whether it sits
+     * inside a SQL string literal. Comments are tracked only so an apostrophe in one (`-- don't`)
+     * is not mistaken for a literal boundary. A doubled quote (`'it''s'`) needs no special case:
+     * it leaves and immediately re-enters the literal.
+     */
+    private advanceLexicalMode(text: string): void {
+        for (let i = 0; i < text.length; i++) {
+            const ch = text[i];
+            const next = text[i + 1];
+            switch (this.lexicalMode) {
+                case 'code':
+                    if (ch === "'") this.lexicalMode = 'string';
+                    else if (ch === '-' && next === '-') { this.lexicalMode = 'lineComment'; i++; }
+                    else if (ch === '/' && next === '*') { this.lexicalMode = 'blockComment'; i++; }
+                    break;
+                case 'string':
+                    if (ch === "'") this.lexicalMode = 'code';
+                    break;
+                case 'lineComment':
+                    if (ch === '\n') this.lexicalMode = 'code';
+                    break;
+                case 'blockComment':
+                    if (ch === '*' && next === '/') { this.lexicalMode = 'code'; i++; }
+                    break;
+            }
+        }
     }
 
     /**
@@ -160,6 +200,11 @@ export class MJPlaceholderSubstitution {
 
     private nextStringPlaceholder(): string {
         return `'__MJT_${String(++this.stringCounter).padStart(3, '0')}__'`;
+    }
+
+    /** Same numbering as {@link nextStringPlaceholder}, without quotes — for use inside an existing literal. */
+    private nextBareStringPlaceholder(): string {
+        return `__MJT_${String(++this.stringCounter).padStart(3, '0')}__`;
     }
 
     private nextNumberPlaceholder(): string {

@@ -3,7 +3,7 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
-import { resolveDeepLinkParam } from './chat-deeplink-params.js';
+import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
 import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
@@ -260,29 +260,164 @@ import { Subject, takeUntil } from 'rxjs';
   encapsulation: ViewEncapsulation.None
 })
 export class ChatConversationsResource extends BaseResourceComponent implements OnDestroy {
-  @ViewChild('conversationList') conversationList?: ConversationListComponent;
-  @ViewChild('chatArea') chatArea?: ConversationChatAreaComponent;
+  @ViewChild('conversationList') ConversationList?: ConversationListComponent;
 
-  public currentUser: any = null;
+  /** @deprecated Use {@link ConversationList}. */
+  get conversationList(): ConversationListComponent | undefined {
+    return this.ConversationList;
+  }
+  /** @deprecated Use {@link ConversationList}. */
+  set conversationList(value: ConversationListComponent | undefined) {
+    this.ConversationList = value;
+  }
+  @ViewChild('chatArea') ChatArea?: ConversationChatAreaComponent;
+
+  /** @deprecated Use {@link ChatArea}. */
+  get chatArea(): ConversationChatAreaComponent | undefined {
+    return this.ChatArea;
+  }
+  /** @deprecated Use {@link ChatArea}. */
+  set chatArea(value: ConversationChatAreaComponent | undefined) {
+    this.ChatArea = value;
+  }
+
+  public CurrentUser: any = null;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  public get currentUser(): any {
+    return this.CurrentUser;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  public set currentUser(value: any) {
+    this.CurrentUser = value;
+  }
   private skipUrlUpdate = true; // Skip URL updates during initialization
 
   // Ready flag - blocks child rendering until AIEngine is initialized
-  public isReady: boolean = false;
+  public IsReady: boolean = false;
+
+  /** @deprecated Use {@link IsReady}. */
+  public get isReady(): boolean {
+    return this.IsReady;
+  }
+  /** @deprecated Use {@link IsReady}. */
+  public set isReady(value: boolean) {
+    this.IsReady = value;
+  }
 
   // LOCAL SELECTION STATE - each wrapper instance manages its own selection
-  public selectedConversationId: string | null = null;
-  public selectedConversation: MJConversationEntity | null = null;
-  public selectedThreadId: string | null = null;
-  public isNewUnsavedConversation: boolean = false;
-  public renamedConversationId: string | null = null;
-  public isSidebarCollapsed: boolean = false;
-  public isSidebarPinned: boolean = true; // Whether sidebar stays open after selection
-  public isMobileView: boolean = false;
-  public sidebarTransitionsEnabled: boolean = false; // Disabled during initial load to prevent jarring animation
-  public isSidebarSettingsLoaded: boolean = false; // Prevents UI flash while loading settings
+  public SelectedConversationId: string | null = null;
+
+  /** @deprecated Use {@link SelectedConversationId}. */
+  public get selectedConversationId(): string | null {
+    return this.SelectedConversationId;
+  }
+  /** @deprecated Use {@link SelectedConversationId}. */
+  public set selectedConversationId(value: string | null) {
+    this.SelectedConversationId = value;
+  }
+  public SelectedConversation: MJConversationEntity | null = null;
+
+  /** @deprecated Use {@link SelectedConversation}. */
+  public get selectedConversation(): MJConversationEntity | null {
+    return this.SelectedConversation;
+  }
+  /** @deprecated Use {@link SelectedConversation}. */
+  public set selectedConversation(value: MJConversationEntity | null) {
+    this.SelectedConversation = value;
+  }
+  public SelectedThreadId: string | null = null;
+
+  /** @deprecated Use {@link SelectedThreadId}. */
+  public get selectedThreadId(): string | null {
+    return this.SelectedThreadId;
+  }
+  /** @deprecated Use {@link SelectedThreadId}. */
+  public set selectedThreadId(value: string | null) {
+    this.SelectedThreadId = value;
+  }
+  public IsNewUnsavedConversation: boolean = false;
+
+  /** @deprecated Use {@link IsNewUnsavedConversation}. */
+  public get isNewUnsavedConversation(): boolean {
+    return this.IsNewUnsavedConversation;
+  }
+  /** @deprecated Use {@link IsNewUnsavedConversation}. */
+  public set isNewUnsavedConversation(value: boolean) {
+    this.IsNewUnsavedConversation = value;
+  }
+  public RenamedConversationId: string | null = null;
+
+  /** @deprecated Use {@link RenamedConversationId}. */
+  public get renamedConversationId(): string | null {
+    return this.RenamedConversationId;
+  }
+  /** @deprecated Use {@link RenamedConversationId}. */
+  public set renamedConversationId(value: string | null) {
+    this.RenamedConversationId = value;
+  }
+  public IsSidebarCollapsed: boolean = false;
+
+  /** @deprecated Use {@link IsSidebarCollapsed}. */
+  public get isSidebarCollapsed(): boolean {
+    return this.IsSidebarCollapsed;
+  }
+  /** @deprecated Use {@link IsSidebarCollapsed}. */
+  public set isSidebarCollapsed(value: boolean) {
+    this.IsSidebarCollapsed = value;
+  }
+  public IsSidebarPinned: boolean = true;
+
+  /** @deprecated Use {@link IsSidebarPinned}. */
+  public get isSidebarPinned(): boolean {
+    return this.IsSidebarPinned;
+  }
+  /** @deprecated Use {@link IsSidebarPinned}. */
+  public set isSidebarPinned(value: boolean) {
+    this.IsSidebarPinned = value;
+  } // Whether sidebar stays open after selection
+  public IsMobileView: boolean = false;
+
+  /** @deprecated Use {@link IsMobileView}. */
+  public get isMobileView(): boolean {
+    return this.IsMobileView;
+  }
+  /** @deprecated Use {@link IsMobileView}. */
+  public set isMobileView(value: boolean) {
+    this.IsMobileView = value;
+  }
+  public SidebarTransitionsEnabled: boolean = false;
+
+  /** @deprecated Use {@link SidebarTransitionsEnabled}. */
+  public get sidebarTransitionsEnabled(): boolean {
+    return this.SidebarTransitionsEnabled;
+  }
+  /** @deprecated Use {@link SidebarTransitionsEnabled}. */
+  public set sidebarTransitionsEnabled(value: boolean) {
+    this.SidebarTransitionsEnabled = value;
+  } // Disabled during initial load to prevent jarring animation
+  public IsSidebarSettingsLoaded: boolean = false;
+
+  /** @deprecated Use {@link IsSidebarSettingsLoaded}. */
+  public get isSidebarSettingsLoaded(): boolean {
+    return this.IsSidebarSettingsLoaded;
+  }
+  /** @deprecated Use {@link IsSidebarSettingsLoaded}. */
+  public set isSidebarSettingsLoaded(value: boolean) {
+    this.IsSidebarSettingsLoaded = value;
+  } // Prevents UI flash while loading settings
 
   // Sidebar resize state
-  public sidebarWidth: number = 300; // Default width in pixels
+  public SidebarWidth: number = 300;
+
+  /** @deprecated Use {@link SidebarWidth}. */
+  public get sidebarWidth(): number {
+    return this.SidebarWidth;
+  }
+  /** @deprecated Use {@link SidebarWidth}. */
+  public set sidebarWidth(value: number) {
+    this.SidebarWidth = value;
+  } // Default width in pixels
   private isSidebarResizing: boolean = false;
   private sidebarResizeStartX: number = 0;
   private sidebarResizeStartWidth: number = 0;
@@ -290,8 +425,26 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private readonly SIDEBAR_MAX_WIDTH = 500;
 
   // Pending navigation state
-  public pendingArtifactId: string | null = null;
-  public pendingArtifactConversationId: string | null = null;
+  public PendingArtifactId: string | null = null;
+
+  /** @deprecated Use {@link PendingArtifactId}. */
+  public get pendingArtifactId(): string | null {
+    return this.PendingArtifactId;
+  }
+  /** @deprecated Use {@link PendingArtifactId}. */
+  public set pendingArtifactId(value: string | null) {
+    this.PendingArtifactId = value;
+  }
+  public PendingArtifactConversationId: string | null = null;
+
+  /** @deprecated Use {@link PendingArtifactConversationId}. */
+  public get pendingArtifactConversationId(): string | null {
+    return this.PendingArtifactConversationId;
+  }
+  /** @deprecated Use {@link PendingArtifactConversationId}. */
+  public set pendingArtifactConversationId(value: string | null) {
+    this.PendingArtifactConversationId = value;
+  }
   /**
    * A pending request to open the REALTIME SESSION REVIEW overlay (deep link /
    * cross-resource nav with `realtimeSessionId`, e.g. the AI Agent Session form's
@@ -300,10 +453,46 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * `await chatArea.OpenRealtimeSessionReview(agentSessionId)` (a NEW session starts
    * through the composer's phone button / `RealtimeSessionService.StartRealtimeSession`).
    */
-  public pendingRealtimeSessionId: string | null = null;
-  public pendingArtifactVersionNumber: number | null = null;
-  public pendingMessageToSend: string | null = null;
-  public pendingAttachmentsToSend: PendingAttachment[] | null = null;
+  public PendingRealtimeSessionId: string | null = null;
+
+  /** @deprecated Use {@link PendingRealtimeSessionId}. */
+  public get pendingRealtimeSessionId(): string | null {
+    return this.PendingRealtimeSessionId;
+  }
+  /** @deprecated Use {@link PendingRealtimeSessionId}. */
+  public set pendingRealtimeSessionId(value: string | null) {
+    this.PendingRealtimeSessionId = value;
+  }
+  public PendingArtifactVersionNumber: number | null = null;
+
+  /** @deprecated Use {@link PendingArtifactVersionNumber}. */
+  public get pendingArtifactVersionNumber(): number | null {
+    return this.PendingArtifactVersionNumber;
+  }
+  /** @deprecated Use {@link PendingArtifactVersionNumber}. */
+  public set pendingArtifactVersionNumber(value: number | null) {
+    this.PendingArtifactVersionNumber = value;
+  }
+  public PendingMessageToSend: string | null = null;
+
+  /** @deprecated Use {@link PendingMessageToSend}. */
+  public get pendingMessageToSend(): string | null {
+    return this.PendingMessageToSend;
+  }
+  /** @deprecated Use {@link PendingMessageToSend}. */
+  public set pendingMessageToSend(value: string | null) {
+    this.PendingMessageToSend = value;
+  }
+  public PendingAttachmentsToSend: PendingAttachment[] | null = null;
+
+  /** @deprecated Use {@link PendingAttachmentsToSend}. */
+  public get pendingAttachmentsToSend(): PendingAttachment[] | null {
+    return this.PendingAttachmentsToSend;
+  }
+  /** @deprecated Use {@link PendingAttachmentsToSend}. */
+  public set pendingAttachmentsToSend(value: PendingAttachment[] | null) {
+    this.PendingAttachmentsToSend = value;
+  }
 
   // User Settings persistence
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
@@ -327,16 +516,16 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   async ngOnInit() {
     super.ngOnInit();
     const md = this.ProviderToUse;
-    this.currentUser = md.CurrentUser;
+    this.CurrentUser = md.CurrentUser;
 
     // Check initial mobile state and set default collapsed
     this.checkMobileView();
-    if (this.isMobileView) {
-      this.isSidebarCollapsed = true;
-      this.isSidebarSettingsLoaded = true; // Mobile uses defaults, no need to load from server
+    if (this.IsMobileView) {
+      this.IsSidebarCollapsed = true;
+      this.IsSidebarSettingsLoaded = true; // Mobile uses defaults, no need to load from server
       // Enable transitions after a brief delay to ensure initial state is applied
       setTimeout(() => {
-        this.sidebarTransitionsEnabled = true;
+        this.SidebarTransitionsEnabled = true;
       }, 50);
     } else {
       // Load sidebar state from User Settings (non-blocking)
@@ -344,7 +533,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         this.cdr.detectChanges();
         // Enable transitions after state is loaded and applied
         setTimeout(() => {
-          this.sidebarTransitionsEnabled = true;
+          this.SidebarTransitionsEnabled = true;
         }, 50);
       });
     }
@@ -416,20 +605,20 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       // Initialize AIEngine, conversations, and mention service in parallel
       await Promise.all([
         AIEngineBase.Instance.Config(false),
-        this.engine.LoadConversations(this.environmentId, this.currentUser, false),
-        this.mentionAutocompleteService.initialize(this.currentUser)
+        this.engine.LoadConversations(this.EnvironmentId, this.CurrentUser, false),
+        this.mentionAutocompleteService.initialize(this.CurrentUser)
       ]);
 
       // Restore active tasks AFTER conversations are cached (uses in-memory lookup)
-      await this.activeTasksService.restoreFromDatabase(this.currentUser);
+      await this.activeTasksService.restoreFromDatabase(this.CurrentUser);
 
       // Mark as ready - child components can now render
-      this.isReady = true;
+      this.IsReady = true;
       this.cdr.detectChanges();
     } catch (error) {
       console.error('Failed to initialize AI engines:', error);
       // Still mark as ready so UI isn't blocked forever
-      this.isReady = true;
+      this.IsReady = true;
       this.cdr.detectChanges();
     }
   }
@@ -444,7 +633,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Try to get from cache first
     const conversation = this.engine.GetConversation(conversationId);
     if (conversation) {
-      this.selectedConversation = conversation;
+      this.SelectedConversation = conversation;
       this.updateTabTitle();
     }
     // If not in cache, the chat area component will handle loading it
@@ -483,20 +672,29 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     }
     console.log(`[Omnibar→Chat] wrapper: agent param '${agentName}' (req=${requestNonce ?? 'none'}) received — staging composer pre-address`);
     this.lastAppliedAgentParamKey = requestKey;
-    this.isNewUnsavedConversation = true;
-    this.selectedConversationId = null;
-    this.selectedConversation = null;
+    this.IsNewUnsavedConversation = true;
+    this.SelectedConversationId = null;
+    this.SelectedConversation = null;
     // Resolved mention PILL (composerAgentMention) — matching the UX of typing
     // '@agent' and picking from the dropdown; pendingMessage would AUTO-SEND.
-    this.pendingComposerAgentMention = agentName;
+    this.PendingComposerAgentMention = agentName;
     this.cdr.detectChanges();
   }
 
-  public pendingComposerAgentMention: string | null = null;
+  public PendingComposerAgentMention: string | null = null;
+
+  /** @deprecated Use {@link PendingComposerAgentMention}. */
+  public get pendingComposerAgentMention(): string | null {
+    return this.PendingComposerAgentMention;
+  }
+  /** @deprecated Use {@link PendingComposerAgentMention}. */
+  public set pendingComposerAgentMention(value: string | null) {
+    this.PendingComposerAgentMention = value;
+  }
   private lastAppliedAgentParamKey: string | null = null;
 
-  public onComposerAgentMentionConsumed(): void {
-    this.pendingComposerAgentMention = null;
+  public OnComposerAgentMentionConsumed(): void {
+    this.PendingComposerAgentMention = null;
     // Consume-and-clear: drop the agent params from the tab/URL so boots and
     // back/forward can't re-stage the pill. lastAppliedAgentParamKey is
     // intentionally NOT reset — a fresh omnibar re-tag (even of the same agent)
@@ -504,6 +702,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // the OLD key is by definition a stale echo.
     console.log(`[Omnibar→Chat] wrapper: pill applied — clearing agent param from URL`);
     this.clearAgentParamDeferred();
+  }
+
+  /** @deprecated Use {@link OnComposerAgentMentionConsumed}. */
+  public onComposerAgentMentionConsumed(): void {
+    return this.OnComposerAgentMentionConsumed();
   }
 
   /**
@@ -524,49 +727,49 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.applyAgentParam(qp?.['agent'], qp?.['agentReq']);
 
     const search = typeof window !== 'undefined' ? window.location.search : '';
-    const conversationId = resolveDeepLinkParam('conversationId', search, qp, config.conversationId as string);
-    const artifactId = resolveDeepLinkParam('artifactId', search, qp, config.artifactId as string);
+    const conversationId = ResolveDeepLinkParam('conversationId', search, qp, config.conversationId as string);
+    const artifactId = ResolveDeepLinkParam('artifactId', search, qp, config.artifactId as string);
     // Resolved the same URL-first way as artifactId above: pairing a URL artifact with the
     // previous visit's version number would open the wrong version of the right artifact.
-    const rawVersion = resolveDeepLinkParam(
+    const rawVersion = ResolveDeepLinkParam(
       'versionNumber', search, qp, config.versionNumber != null ? String(config.versionNumber) : undefined);
     const versionNumber = rawVersion ? parseInt(rawVersion, 10) : null;
 
     // Set pending artifact if provided
     if (artifactId) {
-      this.pendingArtifactId = artifactId;
-      this.pendingArtifactConversationId = conversationId || null;
-      this.pendingArtifactVersionNumber = versionNumber;
+      this.PendingArtifactId = artifactId;
+      this.PendingArtifactConversationId = conversationId || null;
+      this.PendingArtifactVersionNumber = versionNumber;
     }
 
     // Set conversationId synchronously so child components see it immediately
     if (conversationId) {
-      this.selectedConversationId = conversationId;
+      this.SelectedConversationId = conversationId;
       this.bridge.SetActiveFromWorkspace(conversationId);
-      this.isNewUnsavedConversation = false;
+      this.IsNewUnsavedConversation = false;
       // Load entity asynchronously
       this.loadConversationEntity(conversationId);
     }
 
     const realtimeSessionId = qp?.['realtimeSessionId'] || (config['realtimeSessionId'] as string);
     if (realtimeSessionId) {
-      this.pendingRealtimeSessionId = realtimeSessionId;
+      this.PendingRealtimeSessionId = realtimeSessionId;
       this.applyPendingRealtimeSessionReview();
     }
   }
 
   /** Opens the pending realtime session review once the chat area exists (retries next tick while it renders). */
   private applyPendingRealtimeSessionReview(): void {
-    const sessionId = this.pendingRealtimeSessionId;
+    const sessionId = this.PendingRealtimeSessionId;
     if (!sessionId) {
       return;
     }
-    if (!this.chatArea) {
+    if (!this.ChatArea) {
       setTimeout(() => this.applyPendingRealtimeSessionReview(), 50);
       return;
     }
-    this.pendingRealtimeSessionId = null;
-    void this.chatArea.OpenRealtimeSessionReview(sessionId).then((opened) => {
+    this.PendingRealtimeSessionId = null;
+    void this.ChatArea.OpenRealtimeSessionReview(sessionId).then((opened) => {
       if (!opened) {
         console.warn(`Chat: could not open realtime session review for '${sessionId}'`);
       }
@@ -584,7 +787,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.applyAgentParam(params['agent'], params['agentReq']);
     const realtimeSessionId = params['realtimeSessionId'] || null;
     if (realtimeSessionId) {
-      this.pendingRealtimeSessionId = realtimeSessionId;
+      this.PendingRealtimeSessionId = realtimeSessionId;
       this.applyPendingRealtimeSessionReview();
     }
     const conversationId = params['conversationId'] || null;
@@ -592,11 +795,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     const versionNumber = params['versionNumber'] ? parseInt(params['versionNumber'], 10) : null;
 
     // Reflect any artifact intent so the chat area can open it.
-    this.pendingArtifactId = artifactId;
-    this.pendingArtifactConversationId = artifactId ? conversationId : null;
-    this.pendingArtifactVersionNumber = versionNumber;
+    this.PendingArtifactId = artifactId;
+    this.PendingArtifactConversationId = artifactId ? conversationId : null;
+    this.PendingArtifactVersionNumber = versionNumber;
 
-    if (conversationId && conversationId !== this.selectedConversationId) {
+    if (conversationId && conversationId !== this.SelectedConversationId) {
       // The URL is already the source of truth here — suppress the echo back to it.
       // selectConversation()'s body is synchronous up to its URL-update check, so
       // toggling the flag around the call reliably gates that check.
@@ -616,8 +819,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * Select a conversation by ID - loads the entity and updates local state
    */
   private async selectConversation(conversationId: string): Promise<void> {
-    this.selectedConversationId = conversationId;
-    this.isNewUnsavedConversation = false;
+    this.SelectedConversationId = conversationId;
+    this.IsNewUnsavedConversation = false;
 
     // Keep bridge in sync so other consumers (toast suppression, overlay) know
     // which conversation the workspace is viewing
@@ -626,10 +829,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Load the conversation entity from data service
     const conversation = this.engine.GetConversation(conversationId);
     if (conversation) {
-      this.selectedConversation = conversation;
+      this.SelectedConversation = conversation;
     } else {
       // Conversation might not be loaded yet - the chat area will handle loading
-      this.selectedConversation = null;
+      this.SelectedConversation = null;
     }
 
     // Update URL if not skipping
@@ -646,17 +849,17 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     const queryParams: Record<string, string | null> = {};
 
     // Add conversation ID
-    if (this.selectedConversationId) {
-      queryParams['conversationId'] = this.selectedConversationId;
+    if (this.SelectedConversationId) {
+      queryParams['conversationId'] = this.SelectedConversationId;
     } else {
       queryParams['conversationId'] = null;
     }
 
     // Add artifact ID if we have a pending artifact (will be cleared once opened)
-    if (this.pendingArtifactId) {
-      queryParams['artifactId'] = this.pendingArtifactId;
-      if (this.pendingArtifactVersionNumber) {
-        queryParams['versionNumber'] = this.pendingArtifactVersionNumber.toString();
+    if (this.PendingArtifactId) {
+      queryParams['artifactId'] = this.PendingArtifactId;
+      if (this.PendingArtifactVersionNumber) {
+        queryParams['versionNumber'] = this.PendingArtifactVersionNumber.toString();
       }
     } else {
       queryParams['artifactId'] = null;
@@ -678,11 +881,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * Update the tab/browser title based on the currently selected conversation.
    */
   private updateTabTitle(): void {
-    if (this.isNewUnsavedConversation || !this.selectedConversation) {
+    if (this.IsNewUnsavedConversation || !this.SelectedConversation) {
       this.NotifyDisplayNameChanged('Conversations');
       return;
     }
-    const name = this.selectedConversation.Name;
+    const name = this.SelectedConversation.Name;
     if (name) {
       this.NotifyDisplayNameChanged(name);
     }
@@ -692,8 +895,13 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /**
    * Get the environment ID from configuration or use default
    */
-  get environmentId(): string {
+  get EnvironmentId(): string {
     return this.Data?.Configuration?.environmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID;
+  }
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
   }
 
   /**
@@ -724,44 +932,59 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * After the list refreshes, also reload messages in the active chat area so any
    * new agent responses are visible without a full page reload.
    */
+  OnRefreshRequested(): void {
+    void this.ChatArea?.reloadMessages();
+  }
+
+  /** @deprecated Use {@link OnRefreshRequested}. */
   onRefreshRequested(): void {
-    void this.chatArea?.reloadMessages();
+    return this.OnRefreshRequested();
   }
 
   /**
    * Handle conversation deletion from the list.
    * If the deleted conversation was selected, navigate to the first remaining conversation.
    */
-  onConversationDeleted(deletedId: string): void {
-    if (this.selectedConversationId === deletedId) {
+  OnConversationDeleted(deletedId: string): void {
+    if (this.SelectedConversationId === deletedId) {
       const remaining = this.engine.Conversations.filter(c => !UUIDsEqual(c.ID, deletedId));
       if (remaining.length > 0) {
         void this.selectConversation(remaining[0].ID);
         this.updateUrl();
       } else {
-        this.selectedConversationId = null;
-        this.selectedConversation = null;
-        this.selectedThreadId = null;
-        this.isNewUnsavedConversation = true;
+        this.SelectedConversationId = null;
+        this.SelectedConversation = null;
+        this.SelectedThreadId = null;
+        this.IsNewUnsavedConversation = true;
         this.updateUrl();
       }
     }
   }
 
+  /** @deprecated Use {@link OnConversationDeleted}. */
+  onConversationDeleted(deletedId: string): void {
+    return this.OnConversationDeleted(deletedId);
+  }
+
   /**
    * Handle conversation selection from the list
    */
-  async onConversationSelected(conversationId: string): Promise<void> {
+  async OnConversationSelected(conversationId: string): Promise<void> {
     await this.selectConversation(conversationId);
-    this.selectedThreadId = null; // Clear thread when switching conversations
-    this.isNewUnsavedConversation = false;
+    this.SelectedThreadId = null; // Clear thread when switching conversations
+    this.IsNewUnsavedConversation = false;
     this.updateUrl();
     this.updateTabTitle();
 
     // Auto-collapse if mobile OR if sidebar is not pinned
-    if (this.isMobileView || !this.isSidebarPinned) {
-      this.collapseSidebar();
+    if (this.IsMobileView || !this.IsSidebarPinned) {
+      this.CollapseSidebar();
     }
+  }
+
+  /** @deprecated Use {@link OnConversationSelected}. */
+  async onConversationSelected(conversationId: string): Promise<void> {
+    return this.OnConversationSelected(conversationId);
   }
 
   @HostListener('window:resize')
@@ -775,7 +998,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
     // Only handle when sidebar is expanded but unpinned
-    if (this.isSidebarCollapsed || this.isSidebarPinned) {
+    if (this.IsSidebarCollapsed || this.IsSidebarPinned) {
       return;
     }
 
@@ -786,7 +1009,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // If click is outside sidebar and expand handle, collapse it
     if (!sidebarElement && !expandHandle) {
-      this.collapseSidebar();
+      this.CollapseSidebar();
     }
   }
 
@@ -794,46 +1017,61 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * Check if we're in mobile view and handle state accordingly
    */
   private checkMobileView(): void {
-    const wasMobile = this.isMobileView;
-    this.isMobileView = window.innerWidth < 768;
+    const wasMobile = this.IsMobileView;
+    this.IsMobileView = window.innerWidth < 768;
 
-    if (this.isMobileView && !wasMobile) {
+    if (this.IsMobileView && !wasMobile) {
       // Switched to mobile - default to collapsed
-      this.isSidebarCollapsed = true;
+      this.IsSidebarCollapsed = true;
     }
   }
 
   /**
    * Collapse sidebar
    */
+  CollapseSidebar(): void {
+    this.IsSidebarCollapsed = true;
+  }
+
+  /** @deprecated Use {@link CollapseSidebar}. */
   collapseSidebar(): void {
-    this.isSidebarCollapsed = true;
+    return this.CollapseSidebar();
   }
 
   /**
    * Expand sidebar (pinned - stays open until unpinned)
    */
-  expandSidebar(): void {
-    this.isSidebarCollapsed = false;
-    this.isSidebarPinned = true; // Pin it so it stays open
+  ExpandSidebar(): void {
+    this.IsSidebarCollapsed = false;
+    this.IsSidebarPinned = true; // Pin it so it stays open
     this.saveSidebarState();
+  }
+
+  /** @deprecated Use {@link ExpandSidebar}. */
+  expandSidebar(): void {
+    return this.ExpandSidebar();
   }
 
   /**
    * Handle sidebar resize start
    */
-  onSidebarResizeStart(event: MouseEvent): void {
+  OnSidebarResizeStart(event: MouseEvent): void {
     event.preventDefault();
     this.isSidebarResizing = true;
     this.sidebarResizeStartX = event.clientX;
-    this.sidebarResizeStartWidth = this.sidebarWidth;
+    this.sidebarResizeStartWidth = this.SidebarWidth;
 
     // Disable transitions during resize for immediate feedback
-    this.sidebarTransitionsEnabled = false;
+    this.SidebarTransitionsEnabled = false;
 
     // Add event listeners for mousemove and mouseup
     document.addEventListener('mousemove', this.onSidebarResizeMove);
     document.addEventListener('mouseup', this.onSidebarResizeEnd);
+  }
+
+  /** @deprecated Use {@link OnSidebarResizeStart}. */
+  onSidebarResizeStart(event: MouseEvent): void {
+    return this.OnSidebarResizeStart(event);
   }
 
   /**
@@ -846,7 +1084,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     const newWidth = this.sidebarResizeStartWidth + delta;
 
     // Clamp to min/max bounds
-    this.sidebarWidth = Math.max(this.SIDEBAR_MIN_WIDTH, Math.min(this.SIDEBAR_MAX_WIDTH, newWidth));
+    this.SidebarWidth = Math.max(this.SIDEBAR_MIN_WIDTH, Math.min(this.SIDEBAR_MAX_WIDTH, newWidth));
     this.cdr.detectChanges();
   };
 
@@ -859,7 +1097,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.isSidebarResizing = false;
 
     // Re-enable transitions for collapse/expand animations
-    this.sidebarTransitionsEnabled = true;
+    this.SidebarTransitionsEnabled = true;
 
     // Remove event listeners
     document.removeEventListener('mousemove', this.onSidebarResizeMove);
@@ -872,18 +1110,28 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /**
    * Pin sidebar - keep it open after selection
    */
-  pinSidebar(): void {
-    this.isSidebarPinned = true;
+  PinSidebar(): void {
+    this.IsSidebarPinned = true;
     this.saveSidebarState();
+  }
+
+  /** @deprecated Use {@link PinSidebar}. */
+  pinSidebar(): void {
+    return this.PinSidebar();
   }
 
   /**
    * Unpin sidebar - will auto-collapse on next selection
    */
-  unpinSidebar(): void {
-    this.isSidebarPinned = false;
-    this.collapseSidebar();
+  UnpinSidebar(): void {
+    this.IsSidebarPinned = false;
+    this.CollapseSidebar();
     this.saveSidebarState();
+  }
+
+  /** @deprecated Use {@link UnpinSidebar}. */
+  unpinSidebar(): void {
+    return this.UnpinSidebar();
   }
 
   /**
@@ -905,15 +1153,15 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   private async saveSidebarStateToServer(): Promise<void> {
     try {
-      const userId = this.currentUser?.ID;
+      const userId = this.CurrentUser?.ID;
       if (!userId) {
         return;
       }
 
       const stateToSave = {
-        collapsed: this.isSidebarCollapsed,
-        pinned: this.isSidebarPinned,
-        width: this.sidebarWidth
+        collapsed: this.IsSidebarCollapsed,
+        pinned: this.IsSidebarPinned,
+        width: this.SidebarWidth
       };
 
       const engine = UserInfoEngine.Instance;
@@ -942,7 +1190,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   private async loadSidebarState(): Promise<void> {
     try {
-      const userId = this.currentUser?.ID;
+      const userId = this.CurrentUser?.ID;
       if (userId) {
         // Load from cached User Settings
         const engine = UserInfoEngine.Instance;
@@ -950,76 +1198,90 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
         if (setting?.Value) {
           const state = JSON.parse(setting.Value);
-          this.isSidebarCollapsed = state.collapsed ?? true;
-          this.isSidebarPinned = state.pinned ?? false;
-          this.sidebarWidth = state.width ?? 300;
+          this.IsSidebarCollapsed = state.collapsed ?? true;
+          this.IsSidebarPinned = state.pinned ?? false;
+          this.SidebarWidth = state.width ?? 300;
           // Clamp width to valid range
-          this.sidebarWidth = Math.max(this.SIDEBAR_MIN_WIDTH, Math.min(this.SIDEBAR_MAX_WIDTH, this.sidebarWidth));
-          this.isSidebarSettingsLoaded = true;
+          this.SidebarWidth = Math.max(this.SIDEBAR_MIN_WIDTH, Math.min(this.SIDEBAR_MAX_WIDTH, this.SidebarWidth));
+          this.IsSidebarSettingsLoaded = true;
           return;
         }
       }
 
       // No saved state found - NEW USER DEFAULT:
       // Start with sidebar collapsed and show new conversation screen
-      this.isSidebarCollapsed = true;
-      this.isSidebarPinned = false;
-      this.sidebarWidth = 300;
-      this.isNewUnsavedConversation = true;
-      this.isSidebarSettingsLoaded = true;
+      this.IsSidebarCollapsed = true;
+      this.IsSidebarPinned = false;
+      this.SidebarWidth = 300;
+      this.IsNewUnsavedConversation = true;
+      this.IsSidebarSettingsLoaded = true;
     } catch (error) {
       console.warn('Failed to load sidebar state:', error);
       // Default to collapsed for new users on error
-      this.isSidebarCollapsed = true;
-      this.isSidebarPinned = false;
-      this.sidebarWidth = 300;
-      this.isSidebarSettingsLoaded = true;
+      this.IsSidebarCollapsed = true;
+      this.IsSidebarPinned = false;
+      this.SidebarWidth = 300;
+      this.IsSidebarSettingsLoaded = true;
     }
   }
 
   /**
    * Handle new conversation request from the list
    */
-  onNewConversationRequested(): void {
-    this.selectedConversationId = null;
-    this.selectedConversation = null;
-    this.selectedThreadId = null;
-    this.isNewUnsavedConversation = true;
+  OnNewConversationRequested(): void {
+    this.SelectedConversationId = null;
+    this.SelectedConversation = null;
+    this.SelectedThreadId = null;
+    this.IsNewUnsavedConversation = true;
     this.updateUrl();
     this.NotifyDisplayNameChanged('New Conversation');
 
     // Auto-collapse if mobile OR if sidebar is not pinned
-    if (this.isMobileView || !this.isSidebarPinned) {
-      this.collapseSidebar();
+    if (this.IsMobileView || !this.IsSidebarPinned) {
+      this.CollapseSidebar();
     }
+  }
+
+  /** @deprecated Use {@link OnNewConversationRequested}. */
+  onNewConversationRequested(): void {
+    return this.OnNewConversationRequested();
   }
 
   /**
    * Handle conversation created from chat area (after first message in new conversation).
    * The event now includes pending message and attachments for atomic state update.
    */
-  async onConversationCreated(event: {
+  async OnConversationCreated(event: {
     conversation: MJConversationEntity;
     pendingMessage?: string;
     pendingAttachments?: PendingAttachment[];
   }): Promise<void> {
     // Set ALL state atomically before Angular change detection runs
-    this.pendingMessageToSend = event.pendingMessage || null;
-    this.pendingAttachmentsToSend = event.pendingAttachments || null;
-    this.selectedConversationId = event.conversation.ID;
-    this.selectedConversation = event.conversation;
-    this.isNewUnsavedConversation = false;
+    this.PendingMessageToSend = event.pendingMessage || null;
+    this.PendingAttachmentsToSend = event.pendingAttachments || null;
+    this.SelectedConversationId = event.conversation.ID;
+    this.SelectedConversation = event.conversation;
+    this.IsNewUnsavedConversation = false;
     this.bridge.SetActiveFromWorkspace(event.conversation.ID);
     this.updateUrl();
     this.updateTabTitle();
   }
 
+  /** @deprecated Use {@link OnConversationCreated}. */
+  async onConversationCreated(event: {
+    conversation: MJConversationEntity;
+    pendingMessage?: string;
+    pendingAttachments?: PendingAttachment[];
+  }): Promise<void> {
+    return this.OnConversationCreated(event);
+  }
+
   /**
    * Handle conversation rename event
    */
-  onConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
+  OnConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
     // Trigger rename animation in the list
-    this.renamedConversationId = event.conversationId;
+    this.RenamedConversationId = event.conversationId;
 
     // Update tab title with the new name
     if (event.name) {
@@ -1028,41 +1290,66 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Clear the animation trigger after it completes
     setTimeout(() => {
-      this.renamedConversationId = null;
+      this.RenamedConversationId = null;
     }, 1500);
+  }
+
+  /** @deprecated Use {@link OnConversationRenamed}. */
+  onConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
+    return this.OnConversationRenamed(event);
   }
 
   /**
    * Handle thread opened event
    */
+  OnThreadOpened(threadId: string): void {
+    this.SelectedThreadId = threadId;
+  }
+
+  /** @deprecated Use {@link OnThreadOpened}. */
   onThreadOpened(threadId: string): void {
-    this.selectedThreadId = threadId;
+    return this.OnThreadOpened(threadId);
   }
 
   /**
    * Handle thread closed event
    */
+  OnThreadClosed(): void {
+    this.SelectedThreadId = null;
+  }
+
+  /** @deprecated Use {@link OnThreadClosed}. */
   onThreadClosed(): void {
-    this.selectedThreadId = null;
+    return this.OnThreadClosed();
   }
 
   /**
    * Handle pending artifact consumed event
    */
-  onPendingArtifactConsumed(): void {
-    this.pendingArtifactId = null;
-    this.pendingArtifactConversationId = null;
-    this.pendingArtifactVersionNumber = null;
+  OnPendingArtifactConsumed(): void {
+    this.PendingArtifactId = null;
+    this.PendingArtifactConversationId = null;
+    this.PendingArtifactVersionNumber = null;
     // Update URL to remove artifact params
     this.updateUrl();
+  }
+
+  /** @deprecated Use {@link OnPendingArtifactConsumed}. */
+  onPendingArtifactConsumed(): void {
+    return this.OnPendingArtifactConsumed();
   }
 
   /**
    * Handle pending message consumed event
    */
+  OnPendingMessageConsumed(): void {
+    this.PendingMessageToSend = null;
+    this.PendingAttachmentsToSend = null;
+  }
+
+  /** @deprecated Use {@link OnPendingMessageConsumed}. */
   onPendingMessageConsumed(): void {
-    this.pendingMessageToSend = null;
-    this.pendingAttachmentsToSend = null;
+    return this.OnPendingMessageConsumed();
   }
 
   /**
@@ -1070,15 +1357,15 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * @deprecated Use onConversationCreated with pendingMessage instead - this is kept for backwards compatibility.
    */
   onPendingMessageRequested(event: {text: string; attachments: PendingAttachment[]}): void {
-    this.pendingMessageToSend = event.text;
-    this.pendingAttachmentsToSend = event.attachments || null;
+    this.PendingMessageToSend = event.text;
+    this.PendingAttachmentsToSend = event.attachments || null;
   }
 
   /**
    * Handle navigation request from artifact viewer panel within the chat area.
    * Converts the link event to a generic navigation request and uses NavigationService.
    */
-  onArtifactLinkClicked(event: {
+  OnArtifactLinkClicked(event: {
     type: 'conversation' | 'collection';
     id: string;
     artifactId?: string;
@@ -1107,23 +1394,43 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.navigationService.OpenNavItemByName(navItemName, params);
   }
 
+  /** @deprecated Use {@link OnArtifactLinkClicked}. */
+  onArtifactLinkClicked(event: {
+    type: 'conversation' | 'collection';
+    id: string;
+    artifactId?: string;
+    versionNumber?: number;
+  }): void {
+    return this.OnArtifactLinkClicked(event);
+  }
+
   /**
    * Handle entity record open request from chat area (from React component grids).
    * Uses NavigationService to open the record in a new tab.
    */
-  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+  OnOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    return this.OnOpenEntityRecord(event);
   }
 
   /**
    * Handle navigation request from artifact viewer plugins.
    * Opens the target nav item (switching apps if needed) then applies query params to the URL.
    */
-  async onNavigationRequest(event: NavigationRequest): Promise<void> {
+  async OnNavigationRequest(event: NavigationRequest): Promise<void> {
     const appId = event.appName ? this.resolveAppId(event.appName) : undefined;
     await this.navigationService.OpenNavItemByName(event.navItemName, undefined, appId, {
       queryParams: event.queryParams
     });
+  }
+
+  /** @deprecated Use {@link OnNavigationRequest}. */
+  async onNavigationRequest(event: NavigationRequest): Promise<void> {
+    return this.OnNavigationRequest(event);
   }
 
   /**
@@ -1161,10 +1468,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * the resourceId is an agent-internal ID, not a database artifact ID.
    */
   private openMostRecentArtifact(): void {
-    if (!this.chatArea) return;
+    if (!this.ChatArea) return;
 
     // Find the last artifact across all messages
-    const artifactMap = this.chatArea.artifactsByDetailId;
+    const artifactMap = this.ChatArea.artifactsByDetailId;
     let latestArtifact: { artifactId: string; versionId?: string } | null = null;
     for (const artifacts of artifactMap.values()) {
       if (artifacts.length > 0) {
@@ -1177,7 +1484,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     }
 
     if (latestArtifact) {
-      this.chatArea.onArtifactClicked(latestArtifact);
+      this.ChatArea.onArtifactClicked(latestArtifact);
     } else {
       console.warn('No artifacts found in conversation to open for Report/Dashboard command');
     }

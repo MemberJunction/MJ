@@ -4,7 +4,7 @@
  */
 
 import type { ControlToolRole } from '../eval/decision';
-import { encodeHistoryForArm } from '../eval/history';
+import { EncodeHistoryForArm } from '../eval/history';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
@@ -222,7 +222,7 @@ export class PromptEvalDriver extends BaseTestDriver {
             prompt,
             // #3251: never rely on the provider's CurrentUser here.
             contextUser: context.contextUser,
-            conversationMessages: encodeHistoryForArm(input.conversationMessages ?? [], config.nativeToolResults === true),
+            conversationMessages: EncodeHistoryForArm(input.conversationMessages ?? [], config.nativeToolResults === true),
             // The corpus states a starting payload; the loop templates read it as _CURRENT_PAYLOAD.
             templateData: { ...(input.templateData ?? {}), _CURRENT_PAYLOAD: input.payload ?? {} },
             configurationId: config.configurationId,
@@ -279,7 +279,7 @@ export class PromptEvalDriver extends BaseTestDriver {
         const params = await composer.ComposeParams(agentConfig, input.payload ?? {}, {
             agent,
             contextUser: context.contextUser,
-            conversationMessages: encodeHistoryForArm(input.conversationMessages ?? [], config.nativeToolResults === true),
+            conversationMessages: EncodeHistoryForArm(input.conversationMessages ?? [], config.nativeToolResults === true),
             data: input.templateData
         } as ExecuteAgentParams);
 

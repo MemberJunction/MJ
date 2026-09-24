@@ -573,28 +573,28 @@ export interface IOpenAIRealtimeConnection {
      * SDK's `EventEmitter` returns `this` for chaining. A void-returning method is assignable from a
      * value-returning one, so a real `OpenAIRealtimeWebSocket` still satisfies this interface.
      */
-    on(event: 'event', listener: (event: RealtimeServerEvent) => void): void;
+    on(event: 'event', listener: (event: RealtimeServerEvent) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /**
      * Registers a listener for connection errors. The SDK routes BOTH transport-level failures
      * (socket error, unparseable frame, failed send — `error.error` is undefined) and provider
      * `error` server frames (`error.error` carries the payload) through this channel; the driver
      * classifies fatality from that distinction.
      */
-    on(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;
+    on(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Removes a previously-registered listener. See {@link IOpenAIRealtimeConnection.on} re: return type. */
-    off(event: 'event', listener: (event: RealtimeServerEvent) => void): void;
+    off(event: 'event', listener: (event: RealtimeServerEvent) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Removes a previously-registered error listener. */
-    off(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;
+    off(event: 'error', listener: (error: OpenAIRealtimeError) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Sends a client event to the realtime API. */
-    send(event: RealtimeClientEvent): void;
+    send(event: RealtimeClientEvent): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Closes the underlying socket. */
-    close(props?: { code: number; reason: string }): void;
+    close(props?: { code: number; reason: string }): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /**
      * Optional raw WebSocket surface (present on the real `OpenAIRealtimeWebSocket`, which exposes
      * its underlying `socket`). Used solely to detect UNEXPECTED closure — the SDK emitter has no
      * close event of its own. The driver feature-detects; fakes may omit it.
      */
-    socket?: { addEventListener(type: 'close', listener: () => void): void };
+    socket?: { addEventListener(type: 'close', listener: () => void): void };  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

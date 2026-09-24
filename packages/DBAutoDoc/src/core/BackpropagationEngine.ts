@@ -26,7 +26,7 @@ export class BackpropagationEngine {
   /**
    * Execute backpropagation for a set of triggers
    */
-  public async execute(
+  public async Execute(
     state: DatabaseDocumentation,
     run: AnalysisRun,
     triggers: BackpropagationTrigger[]
@@ -147,11 +147,20 @@ export class BackpropagationEngine {
     return { tablesUpdated, tokensUsed: totalTokensUsed };
   }
 
+  /** @deprecated Use {@link Execute}. */
+  public async execute(
+    state: DatabaseDocumentation,
+    run: AnalysisRun,
+    triggers: BackpropagationTrigger[]
+  ): Promise<{ tablesUpdated: number; tokensUsed: number }> {
+    return this.Execute(state, run, triggers);
+  }
+
   /**
    * Detect insights about parent tables from analysis result
    * Uses LLM-provided insights instead of NLP pattern matching
    */
-  public detectParentInsights(
+  public DetectParentInsights(
     table: TableDefinition,
     analysisResult: any,
     schema?: string,
@@ -175,6 +184,16 @@ export class BackpropagationEngine {
     }
 
     return triggers;
+  }
+
+  /** @deprecated Use {@link DetectParentInsights}. */
+  public detectParentInsights(
+    table: TableDefinition,
+    analysisResult: any,
+    schema?: string,
+    tableName?: string
+  ): BackpropagationTrigger[] {
+    return this.DetectParentInsights(table, analysisResult, schema, tableName);
   }
 
   /**

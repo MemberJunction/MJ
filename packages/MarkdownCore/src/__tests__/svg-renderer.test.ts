@@ -1,33 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import { Marked } from 'marked';
-import { createSvgRendererExtension, isSvgContent } from '../extensions/svg-renderer.extension.js';
+import { CreateSvgRendererExtension, IsSvgContent } from '../extensions/svg-renderer.extension.js';
 
 describe('isSvgContent', () => {
   it('accepts a normal svg element', () => {
-    expect(isSvgContent('<svg><circle/></svg>')).toBe(true);
+    expect(IsSvgContent('<svg><circle/></svg>')).toBe(true);
   });
 
   it('accepts a self-closing svg', () => {
-    expect(isSvgContent('<svg width="1" height="1"/>')).toBe(true);
+    expect(IsSvgContent('<svg width="1" height="1"/>')).toBe(true);
   });
 
   it('is case-insensitive', () => {
-    expect(isSvgContent('<SVG></SVG>')).toBe(true);
+    expect(IsSvgContent('<SVG></SVG>')).toBe(true);
   });
 
   it('rejects non-svg content', () => {
-    expect(isSvgContent('<div>not svg</div>')).toBe(false);
-    expect(isSvgContent('console.log("svg")')).toBe(false);
+    expect(IsSvgContent('<div>not svg</div>')).toBe(false);
+    expect(IsSvgContent('console.log("svg")')).toBe(false);
   });
 
   it('rejects an unterminated svg', () => {
-    expect(isSvgContent('<svg><circle/>')).toBe(false);
+    expect(IsSvgContent('<svg><circle/>')).toBe(false);
   });
 });
 
 describe('createSvgRendererExtension', () => {
   const marked = new Marked();
-  marked.use(createSvgRendererExtension());
+  marked.use(CreateSvgRendererExtension());
 
   it('renders an svg fence to a .svg-rendered wrapper', () => {
     const html = marked.parse('```svg\n<svg><rect/></svg>\n```') as string;

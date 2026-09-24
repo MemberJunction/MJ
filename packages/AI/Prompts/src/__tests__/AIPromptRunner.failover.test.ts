@@ -369,6 +369,22 @@ describe('executeModelWithFailover — non-eligible errors do not fail over', ()
     expect(pr.FailoverAttempts).toBe(0);             // not even recorded as a failover attempt
   });
 
+  // The failure must still be SURFACED. It used to fall through to the success path and come
+  // back with nothing logged — during the 6.2.0-edge.0 gate a spend-capped vendor failed every
+  // call this way and the run logs held no trace of why.
+  it('logs a failed result that cannot fail over, naming the error, instead of returning it silently', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    testLLM.Script({ kind: 'fail', error: new Error('Malformed JSON in request body') });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await runFailover(runner, [c1]);
+
+    expect(result.success).toBe(false);
+    const logged = errorLog.mock.calls.map(args => args.map(String).join(' ')).join('\n');
+    expect(logged).toContain('Malformed JSON in request body');
+    expect(logged).toContain('InvalidRequest');
+  });
+
   it('returns a failed ChatResult as-is when the driver supplies NO errorInfo (undiagnosed failure)', async () => {
     const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
     const c2 = candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90);

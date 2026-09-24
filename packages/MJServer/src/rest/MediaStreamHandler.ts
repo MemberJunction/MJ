@@ -23,10 +23,10 @@ import { LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import type { FileStorageBase, ByteRange } from '@memberjunction/storage';
-import { getSystemUser } from '../auth/index.js';
+import { GetSystemUser } from '../auth/index.js';
 import { MediaAccessKeyManager } from './MediaAccessKeys.js';
 import { UploadTokenManager } from './UploadTokenManager.js';
-import { parseRange, parseRangeHeaderLoose } from './mediaRange.js';
+import { ParseRange, ParseRangeHeaderLoose } from './mediaRange.js';
 
 /** A located bytes source for a file: the driver + the provider key to read. */
 interface FileBytesSource {
@@ -41,7 +41,7 @@ interface FileBytesSource {
  * - `GET /media/:fileId` and `GET /media/:fileId/:filename` (Range streaming)
  * - `POST /media/upload-stage` (Raw binary upload staging)
  */
-export function createMediaStreamRouter(): Router {
+export function CreateMediaStreamRouter(): Router {
   const router = express.Router();
 
   router.post(
@@ -59,6 +59,11 @@ export function createMediaStreamRouter(): Router {
     await handleMediaRequest(req, res);
   });
   return router;
+}
+
+/** @deprecated Use {@link CreateMediaStreamRouter}. */
+export function createMediaStreamRouter(): Router {
+  return CreateMediaStreamRouter();
 }
 
 /**
@@ -203,7 +208,7 @@ function verifyMediaToken(token: string, fileId: string): { fileId: string; user
  * provider indistinguishable from a deleted file.
  */
 async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource | null> {
-  const systemUser: UserInfo = await getSystemUser();
+  const systemUser: UserInfo = await GetSystemUser();
 
   // The /media route runs pre-auth on the server's own provider; access was already authorized
   // at token-mint time, so this load only locates the bytes.
@@ -261,7 +266,7 @@ async function streamOrBuffer(req: Request, res: Response, source: FileBytesSour
 
 /** True-streaming path: `GetObjectStream` + pipe, with 206 when a Range was honored. */
 async function serveViaStream(res: Response, source: FileBytesSource, rangeHeader: string | undefined): Promise<void> {
-  const range = rangeHeader ? parseRangeHeaderLoose(rangeHeader) : undefined;
+  const range = rangeHeader ? ParseRangeHeaderLoose(rangeHeader) : undefined;
   // Omit End for an open-ended range so the driver streams to EOF (per ByteRange semantics).
   const streamRange: ByteRange | undefined = range
     ? (range.end == null ? { Start: range.start } : { Start: range.start, End: range.end })
@@ -315,7 +320,7 @@ async function serveViaBuffer(res: Response, source: FileBytesSource, rangeHeade
     return;
   }
 
-  const range = parseRange(rangeHeader, total);
+  const range = ParseRange(rangeHeader, total);
   if (!range) {
     // Unsatisfiable range — per RFC 7233, 416 + Content-Range with the total size.
     res.setHeader('Content-Range', `bytes */${total}`);

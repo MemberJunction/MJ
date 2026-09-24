@@ -13,13 +13,13 @@ const REMOTE_OP_PROGRESS_TOPIC = 'RemoteOperationProgress';
 @InputType()
 export class ExecuteRemoteOperationInput {
     @Field()
-    operationKey: string;
+    operationKey: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    inputJSON: string;
+    inputJSON: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field()
-    invokeMode: string;
+    invokeMode: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     /**
      * Optional client-generated channel id. When set (attached mode over the wire), the server publishes every
@@ -27,7 +27,7 @@ export class ExecuteRemoteOperationInput {
      * so the caller's `onProgress` fires live while the operation runs. Omitted for sync / no-progress calls.
      */
     @Field(() => String, { nullable: true })
-    progressChannelId?: string;
+    progressChannelId?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /** A single streamed progress envelope delivered over the `RemoteOperationProgress` subscription. */
@@ -45,19 +45,19 @@ export class RemoteOperationProgressNotification {
 @ObjectType()
 export class ExecuteRemoteOperationResultType {
     @Field(() => Boolean)
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    resultCode?: string;
+    resultCode?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    outputJSON?: string;
+    outputJSON?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    handle?: string;
+    handle?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 
     @Field(() => String, { nullable: true })
-    errorMessage?: string;
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
 /**

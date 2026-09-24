@@ -179,9 +179,9 @@ function applyParameterValues(
     entity.Type = type;
 
     entity.IsRequired = param.isRequired;
-    entity.DefaultValue = param.defaultValue;
+    entity.DefaultValue = param.DefaultValue;
     entity.Description = param.description;
-    entity.SampleValue = param.sampleValue;
+    entity.SampleValue = param.SampleValue;
     entity.DetectionMethod = 'AI';
 }
 
@@ -204,16 +204,16 @@ function updateParameterIfChanged(
         existing.IsRequired = extracted.isRequired;
         hasChanges = true;
     }
-    if (existing.DefaultValue !== extracted.defaultValue) {
-        existing.DefaultValue = extracted.defaultValue;
+    if (existing.DefaultValue !== extracted.DefaultValue) {
+        existing.DefaultValue = extracted.DefaultValue;
         hasChanges = true;
     }
     if (existing.Description !== extracted.description) {
         existing.Description = extracted.description;
         hasChanges = true;
     }
-    if (existing.SampleValue !== extracted.sampleValue) {
-        existing.SampleValue = extracted.sampleValue;
+    if (existing.SampleValue !== extracted.SampleValue) {
+        existing.SampleValue = extracted.SampleValue;
         hasChanges = true;
     }
     if (existing.DetectionMethod !== 'AI') {
@@ -444,7 +444,7 @@ export async function SyncEntities(
             .map(extracted => {
                 const matchingEntity = metadataProvider.Entities.find(
                     e => e.Name === extracted.name &&
-                         e.SchemaName.toLowerCase() === extracted.schemaName.toLowerCase()
+                         e.SchemaName.toLowerCase() === extracted.SchemaName.toLowerCase()
                 );
                 if (matchingEntity) {
                     return { extracted, entityID: matchingEntity.ID, entityName: matchingEntity.Name };
@@ -507,10 +507,10 @@ export async function SyncDependencies(
 
     // Map resolved refs to the shape needed for sync
     const extractedDeps = resolvedRefs.map(ref => ({
-        dependsOnQueryID: ref.depQuery.ID,
-        referencePath: ref.referencePath,
-        alias: ref.alias,
-        parameterMapping: ref.parameterMapping,
+        dependsOnQueryID: ref.DepQuery.ID,
+        referencePath: ref.ReferencePath,
+        alias: ref.Alias,
+        parameterMapping: ref.ParameterMapping,
     }));
 
     try {
