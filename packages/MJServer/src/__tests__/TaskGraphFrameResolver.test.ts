@@ -19,7 +19,7 @@ vi.mock('@memberjunction/core', () => ({ LogError: vi.fn() }));
 import {
     TASK_GRAPH_FRAMES_TOPIC,
     TaskGraphFrameBroadcaster,
-    taskGraphFrameFilter,
+    TaskGraphFrameFilter,
     type TaskGraphFramePayload,
 } from '../resolvers/TaskGraphFrameResolver';
 import type { TaskGraphFrame } from '@memberjunction/task-graph';
@@ -44,7 +44,7 @@ const payload = (over: Partial<TaskGraphFramePayload> = {}): TaskGraphFramePaylo
 const context = (userId: string | null) => (userId ? { userPayload: { userRecord: { ID: userId } } } : {});
 
 const check = (over: Partial<TaskGraphFramePayload> = {}, args = GRAPH, userId: string | null = OWNER) =>
-    taskGraphFrameFilter({ payload: payload(over), args: { parentTaskId: args }, context: context(userId) });
+    TaskGraphFrameFilter({ payload: payload(over), args: { parentTaskId: args }, context: context(userId) });
 
 describe('taskGraphFrameFilter — the delivery gate', () => {
     it('delivers a frame for the watched graph to its owner', () => {

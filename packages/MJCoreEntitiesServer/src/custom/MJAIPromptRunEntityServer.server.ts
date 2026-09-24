@@ -42,10 +42,15 @@ export type NormalizeUsageResult =
  * is on the total rather than net-new alone. Continuous-media runs legitimately record zero tokens
  * — their work is measured in seconds or images — so units count as usage too.
  */
-export function hasRecordedUsage(recorded: RecordedRunUsage): boolean {
+export function HasRecordedUsage(recorded: RecordedRunUsage): boolean {
     const totalInputTokens = recorded.tokensPrompt + recorded.tokensCacheRead + recorded.tokensCacheWrite;
     const totalUnits = recorded.inputUnits + recorded.outputUnits;
     return totalInputTokens > 0 || recorded.tokensCompletion > 0 || totalUnits > 0;
+}
+
+/** @deprecated Use {@link HasRecordedUsage}. */
+export function hasRecordedUsage(recorded: RecordedRunUsage): boolean {
+    return HasRecordedUsage(recorded);
 }
 
 /**
@@ -56,7 +61,7 @@ export function hasRecordedUsage(recorded: RecordedRunUsage): boolean {
  * would be priced by dividing seconds by a million — a cost of approximately zero that looks like
  * a real answer. Refusing surfaces the misconfigured cost row instead of hiding it behind a number.
  */
-export function normalizeRecordedUsage(
+export function NormalizeRecordedUsage(
     recorded: RecordedRunUsage,
     driverUnitKind: ModelUsageUnitKind
 ): NormalizeUsageResult {
@@ -135,6 +140,14 @@ export function normalizeRecordedUsage(
     return { ok: true, usage: { input: recorded.inputUnits, output: recorded.outputUnits } };
 }
 
+/** @deprecated Use {@link NormalizeRecordedUsage}. */
+export function normalizeRecordedUsage(
+    recorded: RecordedRunUsage,
+    driverUnitKind: ModelUsageUnitKind
+): NormalizeUsageResult {
+    return NormalizeRecordedUsage(recorded, driverUnitKind);
+}
+
 /**
  * Server-side subclass for MJAIPromptRunEntity that automatically calculates costs
  * when a prompt run is completed or errors out. The cost calculation is based on
@@ -208,7 +221,7 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
         
         // Must have recorded usage of SOME kind — tokens for an LLM run, seconds or images for a
         // continuous-media one. Gating on tokens alone is what left media runs silently uncosted.
-        if (!hasRecordedUsage(this.RecordedUsage())) {
+        if (!HasRecordedUsage(this.RecordedUsage())) {
             return false;
         }
         
@@ -341,7 +354,7 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
         priceCalculator: BasePriceUnitType,
         recorded: RecordedRunUsage = this.RecordedUsage()
     ): NormalizedUsage | null {
-        const result = normalizeRecordedUsage(recorded, priceCalculator.UnitKind);
+        const result = NormalizeRecordedUsage(recorded, priceCalculator.UnitKind);
         if (result.ok === false) {
             LogError(`Cannot cost AIPromptRun ${this.ID}: ${result.reason}.`);
             return null;

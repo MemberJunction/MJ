@@ -13,7 +13,7 @@ import { Subject } from 'rxjs';
 import { NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
-import { CacheRate, CacheTokenTotals, cacheHitRate, hasCacheActivity, netCacheSavings } from '../../../services/cache-metrics';
+import { CacheRate, CacheTokenTotals, CacheHitRate, HasCacheActivity, NetCacheSavings } from '../../../services/cache-metrics';
 import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
 import { computeTotalCost, computeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
 import { AIUsageDailyRow, AIUsageByModelRow } from '../../../services/ai-usage-analytics.types';
@@ -620,7 +620,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     set TimeRange(value: string) {
         const prev = this._timeRange;
         this._timeRange = value;
-        if (prev !== value && this.initialized) this.LoadData();
+        if (prev !== value && this.initialized) this.loadData();
     }
     get TimeRange(): string { return this._timeRange; }
 
@@ -630,7 +630,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         const next = value ?? { Models: [], Agents: [], Prompts: [], Statuses: [] };
         const changed = !this.shallowFiltersEqual(this._filters, next);
         this._filters = next;
-        if (changed && this.initialized) this.LoadData();
+        if (changed && this.initialized) this.loadData();
     }
     get Filters(): GlobalFilterState { return this._filters; }
 
@@ -675,7 +675,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     ngOnInit(): void {
         this.initialized = true;
         this.instrumentation.Provider = this.ProviderToUse;
-        this.LoadData();
+        this.loadData();
     }
 
     ngOnDestroy(): void {
@@ -688,13 +688,13 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     public OnTimeRangeChange(range: string): void {
         this.TimeRange = range;
         this.TimeRangeChange.emit(range);
-        this.LoadData();
+        this.loadData();
     }
 
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.Filters = filters;
         this.FiltersChange.emit(filters);
-        this.LoadData();
+        this.loadData();
     }
 
     public FormatCurrency(value: number | null | undefined, decimals = 2): string {
@@ -715,7 +715,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     // ── Data Loading ──
 
-    private async LoadData(): Promise<void> {
+    private async loadData(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 
@@ -772,11 +772,11 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             const key = this.rateKey(r.ModelID, r.VendorID);
             const rate = this.cacheRates.get(key);
             if (!rate) continue;
-            const savings = netCacheSavings(
+            const savings = NetCacheSavings(
                 {
-                    uncachedInputTokens: r.TokensPrompt ?? 0,
-                    cacheReadTokens: r.TokensCacheRead ?? 0,
-                    cacheWriteTokens: r.TokensCacheWrite ?? 0
+                    UncachedInputTokens: r.TokensPrompt ?? 0,
+                    CacheReadTokens: r.TokensCacheRead ?? 0,
+                    CacheWriteTokens: r.TokensCacheWrite ?? 0
                 },
                 rate
             );
@@ -876,18 +876,18 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     /** Append the cache hit-rate and cache-savings KPIs (computed from the current-period daily rows). */
     private appendCacheKpis(): void {
-        const totals: CacheTokenTotals = { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+        const totals: CacheTokenTotals = { UncachedInputTokens: 0, CacheReadTokens: 0, CacheWriteTokens: 0 };
         for (const r of this.dailyRows) {
-            totals.uncachedInputTokens += r.TokensPrompt ?? 0;
-            totals.cacheReadTokens += r.TokensCacheRead ?? 0;
-            totals.cacheWriteTokens += r.TokensCacheWrite ?? 0;
+            totals.UncachedInputTokens += r.TokensPrompt ?? 0;
+            totals.CacheReadTokens += r.TokensCacheRead ?? 0;
+            totals.CacheWriteTokens += r.TokensCacheWrite ?? 0;
         }
         const savings = this.sumCacheSavings(this.dailyRows);
-        const activity = hasCacheActivity(totals);
+        const activity = HasCacheActivity(totals);
 
         this.CostKpis.push({
             Label: 'Cache Hit Rate',
-            Value: (cacheHitRate(totals) * 100).toFixed(1) + '%',
+            Value: (CacheHitRate(totals) * 100).toFixed(1) + '%',
             Delta: null,
             DeltaDirection: 'stable',
             Highlighted: false,
@@ -1007,7 +1007,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 OutputTokens: outputTokens,
                 CacheReadTokens: cacheReadTokens,
                 CacheWriteTokens: cacheWriteTokens,
-                CacheHitRate: cacheHitRate({ uncachedInputTokens: inputTokens, cacheReadTokens, cacheWriteTokens }),
+                CacheHitRate: CacheHitRate({ UncachedInputTokens: inputTokens, CacheReadTokens: cacheReadTokens, CacheWriteTokens: cacheWriteTokens }),
                 CacheSavings: this.sumCacheSavings(modelDailyRows),
                 InputCost: inputCost,
                 OutputCost: outputCost,

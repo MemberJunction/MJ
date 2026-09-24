@@ -38,6 +38,7 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
+import { ClassifyTurboFailures } from '../util/turboOutput.js';
 
 /**
  * Input context for the codegen phase.
@@ -332,6 +333,19 @@ export class CodeGenPhase {
     const { cmd, args } = await this.resolveCli(dir, pm, versionTag, ['codegen']);
     const result = await this.processRunner.Run(cmd, args, {
       Cwd: dir,
+      // `mj codegen` runs the AFTER commands, which are themselves builds, so the
+      // operator's FORCE_COLOR would otherwise reach that whole process tree. Pin it
+      // so the output we capture here — surfaced verbatim in InstallerError bodies and
+      // in the diagnostic report a user pastes into an issue — carries no escape codes.
+      // Misreading a colourised log pasted into GitHub is how #4562 was misdiagnosed twice.
+      // NO_COLOR does not override FORCE_COLOR; pinning it to '0' does.
+      //
+      // This is NOT needed to protect `afterFailed` below: that matches result.Stderr
+      // with /COMMAND:.*FAILED/i, and the line it looks for comes from a bare
+      // console.error template literal in runCommand.ts, which no colour library touches.
+      // Even colourised it would still match, because `.` excludes only line terminators
+      // and an ANSI CSI sequence contains none. Do not re-justify this pin on that basis.
+      Env: { FORCE_COLOR: '0' },
       TimeoutMs: 900_000, // 15 minutes
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
@@ -479,6 +493,13 @@ export class CodeGenPhase {
   /**
    * Packages that contain generated code managed by CodeGen. Build failures in
    * only these packages are tolerated — codegen will regenerate the stale code.
+   *
+   * `DependencyPhase` has a same-named constant with deliberately different
+   * contents — it additionally tolerates `mj_generatedentities`/
+   * `mj_generatedactions`. That build runs **before** CodeGen has written
+   * `src/generated/`, so those two are expected to fail there; this rebuild
+   * runs **after** CodeGen has written it, so they are expected to build here.
+   * Do not "fix" one list to match the other.
    */
   private static readonly CODEGEN_MANAGED_PACKAGES = [
     'ng-core-entity-forms',
@@ -508,6 +529,11 @@ export class CodeGenPhase {
     const rebuild = pm.RunScript('build');
     const result = await this.processRunner.Run(rebuild.Cmd, rebuild.Args, {
       Cwd: dir,
+      // turbo colourises when FORCE_COLOR is set, and ProcessRunner forwards the
+      // operator's whole environment. Colourised output is harder to read in
+      // diagnostic reports and was the trigger for #4562. NO_COLOR does not
+      // override FORCE_COLOR; pinning it to '0' does.
+      Env: { FORCE_COLOR: '0' },
       TimeoutMs: 1_800_000, // 30 minutes — same as DependencyPhase
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
@@ -546,15 +572,12 @@ export class CodeGenPhase {
     // Build failed — tolerate failures in codegen-managed packages only.
     // These contain stale generated code that codegen will regenerate.
     // Codegen itself only needs server-side packages (not Angular forms).
+    // turbo writes its summary to stdout, so both streams go to the classifier.
     const combinedOutput = result.Stdout + '\n' + result.Stderr;
-    const failedPackages = this.extractFailedTurboPackages(combinedOutput);
-    const onlyCodegenFailures = failedPackages.length > 0
-      && failedPackages.every(pkg =>
-        CodeGenPhase.CODEGEN_MANAGED_PACKAGES.some(pattern => pkg.includes(pattern))
-      );
+    const verdict = ClassifyTurboFailures(combinedOutput, CodeGenPhase.CODEGEN_MANAGED_PACKAGES);
 
-    if (onlyCodegenFailures) {
-      const failList = failedPackages.join(', ');
+    if (verdict.ToleratedOnly) {
+      const failList = verdict.FailedPackages.join(', ');
       emitter.Emit('warn', {
         Type: 'warn',
         Phase: 'codegen',
@@ -563,11 +586,15 @@ export class CodeGenPhase {
       return;
     }
 
-    const lastLines = this.lastNLines(result.Stderr || result.Stdout, 50);
+    const lastLines = this.lastNLines(combinedOutput, 50);
+    const attribution = verdict.Attributable
+      ? ` Failed packages: ${verdict.FailedPackages.join(', ')}.`
+      : ' The failure could not be attributed to any package — no "Failed:" summary was found in turbo\'s output.';
+
     throw new InstallerError(
       'codegen',
       'CODEGEN_FAILED',
-      `Package rebuild failed (exit code ${result.ExitCode}):\n${lastLines}`,
+      `Package rebuild failed (exit code ${result.ExitCode}).${attribution}\n${lastLines}`,
       `Run "${pm.Name} run build" manually at the repo root to see full error output, then re-run "mj codegen".`
     );
   }
@@ -810,6 +837,8 @@ export class CodeGenPhase {
       turbo.Cmd, turbo.Args,
       {
         Cwd: dir,
+        // FORCE_COLOR=0: see the note on the workspace rebuild.
+        Env: { FORCE_COLOR: '0' },
         TimeoutMs: 600_000, // 10 minutes
         OnStdout: (line: string) => {
           emitter.Emit('step:progress', {
@@ -866,6 +895,8 @@ export class CodeGenPhase {
       turbo.Cmd, turbo.Args,
       {
         Cwd: dir,
+        // FORCE_COLOR=0: see the note on the workspace rebuild.
+        Env: { FORCE_COLOR: '0' },
         TimeoutMs: 300_000,
         OnStdout: (line: string) => {
           emitter.Emit('step:progress', {
@@ -955,6 +986,8 @@ export class CodeGenPhase {
         pkgBuild.Cmd, pkgBuild.Args,
         {
           Cwd: pkgDir,
+          // FORCE_COLOR=0: see the note on the workspace rebuild.
+          Env: { FORCE_COLOR: '0' },
           TimeoutMs: 300_000, // 5 minutes per package
           OnStdout: (line: string) => {
             emitter.Emit('step:progress', {
@@ -1381,6 +1414,8 @@ export class CodeGenPhase {
       singleBuild.Cmd, singleBuild.Args,
       {
         Cwd: pkgDir,
+        // FORCE_COLOR=0: see the note on the workspace rebuild.
+        Env: { FORCE_COLOR: '0' },
         TimeoutMs: 300_000, // 5 minutes
         OnStdout: (line: string) => {
           emitter.Emit('step:progress', {
@@ -1477,21 +1512,6 @@ export class CodeGenPhase {
   // ---------------------------------------------------------------------------
   // Utilities
   // ---------------------------------------------------------------------------
-
-  /**
-   * Extract failed package names from turbo's output.
-   * Turbo outputs lines like: "Failed:    @memberjunction/ng-core-entity-forms#build"
-   * Note: the "Failed:" summary goes to stdout, not stderr.
-   */
-  private extractFailedTurboPackages(output: string): string[] {
-    const packages: string[] = [];
-    const failedPattern = /Failed:\s+(@[^#\s]+)#build/g;
-    let match: RegExpExecArray | null;
-    while ((match = failedPattern.exec(output)) !== null) {
-      packages.push(match[1]);
-    }
-    return [...new Set(packages)];
-  }
 
   /**
    * Extract the last N lines from a string (for truncated error output).

@@ -6,12 +6,17 @@ import type { ActionResultSimple, RunActionParams } from '@memberjunction/action
  * so the new actions stay small.
  */
 
-export function getStringParam(params: RunActionParams, name: string): string | undefined {
+export function GetStringParam(params: RunActionParams, name: string): string | undefined {
   const param = params.Params.find((p) => p.Name.toLowerCase() === name.toLowerCase() && p.Type === 'Input');
   return param?.Value != null ? String(param.Value) : undefined;
 }
 
-export function getBooleanParam(
+/** @deprecated Use {@link GetStringParam}. */
+export function getStringParam(params: RunActionParams, name: string): string | undefined {
+  return GetStringParam(params, name);
+}
+
+export function GetBooleanParam(
   params: RunActionParams,
   name: string,
   defaultValue: boolean,
@@ -24,8 +29,17 @@ export function getBooleanParam(
   return defaultValue;
 }
 
-export function getJsonParam<T>(params: RunActionParams, name: string): T | undefined {
-  const raw = getStringParam(params, name);
+/** @deprecated Use {@link GetBooleanParam}. */
+export function getBooleanParam(
+  params: RunActionParams,
+  name: string,
+  defaultValue: boolean,
+): boolean {
+  return GetBooleanParam(params, name, defaultValue);
+}
+
+export function GetJsonParam<T>(params: RunActionParams, name: string): T | undefined {
+  const raw = GetStringParam(params, name);
   if (raw == null || raw.trim().length === 0) return undefined;
   try {
     return JSON.parse(raw) as T;
@@ -34,14 +48,29 @@ export function getJsonParam<T>(params: RunActionParams, name: string): T | unde
   }
 }
 
-export function addOutputParam(params: RunActionParams, name: string, value: unknown): void {
+/** @deprecated Use {@link GetJsonParam}. */
+export function getJsonParam<T>(params: RunActionParams, name: string): T | undefined {
+  return GetJsonParam(params, name);
+}
+
+export function AddOutputParam(params: RunActionParams, name: string, value: unknown): void {
   params.Params.push({ Name: name, Type: 'Output', Value: value });
 }
 
-export function missingParam(name: string): ActionResultSimple {
+/** @deprecated Use {@link AddOutputParam}. */
+export function addOutputParam(params: RunActionParams, name: string, value: unknown): void {
+  return AddOutputParam(params, name, value);
+}
+
+export function MissingParam(name: string): ActionResultSimple {
   return {
     Success: false,
     ResultCode: 'MISSING_PARAMETER',
     Message: `'${name}' is required`,
   };
+}
+
+/** @deprecated Use {@link MissingParam}. */
+export function missingParam(name: string): ActionResultSimple {
+  return MissingParam(name);
 }

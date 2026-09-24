@@ -55,4 +55,66 @@ describe('RealtimeDelegationCardComponent — ✕ cancel affordance (explicit us
 
     expect(emitted).toEqual([]);
   });
+
+  it('does NOT emit for a WORKING narration card (narration cannot be cancelled)', () => {
+    const component = new RealtimeDelegationCardComponent();
+    component.Card = workingCard({ Kind: 'narration', CallID: 'call-thought' });
+    const emitted: string[] = [];
+    component.CancelRequested.subscribe((id: string) => emitted.push(id));
+
+    component.CancelWork(fakeClick());
+
+    expect(emitted).toEqual([]);
+  });
+
+  describe('RealtimeDelegationCardComponent properties across kinds (agent, action, narration)', () => {
+    it('suppresses Artifacts for action and narration, permits for agent when done', () => {
+      const component = new RealtimeDelegationCardComponent();
+      const mockArtifacts = [{ ArtifactID: 'a1', ArtifactVersionID: 'v1', Name: 'doc' }];
+
+      component.Card = workingCard({ Kind: 'narration', Done: true, Artifacts: mockArtifacts });
+      expect(component.Artifacts).toEqual([]);
+
+      component.Card = workingCard({ Kind: 'action', Done: true, Artifacts: mockArtifacts });
+      expect(component.Artifacts).toEqual([]);
+
+      component.Card = workingCard({ Kind: 'agent', Done: true, Artifacts: mockArtifacts });
+      expect(component.Artifacts).toEqual(mockArtifacts);
+    });
+
+    it('suppresses ShowOpenRun for action and narration, permits for agent with RunID in DevMode', () => {
+      const component = new RealtimeDelegationCardComponent();
+      component.DevMode = true;
+
+      component.Card = workingCard({ Kind: 'narration', RunID: 'run-1' });
+      expect(component.ShowOpenRun).toBe(false);
+
+      component.Card = workingCard({ Kind: 'action', RunID: 'run-1' });
+      expect(component.ShowOpenRun).toBe(false);
+
+      component.Card = workingCard({ Kind: 'agent', RunID: 'run-1' });
+      expect(component.ShowOpenRun).toBe(true);
+    });
+
+    it('formats ResultText and ProvenanceTitle for narration cards', () => {
+      const component = new RealtimeDelegationCardComponent();
+
+      component.Card = workingCard({
+        Kind: 'narration',
+        AgentName: 'Sage',
+        Result: 'Reasoned about product metrics.',
+      });
+      expect(component.ResultText).toBe('Reasoned about product metrics.');
+      expect(component.ProvenanceTitle).toBe('Thought / narration authored by Sage.');
+
+      // Fallback text when Result and LatestMessage are empty
+      component.Card = workingCard({
+        Kind: 'narration',
+        AgentName: 'Sage',
+        LatestMessage: '',
+        Result: null,
+      });
+      expect(component.ResultText).toBe('Sage shared a thought.');
+    });
+  });
 });

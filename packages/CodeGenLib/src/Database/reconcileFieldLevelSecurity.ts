@@ -21,7 +21,7 @@ import { logError, logStatus } from '../Misc/status_logging';
  * also visible rather than silent: a missing row denies, so the symptom is "I cannot see this new
  * column", not "everyone can see it".
  */
-export async function reconcileFieldLevelSecurity(provider: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
+export async function ReconcileFieldLevelSecurity(provider: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
     const enabled = (provider?.Entities ?? []).filter((e: EntityInfo) => e.EnableFieldLevelSecurity);
     if (enabled.length === 0) {
         return true; // nothing opted in — the overwhelmingly common case
@@ -49,4 +49,9 @@ export async function reconcileFieldLevelSecurity(provider: IMetadataProvider, c
         );
     }
     return failures === 0;
+}
+
+/** @deprecated Use {@link ReconcileFieldLevelSecurity}. */
+export async function reconcileFieldLevelSecurity(provider: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
+    return ReconcileFieldLevelSecurity(provider, currentUser);
 }

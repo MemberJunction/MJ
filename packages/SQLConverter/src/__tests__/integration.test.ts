@@ -19,16 +19,16 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Client } from 'pg';
 import { SQLFileSplitter } from '../SQLFileSplitter.js';
-import { classifyBatch } from '../rules/StatementClassifier.js';
-import { getTSQLToPostgresRules } from '../rules/TSQLToPostgresRules.js';
+import { ClassifyBatch } from '../rules/StatementClassifier.js';
+import { GetTSQLToPostgresRules } from '../rules/TSQLToPostgresRules.js';
 import {
-  createConversionContext,
+  CreateConversionContext,
   type IConversionRule,
   type ConversionContext,
   type StatementType,
 } from '../rules/types.js';
-import { subSplitCompoundBatch } from '../rules/SubSplitter.js';
-import { postProcess } from '../rules/PostProcessor.js';
+import { SubSplitCompoundBatch } from '../rules/SubSplitter.js';
+import { PostProcess } from '../rules/PostProcessor.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -163,7 +163,7 @@ function convertBatch(
     }
   }
 
-  sql = postProcess(sql);
+  sql = PostProcess(sql);
   return sql.trim() || null;
 }
 
@@ -310,16 +310,16 @@ describe('Integration: small-scale conversion', () => {
 
     const allBatches: string[] = [];
     for (const batch of goBatches) {
-      allBatches.push(...subSplitCompoundBatch(batch));
+      allBatches.push(...SubSplitCompoundBatch(batch));
     }
     classifiedBatches = allBatches.map(b => ({
       Batch: b,
-      Type: classifyBatch(b),
+      Type: ClassifyBatch(b),
     }));
 
     // 2. Set up rules and context
-    rules = getTSQLToPostgresRules();
-    context = createConversionContext('tsql', 'postgres');
+    rules = GetTSQLToPostgresRules();
+    context = CreateConversionContext('tsql', 'postgres');
 
     // 3. Connect to PostgreSQL
     pgClient = new Client(PG_CONFIG);

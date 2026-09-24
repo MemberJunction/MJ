@@ -241,7 +241,7 @@ export class EntityOrganicKeyInfo extends BaseInfo {
     // virtual fields from the database view
     Entity: string = null
 
-    private _RelatedEntities: EntityOrganicKeyRelatedEntityInfo[] = []
+    private _RelatedEntities: EntityOrganicKeyRelatedEntityInfo[] = []  // case-violation-ok-legacy-back-compat: a class in the same hierarchy already declares the camelCase name — TypeScript rejects two declarations of one private property (TS2415)
 
     /**
      * Gets the related entities configured for this organic key.
@@ -1018,6 +1018,25 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
+
+    /**
+    * * Field Name: RelatedEntityFilter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional SQL WHERE fragment applied to every lookup on this foreign key
+    *   (e.g. `Status = 'Active'`), AND-ed with whatever the user types. Scopes a picker from
+    *   metadata rather than from every form template that renders the field. Authored, not
+    *   derived from the catalog.
+    */
+    RelatedEntityFilter: string = null
+
+    /**
+    * * Field Name: RelatedEntityOrderBy
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional ORDER BY fragment for the empty-query browse list on this foreign
+    *   key. Defaults to the related entity's name field.
+    */
+    RelatedEntityOrderBy: string = null
+
     EntityIDFieldName: string = null
     __mj_CreatedAt: Date = null
     __mj_UpdatedAt: Date = null
@@ -1242,15 +1261,42 @@ export class EntityFieldInfo extends BaseInfo {
 
     // These are not in the database view and are added in code
     IsFloat: boolean
-    _RelatedEntityTableAlias: string
-    _RelatedEntityNameFieldIsVirtual: boolean
+    RelatedEntityTableAlias: string
+
+    /** @deprecated Use {@link RelatedEntityTableAlias}. */
+    get _RelatedEntityTableAlias(): string {
+        return this.RelatedEntityTableAlias;
+    }
+    /** @deprecated Use {@link RelatedEntityTableAlias}. */
+    set _RelatedEntityTableAlias(value: string) {
+        this.RelatedEntityTableAlias = value;
+    }
+    RelatedEntityNameFieldIsVirtual: boolean
+
+    /** @deprecated Use {@link RelatedEntityNameFieldIsVirtual}. */
+    get _RelatedEntityNameFieldIsVirtual(): boolean {
+        return this.RelatedEntityNameFieldIsVirtual;
+    }
+    /** @deprecated Use {@link RelatedEntityNameFieldIsVirtual}. */
+    set _RelatedEntityNameFieldIsVirtual(value: boolean) {
+        this.RelatedEntityNameFieldIsVirtual = value;
+    }
     /**
      * Mirror of `IsComputed` on the related entity's Name Field. Tracked alongside
      * `_RelatedEntityNameFieldIsVirtual` so that base-view JOIN-target selection can
      * prefer the related entity's base table when the Name Field is a SQL computed/
      * generated column (physically present in the base table even though IsVirtual=1).
      */
-    _RelatedEntityNameFieldIsComputed: boolean
+    RelatedEntityNameFieldIsComputed: boolean
+
+    /** @deprecated Use {@link RelatedEntityNameFieldIsComputed}. */
+    get _RelatedEntityNameFieldIsComputed(): boolean {
+        return this.RelatedEntityNameFieldIsComputed;
+    }
+    /** @deprecated Use {@link RelatedEntityNameFieldIsComputed}. */
+    set _RelatedEntityNameFieldIsComputed(value: boolean) {
+        this.RelatedEntityNameFieldIsComputed = value;
+    }
     private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
     private _entityFieldValuesConstructed = false;
     /**
@@ -1271,17 +1317,36 @@ export class EntityFieldInfo extends BaseInfo {
     private _loggedUnsupportedValueListType: boolean = false;
     /** Memoized yyyy-mm-dd keys for a `date` field's value list; null when it cannot be compared. */
     private _valueListDateKeys: Set<string> | null | undefined = undefined;
-    _EntityFieldValues: EntityFieldValueInfo[];
-    _RelatedEntityNameFieldMap: string
+    _EntityFieldValues: EntityFieldValueInfo[];  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    _RelatedEntityNameFieldMap: string  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     /**
      * Collection of all joined field mappings from the related entity.
      */
-    _RelatedEntityJoinFieldMappings: Array<{
+    RelatedEntityJoinFieldMappings: Array<{
         sourceField: string;
         alias: string;
         isVirtual: boolean;
         isComputed: boolean;
     }>;
+
+    /** @deprecated Use {@link RelatedEntityJoinFieldMappings}. */
+    get _RelatedEntityJoinFieldMappings(): Array<{
+        sourceField: string;
+        alias: string;
+        isVirtual: boolean;
+        isComputed: boolean;
+    }> {
+        return this.RelatedEntityJoinFieldMappings;
+    }
+    /** @deprecated Use {@link RelatedEntityJoinFieldMappings}. */
+    set _RelatedEntityJoinFieldMappings(value: Array<{
+        sourceField: string;
+        alias: string;
+        isVirtual: boolean;
+        isComputed: boolean;
+    }>) {
+        this.RelatedEntityJoinFieldMappings = value;
+    }
 
     /**
      * Cached parsed RelatedEntityJoinFieldsConfig to avoid repeated JSON.parse calls.
@@ -1337,14 +1402,14 @@ export class EntityFieldInfo extends BaseInfo {
         return this._EntityFieldValues;
     }
 
-    private _FieldPermissions: EntityFieldPermissionInfo[] = [];
+    private _fieldPermissions: EntityFieldPermissionInfo[] = [];
 
     /**
      * Field-level (column-level) security records configured for THIS field, across all roles.
      * Empty for the overwhelming majority of fields — see {@link HasFieldPermissions}.
      */
     public get FieldPermissions(): EntityFieldPermissionInfo[] {
-        return this._FieldPermissions;
+        return this._fieldPermissions;
     }
 
     /**
@@ -1356,7 +1421,7 @@ export class EntityFieldInfo extends BaseInfo {
      * enabled entity a field with no records is denied, not open.
      */
     public get HasFieldPermissions(): boolean {
-        return this._FieldPermissions.length > 0;
+        return this._fieldPermissions.length > 0;
     }
 
     /**
@@ -1378,7 +1443,7 @@ export class EntityFieldInfo extends BaseInfo {
      *
      * Stored lowercased; compare with a trimmed, lowercased entity name.
      */
-    private static readonly UnrestrictableEntityNames: ReadonlySet<string> = new Set<string>([
+    private static readonly unrestrictableEntityNames: ReadonlySet<string> = new Set<string>([
         'mj: entities',
         'mj: entity fields',
         'mj: entity permissions',
@@ -1393,7 +1458,7 @@ export class EntityFieldInfo extends BaseInfo {
      * See {@link EntityFieldInfo.UnrestrictableEntityNames} for the rationale.
      */
     public get IsOnUnrestrictableEntity(): boolean {
-        return EntityFieldInfo.UnrestrictableEntityNames.has((this.Entity ?? '').trim().toLowerCase());
+        return EntityFieldInfo.unrestrictableEntityNames.has((this.Entity ?? '').trim().toLowerCase());
     }
 
     /**
@@ -1485,7 +1550,7 @@ export class EntityFieldInfo extends BaseInfo {
      * arithmetic.
      */
     private aggregateUserFieldPermissions(user: UserInfo): EntityFieldUserPermissionInfo {
-        return EntityFieldInfo.AggregateFieldRulesForUser(this._FieldPermissions, user);
+        return EntityFieldInfo.AggregateFieldRulesForUser(this._fieldPermissions, user);
     }
 
     /**
@@ -1760,7 +1825,7 @@ export class EntityFieldInfo extends BaseInfo {
             return true; // an Invalid Date is not an out-of-list value; leave it to the date check
         }
         return this._valueListDateKeys.has(value.toISOString().slice(0, 10)) ||
-               this._valueListDateKeys.has(EntityFieldInfo.LocalCalendarDate(value));
+               this._valueListDateKeys.has(EntityFieldInfo.localCalendarDate(value));
     }
 
     /**
@@ -1785,7 +1850,7 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /** The Date's LOCAL calendar date as yyyy-mm-dd (its UTC one is `toISOString().slice(0, 10)`). */
-    private static LocalCalendarDate(value: Date): string {
+    private static localCalendarDate(value: Date): string {
         const pad = (n: number): string => String(n).padStart(2, '0');
         return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
     }
@@ -2222,7 +2287,7 @@ export class EntityFieldInfo extends BaseInfo {
             // would cost more than the construction it avoids.
             const efp = initData.EntityFieldPermissions || initData._FieldPermissions || initData.FieldPermissions;
             if (efp && efp.length > 0) {
-                this._FieldPermissions = efp.map((p: Record<string, unknown>) => new EntityFieldPermissionInfo(p));
+                this._fieldPermissions = efp.map((p: Record<string, unknown>) => new EntityFieldPermissionInfo(p));
             }
         }
     }
@@ -2714,27 +2779,81 @@ export class EntityInfo extends BaseInfo {
     /**
      * Name of the stored procedure for creating records
      */
-    spCreate: string = null
+    SpCreate: string = null
+
+    /** @deprecated Use {@link SpCreate}. */
+    get spCreate(): string {
+        return this.SpCreate;
+    }
+    /** @deprecated Use {@link SpCreate}. */
+    set spCreate(value: string) {
+        this.SpCreate = value;
+    }
     /**
      * Name of the stored procedure for updating records
      */
-    spUpdate: string = null
+    SpUpdate: string = null
+
+    /** @deprecated Use {@link SpUpdate}. */
+    get spUpdate(): string {
+        return this.SpUpdate;
+    }
+    /** @deprecated Use {@link SpUpdate}. */
+    set spUpdate(value: string) {
+        this.SpUpdate = value;
+    }
     /**
      * Name of the stored procedure for deleting records
      */
-    spDelete: string = null
+    SpDelete: string = null
+
+    /** @deprecated Use {@link SpDelete}. */
+    get spDelete(): string {
+        return this.SpDelete;
+    }
+    /** @deprecated Use {@link SpDelete}. */
+    set spDelete(value: string) {
+        this.SpDelete = value;
+    }
     /**
      * Whether the create stored procedure is generated by CodeGen
      */
-    spCreateGenerated: boolean = null
+    SpCreateGenerated: boolean = null
+
+    /** @deprecated Use {@link SpCreateGenerated}. */
+    get spCreateGenerated(): boolean {
+        return this.SpCreateGenerated;
+    }
+    /** @deprecated Use {@link SpCreateGenerated}. */
+    set spCreateGenerated(value: boolean) {
+        this.SpCreateGenerated = value;
+    }
     /**
      * Whether the update stored procedure is generated by CodeGen
      */
-    spUpdateGenerated: boolean = null
+    SpUpdateGenerated: boolean = null
+
+    /** @deprecated Use {@link SpUpdateGenerated}. */
+    get spUpdateGenerated(): boolean {
+        return this.SpUpdateGenerated;
+    }
+    /** @deprecated Use {@link SpUpdateGenerated}. */
+    set spUpdateGenerated(value: boolean) {
+        this.SpUpdateGenerated = value;
+    }
     /**
      * Whether the delete stored procedure is generated by CodeGen
      */
-    spDeleteGenerated: boolean = null
+    SpDeleteGenerated: boolean = null
+
+    /** @deprecated Use {@link SpDeleteGenerated}. */
+    get spDeleteGenerated(): boolean {
+        return this.SpDeleteGenerated;
+    }
+    /** @deprecated Use {@link SpDeleteGenerated}. */
+    set spDeleteGenerated(value: boolean) {
+        this.SpDeleteGenerated = value;
+    }
     /**
      * Whether to automatically delete related records when a parent is deleted
      */
@@ -2750,7 +2869,16 @@ export class EntityInfo extends BaseInfo {
     /**
      * Name of the stored procedure used for matching/duplicate detection
      */
-    spMatch: string = null
+    SpMatch: string = null
+
+    /** @deprecated Use {@link SpMatch}. */
+    get spMatch(): string {
+        return this.SpMatch;
+    }
+    /** @deprecated Use {@link SpMatch}. */
+    set spMatch(value: string) {
+        this.SpMatch = value;
+    }
     /**
      * Default display type for relationships: Search (type-ahead) or Dropdown
      */
@@ -2925,17 +3053,62 @@ export class EntityInfo extends BaseInfo {
     ParentBaseView: string = null 
 
     // These are not in the database view and are added in code
-    private _Fields: EntityFieldInfo[]
-    private _RelatedEntities: EntityRelationshipInfo[]
-    private _Permissions: EntityPermissionInfo[]
-    private _Settings: EntitySettingInfo[]
-    private _FieldCategories: Record<string, FieldCategoryInfo> | null = null
-    private _OrganicKeys: EntityOrganicKeyInfo[] = []
-    _hasIdField: boolean = false
-    _virtualCount: number = 0
-    _manyToManyCount: number = 0
-    _oneToManyCount: number = 0
-    _floatCount: number = 0
+    private _fields: EntityFieldInfo[]
+    private _relatedEntities: EntityRelationshipInfo[]
+    private _permissions: EntityPermissionInfo[]
+    private _settings: EntitySettingInfo[]
+    private _fieldCategories: Record<string, FieldCategoryInfo> | null = null
+    private _organicKeys: EntityOrganicKeyInfo[] = []
+    HasIdField: boolean = false
+
+    /** @deprecated Use {@link HasIdField}. */
+    get _hasIdField(): boolean {
+        return this.HasIdField;
+    }
+    /** @deprecated Use {@link HasIdField}. */
+    set _hasIdField(value: boolean) {
+        this.HasIdField = value;
+    }
+    VirtualCount: number = 0
+
+    /** @deprecated Use {@link VirtualCount}. */
+    get _virtualCount(): number {
+        return this.VirtualCount;
+    }
+    /** @deprecated Use {@link VirtualCount}. */
+    set _virtualCount(value: number) {
+        this.VirtualCount = value;
+    }
+    ManyToManyCount: number = 0
+
+    /** @deprecated Use {@link ManyToManyCount}. */
+    get _manyToManyCount(): number {
+        return this.ManyToManyCount;
+    }
+    /** @deprecated Use {@link ManyToManyCount}. */
+    set _manyToManyCount(value: number) {
+        this.ManyToManyCount = value;
+    }
+    OneToManyCount: number = 0
+
+    /** @deprecated Use {@link OneToManyCount}. */
+    get _oneToManyCount(): number {
+        return this.OneToManyCount;
+    }
+    /** @deprecated Use {@link OneToManyCount}. */
+    set _oneToManyCount(value: number) {
+        this.OneToManyCount = value;
+    }
+    FloatCount: number = 0
+
+    /** @deprecated Use {@link FloatCount}. */
+    get _floatCount(): number {
+        return this.FloatCount;
+    }
+    /** @deprecated Use {@link FloatCount}. */
+    set _floatCount(value: number) {
+        this.FloatCount = value;
+    }
 
     // --- Lazy caches for immutable field-derived collections ---------------------------------
     // `_Fields` is populated once in the constructor and never reassigned, so these caches never
@@ -3082,7 +3255,7 @@ export class EntityInfo extends BaseInfo {
         if (!this.EnableFieldLevelSecurity) {
             return denied;
         }
-        for (const field of this._Fields) {
+        for (const field of this._fields) {
             if (isDenied(field.GetUserFieldPermissions(user, true))) {
                 denied.add(field.Name.trim().toLowerCase());
                 denied.add(field.CodeName.trim().toLowerCase());
@@ -3106,7 +3279,7 @@ export class EntityInfo extends BaseInfo {
         if (name == null) return undefined;
         if (this._fieldByNameMap === null) {
             const map = new Map<string, EntityFieldInfo>();
-            for (const f of this._Fields) {
+            for (const f of this._fields) {
                 if (f.Name != null) map.set(f.Name.trim().toLowerCase(), f);
             }
             this._fieldByNameMap = map;
@@ -3193,10 +3366,11 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityFieldInfo[]} Array of all entity fields
      */
     get Fields(): EntityFieldInfo[] {
-        return this._Fields;
+        return this._fields;
     }
 
     private _hasInactiveFields: boolean | undefined = undefined;
+    private _hasSearchFields: boolean | undefined = undefined;
     /**
      * Returns true if ANY field on this entity is `Deprecated` or `Disabled` (i.e. not `Active`).
      *
@@ -3210,30 +3384,57 @@ export class EntityInfo extends BaseInfo {
      */
     get HasInactiveFields(): boolean {
         if (this._hasInactiveFields === undefined) {
-            this._hasInactiveFields = this._Fields.some(f => f.Status === 'Deprecated' || f.Status === 'Disabled');
+            this._hasInactiveFields = this._fields.some(f => f.Status === 'Deprecated' || f.Status === 'Disabled');
         }
         return this._hasInactiveFields;
+    }
+
+    /**
+     * Returns true if ANY field on this entity participates in `UserSearchString` matching
+     * (`EntityField.IncludeInUserSearchAPI`).
+     *
+     * Computed once on first access and cached for the lifetime of this EntityInfo. Like
+     * {@link HasInactiveFields} this is a property of the entity DEFINITION, shared across every
+     * record instance, so an entity is scanned at most once however many searches run against it.
+     *
+     * It answers "does this entity have a search surface at all", which is NOT the same question as
+     * "did this search produce a predicate". A field can be excluded from a particular search at
+     * runtime — denied by field-level security, or not a sensible text-search target — on an entity
+     * that does declare searchable fields. Providers use the distinction to tell "the caller asked
+     * to filter by something this entity does not have" (ignore the term) from "every candidate
+     * field dropped out" (match nothing). See MJ#4581.
+     *
+     * Caching assumes `EntityField.IncludeInUserSearchAPI` is not mutated in place after this
+     * EntityInfo is built — the same assumption {@link HasInactiveFields} makes about `Status`.
+     * A metadata refresh constructs new EntityInfo objects rather than editing existing ones, and
+     * the cache is reset wherever `_Fields` is (re)assigned, so both paths stay correct.
+     */
+    get HasSearchFields(): boolean {
+        if (this._hasSearchFields === undefined) {
+            this._hasSearchFields = this._fields.some(f => f.IncludeInUserSearchAPI);
+        }
+        return this._hasSearchFields;
     }
     /**
      * Gets all relationships where other entities reference this entity.
      * @returns {EntityRelationshipInfo[]} Array of entity relationships
      */
     get RelatedEntities(): EntityRelationshipInfo[] {
-        return this._RelatedEntities;
+        return this._relatedEntities;
     }
     /**
      * Gets the security permissions for this entity by role.
      * @returns {EntityPermissionInfo[]} Array of permission settings
      */
     get Permissions(): EntityPermissionInfo[] {
-        return this._Permissions;
+        return this._permissions;
     }
     /**
      * Gets custom configuration settings for this entity.
      * @returns {EntitySettingInfo[]} Array of entity-specific settings
      */
     get Settings(): EntitySettingInfo[] {
-        return this._Settings;
+        return this._settings;
     }
 
     /**
@@ -3242,7 +3443,7 @@ export class EntityInfo extends BaseInfo {
      * during EntityInfo construction. Returns null if no category info is configured.
      */
     get FieldCategories(): Record<string, FieldCategoryInfo> | null {
-        return this._FieldCategories;
+        return this._fieldCategories;
     }
 
     /**
@@ -3252,7 +3453,7 @@ export class EntityInfo extends BaseInfo {
      * @returns {EntityOrganicKeyInfo[]} Array of organic key definitions with their related entities
      */
     get OrganicKeys(): EntityOrganicKeyInfo[] {
-        return this._OrganicKeys;
+        return this._organicKeys;
     }
 
     private static __createdAtFieldName = '__mj_CreatedAt';
@@ -3969,9 +4170,9 @@ export class EntityInfo extends BaseInfo {
         const matchFields = organicKey.MatchFieldNamesArray;
 
         if (organicKeyRelatedEntity.IsTransitiveMatch) {
-            params.ExtraFilter = EntityInfo.BuildTransitiveOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
+            params.ExtraFilter = EntityInfo.buildTransitiveOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
         } else {
-            params.ExtraFilter = EntityInfo.BuildDirectOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
+            params.ExtraFilter = EntityInfo.buildDirectOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
         }
 
         if (filter && filter.length > 0) {
@@ -3996,7 +4197,7 @@ export class EntityInfo extends BaseInfo {
      * matching organic key (same Name) to find its expression. Falls back to the hub's
      * expression on both sides if the spoke doesn't carry its own.
      */
-    private static BuildDirectOrganicKeyFilter(
+    private static buildDirectOrganicKeyFilter(
         record: BaseEntity,
         relatedEntity: EntityOrganicKeyRelatedEntityInfo,
         organicKey: EntityOrganicKeyInfo,
@@ -4007,7 +4208,7 @@ export class EntityInfo extends BaseInfo {
 
         // Resolve the spoke entity's own organic key (matching by Name) to pull its
         // per-column normalization. Falls back to the hub's expression if not found.
-        const spokeOrganicKey = EntityInfo.ResolveSpokeOrganicKey(relatedEntity, organicKey);
+        const spokeOrganicKey = EntityInfo.resolveSpokeOrganicKey(relatedEntity, organicKey);
 
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
@@ -4017,7 +4218,7 @@ export class EntityInfo extends BaseInfo {
             }
             const relatedField = relatedFields[i] || matchFields[i];
             const escapedValue = String(value).replace(/'/g, "''");
-            conditions.push(EntityInfo.WrapBothSidesWithNormalization(
+            conditions.push(EntityInfo.wrapBothSidesWithNormalization(
                 `[${relatedField}]`, spokeOrganicKey ?? organicKey,
                 escapedValue, organicKey
             ));
@@ -4031,7 +4232,7 @@ export class EntityInfo extends BaseInfo {
      * the spoke's own normalization function on the spoke side. Returns undefined if the
      * spoke entity doesn't have a parallel organic key — caller falls back to the hub's.
      */
-    private static ResolveSpokeOrganicKey(
+    private static resolveSpokeOrganicKey(
         relatedEntity: EntityOrganicKeyRelatedEntityInfo,
         hubOrganicKey: EntityOrganicKeyInfo,
         provider?: IMetadataProvider
@@ -4047,7 +4248,7 @@ export class EntityInfo extends BaseInfo {
     /**
      * Builds an ExtraFilter for transitive organic key matching (via SQL view/table subquery).
      */
-    private static BuildTransitiveOrganicKeyFilter(
+    private static buildTransitiveOrganicKeyFilter(
         record: BaseEntity,
         relatedEntity: EntityOrganicKeyRelatedEntityInfo,
         organicKey: EntityOrganicKeyInfo,
@@ -4066,7 +4267,7 @@ export class EntityInfo extends BaseInfo {
             }
             const transitiveField = transitiveMatchFields[i] || matchFields[i];
             const escapedValue = String(value).replace(/'/g, "''");
-            conditions.push(EntityInfo.WrapWithNormalization(
+            conditions.push(EntityInfo.wrapWithNormalization(
                 `[${transitiveField}]`, organicKey, escapedValue
             ));
         }
@@ -4081,7 +4282,7 @@ export class EntityInfo extends BaseInfo {
      * based on the organic key's NormalizationStrategy.
      * Returns a SQL comparison expression like: LOWER(LTRIM(RTRIM([Field]))) = LOWER(LTRIM(RTRIM('value')))
      */
-    private static WrapWithNormalization(
+    private static wrapWithNormalization(
         fieldExpression: string,
         organicKey: EntityOrganicKeyInfo,
         escapedValue: string
@@ -4118,19 +4319,19 @@ export class EntityInfo extends BaseInfo {
      * when the expressions agree; different transforms applied independently when they
      * don't (the per-column normalization case).
      */
-    private static WrapBothSidesWithNormalization(
+    private static wrapBothSidesWithNormalization(
         fieldExpression: string,
         fieldOrganicKey: EntityOrganicKeyInfo,
         escapedValue: string,
         valueOrganicKey: EntityOrganicKeyInfo
     ): string {
-        const leftSide = EntityInfo.NormalizeFieldExpression(fieldExpression, fieldOrganicKey);
-        const rightSide = EntityInfo.NormalizeLiteralExpression(escapedValue, valueOrganicKey);
+        const leftSide = EntityInfo.normalizeFieldExpression(fieldExpression, fieldOrganicKey);
+        const rightSide = EntityInfo.normalizeLiteralExpression(escapedValue, valueOrganicKey);
         return `${leftSide} = ${rightSide}`;
     }
 
     /** Apply an organic key's normalization to a SQL field expression (left side of compare). */
-    private static NormalizeFieldExpression(
+    private static normalizeFieldExpression(
         fieldExpression: string,
         organicKey: EntityOrganicKeyInfo
     ): string {
@@ -4149,7 +4350,7 @@ export class EntityInfo extends BaseInfo {
     }
 
     /** Apply an organic key's normalization to a quoted literal value (right side of compare). */
-    private static NormalizeLiteralExpression(
+    private static normalizeLiteralExpression(
         escapedValue: string,
         organicKey: EntityOrganicKeyInfo
     ): string {
@@ -4175,9 +4376,11 @@ export class EntityInfo extends BaseInfo {
 
             // do some special handling to create class instances instead of just data objects
             // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
-            this._Fields = [];
+            this._fields = [];
 
             // Reset every lazy field-derived memo cache whenever _Fields is (re)assigned.
+            // `entityInfo.cacheReset.test.ts` mirrors this list in `runProductionCacheReset`;
+            // a cache added here needs adding there too, or its reset goes unexercised.
             // These caches (FieldByName map, PrimaryKeys, UniqueKeys, ForeignKeys, EncryptedFields,
             // DatetimeFields, NameField, FirstPrimaryKey) are populated lazily off this.Fields and
             // were previously relying on an implicit "_Fields is write-once after construction"
@@ -4194,34 +4397,38 @@ export class EntityInfo extends BaseInfo {
             this._encryptedFieldsCache = null;
             this._datetimeFieldsCache = null;
             this._nameFieldCache = undefined;
+            this._hasSearchFields = undefined;
+            // Added late: HasInactiveFields (Jun 18) post-dates this block (Jun 15) and was never
+            // listed here, so it carried exactly the staleness the block exists to prevent.
+            this._hasInactiveFields = undefined;
             const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
-                    this._Fields.push(new EntityFieldInfo(ef[j]));
+                    this._fields.push(new EntityFieldInfo(ef[j]));
                 }
             }
 
             // copy the Entity Permissions
-            this._Permissions = [];
+            this._permissions = [];
             const ep = initData.EntityPermissions || initData._Permissions || initData.Permissions;
             if (ep) {
                 for (let j = 0; j < ep.length; j++) {
-                    this._Permissions.push(new EntityPermissionInfo(ep[j]));
+                    this._permissions.push(new EntityPermissionInfo(ep[j]));
                 }
             }
 
             // copy the Entity settings
-            this._Settings = [];
+            this._settings = [];
             const es = initData.EntitySettings || initData._Settings || initData.Settings;
             if (es) {
-                es.map((s) => this._Settings.push(new EntitySettingInfo(s)));
+                es.map((s) => this._settings.push(new EntitySettingInfo(s)));
             }
 
             // auto-populate FieldCategories from the FieldCategoryInfo setting
-            this._FieldCategories = this.parseFieldCategoriesFromSettings();
+            this._fieldCategories = this.parseFieldCategoriesFromSettings();
 
             // copy the Related Entities (accept EntityRelationships, _RelatedEntities, or RelatedEntities as input names)
-            this._RelatedEntities = [];
+            this._relatedEntities = [];
             const er = initData.EntityRelationships || initData._RelatedEntities || initData.RelatedEntities;
             if (er) {
                 // check to see if ANY of the records in the er array have a non-null or non-zero sequence value. The reason is 
@@ -4245,16 +4452,16 @@ export class EntityInfo extends BaseInfo {
 
                 // now that we have prepared the er array by sorting it, if needed, let's load up the related entities
                 for (let j = 0; j < er.length; j++) {
-                    this._RelatedEntities.push(new EntityRelationshipInfo(er[j]));
+                    this._relatedEntities.push(new EntityRelationshipInfo(er[j]));
                 }
             }
 
             // copy the Organic Keys (sorted by sequence inside EntityOrganicKeyInfo constructor)
-            this._OrganicKeys = [];
+            this._organicKeys = [];
             const ok = initData.EntityOrganicKeys || initData._OrganicKeys || initData.OrganicKeys;
             if (ok && Array.isArray(ok)) {
                 for (const item of ok) {
-                    this._OrganicKeys.push(new EntityOrganicKeyInfo(item));
+                    this._organicKeys.push(new EntityOrganicKeyInfo(item));
                 }
             }
 
@@ -4278,9 +4485,9 @@ export class EntityInfo extends BaseInfo {
                 virtualCount += f.IsVirtual ? 1 : 0;
                 floatCount += f.IsFloat ? 1 : 0;
             }
-            this._hasIdField = hasIdField
-            this._floatCount = floatCount;
-            this._virtualCount = virtualCount;
+            this.HasIdField = hasIdField
+            this.FloatCount = floatCount;
+            this.VirtualCount = virtualCount;
     
             // now see if there are any relationships and count the one to many and many to many
             for (let j:number = 0; j < this.RelatedEntities.length; ++j) {
@@ -4292,8 +4499,8 @@ export class EntityInfo extends BaseInfo {
                     manyToManyCount++;
             }
                 
-            this._manyToManyCount = manyToManyCount;
-            this._oneToManyCount = oneToManyCount;
+            this.ManyToManyCount = manyToManyCount;
+            this.OneToManyCount = oneToManyCount;
         }
         catch (e) {
             LogError(e);
@@ -4305,12 +4512,12 @@ export class EntityInfo extends BaseInfo {
      * Called once during construction so the result is cached on _FieldCategories.
      */
     private parseFieldCategoriesFromSettings(): Record<string, FieldCategoryInfo> | null {
-        if (!this._Settings || this._Settings.length === 0) {
+        if (!this._settings || this._settings.length === 0) {
             return null;
         }
 
         // Try new format first
-        const infoSetting = this._Settings.find(s => s.Name === 'FieldCategoryInfo');
+        const infoSetting = this._settings.find(s => s.Name === 'FieldCategoryInfo');
         if (infoSetting?.Value) {
             const parsed = SafeJSONParse<Record<string, FieldCategoryInfo>>(infoSetting.Value, false);
             if (parsed) {
@@ -4319,7 +4526,7 @@ export class EntityInfo extends BaseInfo {
         }
 
         // Fallback to legacy FieldCategoryIcons format (icon-only map)
-        const iconSetting = this._Settings.find(s => s.Name === 'FieldCategoryIcons');
+        const iconSetting = this._settings.find(s => s.Name === 'FieldCategoryIcons');
         if (iconSetting?.Value) {
             const icons = SafeJSONParse<Record<string, string>>(iconSetting.Value, false);
             if (icons) {

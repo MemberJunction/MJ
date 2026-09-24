@@ -51,11 +51,16 @@ export class TagPipelineConfigurationPanel extends BaseFormPanel<MJContentSource
         return this.Record?.ConfigurationObject ?? {};
     }
 
-    public setConfig(patch: Partial<MJContentSourceEntity_IContentSourceConfiguration>): void {
+    public SetConfig(patch: Partial<MJContentSourceEntity_IContentSourceConfiguration>): void {
         if (!this.Record) return;
         const current = this.Record.ConfigurationObject ?? {};
         const merged: MJContentSourceEntity_IContentSourceConfiguration = { ...current, ...patch };
         this.Record.ConfigurationObject = merged;
+    }
+
+    /** @deprecated Use {@link SetConfig}. */
+    public setConfig(patch: Partial<MJContentSourceEntity_IContentSourceConfiguration>): void {
+        return this.SetConfig(patch);
     }
 
     // ---------- Mode -------------------------------------------------------
@@ -64,7 +69,7 @@ export class TagPipelineConfigurationPanel extends BaseFormPanel<MJContentSource
         return this.Config.TagTaxonomyMode ?? 'auto-grow';
     }
     public SetMode(mode: TaxonomyModeJson): void {
-        this.setConfig({ TagTaxonomyMode: mode });
+        this.SetConfig({ TagTaxonomyMode: mode });
     }
 
     // ---------- Thresholds -------------------------------------------------
@@ -77,14 +82,14 @@ export class TagPipelineConfigurationPanel extends BaseFormPanel<MJContentSource
         const cur = this.Config.SuggestThreshold;
         const patch: Partial<MJContentSourceEntity_IContentSourceConfiguration> = { TagMatchThreshold: clamped };
         if (cur == null || cur >= clamped) patch.SuggestThreshold = Math.max(0, clamped - 0.05);
-        this.setConfig(patch);
+        this.SetConfig(patch);
     }
     public get SuggestThresholdValue(): number {
         return this.Config.SuggestThreshold ?? Math.max(0, this.MatchThresholdValue - 0.05);
     }
     public set SuggestThresholdValue(v: number) {
         const clamped = Math.max(0, Math.min(this.MatchThresholdValue, Number(v) || 0));
-        this.setConfig({ SuggestThreshold: clamped });
+        this.SetConfig({ SuggestThreshold: clamped });
     }
     public get ThresholdValidationMessage(): string | null {
         const m = this.Config.TagMatchThreshold;
@@ -101,19 +106,19 @@ export class TagPipelineConfigurationPanel extends BaseFormPanel<MJContentSource
         return this.Config.TagRootID ?? null;
     }
     public set TagRootIDValue(v: string | null) {
-        this.setConfig({ TagRootID: v ?? null });
+        this.SetConfig({ TagRootID: v ?? null });
     }
     public get ShareTaxonomyValue(): boolean {
         return this.Config.ShareTaxonomyWithLLM !== false; // default true
     }
     public set ShareTaxonomyValue(v: boolean) {
-        this.setConfig({ ShareTaxonomyWithLLM: v });
+        this.SetConfig({ ShareTaxonomyWithLLM: v });
     }
     public get EnableVectorizationValue(): boolean {
         return this.Config.EnableVectorization !== false; // default true
     }
     public set EnableVectorizationValue(v: boolean) {
-        this.setConfig({ EnableVectorization: v });
+        this.SetConfig({ EnableVectorization: v });
     }
 
     // ---------- Budgets ----------------------------------------------------
@@ -122,31 +127,31 @@ export class TagPipelineConfigurationPanel extends BaseFormPanel<MJContentSource
         return this.Config.MaxItemsPerRun ?? null;
     }
     public set MaxItemsPerRunValue(v: number | string | null) {
-        this.setConfig({ MaxItemsPerRun: this.normalizeNullableNumber(v) });
+        this.SetConfig({ MaxItemsPerRun: this.normalizeNullableNumber(v) });
     }
     public get MaxNewTagsPerRunValue(): number | null {
         return this.Config.MaxNewTagsPerRun ?? null;
     }
     public set MaxNewTagsPerRunValue(v: number | string | null) {
-        this.setConfig({ MaxNewTagsPerRun: this.normalizeNullableNumber(v) });
+        this.SetConfig({ MaxNewTagsPerRun: this.normalizeNullableNumber(v) });
     }
     public get MaxNewTagsPerItemValue(): number | null {
         return this.Config.MaxNewTagsPerItem ?? null;
     }
     public set MaxNewTagsPerItemValue(v: number | string | null) {
-        this.setConfig({ MaxNewTagsPerItem: this.normalizeNullableNumber(v) });
+        this.SetConfig({ MaxNewTagsPerItem: this.normalizeNullableNumber(v) });
     }
     public get MaxTokensPerRunValue(): number | null {
         return this.Config.MaxTokensPerRun ?? null;
     }
     public set MaxTokensPerRunValue(v: number | string | null) {
-        this.setConfig({ MaxTokensPerRun: this.normalizeNullableNumber(v) });
+        this.SetConfig({ MaxTokensPerRun: this.normalizeNullableNumber(v) });
     }
     public get MaxCostPerRunValue(): number | null {
         return this.Config.MaxCostPerRun ?? null;
     }
     public set MaxCostPerRunValue(v: number | string | null) {
-        this.setConfig({ MaxCostPerRun: this.normalizeNullableNumber(v) });
+        this.SetConfig({ MaxCostPerRun: this.normalizeNullableNumber(v) });
     }
 
     /**

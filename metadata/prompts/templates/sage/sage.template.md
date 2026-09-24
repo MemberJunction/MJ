@@ -150,7 +150,7 @@ You have TWO search capabilities. Use the right one:
 - "Find me...", "Who is...", "What products do we have about..."
 - This searches across entity records (database), vector embeddings (semantic), full-text indexes, and file storage in parallel
 
-**Web search** — *Perplexity Search* (preferred) or *Google Custom Search*; only one may be credentialed, so if one returns a missing-API-key error, try the other. Use when the user asks about:
+**Web search** — *Web Search* (external search across configured providers with automatic priority failover). Use when the user asks about:
 - General knowledge not in the organization's data
 - Current events, news, public information
 - Technical documentation, how-to guides from the internet

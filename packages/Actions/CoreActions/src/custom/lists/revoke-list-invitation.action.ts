@@ -3,7 +3,7 @@ import type { ActionResultSimple, RunActionParams } from '@memberjunction/action
 import { RegisterClass } from '@memberjunction/global';
 import { ListSharing } from '@memberjunction/lists';
 
-import { getStringParam, missingParam } from './_action-helpers';
+import { GetStringParam, MissingParam } from './_action-helpers';
 
 /**
  * Revoke a pending List invitation before acceptance. Once an invitation
@@ -14,8 +14,8 @@ import { getStringParam, missingParam } from './_action-helpers';
 @RegisterClass(BaseAction, 'Revoke List Invitation')
 export class RevokeListInvitationAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const invitationId = getStringParam(params, 'InvitationID');
-    if (!invitationId) return missingParam('InvitationID');
+    const invitationId = GetStringParam(params, 'InvitationID');
+    if (!invitationId) return MissingParam('InvitationID');
 
     const sharing = new ListSharing(params.ContextUser, params.Provider);
     const result = await sharing.RevokeInvitation(invitationId);

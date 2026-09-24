@@ -59,12 +59,21 @@ export const ON_CHANGE_SCOPE_SCRIPT =
  * rather than defaulted: guessing `AfterUpdate` would produce a trigger firing on an event the
  * author never chose, and on the wrong one there is no error — only runs nobody expected.
  */
-export function decideOnChangeAction(p: {
+export function DecideOnChangeAction(p: {
     status: string;
     onChangeEnabled: boolean;
     onChangeInvocationType: string | null;
 }): 'upsert' | 'disable' {
     return p.status === 'Active' && p.onChangeEnabled && !!p.onChangeInvocationType ? 'upsert' : 'disable';
+}
+
+/** @deprecated Use {@link DecideOnChangeAction}. */
+export function decideOnChangeAction(p: {
+    status: string;
+    onChangeEnabled: boolean;
+    onChangeInvocationType: string | null;
+}): 'upsert' | 'disable' {
+    return DecideOnChangeAction(p);
 }
 
 /** Everything the reconciler needs from its caller. */
@@ -84,7 +93,7 @@ export async function ReconcileRecordProcessOnChange(
     process: MJRecordProcessEntity,
     context: OnChangeReconcileContext,
 ): Promise<void> {
-    const action = decideOnChangeAction({
+    const action = DecideOnChangeAction({
         status: process.Status,
         onChangeEnabled: process.OnChangeEnabled,
         onChangeInvocationType: process.OnChangeInvocationType,

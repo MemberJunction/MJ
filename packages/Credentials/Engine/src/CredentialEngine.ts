@@ -175,17 +175,22 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     /**
      * Gets a credential type by name.
      */
-    public getCredentialTypeByName(typeName: string): MJCredentialTypeEntity | undefined {
+    public GetCredentialTypeByName(typeName: string): MJCredentialTypeEntity | undefined {
         return this._credentialTypes.find(t =>
             t.Name.trim().toLowerCase() === typeName.trim().toLowerCase()
         );
     }
 
+    /** @deprecated Use {@link GetCredentialTypeByName}. */
+    public getCredentialTypeByName(typeName: string): MJCredentialTypeEntity | undefined {
+        return this.GetCredentialTypeByName(typeName);
+    }
+
     /**
      * Gets the default credential for a given type.
      */
-    public getDefaultCredentialForType(credentialTypeName: string): MJCredentialEntity | undefined {
-        const credType = this.getCredentialTypeByName(credentialTypeName);
+    public GetDefaultCredentialForType(credentialTypeName: string): MJCredentialEntity | undefined {
+        const credType = this.GetCredentialTypeByName(credentialTypeName);
         if (!credType) return undefined;
 
         return this._credentials.find(c =>
@@ -193,18 +198,28 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         );
     }
 
+    /** @deprecated Use {@link GetDefaultCredentialForType}. */
+    public getDefaultCredentialForType(credentialTypeName: string): MJCredentialEntity | undefined {
+        return this.GetDefaultCredentialForType(credentialTypeName);
+    }
+
     /**
      * Gets a credential by ID.
      */
-    public getCredentialById(credentialId: string): MJCredentialEntity | undefined {
+    public GetCredentialById(credentialId: string): MJCredentialEntity | undefined {
         return this._credentials.find(c => UUIDsEqual(c.ID, credentialId));
+    }
+
+    /** @deprecated Use {@link GetCredentialById}. */
+    public getCredentialById(credentialId: string): MJCredentialEntity | undefined {
+        return this.GetCredentialById(credentialId);
     }
 
     /**
      * Gets a credential by type and name.
      */
-    public getCredentialByName(credentialTypeName: string, credentialName: string): MJCredentialEntity | undefined {
-        const credType = this.getCredentialTypeByName(credentialTypeName);
+    public GetCredentialByName(credentialTypeName: string, credentialName: string): MJCredentialEntity | undefined {
+        const credType = this.GetCredentialTypeByName(credentialTypeName);
         if (!credType) return undefined;
 
         return this._credentials.find(c =>
@@ -212,6 +227,11 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             c.Name.trim().toLowerCase() === credentialName.trim().toLowerCase() &&
             c.IsActive
         );
+    }
+
+    /** @deprecated Use {@link GetCredentialByName}. */
+    public getCredentialByName(credentialTypeName: string, credentialName: string): MJCredentialEntity | undefined {
+        return this.GetCredentialByName(credentialTypeName, credentialName);
     }
 
     // ====================================
@@ -236,7 +256,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * @returns Resolved credential with decrypted values
      * @throws Error if credential is not found
      */
-    public async getCredential<T extends Record<string, string> = Record<string, string>>(
+    public async GetCredential<T extends Record<string, string> = Record<string, string>>(
         credentialName: string,
         options: CredentialResolutionOptions = {}
     ): Promise<ResolvedCredential<T>> {
@@ -299,6 +319,14 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         }
     }
 
+    /** @deprecated Use {@link GetCredential}. */
+    public async getCredential<T extends Record<string, string> = Record<string, string>>(
+        credentialName: string,
+        options: CredentialResolutionOptions = {}
+    ): Promise<ResolvedCredential<T>> {
+        return this.GetCredential(credentialName, options);
+    }
+
     /**
      * Stores a new credential with encryption and audit logging.
      *
@@ -309,7 +337,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * @param contextUser - Required user context
      * @returns The created credential
      */
-    public async storeCredential(
+    public async StoreCredential(
         credentialTypeName: string,
         name: string,
         values: Record<string, string>,
@@ -318,7 +346,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     ): Promise<MJCredentialEntity> {
         this.TryThrowIfNotLoaded();
 
-        const credType = this.getCredentialTypeByName(credentialTypeName);
+        const credType = this.GetCredentialTypeByName(credentialTypeName);
         if (!credType) {
             throw new Error(`Credential type not found: ${credentialTypeName}`);
         }
@@ -364,6 +392,17 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         return credEntity;
     }
 
+    /** @deprecated Use {@link StoreCredential}. */
+    public async storeCredential(
+        credentialTypeName: string,
+        name: string,
+        values: Record<string, string>,
+        options: StoreCredentialOptions,
+        contextUser: UserInfo
+    ): Promise<MJCredentialEntity> {
+        return this.StoreCredential(credentialTypeName, name, values, options, contextUser);
+    }
+
     /**
      * Updates credential values with encryption and audit logging.
      *
@@ -371,7 +410,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * @param values - New credential values
      * @param contextUser - Required user context
      */
-    public async updateCredential(
+    public async UpdateCredential(
         credentialId: string,
         values: Record<string, string>,
         contextUser: UserInfo
@@ -422,6 +461,15 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         });
     }
 
+    /** @deprecated Use {@link UpdateCredential}. */
+    public async updateCredential(
+        credentialId: string,
+        values: Record<string, string>,
+        contextUser: UserInfo
+    ): Promise<void> {
+        return this.UpdateCredential(credentialId, values, contextUser);
+    }
+
     /**
      * Validates credentials against the provider's validation endpoint.
      *
@@ -429,13 +477,13 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * @param contextUser - Required user context
      * @returns Validation result
      */
-    public async validateCredential(
+    public async ValidateCredential(
         credentialId: string,
         contextUser: UserInfo
     ): Promise<CredentialValidationResult> {
         this.TryThrowIfNotLoaded();
 
-        const credential = this.getCredentialById(credentialId);
+        const credential = this.GetCredentialById(credentialId);
         if (!credential) {
             return {
                 isValid: false,
@@ -475,6 +523,14 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         return result;
     }
 
+    /** @deprecated Use {@link ValidateCredential}. */
+    public async validateCredential(
+        credentialId: string,
+        contextUser: UserInfo
+    ): Promise<CredentialValidationResult> {
+        return this.ValidateCredential(credentialId, contextUser);
+    }
+
     // ====================================
     // Private Helper Methods
     // ====================================
@@ -493,7 +549,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     ): MJCredentialEntity | null {
         // Try by ID first
         if (options.credentialId) {
-            return this.getCredentialById(options.credentialId) || null;
+            return this.GetCredentialById(options.credentialId) || null;
         }
 
         // Try by name (using the main credentialName param or the override)

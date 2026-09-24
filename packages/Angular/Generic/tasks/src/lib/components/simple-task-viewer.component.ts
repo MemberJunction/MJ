@@ -312,17 +312,71 @@ import { UUIDsEqual } from '@memberjunction/global';
   `]
 })
 export class SimpleTaskViewerComponent implements OnChanges {
-  @Input() tasks: MJTaskEntity[] = [];
-  @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
-  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Input() Tasks: MJTaskEntity[] = [];
 
-  public selectedTask: MJTaskEntity | null = null;
+  /** @deprecated Use {@link Tasks}. */
+  @Input() set tasks(value: MJTaskEntity[]) {
+    this.Tasks = value;
+  }
+  /** @deprecated Use {@link Tasks}. */
+  get tasks(): MJTaskEntity[] {
+    return this.Tasks;
+  }
+  @Input() AgentRunMap?: Map<string, string>;
+
+  /** @deprecated Use {@link AgentRunMap}. */
+  @Input() set agentRunMap(value: Map<string, string> | undefined) {
+    this.AgentRunMap = value;
+  }
+  /** @deprecated Use {@link AgentRunMap}. */
+  get agentRunMap(): Map<string, string> | undefined {
+    return this.AgentRunMap;
+  } // Maps TaskID -> AgentRunID
+  @Output() TaskClicked = new EventEmitter<MJTaskEntity>();
+
+  /**
+   * @deprecated Use {@link TaskClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (taskClicked) keeps working. Must stay AFTER TaskClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() taskClicked = this.TaskClicked;
+  @Output() OpenEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
+
+  public SelectedTask: MJTaskEntity | null = null;
+
+  /** @deprecated Use {@link SelectedTask}. */
+  public get selectedTask(): MJTaskEntity | null {
+    return this.SelectedTask;
+  }
+  /** @deprecated Use {@link SelectedTask}. */
+  public set selectedTask(value: MJTaskEntity | null) {
+    this.SelectedTask = value;
+  }
 
   public IsTaskSelected(task: MJTaskEntity): boolean {
-    return UUIDsEqual(this.selectedTask?.ID, task.ID);
+    return UUIDsEqual(this.SelectedTask?.ID, task.ID);
   }
-  public detailPanelWidth: number = 400;
+  public DetailPanelWidth: number = 400;
+
+  /** @deprecated Use {@link DetailPanelWidth}. */
+  public get detailPanelWidth(): number {
+    return this.DetailPanelWidth;
+  }
+  /** @deprecated Use {@link DetailPanelWidth}. */
+  public set detailPanelWidth(value: number) {
+    this.DetailPanelWidth = value;
+  }
 
   private isResizing = false;
   private resizeStartX = 0;
@@ -332,28 +386,53 @@ export class SimpleTaskViewerComponent implements OnChanges {
     // Tasks are already loaded
   }
 
+  public OnTaskClick(task: MJTaskEntity): void {
+    this.SelectedTask = task;
+    this.TaskClicked.emit(task);
+  }
+
+  /** @deprecated Use {@link OnTaskClick}. */
   public onTaskClick(task: MJTaskEntity): void {
-    this.selectedTask = task;
-    this.taskClicked.emit(task);
+    return this.OnTaskClick(task);
   }
 
+  public GetAgentRunId(task: MJTaskEntity): string | null {
+    return this.AgentRunMap?.get(task.ID) || null;
+  }
+
+  /** @deprecated Use {@link GetAgentRunId}. */
   public getAgentRunId(task: MJTaskEntity): string | null {
-    return this.agentRunMap?.get(task.ID) || null;
+    return this.GetAgentRunId(task);
   }
 
+  public CloseDetailPanel(): void {
+    this.SelectedTask = null;
+  }
+
+  /** @deprecated Use {@link CloseDetailPanel}. */
   public closeDetailPanel(): void {
-    this.selectedTask = null;
+    return this.CloseDetailPanel();
   }
 
+  public OnOpenEntityRecord(event: { entityName: string; recordId: string }): void {
+    this.OpenEntityRecord.emit(event);
+  }
+
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
   public onOpenEntityRecord(event: { entityName: string; recordId: string }): void {
-    this.openEntityRecord.emit(event);
+    return this.OnOpenEntityRecord(event);
   }
 
-  public startResize(event: MouseEvent): void {
+  public StartResize(event: MouseEvent): void {
     this.isResizing = true;
     this.resizeStartX = event.clientX;
-    this.resizeStartWidth = this.detailPanelWidth;
+    this.resizeStartWidth = this.DetailPanelWidth;
     event.preventDefault();
+  }
+
+  /** @deprecated Use {@link StartResize}. */
+  public startResize(event: MouseEvent): void {
+    return this.StartResize(event);
   }
 
   @HostListener('document:mousemove', ['$event'])
@@ -364,7 +443,7 @@ export class SimpleTaskViewerComponent implements OnChanges {
     const newWidth = this.resizeStartWidth + delta;
 
     // Constrain width between min and max
-    this.detailPanelWidth = Math.max(300, Math.min(600, newWidth));
+    this.DetailPanelWidth = Math.max(300, Math.min(600, newWidth));
   }
 
   @HostListener('document:mouseup')
@@ -372,7 +451,7 @@ export class SimpleTaskViewerComponent implements OnChanges {
     this.isResizing = false;
   }
 
-  public getStatusIcon(status: string): string {
+  public GetStatusIcon(status: string): string {
     switch (status) {
       case 'Complete': return 'fa-check-circle';
       case 'In Progress': return 'fa-spinner';
@@ -381,6 +460,11 @@ export class SimpleTaskViewerComponent implements OnChanges {
       case 'Failed': return 'fa-times-circle';
       default: return 'fa-circle';
     }
+  }
+
+  /** @deprecated Use {@link GetStatusIcon}. */
+  public getStatusIcon(status: string): string {
+    return this.GetStatusIcon(status);
   }
 
   public formatDate(date: Date | null): string {

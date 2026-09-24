@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import ts from 'typescript';
-import { applyOpenAppClientBootstrapBlock } from '../commands/codegen/manifest.js';
+import { ApplyOpenAppClientBootstrapBlock } from '../commands/codegen/manifest.js';
 
 const BASE = `// generated manifest\nexport const CLASS_REGISTRATIONS = [];\n`;
 
@@ -62,7 +62,7 @@ function typeCheckAsConsumer(source: string): ts.Diagnostic[] {
 
 describe('applyOpenAppClientBootstrapBlock', () => {
     it('appends a referenced namespace import per enabled client package in a delimited block', () => {
-        const out = applyOpenAppClientBootstrapBlock(BASE, [
+        const out = ApplyOpenAppClientBootstrapBlock(BASE, [
             { PackageName: '@acme/a-ng', Enabled: true },
             { PackageName: '@acme/b-ng', Enabled: true },
         ]);
@@ -89,7 +89,7 @@ describe('applyOpenAppClientBootstrapBlock', () => {
         // MJExplorer compiles this generated file with `noPropertyAccessFromIndexSignature: true`
         // (packages/MJExplorer/tsconfig.json). Dot access on the `Record<string, unknown>` cast is
         // TS4111 there, which fails the Explorer build and emits zero JS whenever an Open App exists.
-        const out = applyOpenAppClientBootstrapBlock(BASE, [{ PackageName: '@acme/a-ng', Enabled: true }]);
+        const out = ApplyOpenAppClientBootstrapBlock(BASE, [{ PackageName: '@acme/a-ng', Enabled: true }]);
         const violations = typeCheckAsConsumer(out)
             .filter((d) => d.code === TS_PROPERTY_FROM_INDEX_SIGNATURE)
             .map((d) => ts.flattenDiagnosticMessageText(d.messageText, ' '));
@@ -97,7 +97,7 @@ describe('applyOpenAppClientBootstrapBlock', () => {
     });
 
     it('emits a disabled package as a comment, not an import', () => {
-        const out = applyOpenAppClientBootstrapBlock(BASE, [{ PackageName: '@acme/a-ng', Enabled: false }]);
+        const out = ApplyOpenAppClientBootstrapBlock(BASE, [{ PackageName: '@acme/a-ng', Enabled: false }]);
         expect(out).not.toContain("from '@acme/a-ng'");
         expect(out).toContain("// '@acme/a-ng' disabled by");
     });
@@ -109,7 +109,7 @@ describe('applyOpenAppClientBootstrapBlock', () => {
         // `[__openAppClient1]` with only `__openAppClient1` declared — or, under any future
         // skew between the two, an array element naming a variable that does not exist.
         // That is a TS2304 in the host app's build, not a test failure, so it is worth pinning.
-        const out = applyOpenAppClientBootstrapBlock(BASE, [
+        const out = ApplyOpenAppClientBootstrapBlock(BASE, [
             { PackageName: '@acme/disabled-ng', Enabled: false },
             { PackageName: '@acme/enabled-ng', Enabled: true },
         ]);
@@ -129,7 +129,7 @@ describe('applyOpenAppClientBootstrapBlock', () => {
     });
 
     it('keeps alias numbering contiguous across several interleaved disabled entries', () => {
-        const out = applyOpenAppClientBootstrapBlock(BASE, [
+        const out = ApplyOpenAppClientBootstrapBlock(BASE, [
             { PackageName: '@acme/a-ng', Enabled: false },
             { PackageName: '@acme/b-ng', Enabled: true },
             { PackageName: '@acme/c-ng', Enabled: false },
@@ -142,7 +142,7 @@ describe('applyOpenAppClientBootstrapBlock', () => {
     });
 
     it('emits an empty anchor when every entry is disabled (no dangling reference)', () => {
-        const out = applyOpenAppClientBootstrapBlock(BASE, [
+        const out = ApplyOpenAppClientBootstrapBlock(BASE, [
             { PackageName: '@acme/a-ng', Enabled: false },
             { PackageName: '@acme/b-ng', Enabled: false },
         ]);
@@ -153,14 +153,14 @@ describe('applyOpenAppClientBootstrapBlock', () => {
 
     it('is idempotent — applying the same entries twice yields identical content', () => {
         const entries = [{ PackageName: '@acme/a-ng', Enabled: true }];
-        const once = applyOpenAppClientBootstrapBlock(BASE, entries);
-        const twice = applyOpenAppClientBootstrapBlock(once, entries);
+        const once = ApplyOpenAppClientBootstrapBlock(BASE, entries);
+        const twice = ApplyOpenAppClientBootstrapBlock(once, entries);
         expect(twice).toBe(once);
     });
 
     it('replaces a stale block when the entry set changes (no leftover imports)', () => {
-        const first = applyOpenAppClientBootstrapBlock(BASE, [{ PackageName: '@acme/old-ng', Enabled: true }]);
-        const second = applyOpenAppClientBootstrapBlock(first, [{ PackageName: '@acme/new-ng', Enabled: true }]);
+        const first = ApplyOpenAppClientBootstrapBlock(BASE, [{ PackageName: '@acme/old-ng', Enabled: true }]);
+        const second = ApplyOpenAppClientBootstrapBlock(first, [{ PackageName: '@acme/new-ng', Enabled: true }]);
         expect(second).toContain("import * as __openAppClient0 from '@acme/new-ng';");
         expect(second).not.toContain('@acme/old-ng');
         // Exactly one managed block.
@@ -168,8 +168,8 @@ describe('applyOpenAppClientBootstrapBlock', () => {
     });
 
     it('removes the block entirely when there are no client entries', () => {
-        const withBlock = applyOpenAppClientBootstrapBlock(BASE, [{ PackageName: '@acme/a-ng', Enabled: true }]);
-        const cleared = applyOpenAppClientBootstrapBlock(withBlock, []);
+        const withBlock = ApplyOpenAppClientBootstrapBlock(BASE, [{ PackageName: '@acme/a-ng', Enabled: true }]);
+        const cleared = ApplyOpenAppClientBootstrapBlock(withBlock, []);
         expect(cleared).not.toContain('Open App client bootstrap');
         expect(cleared).not.toContain('@acme/a-ng');
         expect(cleared).toContain('export const CLASS_REGISTRATIONS = [];');

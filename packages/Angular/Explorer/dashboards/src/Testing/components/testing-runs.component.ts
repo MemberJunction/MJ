@@ -1109,25 +1109,79 @@ interface FilteredStats {
   `]
 })
 export class TestingRunsComponent implements OnInit, OnDestroy {
-  @Input() initialState: Record<string, unknown> | null = null;
+  @Input() InitialState: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link InitialState}. */
+  @Input() set initialState(value: Record<string, unknown> | null) {
+    this.InitialState = value;
+  }
+  /** @deprecated Use {@link InitialState}. */
+  get initialState(): Record<string, unknown> | null {
+    return this.InitialState;
+  }
   /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
   @Input() HideToolbar = false;
-  @Output() stateChange = new EventEmitter<Record<string, unknown>>();
+  @Output() StateChange = new EventEmitter<Record<string, unknown>>();
+
+  /**
+   * @deprecated Use {@link StateChange}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (stateChange) keeps working. Must stay AFTER StateChange: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() stateChange = this.StateChange;
 
   private destroy$ = new Subject<void>();
   private filterTrigger$ = new BehaviorSubject<void>(undefined);
 
   // Filter state
-  filterState: RunsFilterState = {
+  FilterState: RunsFilterState = {
     status: 'all',
     timeRange: 'month',
     searchText: ''
   };
 
+  /** @deprecated Use {@link FilterState}. */
+  get filterState(): RunsFilterState {
+    return this.FilterState;
+  }
+  /** @deprecated Use {@link FilterState}. */
+  set filterState(value: RunsFilterState) {
+    this.FilterState = value;
+  }
+
   // Feedback form state
-  feedbackRating = 5;
-  feedbackIsCorrect: boolean | null = null;
-  feedbackComments = '';
+  FeedbackRating = 5;
+
+  /** @deprecated Use {@link FeedbackRating}. */
+  get feedbackRating() {
+    return this.FeedbackRating;
+  }
+  /** @deprecated Use {@link FeedbackRating}. */
+  set feedbackRating(value) {
+    this.FeedbackRating = value;
+  }
+  FeedbackIsCorrect: boolean | null = null;
+
+  /** @deprecated Use {@link FeedbackIsCorrect}. */
+  get feedbackIsCorrect(): boolean | null {
+    return this.FeedbackIsCorrect;
+  }
+  /** @deprecated Use {@link FeedbackIsCorrect}. */
+  set feedbackIsCorrect(value: boolean | null) {
+    this.FeedbackIsCorrect = value;
+  }
+  FeedbackComments = '';
+
+  /** @deprecated Use {@link FeedbackComments}. */
+  get feedbackComments() {
+    return this.FeedbackComments;
+  }
+  /** @deprecated Use {@link FeedbackComments}. */
+  set feedbackComments(value) {
+    this.FeedbackComments = value;
+  }
   IsSubmittingFeedback = false;
   IsRefreshing = false;
 
@@ -1154,11 +1208,20 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   readonly RatingValues: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
   constructor(
-    public instrumentationService: TestingInstrumentationService,
+    public InstrumentationService: TestingInstrumentationService,
     private testingDialogService: TestingDialogService,
     private cdr: ChangeDetectorRef,
     private viewContainerRef: ViewContainerRef
   ) {}
+
+  /** @deprecated Use {@link InstrumentationService}. */
+  public get instrumentationService(): TestingInstrumentationService {
+    return this.InstrumentationService;
+  }
+  /** @deprecated Use {@link InstrumentationService}. */
+  public set instrumentationService(value: TestingInstrumentationService) {
+    this.InstrumentationService = value;
+  }
 
   ngOnInit(): void {
     this.applyInitialState();
@@ -1180,8 +1243,8 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   private subscribeToAgentSelectionIntents(): void {
     let lastNonce = -1;
     combineLatest([
-      this.instrumentationService.runSelectionIntent$,
-      this.instrumentationService.testRunsWithFeedback$,
+      this.InstrumentationService.runSelectionIntent$,
+      this.InstrumentationService.testRunsWithFeedback$,
     ]).pipe(
       takeUntil(this.destroy$)
     ).subscribe(([intent, runs]) => {
@@ -1209,17 +1272,17 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
    * intent is replayed via BehaviorSubject when this surface mounts.
    */
   private subscribeToAgentFilterIntents(): void {
-    this.instrumentationService.runsFilterIntent$.pipe(
+    this.InstrumentationService.runsFilterIntent$.pipe(
       takeUntil(this.destroy$)
     ).subscribe(intent => {
       if (!intent) return;
       let changed = false;
-      if (intent.status && intent.status !== this.filterState.status) {
-        this.filterState.status = intent.status;
+      if (intent.status && intent.status !== this.FilterState.status) {
+        this.FilterState.status = intent.status;
         changed = true;
       }
-      if (intent.searchText != null && intent.searchText !== this.filterState.searchText) {
-        this.filterState.searchText = intent.searchText;
+      if (intent.searchText != null && intent.searchText !== this.FilterState.searchText) {
+        this.FilterState.searchText = intent.searchText;
         changed = true;
       }
       if (changed) {
@@ -1245,7 +1308,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   // ------- Public Methods -------
 
   SetStatusFilter(status: StatusFilter): void {
-    this.filterState.status = status;
+    this.FilterState.status = status;
     this.filterTrigger$.next();
     this.emitStateChange();
     this.cdr.markForCheck();
@@ -1253,7 +1316,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
   OnTimeRangeChange(event: Event): void {
     const select = event.target as HTMLSelectElement;
-    this.filterState.timeRange = select.value as TimeRange;
+    this.FilterState.timeRange = select.value as TimeRange;
     this.updateServiceDateRange();
     this.emitStateChange();
     this.cdr.markForCheck();
@@ -1261,14 +1324,14 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
   OnSearchInput(event: Event): void {
     const input = event.target as HTMLInputElement;
-    this.filterState.searchText = input.value;
+    this.FilterState.searchText = input.value;
     this.filterTrigger$.next();
     this.emitStateChange();
     this.cdr.markForCheck();
   }
 
   ClearSearch(): void {
-    this.filterState.searchText = '';
+    this.FilterState.searchText = '';
     this.filterTrigger$.next();
     this.emitStateChange();
     this.cdr.markForCheck();
@@ -1276,7 +1339,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
   Refresh(): void {
     this.IsRefreshing = true;
-    this.instrumentationService.refresh();
+    this.InstrumentationService.refresh();
     setTimeout(() => {
       this.IsRefreshing = false;
       this.cdr.markForCheck();
@@ -1318,11 +1381,11 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
     this.IsSubmittingFeedback = true;
     this.cdr.markForCheck();
 
-    const success = await this.instrumentationService.submitFeedback(
+    const success = await this.InstrumentationService.submitFeedback(
       this.SelectedRun.id,
-      this.feedbackRating,
-      this.feedbackIsCorrect === true,
-      this.feedbackComments
+      this.FeedbackRating,
+      this.FeedbackIsCorrect === true,
+      this.FeedbackComments
     );
 
     this.IsSubmittingFeedback = false;
@@ -1332,9 +1395,9 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
       this.SelectedRun = {
         ...this.SelectedRun,
         hasHumanFeedback: true,
-        humanRating: this.feedbackRating,
-        humanIsCorrect: this.feedbackIsCorrect,
-        humanComments: this.feedbackComments
+        humanRating: this.FeedbackRating,
+        humanIsCorrect: this.FeedbackIsCorrect,
+        humanComments: this.FeedbackComments
       };
     }
 
@@ -1343,7 +1406,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
   OnFeedbackCommentInput(event: Event): void {
     const textarea = event.target as HTMLTextAreaElement;
-    this.feedbackComments = textarea.value;
+    this.FeedbackComments = textarea.value;
   }
 
   TrackByRunId(_index: number, run: TestRunWithFeedbackSummary): string {
@@ -1397,7 +1460,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   // ------- Private Methods -------
 
   private setupObservables(): void {
-    const data$ = this.instrumentationService.testRunsWithFeedback$.pipe(
+    const data$ = this.InstrumentationService.testRunsWithFeedback$.pipe(
       takeUntil(this.destroy$)
     );
 
@@ -1428,7 +1491,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   }
 
   private filterByStatus(runs: TestRunWithFeedbackSummary[]): TestRunWithFeedbackSummary[] {
-    const status = this.filterState.status;
+    const status = this.FilterState.status;
     if (status === 'all') return runs;
 
     const statusMap: Record<string, string[]> = {
@@ -1443,7 +1506,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   }
 
   private filterBySearch(runs: TestRunWithFeedbackSummary[]): TestRunWithFeedbackSummary[] {
-    const text = this.filterState.searchText.toLowerCase().trim();
+    const text = this.FilterState.searchText.toLowerCase().trim();
     if (!text) return runs;
     return runs.filter(r => r.testName.toLowerCase().includes(text));
   }
@@ -1481,7 +1544,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
     const now = new Date();
     let startDate: Date;
 
-    switch (this.filterState.timeRange) {
+    switch (this.FilterState.timeRange) {
       case 'today':
         startDate = new Date(now);
         startDate.setHours(0, 0, 0, 0);
@@ -1500,29 +1563,29 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
         break;
     }
 
-    this.instrumentationService.setDateRange(startDate, now);
+    this.InstrumentationService.setDateRange(startDate, now);
   }
 
   private applyInitialState(): void {
-    if (!this.initialState) return;
+    if (!this.InitialState) return;
 
-    const state = this.initialState;
+    const state = this.InitialState;
     if (state['status'] && typeof state['status'] === 'string') {
-      this.filterState.status = state['status'] as StatusFilter;
+      this.FilterState.status = state['status'] as StatusFilter;
     }
     if (state['timeRange'] && typeof state['timeRange'] === 'string') {
-      this.filterState.timeRange = state['timeRange'] as TimeRange;
+      this.FilterState.timeRange = state['timeRange'] as TimeRange;
     }
     if (state['searchText'] && typeof state['searchText'] === 'string') {
-      this.filterState.searchText = state['searchText'] as string;
+      this.FilterState.searchText = state['searchText'] as string;
     }
   }
 
   private emitStateChange(): void {
-    this.stateChange.emit({
-      status: this.filterState.status,
-      timeRange: this.filterState.timeRange,
-      searchText: this.filterState.searchText,
+    this.StateChange.emit({
+      status: this.FilterState.status,
+      timeRange: this.FilterState.timeRange,
+      searchText: this.FilterState.searchText,
       // Richer state for the dashboard's agent context (selected run id+NAME,
       // visible run names + count, detail-panel state). Read-only — the dashboard
       // does not mutate this; it only publishes it to the agent.
@@ -1535,9 +1598,9 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   }
 
   private resetFeedbackForm(): void {
-    this.feedbackRating = 5;
-    this.feedbackIsCorrect = null;
-    this.feedbackComments = '';
+    this.FeedbackRating = 5;
+    this.FeedbackIsCorrect = null;
+    this.FeedbackComments = '';
     this.IsSubmittingFeedback = false;
   }
 

@@ -508,7 +508,7 @@ export class RealtimeClientSessionService {
      * @param actions The action entities to index by wire name.
      * @returns Map of wire-name to action entity.
      */
-    public buildWireActionMap(actions: MJActionEntityExtended[]): Map<string, MJActionEntityExtended> {
+    public BuildWireActionMap(actions: MJActionEntityExtended[]): Map<string, MJActionEntityExtended> {
         const map = new Map<string, MJActionEntityExtended>();
         const seen = new Map<string, MJActionEntityExtended>();
         for (const action of actions) {
@@ -529,6 +529,11 @@ export class RealtimeClientSessionService {
             map.set(wireName, action);
         }
         return map;
+    }
+
+    /** @deprecated Use {@link BuildWireActionMap}. */
+    public buildWireActionMap(actions: MJActionEntityExtended[]): Map<string, MJActionEntityExtended> {
+        return this.BuildWireActionMap(actions);
     }
     /**
      * The seeded name of the `MJ: AI Prompts` row whose `TemplateText` carries the first-person
@@ -1844,8 +1849,9 @@ export class RealtimeClientSessionService {
         modelID?: string,
         modelVendorID?: string
     ): Promise<RealtimeSessionParams> {
-        const directTools = this.buildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
-        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, directTools.length > 0);
+        const directTools = this.BuildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
+        const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
+        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
         const combinedExtra = directTools.length > 0
             ? [...(input.ExtraTools ?? []), ...directTools]
@@ -1879,6 +1885,7 @@ export class RealtimeClientSessionService {
             // regardless of driver support via the session deadline stamped by the transport layer.
             MaxSessionSeconds: input.MaxSessionSeconds,
             UserID: contextUser?.ID,
+            HasToolFraming: true,
         };
     }
 
@@ -2710,7 +2717,7 @@ export class RealtimeClientSessionService {
      * @param driverClass The resolved vendor's DriverClass.
      * @returns The array of projected direct action tools (empty if unsupported or disabled).
      */
-    public buildDirectActionTools(
+    public BuildDirectActionTools(
         targetAgentID: string | undefined,
         effectiveConfig?: RealtimeCoAgentConfig,
         driverClass?: string,
@@ -2730,7 +2737,7 @@ export class RealtimeClientSessionService {
             IsActionAllowedForDirectInvocation(action.Name, directConfig)
         );
 
-        const wireMap = this.buildWireActionMap(allowedActions);
+        const wireMap = this.BuildWireActionMap(allowedActions);
         if (agentSessionID) {
             this.sessionWireActionMaps.set(agentSessionID, wireMap);
             if (directConfig) {
@@ -2744,6 +2751,16 @@ export class RealtimeClientSessionService {
             tools.push(this.mapActionToToolDefinition(action, wireName));
         }
         return tools;
+    }
+
+    /** @deprecated Use {@link BuildDirectActionTools}. */
+    public buildDirectActionTools(
+        targetAgentID: string | undefined,
+        effectiveConfig?: RealtimeCoAgentConfig,
+        driverClass?: string,
+        agentSessionID?: string
+    ): RealtimeToolDefinition[] {
+        return this.BuildDirectActionTools(targetAgentID, effectiveConfig, driverClass, agentSessionID);
     }
 
     /**
@@ -2830,7 +2847,7 @@ export class RealtimeClientSessionService {
         }
 
         const candidateActions = this.getTargetAgentActions(target.ID);
-        const candidateWireMap = this.buildWireActionMap(candidateActions);
+        const candidateWireMap = this.BuildWireActionMap(candidateActions);
         const action = (input?.AgentSessionID ? this.sessionWireActionMaps.get(input.AgentSessionID)?.get(call.ToolName) : undefined)
             ?? candidateWireMap.get(call.ToolName)
             ?? Array.from(candidateWireMap.entries()).find(([w]) => w.toLowerCase() === call.ToolName.trim().toLowerCase())?.[1];

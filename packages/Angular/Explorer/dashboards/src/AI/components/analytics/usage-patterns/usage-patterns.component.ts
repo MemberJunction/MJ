@@ -554,18 +554,29 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
         return `color-mix(in srgb, var(--mj-brand-primary) ${intensity}%, var(--mj-bg-surface))`;
     }
 
+    /** @deprecated Use {@link GetCellBackground}. */
+    getCellBackground(day: number, hour: number): string {
+        return this.GetCellBackground(day, hour);
+    }
+
     GetCellTooltip(day: number, hour: number): string {
         const count = this.HeatmapCells[day]?.[hour]?.Count ?? 0;
         return `${DAY_NAMES[day]} ${this.formatHourLabel(hour)}: ${count} runs`;
+    }
+
+    /** @deprecated Use {@link GetCellTooltip}. */
+    getCellTooltip(day: number, hour: number): string {
+        return this.GetCellTooltip(day, hour);
     }
 
     GetCellCount(day: number, hour: number): number {
         return this.HeatmapCells[day]?.[hour]?.Count ?? 0;
     }
 
-    getCellBackground(day: number, hour: number): string { return this.GetCellBackground(day, hour); }
-    getCellTooltip(day: number, hour: number): string { return this.GetCellTooltip(day, hour); }
-    getCellCount(day: number, hour: number): number { return this.GetCellCount(day, hour); }
+    /** @deprecated Use {@link GetCellCount}. */
+    getCellCount(day: number, hour: number): number {
+        return this.GetCellCount(day, hour);
+    }
 
     // ── Data Loading ──
 

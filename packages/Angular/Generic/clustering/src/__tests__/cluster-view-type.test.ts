@@ -3,7 +3,7 @@ import type { EntityInfo } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import {
   DEFAULT_CLUSTER_VIEW_CONFIG,
-  toClusterViewConfig,
+  ToClusterViewConfig,
 } from '../lib/view-type/cluster-view.types';
 import { EntityDocumentAvailabilityEngine } from '../lib/view-type/entity-document-availability.engine';
 
@@ -28,25 +28,25 @@ function seedEntitiesWithVectors(entityIds: string[]): void {
 
 describe('toClusterViewConfig', () => {
   it('returns the full defaults for empty / null input', () => {
-    expect(toClusterViewConfig(null)).toEqual(DEFAULT_CLUSTER_VIEW_CONFIG);
-    expect(toClusterViewConfig(undefined)).toEqual(DEFAULT_CLUSTER_VIEW_CONFIG);
-    expect(toClusterViewConfig({})).toEqual(DEFAULT_CLUSTER_VIEW_CONFIG);
+    expect(ToClusterViewConfig(null)).toEqual(DEFAULT_CLUSTER_VIEW_CONFIG);
+    expect(ToClusterViewConfig(undefined)).toEqual(DEFAULT_CLUSTER_VIEW_CONFIG);
+    expect(ToClusterViewConfig({})).toEqual(DEFAULT_CLUSTER_VIEW_CONFIG);
   });
 
   it('preserves valid provided values', () => {
-    const cfg = toClusterViewConfig({ algorithm: 'dbscan', k: 8, dimensions: 3, colorBy: 'entity', maxRecords: 1000, nameClusters: false });
+    const cfg = ToClusterViewConfig({ algorithm: 'dbscan', k: 8, dimensions: 3, colorBy: 'entity', maxRecords: 1000, nameClusters: false });
     expect(cfg).toEqual({ algorithm: 'dbscan', k: 8, dimensions: 3, colorBy: 'entity', maxRecords: 1000, nameClusters: false });
   });
 
   it('coerces invalid enum-ish values to safe defaults', () => {
-    const cfg = toClusterViewConfig({ algorithm: 'bogus', dimensions: 5, colorBy: 'rainbow' });
+    const cfg = ToClusterViewConfig({ algorithm: 'bogus', dimensions: 5, colorBy: 'rainbow' });
     expect(cfg.algorithm).toBe('kmeans');
     expect(cfg.dimensions).toBe(2);
     expect(cfg.colorBy).toBe('cluster');
   });
 
   it('falls back to defaults for wrong-typed numerics/booleans', () => {
-    const cfg = toClusterViewConfig({ k: 'lots', maxRecords: null, nameClusters: 'yes' });
+    const cfg = ToClusterViewConfig({ k: 'lots', maxRecords: null, nameClusters: 'yes' });
     expect(cfg.k).toBe(DEFAULT_CLUSTER_VIEW_CONFIG.k);
     expect(cfg.maxRecords).toBe(DEFAULT_CLUSTER_VIEW_CONFIG.maxRecords);
     expect(cfg.nameClusters).toBe(DEFAULT_CLUSTER_VIEW_CONFIG.nameClusters);

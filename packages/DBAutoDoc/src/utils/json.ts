@@ -28,18 +28,23 @@
  * @returns Parsed value cast to `T`, or `null` on parse failure.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function cleanAndParseJSON<T = any>(inputString: string | null, logErrors = false): T | null {
+export function CleanAndParseJSON<T = any>(inputString: string | null, logErrors = false): T | null {
     if (!inputString) return null;
-    const cleaned = cleanJSON(inputString);
+    const cleaned = CleanJSON(inputString);
     if (!cleaned) return null;
-    return safeJSONParse<T>(cleaned, logErrors);
+    return SafeJSONParse<T>(cleaned, logErrors);
+}
+
+/** @deprecated Use {@link CleanAndParseJSON}. */
+export function cleanAndParseJSON<T = any>(inputString: string | null, logErrors = false): T | null {
+    return CleanAndParseJSON(inputString, logErrors);
 }
 
 /**
  * Extract a valid-JSON string from arbitrary input. Returns null if no usable
  * JSON can be salvaged. Behavior matches @memberjunction/global's CleanJSON.
  */
-export function cleanJSON(inputString: string | null): string | null {
+export function CleanJSON(inputString: string | null): string | null {
     if (!inputString) return null;
 
     let processedString = inputString.trim();
@@ -55,11 +60,11 @@ export function cleanJSON(inputString: string | null): string | null {
         // 2. Common LLM artifacts: extra trailing `}` or missing final `}`.
         if (processedString.endsWith('}')) {
             const withoutLast = processedString.slice(0, -1);
-            const withoutLastResult = safeJSONParse(withoutLast);
+            const withoutLastResult = SafeJSONParse(withoutLast);
             if (withoutLastResult) return JSON.stringify(withoutLastResult, null, 2);
 
             const withExtra = processedString + '}';
-            const withExtraResult = safeJSONParse(withExtra);
+            const withExtraResult = SafeJSONParse(withExtra);
             if (withExtraResult) return JSON.stringify(withExtraResult, null, 2);
         }
     }
@@ -94,7 +99,7 @@ export function cleanJSON(inputString: string | null): string | null {
     const matches = Array.from(processedString.matchAll(markdownRegex));
     if (matches.length > 0) {
         const extracted = matches.map((m) => m[1].trim()).join('\n');
-        return cleanJSON(extracted); // recurse — extracted content may need its own cleanup
+        return CleanJSON(extracted); // recurse — extracted content may need its own cleanup
     }
 
     // 7. Last resort: find first `[` or `{`, take everything to the last matching close-bracket.
@@ -126,12 +131,17 @@ export function cleanJSON(inputString: string | null): string | null {
     }
 }
 
+/** @deprecated Use {@link CleanJSON}. */
+export function cleanJSON(inputString: string | null): string | null {
+    return CleanJSON(inputString);
+}
+
 /**
  * Safe wrapper around JSON.parse. Catches errors; optionally logs them.
  * Matches @memberjunction/global's SafeJSONParse.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function safeJSONParse<T = any>(jsonString: string, logErrors = false): T | null {
+export function SafeJSONParse<T = any>(jsonString: string, logErrors = false): T | null {
     if (!jsonString) return null;
     try {
         return JSON.parse(jsonString) as T;
@@ -139,4 +149,9 @@ export function safeJSONParse<T = any>(jsonString: string, logErrors = false): T
         if (logErrors) console.error('Error parsing JSON string:', e);
         return null;
     }
+}
+
+/** @deprecated Use {@link SafeJSONParse}. */
+export function safeJSONParse<T = any>(jsonString: string, logErrors = false): T | null {
+    return SafeJSONParse(jsonString, logErrors);
 }

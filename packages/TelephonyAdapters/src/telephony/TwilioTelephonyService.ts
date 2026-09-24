@@ -39,19 +39,19 @@ const PHONE_IDENTITY_TYPE = 'PhoneNumber';
 /** A resolved inbound call's identifying fields (parsed from the Twilio webhook). */
 export interface InboundCallInput {
     /** The Twilio Call SID. */
-    callSid: string;
+    callSid: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The caller's number (Twilio `From`). */
-    from: string;
+    from: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** The dialed DID (Twilio `To`) — resolved to an agent identity. */
-    to: string;
+    to: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Result of starting an inbound bridge session. */
 export interface InboundCallResult {
     /** Whether a pinned agent was resolved + a bridge session started. */
-    accepted: boolean;
+    accepted: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Why it was rejected (no agent identity for the DID, provider missing, etc.). */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Injectable collaborators (production defaults wired in the constructor; fakes in tests). */
@@ -174,7 +174,7 @@ export class TwilioTelephonyService {
             Address: args.address,
             Direction: args.direction,
             Configuration: this.buildSessionConfiguration(args.direction, args.fromNumber, args.inboundCallId),
-            BindSdk: this.buildBindSdk(),
+            BindSdk: this.BuildBindSdk(),
             ContextUser: args.contextUser,
             MetadataProvider: args.provider,
         });
@@ -194,7 +194,7 @@ export class TwilioTelephonyService {
      * Builds the per-session SDK binding that wires the REAL Twilio bindings (REST client + the per-call
      * media registry) onto the telephony driver — overriding the package's default unbound SDK.
      */
-    public buildBindSdk(): BridgeNativeSdkBinding {
+    public BuildBindSdk(): BridgeNativeSdkBinding {
         return (driver) => {
             const telephony = driver as BaseTelephonyBridge;
             telephony.SetSdkFactory(() =>
@@ -208,6 +208,11 @@ export class TwilioTelephonyService {
                 ),
             );
         };
+    }
+
+    /** @deprecated Use {@link BuildBindSdk}. */
+    public buildBindSdk(): BridgeNativeSdkBinding {
+        return this.BuildBindSdk();
     }
 
     /**

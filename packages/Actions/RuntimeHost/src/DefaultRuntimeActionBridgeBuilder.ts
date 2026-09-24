@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { RuntimeActionBridgeBuilder, BridgeContext } from '@memberjunction/actions-base';
 import type { BridgeHandlerMap } from '@memberjunction/code-execution';
-import { buildRuntimeActionBridgeHandlers, getRuntimeActionBridgePreamble } from './RuntimeActionBridge';
+import { BuildRuntimeActionBridgeHandlers, GetRuntimeActionBridgePreamble } from './RuntimeActionBridge';
 
 /**
  * Default concrete `RuntimeActionBridgeBuilder` — registered with no key so
@@ -38,11 +38,11 @@ export class DefaultRuntimeActionBridgeBuilder extends RuntimeActionBridgeBuilde
     }
 
     public BuildHandlers(ctx: BridgeContext): BridgeHandlerMap {
-        return buildRuntimeActionBridgeHandlers(ctx);
+        return BuildRuntimeActionBridgeHandlers(ctx);
     }
 
     public GetPreamble(): string {
-        return getRuntimeActionBridgePreamble();
+        return GetRuntimeActionBridgePreamble();
     }
 }
 

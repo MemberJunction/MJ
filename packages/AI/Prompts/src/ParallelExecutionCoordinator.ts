@@ -42,27 +42,42 @@ class ParallelProgressTracker {
     this.progressCallbacks = progressCallbacks;
   }
 
-  updateProgress(currentGroup: number): void {
+  UpdateProgress(currentGroup: number): void {
     this.currentGroup = currentGroup;
     this.sendProgressUpdate();
   }
 
-  addActiveTask(taskId: string): void {
+  /** @deprecated Use {@link UpdateProgress}. */
+  updateProgress(currentGroup: number): void {
+    return this.UpdateProgress(currentGroup);
+  }
+
+  AddActiveTask(taskId: string): void {
     if (!this.activeTasks.includes(taskId)) {
       this.activeTasks.push(taskId);
     }
   }
 
-  removeActiveTask(taskId: string): void {
+  /** @deprecated Use {@link AddActiveTask}. */
+  addActiveTask(taskId: string): void {
+    return this.AddActiveTask(taskId);
+  }
+
+  RemoveActiveTask(taskId: string): void {
     const index = this.activeTasks.indexOf(taskId);
     if (index > -1) {
       this.activeTasks.splice(index, 1);
     }
   }
 
-  taskCompleted(result: ExecutionTaskResult): void {
+  /** @deprecated Use {@link RemoveActiveTask}. */
+  removeActiveTask(taskId: string): void {
+    return this.RemoveActiveTask(taskId);
+  }
+
+  TaskCompleted(result: ExecutionTaskResult): void {
     this.completedTasks++;
-    this.removeActiveTask(result.task.taskId);
+    this.RemoveActiveTask(result.task.taskId);
 
     if (result.success) {
       this.successfulTasks++;
@@ -84,6 +99,11 @@ class ParallelProgressTracker {
     }
 
     this.sendProgressUpdate();
+  }
+
+  /** @deprecated Use {@link TaskCompleted}. */
+  taskCompleted(result: ExecutionTaskResult): void {
+    return this.TaskCompleted(result);
   }
 
   private getCurrentProgress(): ParallelExecutionProgress {
@@ -314,13 +334,13 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       groupTasks.sort((a, b) => b.priority - a.priority);
 
       groups.push({
-        groupNumber,
-        tasks: groupTasks,
+        GroupNumber: groupNumber,
+        Tasks: groupTasks,
       });
     }
 
     // Sort groups by group number (execute in ascending order)
-    groups.sort((a, b) => a.groupNumber - b.groupNumber);
+    groups.sort((a, b) => a.GroupNumber - b.GroupNumber);
 
     LogStatus(`Grouped ${tasks.length} tasks into ${groups.length} execution groups`);
     return groups;
@@ -349,9 +369,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     for (const group of groups) {
       // Check for cancellation before each group
       if (cancellationToken?.aborted) {
-        LogStatus(`Group execution cancelled at group ${group.groupNumber}`);
+        LogStatus(`Group execution cancelled at group ${group.GroupNumber}`);
         // Create cancelled results for remaining tasks
-        const cancelledResults = group.tasks.map((task) => ({
+        const cancelledResults = group.Tasks.map((task) => ({
           task,
           success: false,
           cancelled: true,
@@ -364,10 +384,10 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         break;
       }
 
-      LogStatus(`Executing group ${group.groupNumber} with ${group.tasks.length} tasks`);
+      LogStatus(`Executing group ${group.GroupNumber} with ${group.Tasks.length} tasks`);
 
       // Update progress tracker for current group
-      progressTracker?.updateProgress(group.groupNumber);
+      progressTracker?.updateProgress(group.GroupNumber);
 
       const groupResults = await this.executeGroupInParallel(params, group, config, parentPromptRunId, cancellationToken, progressTracker);
       allResults.push(...groupResults);
@@ -375,7 +395,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       // Check if we should fail fast
       if (config.failFast && groupResults.some((r) => !r.success)) {
         const failedTasks = groupResults.filter((r) => !r.success);
-        LogError(`Failing fast due to ${failedTasks.length} failed tasks in group ${group.groupNumber}`);
+        LogError(`Failing fast due to ${failedTasks.length} failed tasks in group ${group.GroupNumber}`);
         break;
       }
     }
@@ -401,7 +421,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     cancellationToken?: AbortSignal,
     progressTracker?: ParallelProgressTracker,
   ): Promise<ExecutionTaskResult[]> {
-    const maxConcurrent = Math.min(config.maxConcurrentExecutions, group.tasks.length);
+    const maxConcurrent = Math.min(config.maxConcurrentExecutions, group.Tasks.length);
     const results: ExecutionTaskResult[] = [];
     const executing: Promise<ExecutionTaskResult>[] = [];
 
@@ -409,13 +429,13 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     let executionOrder = 0;
 
     // Process tasks with concurrency limit
-    while (taskIndex < group.tasks.length || executing.length > 0) {
+    while (taskIndex < group.Tasks.length || executing.length > 0) {
       // Check for cancellation
       if (cancellationToken?.aborted) {
-        LogStatus(`Task execution cancelled in group ${group.groupNumber}`);
+        LogStatus(`Task execution cancelled in group ${group.GroupNumber}`);
         // Cancel remaining tasks
-        while (taskIndex < group.tasks.length) {
-          const task = group.tasks[taskIndex++];
+        while (taskIndex < group.Tasks.length) {
+          const task = group.Tasks[taskIndex++];
           results.push({
             task,
             success: false,
@@ -430,8 +450,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       }
 
       // Start new tasks up to concurrency limit
-      while (executing.length < maxConcurrent && taskIndex < group.tasks.length) {
-        const task = group.tasks[taskIndex++];
+      while (executing.length < maxConcurrent && taskIndex < group.Tasks.length) {
+        const task = group.Tasks[taskIndex++];
         progressTracker?.addActiveTask(task.taskId);
         const execution = this.executeTask(params, task, config, parentPromptRunId, executionOrder++);
         executing.push(execution);
@@ -455,7 +475,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
     const successfulResults = results.filter((r) => r.success);
     const cancelledResults = results.filter((r) => r.cancelled);
-    LogStatus(`Group ${group.groupNumber} completed: ${successfulResults.length}/${results.length} successful, ${cancelledResults.length} cancelled`);
+    LogStatus(`Group ${group.GroupNumber} completed: ${successfulResults.length}/${results.length} successful, ${cancelledResults.length} cancelled`);
     return results;
   }
 

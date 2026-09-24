@@ -6,7 +6,7 @@ import { ResolveStartupMode, RunView, LogStatus, SetProductionStatus } from '@me
 import { UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { getValidatedConfig } from '../../config';
+import { GetValidatedConfig } from '../../config';
 
 interface ReclassifyTarget {
     artifactVersionId: string;
@@ -45,7 +45,7 @@ export default class ArtifactsReclassify extends Command {
         SetProductionStatus(false);
 
         const spinner = ora('Connecting to database...').start();
-        const config = getValidatedConfig();
+        const config = GetValidatedConfig();
         const pool = new sql.ConnectionPool({
             server: config.dbHost,
             port: config.dbPort,

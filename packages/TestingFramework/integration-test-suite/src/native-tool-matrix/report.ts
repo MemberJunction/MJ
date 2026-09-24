@@ -15,61 +15,61 @@ import type { MatrixCell } from './types';
 /** One request/response pair, as persisted to JSONL. The rig appends one of these per repetition. */
 export interface ProbeRecord {
     /** Run label, so several runs can share a results directory and still be told apart. */
-    label: string;
-    timestamp: string;
-    cellId: string;
-    modelLabel: string;
-    apiName: string;
-    developer: string;
-    generation: string;
-    driverClass: string;
-    scenarioId: string;
-    toolMode: MatrixCell['toolMode'];
-    responseFormat: MatrixCell['responseFormat'];
-    effortLevel: string | null;
-    rep: number;
-    latencyMs: number;
-    observation: CellObservation;
+    Label: string;
+    Timestamp: string;
+    CellId: string;
+    ModelLabel: string;
+    ApiName: string;
+    Developer: string;
+    Generation: string;
+    DriverClass: string;
+    ScenarioId: string;
+    ToolMode: MatrixCell['ToolMode'];
+    ResponseFormat: MatrixCell['ResponseFormat'];
+    EffortLevel: string | null;
+    Rep: number;
+    LatencyMs: number;
+    Observation: CellObservation;
 }
 
 /** Per-cell rates. Every rate is over the repetitions that could produce it, never over all reps. */
 export interface CellSummary {
-    cellId: string;
-    modelLabel: string;
-    apiName: string;
-    developer: string;
-    generation: string;
-    scenarioId: string;
-    toolMode: MatrixCell['toolMode'];
-    responseFormat: MatrixCell['responseFormat'];
-    effortLevel: string | null;
-    reps: number;
-    errorCount: number;
-    errorSamples: string[];
+    CellId: string;
+    ModelLabel: string;
+    ApiName: string;
+    Developer: string;
+    Generation: string;
+    ScenarioId: string;
+    ToolMode: MatrixCell['ToolMode'];
+    ResponseFormat: MatrixCell['ResponseFormat'];
+    EffortLevel: string | null;
+    reps: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    errorCount: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    ErrorSamples: string[];
     /**
      * Computed over ALL repetitions, errors included — a provider rejecting the request is a wrong
      * answer from the caller's point of view, not a missing observation.
      */
-    decisionCorrectRate: number;
+    DecisionCorrectRate: number;
     /**
      * These three describe what a SUCCESSFUL turn looked like, so they are `null` — not zero — when
      * every repetition errored. Reporting an all-400 cell as "0% called a tool" would read as a
      * model choosing not to call one, which is the opposite of what happened.
      */
-    nativeCallRate: number | null;
-    meanNativeCalls: number | null;
-    parallelRate: number | null;
+    nativeCallRate: number | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    MeanNativeCalls: number | null;
+    parallelRate: number | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Among repetitions that produced at least one native call. */
-    wellFormedRate: number | null;
+    WellFormedRate: number | null;
     /** Among repetitions that produced at least one native call. */
-    textWithCallRate: number | null;
-    toolChoiceHonoredRate: number | null;
-    envelopeParsedRate: number | null;
-    envelopeValidRate: number | null;
-    argumentMatchRate: number | null;
-    finishReasons: Record<string, number>;
-    meanPromptTokens: number | null;
-    meanLatencyMs: number;
+    TextWithCallRate: number | null;
+    ToolChoiceHonoredRate: number | null;
+    EnvelopeParsedRate: number | null;
+    EnvelopeValidRate: number | null;
+    argumentMatchRate: number | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    FinishReasons: Record<string, number>;
+    MeanPromptTokens: number | null;
+    MeanLatencyMs: number;
 }
 
 function mean(values: number[]): number {
@@ -87,7 +87,7 @@ function defined<T>(values: (T | null | undefined)[]): T[] {
 function tallyFinishReasons(observations: CellObservation[]): Record<string, number> {
     const tally: Record<string, number> = {};
     for (const o of observations) {
-        const key = o.driverSucceeded ? (o.finishReason ?? '(none)') : '(error)';
+        const key = o.driverSucceeded ? (o.FinishReason ?? '(none)') : '(error)';
         tally[key] = (tally[key] ?? 0) + 1;
     }
     return tally;
@@ -96,51 +96,56 @@ function tallyFinishReasons(observations: CellObservation[]): Record<string, num
 /** Collapses one cell's repetitions into rates. */
 function summarizeOne(records: ProbeRecord[]): CellSummary {
     const first = records[0];
-    const observations = records.map((r) => r.observation);
+    const observations = records.map((r) => r.Observation);
     const ok = observations.filter((o) => o.driverSucceeded);
     const withCalls = ok.filter((o) => o.nativeToolCallCount > 0);
 
     return {
-        cellId: first.cellId,
-        modelLabel: first.modelLabel, apiName: first.apiName, developer: first.developer, generation: first.generation,
-        scenarioId: first.scenarioId, toolMode: first.toolMode, responseFormat: first.responseFormat, effortLevel: first.effortLevel,
+        CellId: first.CellId,
+        ModelLabel: first.ModelLabel, ApiName: first.ApiName, Developer: first.Developer, Generation: first.Generation,
+        ScenarioId: first.ScenarioId, ToolMode: first.ToolMode, ResponseFormat: first.ResponseFormat, EffortLevel: first.EffortLevel,
         reps: records.length,
         errorCount: observations.length - ok.length,
-        errorSamples: [...new Set(defined(observations.map((o) => o.errorMessage)))].slice(0, 2),
-        decisionCorrectRate: rateOf(observations.map((o) => o.decisionCorrect)) ?? 0,
+        ErrorSamples: [...new Set(defined(observations.map((o) => o.errorMessage)))].slice(0, 2),
+        DecisionCorrectRate: rateOf(observations.map((o) => o.decisionCorrect)) ?? 0,
         nativeCallRate: rateOf(ok.map((o) => o.nativeToolCallCount > 0)),
-        meanNativeCalls: ok.length === 0 ? null : mean(ok.map((o) => o.nativeToolCallCount)),
+        MeanNativeCalls: ok.length === 0 ? null : mean(ok.map((o) => o.nativeToolCallCount)),
         parallelRate: rateOf(ok.map((o) => o.nativeToolCallCount > 1)),
-        wellFormedRate: rateOf(withCalls.map((o) => o.nativeCallsWellFormed)),
-        textWithCallRate: rateOf(withCalls.map((o) => o.textAndCallsTogether)),
-        toolChoiceHonoredRate: rateOf(defined(ok.map((o) => o.toolChoiceHonored))),
-        envelopeParsedRate: rateOf(defined(ok.map((o) => o.envelopeParsed))),
-        envelopeValidRate: rateOf(defined(ok.map((o) => o.envelopeValid))),
+        WellFormedRate: rateOf(withCalls.map((o) => o.nativeCallsWellFormed)),
+        TextWithCallRate: rateOf(withCalls.map((o) => o.TextAndCallsTogether)),
+        ToolChoiceHonoredRate: rateOf(defined(ok.map((o) => o.ToolChoiceHonored))),
+        EnvelopeParsedRate: rateOf(defined(ok.map((o) => o.envelopeParsed))),
+        EnvelopeValidRate: rateOf(defined(ok.map((o) => o.envelopeValid))),
         argumentMatchRate: (() => {
             const rates = defined(ok.map((o) => o.argumentMatchRate));
             return rates.length === 0 ? null : mean(rates);
         })(),
-        finishReasons: tallyFinishReasons(observations),
-        meanPromptTokens: (() => {
-            const tokens = defined(ok.map((o) => o.promptTokens));
+        FinishReasons: tallyFinishReasons(observations),
+        MeanPromptTokens: (() => {
+            const tokens = defined(ok.map((o) => o.PromptTokens));
             return tokens.length === 0 ? null : mean(tokens);
         })(),
-        meanLatencyMs: mean(records.map((r) => r.latencyMs))
+        MeanLatencyMs: mean(records.map((r) => r.LatencyMs))
     };
 }
 
 /** Groups records by cell and summarizes each. Input order is irrelevant. */
-export function summarizeCells(records: ProbeRecord[]): CellSummary[] {
+export function SummarizeCells(records: ProbeRecord[]): CellSummary[] {
     const byCell = new Map<string, ProbeRecord[]>();
     for (const record of records) {
-        const bucket = byCell.get(record.cellId);
+        const bucket = byCell.get(record.CellId);
         if (bucket) {
             bucket.push(record);
         } else {
-            byCell.set(record.cellId, [record]);
+            byCell.set(record.CellId, [record]);
         }
     }
     return [...byCell.values()].map(summarizeOne);
+}
+
+/** @deprecated Use {@link SummarizeCells}. */
+export function summarizeCells(records: ProbeRecord[]): CellSummary[] {
+    return SummarizeCells(records);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -165,13 +170,13 @@ function renderTable(headers: string[], rows: string[][]): string {
 function modelsOf(summaries: CellSummary[]): CellSummary[] {
     const seen = new Map<string, CellSummary>();
     for (const s of summaries) {
-        if (!seen.has(s.apiName)) {
-            seen.set(s.apiName, s);
+        if (!seen.has(s.ApiName)) {
+            seen.set(s.ApiName, s);
         }
     }
     // Sorted, not first-seen: models run in parallel, so record order is nondeterministic and two
     // renders of the SAME jsonl would otherwise produce differently-ordered tables.
-    return [...seen.values()].sort((a, b) => a.developer.localeCompare(b.developer) || a.apiName.localeCompare(b.apiName));
+    return [...seen.values()].sort((a, b) => a.Developer.localeCompare(b.Developer) || a.ApiName.localeCompare(b.ApiName));
 }
 
 /** Pools the cells matching a filter and reports one rate over the pooled repetitions. */
@@ -183,10 +188,10 @@ function pooled(summaries: CellSummary[], select: (s: CellSummary) => boolean, m
 }
 
 function renderForcingSection(summaries: CellSummary[]): string {
-    const modes: CellSummary['toolMode'][] = ['none', 'required', 'named'];
+    const modes: CellSummary['ToolMode'][] = ['none', 'required', 'named'];
     const rows = modelsOf(summaries).map((m) => [
-        m.modelLabel,
-        ...modes.map((mode) => pct(pooled(summaries, (s) => s.apiName === m.apiName && s.toolMode === mode, (s) => s.toolChoiceHonoredRate)))
+        m.ModelLabel,
+        ...modes.map((mode) => pct(pooled(summaries, (s) => s.ApiName === m.ApiName && s.ToolMode === mode, (s) => s.ToolChoiceHonoredRate)))
     ]);
     return [
         '### Forcing semantics — does `toolChoice` mean what it says?',
@@ -198,20 +203,20 @@ function renderForcingSection(summaries: CellSummary[]): string {
 }
 
 function renderJsonModeSection(summaries: CellSummary[]): string {
-    const withTools = (s: CellSummary): boolean => s.toolMode !== 'no-tools';
+    const withTools = (s: CellSummary): boolean => s.ToolMode !== 'no-tools';
     const rows = modelsOf(summaries).map((m) => {
-        const cells = summaries.filter((s) => s.apiName === m.apiName && withTools(s));
-        const anyCells = cells.filter((s) => s.responseFormat === 'Any');
-        const jsonCells = cells.filter((s) => s.responseFormat === 'JSON');
+        const cells = summaries.filter((s) => s.ApiName === m.ApiName && withTools(s));
+        const anyCells = cells.filter((s) => s.ResponseFormat === 'Any');
+        const jsonCells = cells.filter((s) => s.ResponseFormat === 'JSON');
         const errorRate = (group: CellSummary[]): string => {
             const reps = group.reduce((a, s) => a + s.reps, 0);
             const errors = group.reduce((a, s) => a + s.errorCount, 0);
             return reps === 0 ? '—' : `${Math.round((errors / reps) * 100)}%`;
         };
         return [
-            m.modelLabel,
-            errorRate(anyCells), pct(pooled(anyCells, () => true, (s) => s.decisionCorrectRate)),
-            errorRate(jsonCells), pct(pooled(jsonCells, () => true, (s) => s.decisionCorrectRate))
+            m.ModelLabel,
+            errorRate(anyCells), pct(pooled(anyCells, () => true, (s) => s.DecisionCorrectRate)),
+            errorRate(jsonCells), pct(pooled(jsonCells, () => true, (s) => s.DecisionCorrectRate))
         ];
     });
     return [
@@ -224,14 +229,14 @@ function renderJsonModeSection(summaries: CellSummary[]): string {
 }
 
 function renderParallelSection(summaries: CellSummary[]): string {
-    const pick = (apiName: string, format: CellSummary['responseFormat']): CellSummary[] =>
-        summaries.filter((s) => s.apiName === apiName && s.scenarioId === 'parallel-call' && s.toolMode === 'auto' && s.responseFormat === format);
+    const pick = (apiName: string, format: CellSummary['ResponseFormat']): CellSummary[] =>
+        summaries.filter((s) => s.ApiName === apiName && s.ScenarioId === 'parallel-call' && s.ToolMode === 'auto' && s.ResponseFormat === format);
     const rows = modelsOf(summaries).map((m) => [
-        m.modelLabel,
-        num(pooled(pick(m.apiName, 'Any'), () => true, (s) => s.meanNativeCalls)),
-        pct(pooled(pick(m.apiName, 'Any'), () => true, (s) => s.decisionCorrectRate)),
-        num(pooled(pick(m.apiName, 'JSON'), () => true, (s) => s.meanNativeCalls)),
-        pct(pooled(pick(m.apiName, 'JSON'), () => true, (s) => s.decisionCorrectRate))
+        m.ModelLabel,
+        num(pooled(pick(m.ApiName, 'Any'), () => true, (s) => s.MeanNativeCalls)),
+        pct(pooled(pick(m.ApiName, 'Any'), () => true, (s) => s.DecisionCorrectRate)),
+        num(pooled(pick(m.ApiName, 'JSON'), () => true, (s) => s.MeanNativeCalls)),
+        pct(pooled(pick(m.ApiName, 'JSON'), () => true, (s) => s.DecisionCorrectRate))
     ]);
     return [
         '### Parallel calls (plan §9.3)',
@@ -243,13 +248,13 @@ function renderParallelSection(summaries: CellSummary[]): string {
 }
 
 function renderCoherenceSection(summaries: CellSummary[]): string {
-    const pick = (apiName: string, mode: CellSummary['toolMode'], format: CellSummary['responseFormat']): CellSummary[] =>
-        summaries.filter((s) => s.apiName === apiName && s.scenarioId === 'no-call-needed' && s.toolMode === mode && s.responseFormat === format);
+    const pick = (apiName: string, mode: CellSummary['ToolMode'], format: CellSummary['ResponseFormat']): CellSummary[] =>
+        summaries.filter((s) => s.ApiName === apiName && s.ScenarioId === 'no-call-needed' && s.ToolMode === mode && s.ResponseFormat === format);
     const rows = modelsOf(summaries).map((m) => [
-        m.modelLabel,
-        pct(pooled(pick(m.apiName, 'auto', 'Any'), () => true, (s) => s.nativeCallRate)),
-        pct(pooled(pick(m.apiName, 'auto', 'JSON'), () => true, (s) => s.nativeCallRate)),
-        pct(pooled(pick(m.apiName, 'required', 'Any'), () => true, (s) => s.textWithCallRate))
+        m.ModelLabel,
+        pct(pooled(pick(m.ApiName, 'auto', 'Any'), () => true, (s) => s.nativeCallRate)),
+        pct(pooled(pick(m.ApiName, 'auto', 'JSON'), () => true, (s) => s.nativeCallRate)),
+        pct(pooled(pick(m.ApiName, 'required', 'Any'), () => true, (s) => s.TextWithCallRate))
     ]);
     return [
         '### Coherence — does declaring tools make a model reach for one?',
@@ -261,15 +266,15 @@ function renderCoherenceSection(summaries: CellSummary[]): string {
 }
 
 function renderEnvelopeSection(summaries: CellSummary[]): string {
-    const pick = (apiName: string, mode: CellSummary['toolMode'], format: CellSummary['responseFormat']): CellSummary[] =>
-        summaries.filter((s) => s.apiName === apiName && s.scenarioId === 'envelope' && s.toolMode === mode && s.responseFormat === format);
+    const pick = (apiName: string, mode: CellSummary['ToolMode'], format: CellSummary['ResponseFormat']): CellSummary[] =>
+        summaries.filter((s) => s.ApiName === apiName && s.ScenarioId === 'envelope' && s.ToolMode === mode && s.ResponseFormat === format);
     const rows = modelsOf(summaries).map((m) => [
-        m.modelLabel,
-        pct(pooled(pick(m.apiName, 'no-tools', 'Any'), () => true, (s) => s.envelopeValidRate)),
-        pct(pooled(pick(m.apiName, 'auto', 'Any'), () => true, (s) => s.envelopeValidRate)),
-        pct(pooled(pick(m.apiName, 'auto', 'Any'), () => true, (s) => s.nativeCallRate)),
-        pct(pooled(pick(m.apiName, 'auto', 'JSON'), () => true, (s) => s.envelopeValidRate)),
-        pct(pooled(pick(m.apiName, 'auto', 'JSON'), () => true, (s) => s.nativeCallRate))
+        m.ModelLabel,
+        pct(pooled(pick(m.ApiName, 'no-tools', 'Any'), () => true, (s) => s.EnvelopeValidRate)),
+        pct(pooled(pick(m.ApiName, 'auto', 'Any'), () => true, (s) => s.EnvelopeValidRate)),
+        pct(pooled(pick(m.ApiName, 'auto', 'Any'), () => true, (s) => s.nativeCallRate)),
+        pct(pooled(pick(m.ApiName, 'auto', 'JSON'), () => true, (s) => s.EnvelopeValidRate)),
+        pct(pooled(pick(m.ApiName, 'auto', 'JSON'), () => true, (s) => s.nativeCallRate))
     ]);
     return [
         '### The envelope under declared tools — which channel does the model pick?',
@@ -282,11 +287,11 @@ function renderEnvelopeSection(summaries: CellSummary[]): string {
 
 function renderShapeSection(summaries: CellSummary[]): string {
     const rows = modelsOf(summaries).map((m) => {
-        const calling = summaries.filter((s) => s.apiName === m.apiName && s.toolMode !== 'no-tools' && s.toolMode !== 'none');
+        const calling = summaries.filter((s) => s.ApiName === m.ApiName && s.ToolMode !== 'no-tools' && s.ToolMode !== 'none');
         return [
-            m.modelLabel,
-            pct(pooled(calling, () => true, (s) => s.wellFormedRate)),
-            pct(pooled(calling, () => true, (s) => s.textWithCallRate)),
+            m.ModelLabel,
+            pct(pooled(calling, () => true, (s) => s.WellFormedRate)),
+            pct(pooled(calling, () => true, (s) => s.TextWithCallRate)),
             pct(pooled(calling, () => true, (s) => s.argumentMatchRate))
         ];
     });
@@ -301,15 +306,15 @@ function renderShapeSection(summaries: CellSummary[]): string {
 
 function renderFinishReasonSection(summaries: CellSummary[]): string {
     const rows = modelsOf(summaries).map((m) => {
-        const mine = summaries.filter((s) => s.apiName === m.apiName);
+        const mine = summaries.filter((s) => s.ApiName === m.ApiName);
         const tally: Record<string, number> = {};
         for (const s of mine) {
-            for (const [reason, count] of Object.entries(s.finishReasons)) {
+            for (const [reason, count] of Object.entries(s.FinishReasons)) {
                 tally[reason] = (tally[reason] ?? 0) + count;
             }
         }
         const rendered = Object.entries(tally).sort((a, b) => b[1] - a[1]).map(([r, c]) => `\`${r}\` ×${c}`).join(', ');
-        return [m.modelLabel, rendered];
+        return [m.ModelLabel, rendered];
     });
     return [
         '### Finish-reason distribution',
@@ -322,13 +327,13 @@ function renderFinishReasonSection(summaries: CellSummary[]): string {
 
 function renderCostSection(summaries: CellSummary[]): string {
     const rows = modelsOf(summaries).map((m) => {
-        const noTools = summaries.filter((s) => s.apiName === m.apiName && s.toolMode === 'no-tools');
-        const withTools = summaries.filter((s) => s.apiName === m.apiName && s.toolMode !== 'no-tools');
+        const noTools = summaries.filter((s) => s.ApiName === m.ApiName && s.ToolMode === 'no-tools');
+        const withTools = summaries.filter((s) => s.ApiName === m.ApiName && s.ToolMode !== 'no-tools');
         return [
-            m.modelLabel,
-            num(pooled(noTools, () => true, (s) => s.meanPromptTokens), 0),
-            num(pooled(withTools, () => true, (s) => s.meanPromptTokens), 0),
-            num(pooled(summaries.filter((s) => s.apiName === m.apiName), () => true, (s) => s.meanLatencyMs), 0)
+            m.ModelLabel,
+            num(pooled(noTools, () => true, (s) => s.MeanPromptTokens), 0),
+            num(pooled(withTools, () => true, (s) => s.MeanPromptTokens), 0),
+            num(pooled(summaries.filter((s) => s.ApiName === m.ApiName), () => true, (s) => s.MeanLatencyMs), 0)
         ];
     });
     return [
@@ -345,28 +350,28 @@ function renderErrorSection(summaries: CellSummary[]): string {
     if (failing.length === 0) {
         return ['### Errors', '', 'None — every cell returned a successful result on every repetition.'].join('\n');
     }
-    const rows = failing.map((s) => [`\`${s.cellId}\``, `${s.errorCount}/${s.reps}`, s.errorSamples.map((e) => e.replace(/\|/g, '\\|').slice(0, 160)).join('<br>')]);
+    const rows = failing.map((s) => [`\`${s.CellId}\``, `${s.errorCount}/${s.reps}`, s.ErrorSamples.map((e) => e.replace(/\|/g, '\\|').slice(0, 160)).join('<br>')]);
     return ['### Errors', '', 'Every cell that failed at least once, with the provider message. A whole-cell failure is itself a finding.', '', renderTable(['Cell', 'Failed', 'Message'], rows)].join('\n');
 }
 
 /** Run metadata printed at the top of the scorecard so a result is reproducible from the doc alone. */
 export interface ScorecardMeta {
-    label: string;
-    startedAt: string;
-    finishedAt: string;
-    reps: number;
-    cellCount: number;
+    Label: string;
+    StartedAt: string;
+    FinishedAt: string;
+    reps: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    CellCount: number;
     /** Omitted when re-rendering from records, which carry no memory of what the spec skipped. */
-    skippedCount: number | null;
-    callCount: number;
+    SkippedCount: number | null;
+    CallCount: number;
 }
 
 /** Renders the whole scorecard. Sections are ordered by the question each answers. */
-export function renderScorecard(summaries: CellSummary[], meta: ScorecardMeta): string {
+export function RenderScorecard(summaries: CellSummary[], meta: ScorecardMeta): string {
     return [
-        `# BaseLLM tool-calling matrix (\`${meta.label}\`)`,
+        `# BaseLLM tool-calling matrix (\`${meta.Label}\`)`,
         '',
-        `Generated by \`rigs/native-tool-matrix.ts\`. ${meta.cellCount} cells × ${meta.reps} repetitions = ${meta.callCount} live calls${meta.skippedCount === null ? '' : `; ${meta.skippedCount} combinations skipped as vacuous`}. Started ${meta.startedAt}, finished ${meta.finishedAt}.`,
+        `Generated by \`rigs/native-tool-matrix.ts\`. ${meta.CellCount} cells × ${meta.reps} repetitions = ${meta.CallCount} live calls${meta.SkippedCount === null ? '' : `; ${meta.SkippedCount} combinations skipped as vacuous`}. Started ${meta.StartedAt}, finished ${meta.FinishedAt}.`,
         '',
         renderForcingSection(summaries), '',
         renderJsonModeSection(summaries), '',
@@ -378,4 +383,9 @@ export function renderScorecard(summaries: CellSummary[], meta: ScorecardMeta): 
         renderCostSection(summaries), '',
         renderErrorSection(summaries), ''
     ].join('\n');
+}
+
+/** @deprecated Use {@link RenderScorecard}. */
+export function renderScorecard(summaries: CellSummary[], meta: ScorecardMeta): string {
+    return RenderScorecard(summaries, meta);
 }

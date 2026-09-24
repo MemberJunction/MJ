@@ -76,7 +76,7 @@ export interface WellFormedResult {
 }
 
 /** Judges whether a turn produced usable output. */
-export function evaluateWellFormed(input: WellFormedInput, config: WellFormedConfig = {}): WellFormedResult {
+export function EvaluateWellFormed(input: WellFormedInput, config: WellFormedConfig = {}): WellFormedResult {
     const { decision } = input;
     const details = {
         kind: decision.kind,
@@ -129,4 +129,9 @@ export function evaluateWellFormed(input: WellFormedInput, config: WellFormedCon
     }
 
     return { passed: true, score: 1, message: `usable ${decision.encoding} response (${decision.kind})`, details };
+}
+
+/** @deprecated Use {@link EvaluateWellFormed}. */
+export function evaluateWellFormed(input: WellFormedInput, config: WellFormedConfig = {}): WellFormedResult {
+    return EvaluateWellFormed(input, config);
 }

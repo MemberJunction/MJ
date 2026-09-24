@@ -8,7 +8,7 @@
  * @module @memberjunction/theme-engine
  */
 
-import { hexToOKLCH, oklchToHex, OKLCH } from './color.js';
+import { HexToOKLCH, OklchToHex, OKLCH } from './color.js';
 
 /** One step of a ramp: its numeric key (50..950) and its measured OKLCH L/C. */
 export interface RampStop {
@@ -92,32 +92,47 @@ export const FAMILY_ANCHOR: Record<'brand' | 'accent' | 'tertiary', number> = {
  * lightness; its hue becomes the seed's hue; its chroma is the shape chroma scaled so
  * the anchor step matches the seed's chroma, times `vibrancy`.
  */
+export function GenerateBrandRamp(
+  shape: RampStop[],
+  anchorStep: number,
+  seedHex: string,
+  vibrancy: number,
+): Record<number, string> {
+  const seed = HexToOKLCH(seedHex);
+  const anchorC = shape.find((s) => s.step === anchorStep)?.C ?? 1;
+  const chromaScale = (anchorC > 0 ? seed.c / anchorC : 1) * vibrancy;
+  const out: Record<number, string> = {};
+  for (const stop of shape) {
+    const color: OKLCH = { l: stop.L, c: stop.C * chromaScale, h: seed.h };
+    out[stop.step] = OklchToHex(color);
+  }
+  return out;
+}
+
+/** @deprecated Use {@link GenerateBrandRamp}. */
 export function generateBrandRamp(
   shape: RampStop[],
   anchorStep: number,
   seedHex: string,
   vibrancy: number,
 ): Record<number, string> {
-  const seed = hexToOKLCH(seedHex);
-  const anchorC = shape.find((s) => s.step === anchorStep)?.C ?? 1;
-  const chromaScale = (anchorC > 0 ? seed.c / anchorC : 1) * vibrancy;
-  const out: Record<number, string> = {};
-  for (const stop of shape) {
-    const color: OKLCH = { l: stop.L, c: stop.C * chromaScale, h: seed.h };
-    out[stop.step] = oklchToHex(color);
-  }
-  return out;
+  return GenerateBrandRamp(shape, anchorStep, seedHex, vibrancy);
 }
 
 /**
  * The neutral ramp: shape lightness preserved, hue bled from the brand (G2), chroma
  * scaled to the requested `neutralChroma` mid-target.
  */
-export function generateNeutralRamp(brandHueDeg: number, neutralChroma: number): Record<number, string> {
+export function GenerateNeutralRamp(brandHueDeg: number, neutralChroma: number): Record<number, string> {
   const chromaScale = neutralChroma / NEUTRAL_REFERENCE_CHROMA;
   const out: Record<number, string> = {};
   for (const stop of NEUTRAL_SHAPE) {
-    out[stop.step] = oklchToHex({ l: stop.L, c: stop.C * chromaScale, h: brandHueDeg });
+    out[stop.step] = OklchToHex({ l: stop.L, c: stop.C * chromaScale, h: brandHueDeg });
   }
   return out;
+}
+
+/** @deprecated Use {@link GenerateNeutralRamp}. */
+export function generateNeutralRamp(brandHueDeg: number, neutralChroma: number): Record<number, string> {
+  return GenerateNeutralRamp(brandHueDeg, neutralChroma);
 }

@@ -260,6 +260,11 @@ export function LoadElasticsearchSearchProvider(): void {
 }
 
 /** Test-only: clear the memoized SDK loader so each test installs its own mock. */
-export function __resetElasticsearchClientLoaderForTests(): void {
+export function ResetElasticsearchClientLoaderForTests(): void {
     clientCtorPromise = null;
+}
+
+/** @deprecated Use {@link ResetElasticsearchClientLoaderForTests}. */
+export function __resetElasticsearchClientLoaderForTests(): void {
+    return ResetElasticsearchClientLoaderForTests();
 }

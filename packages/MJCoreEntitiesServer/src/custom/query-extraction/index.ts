@@ -19,7 +19,7 @@ export type {
 } from "./types";
 
 // Parse stage
-export { parseQuerySQL } from "./parse";
+export { ParseQuerySQL, parseQuerySQL } from "./parse";
 
 // Resolve stage (exported for direct use and testing)
 export {

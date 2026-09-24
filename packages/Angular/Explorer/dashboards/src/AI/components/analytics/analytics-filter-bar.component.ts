@@ -260,12 +260,57 @@ export class AnalyticsFilterBarComponent implements OnInit {
     ];
 
     /** Default items shown when nothing is selected (the "All X" option) */
-    public modelDefaultItem: FilterOption = { text: 'All Models', value: '' };
-    public agentDefaultItem: FilterOption = { text: 'All Agents', value: '' };
-    public promptDefaultItem: FilterOption = { text: 'All Prompts', value: '' };
-    public statusDefaultItem: FilterOption = { text: 'All Statuses', value: '' };
+    public ModelDefaultItem: FilterOption = { text: 'All Models', value: '' };
 
-    public compareActive = false;
+    /** @deprecated Use {@link ModelDefaultItem}. */
+    public get modelDefaultItem(): FilterOption {
+        return this.ModelDefaultItem;
+    }
+    /** @deprecated Use {@link ModelDefaultItem}. */
+    public set modelDefaultItem(value: FilterOption) {
+        this.ModelDefaultItem = value;
+    }
+    public AgentDefaultItem: FilterOption = { text: 'All Agents', value: '' };
+
+    /** @deprecated Use {@link AgentDefaultItem}. */
+    public get agentDefaultItem(): FilterOption {
+        return this.AgentDefaultItem;
+    }
+    /** @deprecated Use {@link AgentDefaultItem}. */
+    public set agentDefaultItem(value: FilterOption) {
+        this.AgentDefaultItem = value;
+    }
+    public PromptDefaultItem: FilterOption = { text: 'All Prompts', value: '' };
+
+    /** @deprecated Use {@link PromptDefaultItem}. */
+    public get promptDefaultItem(): FilterOption {
+        return this.PromptDefaultItem;
+    }
+    /** @deprecated Use {@link PromptDefaultItem}. */
+    public set promptDefaultItem(value: FilterOption) {
+        this.PromptDefaultItem = value;
+    }
+    public StatusDefaultItem: FilterOption = { text: 'All Statuses', value: '' };
+
+    /** @deprecated Use {@link StatusDefaultItem}. */
+    public get statusDefaultItem(): FilterOption {
+        return this.StatusDefaultItem;
+    }
+    /** @deprecated Use {@link StatusDefaultItem}. */
+    public set statusDefaultItem(value: FilterOption) {
+        this.StatusDefaultItem = value;
+    }
+
+    public CompareActive = false;
+
+    /** @deprecated Use {@link CompareActive}. */
+    public get compareActive() {
+        return this.CompareActive;
+    }
+    /** @deprecated Use {@link CompareActive}. */
+    public set compareActive(value) {
+        this.CompareActive = value;
+    }
 
     /** True when at least one of the filter dropdowns is enabled — drives whether to render the popover trigger. */
     public get HasFilterDropdowns(): boolean {
@@ -284,7 +329,7 @@ export class AnalyticsFilterBarComponent implements OnInit {
     }
 
     ngOnInit(): void {
-        this.BuildOptions();
+        this.buildOptions();
     }
 
     public OnTimeRangeSelect(range: string): void {
@@ -317,11 +362,11 @@ export class AnalyticsFilterBarComponent implements OnInit {
     }
 
     public ToggleCompare(): void {
-        this.compareActive = !this.compareActive;
-        this.CompareToggled.emit(this.compareActive);
+        this.CompareActive = !this.CompareActive;
+        this.CompareToggled.emit(this.CompareActive);
     }
 
-    private BuildOptions(): void {
+    private buildOptions(): void {
         const engine = AIEngineBase.Instance;
 
         this.ModelOptions = engine.Models

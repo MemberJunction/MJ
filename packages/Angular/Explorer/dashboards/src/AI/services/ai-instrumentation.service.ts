@@ -87,27 +87,27 @@ export const AGENT_RUN_FIELDS = [
 ];
 
 export interface ExecutionDetails {
-  id: string;
-  type: 'prompt' | 'agent';
-  name: string;
-  status: string;
-  startTime: Date;
-  endTime?: Date;
-  cost: number | null;
-  tokens: number;
-  success: boolean;
-  errorMessage?: string;
-  parentId?: string;
-  children: ExecutionDetails[];
-  model?: string;
-  vendor?: string;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  type: 'prompt' | 'agent';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  startTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  endTime?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cost: number | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tokens: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  success: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  parentId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  children: ExecutionDetails[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  model?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  vendor?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ChartData {
-  executionTrends: TrendData[];
-  costByModel: { model: string; cost: number | null; tokens: number }[];
-  performanceMatrix: { agent: string; model: string; avgTime: number; successRate: number }[];
-  tokenEfficiency: { inputTokens: number; outputTokens: number; cost: number | null; model: string }[];
+  executionTrends: TrendData[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  costByModel: { model: string; cost: number | null; tokens: number }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  performanceMatrix: { agent: string; model: string; avgTime: number; successRate: number }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tokenEfficiency: { inputTokens: number; outputTokens: number; cost: number | null; model: string }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Internal shape for the single data load that all derived streams share */
@@ -156,7 +156,12 @@ export class AIInstrumentationService {
   private readonly _isLoading$ = new BehaviorSubject<boolean>(false);
 
   // Expose loading state as observable
-  readonly isLoading$ = this._isLoading$.asObservable();
+  readonly IsLoading$ = this._isLoading$.asObservable();
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
 
   constructor() {}
 
@@ -172,7 +177,7 @@ export class AIInstrumentationService {
   );
 
   // Derived streams — pure in-memory transforms via ai-usage-analytics.compute.ts
-  readonly kpis$ = this.rawData$.pipe(
+  readonly Kpis$ = this.rawData$.pipe(
     map(data => {
       const activeExecutions = countActiveExecutions(data.livePromptRuns, data.liveAgentRuns);
       return computeKPIs(data.hourlyRows, activeExecutions, data.modelNames, data.agentNames);
@@ -180,17 +185,32 @@ export class AIInstrumentationService {
     shareReplay(1)
   );
 
-  readonly trends$ = this.rawData$.pipe(
+  /** @deprecated Use {@link Kpis$}. */
+  get kpis$() {
+    return this.Kpis$;
+  }
+
+  readonly Trends$ = this.rawData$.pipe(
     map(data => computeTrends(data.hourlyRows, data.start, data.end)),
     shareReplay(1)
   );
 
-  readonly liveExecutions$ = this.rawData$.pipe(
+  /** @deprecated Use {@link Trends$}. */
+  get trends$() {
+    return this.Trends$;
+  }
+
+  readonly LiveExecutions$ = this.rawData$.pipe(
     map(data => computeLiveExecutions(data.livePromptRuns, data.liveAgentRuns)),
     shareReplay(1)
   );
 
-  readonly chartData$ = combineLatest([this.rawData$, this.trends$]).pipe(
+  /** @deprecated Use {@link LiveExecutions$}. */
+  get liveExecutions$() {
+    return this.LiveExecutions$;
+  }
+
+  readonly ChartData$ = combineLatest([this.rawData$, this.Trends$]).pipe(
     map(([data, executionTrends]) => ({
       executionTrends,
       costByModel: computeCostByModel(data.hourlyRows, data.modelNames),
@@ -200,13 +220,27 @@ export class AIInstrumentationService {
     shareReplay(1)
   );
 
-  setDateRange(start: Date, end: Date): void {
+  /** @deprecated Use {@link ChartData$}. */
+  get chartData$() {
+    return this.ChartData$;
+  }
+
+  SetDateRange(start: Date, end: Date): void {
     this._dateRange$.next({ start, end });
   }
 
+  /** @deprecated Use {@link SetDateRange}. */
+  setDateRange(start: Date, end: Date): void {
+    return this.SetDateRange(start, end);
+  }
+
+  Refresh(): void {
+    this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
   refresh(): void {
-    const nextVal = this._refreshTrigger$.value + 1;
-    this._refreshTrigger$.next(nextVal);
+    return this.Refresh();
   }
 
   /**
@@ -307,7 +341,7 @@ export class AIInstrumentationService {
 
   // ─── Execution Details (on-demand, not part of initial load) ──────
 
-  async getExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
+  async GetExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
     try {
       if (type === 'prompt') {
         return await this.getPromptExecutionDetails(executionId);
@@ -318,6 +352,11 @@ export class AIInstrumentationService {
       console.error('Error loading execution details:', error);
       return null;
     }
+  }
+
+  /** @deprecated Use {@link GetExecutionDetails}. */
+  async getExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
+    return this.GetExecutionDetails(executionId, type);
   }
 
   private async getPromptExecutionDetails(promptRunId: string): Promise<ExecutionDetails> {
@@ -614,7 +653,7 @@ export class AIInstrumentationService {
       const modelId = row.ModelID !== null && row.ModelID !== undefined ? row.ModelID : '';
       const vendorId = row.VendorID !== null && row.VendorID !== undefined ? row.VendorID : '';
       const key = `${NormalizeUUID(modelId)}|${NormalizeUUID(vendorId)}`;
-      cacheRates.set(key, { inputRate, cacheReadRate, cacheWriteRate });
+      cacheRates.set(key, { InputRate: inputRate, CacheReadRate: cacheReadRate, CacheWriteRate: cacheWriteRate });
     }
     return cacheRates;
   }

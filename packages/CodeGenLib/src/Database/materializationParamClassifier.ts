@@ -1,6 +1,6 @@
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
-import { verifyParamRole, type VerifiedParamRole } from './materializationParamVerifier';
-import { qualifyParameterizedQuery, type ParamClassification, type ParamQualification } from './materializationAnalysis';
+import { VerifyParamRole, type VerifiedParamRole } from './materializationParamVerifier';
+import { QualifyParameterizedQuery, type ParamClassification, type ParamQualification } from './materializationAnalysis';
 
 /**
  * Phase 2c — deterministic parameter classification for query materialization
@@ -43,16 +43,16 @@ export type VariantRenderer = (paramValues: Record<string, unknown>) => string;
 
 /** A single parameter's classification outcome (for logging / diagnostics). */
 export interface ParamVerdict {
-    name: string;
-    verdict: VerifiedParamRole;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    verdict: VerifiedParamRole;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** Result of classifying all of a query's parameters. */
 export interface QueryParamClassification {
     /** The overall qualification (drives whether/how the query materializes). */
-    qualification: ParamQualification;
+    Qualification: ParamQualification;
     /** Per-parameter verdicts, in declaration order (for precise logs). */
-    perParam: ParamVerdict[];
+    PerParam: ParamVerdict[];
 }
 
 /**
@@ -72,7 +72,7 @@ export interface QueryParamClassification {
  * covered by this structural probe. A falsy value that breaks the template render fails safe (→ Unbounded →
  * refused). Truthy values are kept FIRST so the held baseline is unaffected (holdValue is independent).
  */
-export function probeValues(type: QueryParamType): unknown[] {
+export function ProbeValues(type: QueryParamType): unknown[] {
     switch (type) {
         case 'string':
             return ['__mj_probe_alpha', '__mj_probe_beta', '__mj_probe_gamma', ''];
@@ -85,6 +85,11 @@ export function probeValues(type: QueryParamType): unknown[] {
         case 'array':
             return [['__mj_a', '__mj_b'], ['__mj_c'], ['__mj_d', '__mj_e', '__mj_f']];
     }
+}
+
+/** @deprecated Use {@link ProbeValues}. */
+export function probeValues(type: QueryParamType): unknown[] {
+    return ProbeValues(type);
 }
 
 /** Parses a parameter's SampleValue into the runtime shape its type expects (best-effort). */
@@ -132,12 +137,17 @@ function defaultHoldValue(type: QueryParamType): unknown {
 }
 
 /** Builds the base value map with every parameter held at its stable value. */
-export function buildHeldValues(params: QueryParamDef[]): Record<string, unknown> {
+export function BuildHeldValues(params: QueryParamDef[]): Record<string, unknown> {
     const held: Record<string, unknown> = {};
     for (const p of params) {
         held[p.Name] = holdValue(p);
     }
     return held;
+}
+
+/** @deprecated Use {@link BuildHeldValues}. */
+export function buildHeldValues(params: QueryParamDef[]): Record<string, unknown> {
+    return BuildHeldValues(params);
 }
 
 /**
@@ -150,7 +160,7 @@ function renderVariantsForParam(
     render: VariantRenderer,
 ): string[] | null {
     const variants: string[] = [];
-    for (const v of probeValues(param.Type)) {
+    for (const v of ProbeValues(param.Type)) {
         try {
             variants.push(render({ ...held, [param.Name]: v }));
         } catch {
@@ -232,7 +242,7 @@ function verifyOneParam(param: QueryParamDef, held: Record<string, unknown>, dia
     if (variants == null) {
         return { role: 'Unbounded', reason: `parameter "${param.Name}" produced a template error while probing — cannot verify; refusing under uncertainty` };
     }
-    const verdict = verifyParamRole(variants, dialect);
+    const verdict = VerifyParamRole(variants, dialect);
     // Value-passthrough guard: a proven row filter is only injectable if the raw value survives rendering
     // into the predicate literal. A transforming template would make the materialized read diverge from live.
     if (verdict.role === 'RowFilter' && !isValuePassthrough(param, held, render)) {
@@ -255,7 +265,7 @@ function verifyOneParam(param: QueryParamDef, held: Record<string, unknown>, dia
  * (off by default) *and* a domain is supplied, which it never is here → structural ⇒ refuse. This is
  * intentional: per-value caching is a later phase.
  */
-export function classifyQueryParameters(opts: {
+export function ClassifyQueryParameters(opts: {
     queryName: string;
     params: QueryParamDef[];
     outputColumns: string[];
@@ -268,7 +278,7 @@ export function classifyQueryParameters(opts: {
     const { queryName, params, outputColumns, dialect, render } = opts;
 
     // Compute the held baseline ONCE (not per-parameter) — see verifyOneParam.
-    const held = buildHeldValues(params);
+    const held = BuildHeldValues(params);
     const perParam: ParamVerdict[] = params.map((p) => ({
         name: p.Name,
         verdict: verifyOneParam(p, held, dialect, render),
@@ -294,7 +304,7 @@ export function classifyQueryParameters(opts: {
         heldSQL = undefined;
     }
 
-    const qualification = qualifyParameterizedQuery({
+    const qualification = QualifyParameterizedQuery({
         queryName,
         params: classifications,
         outputColumns,
@@ -304,5 +314,19 @@ export function classifyQueryParameters(opts: {
         dialect,
     });
 
-    return { qualification, perParam };
+    return { Qualification: qualification, PerParam: perParam };
+}
+
+/** @deprecated Use {@link ClassifyQueryParameters}. */
+export function classifyQueryParameters(opts: {
+    queryName: string;
+    params: QueryParamDef[];
+    outputColumns: string[];
+    dialect: SQLParserDialect;
+    render: VariantRenderer;
+    allowPerValueCache?: boolean;
+    /** Phase-2 enablement for Bucket-1 row-filter broad materialization (default false → refuse, stay live-only). */
+    allowRowFilterBroad?: boolean;
+}): QueryParamClassification {
+    return ClassifyQueryParameters(opts);
 }

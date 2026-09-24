@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
-import { verifyParamRole } from '../Database/materializationParamVerifier';
+import { VerifyParamRole } from '../Database/materializationParamVerifier';
 
 /**
  * Phase 2b — the render-and-diff AST oracle (plan §9 Bucket 1, §10 asymmetric-risk).
@@ -14,7 +14,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
 
     describe('RowFilter — clean top-level conjunctive WHERE predicates', () => {
         it('string equality on a single column', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID, Status FROM Orders WHERE Status = 'Active'",
                     "SELECT ID, Status FROM Orders WHERE Status = 'Closed'",
@@ -28,7 +28,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('numeric equality on a single column', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     'SELECT ID FROM Orders WHERE ChapterID = 42',
                     'SELECT ID FROM Orders WHERE ChapterID = 99',
@@ -42,7 +42,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('range operator (>) is a re-applicable row filter, operator captured', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     'SELECT ID FROM Members WHERE Score > 10',
                     'SELECT ID FROM Members WHERE Score > 250',
@@ -59,7 +59,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
             // The critical directionality case: read-time injection emits `column <op> value`, so a
             // `value < column` predicate must be recorded as the flipped `>` — else the materialized read
             // would invert the predicate and silently return the complementary row set.
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     'SELECT ID FROM Members WHERE 100 < Score',
                     'SELECT ID FROM Members WHERE 250 < Score',
@@ -73,7 +73,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('IN list (array param) with varying length → list kind, IN operator', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE Status IN ('A','B')",
                     "SELECT ID FROM Orders WHERE Status IN ('C','D','E')",
@@ -87,7 +87,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('only the varied predicate counts; a sibling fixed predicate is ignored', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE Status = 'Active' AND ChapterID = 42",
                     "SELECT ID FROM Orders WHERE Status = 'Closed' AND ChapterID = 42",
@@ -99,7 +99,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('table-qualified column resolves to the bare column name', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT o.ID FROM Orders o WHERE o.Status = 'Active'",
                     "SELECT o.ID FROM Orders o WHERE o.Status = 'Closed'",
@@ -111,7 +111,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('column-on-the-right form (literal = column) is still a row filter (= is symmetric)', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE 'Active' = Status",
                     "SELECT ID FROM Orders WHERE 'Closed' = Status",
@@ -125,7 +125,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('PostgreSQL column shape ({expr:{value}}) resolves correctly', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID, Status FROM Orders WHERE Status = 'Active'",
                     "SELECT ID, Status FROM Orders WHERE Status = 'Closed'",
@@ -137,7 +137,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('BETWEEN bounds on a single column is a row filter', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     'SELECT ID FROM Members WHERE Score BETWEEN 10 AND 50',
                     'SELECT ID FROM Members WHERE Score BETWEEN 200 AND 50',
@@ -149,7 +149,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('agrees across 3 variants on the same column', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE Status = 'A'",
                     "SELECT ID FROM Orders WHERE Status = 'B'",
@@ -164,7 +164,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
 
     describe('Unbounded — tainted positions are refused (read-time filtering would be unsound)', () => {
         it('predicate under OR is tainted (re-filtering would drop the OR-branch rows)', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE Status = 'Active' OR IsAdmin = 1",
                     "SELECT ID FROM Orders WHERE Status = 'Closed' OR IsAdmin = 1",
@@ -176,7 +176,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('literal in the SELECT projection is not a row filter', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT 'Active' AS Tag, ID FROM Orders",
                     "SELECT 'Closed' AS Tag, ID FROM Orders",
@@ -187,7 +187,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('literal inside a WHERE subquery is tainted', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE ID IN (SELECT OrderID FROM Items WHERE Sku = 'A')",
                     "SELECT ID FROM Orders WHERE ID IN (SELECT OrderID FROM Items WHERE Sku = 'B')",
@@ -198,7 +198,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('literal wrapped in a function is tainted (left side is not a plain column)', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE LOWER(Status) = 'active'",
                     "SELECT ID FROM Orders WHERE LOWER(Status) = 'closed'",
@@ -209,7 +209,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('literal in a JOIN ON clause is tainted (not the top-level WHERE)', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT o.ID FROM Orders o JOIN Ref r ON r.ID = o.RefID AND r.Type = 'A'",
                     "SELECT o.ID FROM Orders o JOIN Ref r ON r.ID = o.RefID AND r.Type = 'B'",
@@ -220,7 +220,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('a param that hits BOTH a clean WHERE predicate and the projection is refused', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT 'Active' AS Tag, ID FROM Orders WHERE Status = 'Active'",
                     "SELECT 'Closed' AS Tag, ID FROM Orders WHERE Status = 'Closed'",
@@ -242,7 +242,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('literal in a HAVING clause is tainted (not the top-level WHERE)', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     'SELECT ChapterID, COUNT(*) AS c FROM Orders GROUP BY ChapterID HAVING COUNT(*) > 5',
                     'SELECT ChapterID, COUNT(*) AS c FROM Orders GROUP BY ChapterID HAVING COUNT(*) > 10',
@@ -253,7 +253,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('a multi-statement render is refused (cannot verify beyond the first statement)', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE Status = 'Active'; SELECT 1 AS x",
                     "SELECT ID FROM Orders WHERE Status = 'Closed'; SELECT 1 AS x",
@@ -264,7 +264,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('value affecting multiple columns is refused (not modeled in v1)', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE FromCode = 'x' AND ToCode = 'x'",
                     "SELECT ID FROM Orders WHERE FromCode = 'y' AND ToCode = 'y'",
@@ -276,7 +276,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('no observable effect (identical SQL) cannot prove a row filter', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     'SELECT ID FROM Orders WHERE ChapterID = 42',
                     'SELECT ID FROM Orders WHERE ChapterID = 42',
@@ -288,7 +288,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('a variant that fails to parse forces a refuse', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE Status = 'Active'",
                     'SELECT FROM WHERE (((( totally broken',
@@ -300,7 +300,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('fewer than 2 variants cannot be verified', () => {
-            const r = verifyParamRole(["SELECT ID FROM Orders WHERE Status = 'Active'"], tsql);
+            const r = VerifyParamRole(["SELECT ID FROM Orders WHERE Status = 'Active'"], tsql);
             expect(r.role).toBe('Unbounded');
             expect(r.reason).toMatch(/at least 2/i);
         });
@@ -308,7 +308,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
 
     describe('Structural — the SQL shape changes with the value (Bucket 2 candidate)', () => {
         it('an extra conjunct appearing/disappearing is structural, not a row filter', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     "SELECT ID FROM Orders WHERE Status = 'Active'",
                     "SELECT ID FROM Orders WHERE Status = 'Active' AND Region = 'East'",
@@ -319,7 +319,7 @@ describe('verifyParamRole (render-and-diff verifier)', () => {
         });
 
         it('different projected columns is structural', () => {
-            const r = verifyParamRole(
+            const r = VerifyParamRole(
                 [
                     'SELECT ID FROM Orders',
                     'SELECT ID, Region FROM Orders',

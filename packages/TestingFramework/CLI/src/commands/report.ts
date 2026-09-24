@@ -20,7 +20,7 @@ export class ReportCommand {
      * @param flags - Command flags
      * @param contextUser - User context
      */
-    async execute(flags: ReportFlags, contextUser: UserInfo): Promise<void> {
+    async Execute(flags: ReportFlags, contextUser: UserInfo): Promise<void> {
         try {
             console.log(OutputFormatter.formatInfo('Report command not yet implemented'));
             console.log('\nPlanned features:');
@@ -42,5 +42,10 @@ export class ReportCommand {
             console.error(OutputFormatter.formatError('Failed to generate report', error as Error));
             process.exit(1);
         }
+    }
+
+    /** @deprecated Use {@link Execute}. */
+    async execute(flags: ReportFlags, contextUser: UserInfo): Promise<void> {
+        return this.Execute(flags, contextUser);
     }
 }

@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { RealtimeDelegationCardVM, FriendlyStepLabel } from './realtime-session-state';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 
 /**
  * Renders a single delegation in the live session thread:
@@ -30,7 +30,7 @@ import { ParsedDelegationArtifact } from '../../services/delegation-result-parse
 })
 export class RealtimeDelegationCardComponent {
   /** Maximum characters of the result shown in the collapsed done chip. */
-  private static readonly PreviewMaxChars = 120;
+  private static readonly previewMaxChars = 120;
 
   /** The delegation card view-model to render (immutable — replaced on every update). */
   @Input({ required: true }) Card!: RealtimeDelegationCardVM;
@@ -56,9 +56,9 @@ export class RealtimeDelegationCardComponent {
   /** Whether the done chip is expanded inline to show the full result text. */
   public Expanded = false;
 
-  /** The artifacts this (done) delegation produced (empty array while running / when none). Suppressed for direct actions. */
+  /** The artifacts this (done) delegation produced (empty array while running / when none). Suppressed for direct actions and narration. */
   public get Artifacts(): ParsedDelegationArtifact[] {
-    return this.Card.Done && this.Card.Kind !== 'action' && this.Card.Artifacts ? this.Card.Artifacts : [];
+    return this.Card.Done && this.Card.Kind === 'agent' && this.Card.Artifacts ? this.Card.Artifacts : [];
   }
 
   /** Emits the open-artifact request for one of this card's produced artifacts. */
@@ -67,9 +67,9 @@ export class RealtimeDelegationCardComponent {
     this.OpenArtifactRequested.emit(artifact);
   }
 
-  /** True when the dev "Open run" link should render (gear on + run id known). Suppressed for direct actions. */
+  /** True when the dev "Open run" link should render (gear on + run id known). Suppressed for direct actions and narration. */
   public get ShowOpenRun(): boolean {
-    return this.DevMode && this.Card.Kind !== 'action' && !!this.Card.RunID;
+    return this.DevMode && this.Card.Kind === 'agent' && !!this.Card.RunID;
   }
 
   /** Emits the open-run request for this card's delegated run. */
@@ -83,7 +83,7 @@ export class RealtimeDelegationCardComponent {
   /** Emits the cancel request for this (still-working) delegation. */
   public CancelWork(event: MouseEvent): void {
     event.stopPropagation();
-    if (!this.Card.Done) {
+    if (!this.Card.Done && this.Card.Kind === 'agent') {
       this.CancelRequested.emit(this.Card.CallID);
     }
   }
@@ -107,13 +107,15 @@ export class RealtimeDelegationCardComponent {
       || this.Card.LatestMessage
       || (this.Card.Kind === 'action'
         ? `${this.Card.AgentName} executed.`
-        : `${this.Card.AgentName} completed the delegated work.`);
+        : this.Card.Kind === 'narration'
+          ? `${this.Card.AgentName} shared a thought.`
+          : `${this.Card.AgentName} completed the delegated work.`);
   }
 
   /** One-line, ~120-char preview of the result for the collapsed chip. */
   public get ResultPreview(): string {
     const oneLine = this.ResultText.replace(/\s+/g, ' ').trim();
-    const max = RealtimeDelegationCardComponent.PreviewMaxChars;
+    const max = RealtimeDelegationCardComponent.previewMaxChars;
     return oneLine.length > max ? `${oneLine.slice(0, max).trimEnd()}…` : oneLine;
   }
 
@@ -121,6 +123,9 @@ export class RealtimeDelegationCardComponent {
   public get ProvenanceTitle(): string {
     if (this.Card.Kind === 'action') {
       return `Result produced directly by the ${this.Card.AgentName} action.`;
+    }
+    if (this.Card.Kind === 'narration') {
+      return `Thought / narration authored by ${this.Card.AgentName}.`;
     }
     const run = this.Card.RunRef ? ` (run ${this.Card.RunRef})` : '';
     return `Result produced by ${this.Card.AgentName}'s own agent run${run} — not invented by the voice co-agent.`;

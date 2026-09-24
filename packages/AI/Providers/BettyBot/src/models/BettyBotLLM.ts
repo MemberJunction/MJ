@@ -7,13 +7,13 @@ import { BettyResponse, SettingsResponse } from '../generic/BettyBot.types';
 @RegisterClass(BaseLLM, "BettyBotLLM")
 export class BettyBotLLM extends BaseLLM {
 
-    private APIKey: string;
-    private JWTToken: string;
-    private TokenExpiration: Date;
+    private aPIKey: string;
+    private JWTToken: string;  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
+    private TokenExpiration: Date;  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
 
     constructor(apiKey: string) {
         super(apiKey);
-        this.APIKey = apiKey;
+        this.aPIKey = apiKey;
         this.JWTToken = '';
         this.TokenExpiration = new Date();
     }
@@ -270,7 +270,7 @@ export class BettyBotLLM extends BaseLLM {
             }
 
             const data = {
-                token: this.APIKey
+                token: this.aPIKey
             };
 
             const endpoint: string = Config.BETTY_BOT_BASE_URL + 'settings';

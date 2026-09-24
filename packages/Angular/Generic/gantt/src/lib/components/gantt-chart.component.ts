@@ -263,10 +263,28 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
     /** Fired after a grid column is resized. */
     @Output() AfterColumnResize = new EventEmitter<AfterColumnResizeEventArgs>();
 
-    @ViewChild('ganttContainer', { static: false }) ganttContainer!: ElementRef<HTMLDivElement>;
+    @ViewChild('ganttContainer', { static: false }) GanttContainer!: ElementRef<HTMLDivElement>;
+
+    /** @deprecated Use {@link GanttContainer}. */
+    get ganttContainer(): ElementRef<HTMLDivElement> {
+        return this.GanttContainer;
+    }
+    /** @deprecated Use {@link GanttContainer}. */
+    set ganttContainer(value: ElementRef<HTMLDivElement>) {
+        this.GanttContainer = value;
+    }
 
     /** @internal */
-    loading = true;
+    Loading = true;
+
+    /** @deprecated Use {@link Loading}. */
+    get loading() {
+        return this.Loading;
+    }
+    /** @deprecated Use {@link Loading}. */
+    set loading(value) {
+        this.Loading = value;
+    }
     private gantt: GanttStatic | null = null;
     private initialized = false;
     private _zoomLevel: GanttZoomLevelName = 'week';
@@ -321,16 +339,16 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         try {
             const module = await import('dhtmlx-gantt');
             this.gantt = module.gantt;
-            this.loading = false;
+            this.Loading = false;
             this.cdr.detectChanges();
 
-            if (this.Items.length > 0 && this.ganttContainer) {
+            if (this.Items.length > 0 && this.GanttContainer) {
                 this.initGantt();
                 this.cdr.markForCheck();
             }
         } catch (error) {
             console.error('@memberjunction/ng-gantt: Failed to load dhtmlx-gantt:', error);
-            this.loading = false;
+            this.Loading = false;
             this.cdr.markForCheck();
         }
     }
@@ -342,9 +360,9 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
             this.gantt.setSizes();
         }
 
-        if (this.initialized && this.ganttContainer) {
+        if (this.initialized && this.GanttContainer) {
             this.updateData();
-        } else if (!this.initialized && this.ganttContainer && this.Items.length > 0) {
+        } else if (!this.initialized && this.GanttContainer && this.Items.length > 0) {
             this.initGantt();
         }
     }
@@ -387,7 +405,7 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
         this.initTooltips(g);
 
         // Initialize
-        g.init(this.ganttContainer.nativeElement);
+        g.init(this.GanttContainer.nativeElement);
         this.initialized = true;
         this.initZoom(g);
         this.bindGridCellTooltips(g);
@@ -395,7 +413,7 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
 
         // ResizeObserver ensures DHTMLX layout recalculates whenever container gets valid non-zero dimensions
         this.resizeObserver?.disconnect();
-        if (typeof ResizeObserver !== 'undefined' && this.ganttContainer?.nativeElement) {
+        if (typeof ResizeObserver !== 'undefined' && this.GanttContainer?.nativeElement) {
             this.resizeObserver = new ResizeObserver((entries) => {
                 for (const entry of entries) {
                     if (entry.contentRect.width > 0 && entry.contentRect.height > 0 && this.initialized && this.gantt) {
@@ -403,7 +421,7 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
                     }
                 }
             });
-            this.resizeObserver.observe(this.ganttContainer.nativeElement);
+            this.resizeObserver.observe(this.GanttContainer.nativeElement);
         }
 
         // Event: click
@@ -435,9 +453,9 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
                 }
             }
         };
-        this.ganttContainer.nativeElement.addEventListener('dblclick', dblClickHandler);
+        this.GanttContainer.nativeElement.addEventListener('dblclick', dblClickHandler);
         this.destroyDblClick = () => {
-            this.ganttContainer?.nativeElement?.removeEventListener('dblclick', dblClickHandler);
+            this.GanttContainer?.nativeElement?.removeEventListener('dblclick', dblClickHandler);
         };
 
         // Event: drag/resize (only fires if not readonly)
@@ -681,7 +699,7 @@ export class MjGanttChartComponent implements AfterViewInit, OnChanges, OnDestro
             levels: BuildDefaultGanttZoomLevels(),
             trigger: 'wheel',
             useKey: 'ctrlKey',
-            element: () => this.ganttContainer.nativeElement,
+            element: () => this.GanttContainer.nativeElement,
             handler: (event: Event) => this.handleWheelZoom(event),
         });
         zoom.setLevel(this._zoomLevel);

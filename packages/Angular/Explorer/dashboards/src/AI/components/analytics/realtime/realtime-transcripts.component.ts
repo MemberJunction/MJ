@@ -131,6 +131,11 @@ export class AnalyticsRealtimeTranscriptsComponent extends BaseAngularComponent 
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link Reload}. */
+    public async reload(): Promise<void> {
+        return this.Reload();
+    }
+
     public async SelectRoom(room: MeetingRoomSummary): Promise<void> {
         this.SelectedRoom = room;
         this.Lines = [];
@@ -141,8 +146,10 @@ export class AnalyticsRealtimeTranscriptsComponent extends BaseAngularComponent 
         this.cdr.detectChanges();
     }
 
-    public reload(): Promise<void> { return this.Reload(); }
-    public selectRoom(room: MeetingRoomSummary): Promise<void> { return this.SelectRoom(room); }
+    /** @deprecated Use {@link SelectRoom}. */
+    public async selectRoom(room: MeetingRoomSummary): Promise<void> {
+        return this.SelectRoom(room);
+    }
 }
 
 /** Tree-shaking prevention — called from the module constructor so the component class isn't elided. */

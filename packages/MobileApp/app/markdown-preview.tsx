@@ -133,11 +133,11 @@ export default function MarkdownPreviewScreen() {
             <ScrollView contentContainerStyle={styles.body}>
                 <Text style={styles.section}>Pie chart</Text>
                 <Chart
-                    width={chartWidth}
-                    spec={{
-                        kind: 'pie',
+                    Width={chartWidth}
+                    Spec={{
+                        Kind: 'pie',
                         title: 'Agent share',
-                        data: [
+                        Data: [
                             { label: 'Skip', value: 40 },
                             { label: 'Research', value: 25 },
                             { label: 'Analyst', value: 20 },
@@ -154,11 +154,11 @@ export default function MarkdownPreviewScreen() {
 
                 <Text style={styles.section}>Bar chart (react-native-svg)</Text>
                 <Chart
-                    width={chartWidth}
-                    spec={{
-                        kind: 'bar',
+                    Width={chartWidth}
+                    Spec={{
+                        Kind: 'bar',
                         title: 'Pipeline by stage',
-                        data: [
+                        Data: [
                             { label: 'Lead', value: 42 },
                             { label: 'Qual', value: 30 },
                             { label: 'Prop', value: 18 },
@@ -169,11 +169,11 @@ export default function MarkdownPreviewScreen() {
 
                 <Text style={styles.section}>Line chart</Text>
                 <Chart
-                    width={chartWidth}
-                    spec={{
-                        kind: 'line',
+                    Width={chartWidth}
+                    Spec={{
+                        Kind: 'line',
                         title: 'Weekly runs',
-                        data: [
+                        Data: [
                             { label: 'W1', value: 12 },
                             { label: 'W2', value: 19 },
                             { label: 'W3', value: 14 },
@@ -184,11 +184,11 @@ export default function MarkdownPreviewScreen() {
 
                 <Text style={styles.section}>Pie chart</Text>
                 <Chart
-                    width={chartWidth}
-                    spec={{
-                        kind: 'pie',
+                    Width={chartWidth}
+                    Spec={{
+                        Kind: 'pie',
                         title: 'Agent share',
-                        data: [
+                        Data: [
                             { label: 'Skip', value: 40 },
                             { label: 'Research', value: 25 },
                             { label: 'Analyst', value: 20 },

@@ -55,6 +55,7 @@ import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
 import { FlsLifecycleChecks } from '../checks/fls-lifecycle.checks';
 import { FlsClientChecks } from '../checks/fls-client.checks';
+import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
@@ -162,6 +163,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 23], // FLS1-FLS23 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
+        ['metadata-sync-push', MetadataSyncPushChecks, 8], // MSP1-MSP8 sync push atomicity, incl. server-derived child rows, mutation tier (IT94)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -261,6 +263,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'materialized-read': 3,
         'metadata-consistency': 7,
         'metadata-sync': 9,
+        'metadata-sync-push': 8,
         'nested-transactions': 11,
         'open-app-teardown': 2,
         'permission-engine': 14,
@@ -434,6 +437,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fls-lifecycle.LC7',
         'fls-lifecycle.LC8',
         'fls-lifecycle.LC9',
+        'metadata-sync-push.MSP1',
+        'metadata-sync-push.MSP2',
+        'metadata-sync-push.MSP3',
+        'metadata-sync-push.MSP4',
+        'metadata-sync-push.MSP5',
+        'metadata-sync-push.MSP6',
+        'metadata-sync-push.MSP7',
+        'metadata-sync-push.MSP8',
         'nested-transactions.NT1',
         'nested-transactions.NT10',
         'nested-transactions.NT2',
