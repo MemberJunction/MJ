@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
@@ -2373,24 +2373,43 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             ? (event.payload as { action?: string })?.action || 'save'
             : event.type;
 
-        if (normalizedName === 'mj: conversations') {
-            return this.handleConversationEntityEvent(event, effectiveType);
-        }
+        const handled =
+            normalizedName === 'mj: conversations' ||
+            normalizedName === 'mj: conversation details' ||
+            normalizedName === 'mj: projects' ||
+            normalizedName === 'mj: ai agent runs' ||
+            normalizedName === 'mj: conversation detail artifacts' ||
+            normalizedName === 'mj: conversation detail ratings';
 
-        if (normalizedName === 'mj: conversation details') {
-            return this.handleConversationDetailEntityEvent(event, effectiveType);
-        }
+        if (handled) {
+            // Hydrate ONCE, here, because this is the only async frame on the path. A remote event
+            // carries the row only for entities on the server's broadcast allowlist (see
+            // `cacheSettings.recordDataBroadcastEntities`); otherwise this re-reads the single
+            // record through the provider, as this user, so access control decides what comes
+            // back. Handlers below stay synchronous and simply receive the row — passing it down
+            // rather than letting each fetch its own keeps this to one read per event and avoids
+            // turning five handlers async for a value the dispatcher can obtain once.
+            // ...and only when something below will actually use it — see eventNeedsRow. On a
+            // remote event without `recordData`, hydrating means a read through the provider, and
+            // this dispatcher runs in EVERY connected browser for every save of these entities
+            // anywhere in the system, whether or not this session has any claim to the record.
+            const row = this.eventNeedsRow(event, normalizedName, effectiveType)
+                ? await ResolveEntityEventRow(event, this.ProviderToUse, this.ContextUser)
+                : null;
 
-        if (normalizedName === 'mj: projects') {
-            return this.handleProjectEntityEvent(event, effectiveType);
-        }
-
-        if (normalizedName === 'mj: ai agent runs') {
-            return this.handleAgentRunEntityEvent(event, effectiveType);
-        }
-
-        if (normalizedName === 'mj: conversation detail artifacts' || normalizedName === 'mj: conversation detail ratings') {
-            return this.handlePeripheralJunctionEntityEvent(event);
+            if (normalizedName === 'mj: conversations') {
+                return this.handleConversationEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: conversation details') {
+                return this.handleConversationDetailEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: projects') {
+                return this.handleProjectEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: ai agent runs') {
+                return this.handleAgentRunEntityEvent(event, effectiveType, row);
+            }
+            return this.handlePeripheralJunctionEntityEvent(event, row);
         }
 
         // Not a conversation entity — let BaseEngine handle it
@@ -2398,28 +2417,96 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Extracts record data from a BaseEntityEvent.
-     * For local events: uses baseEntity directly.
-     * For remote-invalidate events: parses recordData JSON from the payload.
-     * Returns null if no data is available.
+     * Will anything below actually use the row, or does the primary key suffice?
+     *
+     * Asked BEFORE hydrating, because for a remote event whose entity is not on the server's
+     * broadcast allowlist, hydrating costs a read through the provider. This dispatcher runs in
+     * every connected browser, for every save of these entities anywhere in the system — and
+     * conversation details are the hottest write path in the product, so an unconditional read
+     * here is one round trip per connected client per message, nearly all of them refused for a
+     * session with no claim to the record.
+     *
+     * Every `false` below is a case where the handler already returns early without touching the
+     * row, so skipping the read changes nothing a caller can observe.
      */
-    private extractRecordData(event: BaseEntityEvent): Record<string, unknown> | null {
-        // Local event — entity is available directly
-        if (event.baseEntity) {
-            return event.baseEntity.GetAll();
+    private eventNeedsRow(event: BaseEntityEvent, normalizedName: string, effectiveType: string): boolean {
+        // A row that costs nothing is never worth skipping. Free for a local event (the row IS the
+        // live entity) and for a remote event whose payload already carries `recordData`, because
+        // the entity is on the server's broadcast allowlist.
+        //
+        // This has to come first, and the per-entity reasoning below has to be read as being about
+        // THE READ. Applying it to a free row is what dropped a remote project save: the save
+        // branch uses EnvironmentID and IsArchived off the row, and with the row nulled it read
+        // them as undefined/false, concluded the project was outside the loaded environment, and
+        // filtered it out of the list — for exactly the sessions displaying it.
+        if (EntityEventRowIsFree(event)) {
+            return true;
         }
 
-        // Remote event — parse from payload
-        const payload = event.payload as { recordData?: string } | undefined;
-        if (payload?.recordData) {
-            try {
-                return JSON.parse(payload.recordData);
-            } catch {
-                return null;
+        // Projects: a DELETE needs only the id. A SAVE genuinely uses the row — `EnvironmentID` and
+        // `IsArchived` are what decide whether the project stays in the list — so it has to be
+        // hydrated whenever we hold the project.
+        //
+        // The earlier reasoning here ("a save that got this far has nothing to merge regardless")
+        // was true of the MERGE and false of the branch beside it: without the row, `EnvironmentID`
+        // reads as absent, `inLoadedEnvironment` comes out false for any session that has loaded an
+        // environment, and the save REMOVES the project instead. That is precisely the cross-client
+        // case this change exists to serve, so it is gated like conversations are: when we do not
+        // hold the project the remote path does nothing anyway (the append branch below requires
+        // `event.baseEntity`), and the row would be fetched only to be discarded.
+        if (normalizedName === 'mj: projects') {
+            if (effectiveType !== 'save') {
+                return false;
             }
+            const id = this.eventRecordID(event, null);
+            return !!id && this._projects$.value.some(p => UUIDsEqual(p.ID, id));
         }
 
-        return null;
+        if (normalizedName === 'mj: conversations') {
+            // A delete needs only the id. A save merges fields onto a conversation we already
+            // hold — and when we do not hold it, the remote branch of the handler does nothing,
+            // so the row would be fetched only to be discarded.
+            if (effectiveType !== 'save') {
+                return false;
+            }
+            const id = this.eventRecordID(event, null);
+            return !!id && !!this.GetConversation(id);
+        }
+
+        // Details, agent runs and the junction entities all resolve through the detail cache and
+        // return early when the conversation they name is not in it.
+        //
+        // A remote DELETE can never be served: the record is gone, so the re-read comes back null
+        // and every one of those handlers early-returns on the missing foreign key. The round trip
+        // could not change an outcome, so it is not made. (That these handlers cannot act on a
+        // remote delete at all is a pre-existing gap — deletes never carried `recordData` at either
+        // publish site — and is not what this method is for.) Local deletes are unaffected: the
+        // free-row check above already returned true for them.
+        if (effectiveType === 'delete') {
+            return false;
+        }
+
+        // With the cache empty — any session that has not opened a conversation — none of them can
+        // do anything, whatever the row says. (A non-empty cache still needs the read:
+        // ConversationID is a foreign key, so the primary key cannot tell us whether this detail
+        // belongs to a conversation we hold.)
+        return this._detailCache.size > 0;
+    }
+
+    /**
+     * This record's id, from the primary key the event always carries.
+     *
+     * Prefers the key over the row: the key is broadcast unconditionally, whereas the row is only
+     * present for allowlisted entities or after a re-read. Falls back to the row's `ID` so a
+     * single-column entity still resolves if the key is ever absent.
+     */
+    private eventRecordID(event: BaseEntityEvent, data: Record<string, unknown> | null): string | undefined {
+        const key = ResolveEntityEventKey(event);
+        const fromKey = key?.KeyValuePairs?.find(kv => kv.FieldName?.toLowerCase() === 'id')?.Value;
+        if (fromKey != null && String(fromKey).length > 0) {
+            return String(fromKey);
+        }
+        return data?.['ID'] as string | undefined;
     }
 
     /**
@@ -2439,12 +2526,20 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Handles save/delete events on Conversation entities from local or remote code.
      */
-    private handleConversationEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleConversationEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        // Identity comes from the primary key, which is broadcast unconditionally — a delete needs
+        // nothing else, so it no longer depends on the row being available.
+        const id = this.eventRecordID(event, data);
         if (!id) return true;
 
         if (action === 'save') {
+            // Same reasoning as handleProjectEntityEvent: the row can be null even when
+            // `eventNeedsRow` said yes, because the re-read can be refused, find the record gone,
+            // or simply fail — all of which `ResolveEntityEventRow` reports as null rather than
+            // throwing. `mergeDataOntoRecord` would hand that null to `BaseEntity.SetMany`, which
+            // throws, and nothing above this frame catches it. A conversation we cannot re-read
+            // stays as it was; the next `LoadConversations` corrects it.
+            if (!data) return true;
             const existing = this.GetConversation(id);
             if (existing) {
                 this.mergeDataOntoRecord(existing, data);
@@ -2479,10 +2574,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Handles save/delete events on ConversationDetail entities from local or remote code.
      */
-    private handleConversationDetailEntityEvent(event: BaseEntityEvent, action: string): boolean {
+    private handleConversationDetailEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
         const entity = event.baseEntity as MJConversationDetailEntity | null;
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+        const id = this.eventRecordID(event, data);
+        // ConversationID is a foreign key, so the primary key cannot supply it — this is the field
+        // the dispatcher's re-read exists to obtain.
         const conversationId = data?.['ConversationID'] as string;
         if (!id || !conversationId) return true;
 
@@ -2522,9 +2618,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * deleted via the project form modal. Only tracks projects in the currently-loaded
      * environment; archived projects are dropped from the active list.
      */
-    private handleProjectEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleProjectEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        const id = this.eventRecordID(event, data);
         if (!id) return true;
 
         const current = this._projects$.value;
@@ -2537,9 +2632,33 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return true;
         }
 
-        // save — only track projects in the loaded environment; drop archived ones
-        const environmentId = data?.['EnvironmentID'] as string | undefined;
-        const isArchived = data?.['IsArchived'] === true;
+        // WITHOUT THE ROW WE KNOW NOTHING, and must not guess. Every field below would read as
+        // absent: `IsArchived` becomes false, which is harmless, but `EnvironmentID` becomes
+        // undefined — and "no environment" is indistinguishable from "moved to another one", so the
+        // branch that DROPS the project is the one that runs. Leaving it untouched is the only
+        // honest response to a row we do not have.
+        //
+        // `eventNeedsRow` is supposed to guarantee this never happens for a project we hold, but
+        // that contract is enforced by a comment and `strictNullChecks` is off in this package, so
+        // the guarantee is restated here where the damage would be done. Hydration can also simply
+        // fail: `ResolveEntityEventRow` returns null rather than throwing.
+        //
+        // KEEPING IT IS DELIBERATE EVEN WHEN THE ROW WAS WITHHELD ON PURPOSE. A null can mean the
+        // re-read was refused — the viewer may no longer read this project — or that it failed.
+        // The two are indistinguishable here, and they want opposite responses, so this takes the
+        // one whose wrong case is recoverable: a stale row in a sidebar is corrected by the next
+        // `LoadProjects`, whereas a project deleted from the UI on a transient read failure is
+        // gone until the user reloads and cannot be told why.
+        if (!data) {
+            return true;
+        }
+
+        // save — only track projects in the loaded environment; drop archived ones.
+        // No `?.` past the guard above: `data` is non-null here, and optional chaining would say
+        // otherwise. It is also what let `mergeDataOntoRecord(…, data)` accept a nullable argument
+        // without complaint, since `strictNullChecks` is off in this package.
+        const environmentId = data['EnvironmentID'] as string | undefined;
+        const isArchived = data['IsArchived'] === true;
         const inLoadedEnvironment =
             !this._lastProjectsEnvironmentId ||
             (environmentId != null && UUIDsEqual(environmentId, this._lastProjectsEnvironmentId));
@@ -2563,9 +2682,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * Handles save/delete events on AI Agent Run entities from local or remote code.
      * Updates the AgentRunsByDetailId map so timers and status reflect reality.
      */
-    private handleAgentRunEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleAgentRunEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        const id = this.eventRecordID(event, data);
+        // Foreign key, not part of this row's primary key — supplied by the dispatcher's re-read.
         const detailId = data?.['ConversationDetailID'] as string;
         if (!id || !detailId) return true;
 
@@ -2602,8 +2721,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * reconstructed from the entity event alone, so we flag the cache as stale.
      * The UI component checks PeripheralDataStale and force-refreshes when needed.
      */
-    private handlePeripheralJunctionEntityEvent(event: BaseEntityEvent): boolean {
-        const data = this.extractRecordData(event);
+    private handlePeripheralJunctionEntityEvent(event: BaseEntityEvent, data: Record<string, unknown> | null): boolean {
+        // The junction's own primary key is not useful here; what matters is which detail it hangs
+        // off, which is a foreign key and therefore only available from the row.
         const detailId = data?.['ConversationDetailID'] as string;
         if (!detailId) return true;
 

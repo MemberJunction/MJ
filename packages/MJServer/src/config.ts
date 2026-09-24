@@ -230,6 +230,29 @@ const cacheSettingsSchema = z.object({
   evictionSweepIntervalSeconds: z.number().optional().default(300),
   /** Enable verbose cache logging (hits, misses, evictions). Default: false. */
   verboseLogging: z.boolean().optional().default(false),
+  /**
+   * Entity names whose FULL ROW may ride along with a cache-invalidation broadcast.
+   *
+   * The cache-invalidation subscription is delivered to EVERY connected client with no per-user
+   * filter (see CacheInvalidationResolver), so any row named here is disclosed to every signed-in
+   * session, whatever row-level security or tenant scoping would otherwise apply to reading it.
+   *
+   * Defaults to `[]`: invalidation still carries the entity name and primary key, which is all a
+   * client needs to evict, and the client re-fetches through the normal read path where access
+   * control applies. Listing an entity re-enables the apply-in-place optimisation for it — correct
+   * only for reference data every signed-in user is allowed to read.
+   *
+   * What the re-fetch costs depends on the consumer. `ConversationEngine` re-reads the ONE record
+   * by primary key. `BaseEngine` (every engine subclass with `AutoRefresh`, the default) applies a
+   * remote save in place only when the row is present, so without it a remote save falls through to
+   * a full reload of each matching config — a `RunView` of that entity, not a keyed read. Remote
+   * deletes still apply in place from the primary key. Engine-cached reference entities that every
+   * signed-in user may read are the ones worth listing here.
+   *
+   * `['*']` opts every entity in, restoring the previous behaviour. Only safe on a deployment where
+   * every signed-in user may read every row of every entity.
+   */
+  recordDataBroadcastEntities: z.array(z.string()).optional().default([]),
 });
 
 const loggingSettingsSchema = z.object({
